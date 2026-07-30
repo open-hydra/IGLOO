@@ -1,0 +1,10 @@
+cff-version: 0.1.0-alpha
+title: "IGLOO"
+authors:
+  - family-names: "Passarani"
+    given-names: "Giacomo"
+  - family-names: "Grossi"
+    given-names: "Marco"
+license: GPL-3.0
+url: "https://github.com/open-hydra/IGLOO"
+type: software

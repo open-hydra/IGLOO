@@ -1,0 +1,64 @@
+# Building file
+CMakePresets.json
+build
+
+# Fortran module files
+mod
+*.mod
+
+# Executables
+bin
+*.exe
+
+# Test output files
+error*
+OUTPUT
+# Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
+# already covers it; build_*/ stays as a guard against stray out-of-tree variants.
+build_*/
+# Unit-test CSV reports: written relative to the caller's cwd, so a test executable run
+# by hand outside the build tree drops one wherever you happen to be.
+verif_*.csv
+
+# Test-case scratch artifacts (debug/gate runs)
+test/*/dbg*
+test/*/_reg_*
+test/*/run[0-9]*
+test/*/run_std*
+test/*/preA_*
+test/*/postB_*
+test/*/err_gate
+test/*/b_err.txt
+test/*/prog_err.txt
+test/*/smoke_*
+test/*/time_refac.txt
+test/*/out.txt
+test/*_results.txt
+
+# e2e case run logs
+tests/*/*/run_*.txt
+
+# mkdocs build output
+site/
+__pycache__/
+
+# Paper draft (kept out of the repo)
+open_hydra_1_0/
+
+# Source PDFs of the cited papers (publisher copyright) + digitized CSVs; REFERENCES.md
+# records DOI + provenance instead. Local-only working copies.
+papers/
+
+# Plan/design scratch bucket: local working notes, not shipped.
+plan-bucket/
+
+# Working notes, not deliverables: the bug ledger and the narrative findings log are
+# how we track the V&V effort between sessions, not documentation for users. Kept on
+# disk, out of the repo. Nothing in the tree cites them any more -- the facts they
+# carried were inlined at each site, so neither is structural.
+tests/BUGS.md
+tests/FINDINGS.md
+
+# Assistant guidance, not project documentation (was in .git/info/exclude; here so the
+# rule is shared rather than per-clone).
+CLAUDE.md

@@ -1,0 +1,26 @@
+# MHB98 Fig. 2 — single water droplet, experimental data (Ranz & Marshall 1952b)
+# Source: Miller, Harstad, Bellan, Int. J. Multiphase Flow 24(6), 1998, Fig. 2 (p.1038).
+#         papers/MillerHarstadBellan.pdf, PDF page 14. DOI:10.1016/S0301-9322(98)00028-7
+# Conditions: water, D0=1.1 mm (D0^2=1.21 mm^2), Td0=282 K, TG=298 K, Red=0 (quiescent), P=1 atm.
+# PROVENANCE CAVEAT: eyeball-digitized from the rendered PDF page (user-approved),
+#   NOT a WebPlotDigitizer export. Precision ~+/-2-3% of axis range. Fig 2a is a clean
+#   straight line (D2-law); Fig 2b is nearly flat at the wet-bulb. Treat as informational
+#   overlay only (never a gate), per the plan's section 1.1.
+# panel,t_s,value
+# --- Fig 2a: D^2 [mm^2] vs t [s] ---
+a,0,1.210
+a,100,1.085
+a,200,0.930
+a,300,0.780
+a,400,0.625
+a,500,0.470
+a,600,0.315
+a,700,0.160
+a,760,0.055
+# --- Fig 2b: Td [K] vs t [s] (nearly constant wet-bulb ~282.3 K) ---
+b,0,282.0
+b,50,282.3
+b,200,282.3
+b,400,282.35
+b,600,282.35
+b,780,282.3

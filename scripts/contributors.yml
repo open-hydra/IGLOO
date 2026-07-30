@@ -1,0 +1,12 @@
+original_authors:
+  - name: Giacomo Passarani
+  - name: Marco Grossi
+
+present_maintainers:
+  - name: Giacomo Passarani
+  - name: Marco Grossi
+
+exclude:
+  - dependabot[bot]
+  - github-actions[bot]
+  - Paolo

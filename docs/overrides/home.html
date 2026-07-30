@@ -1,0 +1,196 @@
+{% extends "main.html" %}
+
+{% block tabs %}
+{{ super() }}
+
+<style>.md-header { position: initial; }</style>
+
+<div class="igloo-home">
+
+  <!-- ══════════════════════════════════════════ HERO ══════════════════════════════════════════ -->
+  <section class="igloo-hero">
+    <div class="igloo-hero__grid"></div>
+    <div class="igloo-hero__glow igloo-hero__glow--a"></div>
+    <div class="igloo-hero__glow igloo-hero__glow--b"></div>
+    <div class="igloo-hero__wrap">
+
+      <span class="igloo-badge">
+        <span class="igloo-badge__dot"></span>
+        Hydra CFD Suite
+      </span>
+
+      <h1 class="igloo-hero__h1">IGLOO</h1>
+      <p class="igloo-hero__sub">Integration of a General Lagrangian One-way ODE set</p>
+      <p class="igloo-hero__body">
+        Open-source Lagrangian particle solver — each particle's ODE state is integrated
+        through a steady background gas field, from injection to exit of the domain, with
+        drag, heat transfer, evaporation, breakup, and eulerian feedback.
+      </p>
+
+      <div class="igloo-hero__btns">
+        <a href="{{ 'getting-started/' | url }}" class="igloo-btn igloo-btn--primary">
+          Get Started &nbsp;&rarr;
+        </a>
+        <a href="{{ 'overview/' | url }}" class="igloo-btn igloo-btn--ghost">
+          Overview
+        </a>
+      </div>
+
+      <div class="igloo-hero__pills">
+        <div class="igloo-pill"><strong>4</strong>&nbsp;ODE Models</div>
+        <div class="igloo-pill"><strong>Lagrangian</strong>&nbsp;Tracking</div>
+        <div class="igloo-pill"><strong>OpenMP</strong>&nbsp;Parallel</div>
+        <div class="igloo-pill"><strong>Modern</strong>&nbsp;Fortran</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════ FEATURES ════════════════════════════════════════ -->
+  <section class="igloo-features">
+    <div class="igloo-container">
+      <div class="igloo-section-hd">
+        <h2>Everything you need for dispersed-phase simulation</h2>
+        <p>A complete Lagrangian particle solver written in modern Fortran</p>
+      </div>
+      <div class="igloo-grid">
+
+        <article class="igloo-card igloo-card--indigo">
+          <div class="igloo-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+          </div>
+          <h3>Drag &amp; Heat Transfer</h3>
+          <p>Momentum and thermal coupling with the carrier gas through a library of literature drag laws and Nusselt-number correlations.</p>
+        </article>
+
+        <article class="igloo-card igloo-card--violet">
+          <div class="igloo-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </div>
+          <h3>Evaporation</h3>
+          <p>Opt-in phase change: vapor-pressure driven mass transfer with coupled diameter and temperature evolution.</p>
+        </article>
+
+        <article class="igloo-card igloo-card--orange">
+          <div class="igloo-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <h3>Secondary Breakup</h3>
+          <p>Five breakup models — from TAB to Reitz KH-RT — with optional child-particle generation and on-the-fly array growth.</p>
+        </article>
+
+        <article class="igloo-card igloo-card--teal">
+          <div class="igloo-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </div>
+          <h3>Eulerian Feedback</h3>
+          <p>Particle statistics deposited back onto the gas mesh as eulerian and source fields, smoothed by a volume-weighted binomial mollifier.</p>
+        </article>
+
+        <article class="igloo-card igloo-card--green">
+          <div class="igloo-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+          </div>
+          <h3>Parallel Execution</h3>
+          <p>The hot loop is OpenMP-parallel over particles — each one integrates independently through the frozen gas field.</p>
+        </article>
+
+        <article class="igloo-card igloo-card--pink">
+          <div class="igloo-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+          </div>
+          <h3>Flexible I/O</h3>
+          <p>Gas fields read from Tecplot files via ORION or injected in-memory by a parent solver. Trajectory, eulerian, and scatter-cloud output.</p>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════ QUICK START ══════════════════════════════════════ -->
+  <section class="igloo-qs">
+    <div class="igloo-container igloo-qs__inner">
+
+      <div class="igloo-qs__text">
+        <h2>Up and running in minutes</h2>
+        <p>IGLOO ships with a single install script that builds the bundled dependencies, compiles the Fortran core, and drops the executable in <code>bin/</code>.</p>
+        <div class="igloo-qs__links">
+          <a href="{{ 'getting-started/installation/' | url }}" class="igloo-btn igloo-btn--primary">
+            Installation guide &rarr;
+          </a>
+          <a href="{{ 'getting-started/quick-start/' | url }}" class="igloo-btn igloo-btn--secondary">
+            Quick start
+          </a>
+        </div>
+      </div>
+
+      <div class="igloo-qs__code">
+        <div class="igloo-term">
+          <div class="igloo-term__bar">
+            <span class="igloo-term__dot igloo-term__dot--r"></span>
+            <span class="igloo-term__dot igloo-term__dot--y"></span>
+            <span class="igloo-term__dot igloo-term__dot--g"></span>
+            <span class="igloo-term__label">terminal</span>
+          </div>
+          <pre class="igloo-term__body"><code><span class="tc"># Clone and build</span>
+<span class="tp">$</span> git clone https://github.com/open-hydra/IGLOO.git
+<span class="tp">$</span> cd IGLOO &amp;&amp; ./install.sh build --master=None --compilers=gnu --use-openmp
+
+<span class="tc"># Run the test suite</span>
+<span class="tp">$</span> cd test &amp;&amp; ./test.sh run</code></pre>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════ ECOSYSTEM ════════════════════════════════════════ -->
+  <section class="igloo-eco">
+    <div class="igloo-container">
+      <div class="igloo-section-hd">
+        <h2>The Hydra CFD Suite</h2>
+        <p>IGLOO is the Lagrangian dispersed-phase solver in an integrated multi-physics simulation suite</p>
+      </div>
+      <div class="igloo-eco__flow">
+        <a href="https://github.com/open-hydra/ATLAS" target="_blank" rel="noopener" class="igloo-eco__node">
+          <span class="igloo-eco__node-name">ATLAS</span>
+          <span class="igloo-eco__node-role">Pre-processor</span>
+          <span class="igloo-eco__node-desc">Mesh, initial &amp; boundary conditions, phase properties</span>
+        </a>
+        <div class="igloo-eco__arrow">&#8594;</div>
+        <a href="https://github.com/open-hydra/MOSE" target="_blank" rel="noopener" class="igloo-eco__node">
+          <span class="igloo-eco__node-name">MOSE / hydra</span>
+          <span class="igloo-eco__node-role">Gas field</span>
+          <span class="igloo-eco__node-desc">Steady compressible carrier-gas solution, read from file or injected in memory</span>
+        </a>
+        <div class="igloo-eco__arrow">&#8594;</div>
+        <div class="igloo-eco__node igloo-eco__node--active">
+          <span class="igloo-eco__node-tag">You are here</span>
+          <span class="igloo-eco__node-name">IGLOO</span>
+          <span class="igloo-eco__node-role">Particle solver</span>
+          <span class="igloo-eco__node-desc">Lagrangian particle ODE integration with drag, heat, evaporation &amp; breakup</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div><!-- /.igloo-home -->
+{% endblock %}
+
+{% block content %}{% endblock %}
+{% block footer %}{{ super() }}{% endblock %}
