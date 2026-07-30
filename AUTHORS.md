@@ -14,5 +14,3 @@
 
 Automatically sourced from git history.
 
-- GiacomoPassarani
-- MarcoGrossi92
