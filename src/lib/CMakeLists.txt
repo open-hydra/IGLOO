@@ -1,6 +1,6 @@
 file(GLOB LIBSRC *.f90 config/*.f90)
 add_library(${lib} ${LIBSRC})
-target_link_libraries(${lib} PRIVATE FiNeR::FiNeR OSlo ORION)
+target_link_libraries(${lib} PRIVATE FiNeR::FiNeR OSLO ORION)
 
 target_include_directories(${lib} INTERFACE
     $<BUILD_INTERFACE:${CMAKE_Fortran_MODULE_DIRECTORY}>)

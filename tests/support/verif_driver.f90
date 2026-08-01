@@ -144,7 +144,7 @@ contains
     ! Fixed-step: SDIRK4 directly, one step of size dt per call.          !
     ! XEND=X+dt caps H at dt; tol=1 prevents rejection/subdivision; the   !
     ! method coefficients (METH=2, gamma=4/15) come straight from         !
-    ! hairerSdirk4.f -- this measures the production tableau's order.      !
+    ! lib/hairer/sdirk4.f -- this measures the production tableau's order. !
     !-------------------------------------------------------------------!
     subroutine run_fixedstep(neq, dt, nstep, y, ierr)
         integer(I4), intent(in)    :: neq
