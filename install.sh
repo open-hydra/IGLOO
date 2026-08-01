@@ -186,9 +186,11 @@ case "$COMMAND" in
         fi
 
         task "Cloning submodules"
-        # if [[ $MASTER_TYPE == "None" ]]; then
-          # git submodule update --init --recursive 
-        # fi
+        # --recursive is required: FiNeR carries six nested submodules of its own.
+        # Skipped under --master=hydra, which supplies the dependency tree instead.
+        if [[ $MASTER_TYPE == "None" ]]; then
+          git submodule update --init --recursive
+        fi
 
         task "Configuring and building $project"
         if [[ $COMPILERS == "intel" ]]; then
