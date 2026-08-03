@@ -4,7 +4,7 @@
 
 [submodule "lib/OSLO"]
 	path = lib/OSLO
-	url = https://github.com/MarcoGrossi92/OSlo.git
+	url = https://github.com/MarcoGrossi92/OSLO.git
 
 [submodule "lib/ORION"]
 	path = lib/ORION
