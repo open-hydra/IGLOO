@@ -1,6 +1,6 @@
 # Verification matrix
 
-One row per registered CTest entry (42 total: 22 e2e + 19 unit + `self_test`).
+One row per registered CTest entry (48 total: 24 e2e + 24 unit incl. `self_test`).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -28,10 +28,11 @@ Columns:
 
 ---
 
-## Shared box fixture (13 of 22 e2e cases)
+## Shared box fixture (13 of 24 e2e cases)
 
 Every e2e case except `db-2daxi`, `vie-plait`, `mhb98-water`,
-`pilch-erdman-e2e`, `tab-e2e`, `etab-e2e`, `khrt-e2e`, and `reitz-diwakar-e2e` runs on the
+`pilch-erdman-e2e`, `tab-e2e`, `etab-e2e`, `khrt-e2e`, `khrt-stress`,
+`khrt-e2e-threads`, and `reitz-diwakar-e2e` runs on the
 **same** axis-aligned uniform-gas box emitted by
 [`tools/make_box_case.py`](tools/make_box_case.py). The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
@@ -44,7 +45,9 @@ a near-static U=1.9×10⁻⁴ clock) to match the Miller-Harstad-Bellan Fig-2 co
 `pilch-erdman-e2e` likewise keeps the geometry but runs U=200 m/s water drops
 (`tools/make_pe_case.py`) for the PE87 Weber sweep; `tab-e2e`/`etab-e2e` stretch the box to
 0.6 m × 240 cells at U=50 m/s and `khrt-e2e`/`reitz-diwakar-e2e` run the 0.15 m box at U=200 m/s
-(all via `make_pe_case.py`) for the TAB/ETAB onset and the KHRT / Reitz-Diwakar sweeps.
+(all via `make_pe_case.py`) for the TAB/ETAB onset and the KHRT / Reitz-Diwakar sweeps;
+`khrt-stress` and `khrt-e2e-threads` reuse `khrt-e2e`'s fixture unchanged (the former via an
+`INPUT/` symlink, differing only in `mShedLim`; the latter runs that same case at 1/2/4 threads).
 
 | Property | Value |
 |---|---|
@@ -81,6 +84,8 @@ oracle possible.
 | **tab-e2e** | `[ORA87]` eq. 5 (SAE 872089) | *closed form* (Tier V) — onset (no-break `We_r<=5.75`) + first-breakup time vs the damped-oscillator crossing `y(t)=We_Cr(1−e^{−t/t_d}(cos ωt+sin ωt/(ω t_d)))`; **radius-based** We (TAB/ORA87 convention); measured bracket = rows around the first d drop, slack 5 % (t_bu inside bracket to sub-percent). Found + gates the A18 fix (event path was dead) | box geometry stretched: 0.6×0.05×0.05 m, 240×5×5, **U=50 m/s** (`make_pe_case.py --we-convention rad`) | inlet-face 401: 25 cells, one diameter each (`We_r ∈ {3…90}` at slip=25), κ_ρ=0.34, κ_v=0.5, κ_t=1.0, Dirac; `breakup=TAB` (Comega=8, Cmu=5, WeCrit=12 internal, method=2 n=3.5); water (ATLAS-GPB fixtures); outlet + walls |
 | **etab-e2e** | `[Tan97]`,`[Tan98]` (SAE 970050/980808) | *closed form* (Tier V) — onset (no-break `We_r<=5.75`) + first-breakup time (ORA87 oscillator, shared with tab-e2e) + the ETAB deterministic cascade product size `d_child/d_parent = exp(-(Kbr/ω)acos(1-1/WeCr))` (bag `k1(AWe We^4+1)`, strip `k2 sqrt(We)`, WeTrans=80); **radius-based** We; reference at the We AT BREAKUP, tol 1% (worst 0.03%) | box geometry stretched: 0.6×0.05×0.05 m, 240×5×5, **U=50 m/s** (`make_pe_case.py --we-convention rad`) | inlet-face 401: 25 cells, one diameter each (`We_r ∈ {3…105}` at slip=25), κ_v=0.5; `breakup=ETAB` (k1=k2=0.2222, WeCrit=12 internal, WeTrans=80, Comega=8, Cmu=5); water (ATLAS-GPB fixtures); outlet + walls |
 | **khrt-e2e** | `[Reitz87]` (Atomisation & Spray Tech. 1987) | *closed form* (Tier V/P) — the continuous KH-stripping rate `dd/dt=(dStable-d)/tauKH`, dStable=2·B0·λ_KH, τ_KH=3.726·B1·r/(λ_KH·Ω_KH) with the Reitz-87 Λ/Ω correlations; **radius-based** We; initial-rate (same-window LSQ) at We_r>=340, tol 2% (worst 2e-4). `khrt-e2e-rt` = RT-shatter persistence gate (found+gated the A19 fix: 8 drops shatter discontinuously to the fragment scale and persist, mass-consistent) | shared 0.15 m box but **U=200 m/s** (`make_pe_case.py --we-convention rad`) | inlet-face 401: 25 cells, one diameter each (`We_r ∈ {30…1000}` at slip=100), κ_v=0.5; `breakup=Reitz-KHRT` (B0=0.61, B1=20, Ctau=1, CRT=0.1, mShedLim=0.03, WeLimit=6); water (ATLAS-GPB fixtures); outlet + walls |
+| **khrt-stress** | — (robustness stress; **no oracle**) | *behavioral* — the `khrt-e2e` fixture with `mShedLim=0.01` instead of 0.03, so parents shed ~66 deep instead of ~22 and the growable per-parent shed lists go through ~7 doublings. Asserts >=500 children, deepest parcel >=20 sheds, parcel mass-flow conserved to 1e-4 under heavy shedding, and that the `maxShed=1000` runaway guard did NOT fire. Deliberately not a validation case — cite `khrt-e2e` for KHRT physics, never this | shared `khrt-e2e` fixture (`INPUT/` is a **symlink** to `../khrt-e2e/INPUT`; moving either case breaks it) | as `khrt-e2e`, except `[IGLOO-Models] mShedLim = 0.01` |
+| **khrt-e2e-threads** | — (OMP invariance pin) | *cross-run invariant* — runs `khrt-e2e` at `OMP_NUM_THREADS` 1/2/4 and compares `trajectories-A.dat`/`outloc-A.dat` as **sorted multisets** plus the per-pass child counts. Sorting is deliberate: record order is OMP-nondeterministic by design, but a *torn* record (the `unitTraj`/`unitExit` writes are unsynchronised inside the parallel region) is not absorbed by a multiset compare, and nothing else in the suite would catch interleaving. Established green while the one-shed cap was still on, so a later red indicts the cap lift | shared `khrt-e2e` fixture and working directory (`RESOURCE_LOCK khrt_output`) | as `khrt-e2e` |
 | **reitz-diwakar-e2e** | `[RD87]` (SAE 870598) | *closed form* (Tier P) — the RD breakup rate `dd/dt=(dStable-d)/τ`, branch per drop: **bag** (`We_r>6`, `We_r<=0.5√Re`) τ=π√(ρ_l·r³/2σ), dStable=12σ/(ρ_g u²); **stripping** (`We_r>0.5√Re`) τ=C·(r/u)√(ρ_l/ρ_g) C=20, dStable=σ²/(ρ_g u³ μ_g). **radius-based** We; initial-rate (same-window LSQ), tol 2% (worst 8e-4). All four constants + both stable sizes verified vs the [RD87] PDF (bag D=π Eq.7, stripping C=20 curve-fit Eqs 6/8) — no production change | shared 0.15 m box but **U=200 m/s** (`make_pe_case.py --we-convention rad`) | inlet-face 401: 25 cells, one diameter each (`We_r ∈ {8…1000}` at slip=100, handoff at We_r=20), κ_v=0.5; `breakup=Reitz-Diawakar` (WeBag=6, Cb=π, Cstrip=0.5, Cs=20); water (ATLAS-GPB fixtures); outlet + walls |
 | **db-injection** | infrastructure (no paper; bug-B1 regression) | *behavioral* — no reference curve; asserts placement fidelity, `vInj` hand-off (u starts at u_p=1), Stokes relaxation, and domain exits | shared box | **assigned-position (DB)** injection: 5 parcels at explicit x=0.01, y=0.005…0.045, z=0.025, u_p=1.0 m/s, d=11.89 µm, ṁ=1e-4, T=300 K; outlet + walls |
 | **coupled-body** | analytic (euler+source+body) | *mixed* — body-force v(x) closed form (as body-force) **plus** source-deposit totals vs closed forms: the deposit must be the drag reaction only (body-gained momentum/energy stripped) | shared box + `body-accel=(0,−200,0)`; euler+source accumulators ON (default `out-file`) | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; outlet + walls |
@@ -110,6 +115,8 @@ box/BC. Sub-test IDs in parentheses.
 | **test_tc_analytic** | `[TC2012]`,`[ATC24]` | *deep-converged fixed point + closed form* — production TC vs independent bisection root of the G(m) residual (TC1, 27-pt grid); exact isothermal Stefan-Fuchs limit m=rhs0 (TC3); CEM-collapse identity (TC4); bracket theorem (TC6) |
 | **test_combustion** | `[Beck05]` | *closed form + independent integration* — closed-form m(t)=(ρπ/6)(d₀^n−K_eff·t)^{3/n} with complex-step dm/dt vs `becksteadRate` (CB1); local RK4 of the production rate vs the closed form (CB2); bitwise ignition gate (CB3); X_eff-exponent discriminator (CB4) |
 | **test_breakup_khrt** | `[Reitz87]` (KH), `[BR99]` (RT) | *analytic formula @ swept We* — production `Lib_Breakup::breakupOde` (pure-KH, acc=0) vs the coded Reitz-1987 KH linear-stability chain to 1e-12 (KH1 sub-critical, KH2/KH3) |
+| **test_kh_rayleigh_limit** | `[Ray78]` via `[Reitz87]` p.318 | *independent analytic limit* — the ONLY KH reference that shares no constant with the Reitz-87 fit. Recovers `λ_KH`/`Ω_KH` from `breakupOde` by **two-point inversion in `B0`** (the pure-KH rate is affine in `B0`; no production change, no third copy of the correlation), then checks the `We_g→0, Z→0` corner against Rayleigh's dispersion relation solved in-test: `λ/a` 9.02 vs 9.0144 (KHR3, 6.2e-4), `ω*` 0.34 vs 0.34334 (KHR4, 9.7e-3). KHR1/KHR2 pin that the recovered constants ARE the published 9.02/0.34 to 1e-7. **Tolerances = the fit's own accuracy, not implementation error — do not tighten** |
+| **test_khrt_interaction** | — (path-agreement pin) | *cross-path invariant* — KHRT is the only model live on the ODE and event paths at once, each with a verbatim copy of the KH/RT blocks. Asserts the KH rate is exactly 0 **iff** the event path takes the RT branch, over 4 quadrants incl. a ±1e-9 straddle of `tauRT`; that the RT branch lands `dp` on `λ_RT` (5.5e-16); that the duplicated `tc/told` accumulator co-evolves identically, including the by-design reset asymmetry; and the O7-SHED pin that the KH-shed branch is unreachable (A23) |
 | **test_breakup_tab** | `[ORA87]` | *closed form + independent integration* — production `breakupEvent` oscillator vs the analytic damped-driven-oscillator solution (TAB1); *independent* `rk4_ref` of the raw ORA87 ODE (TAB2); rest-drop critical Weber (TAB3); breakup time via bisection (TAB4) |
 | **test_tab_moments** | `[ORA87]` | *stochastic moments* — child-size E[r], E[r²] over 20 000 sampled breakups vs a truncated Rosin-Rammler moment oracle (CLT-band tolerance) |
 | **test_breakup_rd** | `[RD86]` (+`[RD87]` lineage) | *analytic formula @ swept We_r* — production `breakupOde` vs the OpenFOAM-form bag/stripping oracle branches and the regime handoff (RD1–RD4) |
@@ -125,7 +132,11 @@ box/BC. Sub-test IDs in parentheses.
 
 ## Reconciliation
 
-22 e2e + 19 unit + 1 `self_test` = **42 CTest entries** (incl. `khrt-e2e-rt`, the KHRT RT-shatter persistence gate). Unit families that emit
+24 `e2e`-labelled + 24 `unit`-labelled = **48 CTest entries**, all green (counted from `ctest -N`
+2026-08-04). The `e2e` count includes `khrt-e2e-rt`, the KHRT RT-shatter persistence gate, plus the
+two A23/S4 additions `khrt-stress` and `khrt-e2e-threads`; the `unit` count includes `self_test`
+and `registry-docs`, and the two O7 additions `test_kh_rayleigh_limit` and
+`test_khrt_interaction`. Unit families that emit
 a production-vs-reference overlay (`verif_dump` → `tools/plot_curves.py` →
 `docs/vv/images/unit-*.svg`): drag, heat, evaporation-CEM, LK, TC, combustion,
 the five breakup models, and interp — 12 figures. `ini_pipeline` (config
