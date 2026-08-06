@@ -5,9 +5,31 @@ module IGLOO_data_phases
   implicit none
   private
 
-  type, public:: obj_child
-    integer  :: ipos(4), igas(3)
-    real(R8) :: pos(3), vel(3), temp, diam, npdot, time
+  !> One shed child parcel, held in a growable per-parent list (`shedList`) rather than in a
+  !> single slot, so a parent can shed more than once within one pass.
+  type, public:: obj_shed
+    integer  :: ipos(4) = 0,      igas(3) = 0
+    real(R8) :: pos(3)  = 0._R8,  vel(3)  = 0._R8
+    real(R8) :: temp    = 0._R8,  diam    = 0._R8, npdot = 0._R8, time = 0._R8
+  end type
+
+  !> Growable shed list, one per parent index. Vector idiom copied from `registry_t`
+  !> (config/Registry.f90): reserve + double via move_alloc.
+  !>
+  !> ⚠ THE DUMMY IN `integrate` MUST BE `intent(inout)`, NEVER `intent(out)`. `intent(out)`
+  !> on a derived type deallocates its allocatable components on entry and resets the rest to
+  !> their defaults. Here that would silently discard the capacity `solve` reserves before the
+  !> OMP region, forcing an allocation inside it on every call.
+  !> This replaces the single-slot `obj_child`, which was bitten by the other half of the same
+  !> rule (A23e): it was passed `intent(out)` and had NO default initializers, so it entered
+  !> UNDEFINED -- wiping the `diam = 0` guard `solve` set before the loop, leaving the
+  !> compaction to select on stack garbage. Defaults are load-bearing on both types; keep them.
+  type, public:: shedList
+    integer :: n = 0, capacity = 0
+    type(obj_shed), allocatable :: item(:)
+  contains
+    procedure, pass(this), public :: reserve => shed_reserve
+    procedure, pass(this), public :: push    => shed_push
   end type
 
   type, public:: obj_group
@@ -50,7 +72,7 @@ module IGLOO_data_phases
     real(R8) :: qComb = 0._R8
     integer  :: nactive = 0
     type(obj_particle), allocatable :: particle(:)
-    type(obj_child),    allocatable :: child(:)
+    type(shedList),     allocatable :: shed(:)   !> one growable shed list per parent index
   contains
     procedure, pass(self), public :: setup_particleODE
     procedure, pass(self), public :: assign_group2particle
@@ -102,6 +124,37 @@ module IGLOO_data_phases
   end type obj_material
 
 contains
+
+  !> Grow the backing store to at least `newcap`, preserving the live entries. Never shrinks.
+  subroutine shed_reserve(this,newcap)
+    implicit none
+    class(shedList), intent(inout) :: this
+    integer,         intent(in)    :: newcap
+    type(obj_shed), allocatable :: tmp(:)
+
+    if (newcap <= this%capacity) return
+    allocate(tmp(newcap))
+    if (this%n > 0) tmp(1:this%n) = this%item(1:this%n)
+    call move_alloc(tmp,this%item)
+    this%capacity = newcap
+
+  end subroutine shed_reserve
+
+  !> Append one shed record, doubling the capacity when full.
+  subroutine shed_push(this,rec)
+    implicit none
+    class(shedList), intent(inout) :: this
+    type(obj_shed),  intent(in)    :: rec
+
+    if (this%n == this%capacity) then
+      if (this%capacity == 0) then; call this%reserve(4)
+      else;                         call this%reserve(2*this%capacity); endif
+    endif
+    this%n = this%n + 1
+    this%item(this%n) = rec
+
+  end subroutine shed_push
+
 
   pure subroutine assign_material2group(self)
     implicit none

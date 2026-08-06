@@ -213,7 +213,7 @@ contains
     subroutine breakupEvent(eventvar, neventvar, brkupState, nbrkst, &
                              sigma,mup,rhop,rhog,vel,Re,time,acc,vp,dt, &
                              brkupSelect,bp,bpMethod,bpScale, &
-                             event,childState,addChild,exitLoop)
+                             event,childState,addChild,exitLoop,childPending)
         use IGLOO_variables, only: toll
         implicit none
         integer,  intent(in)    :: neventvar, nbrkst
@@ -228,15 +228,18 @@ contains
         real(R8), intent(out)   :: childState(nchild)
         logical,  intent(out)   :: event, addChild
         logical,  intent(in)    :: exitLoop
+        logical,  intent(in), optional :: childPending  !> a child is already banked this call
+        logical :: noShed
 
         childState = 0._R8
+        noShed = .false.; if (present(childPending)) noShed = childPending
         if (vel<toll) then; event = .false.; addChild = .false.; return; endif
         !> eventvar(1) = dp, eventvar(2) = npdot (always, for all models)
         select case (brkupSelect)
         case (3)   !> KHRT: eventvar=[dp,npdot,m0,KHidx], brkupState=[told,tc]
             call ReitzKHRTevent(eventvar(1),sigma,mup,rhop,eventvar(2),rhog,vel, &
                                 time,acc,vp,eventvar(3),brkupState(1),brkupState(2),      &
-                                eventvar(4), bp, event,childState,addChild,exitLoop)
+                                eventvar(4), bp, event,childState,addChild,exitLoop,noShed)
         case (4)   !> TAB: eventvar=[dp,npdot,y,yDot]
             addChild = .false.
             call TABmodel(eventvar(1),sigma,mup,rhop,eventvar(2),rhog,vel,dt, &
@@ -251,7 +254,7 @@ contains
     
 
     subroutine ReitzKHRTevent(dp,sigma,mup,rhop,npdot,rhog,vel,time,acc,vp,m0,told,tc,KHindex, &
-                               bp, event,childState,addChild,exitLoop)
+                               bp, event,childState,addChild,exitLoop,childPending)
         use IGLOO_variables, only: pi, toll
         implicit none
         real(R8), intent(in)    :: sigma, mup, rhop, rhog, vel, time, acc(3), vp(3)
@@ -260,9 +263,10 @@ contains
         real(R8), intent(out)   :: childState(nchild)  !> [vel(3), diam, npdot]
         logical,  intent(out)   :: event, addChild
         logical,  intent(in)    :: exitLoop
+        logical,  intent(in)    :: childPending
         real(R8) :: radius, WeGas, WePart, Oh, Tay, omegaKH, lambdaKH, tauKH, dStable!, dOld
         real(R8) :: gt, force, omegaRT, lambdaRT, tauRT, nDrops, mShed!, lengthScale
-        real(R8) :: ae3, be3, ce3, de3, qe3, pe3, d3, ue3, ve3, dParent, mc, nChild
+        real(R8) :: dLast, npdotLast, nChild
 
         event    = .false.
         addChild = .false.
@@ -300,35 +304,40 @@ contains
                 npdot  = nDrops*npdot
                 m0     = pi/6._R8*rhop*dp**3
             endif
-        elseif (dStable < dp) then
+        elseif (dStable < dp .and. .not. childPending) then
+            !> `childPending` now means "the caller cannot keep a child created right now" --
+            !  it is set for the whole call on the LAST generation pass (B2), where a new child
+            !  would never be integrated and never write its exit record, so its mass would
+            !  vanish from the totals. Suppressing the shed leaves that mass on the parent,
+            !  which is exact.
+            !  It used to mean "the single child slot is already taken" (A23c): shedding twice
+            !  stripped the parent (npdot -> npdotLast) while the second child was discarded,
+            !  measured as a 45 % mass loss. That cap is gone -- each parent now owns a growable
+            !  shed list -- but the terminal-pass case is real and keeps the same guard.
             if (WeGas > bp(6)) then
-                mShed = m0 - pi/6._R8*rhop*dp**3
+                !> A23 fix — Reitz-87 p.322 product-parcel rule. The continuous ODE has been
+                !> shrinking dp while raising npdot at CONSTANT parcel mass (the paper's
+                !> N*a^3 = N0*a0^3), so no mass has actually left the parcel yet; m0 is the
+                !> per-drop mass at the last event, hence dLast is that event's diameter.
+                dLast = (6._R8*m0/(pi*rhop))**(1._R8/3._R8)
+                mShed = m0 - pi/6._R8*rhop*dp**3      !> per-drop mass stripped since then
                 if (mShed/m0 > bp(5)) then
-                    ae3 = 1._R8
-                    be3 = -dStable
-                    ce3 = 0._R8
-                    de3 = dp*dp*(dStable - dp)
-                    qe3 = (be3/(3._R8*ae3))**3 - be3*ce3/(6._R8*ae3*ae3) + de3/(2._R8*ae3);
-                    pe3 = (3._R8*ae3*ce3 - be3*be3)/(9._R8*ae3*ae3);
-                    d3  = qe3*qe3 + pe3*pe3*pe3;
-
-                    if (d3 >= 0._R8) then
-                        d3  = sqrt(d3)
-                        ue3 = (-qe3 + d3)**(1._R8/3._R8)
-                        ve3 = (-qe3 - d3)**(1._R8/3._R8)
-                        dParent = ue3 + ve3 - be3/3._R8
-                        mc  = npdot*(dp**3-dParent**3)
-                        nChild = mc/dStable**3
-                        if (nChild >= npdot) then
-                            event       = .true.
-                            if (exitLoop) then
-                                addChild       = .true.
-                                childState(1:3) = vp   ! child velocity = parent (no normal component in KHRT sheds)
-                                childState(4)   = dStable
-                                childState(5)   = nChild
-                                dp = dParent
-                                m0 = pi/6._R8*rhop*dp**3
-                            endif
+                    !> N0 = parent count at the last event; the paper RESTORES it when the
+                    !> product parcel is created, which is what actually removes the shed
+                    !> mass. The parent keeps its current diameter dp.
+                    npdotLast = npdot*dp**3/dLast**3
+                    !> all stripped mass goes into drops of size dStable = 2*B0*lambda_KH
+                    nChild = npdotLast*(dLast**3 - dp**3)/dStable**3
+                    !> paper: create the parcel only if product drops >= parent drops
+                    if (nChild >= npdotLast) then
+                        event       = .true.
+                        if (exitLoop) then
+                            addChild       = .true.
+                            childState(1:3) = vp   ! child velocity = parent (no normal component in KHRT sheds)
+                            childState(4)   = dStable
+                            childState(5)   = nChild
+                            npdot = npdotLast      !> restore N0 (dp unchanged) => mass leaves the parcel
+                            m0    = pi/6._R8*rhop*dp**3   !> new accumulation reference
                         endif
                     endif
                 endif

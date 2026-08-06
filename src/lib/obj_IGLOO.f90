@@ -104,14 +104,14 @@ contains
                                 probeOn, probeIDs
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
+    use IGLOO_Lib_Properties, only: lookupTab   !> A23c child hand-off (enthalpy slot)
     use oslo
     use omp_lib
     implicit none
     class(obj_IGLOO), intent(inout) :: self
     integer, parameter :: maxLoop=5
-    integer :: m, g, ip, iota, ch, start, nEnd, oldEnd, newSize, b, fam
-    integer :: loopCounter, childCounter
-    logical :: addedChild
+    integer :: m, g, ip, iota, ch, e, start, nEnd, oldStart, oldEnd, newSize, b, fam
+    integer :: loopCounter, childCounter, maxShedSeen
     ! logical, allocatable :: famDone(:)
     real(R8), allocatable :: relTol(:), absTol(:)
     !> Scatter-cloud weight-quantum (dNscat) auto-sizing scratch.
@@ -220,43 +220,53 @@ contains
         write(unitExit ,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
 
         if (gr%brkupHasChild) then
-          if (allocated(gr%child)) deallocate(gr%child)
-          allocate(gr%child(1:gr%nparticles))
+          if (allocated(gr%shed)) deallocate(gr%shed)
+          allocate(gr%shed(1:gr%nparticles))
           gr%nactive = gr%nparticles
           start = 1;  nEnd = gr%nactive
           loopCounter = 0
 
           do while (loopCounter < maxLoop)
             loopCounter = loopCounter + 1
-            !> Ensure child array covers [start:nEnd]
-            if (size(gr%child) < nEnd) then
-              deallocate(gr%child); allocate(gr%child(nEnd))
-            endif
-            gr%child(start:nEnd)%diam = 0._R8
-            childCounter = 0
+            !> Grow BEFORE resetting the window -- the other order indexes past the end on the
+            !  pass that added children. move_alloc (not deallocate/allocate) so each list keeps
+            !  the capacity it reserved on an earlier pass.
+            if (size(gr%shed) < nEnd) call resizeShedArray(gr%shed, nEnd)
+            !> Empty each list in the window and give it room for the common case, so nothing
+            !  has to allocate inside the parallel region below.
+            do ip = start, nEnd
+              gr%shed(ip)%n = 0
+              call gr%shed(ip)%reserve(1)
+            enddo
 
-            !$OMP PARALLEL DO SCHEDULE(DYNAMIC) PRIVATE(addedChild) &
-            !$OMP   REDUCTION(+:childCounter)
+            !$OMP PARALLEL DO SCHEDULE(DYNAMIC)
             do ip = start, nEnd
               if (probeOn) then; if (.not.any(gr%particle(ip)%ID==probeIDs)) cycle; endif
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                              mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab,    &
-                             gr%child(ip),addedChild)
-              if (addedChild) childCounter = childCounter + 1
+                             gr%shed(ip), noShed=(loopCounter==maxLoop))
             enddo
             !$OMP END PARALLEL DO
 
+            !> Total shed EVENTS, not parents that shed -- `newSize` has to size the particle
+            !  array by the number of children actually created. Summed serially: the drain
+            !  below walks the same ascending `ip`, so the child ordering is fixed by the
+            !  traversal itself, independent of thread count and SCHEDULE(DYNAMIC).
+            oldStart     = start
+            childCounter = 0
+            maxShedSeen  = 0
+            do ip = start, nEnd
+              childCounter = childCounter + gr%shed(ip)%n
+              maxShedSeen  = max(maxShedSeen, gr%shed(ip)%n)
+            enddo
+
             if (childCounter > 0) then
               write(*,*)"       Loop",loopCounter," => number of children = ", childCounter
-
-              !> Compact scattered children into gr%child(1:childCounter)
-              ch = 0
-              do ip = start, nEnd
-                if (gr%child(ip)%diam > 0._R8) then
-                  ch = ch + 1
-                  if (ch /= ip) gr%child(ch) = gr%child(ip)
-                endif
-              enddo
+              !> Visible tripwire: how hard the shed path is actually working. A number
+              !  climbing toward the `maxShed` guard in Lib_Integration means the case is
+              !  approaching runaway shedding well before the guard has to fire.
+              if (maxShedSeen > 1) write(*,'(A,I0,A)')                                    &
+                    "                             (max ",maxShedSeen," sheds from one parcel)"
 
               !> Grow particle array if needed (geometric 2x)
               oldEnd  = nEnd
@@ -270,15 +280,61 @@ contains
               call gr%setup_particleODE(start, nEnd)
               call gr%assign_group2particle(start, nEnd)
 
-              do ch = 1, childCounter
+              !> Drain the shed lists in ascending parent index, then push order within each.
+              !  This is the same traversal the old single-slot compaction performed, so with
+              !  the one-shed cap on it visits exactly the same records in the same order --
+              !  which is what keeps `kid%ID = oldEnd + ch` landing on the same parent.
+              !  Deterministic by construction, not by luck: no sort, no thread-number
+              !  dependence, unaffected by SCHEDULE(DYNAMIC).
+              !
+              !> A23c: a child inherits time > 0, so `integrate` SKIPS its `part%time==0`
+              !  initialization block entirely. Everything that block would have established
+              !  must therefore be set here, or the child enters the solver with an
+              !  uninitialized cell index and mass state (which segfaulted on the first
+              !  getVertices). This is the child hand-off that was never written -- the path
+              !  had no trigger before A23a/A23b, so it had never executed for any model.
+              ch = 0
+              do ip = oldStart, oldEnd
+              do e  = 1, gr%shed(ip)%n
+                ch   = ch + 1
                 iota = oldEnd + ch
-                gr%particle(iota)%ID            = iota
-                gr%particle(iota)%stateVar(1:3) = gr%child(ch)%pos
-                gr%particle(iota)%stateVar(4:6) = gr%child(ch)%vel
-                gr%particle(iota)%tp            = gr%child(ch)%temp
-                gr%particle(iota)%d             = gr%child(ch)%diam
-                gr%particle(iota)%npdot         = gr%child(ch)%npdot
-                gr%particle(iota)%time          = gr%child(ch)%time
+                associate(kid => gr%particle(iota), src => gr%shed(ip)%item(e))
+                kid%ID            = iota
+                kid%stateVar(1:3) = src%pos
+                kid%stateVar(4:6) = src%vel
+                kid%tp            = src%temp
+                kid%d             = src%diam
+                kid%npdot         = src%npdot
+                kid%time          = src%time
+                !> cell/gas locators inherited from the parent at the shed point
+                kid%i       = src%ipos
+                kid%igas    = src%igas
+                kid%igasOld = src%igas
+                kid%xi0     = 0.5_R8
+                !> fresh trajectory bookkeeping
+                kid%Ncell = 0; kid%gone = .false.; kid%wasin = .false.; kid%angle = 0._R8
+                kid%lost  = .false.
+                !> parcel mass state: m from (rho, d), then the parcel flow mdot = npdot*m
+                call kid%computeMass(mat%rhoTab)
+                kid%m0   = kid%m
+                kid%mdot = kid%npdot * kid%m
+                !> ODE state: enthalpy/temperature slot, then the model-3 count slot
+                if (kid%varCp) then
+                  kid%stateVar(7) = lookupTab(mat%hTab, kid%tp)
+                else
+                  kid%stateVar(7) = kid%tp
+                endif
+                select case (kid%model)
+                case(2,5); kid%stateVar(8) = kid%m
+                case(3);   kid%stateVar(8) = kid%npdot
+                case(4);   kid%stateVar(8) = kid%m; kid%stateVar(9) = kid%npdot
+                end select
+                if (eulerSwitch)    kid%stateVar(kid%nOde+1:kid%neq) = 0._R8
+                if (kid%bodyAccum)  kid%stateVar(kid%neq-1 :kid%neq) = 0._R8
+                kid%npold   = kid%npdot
+                kid%oldState = kid%stateVar
+                end associate
+              enddo
               enddo
               gr%nactive = newSize
             else
@@ -422,6 +478,22 @@ contains
     tmp(1:n) = arr(1:n)
     call move_alloc(tmp, arr)
   end subroutine resizeParticleArray
+
+
+  !> Same idiom for the per-parent shed lists. Intrinsic assignment deep-copies each list's
+  !> allocatable `item` component, so previously-reserved capacity survives the growth.
+  subroutine resizeShedArray(arr, newCapacity)
+    use IGLOO_data_phases, only: shedList
+    implicit none
+    type(shedList), allocatable, intent(inout) :: arr(:)
+    integer, intent(in) :: newCapacity
+    type(shedList), allocatable :: tmp(:)
+    integer :: n
+    n = min(size(arr), newCapacity)
+    allocate(tmp(newCapacity))
+    tmp(1:n) = arr(1:n)
+    call move_alloc(tmp, arr)
+  end subroutine resizeShedArray
 
 
 end module IGLOO_module

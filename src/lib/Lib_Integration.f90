@@ -9,9 +9,9 @@ module Lib_Integration
 contains
 
   subroutine integrate(part,geoblock,gasblock,srcblock,eulblock,     &
-                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab, child,addChild)
+                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab, shed,noShed)
     use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
-    use IGLOO_data_phases, only: obj_child
+    use IGLOO_data_phases, only: obj_shed, shedList
     use IGLOO_variables,  only: unitTraj,unitExit,unitScat,iprint,dtprint, &
                                 nb,nspecies,toll,ord2,mesh2D,threshold,    &
                                 eulerSwitch,sourceSwitch, phaseChange,     &
@@ -42,9 +42,15 @@ contains
     type(obj_eulerblock),  intent(inout) :: eulblock(nb)
     real(R8),              intent(in)    :: hTab(:),cpTab(:),rhoTab(:),     &
                                             mupTab(:),sigTab(:),psatTab(:)
-    type(obj_child),       intent(out), optional :: child
-    logical,               intent(out), optional :: addChild
+    !> This parent's shed list. `intent(inout)` is REQUIRED -- see the warning on the type.
+    type(shedList),        intent(inout), optional :: shed
+    !> B2: caller is on the LAST generation pass -- a child created now would never be
+    !  integrated and would never write `unitExit`, so its mdot would simply vanish from the
+    !  outloc total (silent mass loss, no crash). Told in advance, the parent keeps the mass
+    !  instead of shedding it into a parcel that gets discarded: exact by construction.
+    logical,               intent(in),    optional :: noShed
     !> local variables
+    type(obj_shed) :: shedRec   !> staged child record, pushed once complete
     real(R8), allocatable :: gas(:,:), gasVert(:,:), gasState(:)
     real(R8) :: vert(3,8), t1, t2, tStart, deltat, tlimit, tprint
     real(R8) :: Ein, Eout, Pin(3), Pout(3), massIn, massOut, vol
@@ -62,12 +68,17 @@ contains
     !> accessed by ODEsystem, rhs1-4, solout via host association
     real(R8) :: y(part%neq), oldLocal(part%neq)
     real(R8) :: auxLocal(nauxvar), childState(nchild)
-    logical  :: addChildLocal   !> breakupEvent needs a present target even when the caller omits addChild
+    logical  :: addChildLocal   !> breakupEvent's shed flag; a present target even when `shed` is absent
+    logical  :: childDone       !> B2: sheds suppressed for this whole call (terminal pass)
     real(R8), allocatable :: stateLocal(:), oldStLocal(:)
     real(R8), allocatable :: eventLocal(:), oldEvLocal(:)
     real(R8) :: timeLocal, din, dout, deltaS(3), dir(3), taup
     integer  :: err, nDL, innerIter, jSlot
     integer,  parameter :: maxInnerIter=10, nStep=10
+    !> Runaway-shed guard: hard cap on child parcels one parent may shed in one call. Sized
+    !  ~100x the worst observed physical value (khrt-e2e peaks in the tens), so reaching it
+    !  means a mis-parameterised case (e.g. mShedLim driven to ~0), not normal operation.
+    integer,  parameter :: maxShed=1000
     real(R8), parameter :: safety=0.99, dtMin=1.e-14_R8, tauFactor=100._R8
     real(R8), parameter :: escapeDist=1.e-6_R8   ! min displacement per sliver-escape hop (startedOut)
     !> Burnout tolerance: absolute threshold on droplet MASS [kg]. A consuming droplet
@@ -91,7 +102,10 @@ contains
 
     !> ARRAYS ALLOCATION
     addChildLocal = .false.
-    if (present(addChild)) addChild = .false.
+    !> Seeded true on the terminal pass (B2) so the shed is suppressed before it ever commits,
+    !  not after: `breakupEvent` reads this as `childPending` and leaves the parent intact.
+    childDone     = .false.
+    if (present(noShed)) childDone = noShed
     allocate(gasState(ng))
     if     (ord2.and.mesh2D) then; allocate(gas(ng,4)); allocate(gasVert(3,4)); ngVert=4
     elseif (     ord2      ) then; allocate(gas(ng,8)); allocate(gasVert(3,8)); ngVert=8
@@ -121,7 +135,7 @@ contains
       if (ord2) then; call part%findDualCell(gasblock(b)); part%igasOld = part%igas; part%xi0 = 0.5_R8
                       call setAtGasBoundary()
       else;                part%igas = part%i(2:4); endif
-      call gasblock(b)%gasProperties(gas,part%igas)
+      call gasblock(b)%gasProperties(gas,part%igas)   ! NOT hoistable: consumed just below
       if (all(part%iInj==[0,0,0,0])) then
         part%stateVar(4:6) = part%vInj   ! DB hand-off (pin_particles can't write stateVar pre-allocation)
         if (any(part%stateVar(4:6)>=threshold)) part%stateVar(4:6) = gas(iu:iu+2,1)
@@ -129,8 +143,6 @@ contains
       else
         call part%initializePart(geoblock,gasblock)
       endif
-      call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen)   ! geo cell (NOT the gas dual index igas)
-      if (ord2) call gasblock(b)%getVertices(part%igas,gasVert,mesh2D, gasHexNorms, gasHexCentroids, gasHexDegen)
       if (part%varCp) then; part%stateVar(7) = lookupTab(hTab,part%tp); else; part%stateVar(7) = part%tp; endif
       call part%computeMass(rhoTab); part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot
 
@@ -145,6 +157,20 @@ contains
 
       if (trajOn) write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID
     endif
+    !> A23f: the block index MUST be resolved for every entry, not just the `time==0` one.
+    !  It was only set at L122 inside the injection-init block, so any particle entering with
+    !  time /= 0 reached the source deposition (`srcblock(b)`) with `b` UNINITIALIZED. That was
+    !  latent forever because nothing ever entered with time /= 0 -- until KH-shed children,
+    !  which inherit the parent's time. Debug build: "Subscript #1 of SRCBLOCK has value 5271
+    !  which is greater than the upper bound of 1" -- stale stack garbage, hence intermittent.
+    b = part%i(1)
+    !> A23g: same class as A23f, for the cell-entry geometry and gas state. `vert` (with its
+    !  norms/centroids/degen companions), `gasVert` and `gas` were filled only inside the
+    !  `time==0` block, yet computeDeltat(vert) runs on EVERY outer-loop entry below and `gas`
+    !  feeds drag, heat and the whole breakup event path -- so a particle entering with
+    !  time /= 0 sized its first step off uninitialized stack and integrated that segment
+    !  against uninitialized gas. Only the non-finite case was caught, by the deltat guard.
+    call refreshCellEntry()
     !> Pack auxiliary variables once (constant throughout integration)
     call packAuxVars(part, nauxvar, auxLocal)
 
@@ -185,16 +211,6 @@ contains
         call ODEsystem()
       enddo
             
-      if (present(addChild)) then
-        if (addChild) then
-          child%ipos = part%i
-          child%igas = part%igas
-          child%pos  = part%stateVar(1:3)
-          child%temp = part%tp
-          child%time = t1
-        endif
-      endif
-      
       if (sourceSwitch) then
         call part%computeSource(massOut,Pout,Eout)
         !> Two-phase conservation on burnout: the cell source is the net parcel flux
@@ -342,7 +358,9 @@ contains
       burnedOut = .false.
       eventType = part%brkupEvent
       addChildLocal = .false.; childState = 0._R8
-      if (present(addChild)) addChild = .false.
+      !> A23c: `childDone` is deliberately NOT reset here -- this is the INNER (segment) loop,
+      !  nested inside the outer cell-crossing loop, so a per-segment reset clobbered a child
+      !  created earlier in the trajectory. Its reset lives at integrate entry only.
       y = part%oldState
       timeLocal = part%time
       oldLocal  = y
@@ -449,14 +467,6 @@ contains
               auxLocal(ind_m)  = part%mdot
             endif
           endif
-          if (present(addChild)) then
-            addChild = addChildLocal
-            if (addChild) then
-              child%vel   = childState(1:3)
-              child%diam  = childState(4)
-              child%npdot = childState(5)
-            endif
-          endif
         endif
         if (allocated(stateLocal)) call unpackAuxState(stateLocal, part, nauxstate)
         if (eulerSwitch) then
@@ -468,6 +478,42 @@ contains
         part%time  = t1
         part%Tstay = t1 - tStart
         call part%updatePart(rhoTab,hTab,eulerSwitch)
+        !> A23h: capture the WHOLE child record here, at the shed point, in one latched place.
+        !  The origin half (ipos/igas/pos/temp/time) used to live in the outer loop guarded only
+        !  by `addChild`, which is latched -- so it re-ran on every later outer iteration and
+        !  walked the child forward to wherever the PARENT ended up, while vel/diam/npdot stayed
+        !  from the shed commit. Measured: all 25 children were born at the parent's exit
+        !  (x = 0.150000, the domain boundary) and left without integrating. Mass conservation
+        !  cannot see this -- the shed mass is right wherever you put it.
+        !  Placed after updatePart so part%tp is this segment's temperature, not the previous
+        !  segment's; part%i/%igas are still the shed cell (crossings are handled further down).
+        !  A23c: LATCH -- only the FIRST child of this call is kept (single child slot per
+        !  parent), and childDone then suppresses further sheds so the parent is not stripped
+        !  for a child that would be discarded.
+        if (eventType .and. present(shed)) then
+          !> Unbounded: a parent sheds as many times as the physics fires, each push appending
+          !  to its own list. The old single-slot design capped this at one shed per parent per
+          !  call -- a limit imposed by the data structure, not by Reitz-87.
+          if (addChildLocal .and. .not. childDone) then
+            shedRec%vel   = childState(1:3)
+            shedRec%diam  = childState(4)
+            shedRec%npdot = childState(5)
+            shedRec%ipos  = part%i
+            shedRec%igas  = part%igas
+            shedRec%pos   = part%stateVar(1:3)
+            shedRec%temp  = part%tp
+            shedRec%time  = t1
+            call shed%push(shedRec)
+            !> Runaway guard. Suppressing rather than aborting keeps mass exact: the parent
+            !  simply retains what it would have shed, the same mechanism the terminal pass
+            !  uses. Loud, because reaching this means the case is mis-parameterised.
+            if (shed%n >= maxShed) then
+              childDone = .true.
+              write(*,'(A,I0,A,I0,A)') '[WARNING] Particle ',part%ID,                  &
+                    ' hit the per-call shed cap (',maxShed,'); further sheds suppressed'
+            endif
+          endif
+        endif
       else
         if (allocated(eventLocal)) call unpackEventVar(oldEvLocal, part, neventvar)
         if (allocated(stateLocal)) call unpackAuxState(oldStLocal, part, nauxstate)
@@ -592,7 +638,16 @@ contains
         case(2,4,5);  m = y(8)
         case default; m = auxLocal(ind_m)
         end select
-        if (ind_d > 0) then; d = auxLocal(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
+        !> A23b: model 3 must derive d from the CURRENT ODE state, exactly as m is derived
+        !  just above. auxLocal is packed ONCE per integrate call (L149) and resynced only at
+        !  an event finalize, so auxLocal(ind_d) is the diameter at injection/last event.
+        !  Pairing that stale d with a current m made the event path evaluate the RT trigger
+        !  (lambda_RT < d, WeGas) at the wrong drop size.
+        if (ind_d > 0 .and. mod_model /= 3) then
+          d = auxLocal(ind_d)
+        else
+          d = (sixOverPi*m/rho)**oneThird
+        endif
 
         Vdif = gasState(2:4)-y(4:6)
         vel  = norm2(Vdif)
@@ -601,13 +656,25 @@ contains
         acc  = Fdrag/m
 
         eventLocal(ind_evd) = d
+        !> A23d: npdot must be refreshed alongside d. It lives in the ODE state and evolves
+        !  continuously, but eventLocal was packed at SEGMENT START, so the event saw a
+        !  current d paired with a STALE npdot. The A19 finalize then re-derives
+        !  mdot = npdot*rho*d^3*pi/6 from that inconsistent pair, so parcel mass JUMPED at
+        !  every event: the KHRT sweep CREATED ~29% mass before A23b, ~2% residual loss after.
+        !  With both, parcel mass-flow is conserved to output precision.
+        if (ind_evn > 0) then
+          select case (mod_model)
+          case(3); eventLocal(ind_evn) = y(8)
+          case(4); eventLocal(ind_evn) = y(9)
+          end select
+        endif
         if (ind_sb1 > 0) brkupState(1:nbrkst) = stateLocal(ind_sb1:ind_sb2)
         !> Advance the analytic oscillator by the completed accepted-step interval (x-xold);
         !  deltat is the outer per-segment cap and is untied to elapsed time.
         call breakupEvent(eventLocal, neventvar, brkupState, nbrkst,    &
                           sigma,mup,rho,gasState(1),vel,Re,t1,acc,y(4:6),x-xold, &
                           mod_brkSelect, mod_bp,mod_bpMethod,mod_bpScale,        &
-                          eventFlag,childState,addChildLocal,exitLoop)
+                          eventFlag,childState,addChildLocal,exitLoop,childDone)
         if (ind_sb1 > 0) stateLocal(ind_sb1:ind_sb2) = brkupState(1:nbrkst)
       endif
 
@@ -646,6 +713,20 @@ contains
     !****************************************************************************************************!
     !*  Particle "position at boundary" handling                                                        *!
     !****************************************************************************************************!
+
+    !> Cell-entry state that every `integrate` call needs, regardless of part%time (A23g).
+    !  For a time==0 particle this re-establishes what the injection block just set (inert);
+    !  for a time /= 0 entry -- a KH-shed child -- it is the only thing that sets it at all.
+    !  `gasProperties` is DUPLICATED rather than hoisted: the init block consumes `gas` for the
+    !  DB velocity/temperature hand-off before this routine is ever reached.
+    subroutine refreshCellEntry()
+      call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen)   ! geo cell (NOT the gas dual index igas)
+      if (ord2) then
+        call gasblock(b)%getVertices(part%igas,gasVert,mesh2D, gasHexNorms, gasHexCentroids, gasHexDegen)
+        call setAtGasBoundary()
+      endif
+      call gasblock(b)%gasProperties(gas,part%igas)
+    end subroutine refreshCellEntry
 
     !> True when the gas dual cell sits on a block boundary
     subroutine setAtGasBoundary()
