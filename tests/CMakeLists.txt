@@ -52,11 +52,16 @@ function(igloo_unit_test name srcdir labels)
 endfunction()
 
 # e2e case: run the freshly built bin/IGLOO in the case dir, then its oracle.
-# Solver exit code is deliberately NOT gated (benign ifort stderr warnings);
+# Ordinary solver exit codes are deliberately NOT gated (benign ifort stderr warnings);
 # PASS == check.py exit 0.
+# EXCEPT signals (rc >= 128): 2026-08-03 a SIGSEGV in the KHRT child-creation path still
+# reported PASS, because check.py happily read the PARTIAL trajectory written before the
+# crash. A crashed solver must never be green, so death-by-signal now fails the case
+# outright. This is the narrowest possible gate -- it does not touch the benign-stderr
+# tolerance that the comment above is about.
 function(igloo_e2e_case name casedir labels)
     add_test(NAME ${name}
-        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${CMAKE_SOURCE_DIR}/bin/IGLOO 1>run_out.txt 2>run_err.txt; python3 -B check.py"
+        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${CMAKE_SOURCE_DIR}/bin/IGLOO 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ge 128 ]; then echo \"[FAIL] solver died on signal (exit $rc)\"; exit 1; fi; python3 -B check.py"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
     set_tests_properties(${name} PROPERTIES
         LABELS "${labels}"
@@ -134,6 +139,15 @@ igloo_e2e_case(burn-box combustion/burn-box "e2e;combustion")
 
 # ---------- breakup: KHRT (unblocked 2026-07-07 by the A2 fix) -----------------
 igloo_unit_test(test_breakup_khrt breakup/reitz-khrt "unit;breakup;khrt;d;t7")
+# O7 (2026-08-03), part 1: KHRT is the only model live on BOTH paths at once, and each
+# path carries its own verbatim copy of the KH/RT blocks. Gates that ReitzKHRT (ODE) and
+# ReitzKHRTevent (event) agree on the RT predicate and on the tc/told accumulator, so the
+# duplication cannot drift. Also pins the unreachable KH-shed branch (A23).
+igloo_unit_test(test_khrt_interaction breakup/reitz-khrt "unit;breakup;khrt;d;t7")
+# O7 part 2: the only KH reference that does NOT re-type the Reitz-87 fit — recovers
+# lambda_KH/omega_KH from breakupOde by two-point inversion in B0, then checks the
+# We_g->0, Z->0 corner against Rayleigh's 1878 dispersion relation solved in-test.
+igloo_unit_test(test_kh_rayleigh_limit breakup/reitz-khrt "unit;breakup;khrt;val;d;t7")
 
 # ---------- breakup -------------------------------------------------------------
 igloo_unit_test(test_breakup_tab  breakup/tab           "unit;breakup;tab;d;t4")
@@ -169,7 +183,23 @@ set_tests_properties(khrt-e2e-rt PROPERTIES
     LABELS "e2e;breakup;val;khrt;rt"
     ENVIRONMENT "OMP_NUM_THREADS=5;KMP_STACKSIZE=100M"
     TIMEOUT 300)
-set_tests_properties(khrt-e2e khrt-e2e-rt PROPERTIES RESOURCE_LOCK khrt_output)
+# A23/S4-E robustness stress (NOT a validation case, no oracle): the khrt-e2e fixture with
+# mShedLim at 0.01 instead of 0.03, so parents shed ~66 deep instead of ~22 and the growable
+# per-parent shed lists go through ~7 doublings. Gates mass exactness under heavy shedding
+# plus "the runaway guard did not fire". INPUT/ is a symlink to ../khrt-e2e/INPUT.
+igloo_e2e_case(khrt-stress breakup/khrt-stress "e2e;breakup;khrt;stress")
+
+# Thread-invariance of the KH-shed path (A23/S4-D1): the drain runs after an OMP region and
+# unitTraj/unitExit are written from inside it. Established green while the one-shed cap was
+# still on, so a later red result indicts the cap lift rather than a pre-existing defect.
+add_test(NAME khrt-e2e-threads
+    COMMAND python3 -B check_threads.py "${CMAKE_SOURCE_DIR}/bin/IGLOO"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/breakup/khrt-e2e")
+set_tests_properties(khrt-e2e-threads PROPERTIES
+    LABELS "e2e;breakup;val;khrt;omp"
+    TIMEOUT 600)
+# All three rm -rf the same OUTPUT/ in the same working directory.
+set_tests_properties(khrt-e2e khrt-e2e-rt khrt-e2e-threads PROPERTIES RESOURCE_LOCK khrt_output)
 
 # ---------- infrastructure: combined output paths --------------------------------
 # euler+source+body accumulator combination (the 2026-07 merge's last untested path)
