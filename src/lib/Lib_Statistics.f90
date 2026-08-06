@@ -21,35 +21,28 @@ module IGLOO_Lib_Statistics
     integer, parameter :: LogNorDistr = 2
     integer, parameter :: RosRamDistr = 3
 
-    logical,  save :: hasBuffer=.false.
-    real(R8), save :: z2buffer
-
 contains
 
-    !> standard normal distribution N(0, 1)
+    !> standard normal distribution N(0, 1), Marsaglia polar method.
+    !> Stateless on purpose: the second deviate v2*y is discarded rather than cached.
+    !> A module-level cache would be shared state read-modify-written from inside the
+    !> OpenMP region (via ChiSquare <- breakupEvent), and initRandomSeed could not
+    !> restore it. Cost is one extra RNG pair per call.
     function NormalStandard() result(z)
-        use IGLOO_variables, only: pi
         implicit none
         real(R8) :: u1, u2, v1, v2, w, y
         real(R8) :: z
-        
-        if (hasBuffer) then
-            z = z2buffer
-            hasBuffer = .false.
-        else
-            w = 0._R8
-            do while (w > 1._R8 .or. w == 0._R8)
-                call random_number(u1)
-                call random_number(u2)
-                v1 = 2._R8*u1 - 1._R8
-                v2 = 2._R8*u2 - 1._R8
-                w  = v1*v1 + v2*v2
-            enddo
-            y = sqrt((-2._R8*log(w))/w)
-            z = v1*y
-            z2buffer  = v2*y
-            hasBuffer = .true.
-        end if
+
+        w = 0._R8
+        do while (w > 1._R8 .or. w == 0._R8)
+            call random_number(u1)
+            call random_number(u2)
+            v1 = 2._R8*u1 - 1._R8
+            v2 = 2._R8*u2 - 1._R8
+            w  = v1*v1 + v2*v2
+        enddo
+        y = sqrt((-2._R8*log(w))/w)
+        z = v1*y
 
     end function NormalStandard
 

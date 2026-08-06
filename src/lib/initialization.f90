@@ -53,15 +53,17 @@ contains
     type(obj_group),  intent(inout) :: group
     integer, intent(in)  :: fam
     integer, intent(out) :: npart
-    integer  :: nn=0, p=0
+    integer  :: nn, p
     integer  :: nb, b, f, m, n, i, j, k
-    real(8)  :: eps=1.0e-8_R8
+    real(8), parameter :: eps=1.0e-8_R8
 
     write(*,*)
     write(*,'(A,I3,A)')'  Placing particles at the bounday every', fsample ,' cells...'
 
     nb = size(block)
     npart = 0
+    nn = 0                  !> no initializers above: those give implicit SAVE
+    p  = 0
     do b = 1, nb; do f = 1, 6
       associate(face => block(b)%face(f))
       do m = 1, face%Nm; do n = 1, face%Nn
@@ -120,7 +122,7 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
   type(obj_group),     intent(inout) :: group
   integer,             intent(in)    :: fam
   integer,             intent(out)   :: npart
-  integer  :: alloc=1e7
+  integer, parameter :: alloc=10000000
   integer  :: p, b, f, m, n, i, j, k, Nm, Nn
   integer  :: mInj, nInj, head, m0, n0, mc, nc, m2, n2, ic, jc, kc, i2, j2, k2, kd
   integer,      allocatable :: ind(:,:)

@@ -38,15 +38,14 @@ contains
     type(orion_data)     :: own_gas
     character(len=llen)  :: gasfile
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
-    integer              :: m, g, fam, nthreads=1
+    integer              :: m, g, fam, nthreads
     character(len=2)     :: method
 
     call print_header()
 
+    nthreads = 1
 # if defined (_OPENMP)
-    !$OMP PARALLEL
-    nthreads = OMP_GET_NUM_THREADS()
-    !$OMP END PARALLEL
+    nthreads = OMP_GET_MAX_THREADS()   !> outside the region: no shared write to race on
 # endif
     if (nthreads>1) then
       write(*,*)" OpenMP threads = ", nthreads

@@ -435,7 +435,7 @@ contains
         real(R8),         intent(out) :: intersectionPoint(3)
         real(R8),         intent(out) :: distance
         real(R8), optional, intent(in) :: relax   !> widen the barycentric bounds (on-edge hits, B4)
-        real(R8) :: toll = 1.0e-20
+        real(R8), parameter :: toll = 1.0e-20
         real(R8) :: u, v, a, verso, e
         real(R8) :: edge1(3), edge2(3), edge3(3), h(3), s(3), q(3)
 
