@@ -7,6 +7,8 @@ module IGLOO_module
   type, public :: obj_IGLOO
     type(obj_block),       allocatable :: geoblock(:)
     type(obj_flowblock),   allocatable :: gasblock(:)
+    !> ⚠ Valid only BETWEEN a solve and the next reset_state: reset_state deallocates both
+    !> (they are re-allocated at the shape the coming sweep needs). Read them before it.
     type(obj_sourceblock), allocatable :: source(:)
     type(obj_eulerblock),  allocatable :: euler(:,:)
     type(obj_material),    allocatable :: material(:)
@@ -140,10 +142,38 @@ contains
   !  other things re-zeroes `brkupVar` for originals (whose only other zeroing is the
   !  child-range call in `solve`, which never reaches an original).
   subroutine reset_state(self)
-    use IGLOO_variables, only: nm
+    use IGLOO_variables, only: nm, nb
     implicit none
     class(obj_IGLOO), intent(inout) :: self
-    integer :: m, g, ip
+    integer :: m, g, ip, b, fam
+
+    !> F7 -- the accumulators must be dropped, not reused. Under ord2 they are allocated at
+    !  gasblock shape (1..Nx+1) but `finalize` move_allocs geoblock-shaped arrays (1..Nx) over
+    !  them at end of solve (obj_block.f90:237-239, :318-321). allocateAccumulators guards on
+    !  allocation STATUS, not shape, so a second solve would keep the geoblock-shaped arrays
+    !  and then deposit through part%igas -- up to Nx+1 -- past the end, via !$OMP ATOMIC
+    !  UPDATE. That is silent heap corruption in a release build, and it was measurable:
+    !  vie-plait's source.tec moved 12 decades above its run-to-run noise floor.
+    !
+    !  Deallocate the COMPLETE set, unconditionally. allocateAccumulators guards on one array
+    !  each (sourceMass, density) but allocateSRC/allocateEUL allocate all seven, so freeing
+    !  only the guard array makes the next allocate fatal. Not ord2-gated either: it costs
+    !  nothing on sweep 1 (nothing is allocated yet, so every guard below is false) and
+    !  solve's allocateAccumulators + initialize_fields rebuild and zero them anyway.
+    !
+    !  Caller contract: self%source and self%euler are valid only BETWEEN a solve and the
+    !  next reset_state.
+    do b = 1, nb
+      if (allocated(self%source(b)%sourceMass)) deallocate(self%source(b)%sourceMass)
+      if (allocated(self%source(b)%sourceMom))  deallocate(self%source(b)%sourceMom)
+      if (allocated(self%source(b)%sourceEn))   deallocate(self%source(b)%sourceEn)
+      do fam = 1, size(self%euler, 2)
+        if (allocated(self%euler(b,fam)%density))     deallocate(self%euler(b,fam)%density)
+        if (allocated(self%euler(b,fam)%velocity))    deallocate(self%euler(b,fam)%velocity)
+        if (allocated(self%euler(b,fam)%temperature)) deallocate(self%euler(b,fam)%temperature)
+        if (allocated(self%euler(b,fam)%np))          deallocate(self%euler(b,fam)%np)
+      enddo
+    enddo
 
     do m = 1, nm
       do g = 1, self%material(m)%ngroups
