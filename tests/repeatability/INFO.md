@@ -24,11 +24,29 @@ over the same `OUTPUT/`.
 | `d2law` | `evaporation/d2law` | F3 — evaporation destroying `d` |
 | `khrt` | `breakup/khrt-e2e` | F2/F5 — children folded into the census, `brkupVar` never re-zeroed |
 | `vie-plait` | `standard/vie-plait` | F7 — accumulator shape. The suite's only `gas-order=2` case, so the *only* one that can see it. Plus the gas-refresh cycle. |
+| `etab` | `breakup/etab-e2e` | a second event-breakup model on the shed/resize path |
 
-`etab-e2e` is deliberately absent: its `random_number(psi)` is drawn inside the OMP region
-([../../src/lib/Lib_Breakup.f90](../../src/lib/Lib_Breakup.f90) `:547`), so sweep-to-sweep
-identity is impossible for that model however correct the reset is. Gating it would need a
-statistical criterion.
+## The one exclusion: `tab-e2e`
+
+⚠ **This was measured, and it corrected an earlier wrong guess of mine.** The exclusion was
+originally written against `etab-e2e`, citing its `random_number(psi)`
+([../../src/lib/Lib_Breakup.f90](../../src/lib/Lib_Breakup.f90) `:547`). That was wrong on both
+counts, and `repeat-etab` above is the proof — 6000 trajectory records multiset-identical,
+`source.tec` bit-identical. `psi` only perturbs a **child velocity**, and ETAB discards its
+children, so it moves no observable.
+
+The case that genuinely cannot be gated is **`tab-e2e`**, for a different reason: it sets
+`[IGLOO-Models] method = 2`, so TAB's child-size sampler draws `random_number` inside the OMP
+region (`RosinRammler`, [../../src/lib/Lib_Statistics.f90](../../src/lib/Lib_Statistics.f90) `:67`
+← `Lib_Breakup.f90:445`). Two measured consequences:
+
+- its trajectories differ **as a multiset** between two separate runs (which is *not* true of
+  etab-e2e, khrt-e2e, pilch-erdman-e2e or reitz-diwakar-e2e — all four are order-only);
+- a second sweep starts from an **advanced RNG state**, so it draws different sizes:
+  `source.tec` max|rel| **8.6e-3**, scatter **50528 vs 22764** records.
+
+No reset can fix that. It needs a deterministic per-particle RNG stream — which would also give
+rank-invariance for MPI. Tracked as `BUGS.md` §E **O2**.
 
 ## Two modes
 

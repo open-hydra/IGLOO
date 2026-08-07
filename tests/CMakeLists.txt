@@ -82,10 +82,10 @@ igloo_unit_test(test_gas_reconstruction infrastructure/gas_reconstruction "unit;
 igloo_unit_test(test_ini_pipeline       infrastructure/ini_pipeline       "unit;infrastructure;ini;t9")
 
 # ---------- two-sweep repeatability harness -----------------------------------
-# Drives one pinned population through solve() TWICE, parking sweep 1's OUTPUT/ in
-# between. The 49-entry suite is single-sweep, so it cannot see a state leak across a
-# second solve(); this is the only gate that can. Exe only here -- the ctest cases that
-# consume it are registered further down.
+# Drives one pinned population through solve() TWICE. Every other case in the suite is
+# single-sweep, so it cannot see state leaking across a second solve(); these are the only
+# gates that can. Sweeps do not overwrite each other -- obj_IGLOO's sweep tag suffixes
+# sweep N>0. Exe only here; the ctest cases that consume it are registered further down.
 add_executable(twosweep support/twosweep.f90)
 target_link_libraries(twosweep PRIVATE IGLOOL FiNeR::FiNeR)
 set_target_properties(twosweep PROPERTIES
@@ -128,9 +128,15 @@ endfunction()
 #   d2law         evaporation destroys d (F3)
 #   khrt          children => counts + brkupVar (F2, F5)
 #   vie-plait     the suite's only gas-order=2 case => accumulator shape (F7)
-# etab-e2e is deliberately EXCLUDED: its random_number(psi) is drawn inside the OMP region
-# (Lib_Breakup.f90:547), so sweep-to-sweep identity is impossible for that model however
-# correct the reset is. It would need a statistical criterion instead.
+#   etab          ETAB event breakup, a second event model on the shed/resize path
+# tab-e2e is the one deliberately EXCLUDED, and it was MEASURED, not assumed: it sets
+# [IGLOO-Models] method = 2, so TAB's child-size sampler draws random_number inside the OMP
+# region (RosinRammler, Lib_Statistics.f90:67 <- Lib_Breakup.f90:445). Two consequences: its
+# trajectories differ as a MULTISET between two separate runs, and a second sweep starts from an
+# advanced RNG state -- measured max|rel| 8.6e-3 on source.tec, scatter 50528 vs 22764 records.
+# No reset can fix that; it needs a deterministic per-particle stream (see BUGS.md O2).
+# NB etab-e2e is NOT affected despite its own random_number(psi) at Lib_Breakup.f90:547 -- psi
+# only perturbs a CHILD velocity, and ETAB discards children, so it moves no observable.
 igloo_twosweep_case(repeat-drag-stokes  repeatability/drag-stokes
                     "e2e;repeatability;standard"       "INPUT/solfile.tec")
 igloo_twosweep_case(repeat-db-injection repeatability/db-injection
@@ -141,6 +147,8 @@ igloo_twosweep_case(repeat-khrt         repeatability/khrt
                     "e2e;repeatability;breakup"        "")
 igloo_twosweep_case(repeat-vie-plait    repeatability/vie-plait
                     "e2e;repeatability;standard"       "INPUT/solfile.tec")
+igloo_twosweep_case(repeat-etab         repeatability/etab
+                    "e2e;repeatability;breakup"        "")
 # docs/user/registry.md is DocGen OUTPUT that is also TRACKED, so it can silently
 # disagree with the registry it documents (it did twice on 2026-07-30). Regenerate
 # into the build tree and diff. Kind 8 (contract meta-test): no physics, no figure.
