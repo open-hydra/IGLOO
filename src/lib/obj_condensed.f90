@@ -33,6 +33,9 @@ module IGLOO_data_phases
   end type
 
   type, public:: obj_group
+    !> nparticles is LIVE (solve overwrites it with nactive once children exist); nInjected
+    !> is the immutable pin-time census reset_state restores it from.
+    integer  :: nInjected = 0
     integer  :: mID, gID, famID, nparticles, childCounter=0
     integer  :: neq
     ! integer  :: distribution

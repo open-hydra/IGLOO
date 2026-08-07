@@ -13,6 +13,8 @@ bin
 # Test output files
 error*
 OUTPUT
+# Sweep 1's OUTPUT, parked by the two-sweep repeatability harness (tests/support/twosweep.f90)
+OUTPUT.sweep1
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/

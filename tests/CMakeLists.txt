@@ -80,6 +80,25 @@ set_tests_properties(self_test PROPERTIES
 
 igloo_unit_test(test_gas_reconstruction infrastructure/gas_reconstruction "unit;infrastructure;interp;e;t1")
 igloo_unit_test(test_ini_pipeline       infrastructure/ini_pipeline       "unit;infrastructure;ini;t9")
+
+# ---------- two-sweep repeatability harness -----------------------------------
+# Drives one pinned population through solve() TWICE, parking sweep 1's OUTPUT/ in
+# between. The 49-entry suite is single-sweep, so it cannot see a state leak across a
+# second solve(); this is the only gate that can. Exe only here -- the ctest cases that
+# consume it are registered further down.
+add_executable(twosweep support/twosweep.f90)
+target_link_libraries(twosweep PRIVATE IGLOOL FiNeR::FiNeR)
+set_target_properties(twosweep PROPERTIES
+    LINKER_LANGUAGE Fortran
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+if(USE_TECIO)
+    target_link_libraries(twosweep PRIVATE -pthread)
+endif()
+if(USE_OPENMP)
+    set_target_properties(twosweep PROPERTIES
+        COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
+        LINK_FLAGS    "${OpenMP_Fortran_FLAGS}")
+endif()
 # docs/user/registry.md is DocGen OUTPUT that is also TRACKED, so it can silently
 # disagree with the registry it documents (it did twice on 2026-07-30). Regenerate
 # into the build tree and diff. Kind 8 (contract meta-test): no physics, no figure.

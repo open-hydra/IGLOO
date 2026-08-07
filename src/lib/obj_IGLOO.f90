@@ -11,10 +11,17 @@ module IGLOO_module
     type(obj_eulerblock),  allocatable :: euler(:,:)
     type(obj_material),    allocatable :: material(:)
     logical :: eulSwitch, srcSwitch
+    !> Repeatability bookkeeping. `setup_static` is once-only (mesh, gas import and pinning
+    !  are static); `reset_state` restores the per-sweep particle state and must run before
+    !  every `solve`. A second `solve` without it silently integrates finished particles.
+    logical :: staticDone    = .false.
+    logical :: stateIsFresh  = .false.
     ! integer            :: iprint
     ! real(R8)           :: ds, mdotMax, dtprint
   contains
     procedure, pass(self) :: setup
+    procedure, pass(self) :: setup_static
+    procedure, pass(self) :: reset_state
     procedure, pass(self) :: solve
     procedure, pass(self) :: getSourceTerms
     procedure, pass(self) :: writeout
@@ -22,7 +29,24 @@ module IGLOO_module
 
 contains
 
+  !> Back-compat entry point: the documented hydra hook and all e2e cases call this.
+  !  A driver that integrates repeatedly should call setup_static once and reset_state
+  !  before each solve instead (see src/app/IGLOO.f90 for the single-sweep shape).
   subroutine setup(self, external_gas)
+    use Lib_ORION_data
+    implicit none
+    class(obj_IGLOO), intent(inout)        :: self
+    type(orion_data), intent(in), optional :: external_gas
+
+    call self%setup_static(external_gas)
+    call self%reset_state()
+
+  end subroutine setup
+
+
+  !> Once-only: input parsing, gas field, block/geometry allocation, BC tagging and
+  !  particle pinning. Everything here is independent of how many sweeps follow.
+  subroutine setup_static(self, external_gas)
     use omp_lib
     use IGLOO_IO
     use IGLOO_IC
@@ -40,6 +64,15 @@ contains
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
     integer              :: m, g, fam, nthreads
     character(len=2)     :: method
+
+    !> Not re-runnable: allocate_blocks declares its outputs intent(inout), allocatable and
+    !  allocates unconditionally, so a second call aborts on a double allocate. Say so
+    !  instead of letting the runtime produce that message.
+    if (self%staticDone) then
+      write(*,*) ' [IGLOO] setup_static already completed -- repeat call ignored'
+      write(*,*) '         (mesh, gas import and pinning are static; use reset_state per sweep)'
+      return
+    endif
 
     call print_header()
 
@@ -85,12 +118,51 @@ contains
         gr%gID   = g
         gr%famID = fam
         call pin_particles(gr, self%geoblock, self%gasblock, method, pos0,vel0,temp0,mdot,diam, fam, gr%nparticles)
-        call gr%assign_group2particle()
+        !> Immutable pin-time census. `solve` overwrites nparticles with nactive (children
+        !  folded in), so without this the count is unrecoverable and a second sweep
+        !  re-injects the previous sweep's children as if they were originals.
+        gr%nInjected = gr%nparticles
         end associate
       enddo
     enddo
     nfam = fam
-  end subroutine setup
+    self%staticDone = .true.
+
+  end subroutine setup_static
+
+
+  !> Per-sweep state restore: puts the pinned population back the way pinning left it, so
+  !  the next `solve` integrates the same particles from injection again. Must run before
+  !  every `solve`; `solve` enforces that through `stateIsFresh`.
+  !
+  !  `assign_group2particle` lives here rather than in `setup_static` because it is the
+  !  per-sweep half of pinning: it is `pure`, writes only `self%particle(i)%*`, and among
+  !  other things re-zeroes `brkupVar` for originals (whose only other zeroing is the
+  !  child-range call in `solve`, which never reaches an original).
+  subroutine reset_state(self)
+    use IGLOO_variables, only: nm
+    implicit none
+    class(obj_IGLOO), intent(inout) :: self
+    integer :: m, g
+
+    do m = 1, nm
+      do g = 1, self%material(m)%ngroups
+        associate(gr => self%material(m)%group(g))
+        !> Counts: drop last sweep's children and restore the pin-time census.
+        gr%nparticles = gr%nInjected
+        gr%nactive    = gr%nInjected
+        if (size(gr%particle) /= gr%nInjected) &
+          call resizeParticleArray(gr%particle, gr%nInjected)
+        !> solve re-allocates the shed lists per group when the model has children.
+        if (allocated(gr%shed)) deallocate(gr%shed)
+        call gr%assign_group2particle()
+        end associate
+      enddo
+    enddo
+
+    self%stateIsFresh = .true.
+
+  end subroutine reset_state
 
 
   subroutine solve(self)
@@ -117,6 +189,18 @@ contains
     integer  :: c, nStreams, nValid
     real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp
     type(obj_particle) :: ptmp   ! throwaway copy for the inject-only pre-pass
+
+    !> Repeatability contract. Every exit path zeroes part%time, so a finished particle is
+    !  indistinguishable from one that never started: calling solve twice without
+    !  reset_state does not fail, it silently integrates a corrupted population (stale d,
+    !  last sweep's children counted as originals, accumulators of the wrong shape). Fail
+    !  loudly instead of returning plausible garbage.
+    if (.not. self%stateIsFresh) then
+      write(*,'(A)') ' [IGLOO::solve] particle state is not fresh.'
+      write(*,'(A)') '   Call reset_state() before each solve() (setup() does it for the first).'
+      error stop 1
+    endif
+    self%stateIsFresh = .false.
 
     sourceSwitch = self%srcSwitch
     eulerSwitch  = self%eulSwitch
