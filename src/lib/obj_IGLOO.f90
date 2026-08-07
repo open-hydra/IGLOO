@@ -170,6 +170,9 @@ contains
             !  particle pristine so the real sweep is bit-unchanged. It deliberately avoids the
             !  geometric cell search (which would pollute the threadprivate myRay).
             ptmp = gr%particle(ip)
+            !> DB/assigned streams: resolveInjectionRate skips initializePart, so stateVar is
+            !  allocated-but-unwritten here. Seed it as integrate does (Lib_Integration:140).
+            if (all(ptmp%iInj == [0,0,0,0])) ptmp%stateVar(4:6) = ptmp%vInj
             call ptmp%resolveInjectionRate(self%geoblock, self%gasblock)
             if (ptmp%npdot > 0._R8) Ndot = Ndot + ptmp%npdot
             vsp = norm2(ptmp%stateVar(4:6))
