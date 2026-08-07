@@ -85,7 +85,12 @@ def cmp_tec(a, b, label):
         ndiff += 1
         worst = max(worst, abs(x - y) / scale)
     if worst <= TEC_TOL:
-        notes.append(f"  {label:<44} max|rel|={worst:.3e} <= {TEC_TOL:.0e} ({ndiff} atomic-order diffs)")
+        #> Deliberately NOT printing `worst` or `ndiff` on success. Both are set by !$OMP ATOMIC
+        #  accumulation order and so vary run to run (measured: khrt 3.9e-16 vs 3.9e-15, vie-plait
+        #  1415 vs 1606 diffs, all far inside tolerance). Printing them makes THIS gate's stdout
+        #  irreproducible, which pollutes every future byte-inert A/B -- the same trap as BUGS.md
+        #  O2. Stable on PASS, fully verbose on FAIL, which is when the numbers are wanted.
+        notes.append(f"  {label:<44} within tolerance (max|rel| <= {TEC_TOL:.0e})")
         return True
     fails.append(f"  {label}: max|rel|={worst:.3e} exceeds {TEC_TOL:.0e} ({ndiff} values differ)")
     return False

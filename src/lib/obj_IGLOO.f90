@@ -147,8 +147,9 @@ contains
   !  other things re-zeroes `brkupVar` for originals (whose only other zeroing is the
   !  child-range call in `solve`, which never reaches an original).
   subroutine reset_state(self, external_gas)
-    use IGLOO_variables,  only: nm, nb
-    use IGLOO_allocation, only: import_gas
+    use IGLOO_variables,      only: nm, nb
+    use IGLOO_allocation,     only: import_gas
+    use IGLOO_Lib_Statistics, only: rngSeedFor
     use Lib_ORION_data
     implicit none
     class(obj_IGLOO), intent(inout)        :: self
@@ -218,6 +219,11 @@ contains
         do ip = 1, gr%nInjected
           associate(part => gr%particle(ip))
           part%ID = ip
+          !> Re-seed this particle's RNG stream. Deterministic in (rng_seed, famID, ID), so every
+          !  sweep replays the same draws -- which is what makes an RNG-consuming model
+          !  repeatable at all. famID comes from the group (set in setup_static), not from
+          !  part%famID, which assign_group2particle only fills after this loop.
+          part%rngState = rngSeedFor(gr%famID, ip)
           part%d  = part%dInj
           !> Assigned/DB streams only. BC streams re-derive tp and mdot from live gas in
           !  initializePart, and their *Inj fields are 0 -- restoring those would inject
@@ -292,6 +298,7 @@ contains
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
     use IGLOO_Lib_Properties, only: lookupTab   !> A23c child hand-off (enthalpy slot)
+    use IGLOO_Lib_Statistics, only: rngSeedFor
     use oslo
     use omp_lib
     implicit none
@@ -502,6 +509,9 @@ contains
                 iota = oldEnd + ch
                 associate(kid => gr%particle(iota), src => gr%shed(ip)%item(e))
                 kid%ID            = iota
+                !> Own RNG stream. Without this a child keeps the default 0 -- deterministic, but
+                !  IDENTICAL for every child, which the repeatability gate cannot see.
+                kid%rngState      = rngSeedFor(gr%famID, iota)
                 kid%stateVar(1:3) = src%pos
                 kid%stateVar(4:6) = src%vel
                 kid%tp            = src%temp

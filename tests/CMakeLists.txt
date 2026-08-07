@@ -80,6 +80,7 @@ set_tests_properties(self_test PROPERTIES
 
 igloo_unit_test(test_gas_reconstruction infrastructure/gas_reconstruction "unit;infrastructure;interp;e;t1")
 igloo_unit_test(test_ini_pipeline       infrastructure/ini_pipeline       "unit;infrastructure;ini;t9")
+igloo_unit_test(test_rng_stream         infrastructure/rng_stream         "unit;infrastructure;rng;t1")
 
 # ---------- two-sweep repeatability harness -----------------------------------
 # Drives one pinned population through solve() TWICE. Every other case in the suite is
@@ -129,14 +130,13 @@ endfunction()
 #   khrt          children => counts + brkupVar (F2, F5)
 #   vie-plait     the suite's only gas-order=2 case => accumulator shape (F7)
 #   etab          ETAB event breakup, a second event model on the shed/resize path
-# tab-e2e is the one deliberately EXCLUDED, and it was MEASURED, not assumed: it sets
-# [IGLOO-Models] method = 2, so TAB's child-size sampler draws random_number inside the OMP
-# region (RosinRammler, Lib_Statistics.f90:67 <- Lib_Breakup.f90:445). Two consequences: its
-# trajectories differ as a MULTISET between two separate runs, and a second sweep starts from an
-# advanced RNG state -- measured max|rel| 8.6e-3 on source.tec, scatter 50528 vs 22764 records.
-# No reset can fix that; it needs a deterministic per-particle stream (see BUGS.md O2).
-# NB etab-e2e is NOT affected despite its own random_number(psi) at Lib_Breakup.f90:547 -- psi
-# only perturbs a CHILD velocity, and ETAB discards children, so it moves no observable.
+#   tab           TAB event breakup -- the RNG-consuming model (see below)
+# NOTHING is excluded any more. `tab-e2e` used to be, because TAB's child-size sampler drew from
+# the intrinsic random_number inside the OMP region, making it irreproducible run-to-run and so
+# ungateable. Per-particle RNG streams (Lib_Statistics::rngSeedFor/rngNext) fixed that at the
+# source, and `repeat-tab` is the gate that proves it. `test_rng_stream` covers the stream
+# contract itself -- distinctness, reproducibility, uniformity -- which no e2e case can see,
+# because one shared seed would reproduce perfectly and pass every e2e gate.
 igloo_twosweep_case(repeat-drag-stokes  repeatability/drag-stokes
                     "e2e;repeatability;standard"       "INPUT/solfile.tec")
 igloo_twosweep_case(repeat-db-injection repeatability/db-injection
@@ -148,6 +148,8 @@ igloo_twosweep_case(repeat-khrt         repeatability/khrt
 igloo_twosweep_case(repeat-vie-plait    repeatability/vie-plait
                     "e2e;repeatability;standard"       "INPUT/solfile.tec")
 igloo_twosweep_case(repeat-etab         repeatability/etab
+                    "e2e;repeatability;breakup"        "")
+igloo_twosweep_case(repeat-tab          repeatability/tab
                     "e2e;repeatability;breakup"        "")
 # docs/user/registry.md is DocGen OUTPUT that is also TRACKED, so it can silently
 # disagree with the registry it documents (it did twice on 2026-07-30). Regenerate

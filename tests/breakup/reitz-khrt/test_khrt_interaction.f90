@@ -32,12 +32,18 @@ program test_khrt_interaction
     !   Q3  lambda_RT < dp, tc >  tauRT-> RT due; KH rate must be exactly 0
     !   Q4  tc astride tauRT (+-1e-9)  -> the threshold itself agrees on both paths
     !
-    use, intrinsic :: iso_fortran_env, only: R8 => real64
+    use, intrinsic :: iso_fortran_env, only: R8 => real64, int64
     use IGLOO_Lib_Breakup, only: breakupOde, breakupEvent, nchild
     use IGLOO_variables,   only: pi, toll
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
     implicit none
+
+    !> One RNG stream for this test program. breakupEvent now takes the parcel's own stream
+    !  instead of drawing from the intrinsic random_number (which is thread-scheduled and so
+    !  irreproducible inside the solver's OMP region). Host-scope, not per-call: an ensemble of
+    !  events must see DISTINCT draws, so the state has to advance across calls.
+    integer(int64) :: tRng = 20260808_int64
 
     real(R8), parameter :: dp0 = 100.0e-6_R8, rho_l = 1000.0_R8, mu_l = 1.0e-3_R8
     real(R8), parameter :: sigma = 0.072_R8, rho_g = 1.2_R8, npdot0 = 1.0e10_R8
@@ -120,7 +126,7 @@ contains
         call breakupEvent(eventvar, 4, brkupState, 2, &
                           sigma, mu_l, rho_l, rho_g, uslip, 0._R8, dt_adv, acc, vp, dt_adv, &
                           3, bp_kh, 1, 1._R8, &
-                          event, childState, addChild, .true.)
+                          event, childState, addChild, .true., tRng)
         dp_after   = eventvar(1)
         rt_taken   = event .and. (.not. addChild)
         shed_taken = event .and. addChild

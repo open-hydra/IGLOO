@@ -1,5 +1,5 @@
 module IGLOO_particles
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only : I4 => int32, I8 => int64, R8 => real64
   use oslo, only: Run_ODESolver
   use IGLOO_variables
   use IGLOO_Lib_Drag
@@ -53,6 +53,11 @@ module IGLOO_particles
     real(R8)     :: dInj    = 0._R8
     real(R8)     :: tpInj   = 0._R8
     real(R8)     :: mdotInj = 0._R8
+    !> This particle's own RNG stream state, seeded from (rng_seed, famID, ID) by reset_state and
+    !  by the child hand-off. Any sampler called from inside the OMP region MUST draw from this
+    !  rather than the intrinsic `random_number`, whose per-thread state makes the draw depend on
+    !  scheduling -- see IGLOO_Lib_Statistics::rngNext.
+    integer(I8)  :: rngState = 0_I8
     integer      :: fInj      !> injection face
     integer      :: Ninj      !> number of particle from the same cell
     integer      :: Ncell     !> number of integration loops in the same cell

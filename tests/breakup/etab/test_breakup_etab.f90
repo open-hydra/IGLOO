@@ -17,12 +17,18 @@ program test_breakup_etab
     !        WeTrans, so ln(rNew/r) ratio across WeTrans = 1 exactly (pre-A15 the
     !        coded k1 branch produced the k1/k2 jump this probe used to pin)
     !
-    use, intrinsic :: iso_fortran_env, only: R8 => real64
+    use, intrinsic :: iso_fortran_env, only: R8 => real64, int64
     use IGLOO_Lib_Breakup, only: breakupEvent
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
     use verif_dump,   only: dump_curve
     implicit none
+
+    !> One RNG stream for this test program. breakupEvent now takes the parcel's own stream
+    !  instead of drawing from the intrinsic random_number (which is thread-scheduled and so
+    !  irreproducible inside the solver's OMP region). Host-scope, not per-call: an ensemble of
+    !  events must see DISTINCT draws, so the state has to advance across calls.
+    integer(int64) :: tRng = 20260808_int64
 
     real(R8), parameter :: PI = 4.0_R8*atan(1.0_R8)
     real(R8), parameter :: rho_l = 1000.0_R8, sigma = 0.072_R8, rho_g = 1.2_R8
@@ -77,7 +83,7 @@ contains
         vloc = 0._R8;   if (present(vp))    vloc = vp     ! |v|=0 => kick suppressed (guard)
         call breakupEvent(ev, 4, brkst, 0, sigma, mu_l, rho_l, rho_g, &
                           vel_of_We(We_r), Re_loc, 0._R8, zero3, vloc, dt, &
-                          5, bp_loc, 1, 1._R8, event, child, addChild, .true.)
+                          5, bp_loc, 1, 1._R8, event, child, addChild, .true., tRng)
         dp_new = ev(1)
         if (present(vp)) vp = vloc
     end subroutine etab_event

@@ -25,28 +25,31 @@ over the same `OUTPUT/`.
 | `khrt` | `breakup/khrt-e2e` | F2/F5 — children folded into the census, `brkupVar` never re-zeroed |
 | `vie-plait` | `standard/vie-plait` | F7 — accumulator shape. The suite's only `gas-order=2` case, so the *only* one that can see it. Plus the gas-refresh cycle. |
 | `etab` | `breakup/etab-e2e` | a second event-breakup model on the shed/resize path |
+| `tab` | `breakup/tab-e2e` | TAB event breakup — the one RNG-consuming model |
 
-## The one exclusion: `tab-e2e`
+## Nothing is excluded any more
 
-⚠ **This was measured, and it corrected an earlier wrong guess of mine.** The exclusion was
-originally written against `etab-e2e`, citing its `random_number(psi)`
-([../../src/lib/Lib_Breakup.f90](../../src/lib/Lib_Breakup.f90) `:547`). That was wrong on both
-counts, and `repeat-etab` above is the proof — 6000 trajectory records multiset-identical,
-`source.tec` bit-identical. `psi` only perturbs a **child velocity**, and ETAB discards its
-children, so it moves no observable.
+`tab-e2e` used to be, and the reason is worth keeping: TAB's child-size sampler drew from the
+intrinsic `random_number` **inside the OMP region**, so which draw a parcel got depended on thread
+scheduling. Measured consequences were that its trajectories differed as a **multiset** between two
+plain runs, and that a second sweep (starting from an advanced RNG state) gave `source.tec`
+max|rel| 8.6e-3 and scatter 50528 vs 22764 records.
 
-The case that genuinely cannot be gated is **`tab-e2e`**, for a different reason: it sets
-`[IGLOO-Models] method = 2`, so TAB's child-size sampler draws `random_number` inside the OMP
-region (`RosinRammler`, [../../src/lib/Lib_Statistics.f90](../../src/lib/Lib_Statistics.f90) `:67`
-← `Lib_Breakup.f90:445`). Two measured consequences:
+That is fixed at the source rather than worked around: every parcel now carries its own stream,
+seeded from `(rng_seed, famID, ID)`
+([../../src/lib/Lib_Statistics.f90](../../src/lib/Lib_Statistics.f90) `rngSeedFor`/`rngNext`).
+`repeat-tab` is the gate that proves it, and the change also bought **thread-count invariance**
+(`OMP_NUM_THREADS=1` and `5` agree as a multiset) — the property MPI needs for rank invariance.
 
-- its trajectories differ **as a multiset** between two separate runs (which is *not* true of
-  etab-e2e, khrt-e2e, pilch-erdman-e2e or reitz-diwakar-e2e — all four are order-only);
-- a second sweep starts from an **advanced RNG state**, so it draws different sizes:
-  `source.tec` max|rel| **8.6e-3**, scatter **50528 vs 22764** records.
+⚠ An earlier version of this file excluded **`etab-e2e`** instead, citing its `random_number(psi)`
+([../../src/lib/Lib_Breakup.f90](../../src/lib/Lib_Breakup.f90) `:547`). That was wrong twice over:
+`etab-e2e` was already repeatable, and the reason is worse than "psi doesn't matter" — the ETAB
+velocity kick that `psi` orients **never reaches the particle state at all**. Filed as `BUGS.md`
+§E **O12**; pinning `psi` to a constant changes no output whatsoever, which is how it was found.
 
-No reset can fix that. It needs a deterministic per-particle RNG stream — which would also give
-rank-invariance for MPI. Tracked as `BUGS.md` §E **O2**.
+The stream contract itself — seed distinctness, reproducibility, uniformity — is gated by
+`test_rng_stream`, not here. No e2e case can see it: one shared seed reproduces perfectly and
+would pass every gate in this directory.
 
 ## Two modes
 

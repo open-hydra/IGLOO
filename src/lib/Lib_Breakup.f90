@@ -1,5 +1,5 @@
 module IGLOO_Lib_Breakup
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : I4 => int32, I8 => int64, R8 => real64
     implicit none
     private
     public :: assign_breakup, assign_scaleFactor
@@ -213,7 +213,7 @@ contains
     subroutine breakupEvent(eventvar, neventvar, brkupState, nbrkst, &
                              sigma,mup,rhop,rhog,vel,Re,time,acc,vp,dt, &
                              brkupSelect,bp,bpMethod,bpScale, &
-                             event,childState,addChild,exitLoop,childPending)
+                             event,childState,addChild,exitLoop,rngState,childPending)
         use IGLOO_variables, only: toll
         implicit none
         integer,  intent(in)    :: neventvar, nbrkst
@@ -228,6 +228,10 @@ contains
         real(R8), intent(out)   :: childState(nchild)
         logical,  intent(out)   :: event, addChild
         logical,  intent(in)    :: exitLoop
+        !> The parcel's own RNG stream. TAB's child-size sampler and ETAB's azimuth both draw from
+        !  it: this routine runs INSIDE the OMP region, where the intrinsic random_number would
+        !  make the draw depend on thread scheduling (see IGLOO_Lib_Statistics::rngNext).
+        integer(I8), intent(inout) :: rngState
         logical,  intent(in), optional :: childPending  !> a child is already banked this call
         logical :: noShed
 
@@ -243,11 +247,11 @@ contains
         case (4)   !> TAB: eventvar=[dp,npdot,y,yDot]
             addChild = .false.
             call TABmodel(eventvar(1),sigma,mup,rhop,eventvar(2),rhog,vel,dt, &
-                          eventvar(3),eventvar(4), bp,bpMethod,bpScale, event,exitLoop)
+                          eventvar(3),eventvar(4), bp,bpMethod,bpScale, event,exitLoop,rngState)
         case (5)   !> ETAB: eventvar=[dp,npdot,y,yDot]; vp kicked by vperp at the apply
             addChild = .false.
             call ETABmodel(eventvar(1),sigma,mup,rhop,eventvar(2),rhog,vel,Re,dt, &
-                           eventvar(3),eventvar(4),vp, bp, event,exitLoop)
+                           eventvar(3),eventvar(4),vp, bp, event,exitLoop,rngState)
         end select
 
     end subroutine breakupEvent
@@ -357,9 +361,9 @@ contains
     end subroutine ReitzKHRTevent
 
     subroutine TABmodel(dp,sigma,mup,rhop,npdot,rhog,vel,dt,y,yDot, &
-                         bp,method,scaleFactor, event,exitLoop)
+                         bp,method,scaleFactor, event,exitLoop,rngState)
         use IGLOO_variables,      only: pi, toll
-        use IGLOO_Lib_Statistics, only: ChiSquare, RosinRammler, RonsinRammlerMoments
+        use IGLOO_Lib_Statistics, only: ChiSquareS, RosinRammlerS, RonsinRammlerMoments
         implicit none
         real(R8), intent(in)    :: sigma, mup, rhop, rhog, vel, dt
         real(R8), intent(inout) :: dp, npdot, y, yDot
@@ -368,6 +372,7 @@ contains
         real(R8), intent(in)    :: scaleFactor   !> precomputed scale factor
         logical,  intent(out)   :: event
         logical,  intent(in)    :: exitLoop
+        integer(I8), intent(inout) :: rngState   !> parcel's own stream; see breakupEvent
         real(R8) :: twoPi, radius, rdt, omega, We, WeCr, y1, y2, a, phi, quad, tb
         real(R8) :: coste, theta, k, rs, rMin, rNew, rSize, nSpread, m3, m2, r32, dOld
         integer  :: n, iter
@@ -420,7 +425,7 @@ contains
                             n = nint(k)
                             rSize = rs/real(n + 4)
                             do while (rNew<rMin .or. rNew>=radius)
-                                rNew = ChiSquare(n)*rSize
+                                rNew = ChiSquareS(n,rngState)*rSize
                             enddo
                         elseif (method==2) then
                             !> Rosin-Rammler distribution with size parameter rs and spread parameter n=3.5
@@ -441,7 +446,7 @@ contains
                                 rSize = rSize * (rs / r32)
                             enddo
                             do while (rNew<rMin .or. rNew>=radius)
-                                rNew = RosinRammler(rSize,nSpread)
+                                rNew = RosinRammlerS(rSize,nSpread,rngState)
                             enddo
                         elseif (method==3) then
                             !> LogNormal/Normal distributions (to be implemented)
@@ -466,14 +471,16 @@ contains
     end subroutine TABmodel
 
     subroutine ETABmodel(dp,sigma,mup,rhop,npdot,rhog,vel,Re,dt,y,yDot,vp, &
-                          bp, event,exitLoop)
-        use IGLOO_variables, only: pi, toll
+                          bp, event,exitLoop,rngState)
+        use IGLOO_variables,      only: pi, toll
+        use IGLOO_Lib_Statistics, only: rngNext
         implicit none
         real(R8), intent(in)    :: sigma, mup, rhop, rhog, vel, Re, dt
         real(R8), intent(inout) :: dp, npdot, y, yDot, vp(3)
         real(R8), intent(in)    :: bp(:)   !> [k1, k2, WeCrit, WeTrans, Comega, Cmu]
         logical,  intent(out)   :: event
         logical,  intent(in)    :: exitLoop
+        integer(I8), intent(inout) :: rngState   !> parcel's own stream; see breakupEvent
         real(R8) :: AWe, twoPi, radius, rdt, omega, We, WeCr, y1, y2, a, phi, quad, tb
         real(R8) :: theta, rNew, sqrtWe, Kbr, dOld
         real(R8) :: Cd0, Asq, vperp, omega0, pHat(3), e1(3), e2(3), psi, vpn
@@ -544,7 +551,7 @@ contains
                                 e2 = [pHat(2)*e1(3)-pHat(3)*e1(2), &
                                       pHat(3)*e1(1)-pHat(1)*e1(3), &
                                       pHat(1)*e1(2)-pHat(2)*e1(1)]
-                                call random_number(psi); psi = twoPi*psi
+                                psi = twoPi*rngNext(rngState)
                                 vp = vp + vperp*(cos(psi)*e1 + sin(psi)*e2)
                             endif
                             dOld  = dp

@@ -1,9 +1,16 @@
 module IGLOO_Lib_Statistics
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : I4 => int32, I8 => int64, R8 => real64
     implicit none
     private
-    !> Sampler functions
+    !> Sampler functions. The bare names draw from the intrinsic `random_number`, whose state is
+    !> per-thread: correct ONLY on the serial pin-time path (sampleDiameter). The `*S`
+    !> ("streamed") twins take an explicit per-particle state and are the ONLY ones safe to call
+    !> from inside the OpenMP region -- see rngNext for why. Deliberately separate names rather
+    !> than one routine with an optional argument: a caller who forgot the optional would
+    !> silently get the thread-scheduled draw back, with no diagnostic.
     public :: RosinRammler, LogNormal, Normal, NormalStandard, ChiSquare
+    public :: RosinRammlerS, NormalStandardS, ChiSquareS
+    public :: rngSeedFor, rngNext
 
     !> PDFs
     public :: RosinRammlerPDF
@@ -21,7 +28,129 @@ module IGLOO_Lib_Statistics
     integer, parameter :: LogNorDistr = 2
     integer, parameter :: RosRamDistr = 3
 
+    !> splitmix64 constants, as SIGNED DECIMAL rather than hex: Fortran has no 0x literal, and a
+    !  BOZ (Z'...') with the top bit set is a portability minefield. These are the exact
+    !  two's-complement images of the published splitmix64 constants
+    !  9E3779B97F4A7C15, C2B2AE3D27D4EB4F, BF58476D1CE4E5B9 and 94D049BB133111EB (hex).
+    integer(I8), parameter :: SM_GOLDEN = -7046029254386353131_I8
+    integer(I8), parameter :: SM_IDMIX  = -4417276706812531889_I8
+    integer(I8), parameter :: SM_MIX_A  = -4658895280553007687_I8
+    integer(I8), parameter :: SM_MIX_B  = -7723592293110705685_I8
+
 contains
+
+    !===========================================================================================!
+    !  Per-particle deterministic RNG stream (splitmix64)                                       !
+    !                                                                                          !
+    !  The intrinsic `random_number` keeps per-thread state, so WHICH draw a particle receives  !
+    !  depends on which thread ran it and in what order -- i.e. on OMP scheduling. Any sampler  !
+    !  called from inside `!$OMP PARALLEL DO` is therefore not reproducible run to run, not     !
+    !  invariant to thread count, and (for MPI) not invariant to rank decomposition. Measured   !
+    !  on `tab-e2e`: its trajectories differ as a MULTISET between two identical runs.          !
+    !                                                                                          !
+    !  Fix: give every particle its own stream, seeded from (rng_seed, famID, ID) and advanced  !
+    !  only by that particle's own draws. The n-th draw of particle p then depends on nothing   !
+    !  but p -- reproducible, thread-count invariant, rank invariant.                           !
+    !                                                                                          !
+    !  splitmix64 (Steele-Lea-Flood 2014) is used because it is a pure integer mix with no      !
+    !  warm-up: a freshly seeded stream is immediately well-distributed, which matters here     !
+    !  because streams are re-seeded per particle per sweep rather than run long.               !
+    !===========================================================================================!
+
+    !> Deterministic stream seed for one particle. `ID` is only unique WITHIN a group (every pin
+    !  path assigns `particle(p)%ID = p`), so `famID` must be mixed in or particle 1 of every
+    !  family would consume an identical stream.
+    pure function rngSeedFor(famID, ID) result(state)
+        use IGLOO_variables, only: rng_seed
+        implicit none
+        integer, intent(in) :: famID, ID
+        integer(I8) :: state
+
+        state = mix64( int(rng_seed,I8)                                &
+                     + int(famID,I8) * SM_GOLDEN           &
+                     + int(ID,   I8) * SM_IDMIX )
+
+    end function rngSeedFor
+
+    !> Next uniform in (0,1) from a particle's own stream; advances `state`.
+    !  Open interval: 0 is excluded because RosinRammler takes log(x).
+    function rngNext(state) result(u)
+        implicit none
+        integer(I8), intent(inout) :: state
+        real(R8) :: u
+        integer(I8) :: z
+        real(R8), parameter :: twoM53 = 1._R8/9007199254740992._R8   ! 2**-53
+
+        do
+            state = state + SM_GOLDEN      ! splitmix64 Weyl increment
+            z     = mix64(state)
+            !> Top 53 bits -> [0,1). ishft by -11 on a signed 64-bit needs the sign bit cleared
+            !  first, so shift right logically via ibits.
+            u = real(ibits(z, 11, 53), R8) * twoM53
+            if (u > 0._R8) exit
+        enddo
+
+    end function rngNext
+
+    !> splitmix64 finalizer. Integer overflow in the multiplies is intended (mod 2**64) and is
+    !  what makes the avalanche work; Fortran wraps here on both gnu and ifx.
+    pure function mix64(x) result(z)
+        implicit none
+        integer(I8), intent(in) :: x
+        integer(I8) :: z
+
+        z = x
+        z = ieor(z, ishft(z, -30)) * SM_MIX_A
+        z = ieor(z, ishft(z, -27)) * SM_MIX_B
+        z = ieor(z, ishft(z, -31))
+
+    end function mix64
+
+    !> Streamed twins of the three samplers reachable from inside the OMP region.
+    function NormalStandardS(state) result(z)
+        implicit none
+        integer(I8), intent(inout) :: state
+        real(R8) :: z, u1, u2, s, y
+
+        do
+            u1 = 2._R8*rngNext(state) - 1._R8
+            u2 = 2._R8*rngNext(state) - 1._R8
+            s  = u1*u1 + u2*u2
+            if (s > 0._R8 .and. s < 1._R8) exit
+        enddo
+        y = sqrt(-2._R8*log(s)/s)
+        z = u1*y                    !> second deviate discarded; see NormalStandard
+
+    end function NormalStandardS
+
+    function RosinRammlerS(x0, n, state) result(x)
+        implicit none
+        real(R8),    intent(in)    :: x0, n
+        integer(I8), intent(inout) :: state
+        real(R8) :: x
+
+        if (x0<=0._R8 .or. n<=0._R8) &
+            error stop ( ' [ERROR] Rosin-Rammler distribution: x0 and n must be positive.' )
+        x = x0*(-log(rngNext(state)))**(1._R8/n)
+
+    end function RosinRammlerS
+
+    function ChiSquareS(k, state) result(x)
+        implicit none
+        integer,     intent(in)    :: k
+        integer(I8), intent(inout) :: state
+        real(R8) :: x, z
+        integer  :: i
+
+        if (k < 1) error stop ( ' [ERROR] ChiSquare: degrees of freedom must be >= 1.' )
+        x = 0._R8
+        do i = 1, k
+            z = NormalStandardS(state)
+            x = x + z*z
+        enddo
+
+    end function ChiSquareS
+
 
     !> standard normal distribution N(0, 1), Marsaglia polar method.
     !> Stateless on purpose: the second deviate v2*y is discarded rather than cached.

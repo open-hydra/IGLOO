@@ -21,11 +21,17 @@ program test_tab_moments
     !      smaller). Also gates: every child in [2*rMin, dp), npdot scaling
     !      npdot_new = npdot_old*(d_old/d_new)^3 per event.
     !
-    use, intrinsic :: iso_fortran_env, only: R8 => real64
+    use, intrinsic :: iso_fortran_env, only: R8 => real64, int64
     use IGLOO_Lib_Breakup, only: breakupEvent
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
     implicit none
+
+    !> One RNG stream for this test program. breakupEvent now takes the parcel's own stream
+    !  instead of drawing from the intrinsic random_number (which is thread-scheduled and so
+    !  irreproducible inside the solver's OMP region). Host-scope, not per-call: an ensemble of
+    !  events must see DISTINCT draws, so the state has to advance across calls.
+    integer(int64) :: tRng = 20260808_int64
 
     real(R8), parameter :: PI = 4.0_R8*atan(1.0_R8)
     ! ORA87 constants for the oracle side
@@ -123,7 +129,7 @@ contains
         ev = [dp0, 1.0_R8, 0._R8, 0._R8];  brkst = 0._R8;  zero3 = 0._R8
         call breakupEvent(ev, 4, brkst, 0, sigma, mu_l, rho_l, rho_g, u, &
                           0._R8, 0._R8, zero3, zero3, dt, 4, bp_tab, 2, &
-                          scaleFactor, event, child, addChild, .true.)
+                          scaleFactor, event, child, addChild, .true., tRng)
         if (.not. event) error stop 'tab_break: event did not fire'
         dp_new  = ev(1)
         npd_fac = ev(2)

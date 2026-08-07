@@ -21,13 +21,19 @@ program test_breakup_tab
     ! Tolerances theory-derived (roundoff accumulation; RK4 truncation floor;
     ! damping-neglect bound for tb) — never tuned to output.
     !
-    use, intrinsic :: iso_fortran_env, only: R8 => real64
+    use, intrinsic :: iso_fortran_env, only: R8 => real64, int64
     use IGLOO_Lib_Breakup, only: breakupEvent
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
     use verif_oracle, only: rk4_ref
     use verif_dump,   only: dump_curve
     implicit none
+
+    !> One RNG stream for this test program. breakupEvent now takes the parcel's own stream
+    !  instead of drawing from the intrinsic random_number (which is thread-scheduled and so
+    !  irreproducible inside the solver's OMP region). Host-scope, not per-call: an ensemble of
+    !  events must see DISTINCT draws, so the state has to advance across calls.
+    integer(int64) :: tRng = 20260808_int64
 
     real(R8), parameter :: PI = 4.0_R8*atan(1.0_R8)
     ! ORA87 constants — the independent oracle's ONLY source
@@ -80,7 +86,7 @@ contains
         ev = [dp0, 1.0_R8, y, yDot];  brkst = 0._R8;  zero3 = 0._R8
         call breakupEvent(ev, 4, brkst, 0, sigma, mu_l, rho_l, rho_g, u, &
                           0._R8, 0._R8, zero3, zero3, dt, 4, bp_tab, 1, 1._R8, &
-                          event, child, addChild, .false.)
+                          event, child, addChild, .false., tRng)
         y = ev(3);  yDot = ev(4)
     end subroutine tab_step
 

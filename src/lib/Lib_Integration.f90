@@ -674,7 +674,7 @@ contains
         call breakupEvent(eventLocal, neventvar, brkupState, nbrkst,    &
                           sigma,mup,rho,gasState(1),vel,Re,t1,acc,y(4:6),x-xold, &
                           mod_brkSelect, mod_bp,mod_bpMethod,mod_bpScale,        &
-                          eventFlag,childState,addChildLocal,exitLoop,childDone)
+                          eventFlag,childState,addChildLocal,exitLoop,part%rngState,childDone)
         if (ind_sb1 > 0) stateLocal(ind_sb1:ind_sb2) = brkupState(1:nbrkst)
       endif
 
