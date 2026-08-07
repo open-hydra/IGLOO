@@ -11,8 +11,8 @@
 !> record count, a stale `d` changes the mass column, an unreset `brkupVar` changes the
 !> exit position, a corrupted accumulator changes source.tec.
 !>
-!> OUTPUT/ is moved aside between sweeps rather than suffixed, so the harness needs no
-!> production filename change (that is P7's sweep tag, for the embedding's benefit).
+!> Sweeps do not overwrite each other: obj_IGLOO's sweep tag gives sweep N>0 the suffix
+!> '-sweep<N>' on every output file, so one OUTPUT/ holds the whole comparison.
 !>
 !> Two modes:
 !>   twosweep                 steady gas, 2 sweeps. Sweep 2 must reproduce sweep 1.
@@ -36,12 +36,11 @@ program twosweep
 
   if (nargs == 0) then
     call IGLOOsolver%setup_static()
-    do sweep = 1, 2
+    do sweep = 0, 1
       write(*,'(/A,I0,A/)') ' ======== twosweep: SWEEP ', sweep, ' ========'
       call IGLOOsolver%reset_state()
       call IGLOOsolver%solve()
       call IGLOOsolver%writeout()
-      if (sweep == 1) call park('OUTPUT.sweep1')
     enddo
 
   else
@@ -52,29 +51,20 @@ program twosweep
 
     call IGLOOsolver%setup_static(gas0)
 
-    write(*,'(/A/)') ' ======== gas-cycle: SWEEP 1 (original field) ========'
+    write(*,'(/A/)') ' ======== gas-cycle: SWEEP 0 (original field) ========'
     call IGLOOsolver%reset_state()
-    call IGLOOsolver%solve();  call IGLOOsolver%writeout();  call park('OUTPUT.sweep1')
+    call IGLOOsolver%solve();  call IGLOOsolver%writeout()
 
-    write(*,'(/A/)') ' ======== gas-cycle: SWEEP 2 (U doubled) ========'
+    write(*,'(/A/)') ' ======== gas-cycle: SWEEP 1 (U doubled) ========'
     call IGLOOsolver%reset_state(gasFast)
-    call IGLOOsolver%solve();  call IGLOOsolver%writeout();  call park('OUTPUT.sweep2')
+    call IGLOOsolver%solve();  call IGLOOsolver%writeout()
 
-    write(*,'(/A/)') ' ======== gas-cycle: SWEEP 3 (original field again) ========'
+    write(*,'(/A/)') ' ======== gas-cycle: SWEEP 2 (original field again) ========'
     call IGLOOsolver%reset_state(gas0)
     call IGLOOsolver%solve();  call IGLOOsolver%writeout()
   endif
 
 contains
-
-  !> Park a finished OUTPUT/ under `dest` so the next sweep writes a fresh tree.
-  subroutine park(dest)
-    character(len=*), intent(in) :: dest
-    integer :: st
-    call execute_command_line('rm -rf '//dest//' && mv OUTPUT '//dest//' && mkdir -p OUTPUT', &
-                              exitstat=st)
-    if (st /= 0) error stop 'twosweep: could not park OUTPUT'
-  end subroutine park
 
   !> Scale the streamwise gas velocity. varnames carries X,Y,Z first, so the variable at
   !  varnames(v) lives in vars(v-3) -- the same offset import_gas uses.

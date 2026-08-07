@@ -581,7 +581,10 @@ contains
   end subroutine read_TECsolfile
 
 
-  subroutine write_outfield(material,geoblock,sourceblock,eulerblock,srcSwitch,eulSwitch)
+  !> `tag` is the caller's sweep suffix (obj_IGLOO%sweepTag()); absent or empty means the
+  !  historical filenames. Applied to source.tec and euler<fam>.tec too -- source.tec is what
+  !  hydra consumes, so a repeated solve clobbers it exactly like the trajectory dumps.
+  subroutine write_outfield(material,geoblock,sourceblock,eulerblock,srcSwitch,eulSwitch,tag)
     use IR_Precision
     use Lib_Tecplot
     use Lib_ORION_data
@@ -594,9 +597,14 @@ contains
     class(obj_block)     , intent(in) :: geoblock(:)
     type(obj_sourceblock), intent(in) :: sourceblock(:)
     type(obj_eulerblock) , intent(in) :: eulerblock(:,:)
+    character(len=*), intent(in), optional :: tag
     type(orion_data)    :: orion
     integer(I4P)        :: E_IO, b, i, j, k, fam
     character(len=llen) :: file, varnames
+    character(len=:), allocatable :: sfx
+
+    sfx = ''
+    if (present(tag)) sfx = tag
 
     orion%tec%node = .false.
     orion%tec%bc   = .false.
@@ -631,7 +639,7 @@ contains
       write(*,*)
       write(*,*)' Writing tec-fomat file: ',trim(file),'.tec'
       write(*,*)
-      E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename='OUTPUT/'//trim(IGLOO_phase_prefix)//trim(file)//'.tec')
+      E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename='OUTPUT/'//trim(IGLOO_phase_prefix)//trim(file)//sfx//'.tec')
     endif
 
     if (allocated(orion%block)) deallocate(orion%block)
@@ -661,7 +669,7 @@ contains
         enddo
         varnames = ''
         varnames = trim(varnames)//trim('"rho<sub>p" "u<sub>p" "v<sub>p" "w<sub>p" "T<sub>p" "n<sub>p"')
-        E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename='OUTPUT/'//trim(IGLOO_phase_prefix)//trim(file)//'.tec')
+        E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename='OUTPUT/'//trim(IGLOO_phase_prefix)//trim(file)//sfx//'.tec')
       enddo
     endif
 

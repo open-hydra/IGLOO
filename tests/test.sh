@@ -12,7 +12,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IGLOO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILD_DIR="${IGLOO_ROOT}/build/verif"
-CATEGORIES="standard evaporation combustion breakup infrastructure unit e2e"
+CATEGORIES="standard evaporation combustion breakup infrastructure repeatability unit e2e"
 
 usage() {
     echo "Usage: ./test.sh [all|<category>|<test-name>|clean] [-- <extra cmake args>]"

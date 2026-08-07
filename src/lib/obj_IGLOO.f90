@@ -18,12 +18,17 @@ module IGLOO_module
     !  every `solve`. A second `solve` without it silently integrates finished particles.
     logical :: staticDone    = .false.
     logical :: stateIsFresh  = .false.
+    !> Output-file generation, counting reset_state calls from 0. Deliberately starts at -1 so
+    !  the FIRST reset_state lands on 0, whose tag is empty: a single-sweep standalone run
+    !  keeps byte-identical filenames, and the 49 oracles that glob fixed names still match.
+    integer :: sweep = -1
     ! integer            :: iprint
     ! real(R8)           :: ds, mdotMax, dtprint
   contains
     procedure, pass(self) :: setup
     procedure, pass(self) :: setup_static
     procedure, pass(self) :: reset_state
+    procedure, pass(self) :: sweepTag
     procedure, pass(self) :: solve
     procedure, pass(self) :: getSourceTerms
     procedure, pass(self) :: writeout
@@ -151,6 +156,10 @@ contains
     type(orion_data) :: own_gas
     integer :: m, g, ip, b, fam
 
+    !> Next output generation. Counting here rather than in solve keeps the tag stable across
+    !  the solve/writeout pair, which write different files for the SAME sweep.
+    self%sweep = self%sweep + 1
+
     !> Refresh the background field when the parent hands one in. Without this an embedding
     !  integrates a frozen gas forever, which defeats the point of being re-runnable.
     !  The mesh is static, so only the field values are re-imported.
@@ -252,6 +261,26 @@ contains
   end subroutine reset_state
 
 
+  !> Filename tag for the current output generation: empty on the first sweep (so standalone
+  !  runs are byte-identical to before this existed), '-sweep<N>' afterwards. Applied to every
+  !  output file INCLUDING the .tec ones -- source.tec is what hydra consumes, and it clobbers
+  !  just as readily as the trajectory dumps.
+  function sweepTag(self) result(tag)
+    implicit none
+    class(obj_IGLOO), intent(in)  :: self
+    character(len=:), allocatable :: tag
+    character(len=16) :: buf
+
+    if (self%sweep <= 0) then
+      tag = ''
+    else
+      write(buf,'(A,I0)') '-sweep', self%sweep
+      tag = trim(buf)
+    endif
+
+  end function sweepTag
+
+
   subroutine solve(self)
     use Lib_Integration,  only: integrate
     use IGLOO_particles,  only: obj_particle
@@ -316,10 +345,10 @@ contains
     do m = 1, nm
       material: associate(mat => self%material(m))
       if (trajOn) then
-        open(newunit=unitTraj,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'trajectories-'//trim(mat%matName)//'.dat')
+        open(newunit=unitTraj,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'trajectories-'//trim(mat%matName)//self%sweepTag()//'.dat')
         write(unitTraj,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'
       endif
-      open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//'.dat')
+      open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//self%sweepTag()//'.dat')
       write(unitExit,*) 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID"'
 
       !> Scatter cloud: one flat point-cloud zone per material; auto-size the weight quantum
@@ -327,7 +356,7 @@ contains
       !  population estimate (Ndot*tauRef) is crude; it sets only the count, not the shape.
       dNscat = 0._R8
       if (scatOn) then
-        open(newunit=unitScat,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'scatter-'//trim(mat%matName)//'.dat')
+        open(newunit=unitScat,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'scatter-'//trim(mat%matName)//self%sweepTag()//'.dat')
         write(unitScat,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'
         write(unitScat,'(A,A,A)')'Zone T="Mat ',trim(mat%matName),' scatter"'
         !> Serial inject-only pre-pass: resolve each stream's npdot (= Σ droplet rate Ndot) and
@@ -619,7 +648,8 @@ contains
     implicit none
     class(obj_IGLOO), intent(inout) :: self
 
-    call write_outfield(self%material,self%geoblock,self%source,self%euler,self%srcSwitch,self%eulSwitch)
+    call write_outfield(self%material,self%geoblock,self%source,self%euler,self%srcSwitch, &
+                        self%eulSwitch, tag=self%sweepTag())
 
   end subroutine writeout
 

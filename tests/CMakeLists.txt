@@ -99,6 +99,48 @@ if(USE_OPENMP)
         COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
         LINK_FLAGS    "${OpenMP_Fortran_FLAGS}")
 endif()
+
+# Repeatability case: run the harness in an ISOLATED case dir, then the shared oracle.
+# The dirs under repeatability/ symlink INPUT to their parent e2e case (khrt-stress
+# precedent) and carry their own input.ini, so these tests never share an OUTPUT/ with the
+# single-sweep cases -- which they otherwise would clobber under `ctest -j`.
+# A non-empty `gasfile` additionally runs the 3-sweep gas-refresh cycle.
+# Signal handling matches igloo_e2e_case: ordinary solver exit codes are not gated, death
+# by signal is.
+function(igloo_twosweep_case name casedir labels gasfile)
+    set(_oracle "python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_twosweep.py")
+    set(_run "${CMAKE_CURRENT_BINARY_DIR}/twosweep")
+    set(_cmd "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${_run} 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ge 128 ]; then echo \"[FAIL] harness died on signal (exit $rc)\"; exit 1; fi; ${_oracle} steady || exit 1")
+    if(NOT "${gasfile}" STREQUAL "")
+        string(APPEND _cmd "; rm -rf OUTPUT; mkdir -p OUTPUT; ${_run} ${gasfile} 1>run_out_gas.txt 2>run_err_gas.txt; rc=$?; if [ \"$rc\" -ge 128 ]; then echo \"[FAIL] gas-cycle died on signal (exit $rc)\"; exit 1; fi; ${_oracle} gas-cycle || exit 1")
+    endif()
+    add_test(NAME ${name} COMMAND bash -c "${_cmd}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
+    set_tests_properties(${name} PROPERTIES
+        LABELS "${labels}"
+        ENVIRONMENT "OMP_NUM_THREADS=5;KMP_STACKSIZE=100M"
+        TIMEOUT 900)
+endfunction()
+
+# The five cases the plan calls for, each exercising a different leak:
+#   drag-stokes   simplest ord1 path -- was already repeatable, so this is a REGRESSION gate
+#   db-injection  assigned stream => the *Inj capture path (F4)
+#   d2law         evaporation destroys d (F3)
+#   khrt          children => counts + brkupVar (F2, F5)
+#   vie-plait     the suite's only gas-order=2 case => accumulator shape (F7)
+# etab-e2e is deliberately EXCLUDED: its random_number(psi) is drawn inside the OMP region
+# (Lib_Breakup.f90:547), so sweep-to-sweep identity is impossible for that model however
+# correct the reset is. It would need a statistical criterion instead.
+igloo_twosweep_case(repeat-drag-stokes  repeatability/drag-stokes
+                    "e2e;repeatability;standard"       "INPUT/solfile.tec")
+igloo_twosweep_case(repeat-db-injection repeatability/db-injection
+                    "e2e;repeatability;infrastructure" "")
+igloo_twosweep_case(repeat-d2law        repeatability/d2law
+                    "e2e;repeatability;evaporation"    "")
+igloo_twosweep_case(repeat-khrt         repeatability/khrt
+                    "e2e;repeatability;breakup"        "")
+igloo_twosweep_case(repeat-vie-plait    repeatability/vie-plait
+                    "e2e;repeatability;standard"       "INPUT/solfile.tec")
 # docs/user/registry.md is DocGen OUTPUT that is also TRACKED, so it can silently
 # disagree with the registry it documents (it did twice on 2026-07-30). Regenerate
 # into the build tree and diff. Kind 8 (contract meta-test): no physics, no figure.

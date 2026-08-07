@@ -13,8 +13,11 @@ bin
 # Test output files
 error*
 OUTPUT
-# Sweep 1's OUTPUT, parked by the two-sweep repeatability harness (tests/support/twosweep.f90)
-OUTPUT.sweep1
+# Parked sweep OUTPUT dirs. The shipped harness no longer parks (it relies on the production
+# -sweep<N> filename suffix, inside OUTPUT/, already covered above) -- but a hand-run of an older
+# twosweep, or any manual A/B, drops these. Glob, not `.sweep1`: an exact rule let 6.7 MB of
+# generated source.tec into the P6 commit (since stripped) -- the gas-cycle mode writes .sweep2.
+OUTPUT.sweep*
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/
