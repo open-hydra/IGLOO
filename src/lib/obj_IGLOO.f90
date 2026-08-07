@@ -141,11 +141,27 @@ contains
   !  per-sweep half of pinning: it is `pure`, writes only `self%particle(i)%*`, and among
   !  other things re-zeroes `brkupVar` for originals (whose only other zeroing is the
   !  child-range call in `solve`, which never reaches an original).
-  subroutine reset_state(self)
-    use IGLOO_variables, only: nm, nb
+  subroutine reset_state(self, external_gas)
+    use IGLOO_variables,  only: nm, nb
+    use IGLOO_allocation, only: import_gas
+    use Lib_ORION_data
     implicit none
-    class(obj_IGLOO), intent(inout) :: self
+    class(obj_IGLOO), intent(inout)        :: self
+    type(orion_data), intent(in), optional :: external_gas
+    type(orion_data) :: own_gas
     integer :: m, g, ip, b, fam
+
+    !> Refresh the background field when the parent hands one in. Without this an embedding
+    !  integrates a frozen gas forever, which defeats the point of being re-runnable.
+    !  The mesh is static, so only the field values are re-imported.
+    !  ⚠ cell%mdotGas is NOT refreshed: its seeder early-returns when non-zero
+    !  (obj_block.f90:1186), so bcdef-401 streams keep the mass flow they were seeded with.
+    !  Under an evolving gas the injected mass flow will not track it. Physics change with
+    !  its own gate; recorded, not silently inherited.
+    if (present(external_gas)) then
+      call copyORION(external_gas, own_gas)
+      call import_gas(own_gas, self%gasblock)
+    endif
 
     !> F7 -- the accumulators must be dropped, not reused. Under ord2 they are allocated at
     !  gasblock shape (1..Nx+1) but `finalize` move_allocs geoblock-shaped arrays (1..Nx) over

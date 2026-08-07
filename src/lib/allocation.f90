@@ -232,7 +232,9 @@ contains
     logical             :: gasConstantRead
     character(len=64)   :: vname
 
-    allocate(nspecies(1:nb))
+    !> Guarded so import_gas is re-runnable: reset_state calls it again to refresh the
+    !  background field, and nb never changes (the mesh is static).
+    if (.not.allocated(nspecies)) allocate(nspecies(1:nb))
 
     nspecies = 0
     do ib = 1, nb
