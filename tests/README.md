@@ -85,6 +85,5 @@ the fix holds, RED on regression.
 
 ## Status
 
-ctest 20/20 (13 gated unit + 3 xfail probes + 4 e2e). Held out: `evaporation/d2law`
-(production bugs A3/A4), KHRT (bug A2). Convergence-order
+ctest 49/49 (25 e2e + 24 unit, `self_test` among the latter). Convergence-order
 aggregate tables (plan §4 T8-convergence) not started.

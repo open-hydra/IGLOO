@@ -1,6 +1,6 @@
 # Verification matrix
 
-One row per registered CTest entry (48 total: 24 e2e + 24 unit incl. `self_test`).
+One row per registered CTest entry (49 total: 25 e2e + 24 unit incl. `self_test`).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -28,16 +28,16 @@ Columns:
 
 ---
 
-## Shared box fixture (13 of 24 e2e cases)
+## Shared box fixture (14 of 25 e2e cases)
 
 Every e2e case except `db-2daxi`, `vie-plait`, `mhb98-water`,
-`pilch-erdman-e2e`, `tab-e2e`, `etab-e2e`, `khrt-e2e`, `khrt-stress`,
+`pilch-erdman-e2e`, `tab-e2e`, `etab-e2e`, `khrt-e2e`, `khrt-e2e-rt`, `khrt-stress`,
 `khrt-e2e-threads`, and `reitz-diwakar-e2e` runs on the
 **same** axis-aligned uniform-gas box emitted by
 [`tools/make_box_case.py`](tools/make_box_case.py). The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The eight exceptions: `db-2daxi`
+once here, referenced as **"shared box"** below. The eleven exceptions: `db-2daxi`
 (spatially varying, real MOSE nozzle solution) and `vie-plait` (spatially varying,
 analytic `−ε(y−1)`) are the two non-uniform-gas cases; `mhb98-water` keeps the box
 *geometry* but swaps in a different **uniform** gas (water in air at T_G=298 K with
@@ -46,8 +46,9 @@ a near-static U=1.9×10⁻⁴ clock) to match the Miller-Harstad-Bellan Fig-2 co
 (`tools/make_pe_case.py`) for the PE87 Weber sweep; `tab-e2e`/`etab-e2e` stretch the box to
 0.6 m × 240 cells at U=50 m/s and `khrt-e2e`/`reitz-diwakar-e2e` run the 0.15 m box at U=200 m/s
 (all via `make_pe_case.py`) for the TAB/ETAB onset and the KHRT / Reitz-Diwakar sweeps;
-`khrt-stress` and `khrt-e2e-threads` reuse `khrt-e2e`'s fixture unchanged (the former via an
-`INPUT/` symlink, differing only in `mShedLim`; the latter runs that same case at 1/2/4 threads).
+`khrt-e2e-rt`, `khrt-stress` and `khrt-e2e-threads` reuse `khrt-e2e`'s fixture unchanged (the first
+is a second oracle on that same run; the second via an `INPUT/` symlink, differing only in
+`mShedLim`; the third runs that same case at 1/2/4 threads).
 
 | Property | Value |
 |---|---|
@@ -90,6 +91,7 @@ oracle possible.
 | **db-injection** | infrastructure (no paper; bug-B1 regression) | *behavioral* — no reference curve; asserts placement fidelity, `vInj` hand-off (u starts at u_p=1), Stokes relaxation, and domain exits | shared box | **assigned-position (DB)** injection: 5 parcels at explicit x=0.01, y=0.005…0.045, z=0.025, u_p=1.0 m/s, d=11.89 µm, ṁ=1e-4, T=300 K; outlet + walls |
 | **coupled-body** | analytic (euler+source+body) | *mixed* — body-force v(x) closed form (as body-force) **plus** source-deposit totals vs closed forms: the deposit must be the drag reaction only (body-gained momentum/energy stripped) | shared box + `body-accel=(0,−200,0)`; euler+source accumulators ON (default `out-file`) | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; outlet + walls |
 | **db-2daxi** | infrastructure (no paper; promoted legacy `assigned-pos`) | *behavioral*, md5-free — both parcels integrate, exit the nozzle outlet, all fields finite; no analytic oracle (real flow field) | **NON-UNIFORM real MOSE nozzle**: `common/solfile_mose.tec`, single block I=201×J=181×K=2 (2-D axisymmetric wedge, one cell thick), ~6×10⁵ distinct field values; spatially varying ρ/U/T (~300–3600 K). Drag=Morsi-Alexander, heat=Kavanau-Drake | **assigned-position (DB)** injection: 2 parcels x=[−0.49,0.064], y=[0.55,0.66], d=[1e-4,2e-5], ṁ=[0.1,1.0]; face1 inlet, face2 outlet, **face3 symmetry** (axisymmetric fold), face4 wall; euler-only output |
+| **bc-center-2grp** | infrastructure (no paper; bug-A24 regression) | *behavioral* — no reference curve; every expectation is built from the known inputs (25 inlet cells, `fsample=2`, 2 groups), never from production output: 12 particles per group, ID set exactly {1…12} per group, group 2 an exact clone of group 1 (same cells, same properties, same physics), and every particle writing ≥5 trajectory records and exiting on the outflow plane. The suite's only execution of `pin_particles_bc_center` | shared box (`INPUT/` symlinks `standard/drag-stokes/INPUT`) | inlet-face 401, κ_ρ=0.34, κ_v=0.1, κ_t=1.0, d=11.89 µm, ρ_p=2950; outlet + walls. Two load-bearing deviations from `drag-stokes`: **`ds` deleted** from `[IGLOO-BC]` (⇒ dispatch to `pin_particles_bc_center`, not `_bc_ds`) and **`fsample = 2`** (every 2nd inlet cell ⇒ 12 particles/group), with `phase.txt` = `A 2` (**two groups**). At `fsample = 1` half the defect is invisible — do not "simplify" |
 | **periodic-y** | infrastructure (translational periodic path) | *closed form* — body-force closed form folded **modulo L_y**; velocity unchanged across each wrap (transport = exact ±L_y translation), residual ~5e-7 m | shared box + `body-accel=(0,−8000,0)` (drives 2–3 y-wraps) | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; **faces 3/4 translational-periodic (bcdef 201)**; face2 outlet; faces 5/6 wall |
 
 ---
@@ -132,9 +134,10 @@ box/BC. Sub-test IDs in parentheses.
 
 ## Reconciliation
 
-24 `e2e`-labelled + 24 `unit`-labelled = **48 CTest entries**, all green (counted from `ctest -N`
-2026-08-04). The `e2e` count includes `khrt-e2e-rt`, the KHRT RT-shatter persistence gate, plus the
-two A23/S4 additions `khrt-stress` and `khrt-e2e-threads`; the `unit` count includes `self_test`
+25 `e2e`-labelled + 24 `unit`-labelled = **49 CTest entries**, all green (counted from `ctest -N`
+2026-08-07). The `e2e` count includes `khrt-e2e-rt`, the KHRT RT-shatter persistence gate, the
+two A23/S4 additions `khrt-stress` and `khrt-e2e-threads`, and the A24 pinning case
+`bc-center-2grp`; the `unit` count includes `self_test`
 and `registry-docs`, and the two O7 additions `test_kh_rayleigh_limit` and
 `test_khrt_interaction`. Unit families that emit
 a production-vs-reference overlay (`verif_dump` → `tools/plot_curves.py` →

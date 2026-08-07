@@ -149,6 +149,7 @@ solver could only emulate with a no-drag production flag.  See
 | Coupled outputs (`infrastructure/coupled-body`) | euler + source + body-force accumulators together (model 1) | Body-force $v(x)$ + source totals vs closed forms (drag-reaction-only deposit, agreement ~4·10⁻⁷) | **GREEN** (2026-07-15) |
 | 2Daxi + DB (`infrastructure/db-2daxi`) | Axisymmetric wedge, real MOSE gas field, DB injection, euler-only output | Behavioral (both particles integrate to the outlet, fields finite) | **GREEN** (B5/B6 fixed 2026-07-15) |
 | Periodic BC (`infrastructure/periodic-y`) | Translational periodic pair (bcdef 201): transport, velocity-unchanged contract, relocation | Body-force $v(x)$ closed form across 2–3 wraps + $y(x)$ modulo $L_y$ (residual ~$5\cdot10^{-7}$ m) | **GREEN** (2026-07-16, first exercise of the path) |
+| Multi-group `bc_center` pinning (`infrastructure/bc-center-2grp`) | Inlet-face pinning through `pin_particles_bc_center` with **two** particle groups and `fsample = 2` — the suite's only execution of that routine | Behavioral, no reference curve — per-group population, ID identity, group 2 as a faithful clone of group 1, and integration to the outflow plane, all derived from the known inputs (mesh size, `fsample`, group count) | **GREEN** (A24 fixed 2026-08-07; RED at `d857aba^`, GREEN at `d857aba`) |
 
 ---
 

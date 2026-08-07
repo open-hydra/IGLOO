@@ -61,7 +61,7 @@ tests/
 ├── evaporation/                  # unit families (d2law, interface-neq, tc-analytic) + d2law/lk-neq/tc-box e2e
 ├── breakup/                      # TAB, Pilch-Erdman, Reitz-Diwakar, ETAB, Reitz-KHRT
 ├── combustion/                   # Beckstead unit family + burn-box e2e
-└── infrastructure/               # gas_reconstruction, ini_pipeline; db-injection/coupled-body/db-2daxi/periodic-y (e2e)
+└── infrastructure/               # gas_reconstruction, ini_pipeline; db-injection/coupled-body/db-2daxi/periodic-y/bc-center-2grp (e2e)
 ```
 
 ### Categories
@@ -70,9 +70,9 @@ tests/
 |----------|----------|--------|
 | `standard` | Drag (A) and temperature (B) unit families; drag-stokes, temp-relax, body-force, conv-nu, vie-plait e2e | **GREEN** |
 | `evaporation` | Evaporation (C), LK-interface, TC-analytical unit families; d²-law, lk-neq, tc-box e2e + **mhb98-water** (E-VAL-2, paper-reproduction validation) | **GREEN** (bugs A3/A4/A8/A9/A10 fixed; F1/F2 e2e 2026-07-11; E-VAL-2 2026-07-21) |
-| `breakup` | TAB/ETAB, Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT families + TAB stochastic moments | **GREEN** (6 tests; A2/A13/A14/A15 fixed; ETAB event path implemented 2026-07-16) |
+| `breakup` | TAB/ETAB, Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT families + TAB stochastic moments | **GREEN** (8 tests; A2/A13/A14/A15 fixed; ETAB event path implemented 2026-07-16) |
 | `combustion` | Beckstead $d^n$ Al-burn unit family; burn-box e2e | **GREEN** (M1, 2026-07-11) |
-| `infrastructure` | Gas reconstruction (E), INI pipeline (T9); db-injection, coupled-body, db-2daxi, periodic-y e2e | **GREEN** (B1/B5/B6 fixed; 201-periodic exercised 2026-07-16) |
+| `infrastructure` | Gas reconstruction (E), INI pipeline (T9); db-injection, coupled-body, db-2daxi, periodic-y, bc-center-2grp e2e | **GREEN** (B1/B5/B6 fixed; 201-periodic exercised 2026-07-16; A24 `bc_center` pinning gated 2026-08-07) |
 
 CTest labels combine category (`standard`/`evaporation`/…), kind (`unit`/`e2e`),
 and family tags. **No test is registered `WILL_FAIL`** — every entry is a real gate,
@@ -80,7 +80,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 (`test_{drag,heat,evap}_probes`) began life as expected-fail bug reproducers, but
 every bug they cover is fixed, so they now run as ordinary bug-transcription pins.
 
-Current gate: **43/43** (22 e2e + 21 unit, `self_test` among the latter).
+Current gate: **49/49** (25 e2e + 24 unit, `self_test` among the latter).
 One row per entry in `tests/VERIFICATION_MATRIX.md`.
 
 ### Adding a test

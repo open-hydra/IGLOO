@@ -506,6 +506,12 @@ the intended boundary) with no reference curve at all, because a real MOSE nozzl
 field has no analytic solution.  `db-2daxi` is deliberately md5-free: trajectory
 bytes drift by 1 ULP across compiler and configure generations.
 
+One member of this category has **no figure** and so no section below:
+`bc-center-2grp`, the multi-group `bc_center` pinning gate (a behavioral case with
+no reference curve — see the table in [Overview](index.md)).  This page is organized
+around comparison figures; a case that pins particle *placement* rather than a
+trajectory has nothing to plot.
+
 The routine-level member of this category is the interpolation family
 `test_gas_reconstruction` (E1–E5), documented under
 [Literature tests](literature.md); `vie-plait` is its in-solver counterpart, the

@@ -37,8 +37,8 @@ No prior build is needed. The script:
 A healthy run ends like:
 
 ```
-100% tests passed, 0 tests failed out of 20
-[report] .../build/verif/tests/verification_report.md: 42/42 rows PASS, 12 csv files
+100% tests passed, 0 tests failed out of 49
+[report] .../build/verif/tests/verification_report.md: 97/97 rows PASS, 19 csv files
 ```
 
 ---
@@ -65,7 +65,7 @@ For anything finer, drive CTest directly — tests carry composable labels
 
 ```bash
 ctest --test-dir build/verif -L breakup --output-on-failure
-ctest --test-dir build/verif -L unit                # all 21 unit tests
+ctest --test-dir build/verif -L unit                # all 24 unit tests
 ctest --test-dir build/verif -R "test_drag.*"        # regex on names
 ```
 
@@ -76,7 +76,7 @@ is nothing to exclude (`-LE xfail` is a no-op).
 
 ## Reading the results
 
-**CTest summary.** All 43 tests should pass, and "Passed" means what it says
+**CTest summary.** All 49 tests should pass, and "Passed" means what it says
 everywhere — **no test is registered `WILL_FAIL`**.
 
 Three of them (`test_drag_probes`, `test_heat_probes`, `test_evap_probes`) are
@@ -89,7 +89,7 @@ they exit 0 and behave like any other gate: **RED now means a regression.** Thei
 parent families; they already gate as they stand.
 
 **Aggregated report.** `build/verif/tests/verification_report.md` — one row per
-verified quantity (42 currently), with the measured error, the derived tolerance,
+verified quantity (97 currently), with the measured error, the derived tolerance,
 and PASS/FAIL. The same data lives in per-test `verif_*.csv` files next to it
 (schema: `case, variable, Linf, L2, p_obs, p_expected, tol, result`).
 
