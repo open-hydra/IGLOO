@@ -209,6 +209,14 @@ igloo_e2e_case(coupled-body infrastructure/coupled-body "e2e;infrastructure")
 igloo_e2e_case(db-2daxi infrastructure/db-2daxi "e2e;infrastructure")
 # translational periodic pair (bcdef 201): closed-form v(x) across wraps + modular-y
 igloo_e2e_case(periodic-y infrastructure/periodic-y "e2e;infrastructure")
+# A24 (2026-08-07): first coverage for pin_particles_bc_center. Every other case sets
+# `ds` (20) or injects an assigned/DB stream (3), and every other phase.txt declares one
+# group, so this routine ran in no test at all -- long enough to accumulate two
+# implicit-SAVE counters and a silent out-of-bounds write. Needs BOTH `A 2` (>=2 groups,
+# for the particle-index carry) and `fsample = 2` (for the cell-counter phase shift);
+# neither trigger alone exposes both halves. INPUT/ symlinks standard/drag-stokes'.
+# Verified RED at d857aba^ (group 2: 13 particles, 12 of them ID 0) and GREEN at d857aba.
+igloo_e2e_case(bc-center-2grp infrastructure/bc-center-2grp "e2e;infrastructure;pinning")
 
 # A7 resolved 2026-07-15 as source-faithful (Shimada2006 eq.45 quoting NASA-SP-8039
 # has no +2 floor): the xfail probe is promoted to a positive transcription pin.
