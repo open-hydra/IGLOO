@@ -255,17 +255,19 @@ contains
 
     do i = start, end
       associate(part => self%particle(i))
-      !> ODE system configuration (allocations idempotent: setup may run twice — once for the
-      !  scatter inject-only pre-pass, once for the real sweep).
-      if (.not.allocated(part%stateVar)) allocate(part%stateVar(self%neq))
-      if (.not.allocated(part%oldState)) allocate(part%oldState(self%neq))
-      if (nAuxSt > 0 .and. .not.allocated(part%auxState)) allocate(part%auxState(nAuxSt))
-      if (nEvV   > 0 .and. .not.allocated(part%eventVar)) allocate(part%eventVar(nEvV))
-      if (eulerSwitch .and. .not.allocated(part%intE)) then
+      !> ODE system configuration. Guards test SIZE, not merely allocation status: this runs
+      !  more than once per particle (the scatter inject-only pre-pass, the real sweep, and
+      !  reset_state before each further sweep), and a guard on allocation alone would keep a
+      !  wrongly-sized array whenever neq changes between calls.
+      call sizeTo(part%stateVar, self%neq)
+      call sizeTo(part%oldState, self%neq)
+      if (nAuxSt > 0) call sizeTo(part%auxState, nAuxSt)
+      if (nEvV   > 0) call sizeTo(part%eventVar, nEvV)
+      if (eulerSwitch) then
         select case(mdl)
-        case(2,5);    allocate(part%intE(1:5))
-        case(3,4);    allocate(part%intE(1:6))
-        case default; allocate(part%intE(1:4))
+        case(2,5);    call sizeTo(part%intE, 5)
+        case(3,4);    call sizeTo(part%intE, 6)
+        case default; call sizeTo(part%intE, 4)
         end select
       endif
       part%model = mdl
@@ -275,6 +277,23 @@ contains
       part%brkupSelect = self%brkupSelect
       end associate
     enddo
+
+  contains
+
+    !> Ensure `arr` is allocated with exactly `n` elements, reallocating on a size change.
+    !  Contents are not preserved -- every caller overwrites them before the next read.
+    pure subroutine sizeTo(arr, n)
+      implicit none
+      real(R8), allocatable, intent(inout) :: arr(:)
+      integer,               intent(in)    :: n
+
+      if (allocated(arr)) then
+        if (size(arr) == n) return
+        deallocate(arr)
+      endif
+      allocate(arr(n))
+
+    end subroutine sizeTo
 
   end subroutine setup_particleODE
 

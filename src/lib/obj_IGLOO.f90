@@ -162,7 +162,8 @@ contains
         !  an explicit input key, not a refactor side effect.
         do ip = 1, gr%nInjected
           associate(part => gr%particle(ip))
-          part%d = part%dInj
+          part%ID = ip
+          part%d  = part%dInj
           !> Assigned/DB streams only. BC streams re-derive tp and mdot from live gas in
           !  initializePart, and their *Inj fields are 0 -- restoring those would inject
           !  a zero-temperature, zero-mass-flow particle.
@@ -170,9 +171,31 @@ contains
             part%tp   = part%tpInj
             part%mdot = part%mdotInj
           endif
+          !> time == 0 IS the "needs injection init" flag integrate keys off
+          !  (Lib_Integration.f90:119), and every exit path zeroes it -- which is what makes
+          !  a finished particle re-injectable at all.
+          part%time        = 0._R8
+          part%lost        = .false.
+          part%exitFace    = 0
+          part%gasExitFace = 0
+          part%Af          = 0._R8
+          !> Redundant with integrate's injection-init block, but reset_state should read as
+          !  a statement of the fresh state, not as a transcript of integrate's internals.
+          part%gone  = .false.
+          part%wasin = .false.
+          part%Ncell = 0
+          part%angle = 0._R8
+          part%i     = part%iInj
+          !> `iold` has no default initializer and only the DB pin path ever wrote it, so
+          !  bc-pinned particles carry stale/undefined values here. Latent today: at
+          !  injection findParticle succeeds (injViable guarantees it) and updateCell
+          !  returns before reaching the `retry` seed that reads iold. Defined now.
+          part%iold  = [0,0,0,0]
           end associate
         enddo
 
+        !> Same order as solve's child hand-off: ODE sizing first, then properties.
+        call gr%setup_particleODE()
         call gr%assign_group2particle()
         end associate
       enddo
