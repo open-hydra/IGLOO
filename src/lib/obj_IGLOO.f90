@@ -143,7 +143,7 @@ contains
     use IGLOO_variables, only: nm
     implicit none
     class(obj_IGLOO), intent(inout) :: self
-    integer :: m, g
+    integer :: m, g, ip
 
     do m = 1, nm
       do g = 1, self%material(m)%ngroups
@@ -155,6 +155,24 @@ contains
           call resizeParticleArray(gr%particle, gr%nInjected)
         !> solve re-allocates the shed lists per group when the model has children.
         if (allocated(gr%shed)) deallocate(gr%shed)
+
+        !> Fan the pin-time capture back out to the live fields the last sweep consumed.
+        !  Restoring d = dInj deliberately re-injects the SAME stochastic draw every sweep:
+        !  frozen realization vs resampled ensemble is a physics choice and belongs behind
+        !  an explicit input key, not a refactor side effect.
+        do ip = 1, gr%nInjected
+          associate(part => gr%particle(ip))
+          part%d = part%dInj
+          !> Assigned/DB streams only. BC streams re-derive tp and mdot from live gas in
+          !  initializePart, and their *Inj fields are 0 -- restoring those would inject
+          !  a zero-temperature, zero-mass-flow particle.
+          if (all(part%iInj == [0,0,0,0])) then
+            part%tp   = part%tpInj
+            part%mdot = part%mdotInj
+          endif
+          end associate
+        enddo
+
         call gr%assign_group2particle()
         end associate
       enddo

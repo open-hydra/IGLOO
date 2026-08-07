@@ -46,6 +46,13 @@ module IGLOO_particles
     integer      :: iInj(4)   !> injection index-based position (b,i,j,k)
     real(R8)     :: pInj(3)   !> injection position
     real(R8)     :: vInj(3) = 1.0e30_R8 !> DB velocity request (pin time predates stateVar allocation); >= threshold => gas velocity
+    !> Pin-time capture of the state the live fields below get destroyed by, so reset_state
+    !  can re-inject the same particle. `d` is consumed by evaporation and breakup; `tp` and
+    !  `mdot` are pin-time-only for assigned/DB streams (BC streams re-derive both from live
+    !  gas in initializePart, so theirs stay 0 and must NOT be restored).
+    real(R8)     :: dInj    = 0._R8
+    real(R8)     :: tpInj   = 0._R8
+    real(R8)     :: mdotInj = 0._R8
     integer      :: fInj      !> injection face
     integer      :: Ninj      !> number of particle from the same cell
     integer      :: Ncell     !> number of integration loops in the same cell

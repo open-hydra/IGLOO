@@ -35,9 +35,11 @@ subroutine pin_particles(group, block, gas, method, pos0,vel,temp,mdot,diam,fam,
         part%pInj = pos0(np,:)
         part%iInj = [0,0,0,0]
         part%iold = [0,0,0,0]
-        part%mdot = mdot(np)
-        part%d    = diam(np)
-        part%tp   = temp(np)
+        !> Pinning writes only the *Inj capture; reset_state fans out to the live fields
+        !  before every sweep. One code path instead of two.
+        part%mdotInj = mdot(np)
+        part%dInj    = diam(np)
+        part%tpInj   = temp(np)
         part%vInj = vel(np,:)   ! stateVar not yet allocated here; handed off in integrate's init
         end associate
       enddo
@@ -90,9 +92,9 @@ contains
             particle(p)%iInj = [b, i, j, k]
             particle(p)%fInj = f
             particle(p)%Ninj = 1
-            particle(p)%d = sampleDiameter( 2._R8*face%cell(m,n)%properties(fam,6), &  ! dp = 2*rp
-                                                  face%cell(m,n)%properties(fam,7), &  ! sigmap
-                                            nint( face%cell(m,n)%properties(fam,8) ) ) ! law code
+            particle(p)%dInj = sampleDiameter( 2._R8*face%cell(m,n)%properties(fam,6), &  ! dp = 2*rp
+                                                     face%cell(m,n)%properties(fam,7), &  ! sigmap
+                                               nint( face%cell(m,n)%properties(fam,8) ) ) ! law code
           endif
         endif
       enddo; enddo
@@ -415,9 +417,9 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
     particle(p)%fInj = ind( 5 ,p)
     b = ind(1,p); f = ind(5,p); m = ind(6,p); n = ind(7,p)
     particle(p)%Ninj = block(b)%face(f)%cell(m,n)%nInj
-    particle(p)%d = sampleDiameter( 2._R8*block(b)%face(f)%cell(m,n)%properties(fam,6), &  ! dp = 2*rp
-                                          block(b)%face(f)%cell(m,n)%properties(fam,7), &  ! sigmap
-                                    nint( block(b)%face(f)%cell(m,n)%properties(fam,8) ) ) ! law code
+    particle(p)%dInj = sampleDiameter( 2._R8*block(b)%face(f)%cell(m,n)%properties(fam,6), &  ! dp = 2*rp
+                                             block(b)%face(f)%cell(m,n)%properties(fam,7), &  ! sigmap
+                                       nint( block(b)%face(f)%cell(m,n)%properties(fam,8) ) ) ! law code
   enddo
   end associate
 
