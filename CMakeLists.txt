@@ -15,8 +15,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
 
   # Set some options the user may choose
-  # Uncomment the below if you want the user to choose a parallelization library
-  #OPTION(USE_MPI "Use the MPI library for parallelization" OFF)
+  # NOTE USE_MPI is shared with ORION, which declares its own OPTION of the same name and uses it
+  # to select teciompi over tecio when USE_TECIO is also ON. That coupling is unavoidable (ORION is
+  # add_subdirectory'd into this cache namespace) and is documented in the MPI plan; the default
+  # build and the whole test path set USE_TECIO=false, so they are unaffected.
+  OPTION(USE_MPI "Use the MPI library for parallelization" OFF)
   OPTION(USE_OPENMP "Use OpenMP for parallelization" OFF)
 
   # This INCLUDE statement executes code that sets the compile flags for DEBUG,

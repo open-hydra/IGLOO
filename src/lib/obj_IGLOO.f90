@@ -299,6 +299,7 @@ contains
     use IGLOO_allocation, only: allocateAccumulators
     use IGLOO_Lib_Properties, only: lookupTab   !> A23c child hand-off (enthalpy slot)
     use IGLOO_Lib_Statistics, only: rngSeedFor
+    use IGLOO_Mod_MPI,        only: mpi_size_, mpi_abort_all
     use oslo
     use omp_lib
     implicit none
@@ -312,6 +313,17 @@ contains
     integer  :: c, nStreams, nValid
     real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp
     type(obj_particle) :: ptmp   ! throwaway copy for the inject-only pre-pass
+
+    !> PHASE-1 SCAFFOLDING GUARD -- REMOVE AT THE START OF PHASE 2b.
+    !  Phase 1 lands only the MPI environment: there is no ownership predicate at the integration
+    !  loops and no accumulator reduction yet, so every rank would integrate EVERY particle and
+    !  write the same records to the same files. That is not slow-but-correct, it is wrong output.
+    !  Fail loudly instead of shipping a half-working parallel path, which is what makes Phase 1
+    !  independently committable. mpi_size_ is 1 in a serial or USE_MPI=OFF build, so this is
+    !  unreachable there.
+    if (mpi_size_ > 1) call mpi_abort_all( &
+      'MPI particle decomposition is not implemented yet (Phase 1 wires the environment only). '// &
+      'Run with one rank, or build with USE_MPI=OFF.')
 
     !> Repeatability contract. Every exit path zeroes part%time, so a finished particle is
     !  indistinguishable from one that never started: calling solve twice without

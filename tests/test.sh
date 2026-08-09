@@ -38,9 +38,13 @@ if [[ "${TARGET}" == clean ]]; then
     exit 0
 fi
 
+# USE_MPI defaults OFF: the suite is serial unless explicitly asked, so a plain ./test.sh run is
+# unchanged. Override from the environment (USE_MPI=ON ./test.sh all) or with `-- -DUSE_MPI=ON`.
+# Without this line MPI would silently never turn on for the test build, whatever install.sh did.
 cmake -B "${BUILD_DIR}" -S "${IGLOO_ROOT}" \
     -DMASTER=None \
     -DUSE_OPENMP=ON \
+    -DUSE_MPI=${USE_MPI:-OFF} \
     -DUSE_SUNDIALS=OFF \
     -DBUILD_VERIFICATION=ON \
     -DCMAKE_BUILD_TYPE=RELEASE \

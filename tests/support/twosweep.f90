@@ -25,12 +25,18 @@
 program twosweep
   use IGLOO_module,     only: obj_IGLOO
   use IGLOO_IO,         only: read_TECsolfile
+  use IGLOO_Mod_MPI,    only: mpi_init_env, mpi_finalize_env
   use Lib_ORION_data
   implicit none
   type(obj_IGLOO)      :: IGLOOsolver
   type(orion_data)     :: gas0, gasFast
   character(len=512)   :: gasfile
   integer              :: sweep, nargs
+
+  !> Mirrors src/app/IGLOO.f90. Without these the repeatability cases -- the only gates that
+  !  exercise setup_static -> N x (reset_state + solve + writeout), i.e. the hydra embedding mode --
+  !  could not run under MPI. No-ops in a USE_MPI=OFF build.
+  call mpi_init_env()
 
   nargs = command_argument_count()
 
@@ -63,6 +69,8 @@ program twosweep
     call IGLOOsolver%reset_state(gas0)
     call IGLOOsolver%solve();  call IGLOOsolver%writeout()
   endif
+
+  call mpi_finalize_env()
 
 contains
 
