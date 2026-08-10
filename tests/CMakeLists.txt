@@ -69,6 +69,29 @@ function(igloo_e2e_case name casedir labels)
         TIMEOUT 300)
 endfunction()
 
+# MPI variant of igloo_e2e_case: same case, launched under mpiexec on <nranks> ranks, oracle
+# unmodified. Registered ONLY when this build actually has MPI -- USE_MPI defaults OFF, so a plain
+# ./test.sh run is unchanged and these tests simply do not exist. Run them with
+#   USE_MPI=ON ./test.sh mpi          (MPI builds also need -DUSE_TECIO=OFF; see INFO.md)
+#
+# Three deliberate departures from igloo_e2e_case:
+#  * rc gate is `!= 0`, not `>= 128`. Measured on this host (Intel MPI 2021.9.0): mpiexec returns
+#    255 when ANY rank dies on a signal and 0 on a clean run, so a `>=128` gate would work only by
+#    luck of that value. IGLOO never exits non-zero benignly (khrt-e2e-rt already relies on it).
+#  * OMP_NUM_THREADS is per-case, because ranks x threads must stay bounded.
+#  * each case gets its OWN directory rather than sharing the serial case's OUTPUT/ under a
+#    RESOURCE_LOCK -- the repeatability/ pattern. A private dir cannot race the serial variant at
+#    all and lets the two run concurrently under `ctest -j`.
+function(igloo_e2e_case_mpi name casedir nranks nthreads labels)
+    add_test(NAME ${name}
+        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${nranks} ${CMAKE_SOURCE_DIR}/bin/IGLOO 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ne 0 ]; then echo \"[FAIL] mpiexec exit $rc on ${nranks} ranks\"; tail -20 run_out.txt; exit 1; fi; grep -q \"MPI ranks = ${nranks}\" run_out.txt || { echo \"[FAIL] solver did not report ${nranks} ranks -- is bin/IGLOO an MPI build?\"; exit 1; }; python3 -B check.py"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
+    set_tests_properties(${name} PROPERTIES
+        LABELS "${labels}"
+        ENVIRONMENT "OMP_NUM_THREADS=${nthreads};KMP_STACKSIZE=100M"
+        TIMEOUT 600)
+endfunction()
+
 # ---------- infrastructure ----------------------------------------------------
 add_executable(test_verif_self support/test_self.f90)
 target_link_libraries(test_verif_self PRIVATE verif_support)
@@ -290,6 +313,29 @@ igloo_e2e_case(periodic-y infrastructure/periodic-y "e2e;infrastructure")
 # neither trigger alone exposes both halves. INPUT/ symlinks standard/drag-stokes'.
 # Verified RED at d857aba^ (group 2: 13 particles, 12 of them ID 0) and GREEN at d857aba.
 igloo_e2e_case(bc-center-2grp infrastructure/bc-center-2grp "e2e;infrastructure;pinning")
+
+# ---------- mpi (registered only in a USE_MPI build) ----------------------------
+# See mpi/INFO.md. Each dir symlinks its parent case's INPUT/, input.ini and check.py, so the fixture
+# and the oracle are literally the same files -- "check.py passes unmodified" is not a claim here,
+# it is the same inode. Rank counts x threads stay <= 8.
+if(USE_MPI AND MPIEXEC_EXECUTABLE)
+    igloo_e2e_case_mpi(mpi-drag-stokes    mpi/drag-stokes    2 2 "e2e;mpi;standard")
+    igloo_e2e_case_mpi(mpi-conv-nu        mpi/conv-nu        4 2 "e2e;mpi;standard")
+    # children: 241 of them, and the only oracle that reads the child count out of the solver log
+    igloo_e2e_case_mpi(mpi-khrt           mpi/khrt           4 2 "e2e;mpi;breakup")
+    # the suite's ONLY ngroups=2 case, so the only real exercise of the merge's per-zone loop
+    igloo_e2e_case_mpi(mpi-bc-center-2grp mpi/bc-center-2grp 4 2 "e2e;mpi;infrastructure")
+    # n=1 vs n=4 of the same binary: witness, file layout, .dat multisets, .tec fields. Launches
+    # mpiexec itself (khrt-e2e-threads precedent), so it is not an igloo_e2e_case_mpi.
+    add_test(NAME mpi-consistency
+        COMMAND python3 -B check.py "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}"
+                                   "${CMAKE_SOURCE_DIR}/bin/IGLOO"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mpi/consistency")
+    set_tests_properties(mpi-consistency PROPERTIES
+        LABELS "e2e;mpi;infrastructure;consistency"
+        ENVIRONMENT "OMP_NUM_THREADS=2;KMP_STACKSIZE=100M"
+        TIMEOUT 900)
+endif()
 
 # A7 resolved 2026-07-15 as source-faithful (Shimada2006 eq.45 quoting NASA-SP-8039
 # has no +2 floor): the xfail probe is promoted to a positive transcription pin.

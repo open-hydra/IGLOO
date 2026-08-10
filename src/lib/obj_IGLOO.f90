@@ -53,6 +53,23 @@ contains
 
   !> Once-only: input parsing, gas field, block/geometry allocation, BC tagging and
   !  particle pinning. Everything here is independent of how many sweeps follow.
+  !>
+  !> **MPI contract for `external_gas`** (same for reset_state, the other entry point that takes it):
+  !>  - The parent passes the FULL gas field, IDENTICALLY, on every rank. IGLOO replicates mesh and
+  !>    gas and decomposes over PARTICLES; it never partitions the field, so a rank given a subdomain
+  !>    would integrate particles through a hole. No consistency check is possible here -- a
+  !>    per-rank-different field produces plausible, wrong answers.
+  !>  - The PARENT owns MPI_Init/Finalize. `mpi_init_env` is idempotent (it guards on
+  !>    MPI_Initialized) so an embedded IGLOO adopts the parent's communicator; `mpi_finalize_env` is
+  !>    driver-only and must never be called from an embedding.
+  !>  - Pinning and `initRandomSeed` run replicated on every rank, deliberately: identical particle
+  !>    populations and identical RNG streams are what make rank count invisible in the output.
+  !>
+  !> Two contracts inherited from the repeated-sweep split, both easy to violate from a parent:
+  !>  - `self%source` / `self%euler` are valid only BETWEEN a `solve` and the next `reset_state`,
+  !>    which deallocates them.
+  !>  - `cell%mdotGas` must be re-imposed by the parent EVERY sweep: the seeder early-returns when it
+  !>    is already non-zero, so a write-once value silently freezes injection mass flow.
   subroutine setup_static(self, external_gas)
     use omp_lib
     use IGLOO_IO
@@ -62,7 +79,7 @@ contains
     use IGLOO_allocation
     use IGLOO_IO_INI, only: read_IGLOO_input
     use IGLOO_Lib_Statistics, only: initRandomSeed
-    use IGLOO_Mod_MPI,        only: mpi_is_root
+    use IGLOO_Mod_MPI,        only: mpi_is_root, mpi_size_
     use Lib_ORION_data
     implicit none
     class(obj_IGLOO), intent(inout)        :: self
@@ -93,6 +110,14 @@ contains
 # endif
     if (nthreads>1 .and. mpi_is_root) then
       write(*,*)" OpenMP threads = ", nthreads
+    endif
+    !> Rank count, printed only when actually decomposed -- so a serial build and `mpirun -n 1` stay
+    !  byte-identical. This is the ONLY positive witness that the particle decomposition is live: a
+    !  USE_MPI=OFF binary launched under `mpirun -n 4` runs four independent full sweeps that clobber
+    !  one another's OUTPUT/, and every after-the-fact file check passes vacuously. The MPI
+    !  consistency gate asserts this line reports exactly the rank count it asked for.
+    if (mpi_size_>1 .and. mpi_is_root) then
+      write(*,'(A,I0)')" MPI ranks = ", mpi_size_
     endif
 
     call read_IGLOO_input(method,self%srcSwitch,self%eulSwitch,gasfile,pos0,vel0,temp0,mdot,diam)
@@ -150,6 +175,11 @@ contains
   !  per-sweep half of pinning: it is `pure`, writes only `self%particle(i)%*`, and among
   !  other things re-zeroes `brkupVar` for originals (whose only other zeroing is the
   !  child-range call in `solve`, which never reaches an original).
+  !
+  !  MPI: `external_gas` carries the same replication contract as in `setup_static` above -- the
+  !  parent passes the FULL field identically on every rank. This is the entry point a parent with
+  !  an evolving gas field actually calls per sweep, so it is the one where a partitioned field would
+  !  be introduced.
   subroutine reset_state(self, external_gas)
     use IGLOO_variables,      only: nm, nb
     use IGLOO_allocation,     only: import_gas

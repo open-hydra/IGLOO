@@ -42,8 +42,11 @@ test/*_results.txt
 
 # e2e case run logs
 tests/*/*/run_*.txt
+tests/*/*/err_*.txt
 # Failure-only diagnostics written by check_threads.py (BUGS.md O13). Absent on a passing run.
 tests/*/*/diag_*.txt
+# Per-rank-count .tec snapshots kept by the mpi-consistency gate for its cross-rank compare
+tests/mpi/*/tec_n*/
 
 # mkdocs build output
 site/

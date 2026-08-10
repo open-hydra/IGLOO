@@ -16,7 +16,11 @@ Two comparison rules, both forced on us by real nondeterminism rather than chose
          loop writes as particles finish), so byte-identity does not hold even between
          two runs of one sweep. The multiset is exact -- no tolerance.
 
-  *.tec  max relative difference below TEC_TOL. These fields are filled by
+  *.tec  max SCALE-relative difference below TEC_TOL, i.e. max|a-b| normalised by the
+         FIELD's magnitude max|a| -- NOT a per-value |a-b|/|a|, which is ill-conditioned
+         here (see tools/compare_tec.py for the measurement). The PASS string below says
+         "max|rel|" for stdout byte-stability; the computation is and always was
+         scale-relative. These fields are filled by
          !$OMP ATOMIC UPDATE, and FP addition is not associative, so the value depends
          on thread interleaving. Measured 2026-08-07 on this host: the run-to-run floor
          at a FIXED sweep is <= 4e-15, while the F7 accumulator-shape bug this test was
