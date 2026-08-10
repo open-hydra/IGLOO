@@ -299,14 +299,21 @@ contains
     use IGLOO_allocation, only: allocateAccumulators
     use IGLOO_Lib_Properties, only: lookupTab   !> A23c child hand-off (enthalpy slot)
     use IGLOO_Lib_Statistics, only: rngSeedFor
-    use IGLOO_Mod_MPI,        only: mpi_size_, mpi_abort_all
+    use IGLOO_Mod_MPI,        only: mpi_size_, mpi_abort_all, owns_particle, &
+                                    mpi_allreduce_sum_i4_array
     use oslo
     use omp_lib
     implicit none
     class(obj_IGLOO), intent(inout) :: self
     integer, parameter :: maxLoop=5
     integer :: m, g, ip, iota, ch, e, start, nEnd, oldStart, oldEnd, newSize, b, fam
-    integer :: loopCounter, childCounter, maxShedSeen
+    integer :: loopCounter, maxShedSeen
+    !> Child-ID band. curBase/curCount describe the GLOBAL generation held in the current
+    !  window: its IDs are (curBase, curBase+curCount]. childLocal sizes LOCAL storage,
+    !  childGlobal fixes the next band and the rank-uniform termination test. Deliberately
+    !  uninitialized -- an initializer here would make them implicit-SAVE (work package A).
+    integer :: curBase, curCount, newBase, childLocal, childGlobal, pidx, idBase
+    integer, allocatable :: nShedAll(:), shedOff(:)
     ! logical, allocatable :: famDone(:)
     real(R8), allocatable :: relTol(:), absTol(:)
     !> Scatter-cloud weight-quantum (dNscat) auto-sizing scratch.
@@ -446,6 +453,12 @@ contains
           gr%nactive = gr%nparticles
           start = 1;  nEnd = gr%nactive
           loopCounter = 0
+          !> Generation 0 = the pinned parents, IDs 1..nInjected (reset_state assigns the storage
+          !  index, and so do all three pin sites). curBase=0 makes newBase = n0 on pass 1, which
+          !  is byte-for-byte the `oldEnd` that `kid%ID = oldEnd + ch` used before the census.
+          !  Per GROUP: the ID space is per group, so this cannot be hoisted out.
+          curBase  = 0
+          curCount = gr%nInjected   !> the immutable pin-time census, never the live counter
 
           do while (loopCounter < maxLoop)
             loopCounter = loopCounter + 1
@@ -469,29 +482,65 @@ contains
             enddo
             !$OMP END PARALLEL DO
 
-            !> Total shed EVENTS, not parents that shed -- `newSize` has to size the particle
-            !  array by the number of children actually created. Summed serially: the drain
-            !  below walks the same ascending `ip`, so the child ordering is fixed by the
-            !  traversal itself, independent of thread count and SCHEDULE(DYNAMIC).
-            oldStart     = start
-            childCounter = 0
-            maxShedSeen  = 0
-            do ip = start, nEnd
-              childCounter = childCounter + gr%shed(ip)%n
-              maxShedSeen  = max(maxShedSeen, gr%shed(ip)%n)
+            !> Shed census -- total shed EVENTS, not parents that shed, because `newSize` has to
+            !  size the particle array by the number of children actually created. One entry per
+            !  parcel of the CURRENT generation, indexed by its position in that generation's
+            !  global ID band, so MPI_SUM reconstructs the exact serial per-parent vector: every
+            !  parcel is written by exactly ONE rank (pass 1 -- a non-owned parent is cycled and
+            !  keeps the n=0 stored just above, which every rank writes unconditionally; passes
+            !  >=2 -- the window holds only locally-created children, each on its creator).
+            !  Child ordering is fixed by the ascending `ip` traversal the drain below repeats,
+            !  so it is independent of thread count and SCHEDULE(DYNAMIC).
+            oldStart = start
+            oldEnd   = nEnd    !> hoisted: needed on every rank every pass, childLocal==0 included
+            if (allocated(nShedAll)) deallocate(nShedAll, shedOff)
+            allocate(nShedAll(curCount), shedOff(curCount))   !> curCount is globally agreed
+            nShedAll   = 0
+            childLocal = 0
+            do ip = oldStart, oldEnd
+              pidx = gr%particle(ip)%ID - curBase
+              if (pidx < 1 .or. pidx > curCount) &
+                call mpi_abort_all('shed census: parcel outside its generation ID band')
+              nShedAll(pidx) = gr%shed(ip)%n
+              childLocal     = childLocal + gr%shed(ip)%n
             enddo
+            !> Both premises of the pass-1 authority argument, asserted rather than assumed.
+            if (loopCounter == 1) then
+              do ip = oldStart, oldEnd
+                if (gr%particle(ip)%ID /= ip) &
+                  call mpi_abort_all('generation-0 IDs are not the 1..nInjected storage index')
+                if (.not.owns_particle(ip) .and. gr%shed(ip)%n /= 0) &
+                  call mpi_abort_all('non-owned parent shed a child (ownership gate leak)')
+              enddo
+            endif
 
-            if (childCounter > 0) then
-              write(*,*)"       Loop",loopCounter," => number of children = ", childCounter
+            call mpi_allreduce_sum_i4_array(nShedAll, curCount)   !> the ONLY in-loop collective
+
+            !> Exclusive prefix over the GLOBAL vector: childGlobal fixes the next band and the
+            !  rank-uniform termination test, shedOff places each parent's children inside it.
+            childGlobal = 0
+            maxShedSeen = 0
+            do e = 1, curCount
+              shedOff(e)  = childGlobal
+              childGlobal = childGlobal + nShedAll(e)
+              maxShedSeen = max(maxShedSeen, nShedAll(e))
+            enddo
+            newBase = curBase + curCount
+            if (childGlobal > huge(1) - newBase) &
+              call mpi_abort_all('child ID band overflowed int32')
+
+            if (childGlobal > 0) then
+              write(*,*)"       Loop",loopCounter," => number of children = ", childGlobal
               !> Visible tripwire: how hard the shed path is actually working. A number
               !  climbing toward the `maxShed` guard in Lib_Integration means the case is
               !  approaching runaway shedding well before the guard has to fire.
               if (maxShedSeen > 1) write(*,'(A,I0,A)')                                    &
                     "                             (max ",maxShedSeen," sheds from one parcel)"
 
-              !> Grow particle array if needed (geometric 2x)
-              oldEnd  = nEnd
-              newSize = gr%nactive + childCounter
+              !> Grow particle array if needed (geometric 2x). Sized on childLocal, not
+              !  childGlobal: only this rank's children live in this rank's array. `oldEnd` was
+              !  hoisted above the census -- do not re-derive it here, `nEnd` moves just below.
+              newSize = gr%nactive + childLocal
               if (newSize > size(gr%particle)) then
                 call resizeParticleArray(gr%particle, max(2*size(gr%particle), newSize))
               endif
@@ -516,14 +565,22 @@ contains
               !  had no trigger before A23a/A23b, so it had never executed for any model.
               ch = 0
               do ip = oldStart, oldEnd
+              idBase = newBase + shedOff(gr%particle(ip)%ID - curBase)
               do e  = 1, gr%shed(ip)%n
                 ch   = ch + 1
                 iota = oldEnd + ch
                 associate(kid => gr%particle(iota), src => gr%shed(ip)%item(e))
-                kid%ID            = iota
+                !> ID comes from the GLOBAL census band; `iota` stays the LOCAL storage slot. Keep
+                !  the two axes apart -- at size 1 they coincide and the tripwire says so, but
+                !  part%ID also seeds the scatter sampling (Lib_Integration:182), so silently
+                !  re-baselining it would move which scatter points get emitted.
+                kid%ID            = idBase + e
+                if (mpi_size_ == 1 .and. kid%ID /= iota) &
+                  call mpi_abort_all('child-ID census broke serial equivalence')
                 !> Own RNG stream. Without this a child keeps the default 0 -- deterministic, but
-                !  IDENTICAL for every child, which the repeatability gate cannot see.
-                kid%rngState      = rngSeedFor(gr%famID, iota)
+                !  IDENTICAL for every child, which the repeatability gate cannot see. Seeded from
+                !  the global ID, so the stream is rank-invariant as well as thread-invariant.
+                kid%rngState      = rngSeedFor(gr%famID, kid%ID)
                 kid%stateVar(1:3) = src%pos
                 kid%stateVar(4:6) = src%vel
                 kid%tp            = src%temp
@@ -561,6 +618,9 @@ contains
               enddo
               enddo
               gr%nactive = newSize
+              !> Advance the band: the children just created are the next generation.
+              curBase  = newBase
+              curCount = childGlobal
             else
               exit
             endif
