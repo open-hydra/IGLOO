@@ -726,69 +726,73 @@ contains
 
 
   !> Merge `<base>.rank0.dat` … `<base>.rank<N-1>.dat` into `<base>.dat` and delete the shards.
+  !>
+  !> **Byte-block copy, not record-by-record.** The output is byte-identical to a record loop, but the
+  !> unit of work is one block per (zone, rank) instead of one formatted read + one formatted write per
+  !> record. That matters: on `khrt-stress` at 5 ranks the old per-record loop moved ~1.1 M records and
+  !> cost 3.47 s of a 7.01 s run -- 49 %, entirely serial on root, so it was cancelling most of the
+  !> benefit of decomposing in the first place. Same structure, ~15 I/O operations instead of ~1.1 M.
+  !>
+  !> It still has to be ZONE-AWARE. Concatenating whole shards end to end would emit rank 0's zones,
+  !> then rank 1's, i.e. duplicated zone headers -- which is exactly the corruption the Phase 4
+  !> falsification produced, and which a case's own `check.py` does not notice. The reason a block copy
+  !> is possible at all is that within ONE shard the data lines of a given zone are contiguous bytes.
   subroutine merge_one_stream(base)
     use IGLOO_Mod_MPI, only: mpi_size_, mpi_abort_all
     implicit none
     character(len=*), intent(in) :: base
-    !> Widest record written to these units is 118 chars (`7F12.6,2E13.6E2,I8`); an over-long record
-    !  aborts rather than silently truncating, so this bound is checked, not assumed.
-    integer, parameter :: LMAX = 512
-    integer,               allocatable :: u(:), plen(:)
-    character(len=LMAX),   allocatable :: pend(:)
-    logical,               allocatable :: done(:)
-    character(len=LMAX) :: line, hdr
-    integer :: r, uo, nlen, hlen, ios
+    character(len=1), parameter  :: NL = char(10)
+    integer, allocatable :: u(:), nz(:), vlo(:), vhi(:)
+    integer, allocatable :: hlo(:,:), hhi(:,:), dlo(:,:), dhi(:,:)
+    logical, allocatable :: needNL(:)
+    character(len=:), allocatable :: blk, hdr0
+    integer :: r, z, uo, ios, nzone
 
-    allocate(u(0:mpi_size_-1), pend(0:mpi_size_-1), plen(0:mpi_size_-1), done(0:mpi_size_-1))
-    pend = ''; plen = 0; done = .false.; hdr = ''; hlen = 0
+    allocate(u(0:mpi_size_-1), nz(0:mpi_size_-1), vlo(0:mpi_size_-1), vhi(0:mpi_size_-1), &
+             needNL(0:mpi_size_-1))
+    nz = 0; needNL = .false.
 
+    !> Pass 1: index each shard. Peak memory is ONE shard, not the merged total -- the buffer is
+    !  released before the next shard is read, and pass 2 re-reads only the blocks it writes.
     do r = 0, mpi_size_-1
-      !> No `action='read'`: the standard forbids deleting a file connected for input only, and the
-      !  shards are closed with status='delete' below. ifx accepts the pair, gfortran need not.
-      open(newunit=u(r), file=shard_name(base,r), status='old', iostat=ios)
-      if (ios /= 0) call mpi_abort_all('rank-file merge: cannot open shard '//shard_name(base,r))
+      call scan_shard(base, r, u(r), nz(r), vlo(r), vhi(r), hlo, hhi, dlo, dhi, needNL(r), &
+                      (r == 0))
+      if (r > 0 .and. nz(r) /= nz(0)) &
+        call mpi_abort_all('rank-file merge: shards disagree on zone count, '//base)
     enddo
-    open(newunit=uo, file=base//'.dat', status='replace', action='write')
+    nzone = nz(0)
 
-    !> `variables=` line: emit rank 0's once, and verify the others match rather than assume it.
-    do r = 0, mpi_size_-1
-      call get_record(u(r), line, nlen, done(r))
-      if (done(r)) call mpi_abort_all('rank-file merge: empty shard '//shard_name(base,r))
-      if (r == 0) then
-        hdr = line; hlen = nlen
-        write(uo,'(A)') hdr(1:hlen)
-      else if (nlen /= hlen .or. line(1:nlen) /= hdr(1:hlen)) then
+    open(newunit=uo, file=base//'.dat', access='stream', form='unformatted', status='replace', &
+         action='write', iostat=ios)
+    if (ios /= 0) call mpi_abort_all('rank-file merge: cannot write '//base//'.dat')
+
+    !> `variables=` line: emit rank 0's once, verifying the others match rather than assuming it.
+    call read_block(u(0), vlo(0), vhi(0), hdr0)
+    write(uo) hdr0
+    do r = 1, mpi_size_-1
+      call read_block(u(r), vlo(r), vhi(r), blk)
+      if (blk /= hdr0) &
         call mpi_abort_all('rank-file merge: shards disagree on the variables header, '//base)
-      endif
     enddo
 
-    !> One-record lookahead per shard: after the header every shard sits on a zone header.
-    do r = 0, mpi_size_-1
-      call get_record(u(r), pend(r), plen(r), done(r))
-    enddo
-
-    do
-      if (all(done)) exit
-      if (any(done)) call mpi_abort_all('rank-file merge: shards disagree on zone count, '//base)
-      do r = 0, mpi_size_-1
-        if (.not. is_zone_header(pend(r)(1:plen(r)))) &
-          call mpi_abort_all('rank-file merge: lookahead is not a zone header in ' &
-                             //shard_name(base,r))
-        if (plen(r) /= plen(0) .or. pend(r)(1:plen(r)) /= pend(0)(1:plen(0))) &
+    do z = 1, nzone
+      !> Zone header once, from rank 0, after checking every shard agrees on it byte for byte.
+      call read_block(u(0), hlo(0,z), hhi(0,z), hdr0)
+      do r = 1, mpi_size_-1
+        call read_block(u(r), hlo(r,z), hhi(r,z), blk)
+        if (blk /= hdr0) &
           call mpi_abort_all('rank-file merge: shards disagree on a zone header, '//base)
       enddo
-      write(uo,'(A)') pend(0)(1:plen(0))
-      !> This zone's data, rank-blocked; each rank stops at its next zone header, which becomes its
-      !  new lookahead.
+      write(uo) hdr0
+      !> This zone's data, rank-blocked. An empty segment (a rank owning no parcel in this zone) is
+      !  normal, not an error -- it happens whenever the rank count exceeds the parcel count.
       do r = 0, mpi_size_-1
-        do
-          call get_record(u(r), line, nlen, done(r))
-          if (done(r)) exit
-          if (is_zone_header(line(1:nlen))) then
-            pend(r) = line; plen(r) = nlen; exit
-          endif
-          write(uo,'(A)') line(1:nlen)
-        enddo
+        if (dhi(r,z) < dlo(r,z)) cycle
+        call read_block(u(r), dlo(r,z), dhi(r,z), blk)
+        write(uo) blk
+        !> A shard whose final record carries no trailing newline would otherwise splice onto the
+        !  next rank's first record.
+        if (needNL(r) .and. z == nzone) write(uo) NL
       enddo
     enddo
 
@@ -796,45 +800,156 @@ contains
       close(u(r), status='delete')
     enddo
     close(uo)
-    deallocate(u, pend, plen, done)
+    deallocate(u, nz, vlo, vhi, needNL, hlo, hhi, dlo, dhi)
 
   end subroutine merge_one_stream
 
 
-  !> One record with its EXACT length, trailing blanks included. Non-advancing so `size=` reports the
-  !> true record length: a plain `read(u,'(A)')` blank-pads the buffer and would force a `trim`,
-  !> silently rewriting any record that legitimately ends in a space.
-  subroutine get_record(u, buf, nlen, atEnd)
-    use, intrinsic :: iso_fortran_env, only: IOSTAT_END, IOSTAT_EOR
+  !> Index one shard: byte ranges of its `variables=` line, of each zone header, and of each zone's
+  !> data block. Leaves the unit OPEN for stream reads (and for the delete that closes the merge).
+  !> `alloc` sizes the per-zone index arrays from this shard's zone count; every later shard is
+  !> checked against it by the caller.
+  !>
+  !> ONE pass over the bytes, and it records only ZONE HEADERS -- a zone's data is by definition
+  !> everything between its header and the next one, so the data lines never need to be visited
+  !> individually. Measured on `khrt-stress` at 5 ranks (195 MB of scatter output): the first version
+  !> walked the buffer twice and called an `adjustl`-based predicate on all 1.65 M lines, ~1 s of the
+  !> 2.4 s the merge cost. What is left is one byte compare per byte plus one cheap test per line.
+  subroutine scan_shard(base, r, u, nzone, vlo, vhi, hlo, hhi, dlo, dhi, needNL, alloc)
+    use, intrinsic :: iso_fortran_env, only: I8 => int64
+    use IGLOO_Mod_MPI, only: mpi_size_, mpi_abort_all
+    implicit none
+    character(len=*), intent(in)  :: base
+    integer,          intent(in)  :: r
+    integer,          intent(out) :: u, nzone, vlo, vhi
+    integer, allocatable, intent(inout) :: hlo(:,:), hhi(:,:), dlo(:,:), dhi(:,:)
+    logical,          intent(out) :: needNL
+    logical,          intent(in)  :: alloc
+    character(len=1), parameter   :: NL = char(10)
+    character(len=:), allocatable :: buf
+    integer, allocatable :: hs(:), he(:), tmp(:)
+    integer :: nbytes, i, ls, le, ios, z, cap
+    integer(I8) :: nbytes64
+
+    !> Size in int64. A default integer would be int32, and a shard above 2 GB would then either come
+    !  back negative (aborting with a misleading "empty shard") or WRAP POSITIVE and silently truncate
+    !  the merge. The whole-shard buffer below is a `character(len=)`, whose length is a default
+    !  integer, so >2 GB genuinely cannot be held here -- refuse it by name instead of guessing.
+    inquire(file=shard_name(base,r), size=nbytes64)
+    if (nbytes64 <= 0_I8) call mpi_abort_all('rank-file merge: empty shard '//shard_name(base,r))
+    if (nbytes64 > int(huge(1)/2, I8)) &
+      call mpi_abort_all('rank-file merge: shard exceeds the 1 GB whole-buffer limit, ' &
+                         //shard_name(base,r)//' -- use more ranks, or turn scatter output off')
+    nbytes = int(nbytes64)
+    !> No `action='read'`: the standard forbids deleting a file connected for input only, and the
+    !  shards are closed with status='delete' at the end of the merge. ifx accepts the pair,
+    !  gfortran need not.
+    open(newunit=u, file=shard_name(base,r), access='stream', form='unformatted', status='old', &
+         iostat=ios)
+    if (ios /= 0) call mpi_abort_all('rank-file merge: cannot open shard '//shard_name(base,r))
+    allocate(character(len=nbytes) :: buf)
+    read(u, pos=1, iostat=ios) buf
+    if (ios /= 0) call mpi_abort_all('rank-file merge: short read on '//shard_name(base,r))
+    !> Every record a Fortran formatted `write` produces is newline-terminated, so this cannot happen
+    !  for a shard our own writer created. Assert rather than patch: the missing byte could belong to a
+    !  zone header as easily as to a data block, and the per-data-block patch this replaces sat after
+    !  the empty-block `cycle`, so it could not have covered either case reliably.
+    if (buf(nbytes:nbytes) /= NL) &
+      call mpi_abort_all('rank-file merge: shard does not end in a newline, '//shard_name(base,r))
+    needNL = .false.
+
+    !> First record is the `variables=` line.
+    le = 0
+    do i = 1, nbytes
+      if (buf(i:i) == NL) then; le = i; exit; endif
+    enddo
+    if (le == 0) le = nbytes
+    vlo = 1; vhi = le
+
+    cap = 16; allocate(hs(cap), he(cap)); nzone = 0
+    ls = le + 1
+    do i = ls, nbytes
+      if (buf(i:i) /= NL) cycle
+      if (line_is_zone(buf, ls, i)) then
+        nzone = nzone + 1
+        if (nzone > cap) then                     !> grow; never taken for real group counts
+          allocate(tmp(2*cap)); tmp(1:cap) = hs; call move_alloc(tmp, hs)
+          allocate(tmp(2*cap)); tmp(1:cap) = he; call move_alloc(tmp, he)
+          cap = 2*cap
+        endif
+        hs(nzone) = ls; he(nzone) = i
+      endif
+      ls = i + 1
+    enddo
+    if (ls <= nbytes) then                        !> final record carrying no newline
+      if (line_is_zone(buf, ls, nbytes)) then
+        nzone = nzone + 1
+        if (nzone <= cap) then; hs(nzone) = ls; he(nzone) = nbytes; endif
+      endif
+    endif
+    if (nzone < 1) call mpi_abort_all('rank-file merge: no zone header in '//shard_name(base,r))
+    if (hs(1) /= vhi + 1) &
+      call mpi_abort_all('rank-file merge: data before the first zone header in ' &
+                         //shard_name(base,r))
+
+    if (alloc) then
+      if (allocated(hlo)) deallocate(hlo, hhi, dlo, dhi)
+      allocate(hlo(0:mpi_size_-1, nzone), hhi(0:mpi_size_-1, nzone), &
+               dlo(0:mpi_size_-1, nzone), dhi(0:mpi_size_-1, nzone))
+      hlo = 0; hhi = 0; dlo = 1; dhi = 0
+    endif
+    if (nzone > size(hlo,2)) &
+      call mpi_abort_all('rank-file merge: shards disagree on zone count, '//shard_name(base,r))
+
+    !> A zone's data is everything between its header and the next header (or end of file). An empty
+    !  range (dhi < dlo) means this rank owned no parcel in that zone, which is normal.
+    do z = 1, nzone
+      hlo(r,z) = hs(z); hhi(r,z) = he(z)
+      dlo(r,z) = he(z) + 1
+      if (z < nzone) then; dhi(r,z) = hs(z+1) - 1; else; dhi(r,z) = nbytes; endif
+    enddo
+    deallocate(buf, hs, he)
+
+  end subroutine scan_shard
+
+
+  !> Does the record in `buf(a:b)` start the `Zone` keyword? Positional and allocation-free: the
+  !> obvious `index(adjustl(line),'Zone')` builds a temporary copy of every line, which is what made
+  !> the first merge implementation slow.
+  pure logical function line_is_zone(buf, a, b)
+    implicit none
+    character(len=*), intent(in) :: buf
+    integer,          intent(in) :: a, b
+    integer :: j
+
+    line_is_zone = .false.
+    j = a
+    do while (j <= b)
+      if (buf(j:j) /= ' ') exit
+      j = j + 1
+    enddo
+    if (j + 3 > b) return
+    line_is_zone = (buf(j:j+3) == 'Zone')
+  end function line_is_zone
+
+
+  !> Read bytes [lo,hi] of an open stream unit into an allocatable buffer.
+  subroutine read_block(u, lo, hi, blk)
     use IGLOO_Mod_MPI, only: mpi_abort_all
     implicit none
-    integer,          intent(in)  :: u
-    character(len=*), intent(out) :: buf
-    integer,          intent(out) :: nlen
-    logical,          intent(out) :: atEnd
+    integer,                       intent(in)  :: u, lo, hi
+    character(len=:), allocatable, intent(out) :: blk
     integer :: ios
 
-    buf = ''; nlen = 0; atEnd = .false.
-    read(u,'(A)',advance='no',iostat=ios,size=nlen) buf
-    if (ios == IOSTAT_END) then
-      atEnd = .true.; nlen = 0
-    else if (ios == 0) then
-      !> Buffer filled without hitting end-of-record: the record is longer than LMAX.
-      call mpi_abort_all('rank-file merge: record longer than the merge buffer')
-    else if (ios /= IOSTAT_EOR) then
-      call mpi_abort_all('rank-file merge: read error on a rank shard')
+    if (hi < lo) then
+      blk = ''
+      return
     endif
+    allocate(character(len=hi-lo+1) :: blk)
+    read(u, pos=lo, iostat=ios) blk
+    if (ios /= 0) call mpi_abort_all('rank-file merge: block read failed')
 
-  end subroutine get_record
-
-
-  !> Zone headers are the only non-numeric records in a shard body; data records are fixed-format
-  !> numbers, so testing the leading token is exact rather than heuristic.
-  pure logical function is_zone_header(s)
-    implicit none
-    character(len=*), intent(in) :: s
-    is_zone_header = (index(adjustl(s), 'Zone') == 1)
-  end function is_zone_header
+  end subroutine read_block
 
 
   function shard_name(base, r) result(fn)
