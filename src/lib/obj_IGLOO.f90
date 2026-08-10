@@ -62,6 +62,7 @@ contains
     use IGLOO_allocation
     use IGLOO_IO_INI, only: read_IGLOO_input
     use IGLOO_Lib_Statistics, only: initRandomSeed
+    use IGLOO_Mod_MPI,        only: mpi_is_root
     use Lib_ORION_data
     implicit none
     class(obj_IGLOO), intent(inout)        :: self
@@ -81,13 +82,16 @@ contains
       return
     endif
 
-    call print_header()
+    !> Root-gated banners. The "already completed" message above is NOT gated: it is a contract
+    !  violation, and a non-root rank swallowing one would strand the others at the next
+    !  collective. Same rule for solve's stateIsFresh failure.
+    if (mpi_is_root) call print_header()
 
     nthreads = 1
 # if defined (_OPENMP)
     nthreads = OMP_GET_MAX_THREADS()   !> outside the region: no shared write to race on
 # endif
-    if (nthreads>1) then
+    if (nthreads>1 .and. mpi_is_root) then
       write(*,*)" OpenMP threads = ", nthreads
     endif
 
@@ -95,7 +99,7 @@ contains
     if (present(external_gas)) then
       call copyORION(external_gas,own_gas)
     else
-      write(*,*)' >> Background flow field => ',trim(gasfile)
+      if (mpi_is_root) write(*,*)' >> Background flow field => ',trim(gasfile)
       call read_TECsolfile(gasfile,own_gas)
     endif
 
@@ -300,7 +304,7 @@ contains
     use IGLOO_Lib_Properties, only: lookupTab   !> A23c child hand-off (enthalpy slot)
     use IGLOO_Lib_Statistics, only: rngSeedFor
     use IGLOO_Mod_MPI,        only: mpi_size_, mpi_abort_all, owns_particle, &
-                                    mpi_allreduce_sum_i4_array
+                                    mpi_allreduce_sum_i4_array, mpi_is_root, rank_suffix
     use oslo
     use omp_lib
     implicit none
@@ -320,17 +324,6 @@ contains
     integer  :: c, nStreams, nValid
     real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp
     type(obj_particle) :: ptmp   ! throwaway copy for the inject-only pre-pass
-
-    !> PHASE-1 SCAFFOLDING GUARD -- REMOVE AT THE START OF PHASE 2b.
-    !  Phase 1 lands only the MPI environment: there is no ownership predicate at the integration
-    !  loops and no accumulator reduction yet, so every rank would integrate EVERY particle and
-    !  write the same records to the same files. That is not slow-but-correct, it is wrong output.
-    !  Fail loudly instead of shipping a half-working parallel path, which is what makes Phase 1
-    !  independently committable. mpi_size_ is 1 in a serial or USE_MPI=OFF build, so this is
-    !  unreachable there.
-    if (mpi_size_ > 1) call mpi_abort_all( &
-      'MPI particle decomposition is not implemented yet (Phase 1 wires the environment only). '// &
-      'Run with one rank, or build with USE_MPI=OFF.')
 
     !> Repeatability contract. Every exit path zeroes part%time, so a finished particle is
     !  indistinguishable from one that never started: calling solve twice without
@@ -370,11 +363,17 @@ contains
 
     do m = 1, nm
       material: associate(mat => self%material(m))
+      !> Per-rank shards. rank_suffix() composes AFTER the sweep tag, giving
+      !  `trajectories-A-sweep1.rank2.dat`: `<kind>-<material><sweeptag>` stays the logical file
+      !  identity and `.rank<r>` is a pure shard marker, so Phase 4 merges per sweep by globbing
+      !  `<logical>.rank*.dat`. Reversing the order would make that glob straddle sweeps.
+      !  Empty at one rank, so serial filenames are byte-identical. Each rank writes its own
+      !  `variables=` and Zone headers, so every shard stays independently Tecplot-loadable.
       if (trajOn) then
-        open(newunit=unitTraj,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'trajectories-'//trim(mat%matName)//self%sweepTag()//'.dat')
+        open(newunit=unitTraj,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'trajectories-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
         write(unitTraj,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'
       endif
-      open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//self%sweepTag()//'.dat')
+      open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
       write(unitExit,*) 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID"'
 
       !> Scatter cloud: one flat point-cloud zone per material; auto-size the weight quantum
@@ -382,11 +381,16 @@ contains
       !  population estimate (Ndot*tauRef) is crude; it sets only the count, not the shape.
       dNscat = 0._R8
       if (scatOn) then
-        open(newunit=unitScat,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'scatter-'//trim(mat%matName)//self%sweepTag()//'.dat')
+        open(newunit=unitScat,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'scatter-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
         write(unitScat,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'
         write(unitScat,'(A,A,A)')'Zone T="Mat ',trim(mat%matName),' scatter"'
         !> Serial inject-only pre-pass: resolve each stream's npdot (= Σ droplet rate Ndot) and
         !  injection speed (=> Vref) without the cell search. Serial => deterministic dNscat.
+        !  ⚠ MPI: this stays a FULL REPLICATED SWEEP -- do NOT add an owns_particle guard. Every
+        !  rank computing it over ALL particles is what keeps dNscat identical everywhere; an
+        !  ownership guard would turn Ndot/Vsum/nValid/nStreams into partial sums and give each
+        !  rank a different scatter quantum. Pinning and initRandomSeed stay replicated for the
+        !  same reason.
         Ndot = 0._R8; nStreams = 0; Vsum = 0._R8; nValid = 0
         do g = 1, mat%ngroups
           associate(gr => mat%group(g))
@@ -412,13 +416,19 @@ contains
         if (Ndot>0._R8 .and. nStreams>0) &
           dNscat = Ndot*tauRef / real(max(trajSample*nStreams,1), R8)
         if (.not. (dNscat>0._R8)) dNscat = 0._R8       ! guard NaN/neg => scatter silently skipped
-        write(*,'(A,A,A,ES10.3,A,I0,A)') '     >> scatter cloud [',trim(mat%matName),       &
+        !> Root-gated: every rank computes the same value, so N copies would only duplicate the
+        !  line. Informational prints follow this rule throughout; WARNINGS and contract
+        !  violations stay on every rank (a silent non-root failure hangs the next collective).
+        if (mpi_is_root) &
+          write(*,'(A,A,A,ES10.3,A,I0,A)') '     >> scatter cloud [',trim(mat%matName),     &
               ']: dNscat=',dNscat,' droplets/pt (nominal ~',trajSample,                      &
               '/stream; realized varies with residence — raise fsample-traj for a denser cloud)'
       endif
-      
-      write(*,*)" Compute particles dynamics for material: ",trim(mat%matName)
-      if (mat%cpVariable) write(*,*) ' >> Solving enthalpy equation'
+
+      if (mpi_is_root) then
+        write(*,*)" Compute particles dynamics for material: ",trim(mat%matName)
+        if (mat%cpVariable) write(*,*) ' >> Solving enthalpy equation'
+      endif
       do g = 1, mat%ngroups
         group: associate(gr => mat%group(g))
         call gr%setup_particleODE()
@@ -435,14 +445,16 @@ contains
         endif
         call setup_odesolver(N=gr%neq,solver=ode_word,RT=relTol,AT=absTol,iopt=iopt)
 
-        write(*,'(A,I3,A,I6)')"     Group",g," => number of particles = ", gr%nparticles
-        write(*,'(A,I2,A)') '     >> ODE system (neq=', gr%particle(1)%neq, '):'
-        if (gr%evapSelect/=0) write(*,*) '       - evaporation --> ', trim(gr%evapWord)
-        if (gr%combSelect/=0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
-        if (gr%brkupEqOde   ) write(*,*) '       - breakup     --> ', trim(gr%brkupWord)
-        if (gr%evapSelect==0 .and. gr%combSelect==0 .and. .not.gr%brkupEqOde) &
-          write(*,*) '       - constant particle mass and size'
-        if (eulerSwitch) write(*,*) '       - eulerian field included'
+        if (mpi_is_root) then
+          write(*,'(A,I3,A,I6)')"     Group",g," => number of particles = ", gr%nparticles
+          write(*,'(A,I2,A)') '     >> ODE system (neq=', gr%particle(1)%neq, '):'
+          if (gr%evapSelect/=0) write(*,*) '       - evaporation --> ', trim(gr%evapWord)
+          if (gr%combSelect/=0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
+          if (gr%brkupEqOde   ) write(*,*) '       - breakup     --> ', trim(gr%brkupWord)
+          if (gr%evapSelect==0 .and. gr%combSelect==0 .and. .not.gr%brkupEqOde) &
+            write(*,*) '       - constant particle mass and size'
+          if (eulerSwitch) write(*,*) '       - eulerian field included'
+        endif
 
         if (trajOn) write(unitTraj,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
         write(unitExit ,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
@@ -476,6 +488,13 @@ contains
             !$OMP PARALLEL DO SCHEDULE(DYNAMIC)
             do ip = start, nEnd
               if (probeOn) then; if (.not.any(gr%particle(ip)%ID==probeIDs)) cycle; endif
+              !> Ownership -- FIRST PASS ONLY. Pass 1 iterates the replicated parents, of which
+              !  each rank integrates its stripe; later passes iterate [start:nEnd] = the
+              !  children this rank created, which it must integrate unconditionally. Identically
+              !  true at one rank, so the serial path is unchanged.
+              if (loopCounter == 1) then
+                if (.not. owns_particle(ip)) cycle
+              endif
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                              mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab,    &
                              gr%shed(ip), noShed=(loopCounter==maxLoop))
@@ -530,12 +549,17 @@ contains
               call mpi_abort_all('child ID band overflowed int32')
 
             if (childGlobal > 0) then
-              write(*,*)"       Loop",loopCounter," => number of children = ", childGlobal
-              !> Visible tripwire: how hard the shed path is actually working. A number
-              !  climbing toward the `maxShed` guard in Lib_Integration means the case is
-              !  approaching runaway shedding well before the guard has to fire.
-              if (maxShedSeen > 1) write(*,'(A,I0,A)')                                    &
+              !> Root-gated, and childGlobal (not childLocal) is load-bearing: khrt-e2e's
+              !  check.py and check_threads.py parse this line out of run_out.txt and sum it, so
+              !  it has to report the same total serial does, exactly once.
+              if (mpi_is_root) then
+                write(*,*)"       Loop",loopCounter," => number of children = ", childGlobal
+                !> Visible tripwire: how hard the shed path is actually working. A number
+                !  climbing toward the `maxShed` guard in Lib_Integration means the case is
+                !  approaching runaway shedding well before the guard has to fire.
+                if (maxShedSeen > 1) write(*,'(A,I0,A)')                                  &
                     "                             (max ",maxShedSeen," sheds from one parcel)"
+              endif
 
               !> Grow particle array if needed (geometric 2x). Sized on childLocal, not
               !  childGlobal: only this rank's children live in this rank's array. `oldEnd` was
@@ -626,7 +650,12 @@ contains
             endif
           enddo
 
-          !> Trim excess capacity + sync nparticles
+          !> Trim excess capacity + sync nparticles.
+          !  ⚠ MPI: both counters are now RANK-LOCAL after a solve -- each rank holds only its own
+          !  stripe plus the children it created. Nothing downstream in standalone mode consumes
+          !  the particle arrays, and reset_state restores both from gr%nInjected before every
+          !  sweep, so the divergence cannot survive into the next one. Drive ownership and
+          !  curCount from gr%nInjected, never from these.
           if (size(gr%particle) > gr%nactive) then
             call resizeParticleArray(gr%particle, gr%nactive)
           endif
@@ -635,6 +664,9 @@ contains
           !$OMP PARALLEL DO SCHEDULE(DYNAMIC)
           do ip = 1,gr%nparticles
             if (probeOn) then; if (.not.any(gr%particle(ip)%ID==probeIDs)) cycle; endif
+            !> Ownership: no children here, so every particle is a replicated parent and the
+            !  stripe is unconditional. Identically true at one rank.
+            if (.not. owns_particle(ip)) cycle
             call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                             mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab)
           enddo
@@ -679,7 +711,7 @@ contains
       ! deallocate(famDone)
     endif
 
-    write(*,*)" Stop condition : All particles out of domain!"
+    if (mpi_is_root) write(*,*)" Stop condition : All particles out of domain!"
 
   end subroutine solve
 
@@ -727,8 +759,18 @@ contains
 
   subroutine writeout(self)
     use IGLOO_IO
+    use IGLOO_Mod_MPI, only: mpi_is_root
     implicit none
     class(obj_IGLOO), intent(inout) :: self
+
+    !> ROOT ONLY. write_outfield writes exclusively grid .tec files to one fixed name per
+    !  (material, sweep) -- no rank shard -- so every rank calling it is N writers on one path.
+    !  ⚠ PHASE 2b: the grid VALUES are per-rank partial sums and therefore wrong (root writes its
+    !  own stripe's contribution, not the total). Phase 3 allreduces the accumulators inside solve
+    !  before finalize, after which every rank holds identical sums and root-only stays the right
+    !  answer permanently. Until then, treat source.tec/euler*.tec from a multi-rank run as
+    !  meaningless; the .dat particle streams are correct and sharded.
+    if (.not. mpi_is_root) return
 
     call write_outfield(self%material,self%geoblock,self%source,self%euler,self%srcSwitch, &
                         self%eulSwitch, tag=self%sweepTag())
