@@ -247,8 +247,10 @@ igloo_e2e_case(reitz-diwakar-e2e breakup/reitz-diwakar-e2e "e2e;breakup;val;rd")
 # 2026-07-23 and check_rt.py promoted from a WILL_FAIL sentinel to a real gate (RT fires,
 # applies, and persists as a mass-consistent discontinuous shatter).
 igloo_e2e_case(khrt-e2e breakup/khrt-e2e "e2e;breakup;val;khrt")
+# The rc guard matches igloo_e2e_case: without it a solver that died on a signal reached
+# check_rt.py, which would then judge whatever partial OUTPUT survived (BUGS.md O13).
 add_test(NAME khrt-e2e-rt
-    COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${CMAKE_SOURCE_DIR}/bin/IGLOO 1>run_out.txt 2>run_err.txt; python3 -B check_rt.py"
+    COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${CMAKE_SOURCE_DIR}/bin/IGLOO 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ne 0 ]; then echo \"[FAIL] solver exit $rc\"; exit 1; fi; python3 -B check_rt.py"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/breakup/khrt-e2e")
 set_tests_properties(khrt-e2e-rt PROPERTIES
     LABELS "e2e;breakup;val;khrt;rt"
