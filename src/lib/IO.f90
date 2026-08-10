@@ -7,6 +7,7 @@ module IGLOO_IO
   public:: read_cdp_bc_file
   public:: read_cdp_properties
   public:: write_outfield
+  public:: merge_rank_particle_files    !> MPI choke-point 3
 
 contains
 
@@ -674,6 +675,178 @@ contains
     endif
 
   end subroutine write_outfield
+
+
+  !> MPI choke-point 3 — collapse this sweep's per-rank particle-output shards into the serial file
+  !> layout, then delete them. ROOT ONLY; no-op at one rank, where `rank_suffix()` was empty and the
+  !> files already carry their logical names.
+  !>
+  !> **Current sweep only.** Shards are `<kind>-<material><sweeptag>.rank<r>.dat`, so the sweep tag
+  !> is a third key alongside kind and material. Merging once per `writeout` call matches the
+  !> one-file-set-per-sweep lifetime and avoids globbing the filesystem for historical sweeps.
+  !>
+  !> **Lockstep zone merge, not concatenation.** Every rank writes the same `variables=` line and the
+  !> same zone headers in the same order -- `solve`'s material and group loops are fully replicated
+  !> and only the particles inside them are striped -- so emitting each header once and interleaving
+  !> the data blocks reproduces the serial layout exactly, and every existing `check.py` runs
+  !> unmodified. Within a zone the records come out rank-blocked. That is deliberately NOT sorted:
+  !> the serial file is not sorted either (OMP already interleaves), and every gate treats record
+  !> order as noise. Each particle is owned by exactly one rank, so its own records stay contiguous
+  !> and in time order -- which is what the per-ID loaders in the oracles actually rely on.
+  !>
+  !> Structural disagreement between shards is fatal, never patched over: a differing header or zone
+  !> count means the replication assumption above is false, and silently concatenating would produce
+  !> a file that loads in Tecplot and is wrong.
+  subroutine merge_rank_particle_files(material, tag)
+    use IGLOO_variables,   only: IGLOO_phase_prefix, trajOn, scatOn
+    use IGLOO_data_phases, only: obj_material
+    use IGLOO_Mod_MPI,     only: mpi_size_
+    implicit none
+    type(obj_material), intent(in) :: material(:)
+    character(len=*), intent(in), optional :: tag
+    character(len=:), allocatable :: sfx, stem
+    integer :: m
+
+    if (mpi_size_ <= 1) return
+
+    sfx = ''
+    if (present(tag)) sfx = trim(tag)
+
+    do m = 1, size(material)
+      stem = 'OUTPUT/'//trim(IGLOO_phase_prefix)
+      !> Same three streams, and the same on/off switches, as the opens in solve. Driving the list
+      !  from the switches rather than from what happens to exist on disk is what lets a missing
+      !  shard be an error instead of a silent skip.
+      if (trajOn) call merge_one_stream(stem//'trajectories-'//trim(material(m)%matName)//sfx)
+      call merge_one_stream(stem//'outloc-'//trim(material(m)%matName)//sfx)
+      if (scatOn) call merge_one_stream(stem//'scatter-'//trim(material(m)%matName)//sfx)
+    enddo
+
+  end subroutine merge_rank_particle_files
+
+
+  !> Merge `<base>.rank0.dat` … `<base>.rank<N-1>.dat` into `<base>.dat` and delete the shards.
+  subroutine merge_one_stream(base)
+    use IGLOO_Mod_MPI, only: mpi_size_, mpi_abort_all
+    implicit none
+    character(len=*), intent(in) :: base
+    !> Widest record written to these units is 118 chars (`7F12.6,2E13.6E2,I8`); an over-long record
+    !  aborts rather than silently truncating, so this bound is checked, not assumed.
+    integer, parameter :: LMAX = 512
+    integer,               allocatable :: u(:), plen(:)
+    character(len=LMAX),   allocatable :: pend(:)
+    logical,               allocatable :: done(:)
+    character(len=LMAX) :: line, hdr
+    integer :: r, uo, nlen, hlen, ios
+
+    allocate(u(0:mpi_size_-1), pend(0:mpi_size_-1), plen(0:mpi_size_-1), done(0:mpi_size_-1))
+    pend = ''; plen = 0; done = .false.; hdr = ''; hlen = 0
+
+    do r = 0, mpi_size_-1
+      !> No `action='read'`: the standard forbids deleting a file connected for input only, and the
+      !  shards are closed with status='delete' below. ifx accepts the pair, gfortran need not.
+      open(newunit=u(r), file=shard_name(base,r), status='old', iostat=ios)
+      if (ios /= 0) call mpi_abort_all('rank-file merge: cannot open shard '//shard_name(base,r))
+    enddo
+    open(newunit=uo, file=base//'.dat', status='replace', action='write')
+
+    !> `variables=` line: emit rank 0's once, and verify the others match rather than assume it.
+    do r = 0, mpi_size_-1
+      call get_record(u(r), line, nlen, done(r))
+      if (done(r)) call mpi_abort_all('rank-file merge: empty shard '//shard_name(base,r))
+      if (r == 0) then
+        hdr = line; hlen = nlen
+        write(uo,'(A)') hdr(1:hlen)
+      else if (nlen /= hlen .or. line(1:nlen) /= hdr(1:hlen)) then
+        call mpi_abort_all('rank-file merge: shards disagree on the variables header, '//base)
+      endif
+    enddo
+
+    !> One-record lookahead per shard: after the header every shard sits on a zone header.
+    do r = 0, mpi_size_-1
+      call get_record(u(r), pend(r), plen(r), done(r))
+    enddo
+
+    do
+      if (all(done)) exit
+      if (any(done)) call mpi_abort_all('rank-file merge: shards disagree on zone count, '//base)
+      do r = 0, mpi_size_-1
+        if (.not. is_zone_header(pend(r)(1:plen(r)))) &
+          call mpi_abort_all('rank-file merge: lookahead is not a zone header in ' &
+                             //shard_name(base,r))
+        if (plen(r) /= plen(0) .or. pend(r)(1:plen(r)) /= pend(0)(1:plen(0))) &
+          call mpi_abort_all('rank-file merge: shards disagree on a zone header, '//base)
+      enddo
+      write(uo,'(A)') pend(0)(1:plen(0))
+      !> This zone's data, rank-blocked; each rank stops at its next zone header, which becomes its
+      !  new lookahead.
+      do r = 0, mpi_size_-1
+        do
+          call get_record(u(r), line, nlen, done(r))
+          if (done(r)) exit
+          if (is_zone_header(line(1:nlen))) then
+            pend(r) = line; plen(r) = nlen; exit
+          endif
+          write(uo,'(A)') line(1:nlen)
+        enddo
+      enddo
+    enddo
+
+    do r = 0, mpi_size_-1
+      close(u(r), status='delete')
+    enddo
+    close(uo)
+    deallocate(u, pend, plen, done)
+
+  end subroutine merge_one_stream
+
+
+  !> One record with its EXACT length, trailing blanks included. Non-advancing so `size=` reports the
+  !> true record length: a plain `read(u,'(A)')` blank-pads the buffer and would force a `trim`,
+  !> silently rewriting any record that legitimately ends in a space.
+  subroutine get_record(u, buf, nlen, atEnd)
+    use, intrinsic :: iso_fortran_env, only: IOSTAT_END, IOSTAT_EOR
+    use IGLOO_Mod_MPI, only: mpi_abort_all
+    implicit none
+    integer,          intent(in)  :: u
+    character(len=*), intent(out) :: buf
+    integer,          intent(out) :: nlen
+    logical,          intent(out) :: atEnd
+    integer :: ios
+
+    buf = ''; nlen = 0; atEnd = .false.
+    read(u,'(A)',advance='no',iostat=ios,size=nlen) buf
+    if (ios == IOSTAT_END) then
+      atEnd = .true.; nlen = 0
+    else if (ios == 0) then
+      !> Buffer filled without hitting end-of-record: the record is longer than LMAX.
+      call mpi_abort_all('rank-file merge: record longer than the merge buffer')
+    else if (ios /= IOSTAT_EOR) then
+      call mpi_abort_all('rank-file merge: read error on a rank shard')
+    endif
+
+  end subroutine get_record
+
+
+  !> Zone headers are the only non-numeric records in a shard body; data records are fixed-format
+  !> numbers, so testing the leading token is exact rather than heuristic.
+  pure logical function is_zone_header(s)
+    implicit none
+    character(len=*), intent(in) :: s
+    is_zone_header = (index(adjustl(s), 'Zone') == 1)
+  end function is_zone_header
+
+
+  function shard_name(base, r) result(fn)
+    implicit none
+    character(len=*), intent(in)  :: base
+    integer,          intent(in)  :: r
+    character(len=:), allocatable :: fn
+    character(len=16) :: buf
+
+    write(buf,'(A,I0)') '.rank', r
+    fn = base//trim(buf)//'.dat'
+  end function shard_name
 
 
   !─────────────────────────────────────────────────────────────────────────────

@@ -789,6 +789,12 @@ contains
     call write_outfield(self%material,self%geoblock,self%source,self%euler,self%srcSwitch, &
                         self%eulSwitch, tag=self%sweepTag())
 
+    !> Choke-point 3: collapse THIS sweep's per-rank .dat shards into the serial layout, so the
+    !  oracles and any parent post-processing see one file per (kind, material, sweep). No-op at one
+    !  rank. Safe here because solve closed every shard on every rank before returning; the barrier
+    !  above makes that ordering explicit instead of incidental.
+    call merge_rank_particle_files(self%material, tag=self%sweepTag())
+
   end subroutine writeout
 
 
