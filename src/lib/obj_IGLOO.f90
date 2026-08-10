@@ -303,8 +303,9 @@ contains
     use IGLOO_allocation, only: allocateAccumulators
     use IGLOO_Lib_Properties, only: lookupTab   !> A23c child hand-off (enthalpy slot)
     use IGLOO_Lib_Statistics, only: rngSeedFor
-    use IGLOO_Mod_MPI,        only: mpi_size_, mpi_abort_all, owns_particle, &
-                                    mpi_allreduce_sum_i4_array, mpi_is_root, rank_suffix
+    use IGLOO_Mod_MPI,        only: mpi_size_, mpi_abort_all, owns_particle,           &
+                                    mpi_allreduce_sum_i4_array, mpi_is_root, rank_suffix, &
+                                    reduce_accumulators
     use oslo
     use omp_lib
     implicit none
@@ -680,6 +681,18 @@ contains
       close(unitExit)
     enddo
 
+    !> MPI: merge the per-rank partial grid sums BEFORE finalize, because finalize is NONLINEAR --
+    !  it divides the +=-accumulated numerators by density (Favre average), so reducing afterwards
+    !  would average averages. ALLREDUCE, not reduce-to-root: the finalize below then runs on
+    !  identical raw sums on every rank, which keeps the post-solve object state bit-identical
+    !  everywhere and is what makes the hydra embedding straightforward. The ord2
+    !  gasblock->geoblock reduction inside finalize is linear and runs once on already-reduced
+    !  arrays. Must sit HERE and not in writeout: reset_state deallocates all seven accumulators
+    !  every sweep, so they are only guaranteed allocated between allocateAccumulators and the next
+    !  reset_state -- shapes are therefore read fresh per sweep, never cached across sweeps.
+    !  INVARIANT: with the Phase-2a census this is the SECOND and last collective in solve().
+    call reduce_accumulators(self%source, self%euler, sourceSwitch, eulerSwitch)
+
     !> End-of-solve finalization.
     !  - obj_eulerblock%finalize normalizes +-accumulated numerators into
     !    weighted averages (and inverts h→T for cpVariable groups), then if
@@ -759,17 +772,18 @@ contains
 
   subroutine writeout(self)
     use IGLOO_IO
-    use IGLOO_Mod_MPI, only: mpi_is_root
+    use IGLOO_Mod_MPI, only: mpi_is_root, mpi_barrier_env
     implicit none
     class(obj_IGLOO), intent(inout) :: self
 
+    !> Every rank must have closed its own .dat shards before root reads or merges them (Phase 4),
+    !  so the barrier stays even though the write below is root-only. No-op at one rank.
+    call mpi_barrier_env()
+
     !> ROOT ONLY. write_outfield writes exclusively grid .tec files to one fixed name per
     !  (material, sweep) -- no rank shard -- so every rank calling it is N writers on one path.
-    !  ⚠ PHASE 2b: the grid VALUES are per-rank partial sums and therefore wrong (root writes its
-    !  own stripe's contribution, not the total). Phase 3 allreduces the accumulators inside solve
-    !  before finalize, after which every rank holds identical sums and root-only stays the right
-    !  answer permanently. Until then, treat source.tec/euler*.tec from a multi-rank run as
-    !  meaningless; the .dat particle streams are correct and sharded.
+    !  Since Phase 3 the values are correct on every rank (solve allreduces the accumulators before
+    !  finalize), so root-only is the permanent answer here, not scaffolding.
     if (.not. mpi_is_root) return
 
     call write_outfield(self%material,self%geoblock,self%source,self%euler,self%srcSwitch, &
