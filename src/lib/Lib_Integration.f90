@@ -56,6 +56,15 @@ contains
     real(R8) :: Ein, Eout, Pin(3), Pout(3), massIn, massOut, vol
     real(R8) :: entryPos(3)   ! cell-entry position, for the closed-form body-force work (models 1,3)
     real(R8) :: wAcc          ! scatter-cloud npdot-weight accumulator (host-associated into solout)
+    !> Scatter-cloud output buffer. `unitScat` is written from INSIDE `!$OMP PARALLEL DO`, so emitting
+    !  one record at a time took the Fortran unit lock once per record -- measured as ~47 % of serial
+    !  runtime on khrt-stress and an INVERSION of thread scaling (5 threads slower than 1). Records are
+    !  formatted into this buffer and emitted by flushScat in ONE write statement, so the lock is taken
+    !  once per SCATCAP records instead of once per record. Automatic array, no initializer: an
+    !  initializer would make it implicit-SAVE and therefore shared across threads (work package A).
+    integer, parameter :: SCATLEN = 128, SCATCAP = 4096
+    character(len=SCATLEN) :: scatBuf(SCATCAP)
+    integer  :: nScat, iScat
     integer  :: neq, nsp, ng, b, i, j, k, ngVert, iu, iw, it, iter, nCross, nE, nStall
     real(R8) :: posPrev(3)    ! last outer-iter position, for the zero-progress guard
     logical  :: doLoop, IamOut, newGas, eventType, eventFlag, exitLoop, startedOut, burnedOut
@@ -93,6 +102,7 @@ contains
     real(R8), parameter :: mBurnTol=1.e-15_R8
 
     ! write(*,*) "      Processing particle n.", part%ID !> DEBUG PRINTING
+    nScat = 0            !> before every exit path, so flushScat is always well-defined
     tlimit = huge(1._R8) !> steady-state by default (temporary)
     neq = part%neq       !> save local copy of neq
     atGasBoundary = .true.   !> conservative default: geo consulted until proven interior
@@ -128,6 +138,7 @@ contains
       if (part%gone) then
         write(*,'(A,I4,A)')                                                         &
                 '[WARNING] Particle ',part%ID,' has been initialized out of domain!'
+        call flushScat()
         return
       endif
 
@@ -328,6 +339,7 @@ contains
         part%time = 0._R8
         write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8)')                                      &
               part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), part%angle, part%mdot, part%Af, part%ID
+        call flushScat()
         return
       endif
 
@@ -342,8 +354,21 @@ contains
       write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8)')                                          &
             part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), part%angle, part%mdot, part%Af, part%ID
     endif
+    !> Third and last exit: fall-through past the outer loop. integrate has exactly three ways out
+    !  (this one plus the two `return`s above) and every one of them flushes.
+    call flushScat()
 
   contains
+
+    !> Emit the buffered scatter records with ONE write statement: with format '(A)' the format
+    !  reverts per output item, so N items produce N records under a single unit-lock acquisition.
+    !  `trim` keeps each record byte-identical to the direct write it replaces (the format produces
+    !  118 characters; the buffer is 128 and the tail is blank).
+    subroutine flushScat()
+      if (nScat <= 0) return
+      write(unit=unitScat,fmt='(A)') (trim(scatBuf(iScat)), iScat=1,nScat)
+      nScat = 0
+    end subroutine flushScat
 
     !============================================================================================!
     !  ODEsystem — internal procedure, accesses integrate's locals via host association          !
@@ -704,7 +729,10 @@ contains
         case default; m = auxLocal(ind_m)
         end select
         if (ind_d > 0) then; d = auxLocal(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
-        write(unit=unitScat,fmt='(7F12.6,2E13.6E2,I8)') y(1:3), y(4:6), tp, d, m, part%ID
+        !> Internal write: same format, so the bytes are identical to writing the unit directly.
+        nScat = nScat + 1
+        write(scatBuf(nScat),'(7F12.6,2E13.6E2,I8)') y(1:3), y(4:6), tp, d, m, part%ID
+        if (nScat == SCATCAP) call flushScat()
         wAcc = wAcc - dNscat
       endif
 
