@@ -81,6 +81,13 @@ contains
     logical  :: childDone       !> B2: sheds suppressed for this whole call (terminal pass)
     real(R8), allocatable :: stateLocal(:), oldStLocal(:)
     real(R8), allocatable :: eventLocal(:), oldEvLocal(:)
+    !> ETAB's product-velocity kick (Tanner-97 eqs 8-10) is applied by breakupEvent to solout's
+    !  OWN state vector -- the ODE solver's working array, not `y`. On the IRTRN=-2724 abort OSlo
+    !  returns the last ACCEPTED state, so the kick never reaches the caller and is discarded.
+    !  Carry it across as a DELTA (not the whole velocity) so only the kick is transported and the
+    !  segment still resumes from the accepted state.
+    real(R8) :: kickDV(3)
+    logical  :: kickPend
     real(R8) :: timeLocal, din, dout, deltaS(3), dir(3), taup
     integer  :: err, nDL, innerIter, jSlot
     integer,  parameter :: maxInnerIter=10, nStep=10
@@ -381,6 +388,7 @@ contains
       deltat = safety*deltat
       newGas = .false.; IamOut = .false.; exitLoop = .false.; eventFlag = .false.; startedOut = .false.
       burnedOut = .false.
+      kickPend = .false.; kickDV = 0._R8
       eventType = part%brkupEvent
       addChildLocal = .false.; childState = 0._R8
       !> A23c: `childDone` is deliberately NOT reset here -- this is the INNER (segment) loop,
@@ -458,6 +466,13 @@ contains
       part%stateVar = y
       part%time     = timeLocal
       part%oldState = oldLocal
+      !> Transport ETAB's product-velocity kick out of the discarded step (see kickDV above).
+      !  Both states get it: stateVar is this segment's result, oldState is what the next
+      !  segment resumes from -- without the latter the kick is reverted one segment later.
+      if (kickPend) then
+        part%stateVar(4:6) = part%stateVar(4:6) + kickDV
+        part%oldState(4:6) = part%oldState(4:6) + kickDV
+      endif
       !> Full [t1,t2] consumed with no interrupt (solver reached XEND): finalize the segment;
       !  re-invoking on the null interval [t2,t2] hands SDIRK4 H=0 -> IDID=-1 -> spurious kill.
       !  Outer loop re-budgets deltat from the current (possibly decelerated) velocity.
@@ -696,10 +711,14 @@ contains
         if (ind_sb1 > 0) brkupState(1:nbrkst) = stateLocal(ind_sb1:ind_sb2)
         !> Advance the analytic oscillator by the completed accepted-step interval (x-xold);
         !  deltat is the outer per-segment cap and is untied to elapsed time.
+        kickDV = Y(4:6)
         call breakupEvent(eventLocal, neventvar, brkupState, nbrkst,    &
                           sigma,mup,rho,gasState(1),vel,Re,t1,acc,y(4:6),x-xold, &
                           mod_brkSelect, mod_bp,mod_bpMethod,mod_bpScale,        &
                           eventFlag,childState,addChildLocal,exitLoop,part%rngState,childDone)
+        !> ETAB kicked solout's own Y; keep the delta -- the abort below discards Y itself.
+        kickDV = Y(4:6) - kickDV
+        kickPend = (mod_brkSelect == 5) .and. (maxval(abs(kickDV)) > 0._R8)
         if (ind_sb1 > 0) stateLocal(ind_sb1:ind_sb2) = brkupState(1:nbrkst)
       endif
 
