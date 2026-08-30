@@ -44,6 +44,11 @@ WE_NOBRK = 5.75         # gate A scope (onset is exactly 6; margin for slip drif
 WE_BRK   = 6.5          # gate B/C scope
 TOL_T    = 0.05         # timing slack (fraction of t_bu)
 TOL_R    = 0.01         # child-size ratio tol (observed ~3e-4; 30x margin)
+# Gate D (v_perp transport). Floor MEASURED 2026-08-29: three runs of the fixed binary are
+# byte-identical (1663/6002 rows, max|V|=0.53732, max|W|=0.370132), so the rule is EXACT --
+# no tolerance. Signal is structural: with the kick discarded, V and W are exactly zero in
+# every row. LAT_MAX is a sanity envelope only; measured ratio is 0.0215 (0.537 / 25).
+LAT_MAX  = 0.10         # max lateral speed as a fraction of axial speed
 N_BRK    = 18           # of the 20 swept drops with We_r >= 6.5
 
 
@@ -90,6 +95,27 @@ def load_trajectories(path):
             except ValueError:
                 continue
     return parts
+
+
+def load_lateral(path):
+    """Per-ID [max|V|, max|W|, max|U|, d_max, d_min] for the v_perp transport gate.
+
+    Separate from load_trajectories, which keeps only (x, U, d). Uses max/min of d rather
+    than first/last so it is independent of record order (OMP-nondeterministic).
+    """
+    lat = {}
+    for line in open(path):
+        c = line.split()
+        if len(c) == 10 and c[0][0] in "0123456789-":
+            try:
+                pid = int(c[9])
+                u, v, w, d = float(c[3]), float(c[4]), float(c[5]), float(c[7])
+            except ValueError:
+                continue
+            e = lat.setdefault(pid, [0.0, 0.0, 0.0, d, d])
+            e[0] = max(e[0], abs(v)); e[1] = max(e[1], abs(w)); e[2] = max(e[2], abs(u))
+            e[3] = max(e[3], d);      e[4] = min(e[4], d)
+    return lat
 
 
 def drop_report(rows):
@@ -156,10 +182,43 @@ def main():
             print(f"{pid:>3} {wer:>6.2f} {'yes' if broke else 'no':>4} {'-':>9} {'-':>7} "
                   f"{'-':>7} {'-':>6}  info[onset band]")
 
+    # ---- Gate D: the v_perp product kick actually reaches the parcel state -------------
+    # Tanner-97 eqs 8-10 give the products a normal velocity. ET4a/b in
+    # tests/breakup/etab/test_breakup_etab.f90 already verify the MAGNITUDE and that it is
+    # perpendicular -- but they call breakupEvent directly and read the test's own vp, so
+    # they pass whether or not the kick ever reaches the particle. It did not: bug O12 left
+    # V and W exactly zero in all 6000 rows while ET4 stayed green. A routine-level gate
+    # cannot see a transport bug; this leg is the one that can.
+    lat = load_lateral(TRAJ)
+    kicked = {pid for pid, e in lat.items() if e[0] > 0.0 or e[1] > 0.0}
+    broke_d = {pid for pid, e in lat.items() if e[4] < e[3] * 0.999}
+    leaked  = sorted(kicked - broke_d)
+    umax    = max((e[2] for e in lat.values()), default=0.0)
+    latmax  = max((max(e[0], e[1]) for e in lat.values()), default=0.0)
+    ratio   = latmax / umax if umax > 0.0 else 0.0
+
+    d1 = len(kicked) > 0
+    d2 = not leaked
+    d3 = 0.0 < ratio < LAT_MAX
+    print(f"\nv_perp transport: {len(kicked)} of {len(broke_d)} broken drops carry lateral "
+          f"velocity; max|v_lat|/max|U| = {ratio:.4f} (< {LAT_MAX})")
+    if not d1:
+        print("  [FAIL] D1: NO drop carries lateral velocity -- the kick is computed and "
+              "discarded (bug O12), or breakup never fired")
+    if not d2:
+        print(f"  [FAIL] D2: lateral velocity on drops that never broke: {leaked}")
+    if not d3:
+        print(f"  [FAIL] D3: max|v_lat|/max|U| = {ratio:.4g} outside (0, {LAT_MAX})")
+    # NOTE: kicked is a SUBSET of broke, not equal to it -- drops in the A^2 <= 0 regime
+    # (low We, surface-energy deficit beats the drag term) resize with NO kick. Measured
+    # here: 20 broke, 15 kicked, the 5 unkicked being the low-We end. Gating equality
+    # would be wrong physics; ET4c covers the no-kick branch at routine level.
+
     print(f"\nno-break violations: {n_nobrk_bad}; broken (We_r>={WE_BRK:g}): {n_brk} "
           f"(need >= {N_BRK}); timing violations: {n_time_bad}; "
           f"child-size violations (tol {TOL_R:.0%}): {n_size_bad}")
-    if n_nobrk_bad == 0 and n_brk >= N_BRK and n_time_bad == 0 and n_size_bad == 0:
+    if n_nobrk_bad == 0 and n_brk >= N_BRK and n_time_bad == 0 and n_size_bad == 0 \
+       and d1 and d2 and d3:
         print("\n[PASS] ETAB reproduces the ORA87 onset+t_bu and Tanner's exponential-cascade "
               "product size across the bag and stripping branches.")
         return 0

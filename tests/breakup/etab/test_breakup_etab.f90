@@ -144,6 +144,7 @@ contains
         real(R8), parameter :: We_hi = 100._R8, We_lo = 6.5_R8, Re4 = 500._R8
         real(R8) :: vp(3), vp0(3), dv(3), dpn, err, tol
         real(R8) :: rdt, omg, omega0, WeCr, Kbr, rNew, Cd, Asq, vexp
+        real(R8) :: eSurf, eDrag, vEner
         logical  :: ev, pass
 
         ! --- oracle (paper-side re-derivation, stripping branch We_hi > WeTrans) ---
@@ -171,6 +172,27 @@ contains
         pass = assert_lt('ET4b vperp orthogonal to parent path', err, tol)
         ok = ok .and. pass
         call append_row('ET4b_vperp_orth', 'cos', err, err, 0._R8, 0._R8, tol, pass)
+
+        ! --- ET4d: magnitude by an INDEPENDENT derivation (anti-lockstep) ---------------
+        ! ET4a above re-types Tanner's A^2 from the same lines ETABmodel was written from,
+        ! so a shared misreading of the paper passes BOTH sides -- exactly how bug A13 got
+        ! through. Re-derive the same quantity from energy per unit mass instead: the
+        ! products' radial kinetic energy equals the surface energy released plus the drag
+        ! deformation input,
+        !     v_perp^2/2 = 3*sigma/(rho_l*a) - 3*sigma/(rho_l*r') + (5/24)*Cd*We*sigma/(rho_l*a)
+        ! the first pair being the surface term (NEGATIVE for r'<a: new surface costs energy,
+        ! which is what makes the A^2<=0 no-kick regime of ET4c exist at low We).
+        ! This is independent of how A^2 is assembled: it catches a sign error on (1 - a/r'),
+        ! an a<->r' swap, a wrong Comega inside omega0, the factor 3, and the 1/2 in
+        ! xdot = a*ydot/2. It is NOT independent of Tanner's 5/72 drag coefficient or of the
+        ! Cd correlation -- those are necessarily shared with production.
+        eSurf = 3._R8*sigma/(rho_l*radius) - 3._R8*sigma/(rho_l*rNew)
+        eDrag = (5._R8/24._R8)*Cd*We_hi*sigma/(rho_l*radius)
+        vEner = sqrt(2._R8*(eSurf + eDrag))
+        err  = abs(norm2(dv) - vEner)/vEner
+        pass = assert_lt('ET4d vperp = energy balance (independent derivation)', err, tol)
+        ok = ok .and. pass
+        call append_row('ET4d_vperp_energy', 'dv', err, err, 0._R8, 0._R8, tol, pass)
 
         vp  = vp0
         call etab_event(We_lo, bp_def, ev, dpn, Re_in=Re4, vp=vp)
