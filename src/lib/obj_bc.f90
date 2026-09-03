@@ -9,6 +9,7 @@ module IGLOO_bcBox
   real(R8), parameter :: grazeFrac=2.e-2_R8      !> below this v_n/|v| a 300-impact is grazing: project, don't reflect
   real(R8), parameter :: grazeStandoff=1.e-6_R8  !> interior offset after a graze; >> roundoff, << cell size
   real(R8), parameter :: wedgeAzimTol=0.5_R8     !> |faceAzimuth| above this ⇒ wedge face (rotate), else reflect
+  real(R8), parameter :: grazeCellFrac=1.e-2_R8  !> graze standoff also capped at this fraction of the cell
   type(Ray_t)         :: myRay
   !$omp threadprivate(myRay)   !> per-thread: checkBoundary writes it, bcDef reuses it within a thread
   private
@@ -17,8 +18,50 @@ module IGLOO_bcBox
   public :: axisymFold
   public :: periodicTransport
   public :: faceAzimuth, wedgeAzimTol
+  public :: grazeOffset, grazeStandoff, grazeCellFrac
 
 contains
+
+  !> Interior offset applied after a grazing reflection, along the face normal `nn`.
+  !
+  !  `grazeStandoff` alone is an ABSOLUTE length, and its contract ("<< cell size") was never
+  !  enforced. That became load-bearing once the axisymmetric AXIS face started reflecting:
+  !  the axis is exactly where a mesh is radially thin, and a first cell thinner than
+  !  grazeStandoff would have the standoff push the particle straight through it into j=2 --
+  !  a silent teleport across a cell boundary.
+  !
+  !  So cap it at a small fraction of the cell's own extent along the normal as well. The
+  !  offset is the SMALLER of the two, hence never larger than before: on every mesh where
+  !  the old constant already satisfied its contract this returns grazeStandoff unchanged
+  !  (JPL first cell 5.7e-4 and db-2daxi 5.6e-3 both give a cap ~50x larger than 1e-6), and
+  !  it only bites where the previous behaviour was wrong.
+  !
+  !  A degenerate cell (no measurable extent) falls back to grazeStandoff: there is no cell
+  !  scale to speak of, and that is the pre-existing behaviour.
+  !
+  !  `thickness` spans all eight vertices, so on a SKEWED cell it exceeds the true clearance
+  !  normal to the face -- it is an upper bound, not the clearance itself. That fails safe here
+  !  (over-measuring loosens the cap back toward the bare constant), but anyone tightening
+  !  grazeCellFrac should know the quantity being scaled is a bound.
+  !
+  !  Measured inert: instrumented to report only when the cap actually changes the offset, the
+  !  full e2e suite and the JPL nozzle produce ZERO hits -- every boundary cell they touch is
+  !  thick enough that grazeStandoff still wins.
+  pure function grazeOffset(vertices, nn) result(offset)
+    use IGLOO_variables, only: toll
+    implicit none
+    real(R8), intent(in) :: vertices(3,8), nn(3)
+    real(R8) :: offset, proj(8), thickness
+
+    proj      = matmul(nn, vertices)          !> signed position of each vertex along the normal
+    thickness = maxval(proj) - minval(proj)
+    if (thickness <= toll) then
+      offset = grazeStandoff
+    else
+      offset = min(grazeStandoff, grazeCellFrac*thickness)
+    endif
+
+  end function grazeOffset
 
   !> Azimuthal projection of a boundary face's outward normal about the symmetry axis
   !  `axisDir`, in [-1,1]. This is the orientation-independent classifier for bcdef-200 faces:
@@ -194,7 +237,7 @@ contains
       if (abs(dot_product(v,nn)) < grazeFrac*norm2(v)) then
         !> grazing: slide along the plane (kills micro-bounce skating); standoff keeps the ray off the face
         v = v - dot_product(v,nn) * nn
-        p = intersect - sign(grazeStandoff, dot_product(myRay%direction,nn)) * nn
+        p = intersect - sign(grazeOffset(vertices,nn), dot_product(myRay%direction,nn)) * nn
       else
         v = v - 2.0 * dot_product(v,nn) * nn
         p = pstop - 2.0 * dot_product(pstop-intersect,nn) * nn

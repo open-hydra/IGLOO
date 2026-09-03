@@ -109,6 +109,11 @@ igloo_unit_test(test_rng_stream         infrastructure/rng_stream         "unit;
 # equivalence with the retired `f==6` rule. No e2e case reaches bcDef's fold branch (axisymFold
 # re-sectors first), so this unit test is its only coverage.
 igloo_unit_test(test_axis_dispatch      infrastructure/axis_dispatch      "unit;infrastructure;bc;t1")
+# the grazing standoff is an absolute length whose "<< cell size" contract was unenforced.
+# It became load-bearing when the axis face started reflecting -- the axis is where meshes go
+# radially thin -- so grazeOffset caps it at a fraction of the cell. Pins the invariant across
+# 12 decades of cell thickness.
+igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;infrastructure;bc;t1")
 
 # ---------- two-sweep repeatability harness -----------------------------------
 # Drives one pinned population through solve() TWICE. Every other case in the suite is
