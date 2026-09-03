@@ -77,15 +77,19 @@ contains
         if (axisym) then
           write(*,'(A,F12.8,A)') '     - Axisymmetric wedge: delthe = ', delthe, ' rad'
           !> mesh2D flattens node component 3 (below) and interp2ndOrder2D reads only components
-          !  1 and 2, so the gas dual lives in the x-y plane. A symmetry axis other than x would
-          !  give correct particle BCs on a silently wrong gas field -- refuse instead.
-          if (abs(abs(axisDir(1)) - 1._R8) > 1.e-12_R8) then
-            write(*,'(A)') '  [ERROR] axisym: only a symmetry axis along x is supported.'
-            write(*,'(A)') '          The BC layer is axis-agnostic, but the 2D gas dual is not:'
-            write(*,'(A)') '          allocation.f90 zeroes node component 3 and interp2ndOrder2D'
-            write(*,'(A)') '          reads only components 1-2. Generalise those before moving'
-            write(*,'(A)') '          axisDir off x.'
-            error stop 'IGLOO: unsupported axisymmetric axis direction'
+          !  1 and 2, so the gas dual is planar in x-y. That constrains the axis to LIE IN that
+          !  plane -- it does not single out x: any direction within x-y is equally fine, and the
+          !  wedge's azimuthal normal is then +-z, exactly the component being flattened. Only an
+          !  axis with a z-component is unsupported, and it would give correct particle BCs on a
+          !  silently wrong gas field, so refuse it rather than accept it.
+          if (abs(axisDir(3)) > 1.e-12_R8 .or. abs(refDir(3)) > 1.e-12_R8) then
+            write(*,'(A)') '  [ERROR] axisym: the symmetry axis must lie in the x-y plane.'
+            write(*,'(A)') '          Any direction within that plane is supported (x, y, or any'
+            write(*,'(A)') '          line between); one with a z-component is not. The BC layer'
+            write(*,'(A)') '          is axis-agnostic, but the 2D gas dual is not: allocation.f90'
+            write(*,'(A)') '          zeroes node component 3 and interp2ndOrder2D reads only'
+            write(*,'(A)') '          components 1-2. Generalise those first.'
+            error stop 'IGLOO: axisymmetric axis must lie in the x-y plane'
           endif
         endif
       endif
