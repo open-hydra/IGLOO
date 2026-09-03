@@ -100,8 +100,21 @@ contains
     gone  = .false.
     retry = .false.
 
-    !> Reflection boundary (symmetry)
-    if (cell%bcdef==300) then
+    !> Reflection boundary (symmetry) — and the axisymmetric AXIS face.
+    !
+    !  ATLAS emits bcdef 200 for BOTH the wedge k-faces (5/6) and the axis face, but only the
+    !  k-faces are a rotation. Rotating about x is an isometry: it leaves hypot(y,z) unchanged,
+    !  so it can never bring a particle that reached the axis back inside the domain. Sending the
+    !  axis face down the 200 branch trapped such a particle in an exact period-2 cycle — bcDef
+    !  rotated +delthe, axisymFold rotated it back — with zero net displacement, until the nStall
+    !  guard discarded it. (JPL-Lagrangian-20micron: the 6 innermost particles, every sweep.)
+    !
+    !  The axis is a symmetry plane like any other, so it belongs here. The reflection plane is
+    !  the mesh's innermost radial line (GRIB writes it at `axis`, 1e-8 m) rather than r=0 exactly
+    !  — the resulting offset is far below any physical scale in these cases (particle diameters
+    !  are O(1e-5 m)) and no worse than the wedge discretisation already in play. Note this also
+    !  covers 200 on any other non-wedge face, which is likewise not a rotation.
+    if (cell%bcdef==300 .or. (cell%bcdef==200 .and. f/=5 .and. f/=6)) then
       nn = cell%normal
       try = 0
       do while ((norm2(nn)<toll) .and. (try<2))
@@ -128,8 +141,9 @@ contains
         p = pstop - 2.0 * dot_product(pstop-intersect,nn) * nn
       endif
 
-    !> Axisymmetric wedge (3D mesh): fold position+velocity by -+delthe about x; face6 (+z)
-    !  -> -delthe, face5 -> +delthe. gone/retry stay .false. (x-y cell invariant under the fold).
+    !> Axisymmetric wedge k-faces ONLY (3D mesh): fold position+velocity by -+delthe about x;
+    !  face6 (+z) -> -delthe, face5 -> +delthe. gone/retry stay .false. (x-y cell invariant under
+    !  the fold). Reached only for f==5/6 — every other 200 face took the reflection branch above.
     elseif (cell%bcdef==200) then
       rot = merge(-delthe, delthe, f==6)
       p = rotateVector(p, [1._R8,0._R8,0._R8], rot)

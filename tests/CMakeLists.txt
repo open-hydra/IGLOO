@@ -303,6 +303,13 @@ igloo_e2e_case(coupled-body infrastructure/coupled-body "e2e;infrastructure")
 # promoted legacy test/assigned-pos: 2Daxi wedge + real MOSE solfile + DB injection
 # + euler-only output (the B5/B6 path); behavioral gate, md5 A/B stays manual
 igloo_e2e_case(db-2daxi infrastructure/db-2daxi "e2e;infrastructure")
+# axis face tagged `axisymmetric` (bcdef 200) rather than `sym` (300) -- what ATLAS
+# emits and what the JPL nozzle cases use. db-2daxi tags face3 `sym` and injects both
+# particles far off-axis, so the axis path was covered by no test at all: bcDef's 200
+# branch rotates about x, which cannot change a particle's radius, so anything that
+# reached the axis was trapped in a period-2 rotation cycle and discarded.
+# Verified RED before the axis-face fix and GREEN after.
+igloo_e2e_case(axis-200 infrastructure/axis-200 "e2e;infrastructure")
 # translational periodic pair (bcdef 201): closed-form v(x) across wraps + modular-y
 igloo_e2e_case(periodic-y infrastructure/periodic-y "e2e;infrastructure")
 # A24 (2026-08-07): first coverage for pin_particles_bc_center. Every other case sets
