@@ -8,6 +8,7 @@ module IGLOO_bcBox
   real(R8), parameter :: minDist=1.e-12_R8
   real(R8), parameter :: grazeFrac=2.e-2_R8      !> below this v_n/|v| a 300-impact is grazing: project, don't reflect
   real(R8), parameter :: grazeStandoff=1.e-6_R8  !> interior offset after a graze; >> roundoff, << cell size
+  real(R8), parameter :: wedgeAzimTol=0.5_R8     !> |faceAzimuth| above this ⇒ wedge face (rotate), else reflect
   type(Ray_t)         :: myRay
   !$omp threadprivate(myRay)   !> per-thread: checkBoundary writes it, bcDef reuses it within a thread
   private
@@ -15,8 +16,41 @@ module IGLOO_bcBox
   public :: bcDef
   public :: axisymFold
   public :: periodicTransport
+  public :: faceAzimuth, wedgeAzimTol
 
 contains
+
+  !> Azimuthal projection of a boundary face's outward normal about the x symmetry axis,
+  !  in [-1,1]. This is the orientation-independent classifier for bcdef-200 faces:
+  !
+  !    |azim| ~ 1  the face is a WEDGE face — a radial plane through the axis, whose normal
+  !                is azimuthal. The 200 fold (a rotation about x) applies.
+  !    |azim| ~ 0  anything else — the AXIS face (constant radius, radial normal) or an
+  !                x-normal face. A rotation about x cannot move such a particle off the
+  !                face, so these must reflect instead.
+  !
+  !  The SIGN identifies the wedge side: azim > 0 on the +theta boundary, whose fold is
+  !  -delthe. Deriving both from the face's geometry rather than from its index keeps the BC
+  !  independent of how the block is oriented — nothing pins the wedge to faces 5/6.
+  !
+  !  Returns 0 for a face centred exactly on the axis, where thetaHat is undefined; that
+  !  falls in the reflect class, which is the safe answer.
+  pure function faceAzimuth(vertices, f, normal) result(azim)
+    use IGLOO_variables, only: toll
+    implicit none
+    real(R8), intent(in) :: vertices(3,8), normal(3)
+    integer,  intent(in) :: f
+    real(R8) :: azim, fc(3), that(3), rr
+
+    azim = 0._R8
+    fc = 0.25_R8*( vertices(:,guide(f,1)) + vertices(:,guide(f,2))   &
+                 + vertices(:,guide(f,3)) + vertices(:,guide(f,4)) )
+    rr = norm2(fc(2:3))
+    if (rr <= toll) return
+    that = [0._R8, -fc(3), fc(2)] / rr        !> xHat x rHat, already a unit vector
+    azim = dot_product(normal, that)
+
+  end function faceAzimuth
 
   subroutine checkBoundary(block,vertices,p,pold,vold,i,j,k,intersect,f,m,n,noBound,found,planar)
     use IGLOO_variables, only: pi
@@ -95,10 +129,32 @@ contains
     logical,            intent(out)   :: gone, retry
     !> local variables
     real(R8) :: nn(3), nn1(3), nn2(3), pstop(3), rot
+    real(R8) :: azim
     integer      :: try
 
     gone  = .false.
     retry = .false.
+
+    !> Classify a 200 face from its OWN GEOMETRY, never from its index. ATLAS emits 200 for
+    !  both the wedge faces and the axis face, and nothing pins the wedge to any particular
+    !  face number — the block may be oriented however the mesh author likes — so the two must
+    !  be told apart by what they are, not by where they sit in the index tuple.
+    !
+    !  A wedge face is a radial plane through the symmetry axis: its normal is AZIMUTHAL.
+    !  The axis face is a surface of constant radius: its normal is RADIAL. Any 200 face whose
+    !  normal has an x-component (an i-plane) is neither, and is likewise not a rotation.
+    !  Projecting the face normal on thetaHat separates all three: |azim| ~ 1 for the wedge,
+    !  ~ 0 for everything else.
+    !
+    !  azim also carries the SIGN, which replaces the old `f==6` test: the face whose outward
+    !  normal points along +theta is the +delthe boundary, so the fold rotates by -delthe, and
+    !  vice versa. On a k-ordered wedge this reproduces the previous face-index behaviour;
+    !  test_axis_dispatch checks that equivalence at every face index and for wedges built on
+    !  the i- and j-directions too. (No e2e case reaches the fold branch below: axisymFold
+    !  re-sectors the particle each outer step, so bcDef sees 0 wedge-face 200 calls on both
+    !  db-2daxi and JPL — measured. The unit test is the coverage for it.)
+    azim = 0._R8
+    if (cell%bcdef==200) azim = faceAzimuth(vertices, f, cell%normal)
 
     !> Reflection boundary (symmetry) — and the axisymmetric AXIS face.
     !
@@ -114,7 +170,7 @@ contains
     !  — the resulting offset is far below any physical scale in these cases (particle diameters
     !  are O(1e-5 m)) and no worse than the wedge discretisation already in play. Note this also
     !  covers 200 on any other non-wedge face, which is likewise not a rotation.
-    if (cell%bcdef==300 .or. (cell%bcdef==200 .and. f/=5 .and. f/=6)) then
+    if (cell%bcdef==300 .or. (cell%bcdef==200 .and. abs(azim) <= wedgeAzimTol)) then
       nn = cell%normal
       try = 0
       do while ((norm2(nn)<toll) .and. (try<2))
@@ -141,11 +197,12 @@ contains
         p = pstop - 2.0 * dot_product(pstop-intersect,nn) * nn
       endif
 
-    !> Axisymmetric wedge k-faces ONLY (3D mesh): fold position+velocity by -+delthe about x;
-    !  face6 (+z) -> -delthe, face5 -> +delthe. gone/retry stay .false. (x-y cell invariant under
-    !  the fold). Reached only for f==5/6 — every other 200 face took the reflection branch above.
+    !> Axisymmetric WEDGE faces only (3D mesh): fold position+velocity by -+delthe about x.
+    !  Reached only when the face normal is azimuthal (|azim| > 0.5); every other 200 face took
+    !  the reflection branch above. The rotation sense comes from the sign of azim, so it holds
+    !  whichever way the block is oriented. gone/retry stay .false. (cell invariant under the fold).
     elseif (cell%bcdef==200) then
-      rot = merge(-delthe, delthe, f==6)
+      rot = -sign(abs(delthe), azim)
       p = rotateVector(p, [1._R8,0._R8,0._R8], rot)
       v = rotateVector(v, [1._R8,0._R8,0._R8], rot)
 

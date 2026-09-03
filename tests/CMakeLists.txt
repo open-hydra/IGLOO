@@ -104,6 +104,11 @@ set_tests_properties(self_test PROPERTIES
 igloo_unit_test(test_gas_reconstruction infrastructure/gas_reconstruction "unit;infrastructure;interp;e;t1")
 igloo_unit_test(test_ini_pipeline       infrastructure/ini_pipeline       "unit;infrastructure;ini;t9")
 igloo_unit_test(test_rng_stream         infrastructure/rng_stream         "unit;infrastructure;rng;t1")
+# bcdef-200 dispatch must key off face GEOMETRY, not face index: the wedge is not pinned to
+# faces 5/6 by anything. Covers all six indices for wedges built on i, j and k, and pins the
+# equivalence with the retired `f==6` rule. No e2e case reaches bcDef's fold branch (axisymFold
+# re-sectors first), so this unit test is its only coverage.
+igloo_unit_test(test_axis_dispatch      infrastructure/axis_dispatch      "unit;infrastructure;bc;t1")
 
 # ---------- two-sweep repeatability harness -----------------------------------
 # Drives one pinned population through solve() TWICE. Every other case in the suite is
