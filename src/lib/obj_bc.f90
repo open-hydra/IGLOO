@@ -20,34 +20,38 @@ module IGLOO_bcBox
 
 contains
 
-  !> Azimuthal projection of a boundary face's outward normal about the x symmetry axis,
-  !  in [-1,1]. This is the orientation-independent classifier for bcdef-200 faces:
+  !> Azimuthal projection of a boundary face's outward normal about the symmetry axis
+  !  `axisDir`, in [-1,1]. This is the orientation-independent classifier for bcdef-200 faces:
   !
   !    |azim| ~ 1  the face is a WEDGE face — a radial plane through the axis, whose normal
-  !                is azimuthal. The 200 fold (a rotation about x) applies.
-  !    |azim| ~ 0  anything else — the AXIS face (constant radius, radial normal) or an
-  !                x-normal face. A rotation about x cannot move such a particle off the
-  !                face, so these must reflect instead.
+  !                is azimuthal. The 200 fold (a rotation about axisDir) applies.
+  !    |azim| ~ 0  anything else — the AXIS face (constant radius, radial normal) or a face
+  !                normal to axisDir. A rotation about the axis cannot move such a particle
+  !                off the face, so these must reflect instead.
   !
   !  The SIGN identifies the wedge side: azim > 0 on the +theta boundary, whose fold is
-  !  -delthe. Deriving both from the face's geometry rather than from its index keeps the BC
-  !  independent of how the block is oriented — nothing pins the wedge to faces 5/6.
+  !  -delthe. Deriving both from the face's geometry rather than from its index — and taking
+  !  the frame from axisDir rather than from x — keeps the BC independent of BOTH how the
+  !  block is indexed and which way the symmetry axis points. Nothing pins the wedge to
+  !  faces 5/6, and nothing pins the axis to x.
   !
   !  Returns 0 for a face centred exactly on the axis, where thetaHat is undefined; that
   !  falls in the reflect class, which is the safe answer.
   pure function faceAzimuth(vertices, f, normal) result(azim)
-    use IGLOO_variables, only: toll
+    use IGLOO_variables, only: toll, axisDir
     implicit none
     real(R8), intent(in) :: vertices(3,8), normal(3)
     integer,  intent(in) :: f
-    real(R8) :: azim, fc(3), that(3), rr
+    real(R8) :: azim, fc(3), rvec(3), that(3), rr
 
     azim = 0._R8
     fc = 0.25_R8*( vertices(:,guide(f,1)) + vertices(:,guide(f,2))   &
                  + vertices(:,guide(f,3)) + vertices(:,guide(f,4)) )
-    rr = norm2(fc(2:3))
+    !> radial part of the face centre = component perpendicular to the symmetry axis
+    rvec = fc - dot_product(fc, axisDir)*axisDir
+    rr   = norm2(rvec)
     if (rr <= toll) return
-    that = [0._R8, -fc(3), fc(2)] / rr        !> xHat x rHat, already a unit vector
+    that = cross(axisDir, rvec/rr)            !> axisDir x rHat: already a unit vector
     azim = dot_product(normal, that)
 
   end function faceAzimuth
@@ -115,7 +119,7 @@ contains
   end subroutine checkBoundary
 
   subroutine bcDef(cell,vertices,pold,vold,intersect,f,p,v,time,iold,angle,Af,found,gone,retry)
-    use IGLOO_variables, only: pi, toll, delthe
+    use IGLOO_variables, only: pi, toll, delthe, axisDir
     implicit none
     class(obj_bc_cell), intent(in)    :: cell
     real(R8),           intent(in)    :: vertices(3,8), pold(3), vold(3)
@@ -141,10 +145,9 @@ contains
     !  be told apart by what they are, not by where they sit in the index tuple.
     !
     !  A wedge face is a radial plane through the symmetry axis: its normal is AZIMUTHAL.
-    !  The axis face is a surface of constant radius: its normal is RADIAL. Any 200 face whose
-    !  normal has an x-component (an i-plane) is neither, and is likewise not a rotation.
-    !  Projecting the face normal on thetaHat separates all three: |azim| ~ 1 for the wedge,
-    !  ~ 0 for everything else.
+    !  The axis face is a surface of constant radius: its normal is RADIAL. A face normal to
+    !  the axis is neither, and is likewise not a rotation. Projecting the face normal on
+    !  thetaHat separates all three: |azim| ~ 1 for the wedge, ~ 0 for everything else.
     !
     !  azim also carries the SIGN, which replaces the old `f==6` test: the face whose outward
     !  normal points along +theta is the +delthe boundary, so the fold rotates by -delthe, and
@@ -197,14 +200,15 @@ contains
         p = pstop - 2.0 * dot_product(pstop-intersect,nn) * nn
       endif
 
-    !> Axisymmetric WEDGE faces only (3D mesh): fold position+velocity by -+delthe about x.
-    !  Reached only when the face normal is azimuthal (|azim| > 0.5); every other 200 face took
-    !  the reflection branch above. The rotation sense comes from the sign of azim, so it holds
-    !  whichever way the block is oriented. gone/retry stay .false. (cell invariant under the fold).
+    !> Axisymmetric WEDGE faces only (3D mesh): fold position+velocity by -+delthe about axisDir.
+    !  Reached only when the face normal is azimuthal (|azim| > wedgeAzimTol); every other 200
+    !  face took the reflection branch above. The rotation sense comes from the sign of azim and
+    !  the axis from axisDir, so neither the face ordering nor the axis direction is assumed here.
+    !  gone/retry stay .false. (cell invariant under the fold).
     elseif (cell%bcdef==200) then
       rot = -sign(abs(delthe), azim)
-      p = rotateVector(p, [1._R8,0._R8,0._R8], rot)
-      v = rotateVector(v, [1._R8,0._R8,0._R8], rot)
+      p = rotateVector(p, axisDir, rot)
+      v = rotateVector(v, axisDir, rot)
 
     !> Connected boundary (coincident conformal interface: index jump, no remap). Periodic
     !  (201) is NOT here — its faces are separated, so updateCell transports the particle.
@@ -225,23 +229,25 @@ contains
   end subroutine bcDef
 
   !> AXISYMMETRIC (200) per-step fold: rotate state position+velocity back into the wedge sector
-  !  by -+delthe about x when the azimuth exceeds +-delthe/2 (face6 -> -delthe, face5 -> +delthe).
+  !  by -+delthe about axisDir when the azimuth leaves +-delthe/2. The azimuth is measured in the
+  !  frame (refDir, binormal) spanning the plane normal to axisDir, so nothing here assumes the
+  !  axis is x: with the default frame this is exactly atan2(z,y), bit for bit.
   subroutine axisymFold(stateVar)
-    use IGLOO_variables, only: axisym, delthe
+    use IGLOO_variables, only: axisym, delthe, axisDir, refDir
     implicit none
     real(R8), intent(inout) :: stateVar(:)
-    real(R8), parameter :: xaxis(3) = [1._R8, 0._R8, 0._R8]
-    real(R8) :: theta, rot
+    real(R8) :: theta, rot, binormal(3)
     integer  :: guard
 
     if (.not.axisym) return
+    binormal = cross(axisDir, refDir)
     do guard = 1, 1000
-      theta = atan2(stateVar(3), stateVar(2))
+      theta = atan2(dot_product(stateVar(1:3), binormal), dot_product(stateVar(1:3), refDir))
       if      (theta >  0.5_R8*delthe) then; rot = -delthe
       else if (theta < -0.5_R8*delthe) then; rot =  delthe
       else; return; endif
-      stateVar(1:3) = rotateVector(stateVar(1:3), xaxis, rot)
-      stateVar(4:6) = rotateVector(stateVar(4:6), xaxis, rot)
+      stateVar(1:3) = rotateVector(stateVar(1:3), axisDir, rot)
+      stateVar(4:6) = rotateVector(stateVar(4:6), axisDir, rot)
     enddo
   end subroutine axisymFold
 

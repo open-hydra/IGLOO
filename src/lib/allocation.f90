@@ -6,7 +6,8 @@ contains
 
 
   subroutine allocate_blocks(orion,material,geoblock,solblock,srcblock,eulblock,srcSwitch,eulSwitch)
-    use IGLOO_variables,   only: nb, ord2, mesh2D, axisym, delthe
+    use IGLOO_variables,   only: nb, ord2, mesh2D, axisym, delthe, axisDir, refDir
+    use IGLOO_VectorModule, only: cross
     use IGLOO_data_block,  only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock
     use IGLOO_data_phases, only: obj_material
     use Lib_ORION_data
@@ -19,7 +20,7 @@ contains
     type(obj_sourceblock), intent(inout), allocatable :: srcblock(:)
     type(obj_eulerblock) , intent(inout), allocatable :: eulblock(:,:)
     integer      :: ib, i, j, k, v, nsc, ntot, kmin, kmax, im, jm
-    real(R8)     :: rmax, r2
+    real(R8)     :: rmax, r2, rvec(3), binormal(3)
     
 
     !> Look for gas densities
@@ -55,19 +56,38 @@ contains
         blk%node(:,i,j,k) = oBlk%mesh(1:3,i,j,k)
       enddo; enddo; enddo
 
-      !> Axisymmetric wedge: full angular span of the two k-planes about the x-axis (radial
-      !  plane y-z). geoblock keeps real z (only the gas dual is flattened); pick the max-radius
-      !  node to minimise atan2 roundoff. Computed once.
+      !> Axisymmetric wedge: full angular span of the two k-planes about axisDir. The radius and
+      !  azimuth are taken in the (refDir, binormal) frame normal to axisDir rather than assuming
+      !  y-z, so the detection carries no hardcoded axis; with the default frame every expression
+      !  below reduces to the previous y/z form bit for bit. geoblock keeps real z (only the gas
+      !  dual is flattened); pick the max-radius node to minimise atan2 roundoff. Computed once.
       if (mesh2D .and. .not.axisym) then
+        binormal = cross(axisDir, refDir)
         rmax = -1._R8; im = 0; jm = 0
         do j = 0, blk%Ny; do i = 0, blk%Nx
-          r2 = blk%node(2,i,j,1)**2 + blk%node(3,i,j,1)**2
+          rvec = blk%node(:,i,j,1) - dot_product(blk%node(:,i,j,1), axisDir)*axisDir
+          r2   = sum(rvec**2)
           if (r2 > rmax) then; rmax = r2; im = i; jm = j; endif
         enddo; enddo
-        delthe = atan2(blk%node(3,im,jm,1), blk%node(2,im,jm,1)) &
-               - atan2(blk%node(3,im,jm,0), blk%node(2,im,jm,0))
+        delthe = atan2(dot_product(blk%node(:,im,jm,1), binormal),                  &
+                       dot_product(blk%node(:,im,jm,1), refDir))                    &
+               - atan2(dot_product(blk%node(:,im,jm,0), binormal),                  &
+                       dot_product(blk%node(:,im,jm,0), refDir))
         axisym = abs(delthe) > 1.e-9_R8
-        if (axisym) write(*,'(A,F12.8,A)') '     - Axisymmetric wedge: delthe = ', delthe, ' rad'
+        if (axisym) then
+          write(*,'(A,F12.8,A)') '     - Axisymmetric wedge: delthe = ', delthe, ' rad'
+          !> mesh2D flattens node component 3 (below) and interp2ndOrder2D reads only components
+          !  1 and 2, so the gas dual lives in the x-y plane. A symmetry axis other than x would
+          !  give correct particle BCs on a silently wrong gas field -- refuse instead.
+          if (abs(abs(axisDir(1)) - 1._R8) > 1.e-12_R8) then
+            write(*,'(A)') '  [ERROR] axisym: only a symmetry axis along x is supported.'
+            write(*,'(A)') '          The BC layer is axis-agnostic, but the 2D gas dual is not:'
+            write(*,'(A)') '          allocation.f90 zeroes node component 3 and interp2ndOrder2D'
+            write(*,'(A)') '          reads only components 1-2. Generalise those before moving'
+            write(*,'(A)') '          axisDir off x.'
+            error stop 'IGLOO: unsupported axisymmetric axis direction'
+          endif
+        endif
       endif
       allocate(blk%center(3,1:blk%Nx,1:blk%Ny,1:blk%Nz))
       call blk%compute_geometry

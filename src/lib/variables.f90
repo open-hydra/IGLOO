@@ -22,8 +22,22 @@ module IGLOO_variables
   logical  :: dsSwitch=.false.        !> any inflow cell carries a per-cell ds>0 (from bc.txt col 9)
   logical  :: ord2=.false.
   logical  :: mesh2D=.false.
-  logical  :: axisym=.false.          !> axisymmetric wedge mesh (k-planes span an angle about x)
-  real(R8) :: delthe=0._R8            !> wedge angle [rad]; particles crossing faces 5/6 fold by -+delthe
+  logical  :: axisym=.false.          !> axisymmetric wedge mesh (k-planes span an angle about axisDir)
+  real(R8) :: delthe=0._R8            !> wedge angle [rad]; particles crossing a wedge face fold by -+delthe
+  !> Symmetry-axis frame for axisymmetric wedges. Every BC-side axisymmetric operation --
+  !  delthe detection, the wedge fold, and the 200 face classification -- is written against
+  !  these two vectors rather than against x and y, so the BC layer carries no hardcoded axis.
+  !  axisDir is the symmetry axis; refDir is the azimuth origin (theta=0), and must be a unit
+  !  vector orthogonal to axisDir. binormal = axisDir x refDir completes the right-handed frame.
+  !
+  !  They are NOT user-settable, deliberately. `axisym` is only ever set inside a `mesh2D`
+  !  branch, and mesh2D flattens node component 3 to zero (allocation.f90) while
+  !  interp2ndOrder2D reads only components 1 and 2 (Lib_Equations) -- so the gas dual and its
+  !  interpolation are hardwired to the x-y plane. Pointing axisDir elsewhere today would give
+  !  correct particle BCs on top of a silently wrong gas field. Lifting that is the remaining
+  !  work; `assertAxisSupported` below fails loudly rather than letting it happen quietly.
+  real(R8) :: axisDir(3) = [1._R8, 0._R8, 0._R8]   !> symmetry axis (unit)
+  real(R8) :: refDir(3)  = [0._R8, 1._R8, 0._R8]   !> azimuth origin, theta=0 (unit, ⟂ axisDir)
   integer  :: fsample, nb, nm, nfam, iprint, trajSample
   integer, allocatable :: nspecies(:)
   real(R8) :: ds, mdotMax, dtprint
