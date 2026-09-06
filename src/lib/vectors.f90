@@ -1,5 +1,5 @@
 module IGLOO_VectorModule
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
 
 contains

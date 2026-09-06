@@ -1,5 +1,5 @@
 module IGLOO_Lib_Statistics
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, I8 => int64, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : I8 => int64, R8 => real64
     implicit none
     private
     !> Sampler functions. The bare names draw from the intrinsic `random_number`, whose state is

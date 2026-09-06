@@ -20,7 +20,7 @@ module IGLOO_Mod_MPI
 #ifdef USE_MPI
   use mpi
 #endif
-  use, intrinsic :: iso_fortran_env, only: R8 => real64, I4 => int32
+  use, intrinsic :: iso_fortran_env, only: R8 => real64
   use IGLOO_data_block, only: obj_sourceblock, obj_eulerblock
 
   implicit none

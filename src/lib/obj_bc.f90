@@ -1,5 +1,5 @@
 module IGLOO_bcBox
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_VectorModule, only: cross, rotateVector
   use IGLOO_RayFaceIntersection3D
   use IGLOO_data_block, only: obj_block, obj_bc_cell
@@ -99,7 +99,6 @@ contains
   end function faceAzimuth
 
   subroutine checkBoundary(block,vertices,p,pold,vold,i,j,k,intersect,f,m,n,noBound,found,planar)
-    use IGLOO_variables, only: pi
     implicit none
     class(obj_block), intent(in)    :: block
     real(R8),         intent(in)    :: vertices(3,8), p(3), pold(3), vold(3)

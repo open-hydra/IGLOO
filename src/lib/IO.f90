@@ -12,7 +12,7 @@ module IGLOO_IO
 contains
 
   subroutine read_cdp_properties(prefix,material)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     use strings,               only: parse
     use IGLOO_variables,       only: nm, brkupSwitch, phaseChange, breakup_word, evaporation_word, &
                                      liqSelect, intfSelect, boilSelect
@@ -196,7 +196,7 @@ contains
 
 
   subroutine read_cdp_bc_file(name,material,geoblock,gasblock,sourceblock,eulerblock,srcSwitch,eulSwitch)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_variables,             only: nb, nm, ord2, mesh2D, dsSwitch
     use IGLOO_data_block,            only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, obj_bc_cell
     use IGLOO_data_phases,           only: obj_material

@@ -1,5 +1,5 @@
 module IGLOO_variables
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   implicit none
 
   character(len=32)  :: IGLOO_phase_prefix=''

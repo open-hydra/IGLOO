@@ -1,5 +1,5 @@
 module IGLOO_Lib_Drag
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   implicit none
   private
   public :: assign_drag
@@ -103,7 +103,7 @@ contains
 
   !> Stokes Drag Model
   pure function drag_Stokes(Re) result(Cd)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re
     real(R8), parameter :: toll=1e-20
@@ -115,7 +115,7 @@ contains
 
   !> Schlichting Drag Model
   pure function drag_Schlichting(Re) result(Cd)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re
     real(R8), parameter :: toll=1e-20
@@ -127,7 +127,7 @@ contains
 
   !> Schiller Naumann Drag Model
   pure function drag_Schiller_Naumann(Re) result(Cd)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re
     real(R8), parameter :: toll=1e-20
@@ -139,7 +139,7 @@ contains
 
   !> Chang Drag Model
   pure function drag_Chang(Re) result(Cd)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re
     real(R8), parameter :: toll=1e-20
@@ -151,7 +151,7 @@ contains
 
   !> Wen Yu Drag Model
   pure function drag_Wen_Yu(Re) result(Cd)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re
     real(R8), parameter :: toll=1e-20
@@ -167,7 +167,7 @@ contains
 
   !> Putnam Drag Model
   pure function drag_Putnam(Re) result(Cd)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re
     real(R8), parameter :: toll=1e-20
@@ -183,7 +183,7 @@ contains
 
   !> Clift Gauvin Drag Model
   pure function drag_Clift_Gauvin(Re) result(Cd)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re
     real(R8), parameter :: toll=1e-20
@@ -195,7 +195,7 @@ contains
 
   !> Carlson Hoglund Drag Model
   pure function drag_Carlson_Hoglund(Re,Ma) result(Cd)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re, Ma
     real(R8), parameter :: toll=1e-20
@@ -210,7 +210,7 @@ contains
   !> Henderson Drag Model
   !> Subsonic Flow
   pure function drag_Henderson_1(Re,Ma,G,Tr) result(Cd)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re, Ma, G, Tr
     real(R8), parameter :: toll=1e-20
@@ -225,7 +225,7 @@ contains
 
   !> High Supersonic Flow
   pure function drag_Henderson_2(Re,Ma,G,Tr) result(Cd)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re, Ma, G, Tr
     real(R8), parameter :: toll=1e-20
@@ -238,7 +238,7 @@ contains
   end function drag_Henderson_2
 
   pure function drag_Henderson(Re,Ma,G,Tr) result(Cd)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re, Ma, G, Tr
     real(kind=R8) :: Cd, Ma1, Ma2, Cd1, Cd2
@@ -258,7 +258,7 @@ contains
   end function drag_Henderson
 
   pure function drag_Crowe(Re,Ma,G,Tr) result(Cd)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re, Ma, G, Tr
     real(R8), parameter :: toll=1e-20
@@ -275,7 +275,7 @@ contains
   end function drag_Crowe
 
   pure function drag_Hermsen(Re,Ma,G,Tr) result(Cd)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re, Ma, G, Tr
     real(R8), parameter :: toll=1e-20
@@ -291,7 +291,7 @@ contains
   end function drag_Hermsen
 
   pure function drag_Morsi_Alexander(Re) result(Cd)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re
     real(R8), parameter :: toll=1e-20

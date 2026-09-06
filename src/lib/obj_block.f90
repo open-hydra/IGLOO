@@ -1,6 +1,5 @@
 module IGLOO_data_block
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
-  use IGLOO_data_gas,  only: obj_species
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_Lib_Mollify, only: binomial_smooth
   implicit none
   private
@@ -53,7 +52,6 @@ module IGLOO_data_block
 
   type, extends(obj_block), public :: obj_flowblock
     integer :: nproperties
-    type(obj_species) :: species
     real(R8), dimension(:,:,:,:), allocatable :: density
     real(R8), dimension(:,:,:,:), allocatable :: velocity
     real(R8), dimension(:,:,:),   allocatable :: temperature

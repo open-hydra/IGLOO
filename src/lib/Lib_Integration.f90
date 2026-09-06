@@ -1,5 +1,5 @@
 module Lib_Integration
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
   implicit none
   private
@@ -10,10 +10,10 @@ contains
 
   subroutine integrate(part,geoblock,gasblock,srcblock,eulblock,     &
                         hTab,cpTab,rhoTab,mupTab,sigTab,psatTab, shed,noShed)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
     use IGLOO_variables,  only: unitTraj,unitExit,unitScat,iprint,dtprint, &
-                                nb,nspecies,toll,ord2,mesh2D,threshold,    &
+                                nb,toll,ord2,mesh2D,threshold,            &
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
                                 trajOn, scatOn, dNscat, sixOverPi
@@ -26,9 +26,9 @@ contains
                        packEventVar, unpackEventVar,                           &
                        rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, &
                        rhsAlCombustion,                                             &
-                       ind_d, ind_rho, ind_m0, ind_n0, ind_sig, ind_mup, ind_m,     &
-                       ind_sxi, ind_sb1, ind_sb2,                                   &
-                       ind_evd, ind_evn, ind_evm0, ind_ev1, ind_ev2,                &
+                       ind_d, ind_rho, ind_sig, ind_mup, ind_m,                     &
+                       ind_sb1, ind_sb2,                                            &
+                       ind_evd, ind_evn,                                            &
                        nauxstate, neventvar, nbrkst,                                &
                        mod_brkSelect, mod_propFlags, mod_model,                     &
                        mod_bp, mod_bpMethod, mod_bpScale
@@ -108,7 +108,6 @@ contains
     !  A threshold relative to the injected mass would satisfy both.
     real(R8), parameter :: mBurnTol=1.e-15_R8
 
-    ! write(*,*) "      Processing particle n.", part%ID !> DEBUG PRINTING
     nScat = 0            !> before every exit path, so flushScat is always well-defined
     tlimit = huge(1._R8) !> steady-state by default (temporary)
     neq = part%neq       !> save local copy of neq

@@ -1,6 +1,5 @@
 module Lib_Equations
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
-    use IGLOO_particles, only: obj_particle
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     private
 
@@ -158,7 +157,7 @@ contains
   end subroutine interp2ndOrder2D
 
   pure subroutine interphase(gas,nsp,vdiff,slip,temp,diam,Re,cpFactor, Fdrag,Qdot)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_variables, only: pi, dragSelect, heatSelect
     use IGLOO_Lib_Drag
     use IGLOO_Lib_Heat

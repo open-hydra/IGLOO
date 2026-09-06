@@ -1,6 +1,5 @@
 module IGLOO_data_phases
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
-  use IGLOO_variables, only: llen
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_particles
   implicit none
   private

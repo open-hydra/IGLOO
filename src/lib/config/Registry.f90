@@ -1,6 +1,6 @@
 module IGLOO_Input_Registry
 
-  use iso_fortran_env, only: I4 => int32, R8 => real64
+  use iso_fortran_env, only: R8 => real64
   implicit none
   private
 
@@ -465,9 +465,7 @@ contains
     if (is_sep) then
         end = i - 1
         token = adjustl(allowed(start:end))
-        ! [NOT ACTIIVE] Allow capital and lowercase values to compare them in a case-insensitive way
-        ! token = lowercase(token)
-        ! lower_value = lowercase(value)
+        !> Comparison is case-SENSITIVE: the case-insensitive path was never activated.
         lower_value = value
         if (trim(token) == trim(lower_value)) then
           return
@@ -545,23 +543,6 @@ contains
   end subroutine generate_markdown
 
 
-  function lowercase(str) result(out)
-
-    implicit none
-
-    character(*), intent(in) :: str
-    character(len=len(str)) :: out
-    integer :: i
-
-    do i = 1, len(str)
-        if (str(i:i) >= "A" .and. str(i:i) <= "Z") then
-            out(i:i) = char(iachar(str(i:i)) + 32)
-        else
-            out(i:i) = str(i:i)
-        end if
-    end do
-
-  end function lowercase
 
 
 end module IGLOO_Input_Registry

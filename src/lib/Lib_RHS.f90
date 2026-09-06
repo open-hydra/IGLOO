@@ -1,5 +1,5 @@
 module Lib_RHS
-  use, intrinsic :: iso_fortran_env, only: I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only: R8 => real64
   implicit none
   private
 
@@ -8,9 +8,8 @@ module Lib_RHS
   public  :: packAuxState, unpackAuxState
   public  :: packEventVar, unpackEventVar
   public  :: rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, rhsAlCombustion
-  ! public  :: ind_xi
   public  :: ind_d, ind_rho, ind_sig, ind_mup
-  public  :: ind_m0, ind_n0, ind_ps, ind_Mv, ind_Lv, ind_Cv
+  public  :: ind_ps, ind_Mv, ind_Lv, ind_Cv
   public  :: ind_Le, ind_Yi, ind_e1, ind_e2, ind_cp, ind_m
   public  :: ind_sxi, ind_sb1, ind_sb2
   public  :: ind_evd, ind_evn, ind_evm0, ind_ev1, ind_ev2
@@ -37,7 +36,6 @@ module Lib_RHS
   !--- AuxVars dynamic indices (set by computeNaux, 0 = not allocated) ---
   integer :: ind_cp  = 0, ind_m  = 0, ind_d   = 0, ind_rho = 0
   integer :: ind_sig = 0, ind_mup = 0
-  integer :: ind_n0  = 0, ind_m0  = 0
   integer :: ind_ps  = 0, ind_Mv  = 0, ind_Lv = 0, ind_Cv = 0
   integer :: ind_Le  = 0, ind_Yi  = 0, ind_e1 = 0, ind_e2  = 0
   integer :: ind_e3  = 0, ind_e4  = 0, ind_e5 = 0  !> alpha_e (LK interface); k_liq / mu_liq reserved for P2T
@@ -138,9 +136,6 @@ contains
       if (.not.propFlags(4)) then
         nBrk = nBrk + 1; ind_mup = ind; ind = ind + 1     !> liquid viscosity (const)
       endif
-      ! ind_n0 = ind; ind = ind + 1                         !> npdot0
-      ! ind_m0 = ind; ind = ind + 1                         !> m0
-      ! nBrk = nBrk + 2
     endif
 
     !--- EVAPORATION ---
@@ -259,7 +254,7 @@ contains
     endif
     !> Reset all ind_* to 0 (sentinel: 0 = not in aux)
     ind_cp=0;  ind_m=0;   ind_d=0;  ind_rho=0
-    ind_sig=0; ind_mup=0; ind_n0=0; ind_m0=0
+    ind_sig=0; ind_mup=0
     ind_ps=0;  ind_Mv=0;  ind_Lv=0; ind_Cv=0; ind_Le=0; ind_Yi=0
     ind_e1=0;  ind_e2=0;  ind_e3=0; ind_e4=0; ind_e5=0
     ind_mb=0

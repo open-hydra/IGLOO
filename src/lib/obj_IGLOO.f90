@@ -1,5 +1,5 @@
 module IGLOO_module
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_data_block, only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock
   use IGLOO_data_phases, only: obj_material
   implicit none
@@ -758,7 +758,7 @@ contains
 
 
   pure function getSourceTerms(self,gas,vel,Tp,rhop,np,mID) result(FdragQdot)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_Lib_Properties, only: lookupTab
     use IGLOO_variables,      only: pi, dragSelect, heatSelect
     use IGLOO_Lib_Drag

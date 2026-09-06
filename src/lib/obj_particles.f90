@@ -1,6 +1,5 @@
 module IGLOO_particles
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, I8 => int64, R8 => real64
-  use oslo, only: Run_ODESolver
+  use, intrinsic :: iso_fortran_env, only : I8 => int64, R8 => real64
   use IGLOO_variables
   use IGLOO_Lib_Drag
   use IGLOO_Lib_Heat
@@ -17,7 +16,6 @@ module IGLOO_particles
     real(R8), allocatable :: stateVar(:) !> ODE state vector (IC for solver), size neq
     real(R8), allocatable :: oldstate(:) !> checkpoint at each accepted step, size neq
     real(R8), allocatable :: auxState(:) !> variables updated at RHS runtime, size nAuxState
-    real(R8), allocatable :: auxStOld(:) !> checkpoint for auxState variable, size nAuxState
     real(R8), allocatable :: eventVar(:) !> vars modified if an event occurs, size nEventVar
     real(R8), allocatable :: intE(:)     !> self velocity&temperature integral
     real(R8)     :: m         !> mass of the single self
@@ -88,8 +86,6 @@ module IGLOO_particles
     integer      :: neq         = 7    !> number of ODE equations
     integer      :: nOde        = 7    !> number of ODE state variables
     logical      :: bodyAccum = .false. !> body-force J/W accumulators present (only models 2,4,5 & srcBodyForce)
-    integer      :: indBrk =0
-    integer      :: indEvap=0
     !> Basic properties       (per-material, constant)
     real(R8)     :: cp        !> specific heat
     real(R8)     :: rho       !> material density

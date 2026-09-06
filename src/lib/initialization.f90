@@ -555,7 +555,7 @@ logical function check_distance(npart,R,Inj,newInj)
 end function check_distance
 
 subroutine compute_ds(block,gas,f,m,n,i,j,k,vertices,group,ds,mdotMax,R,single,dcell)
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_data_phases, only: obj_group
   use IGLOO_data_block,     only: obj_block, obj_flowblock
   implicit none
@@ -646,7 +646,7 @@ logical function isInj(bcdef)
 end function isInj
 
 subroutine initialize_fields(sourceblock,eulerblock,srcSwitch,eulSwitch)
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_variables,  only: nb
   use IGLOO_data_block, only: obj_sourceblock, obj_eulerblock
   implicit none

@@ -1,6 +1,6 @@
 !> Runtime INI reader — keep in sync with the doc registry config/Register_IGLOO.f90.
 module IGLOO_IO_INI
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   use finer, only: file_ini
   implicit none
   private
