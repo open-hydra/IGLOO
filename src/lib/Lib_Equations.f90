@@ -1,14 +1,12 @@
 module Lib_Equations
     use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
     use IGLOO_particles, only: obj_particle
-    ! use IGLOO_data_gas, only: obj_gas_state
     implicit none
     private
 
     public :: interphase
     public :: interp2ndOrder
     public :: interp2ndOrder2D
-    ! public :: interp2ndOrderDirect
 
 contains
 
@@ -17,7 +15,6 @@ contains
   !***********************************************************************************************************!
 
   pure subroutine interp2ndOrder(vertices,gasNodes,p0,nsp,xi,gas)
-    ! use IGLOO_data_gas, only: obj_gas_state
     implicit none
     integer,  intent(in)    :: nsp
     real(R8), intent(in)    :: vertices(3,8), gasNodes(nsp,8)
@@ -97,7 +94,6 @@ contains
   end subroutine interp2ndOrder
 
   subroutine interp2ndOrder2D(vertices,gasNodes,p0,nsp,gas)
-    ! use IGLOO_data_gas, only: obj_gas_state
     implicit none
     integer,  intent(in)  :: nsp
     real(R8), intent(in)  :: vertices(3,4), gasNodes(nsp,4)
@@ -160,50 +156,6 @@ contains
     gas = N(1)*gasNodes(:,1) + N(2)*gasNodes(:,2) + N(3)*gasNodes(:,3) + N(4)*gasNodes(:,4)
 
   end subroutine interp2ndOrder2D
-
-  ! pure subroutine interp2ndOrderDirect(centers, gasNodes, p0, nsp , gas, is2D)
-  !   use IGLOO_data_gas, only: obj_gas_state
-  !   implicit none
-  !   real(R8),            intent(in)  :: centers(:,:)  !> (3,N)
-  !   type(obj_gas_state), intent(in)  :: gasNodes(:)
-  !   real(R8),            intent(in)  :: p0(3)
-  !   logical,             intent(in)  :: is2D
-  !   type(obj_gas_state), intent(out) :: gas
-  !   real(R8) :: u, v, w, N(8), dx, dy, dz, A, B, C, D
-  !   integer  :: i, j
-
-  !   if (is2D) then; j = 2; else; j = 5; endif
-  !   dx = centers(1,j) - centers(1,1); if (abs(dx) < 1e-20_R8) dx = 1._R8
-  !   dy = centers(2,4) - centers(2,1); if (abs(dy) < 1e-20_R8) dy = 1._R8
-  !   u = max(0._R8, min(1._R8, (p0(1) - centers(1,1)) / dx))
-  !   v = max(0._R8, min(1._R8, (p0(2) - centers(2,1)) / dy))
-  !   A = (1._R8-u)*(1._R8-v); B = u*(1._R8-v)
-  !   C = u*v;                 D = (1._R8-u)*v
-  !   if (is2D) then
-  !     N(1) = A;  N(2) = B;  N(3) = C;  N(4) = D
-  !   else
-  !     j  = 8
-  !     dz = centers(3,2) - centers(3,1); if (abs(dz) < 1e-20_R8) dz = 1._R8
-  !     w  = max(0._R8, min(1._R8, (p0(3) - centers(3,1)) / dz))
-  !     N(1) = A*(1._R8-w);  N(2) = A*w;  N(3) = D*w;  N(4) = D*(1._R8-w)
-  !     N(5) = B*(1._R8-w);  N(6) = B*w;  N(7) = C*w;  N(8) = C*(1._R8-w)
-  !   endif
-
-  !   gas%rho = 0._R8; gas%tg  = 0._R8; gas%mu  = 0._R8
-  !   gas%v   = 0._R8
-  !   gas%kl  = 0._R8; gas%gam = 0._R8; gas%R   = 0._R8
-  !   do i = 1, j
-  !     gas%rho = gas%rho + N(i) * gasNodes(i)%rho
-  !     gas%v   = gas%v   + N(i) * gasNodes(i)%v
-  !     gas%tg  = gas%tg  + N(i) * gasNodes(i)%tg
-  !     gas%mu  = gas%mu  + N(i) * gasNodes(i)%mu
-  !     gas%kl  = gas%kl  + N(i) * gasNodes(i)%kl
-  !     gas%gam = gas%gam + N(i) * gasNodes(i)%gam
-  !     gas%R   = gas%R   + N(i) * gasNodes(i)%R
-  !   enddo
-
-  ! end subroutine interp2ndOrderDirect
-
 
   pure subroutine interphase(gas,nsp,vdiff,slip,temp,diam,Re,cpFactor, Fdrag,Qdot)
     use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64

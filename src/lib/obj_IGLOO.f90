@@ -22,8 +22,6 @@ module IGLOO_module
     !  the FIRST reset_state lands on 0, whose tag is empty: a single-sweep standalone run
     !  keeps byte-identical filenames, and the 49 oracles that glob fixed names still match.
     integer :: sweep = -1
-    ! integer            :: iprint
-    ! real(R8)           :: ds, mdotMax, dtprint
   contains
     procedure, pass(self) :: setup
     procedure, pass(self) :: setup_static

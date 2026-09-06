@@ -3,7 +3,6 @@ module IGLOO_bcBox
   use IGLOO_VectorModule, only: cross, rotateVector
   use IGLOO_RayFaceIntersection3D
   use IGLOO_data_block, only: obj_block, obj_bc_cell
-  ! use IGLOO_data_gas,   only: obj_gas_state
   implicit none
   real(R8), parameter :: minDist=1.e-12_R8
   real(R8), parameter :: grazeFrac=2.e-2_R8      !> below this v_n/|v| a 300-impact is grazing: project, don't reflect

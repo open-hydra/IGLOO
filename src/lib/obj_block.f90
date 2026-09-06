@@ -1122,11 +1122,9 @@ contains
 
 
   subroutine imposeBCValues(self, face_id, face_values)
-    ! use IGLOO_data_gas, only: obj_gas_state
     implicit none
     class(obj_flowblock), intent(inout) :: self
     integer,              intent(in)    :: face_id
-    ! type(obj_gas_state),  intent(in)    :: face_values(:,:)
     real(R8),             intent(in)    :: face_values(:,:,:) !> (nsp, Nm, Nn)
     integer  :: m, n, Ai, Aj, Ak, gi, gj, gk
     real(R8) :: rhoInt, rhoGhost, ratio

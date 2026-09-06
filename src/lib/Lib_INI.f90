@@ -598,7 +598,6 @@ contains
 
 
   subroutine read_ode()
-    ! use oslo
     use IGLOO_variables, only: ode_word, iopt, rtol, atol
     implicit none
 
@@ -631,7 +630,6 @@ contains
     call fini%get(section_name='IGLOO-ODE', option_name='absolute-tol', val=atol, error=error)
     if (error/=0) atol=1d-10
 
-    ! call setup_odesolver(N=neq,solver=ode_word,RT=rtol,AT=atol,iopt=iopt)
   end subroutine read_ode
 
 

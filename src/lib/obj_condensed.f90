@@ -38,7 +38,6 @@ module IGLOO_data_phases
     integer  :: nInjected = 0
     integer  :: mID, gID, famID, nparticles, childCounter=0
     integer  :: neq
-    ! integer  :: distribution
     logical  :: cpVariable
     logical  :: rhoVariable
     real(R8) :: cp    !> specific heat (defined if cp=const)
