@@ -947,24 +947,69 @@ contains
   !  normalization in computeEulField. The dual cell count is [1..Nx+1] per
   !  direction (one more than the geo cells). 3D: full hex volume via computeVolume
   !  on the dual node (range 0:Nx+1). mesh2D: the dual node carries a single z layer,
-  !  so the slab volume is the dual-quad area times the geo slab thickness Tgeo
-  !  (uniform for the extruded 2D mesh), derived from an interior geo cell so it
-  !  matches the geo volume convention (geoblock%cellVol = geoArea*Tgeo) exactly.
+  !  so the slab volume is the dual-quad area times the geo slab thickness.
+  !
+  !  ⚠ That thickness is uniform only on a PLANAR extruded 2D mesh. On an AXISYMMETRIC
+  !  wedge it is r*delthe -- proportional to the local radius. This routine used to take
+  !  ONE Tgeo from a mid-mesh geo cell and apply it everywhere, which mis-scaled every dual
+  !  cell by r_ref/r: the projected condensed density came out inflated at large radius and
+  !  depleted near the axis. On the JPL nozzle r/r_ref spanned 0.02 .. 5.1, i.e. up to ~43x
+  !  too little density on the axis and ~5x too much at the wall -- which is what drove the
+  !  Chang-MPL centreline disagreement (gas too fast on the axis, too slow at the wall).
+  !  Only the eulerian projection was affected; the SOURCE path normalizes by
+  !  geoblock%cellVol (correct per-cell volumes) and was always right.
+  !
+  !  Wedge branch: the proportionality T = cSlab*r is fitted from the geo metric by least
+  !  squares through the origin, rather than taken as `delthe`, so the dual keeps matching
+  !  geoblock%cellVol's OWN convention exactly (computeVolume builds planar-faced hexes,
+  !  which differ from a true swept sector at O(delthe^2)). It is then evaluated at each dual
+  !  cell's own centroid radius -- including the boundary half-cells at the axis, where a
+  !  nearest-geo-cell copy would be ~2x wrong precisely where the error matters most.
+  !  Planar branch keeps the single-Tgeo form, which is exact there.
   subroutine precomputeDualMetric(self, is2D, geoblock)
+    use IGLOO_variables, only: axisym, axisDir
     implicit none
     class(obj_block), intent(inout) :: self      !> dual (gas) block
     logical,          intent(in)    :: is2D
     class(obj_block), intent(in)    :: geoblock   !> for the slab thickness in 2D
-    integer  :: i, j, k, i0, j0, nxe, nye, nze
+    integer  :: i, j, k, i0, j0, ii, jj, nxe, nye, nze
     real(R8) :: vol, Tgeo, geoArea, v(3,4), d1(3), d2(3)
+    real(R8) :: rad, num, den, cSlab
 
     nxe = self%Nx + 1
     nye = self%Ny + 1
     nze = merge(1, self%Nz + 1, is2D)
     if (.not. allocated(self%cellVol)) allocate(self%cellVol(1:nxe, 1:nye, 1:nze))
 
-    if (is2D) then
-      !> Tgeo = geo slab thickness = geoblock%cellVol / geoArea (interior cell)
+    if (is2D .and. axisym) then
+      !> Fit T = cSlab*r over the geo cells (least squares through the origin).
+      num = 0._R8; den = 0._R8
+      do jj = 1, geoblock%Ny; do ii = 1, geoblock%Nx
+        call geoblock%getVertices([ii, jj, 1], v, .true.)
+        d1 = v(:,3) - v(:,1); d2 = v(:,4) - v(:,2)
+        geoArea = 0.5_R8 * norm2([d1(2)*d2(3)-d1(3)*d2(2), &
+                                  d1(3)*d2(1)-d1(1)*d2(3), &
+                                  d1(1)*d2(2)-d1(2)*d2(1)])
+        rad  = 0.25_R8 * ( axisRadius(v(:,1)) + axisRadius(v(:,2)) &
+                         + axisRadius(v(:,3)) + axisRadius(v(:,4)) )
+        Tgeo = geoblock%cellVol(ii, jj, 1) / max(geoArea, tiny(1._R8))
+        num  = num + Tgeo*rad
+        den  = den + rad*rad
+      enddo; enddo
+      cSlab = num / max(den, tiny(1._R8))
+
+      do j = 1, nye; do i = 1, nxe
+        call self%getVertices([i, j, 1], v, .true.)
+        d1 = v(:,3) - v(:,1); d2 = v(:,4) - v(:,2)
+        rad = 0.25_R8 * ( axisRadius(v(:,1)) + axisRadius(v(:,2)) &
+                        + axisRadius(v(:,3)) + axisRadius(v(:,4)) )
+        self%cellVol(i, j, 1) = 0.5_R8 * norm2([d1(2)*d2(3)-d1(3)*d2(2), &
+                                                d1(3)*d2(1)-d1(1)*d2(3), &
+                                                d1(1)*d2(2)-d1(2)*d2(1)]) * cSlab * rad
+      enddo; enddo
+    else if (is2D) then
+      !> Planar extruded mesh: the slab thickness really is uniform.
+      !  Tgeo = geo slab thickness = geoblock%cellVol / geoArea (interior cell)
       i0 = max(1, geoblock%Nx/2); j0 = max(1, geoblock%Ny/2)
       call geoblock%getVertices([i0, j0, 1], v, .true.)
       d1 = v(:,3) - v(:,1); d2 = v(:,4) - v(:,2)
@@ -987,6 +1032,22 @@ contains
     endif
 
   end subroutine precomputeDualMetric
+
+  !> Perpendicular distance of a point from the symmetry axis (through the origin, along
+  !  axisDir). Used for the axisymmetric dual-cell slab thickness.
+  !
+  !  ⚠ Callers must average the VERTEX radii, never take the radius of the vertex centroid.
+  !  Under ord2 the gasblock carries a ghost row that straddles the axis, so its vertices sit
+  !  at -+dr and the centroid lands at r ~ 0 while the cell still has finite area. Using
+  !  |centroid| there collapsed that row's volume by ~1e6 (8.0e-17 vs 9.7e-11 m^3) and the
+  !  resulting density blew the coupled run up with 'NaN or p<0' on the very first sweep.
+  pure function axisRadius(p) result(r)
+    use IGLOO_variables, only: axisDir
+    implicit none
+    real(R8), intent(in) :: p(3)
+    real(R8)             :: r
+    r = norm2( p - dot_product(p, axisDir)*axisDir )
+  end function axisRadius
 
   pure function CalculateNormal(A,B,C,D) result(n)
     implicit none
