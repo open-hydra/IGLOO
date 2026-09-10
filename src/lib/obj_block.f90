@@ -972,9 +972,9 @@ contains
     class(obj_block), intent(inout) :: self      !> dual (gas) block
     logical,          intent(in)    :: is2D
     class(obj_block), intent(in)    :: geoblock   !> for the slab thickness in 2D
-    integer  :: i, j, k, i0, j0, ii, jj, in, jn, nxe, nye, nze
+    integer  :: i, j, k, i0, j0, ii, jj, in, jn, kn, nxe, nye, nze
     real(R8) :: vol, Tgeo, geoArea, v(3,4), d1(3), d2(3)
-    real(R8) :: rad, num, den, cSlab, fi, fj
+    real(R8) :: rad, num, den, cSlab, fi, fj, fk
 
     nxe = self%Nx + 1
     nye = self%Ny + 1
@@ -1045,27 +1045,35 @@ contains
     !  correct if the ghost-node placement rule changes (today it is a reflection through the
     !  face centre, which equals extrapolation only on a uniform mesh).
     !
-    !  Scope: 2D only. The 3D branch above has the SAME straddling and needs the same clip in
-    !  i/j/k -- deliberately not done here because there is no 3D case in the suite to prove
-    !  it against; see the note in the dual-volume memory entry.
-    if (is2D) then
-      do j = 1, nye; do i = 1, nxe
-        fi = 1._R8; fj = 1._R8
-        jn = min(max(j-1, 1), geoblock%Ny)
-        in = min(max(i-1, 1), geoblock%Nx)
-        if (i == 1)   fi = insideFrac(self%node(:,1,jn,1), self%node(:,0,jn,1),          &
-                                      geoblock%face(1)%cell(jn,1)%center)
-        if (i == nxe) fi = insideFrac(self%node(:,self%Nx,jn,1),                          &
-                                      self%node(:,self%Nx+1,jn,1),                        &
-                                      geoblock%face(2)%cell(jn,1)%center)
-        if (j == 1)   fj = insideFrac(self%node(:,in,1,1), self%node(:,in,0,1),            &
-                                      geoblock%face(3)%cell(in,1)%center)
-        if (j == nye) fj = insideFrac(self%node(:,in,self%Ny,1),                           &
-                                      self%node(:,in,self%Ny+1,1),                         &
-                                      geoblock%face(4)%cell(in,1)%center)
-        self%cellVol(i, j, 1) = self%cellVol(i, j, 1) * fi * fj
-      enddo; enddo
-    endif
+    !  Applied in every direction the mesh HAS: i/j always, k only in 3D (mesh2D carries a
+    !  single dual layer in k, which is the slab and is not a straddling direction). The
+    !  invariant this enforces is exact tiling -- the clipped dual cells sum to the domain
+    !  volume, where the unclipped ones overshoot it by (Nx+1)(Ny+1)(Nz+1)/(Nx*Ny*Nz).
+    !  test_dual_clip pins that in both 2D and 3D.
+    do k = 1, nze; do j = 1, nye; do i = 1, nxe
+      fi = 1._R8; fj = 1._R8; fk = 1._R8
+      in = min(max(i-1, 1), geoblock%Nx)
+      jn = min(max(j-1, 1), geoblock%Ny)
+      kn = merge(1, min(max(k-1, 1), geoblock%Nz), is2D)
+      if (i == 1)   fi = insideFrac(self%node(:,1,jn,kn), self%node(:,0,jn,kn),          &
+                                    geoblock%face(1)%cell(jn,kn)%center)
+      if (i == nxe) fi = insideFrac(self%node(:,self%Nx,jn,kn),                          &
+                                    self%node(:,self%Nx+1,jn,kn),                        &
+                                    geoblock%face(2)%cell(jn,kn)%center)
+      if (j == 1)   fj = insideFrac(self%node(:,in,1,kn), self%node(:,in,0,kn),          &
+                                    geoblock%face(3)%cell(in,kn)%center)
+      if (j == nye) fj = insideFrac(self%node(:,in,self%Ny,kn),                          &
+                                    self%node(:,in,self%Ny+1,kn),                        &
+                                    geoblock%face(4)%cell(in,kn)%center)
+      if (.not. is2D) then
+        if (k == 1)   fk = insideFrac(self%node(:,in,jn,1), self%node(:,in,jn,0),        &
+                                      geoblock%face(5)%cell(in,jn)%center)
+        if (k == nze) fk = insideFrac(self%node(:,in,jn,self%Nz),                        &
+                                      self%node(:,in,jn,self%Nz+1),                      &
+                                      geoblock%face(6)%cell(in,jn)%center)
+      endif
+      self%cellVol(i, j, k) = self%cellVol(i, j, k) * fi * fj * fk
+    enddo; enddo; enddo
 
   end subroutine precomputeDualMetric
 

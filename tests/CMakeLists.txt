@@ -114,6 +114,12 @@ igloo_unit_test(test_axis_dispatch      infrastructure/axis_dispatch      "unit;
 # radially thin -- so grazeOffset caps it at a fraction of the cell. Pins the invariant across
 # 12 decades of cell thickness.
 igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;infrastructure;bc;t1")
+# the ord2 dual must TILE the domain: its boundary cells straddle the boundary face, so an
+# unclipped one dilutes its deposited density by the outside fraction. Pins sum(dual cellVol)
+# == domain volume plus the per-cell 1/2, 1/4, 1/8 factors. The 3D branch had no clip at all
+# and NO e2e case reaches it -- every case in the suite is mesh2D -- so this is its only
+# coverage; the 2D cases in it are the regression half.
+igloo_unit_test(test_dual_clip          infrastructure/dual_clip          "unit;infrastructure;euler;t1")
 
 # ---------- two-sweep repeatability harness -----------------------------------
 # Drives one pinned population through solve() TWICE. Every other case in the suite is
