@@ -103,56 +103,8 @@ contains
                           kmin = 1; kmax = 1
         else;             allocate(sol%node(3,0:oBlk%Ni+1,0:oBlk%Nj+1,0:oBlk%Nk+1))
                           kmin = 0; kmax = oBlk%Nk+1; endif
-        !--- Interior nodes: cell centers (bijection sol%node <-> gas data) ---
-        do k = 1, sol%Nz; do j = 1, sol%Ny; do i = 1, sol%Nx
-          sol%node(:,i,j,k) = blk%center(:,i,j,k)
-        enddo; enddo; enddo
-        !--- Face ghosts: reflection through boundary face center ---
-        !    ghost = 2 * face_center - interior_center
-        do k = 1, sol%Nz; do j = 1, sol%Ny
-          sol%node(:,0,j,k)        = 2.0_R8*blk%face(1)%cell(j,k)%center - blk%center(:,1,j,k)
-          sol%node(:,sol%Nx+1,j,k) = 2.0_R8*blk%face(2)%cell(j,k)%center - blk%center(:,sol%Nx,j,k)
-        enddo; enddo
-        do k = 1, sol%Nz; do i = 1, sol%Nx
-          sol%node(:,i,0,k)        = 2.0_R8*blk%face(3)%cell(i,k)%center - blk%center(:,i,1,k)
-          sol%node(:,i,sol%Ny+1,k) = 2.0_R8*blk%face(4)%cell(i,k)%center - blk%center(:,i,sol%Ny,k)
-        enddo; enddo
-        if (.not.mesh2D) then
-          do j = 1, sol%Ny; do i = 1, sol%Nx
-            sol%node(:,i,j,0)        = 2.0_R8*blk%face(5)%cell(i,j)%center - blk%center(:,i,j,1)
-            sol%node(:,i,j,sol%Nz+1) = 2.0_R8*blk%face(6)%cell(i,j)%center - blk%center(:,i,j,sol%Nz)
-          enddo; enddo
-        endif
-        !--- Edge ghosts: cascading constant-gradient extrapolation ---
-        do k = 1, sol%Nz
-          sol%node(:,0,       0,       k) = 2.0_R8*sol%node(:,0,       1,     k) - sol%node(:,0,       2,       k)
-          sol%node(:,sol%Nx+1,0,       k) = 2.0_R8*sol%node(:,sol%Nx+1,1,     k) - sol%node(:,sol%Nx+1,2,       k)
-          sol%node(:,0,       sol%Ny+1,k) = 2.0_R8*sol%node(:,0,       sol%Ny,k) - sol%node(:,0,       sol%Ny-1,k)
-          sol%node(:,sol%Nx+1,sol%Ny+1,k) = 2.0_R8*sol%node(:,sol%Nx+1,sol%Ny,k) - sol%node(:,sol%Nx+1,sol%Ny-1,k)
-        enddo
-        if (.not.mesh2D) then
-          do j = 1, sol%Ny
-            sol%node(:,0,       j,0       ) = 2.0_R8*sol%node(:,0,       j,1     ) - sol%node(:,0,       j,2       )
-            sol%node(:,sol%Nx+1,j,0       ) = 2.0_R8*sol%node(:,sol%Nx+1,j,1     ) - sol%node(:,sol%Nx+1,j,2       )
-            sol%node(:,0,       j,sol%Nz+1) = 2.0_R8*sol%node(:,0,       j,sol%Nz) - sol%node(:,0,       j,sol%Nz-1)
-            sol%node(:,sol%Nx+1,j,sol%Nz+1) = 2.0_R8*sol%node(:,sol%Nx+1,j,sol%Nz) - sol%node(:,sol%Nx+1,j,sol%Nz-1)
-          enddo
-          do i = 1, sol%Nx
-            sol%node(:,i,0,       0       ) = 2.0_R8*sol%node(:,i,0,       1     ) - sol%node(:,i,0,       2       )
-            sol%node(:,i,sol%Ny+1,0       ) = 2.0_R8*sol%node(:,i,sol%Ny+1,1     ) - sol%node(:,i,sol%Ny+1,2       )
-            sol%node(:,i,0,       sol%Nz+1) = 2.0_R8*sol%node(:,i,0,       sol%Nz) - sol%node(:,i,0,       sol%Nz-1)
-            sol%node(:,i,sol%Ny+1,sol%Nz+1) = 2.0_R8*sol%node(:,i,sol%Ny+1,sol%Nz) - sol%node(:,i,sol%Ny+1,sol%Nz-1)
-          enddo
-          !--- Corner ghosts: cascading from edge ghosts ---
-          sol%node(:,0,       0,       0       ) = 2.0_R8*sol%node(:,0,       0,       1     ) - sol%node(:,0,       0,       2       )
-          sol%node(:,sol%Nx+1,0,       0       ) = 2.0_R8*sol%node(:,sol%Nx+1,0,       1     ) - sol%node(:,sol%Nx+1,0,       2       )
-          sol%node(:,0,       sol%Ny+1,0       ) = 2.0_R8*sol%node(:,0,       sol%Ny+1,1     ) - sol%node(:,0,       sol%Ny+1,2       )
-          sol%node(:,sol%Nx+1,sol%Ny+1,0       ) = 2.0_R8*sol%node(:,sol%Nx+1,sol%Ny+1,1     ) - sol%node(:,sol%Nx+1,sol%Ny+1,2       )
-          sol%node(:,0,       0,       sol%Nz+1) = 2.0_R8*sol%node(:,0,       0,       sol%Nz) - sol%node(:,0,       0,       sol%Nz-1)
-          sol%node(:,sol%Nx+1,0,       sol%Nz+1) = 2.0_R8*sol%node(:,sol%Nx+1,0,       sol%Nz) - sol%node(:,sol%Nx+1,0,       sol%Nz-1)
-          sol%node(:,0,       sol%Ny+1,sol%Nz+1) = 2.0_R8*sol%node(:,0,       sol%Ny+1,sol%Nz) - sol%node(:,0,       sol%Ny+1,sol%Nz-1)
-          sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz+1) = 2.0_R8*sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz) - sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz-1)
-        endif
+        !--- Dual node cloud: interior = geo cell centres, ghosts by reflection ---
+        call fill_dual_nodes(sol, blk, mesh2D)
         !--- Compute isDeformed flag per cell ---
         call computeSkewFlag(sol, mesh2D)
         !--- Dual-cell volumes for eulerian density normalization (computeEulField) ---
@@ -314,6 +266,86 @@ contains
 
   end subroutine import_gas
 
+
+
+  !> Place the ord2 dual node cloud: interior nodes are the geo CELL CENTRES (the bijection
+  !  sol%node <-> gas data), and the surrounding ring is ghosts. precomputeDualMetric turns
+  !  these into the dual cell volumes, so an unset ghost is not a missing decoration -- it is
+  !  a garbage volume that computeEulField then divides a parcel's mass by.
+  !
+  !  ⚠ The 2D/3D split is NOT "everything after the face ghosts is 3D". Read the three groups:
+  !
+  !    faces      i and j in both modes; k only in 3D (mesh2D has a single dual layer in k)
+  !    ij-corners **BOTH MODES** -- the 2D dual quad of the corner cell has node(0,0) as a
+  !               vertex, so skipping these in 2D leaves its area garbage. This is the one
+  !               that reads like 3D-only company and is not; test_dual_clip reproduced
+  !               exactly that failure in its own fixture before this was made explicit.
+  !    k-edges    3D only, together with the eight true corners
+  !
+  !  Every statement below is unchanged from the inline version this replaced, in the same
+  !  order, so the node cloud is bit-identical.
+  subroutine fill_dual_nodes(sol, blk, is2D)
+    use IGLOO_data_block, only: obj_block, obj_flowblock
+    implicit none
+    type(obj_flowblock), intent(inout) :: sol  !> dual (gas) block -- node ring to fill
+    type(obj_block),     intent(in)    :: blk  !> geo block -- centres and face centres
+    logical,             intent(in)    :: is2D
+    integer :: i, j, k
+    !--- Interior nodes: cell centers (bijection sol%node <-> gas data) ---
+    do k = 1, sol%Nz; do j = 1, sol%Ny; do i = 1, sol%Nx
+      sol%node(:,i,j,k) = blk%center(:,i,j,k)
+    enddo; enddo; enddo
+    !--- Face ghosts: reflection through boundary face center ---
+    !    ghost = 2 * face_center - interior_center
+    do k = 1, sol%Nz; do j = 1, sol%Ny
+      sol%node(:,0,j,k)        = 2.0_R8*blk%face(1)%cell(j,k)%center - blk%center(:,1,j,k)
+      sol%node(:,sol%Nx+1,j,k) = 2.0_R8*blk%face(2)%cell(j,k)%center - blk%center(:,sol%Nx,j,k)
+    enddo; enddo
+    do k = 1, sol%Nz; do i = 1, sol%Nx
+      sol%node(:,i,0,k)        = 2.0_R8*blk%face(3)%cell(i,k)%center - blk%center(:,i,1,k)
+      sol%node(:,i,sol%Ny+1,k) = 2.0_R8*blk%face(4)%cell(i,k)%center - blk%center(:,i,sol%Ny,k)
+    enddo; enddo
+    if (.not.is2D) then
+      do j = 1, sol%Ny; do i = 1, sol%Nx
+        sol%node(:,i,j,0)        = 2.0_R8*blk%face(5)%cell(i,j)%center - blk%center(:,i,j,1)
+        sol%node(:,i,j,sol%Nz+1) = 2.0_R8*blk%face(6)%cell(i,j)%center - blk%center(:,i,j,sol%Nz)
+      enddo; enddo
+    endif
+    !--- i/j CORNER ghosts, cascading constant-gradient extrapolation: BOTH MODES ---
+    !    Not 3D-only, despite sitting next to the 3D blocks: in 2D the corner dual cell's
+    !    quad has node(0,0) as a vertex, so skipping this leaves its AREA undefined.
+    !    `do k = 1, sol%Nz` covers both modes on its own -- mesh2D has sol%Nz == 1.
+    do k = 1, sol%Nz
+      sol%node(:,0,       0,       k) = 2.0_R8*sol%node(:,0,       1,     k) - sol%node(:,0,       2,       k)
+      sol%node(:,sol%Nx+1,0,       k) = 2.0_R8*sol%node(:,sol%Nx+1,1,     k) - sol%node(:,sol%Nx+1,2,       k)
+      sol%node(:,0,       sol%Ny+1,k) = 2.0_R8*sol%node(:,0,       sol%Ny,k) - sol%node(:,0,       sol%Ny-1,k)
+      sol%node(:,sol%Nx+1,sol%Ny+1,k) = 2.0_R8*sol%node(:,sol%Nx+1,sol%Ny,k) - sol%node(:,sol%Nx+1,sol%Ny-1,k)
+    enddo
+    !--- k edges and the eight true corners: 3D only ---
+    if (.not.is2D) then
+      do j = 1, sol%Ny
+        sol%node(:,0,       j,0       ) = 2.0_R8*sol%node(:,0,       j,1     ) - sol%node(:,0,       j,2       )
+        sol%node(:,sol%Nx+1,j,0       ) = 2.0_R8*sol%node(:,sol%Nx+1,j,1     ) - sol%node(:,sol%Nx+1,j,2       )
+        sol%node(:,0,       j,sol%Nz+1) = 2.0_R8*sol%node(:,0,       j,sol%Nz) - sol%node(:,0,       j,sol%Nz-1)
+        sol%node(:,sol%Nx+1,j,sol%Nz+1) = 2.0_R8*sol%node(:,sol%Nx+1,j,sol%Nz) - sol%node(:,sol%Nx+1,j,sol%Nz-1)
+      enddo
+      do i = 1, sol%Nx
+        sol%node(:,i,0,       0       ) = 2.0_R8*sol%node(:,i,0,       1     ) - sol%node(:,i,0,       2       )
+        sol%node(:,i,sol%Ny+1,0       ) = 2.0_R8*sol%node(:,i,sol%Ny+1,1     ) - sol%node(:,i,sol%Ny+1,2       )
+        sol%node(:,i,0,       sol%Nz+1) = 2.0_R8*sol%node(:,i,0,       sol%Nz) - sol%node(:,i,0,       sol%Nz-1)
+        sol%node(:,i,sol%Ny+1,sol%Nz+1) = 2.0_R8*sol%node(:,i,sol%Ny+1,sol%Nz) - sol%node(:,i,sol%Ny+1,sol%Nz-1)
+      enddo
+      !--- Corner ghosts: cascading from edge ghosts ---
+      sol%node(:,0,       0,       0       ) = 2.0_R8*sol%node(:,0,       0,       1     ) - sol%node(:,0,       0,       2       )
+      sol%node(:,sol%Nx+1,0,       0       ) = 2.0_R8*sol%node(:,sol%Nx+1,0,       1     ) - sol%node(:,sol%Nx+1,0,       2       )
+      sol%node(:,0,       sol%Ny+1,0       ) = 2.0_R8*sol%node(:,0,       sol%Ny+1,1     ) - sol%node(:,0,       sol%Ny+1,2       )
+      sol%node(:,sol%Nx+1,sol%Ny+1,0       ) = 2.0_R8*sol%node(:,sol%Nx+1,sol%Ny+1,1     ) - sol%node(:,sol%Nx+1,sol%Ny+1,2       )
+      sol%node(:,0,       0,       sol%Nz+1) = 2.0_R8*sol%node(:,0,       0,       sol%Nz) - sol%node(:,0,       0,       sol%Nz-1)
+      sol%node(:,sol%Nx+1,0,       sol%Nz+1) = 2.0_R8*sol%node(:,sol%Nx+1,0,       sol%Nz) - sol%node(:,sol%Nx+1,0,       sol%Nz-1)
+      sol%node(:,0,       sol%Ny+1,sol%Nz+1) = 2.0_R8*sol%node(:,0,       sol%Ny+1,sol%Nz) - sol%node(:,0,       sol%Ny+1,sol%Nz-1)
+      sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz+1) = 2.0_R8*sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz) - sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz-1)
+    endif
+  end subroutine fill_dual_nodes
 
   subroutine computeSkewFlag(sol, is2D)
     use IGLOO_data_block, only: obj_flowblock, obj_block

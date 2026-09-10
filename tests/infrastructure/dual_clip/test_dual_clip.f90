@@ -169,9 +169,10 @@ contains
 
     !> Edge/corner ghosts by the same cascading extrapolation as allocation.f90:127-155.
     !  computeVolume (3D) and getVertices (2D) read them for the boundary dual cells, so they
-    !  must exist. ⚠ The i/j corner block runs in BOTH modes -- allocation.f90 puts it outside
-    !  the `.not.mesh2D` guard. Omitting it in 2D leaves node(0,0) undefined and the boundary
-    !  quad area is then garbage; this test caught exactly that in its own fixture.
+    !  must exist. ⚠ The i/j corner block runs in BOTH modes -- see `fill_dual_nodes` in
+    !  allocation.f90, whose header spells the three groups out. Omitting it in 2D leaves
+    !  node(0,0) undefined and the boundary quad area is then garbage; this test caught
+    !  exactly that in its own fixture, which is why that header now exists.
     subroutine fillEdges(dl, is2D)
         type(obj_block), intent(inout) :: dl
         logical,         intent(in)    :: is2D
