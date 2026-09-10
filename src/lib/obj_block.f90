@@ -972,9 +972,9 @@ contains
     class(obj_block), intent(inout) :: self      !> dual (gas) block
     logical,          intent(in)    :: is2D
     class(obj_block), intent(in)    :: geoblock   !> for the slab thickness in 2D
-    integer  :: i, j, k, i0, j0, ii, jj, nxe, nye, nze
+    integer  :: i, j, k, i0, j0, ii, jj, in, jn, nxe, nye, nze
     real(R8) :: vol, Tgeo, geoArea, v(3,4), d1(3), d2(3)
-    real(R8) :: rad, num, den, cSlab
+    real(R8) :: rad, num, den, cSlab, fi, fj
 
     nxe = self%Nx + 1
     nye = self%Ny + 1
@@ -1031,7 +1031,61 @@ contains
       enddo; enddo; enddo
     endif
 
+    !> --- Clip the boundary dual cells to the domain -------------------------------------
+    !  The dual node ring is the geo CELL CENTRES plus a ghost node placed OUTSIDE each
+    !  boundary (allocation.f90:110-118). So the first/last dual cell in every direction
+    !  STRADDLES the boundary face: part of its volume lies outside the domain, where no
+    !  parcel can ever deposit. computeEulField divides the deposited mass by this volume, so
+    !  an unclipped boundary cell reports a density diluted by exactly the outside fraction,
+    !  and finalizeEUL then averages that into the adjacent geo cell. Measured on the JPL
+    !  nozzle: the boundary geo cells carried only 0.74 of the condensed mass flux -- at the
+    !  inlet, where that flux is IMPOSED and must be reproduced exactly.
+    !
+    !  The inside fraction is MEASURED from the mesh, never assumed to be 1/2, so this stays
+    !  correct if the ghost-node placement rule changes (today it is a reflection through the
+    !  face centre, which equals extrapolation only on a uniform mesh).
+    !
+    !  Scope: 2D only. The 3D branch above has the SAME straddling and needs the same clip in
+    !  i/j/k -- deliberately not done here because there is no 3D case in the suite to prove
+    !  it against; see the note in the dual-volume memory entry.
+    if (is2D) then
+      do j = 1, nye; do i = 1, nxe
+        fi = 1._R8; fj = 1._R8
+        jn = min(max(j-1, 1), geoblock%Ny)
+        in = min(max(i-1, 1), geoblock%Nx)
+        if (i == 1)   fi = insideFrac(self%node(:,1,jn,1), self%node(:,0,jn,1),          &
+                                      geoblock%face(1)%cell(jn,1)%center)
+        if (i == nxe) fi = insideFrac(self%node(:,self%Nx,jn,1),                          &
+                                      self%node(:,self%Nx+1,jn,1),                        &
+                                      geoblock%face(2)%cell(jn,1)%center)
+        if (j == 1)   fj = insideFrac(self%node(:,in,1,1), self%node(:,in,0,1),            &
+                                      geoblock%face(3)%cell(in,1)%center)
+        if (j == nye) fj = insideFrac(self%node(:,in,self%Ny,1),                           &
+                                      self%node(:,in,self%Ny+1,1),                         &
+                                      geoblock%face(4)%cell(in,1)%center)
+        self%cellVol(i, j, 1) = self%cellVol(i, j, 1) * fi * fj
+      enddo; enddo
+    endif
+
   end subroutine precomputeDualMetric
+
+  !> Fraction of a boundary dual cell's extent that lies INSIDE the domain, along one
+  !  direction: the boundary face sits somewhere between the first interior dual node and the
+  !  ghost node, and only the interior part can receive deposition. Measured, not assumed --
+  !  it is exactly 1/2 for a reflected ghost, something else for an extrapolated one.
+  !  Clamped to (0,1]: a degenerate or mis-placed ghost must not silently zero a volume.
+  pure function insideFrac(nodeIn, nodeGhost, faceCentre) result(f)
+    implicit none
+    real(R8), intent(in) :: nodeIn(3), nodeGhost(3), faceCentre(3)
+    real(R8)             :: f, span
+    span = norm2( nodeIn - nodeGhost )
+    if (span <= tiny(1._R8)) then
+      f = 1._R8
+    else
+      f = norm2( nodeIn - faceCentre ) / span
+      f = max( min(f, 1._R8), 1.e-3_R8 )
+    endif
+  end function insideFrac
 
   !> Perpendicular distance of a point from the symmetry axis (through the origin, along
   !  axisDir). Used for the axisymmetric dual-cell slab thickness.
