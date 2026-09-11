@@ -201,16 +201,38 @@ def check_source():
 
 
 def check_euler():
-    """Gate 3: euler field parses and is finite; density/np non-negative."""
+    """Gate 3: euler field parses and is finite; density/np non-negative.
+
+    The non-negativity half of that sentence used to be documented but not coded --
+    every value was lumped into one list and only tested for NaN/Inf. It cannot be
+    restored as a blanket `all >= 0`: this case runs g_y = -200, so v_p is
+    legitimately negative over the whole field. So the BLOCK layout is unpacked
+    per-variable (3 NODAL coords, then 6 CELLCENTERED) and the bound is applied to
+    rho_p and n_p only, which are pure += accumulations of positive quantities in
+    computeEulField and therefore cannot go negative for any physical reason.
+    """
     try:
         lines = open(EUL).read().splitlines()
     except FileNotFoundError:
         print(f"[FAIL] {EUL} not found -- euler output off?")
         return 1
+    try:
+        zi = next(i for i, l in enumerate(lines)
+                  if l.strip().lower().startswith("zone"))
+    except StopIteration:
+        print(f"[FAIL] {EUL}: no ZONE header")
+        return 1
+    hdr = lines[zi]
+    try:
+        I = int(re.search(r"I=\s*(\d+)", hdr).group(1))
+        J = int(re.search(r"J=\s*(\d+)", hdr).group(1))
+        K = int(re.search(r"K=\s*(\d+)", hdr).group(1))
+    except AttributeError:
+        print(f"[FAIL] {EUL}: cannot read I/J/K from ZONE header")
+        return 1
+
     vals = []
-    for l in lines:
-        if any(k in l for k in ("VARIABLE", "ZONE", "variables", "Zone", '"')):
-            continue
+    for l in lines[zi + 1:]:
         for tok in l.replace(",", " ").split():
             try:
                 vals.append(float(tok))
@@ -223,7 +245,28 @@ def check_euler():
     if any(math.isnan(v) or math.isinf(v) for v in vals):
         print("[FAIL] euler.tec contains NaN/Inf")
         return 1
-    print(f"euler field: {len(vals)} values, all finite  [PASS]")
+
+    nn = I * J * K
+    nc = (I - 1) * (J - 1) * max(K - 1, 1)
+    if len(vals) != 3 * nn + 6 * nc:
+        print(f"[FAIL] euler.tec: {len(vals)} values, expected {3*nn + 6*nc} "
+              f"for I={I} J={J} K={K}")
+        return 1
+    off = 3 * nn
+    rho = vals[off:off + nc]
+    npd = vals[off + 5 * nc:off + 6 * nc]
+
+    neg_rho = [v for v in rho if v < 0.0]
+    neg_np = [v for v in npd if v < 0.0]
+    if neg_rho or neg_np:
+        print(f"[FAIL] euler.tec: {len(neg_rho)} negative rho_p "
+              f"(min {min(neg_rho) if neg_rho else 0:.3e}) and {len(neg_np)} "
+              f"negative n_p (min {min(neg_np) if neg_np else 0:.3e}) -- both are "
+              f"pure += accumulations and cannot be negative")
+        return 1
+    ndep = sum(1 for v in rho if v > 0.0)
+    print(f"euler field: {len(vals)} values, all finite; {ndep} depositing cells, "
+          f"rho_p/n_p >= 0  [PASS]")
     return 0
 
 
