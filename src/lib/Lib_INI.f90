@@ -584,7 +584,20 @@ contains
               vel0(i,:) = [x(i), y(i), z(i)]
             enddo
           else
-            error stop ( '[ERROR] up, vp, wp velocity components have diffent sizes' )
+            !> Name the cause: by far the commonest way to land here is FORMATTING, not a
+            !  genuinely ragged input. `count_values` counts the gaps, so aligning columns
+            !  with two or more spaces ("vp = -1.0   -3.3") reports more values than are
+            !  there and this test fails. Measured on axis-200: one space parses correctly,
+            !  two or more error-stop here. The old message named neither the offending
+            !  option nor the sizes, so the natural reading was "my arrays disagree".
+            write(*,'(a)')    ' [ERROR] up, vp, wp velocity components have different sizes.'
+            write(*,'(a,i0,a,i0,a,i0,a,i0)')                                              &
+                 '         up = ', xSize, ',  vp = ', ySize, ',  wp = ', zSize,           &
+                 '   against particle count ', maxSize
+            write(*,'(a)')    '         Each must have that many values, or exactly 1, or be absent.'
+            write(*,'(a)')    '         CHECK THE SPACING FIRST: separate values by a SINGLE space.'
+            write(*,'(a)')    '         Two or more spaces are counted as extra values.'
+            error stop 'IGLOO: up/vp/wp size mismatch in [IGLOO-BC]'
           endif
         endif
       endif

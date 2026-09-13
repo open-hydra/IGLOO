@@ -58,6 +58,11 @@ module IGLOO_data_block
     real(R8), dimension(:,:,:),   allocatable :: mit, mil
     real(R8), dimension(:,:,:),   allocatable :: kl, gam, R
     logical,  dimension(:,:,:),   allocatable :: isDeformed
+    !> Dual ghost nodes that `fill_dual_nodes` projected ONTO the symmetry axis. Set by the
+    !  same code that moves them, and read by fillGhostGradient, so the node POSITION and the
+    !  node VALUE can never disagree about where that node is -- which is exactly the defect
+    !  this pairing was introduced to close (a node sitting at r = 0 carrying v_r /= 0).
+    logical,  dimension(:,:,:),   allocatable :: nodeOnAxis
   contains
     private
     procedure, pass(self), public :: allocate
@@ -1192,6 +1197,39 @@ contains
       enddo; enddo
     endif
 
+    !--- Axis symmetry override -----------------------------------------------------------
+    !  A ghost that fill_dual_nodes projected ONTO the symmetry axis sits at r = 0, and the
+    !  constant-gradient rule above is the wrong law for it: `2*q1 - q2` is the value for a
+    !  ghost one spacing BEYOND node 1, i.e. for the mirror point at r = -r_1, not for r = 0.
+    !  Applying it to a node that has been moved to the axis put v_r = +6.7381e-01 m/s ON the
+    !  axis on axis-200 (2*(-1.9025) - (-4.4789)), pointing OUTWARD, where the radial velocity
+    !  is odd in r and must be identically zero.
+    !
+    !  The symmetry values are the only self-consistent ones at r = 0: scalars are even, so
+    !  their normal gradient vanishes and the ghost takes the interior value (2nd order); the
+    !  velocity keeps only its axis-PARALLEL part, because the radial and azimuthal components
+    !  are odd and vanish on the axis.
+    !
+    !  Runs before the edge/corner cascade below, so those inherit the corrected face ghosts.
+    !  `mit` is deliberately not touched here: fillGhostGradient does not fill it on any face
+    !  either, and silently giving it a value on one ring only would be worse than the gap.
+    if (allocated(self%nodeOnAxis)) then
+      do k = 1, Nz; do j = 1, Ny
+        if (self%nodeOnAxis(0,   j,k)) call axisGhost(self, 0,   j,k,  1, j,k)
+        if (self%nodeOnAxis(Nx+1,j,k)) call axisGhost(self, Nx+1,j,k, Nx, j,k)
+      enddo; enddo
+      do k = 1, Nz; do i = 1, Nx
+        if (self%nodeOnAxis(i,0,   k)) call axisGhost(self, i,0,   k, i, 1,k)
+        if (self%nodeOnAxis(i,Ny+1,k)) call axisGhost(self, i,Ny+1,k, i,Ny,k)
+      enddo; enddo
+      if (is3D) then
+        do j = 1, Ny; do i = 1, Nx
+          if (self%nodeOnAxis(i,j,0   )) call axisGhost(self, i,j,0,    i,j, 1)
+          if (self%nodeOnAxis(i,j,Nz+1)) call axisGhost(self, i,j,Nz+1, i,j,Nz)
+        enddo; enddo
+      endif
+    endif
+
     !--- Edge ghosts: cascading 1D extrapolation from face ghosts ---
     do k = 1, Nz
       call extrapEdge(self, 0,    0,    k, 0,    1,    k, 0,    2,    k)
@@ -1224,6 +1262,31 @@ contains
     endif
 
   end subroutine fillGhostGradient
+
+
+  !> Symmetry-axis ghost values for a node sitting AT r = 0 (indices g*), taken from its
+  !  interior partner (indices i*). Scalars are even in r, so the ghost takes the interior
+  !  value; the velocity keeps only its axis-parallel component, the radial and azimuthal
+  !  parts being odd and therefore zero on the axis. Frame-agnostic via axisDir, matching
+  !  axisRadius' convention (axis through the origin).
+  subroutine axisGhost(self, gi, gj, gk, ii, ij, ik)
+    use IGLOO_variables, only: axisDir
+    implicit none
+    class(obj_flowblock), intent(inout) :: self
+    integer,              intent(in)    :: gi, gj, gk, ii, ij, ik
+    real(R8) :: v(3)
+
+    self%density    (:, gi,gj,gk) = self%density    (:, ii,ij,ik)
+    self%temperature(   gi,gj,gk) = self%temperature(   ii,ij,ik)
+    self%mil        (   gi,gj,gk) = self%mil        (   ii,ij,ik)
+    self%kl         (   gi,gj,gk) = self%kl         (   ii,ij,ik)
+    self%gam        (   gi,gj,gk) = self%gam        (   ii,ij,ik)
+    self%R          (   gi,gj,gk) = self%R          (   ii,ij,ik)
+
+    v = self%velocity(:, ii,ij,ik)
+    self%velocity(:, gi,gj,gk) = dot_product(v, axisDir)*axisDir
+
+  end subroutine axisGhost
 
 
   subroutine extrapEdge(sol, ig,jg,kg, i1,j1,k1, i2,j2,k2)

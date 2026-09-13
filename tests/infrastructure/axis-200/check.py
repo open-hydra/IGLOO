@@ -19,15 +19,24 @@ The gate asserts, in order of directness:
 
   1. no give-up message in run_out.txt -- the trap's signature is
      `no net progress ==> marking gone`;
-  2. COVERAGE: the near-axis particle really does reach the axis
-     (min radius over its trajectory < R_NEAR). Without this the case could pass
-     vacuously if a future flow/mesh change stopped carrying it inward, and the
-     gate would silently stop gating. Note the trajectory file prints y and z at
-     F12.6, so this radius has a resolution floor of ~5e-7 m and reads as exactly
-     0 once the particle is inside that -- it answers "did it reach the axis",
-     not "how close". Measured 0.0 both before and after the fix, against
-     R_NEAR = 1e-5: the margin is set by the print format, not by grazeStandoff,
-     so it does not track that constant if it is ever retuned;
+  2. COVERAGE: the near-axis particle really does reach the axis (min radius over
+     its trajectory < R_NEAR). Without this the case could pass vacuously if a future
+     flow/mesh change stopped carrying it inward, and the gate would silently stop
+     gating. The trajectory file prints y and z at F12.6, so this radius has a
+     resolution floor of ~5e-7 m and reads as exactly 0 once the particle is inside
+     that -- it answers "did it reach the axis", not "how close". Measured 0.0, against
+     R_NEAR = 1e-5: the margin is set by the print format, not by grazeStandoff, so it
+     does not track that constant if it is ever retuned.
+     ⚠ This assertion is load-bearing, and it is why input.ini gives ID 1 an INWARD
+     `vp`. With the axis dual ghost corrected (2026-09-11) the gas radial velocity
+     vanishes ON the axis, as it must, so an equilibrium parcel only approaches
+     asymptotically -- measured r_min ~ 0.24 * y0 at EVERY injection radius tried --
+     and never touches the bcdef-200 face at all. Measured axis-face reflection events:
+     25 before that fix (driven by the defect's own spurious v_r at r = 0), 0 after it
+     without `vp`, 1 after it with `vp` -- one encounter, after which the graze branch
+     projects the parcel and it slides along the axis instead of bouncing. Stable at 1
+     across vp = -0.5 .. -5.0. Remove `vp` and this case passes every assertion below
+     while exercising none of the axis path;
   3. both particles exit through the outlet (x > X_EXIT);
   4. trajectory rows finite, T and dp physical;
   5. the EULERIAN projection (bug O14) -- see below.
@@ -57,23 +66,28 @@ quadrature is good to ~4e-4 and the ord1 deposit conserves mass essentially exac
 Three assertions, each with its measured provenance:
 
   E1 RETAIN -- total mass retention, sum(rho_p*V) / sum(mdot*t).
-     MEASURED 0.931625, and it is NOT 1.0 by design-of-the-code, not by accident:
-     finalizeEUL's ord2 dual->geo reduction averages the INTENSIVE density
-     (accDens/sumVol, obj_block.f90), which does not preserve the integral, and
-     loses 6.8% of the deposited mass on this case. Mollification is NOT the cause
-     -- measured mass-invariant to the last bit (`mollify = off` moves the nonzero
-     cell count 6213 -> 685 and leaves sum(rho_p*V) bit-identical). This number is
-     PINNED, not derived: it is the projection's mass behaviour, and any change to
-     it should be seen and consciously re-baselined rather than absorbed.
-     Unclipped dual (b4fd7d0 reverted) measures 0.896683 -> caught with 7x margin.
+     MEASURED 1.000787, and it is ~1 BY PHYSICS: the projection conserves the
+     deposited mass. The residual is the ORACLE's residence quadrature, not solver
+     error -- cross-checked at `gas-order = 1`, where no dual->geo remap runs at all
+     and the same audit reads 0.99964.
+     ⚠ This read 0.931625 until 2026-09-11. That was NOT a discretization artifact to
+     be pinned, which is what an earlier version of this gate assumed and documented:
+     it was the axis ghost defect below, and the 6.8% was real lost mass.
+     Detects: the axis-ghost regression (0.931625, 69x outside the band).
+     Does NOT detect: removal of the boundary dual clip, measured 1.000228 with the
+     axis ghost correct -- INSIDE the band. Said plainly because the earlier version
+     of this file claimed the opposite. The clip has its own direct unit gate in
+     tests/infrastructure/dual_clip (the tiling invariant, 2D and 3D, proven RED);
+     this case is not, and should not be treated as, the clip's detector.
 
   E2 AXIS_SHARE -- the near-axis band's share, sum(rho_p*V | y < Y_BAND) divided by
-     the axis particle's own mdot*t. This is the SHARP detector: the axis rider's
-     deposit enters entirely through the axis dual ring, which is exactly what the
-     clip halves. MEASURED 0.499505 fixed vs 0.249286 unclipped -- a ratio of
-     2.0037, caught with 12x margin. Like E1 this is a pinned measured share, not a
-     conservation law: mollification spreads the axis deposit past Y_BAND, so the
-     value is a discretization artifact whose STABILITY is what is being gated.
+     the axis particle's own mdot*t. MEASURED 0.999005, and this one is the sharp
+     physical statement: the axis rider deposits its entire mass through the axis
+     dual ring, so this ratio IS that parcel's mass conservation. It read 0.499505
+     before the axis-ghost fix -- exactly half, because the dual cell straddling the
+     axis had twice the radial extent of the physical region.
+     Detects: the axis-ghost regression (0.499505, 500x outside), and the clip
+     removal too (0.997116, 1.9x outside -- thin, and E1 misses that case entirely).
 
   E3 per-drop mass -- rho_p/n_p must equal rho_liq*(pi/6)*dp^3 in every depositing
      cell. This one IS exact physics and carries no pinned constant: density and
@@ -93,23 +107,25 @@ and configure-generation drift ONLY, which this host cannot measure (ifx only); 
 recorded experience is ~1 ULP on trajectory bytes, which reaches these ratios at ~1e-15.
 Tighten to 1e-5 if a gnu baseline is ever taken.
 
-What that buys in detection, since distance-to-the-known-defect is the wrong measure:
-the clip multiplies the boundary dual volume by fi*fj*fk, and the axis deposit scales as
-the inverse of the ring volume, so E2 catches any error larger than ~0.2% in the axis-ring
-dual volume -- not merely the full 2x halving. That matters because a6cfd2b extended this
-code to 3D, where a clip can fail in one direction while working in the others and move
-the share by far less than a factor of two.
+The axis-ghost defect these two now guard (O15, fixed 2026-09-11 in fill_dual_nodes):
+the dual ghost outside a boundary face is placed by `2*faceCentre - interiorCentre`.
+On the AXIS face the face centre sits at r ~ 1e-8, so that reflection threw the ghost
+to r = -2.81965e-03 -- across the axis. The first dual cell then spanned [-r_c, +r_c]
+instead of [0, r_c], and because axisRadius() is an UNSIGNED distance the wedge slab
+thickness was taken at r_c for a cell whose centroid sits on the axis. insideFrac
+could not see it either: it is a length ratio along the node-to-ghost line and returns
+exactly 0.50000 for any reflected ghost, however illegal the reflection.
 
-Y_BAND = 0.05 is chosen from a measured sweep, not picked: over cuts 0.02/0.05/0.1/0.2/0.3
-the near-axis share reads 0.4555/0.4995/0.589/0.826/1.223 -- there is no plateau, because
-mollification spreads the axis deposit outward, and past y ~ 0.2 the off-axis particle
-starts contributing. 0.05 is where the complementary band closes on ID 2's own mdot*t
-(M_out/m2 = 1.00099). Move it only with a fresh sweep and a re-measured AXIS_SHARE.
+Y_BAND = 0.05 is chosen from a measured sweep, not picked: with the axis ghost correct
+the complementary band closes on ID 2's own mdot*t (M_out/m2 = 1.00107) while the inner
+band closes on ID 1's. Past y ~ 0.2 the off-axis particle starts contributing and the
+split stops meaning anything. Move it only with a fresh sweep and a re-measured
+AXIS_SHARE.
 
-Verified RED before the axis fix (particle 1 discarded at the axis, never reaches
-the outlet) and GREEN after. E1/E2 verified RED against the unclipped dual by
-disabling the clip in `precomputeDualMetric` and rebuilding; E3 stays GREEN there,
-which is the expected behaviour of a volume-free identity and is why it is
+Verified RED before the bcdef-200 axis fix (particle 1 discarded at the axis, never
+reaches the outlet) and GREEN after. E1/E2 verified RED against the axis-ghost defect
+by reverting the fill_dual_nodes repair and rebuilding (0.931625 / 0.499505). E3 stays
+GREEN under both, the expected behaviour of a volume-free identity, which is why it is
 documented as a guard rather than a detector.
 """
 import math
@@ -132,11 +148,11 @@ DP_MAX   = 1.2e-4
 # --- eulerian audit (section 5). All three MEASURED; see the module docstring. ---
 RHO_LIQ     = 2500.0      # [GPB-Phase1] rho in input.ini
 DP_INJ      = 2.0e-5      # [IGLOO-BC] diam in input.ini (constant: no evap/breakup)
-RETAIN      = 0.931625    # E1: measured total mass retention (unclipped: 0.896683)
-RETAIN_TOL  = 1.0e-3      # 35x the 0.034942 defect signal; floor is ZERO (see below)
+RETAIN      = 1.000787    # E1: measured total mass retention. ~1 BY PHYSICS now (see docstring)
+RETAIN_TOL  = 1.0e-3      # 69x the 0.069163 axis-ghost signal; floor is ZERO (see below)
 Y_BAND      = 0.05        # E2: near-axis band; ID 2 sits at y = 0.55
-AXIS_SHARE  = 0.499505    # E2: measured near-axis share (unclipped: 0.249286)
-SHARE_TOL   = 1.0e-3      # 250x the 0.250219 defect signal; catches a 0.2% ring-volume error
+AXIS_SHARE  = 0.999005    # E2: measured near-axis share. ~1 BY PHYSICS now
+SHARE_TOL   = 1.0e-3      # 500x the axis-ghost signal (0.499505)
 MDROP_TOL   = 1.0e-12     # E3: measured worst deviation 9.1e-15 (round-off)
 MIN_DEPOSIT_CELLS = 100   # vacuous-pass guard: measured 6213
 
@@ -257,14 +273,14 @@ def check_euler(traj, mdot):
     if abs(retain - RETAIN) > RETAIN_TOL:
         rc |= fail(f"E1 mass retention {retain:.6f} outside "
                    f"{RETAIN} +- {RETAIN_TOL}. sum(rho_p*V)={m_eul:.6e} kg vs "
-                   f"imposed sum(mdot*t)={m_imposed:.6e} kg. Three things move this, "
-                   f"and they are distinguishable: (a) an UNCLIPPED boundary dual "
-                   f"(b4fd7d0 reverted) measures 0.896683 -- a REGRESSION, fix the code; "
-                   f"(b) if O15 was FIXED -- the dual->geo reduction made conservative "
-                   f"instead of averaging the intensive density -- the correct new value "
-                   f"is ~1.0, NOT a re-measured 0.93, and this gate going red is the "
-                   f"EXPECTED outcome; (c) a mesh or injection change rescales it. "
-                   f"Identify which before re-baselining.")
+                   f"imposed sum(mdot*t)={m_imposed:.6e} kg. This is a CONSERVATION "
+                   f"statement -- the projection must return the mass it was given -- so "
+                   f"~1.0 is the physical value and a drop is lost mass, not a new "
+                   f"discretization constant to pin. A reading near 0.9316 means the "
+                   f"fill_dual_nodes axis-ghost repair was lost: the dual ghost is being "
+                   f"reflected ACROSS the symmetry axis again, giving the first dual cell "
+                   f"twice its physical radial extent. Re-measure only after confirming "
+                   f"the mesh or injection actually changed.")
 
     # E2 -- near-axis band share (the sharp clip detector)
     m_axis = sum(r * v for r, v, yy in zip(rho, vols, yc) if yy < Y_BAND)
@@ -272,9 +288,11 @@ def check_euler(traj, mdot):
     share = m_axis / m_axis_imposed if m_axis_imposed > 0.0 else float("nan")
     if not (abs(share - AXIS_SHARE) <= SHARE_TOL):
         rc |= fail(f"E2 near-axis deposit share {share:.6f} outside "
-                   f"{AXIS_SHARE} +- {SHARE_TOL} (band y < {Y_BAND}). The axis "
-                   f"rider's deposit enters through the axis dual ring, so an "
-                   f"unclipped boundary dual HALVES this -- measured 0.249286.")
+                   f"{AXIS_SHARE} +- {SHARE_TOL} (band y < {Y_BAND}). This is the axis "
+                   f"parcel's own mass conservation: it deposits entirely through the "
+                   f"axis dual ring, so ~1.0 is physical. ~0.4995 means the axis ghost is "
+                   f"reflected across the axis again (the cell spans [-r_c,+r_c] instead "
+                   f"of [0,r_c]); ~0.9971 means the boundary dual clip was removed.")
 
     # E3 -- volume-free per-drop mass identity (exact physics, no pinned constant)
     m_drop = RHO_LIQ * math.pi / 6.0 * DP_INJ**3
@@ -294,10 +312,10 @@ def check_euler(traj, mdot):
 
     if rc == 0:
         print(f"euler deposit:     {ncell} cells, sum(rho_p*V)={m_eul:.6e} kg")
-        print(f"  E1 retention:    {retain:.6f}  (pinned {RETAIN} +- {RETAIN_TOL}; "
-              f"unclipped 0.896683)")
-        print(f"  E2 axis share:   {share:.6f}  (pinned {AXIS_SHARE} +- {SHARE_TOL}; "
-              f"unclipped 0.249286)")
+        print(f"  E1 retention:    {retain:.6f}  (conservation; {RETAIN} +- {RETAIN_TOL}, "
+              f"axis-ghost defect reads 0.931625)")
+        print(f"  E2 axis share:   {share:.6f}  (axis parcel conservation; {AXIS_SHARE} "
+              f"+- {SHARE_TOL}, axis-ghost defect reads 0.499505)")
         print(f"  E3 per-drop:     worst rel dev {worst:.2e} over {ncmp} cells "
               f"(tol {MDROP_TOL:.0e})")
     return rc

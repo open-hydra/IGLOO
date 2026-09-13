@@ -286,11 +286,13 @@ contains
   !  order, so the node cloud is bit-identical.
   subroutine fill_dual_nodes(sol, blk, is2D)
     use IGLOO_data_block, only: obj_block, obj_flowblock
+    use IGLOO_variables,  only: axisym, refDir
     implicit none
     type(obj_flowblock), intent(inout) :: sol  !> dual (gas) block -- node ring to fill
     type(obj_block),     intent(in)    :: blk  !> geo block -- centres and face centres
     logical,             intent(in)    :: is2D
-    integer :: i, j, k
+    integer  :: i, j, k
+    real(R8) :: s, sref
     !--- Interior nodes: cell centers (bijection sol%node <-> gas data) ---
     do k = 1, sol%Nz; do j = 1, sol%Ny; do i = 1, sol%Nx
       sol%node(:,i,j,k) = blk%center(:,i,j,k)
@@ -345,6 +347,51 @@ contains
       sol%node(:,0,       sol%Ny+1,sol%Nz+1) = 2.0_R8*sol%node(:,0,       sol%Ny+1,sol%Nz) - sol%node(:,0,       sol%Ny+1,sol%Nz-1)
       sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz+1) = 2.0_R8*sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz) - sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz-1)
     endif
+    !--- Axis-aware repair: a ghost must never be reflected ACROSS the symmetry axis ------
+    !  `ghost = 2*faceCentre - interiorCentre` is only a valid reflection when the face is a
+    !  real domain boundary. On the AXIS face the face centre sits at r ~ 0, so the rule throws
+    !  the ghost to r = -r_c: the first dual cell then spans [-r_c, +r_c] straight through the
+    !  axis. Two things go wrong with that cell, and neither is detectable downstream:
+    !    * its radial extent is 2*r_c where the physical region is only [0, r_c];
+    !    * axisRadius() is an UNSIGNED distance, so the vertex-mean radius that sets the wedge
+    !      slab thickness reads r_c for a cell whose centroid is ON the axis.
+    !  insideFrac cannot catch it either -- it is a length ratio along the node-to-ghost line
+    !  and returns exactly 0.50000 for any reflected ghost, however illegal the reflection.
+    !  Measured on axis-200 (ghost y = -2.81965e-03 against a face centre at y = 9.99962e-09):
+    !  the resulting dual volume disagreed with the geo sub-octant coverage by between 0% and
+    !  a factor 2 depending on station -- unreliable rather than uniformly wrong.
+    !  Fix: project any ghost that landed on the far side of the axis back ONTO the axis, so
+    !  the first dual cell spans [axis, first centre] -- exactly the physical region, with a
+    !  non-degenerate wedge quad and no clip needed.
+    if (axisym) then
+      if (.not.allocated(sol%nodeOnAxis)) then
+        allocate(sol%nodeOnAxis(lbound(sol%node,2):ubound(sol%node,2),   &
+                                lbound(sol%node,3):ubound(sol%node,3),   &
+                                lbound(sol%node,4):ubound(sol%node,4)))
+      endif
+      sol%nodeOnAxis = .false.
+      sref = dot_product(sol%node(:,1,1,1), refDir)
+      sref = sign(1._R8, sref)
+      do k = lbound(sol%node,4), ubound(sol%node,4)
+        do j = lbound(sol%node,3), ubound(sol%node,3)
+          do i = lbound(sol%node,2), ubound(sol%node,2)
+            !> interior nodes are cell centres and are never touched
+            if (i >= 1 .and. i <= sol%Nx .and. j >= 1 .and. j <= sol%Ny .and. &
+                (is2D .or. (k >= 1 .and. k <= sol%Nz))) cycle
+            s = dot_product(sol%node(:,i,j,k), refDir)
+            if (s*sref < 0._R8) then
+              sol%node(:,i,j,k) = sol%node(:,i,j,k) - s*refDir
+              !> FLAG IT: the node now sits at r = 0, so its VALUE must be the symmetry one
+              !  too. fillGhostGradient reads this. Moving a node without flagging it is the
+              !  bug this pairing exists to prevent -- a constant-gradient extrapolation left
+              !  v_r = +0.674 m/s ON the axis on axis-200, outward, where it must vanish.
+              sol%nodeOnAxis(i,j,k) = .true.
+            endif
+          enddo
+        enddo
+      enddo
+    endif
+
   end subroutine fill_dual_nodes
 
   subroutine computeSkewFlag(sol, is2D)
