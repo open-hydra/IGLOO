@@ -33,6 +33,6 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
   for RM/JAXA2/JAXA3 (deliberately NOT JAXA4/KD — their sub-2 low-Re limit is
   physical rarefaction); HN3 Kavanau-Drake Ma=0 collapse (transcription pin;
   D-HEAT-2/3 stay open flags).
-- `test_heat_probes.f90` (ctest `test_heat_probes`, WILL_FAIL xfail): XH1
+- `test_heat_probes.f90` (ctest `test_heat_probes`, ordinary gate — bug-transcription pin): XH1
   JAXA1 missing +2 floor — Nu(Re=1e-6)=0.315 today. Flips the suite RED when
   production is fixed, signalling promotion to the gate (bug A7).

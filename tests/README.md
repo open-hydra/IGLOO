@@ -3,13 +3,15 @@
 One tree, MOSE-style, categorized by **model**: each category holds compiled
 unit-test families (literature-grounded, independent oracles) and end-to-end
 solver cases (box case + `check.py` oracle). Everything is registered in ctest.
-Authoritative spec: [`../plan-bucket/verification-phase1-plan.md`](../plan-bucket/verification-phase1-plan.md).
+Registry of record: [`CMakeLists.txt`](CMakeLists.txt) (every gate) and
+[`VERIFICATION_MATRIX.md`](VERIFICATION_MATRIX.md) (one row per gate). The original phase-1
+verification plan is a local, gitignored working note (`plan-bucket/implemented/`), absent from a fresh clone.
 
 ## Run
 
 ```bash
 ./tests/test.sh all              # build (build/verif/ + bin/IGLOO) + full ctest + aggregated report
-./tests/test.sh standard         # one category: standard|evaporation|breakup|infrastructure
+./tests/test.sh standard         # one category: standard|evaporation|combustion|breakup|infrastructure|repeatability|mpi
 ./tests/test.sh e2e              # by kind: unit|e2e
 ./tests/test.sh conv-nu          # single test by ctest name
 ./tests/test.sh clean            # wipe e2e OUTPUT/run logs + build/verif/
@@ -24,29 +26,34 @@ that is the executable the e2e cases run.
 
 ```
 tests/
-├── README.md  REFERENCES.md  VERIFICATION_MATRIX.md
+├── README.md  REFERENCES.md  VERIFICATION_MATRIX.md      # (BUGS.md, FINDINGS.md: local working notes, gitignored)
 ├── CMakeLists.txt                # single ctest registry (unit + e2e, labeled)
-├── test.sh                       # MOSE-style runner
-├── common/                       # shared box fixtures (mesh, uniform gas, bc/phase/properties)
-├── tools/                        # make_box_case.py, make_uniform_gas.py, set_kv.py, aggregate_report.py
-├── support/                      # support library (NOT a test family)
-│   ├── verif_norms.f90           # relLinf, relL2, observed_order, assert_lt
-│   ├── verif_report.f90          # CSV row writer + summary + exit code
-│   ├── verif_oracle.f90          # closed-form refs + self-contained RK4
-│   ├── verif_interp.f90          # multilinear analytic field + forward hex map
-│   └── verif_driver.f90          # the only module that touches IGLOO production
-├── standard/                     # always-on physics: drag + heat
-│   ├── drag/  temperature/       #   unit families (A/B: tests + transcription pins)
-│   └── drag-stokes/ temp-relax/ body-force/ conv-nu/   # e2e cases
-├── evaporation/                  # unit family at category root (C)
-│   └── d2law/                    #   e2e case — BLOCKED on bugs A3/A4 (BLOCKED.md)
-├── breakup/                      # D families
-│   └── tab/ pilch-erdman/ reitz-diwakar/ etab/
-└── infrastructure/               # E + pipeline
-    └── gas_reconstruction/ ini_pipeline/
+├── test.sh                       # MOSE-style runner: standard evaporation combustion breakup infrastructure repeatability mpi unit e2e
+├── vv_style.py                   # the single plot-style source for every SVG
+├── common/                       # shared box fixtures + the MOSE nozzle solfile (db-2daxi, axis-200)
+├── tools/                        # make_box_case.py make_pe_case.py make_vie_case.py make_uniform_gas.py set_kv.py
+│                                 # aggregate_report.py check_twosweep.py compare_tec.py check_registry.cmake plot_curves.py mpi_scaling_smoke.sh
+├── support/                      # shared Fortran library (NOT a test family)
+│   ├── verif_norms.f90  verif_report.f90  verif_oracle.f90  verif_interp.f90  verif_dump.f90
+│   ├── verif_driver.f90          # the only module that touches IGLOO production
+│   ├── test_self.f90             # ctest `self_test`
+│   └── twosweep.f90              # the two-sweep repeatability driver
+├── standard/                     # drag + heat
+│   ├── drag/  temperature/       #   unit families
+│   └── drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/            # e2e
+├── evaporation/                  # unit families: (root)  interface-neq/  tc-analytic/
+│   └── d2law/ d2law-line/ lk-neq/ tc-box/ tc-hexadecane/ mhb98-water/     # e2e
+├── combustion/                   # unit family (root) + burn-box/ (e2e)
+├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
+│   └── tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/   # e2e
+├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/
+│   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ periodic-y/ bc-center-2grp/        # e2e
+├── repeatability/                # two-sweep gates: drag-stokes/ db-injection/ d2law/ khrt/ vie-plait/ etab/ tab/
+└── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ bc-center-2grp/ consistency/
 ```
 
-Each unit family carries an `INFO.md` cataloguing its tests — see plan §2.5
+Each unit family carries an `INFO.md` cataloguing its tests; `tools/aggregate_report.py`
+(gate T9(b)) fails the run if a family listed in its `FAMILY_DIRS` lacks one
 for the schema and `REFERENCES.md` for the master bibliography. E2e cases are
 self-contained: `input.ini`, `INPUT/`, independent oracle `check.py`
 (PASS == exit 0; the solver's stderr is NOT the gate).
@@ -63,13 +70,15 @@ the fix holds, RED on regression.
 1. Pick the model category; create the family/case dir if new (unit families
    need an `INFO.md` per the §2.5 template — the aggregator gate checks it).
 2. Unit: add the Fortran program + register via `igloo_unit_test(...)` in
-   `CMakeLists.txt` (add the family dir to `tools/aggregate_report.py::FAMILY_DIRS`).
+   `CMakeLists.txt`, add the family dir to `tools/aggregate_report.py::FAMILY_DIRS`, and give
+   it an `INFO.md` (T9(b) refuses a listed family without one).
    E2e: build the case with `tools/make_box_case.py`, write an independent
    `check.py`, register via `igloo_e2e_case(...)`.
 3. Append the test row to the family `INFO.md`; new citation tags go to
    `REFERENCES.md` (deduplicated master bibliography).
-4. The CSV row appended by `verif_report` at run time must have the same `id`
-   as the `INFO.md` row — the consistency gate fails on mismatch.
+4. The CSV row appended by `verif_report` at run time should carry the same `id`
+   as the `INFO.md` row (convention — the consistency gate T9 checks FAIL rows, a missing
+   `INFO.md` per listed family and empty reports; it does not cross-check ids).
 5. Optional e2e overlay: copy an existing `verify.py` scaffold (non-gating,
    writes `OUTPUT/<case>.svg`; `test.sh` syncs into `docs/vv/images/`). Plot
    style is centralized in `vv_style.py` (Computer Modern / LaTeX math): write
@@ -85,5 +94,6 @@ the fix holds, RED on regression.
 
 ## Status
 
-ctest 49/49 (25 e2e + 24 unit, `self_test` among the latter). Convergence-order
+ctest 61/61 in a serial build (33 e2e + 28 unit, `self_test` and `registry-docs` among the
+latter); `USE_MPI=ON` registers 5 more `mpi-*` cases, 66/66. Convergence-order
 aggregate tables (plan §4 T8-convergence) not started.

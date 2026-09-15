@@ -4,12 +4,14 @@
 # unit-test families (compiled Fortran, LABELS "unit;<category>;...") and
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
-#   support/            verif_* modules (norms/report/oracle/interp/driver) + test_self
-#   standard/           always-on physics: drag/ temperature/ (unit)
-#                       + drag-stokes/ temp-relax/ body-force/ conv-nu/ (e2e)
-#   evaporation/        unit family at category root + d2law/ (e2e, BLOCKED)
-#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ (unit)
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ (unit)
+#   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ (e2e)
+#   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-hexadecane/ mhb98-water/ (e2e)
+#   combustion/         unit family (root) + burn-box/ (e2e)
+#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ periodic-y/ bc-center-2grp/
+#   repeatability/      two-sweep gates (twosweep driver): 7 cases
+#   mpi/                registered only under USE_MPI: 4 rank-count cases + consistency
 #
 # Run everything via ../test.sh (builds bin/IGLOO too — e2e cases use it).
 
@@ -117,8 +119,9 @@ igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;
 # the ord2 dual must TILE the domain: its boundary cells straddle the boundary face, so an
 # unclipped one dilutes its deposited density by the outside fraction. Pins sum(dual cellVol)
 # == domain volume plus the per-cell 1/2, 1/4, 1/8 factors. The 3D branch had no clip at all
-# and NO e2e case reaches it -- every case in the suite is mesh2D -- so this is its only
-# coverage; the 2D cases in it are the regression half.
+# and NO e2e case GATES it (the box fixtures are Nk=5 but ord1, no dual; vie-plait runs it at
+# gas-order 2 with nothing reading the field) -- so this is its only coverage; the 2D cases in
+# it are the regression half.
 igloo_unit_test(test_dual_clip          infrastructure/dual_clip          "unit;infrastructure;euler;t1")
 
 # ---------- two-sweep repeatability harness -----------------------------------

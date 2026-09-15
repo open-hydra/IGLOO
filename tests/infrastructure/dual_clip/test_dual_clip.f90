@@ -29,9 +29,9 @@ program test_dual_clip
     ! small enough to iterate on is where it would have bitten hardest.
     !
     ! D1/D2 run the 3D branch, which had no clip at all until this test was written and which
-    ! no e2e case in the suite reaches (every case is mesh2D). D3/D4 run the 2D branch, which
-    ! shipped clipped -- they are the regression half, and they also pin that adding the k
-    ! direction did not disturb i/j.
+    ! no e2e case GATES (box fixtures are Nk=5 but ord1, no dual; vie-plait runs the 3D dual at
+    ! gas-order 2 with nothing reading its field). D3/D4 run the 2D branch, which shipped
+    ! clipped -- they are the regression half, and they also pin that adding k did not disturb i/j.
     !
     ! The fixture is a uniform Cartesian box built through the PRODUCTION geometry path
     ! (compute_geometry + precomputeMetric), with the dual assembled exactly as

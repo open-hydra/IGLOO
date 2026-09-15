@@ -1,8 +1,9 @@
 # Verification & Validation
 
 IGLOO's V&V suite lives in a single model-first tree under `tests/`, categorized
-by physics: `standard/` (drag + heat), `evaporation/`, `breakup/`, and
-`infrastructure/`.  Each category holds tests of two kinds, all registered in
+by physics: `standard/` (drag + heat), `evaporation/`, `combustion/`, `breakup/` and
+`infrastructure/`, plus two harness categories, `repeatability/` (two-sweep gates) and
+`mpi/` (rank-count gates, `USE_MPI` builds only).  Each category holds tests of two kinds, all registered in
 CTest (opt-in via `-DBUILD_VERIFICATION=ON`).
 
 **End-to-end cases** run the full production solver on a canonical box geometry,
@@ -150,6 +151,7 @@ solver could only emulate with a no-drag production flag.  See
 | 2Daxi + DB (`infrastructure/db-2daxi`) | Axisymmetric wedge, real MOSE gas field, DB injection, euler-only output | Behavioral (both particles integrate to the outlet, fields finite) | **GREEN** (B5/B6 fixed 2026-07-15) |
 | Periodic BC (`infrastructure/periodic-y`) | Translational periodic pair (bcdef 201): transport, velocity-unchanged contract, relocation | Body-force $v(x)$ closed form across 2–3 wraps + $y(x)$ modulo $L_y$ (residual ~$5\cdot10^{-7}$ m) | **GREEN** (2026-07-16, first exercise of the path) |
 | Multi-group `bc_center` pinning (`infrastructure/bc-center-2grp`) | Inlet-face pinning through `pin_particles_bc_center` with **two** particle groups and `fsample = 2` — the suite's only execution of that routine | Behavioral, no reference curve — per-group population, ID identity, group 2 as a faithful clone of group 1, and integration to the outflow plane, all derived from the known inputs (mesh size, `fsample`, group count) | **GREEN** (A24 fixed 2026-08-07; RED at `d857aba^`, GREEN at `d857aba`) |
+| Axis face tagged `axisymmetric` (`infrastructure/axis-200`) | The wedge AXIS face carrying bcdef 200 (what ATLAS emits): reflection instead of the k-face rotation; a near-axis DB parcel with inward `vp`; the ord2 eulerian deposit on the MOSE nozzle field | Behavioral (no give-up, axis reached, outlet exit) + eulerian conservation with cell volumes recomputed from the tec nodes: E1 $\Sigma\rho_p V/\Sigma\dot m t = 1.000787\pm10^{-3}$, E2 near-axis share $0.999005\pm10^{-3}$, E3 $\rho_p/n_p=\rho_\ell\pi d^3/6$ to $10^{-12}$ | **GREEN** (axis-face cycle fixed 2026-09-03; axis dual ghost + E1–E3 2026-09-13) |
 
 ---
 
@@ -186,9 +188,10 @@ Step-by-step walkthrough (reading reports, diagnosing failures, xfail promotion)
 
 ## Production bugs found
 
-The verification effort has catalogued **twenty-one model-formula bugs (A1–A21)**, one
-combustion-constant fix (M1), and six infrastructure bugs (B1–B6).  As of 2026-07-23
-**every one is fixed, refuted, or closed as source-faithful**, each gated by a CTest
+The verification effort has catalogued **twenty-nine model-formula, event and state bugs
+(A1–A29; the A23 KHRT child-creation family counted once)**, one combustion-constant fix (M1),
+and six infrastructure bugs (B1–B6).  As of 2026-09-13 **every one is fixed, refuted, or closed
+as source-faithful**, each gated by a CTest
 probe or e2e oracle: A7 (JAXA1 floor) and B2 closed *not-a-bug*; A16/A17 (`pilch-erdman-e2e`),
 A18 (the event-breakup path had never executed; `tab-e2e`), and A19 (the KHRT
 Rayleigh–Taylor child/shed event reverted because its droplet count was never written to

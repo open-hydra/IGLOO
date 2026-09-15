@@ -1,6 +1,7 @@
 # Verification matrix
 
-One row per registered CTest entry (49 total: 25 e2e + 24 unit incl. `self_test`).
+One row per registered CTest entry (61 in a serial build: 33 e2e + 28 unit incl. `self_test` and
+`registry-docs`; a `USE_MPI` build adds the 5 `mpi-*` rows in their own section, 66).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -28,18 +29,19 @@ Columns:
 
 ---
 
-## Shared box fixture (14 of 25 e2e cases)
+## Shared box fixture (14 of 26 e2e fixtures)
 
-Every e2e case except `db-2daxi`, `vie-plait`, `mhb98-water`,
+Every e2e case except `db-2daxi`, `axis-200`, `vie-plait`, `mhb98-water`,
 `pilch-erdman-e2e`, `tab-e2e`, `etab-e2e`, `khrt-e2e`, `khrt-e2e-rt`, `khrt-stress`,
 `khrt-e2e-threads`, and `reitz-diwakar-e2e` runs on the
 **same** axis-aligned uniform-gas box emitted by
 [`tools/make_box_case.py`](tools/make_box_case.py). The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The eleven exceptions: `db-2daxi`
-(spatially varying, real MOSE nozzle solution) and `vie-plait` (spatially varying,
-analytic `−ε(y−1)`) are the two non-uniform-gas cases; `mhb98-water` keeps the box
+once here, referenced as **"shared box"** below. The twelve exceptions: `db-2daxi`
+(spatially varying, real MOSE nozzle solution), `axis-200` (the same nozzle solution with
+face 3 retagged `axisymmetric`) and `vie-plait` (spatially varying, analytic `−ε(y−1)`) are the
+three non-uniform-gas cases; `mhb98-water` keeps the box
 *geometry* but swaps in a different **uniform** gas (water in air at T_G=298 K with
 a near-static U=1.9×10⁻⁴ clock) to match the Miller-Harstad-Bellan Fig-2 conditions;
 `pilch-erdman-e2e` likewise keeps the geometry but runs U=200 m/s water drops
@@ -78,7 +80,6 @@ oracle possible.
 | **lk-neq** | `[MHB98]` | *run-conditioned* — LK-corrected CEM d²-ODE RK4-integrated along measured T_p; VLE-equilibrium curve as the regression the case must out-distance | shared box | inlet-face 401; `evaporation=CEM`+`interface=LK`, α_e=1.0; κ_t=0.5, d=20 µm, ρ_p=8000; outlet + walls |
 | **tc-box** | `[TC2012]`,`[ATC24]` | *run-conditioned* — Tonini–Cossali Stefan–Fuchs d²-ODE RK4-integrated along measured T_p; CEM-Spalding as the silent regression | shared box | inlet-face 401; `evaporation=TC`+`interface=VLE`; κ_t=0.5, d=20 µm; fuel L_v=1e6, T_boil=600; outlet + walls |
 | **burn-box** | `[Beck05]` | *mixed* — diameter d^n(x)=d₀^n−K_eff·(x−x_a)/u_g is a **closed form** (T_p-independent above ignition); temperature T_p(x) is an **independent RK4** energy balance (Nu=2 conduction + combustion release); `reference/beckstead.txt` | shared box | inlet-face 401; `combustion=Beckstead` (K-burn=4.5e-7, n=1.8, X-eff=0.5, T-ign=550, β=0.3, q-comb=1e6); κ_t=1.0, d=30 µm, ρ_p=8000; outlet + walls |
-| **test_mhb98_decane** (unit) | `[MHB98]` Fig. 4 **M7** (decane, T_G=1000 K, T_d,0=315 K, D0=2.0 mm, Re_d,0=17; exp Wong & Lin 1992) | *validation* (E-VAL-2b) — THE model-discriminating case: Fig. 4b spans ~200 K across M1–M8 vs 0.47 K in Fig. 2b. GATES: **DC1** IGLOO `evaporation()` CEM+LK mdot vs an independently re-coded M7 chain (eqs 10, 15–18) at 25 sampled states, 1e-12 (measured **3.5e-16**) + **DC2** IGLOO `blowingFactor()` vs eq. 19 `f2=b/(e^b−1)`, 1e-12 (measured **9.4e-15**; f2 spans **0.40–0.88**, i.e. convective heat cut up to 60 %) + **DC3** the re-coded M7 at MHB98's OWN 0.552 vs three PIXEL-MEASURED Fig. 4 quantities: β 1.579 vs 1.60 (**1.3 %**), T_d(3.5 s) 393.7 vs 397 K (**3.3 K**), D²(4.0 s) 1.908 vs 1.885 mm² (**1.2 %**) | **FIXED SLIP** (suspended drop, Re ∝ d): free flight was REFUTED by measurement (β 1.31–1.44 for every Sc). All properties = MHB98 App. A at their T_R=420.19 K; **Le=1 deliberately, NOT their App. Γ_V** (which gives Le=4.40 and misses the plateau by +40 K — paper is self-inconsistent) | needs `blowing = LK`; trajectory RK4'd in-test over IGLOO's kernels — a unit test, not e2e, since fixed slip would need a no-drag flag and `t=x/U` is invalid with real slip. **Confound quantified, not hidden:** IGLOO's Ranz-Marshall carries 0.600, MHB98 eq. 6 prints 0.552 (8.7 %); DC1/DC2 use 0.600 (implementation), DC3 uses 0.552 (paper) |
 | **mhb98-water** | `[MHB98]` Fig. 2 **M7** model line (WPD-digitized) | *validation* (paper-reproduction) — GATES: IGLOO-vs-LK-kernel RK4-integrated along measured T_p (tight) + the `K=(T_G−T_wb)·8k_g/(ρ_l L_v)` identity + **IGLOO β vs the digitized M7 slope β_M7≈6.35×10⁻³ (Eq.28), ±10%** (IGLOO=6.30e-3, rel 0.8%; guarded vs paper's 6×10⁻³) + **wet-bulb vs M7 plateau 282.4 K, ±0.5 K** (IGLOO 282.33, ΔT 0.10 K); overlay is absolute D²[mm²]. IGLOO runs CEM+LK = uniform-temp LK = **M7**. Eyeball `[RM52]` exp dropped (reads high; re-digitize follow-up) | box, but **water @ T_G=298 K**, U=1.9×10⁻⁴ (pure clock); **all properties = MHB98 Appendix A (Harpole 1981) at their T_R=293.968 K**: ρ=1.184727, μ=1.8735×10⁻⁵, k=0.0261731, c_p,g=989.45 (via GAM) | inlet-face 401; `evaporation=CEM`+`interface=LK`; single water droplet d=1.05 mm (the FIGURE's D0², not the caption's), κ_t=0.9463 (T_p0=282 K), κ_v=1 (Re=0), ρ_p=997, L_v=2.462478e6, dry air Y∞=0; outlet + walls |
 | **tc-hexadecane** | `[TC2012]` Fig. 11 | *run-conditioned* (Tier V) + digitized overlay (non-gating) — variable-density TC mass rate: the oracle integrates droplet MASS with the TC2012 eq.9 Stefan-Fuchs rate (bisection) along measured Tp, reconstructs d^2=(6m/(pi rho_l(Tp)))^{2/3} (evaporation + thermal swelling), matches measured d^2 (25/25 <0.2%, tol 2%) + asserts swelling. First VARIABLE-property case: found+fixed A20 (tabs never allocated) + A21 (lookupTab OOB) | shared box but **water->n-hexadecane, T-dependent rho_l(T)** in `properties.dat` (Mv=226.45, Tboil=560, Lv=2.9e5); air at T_G=600 K | inlet-face 401; `evaporation=TC`+`interface=VLE`; d0=20 um, kt=0.5 (T_p0=300 K), kv=1 (Re=0); outlet + walls |
 | **pilch-erdman-e2e** | `[PE87]` Fig. 7 / p. 748 | *validation* (paper-reproduction) — GATE is IGLOO's initial breakup rate per drop vs PE87's closed-form T\*(We) forward rate `dd/dt=(d_stable−d)/τ` at the injection We (t reconstructed as Σdx/ū); **diameter-based** We (PE convention); the reference applies the same leading-window LSQ to the kernel's RK4 samples (window-bias cancels). Gates: rate at We≥45 (22 drops, tol 1 %) + B-VAL-2 d_stable plateau vs the paper's initial-conditions closed form (5 drops, tol 12 %) | shared box geometry but **U=200 m/s**, ρ_g=1.2, T=300 K (`tools/make_pe_case.py`); σ=0.072, μ_p=1e-3 via `[IGLOO-Properties]` | inlet-face 401 on face 1: **25 inlet cells, one diameter each** (We sweep 20…1000 at slip=100), κ_ρ=0.34, κ_v=0.5 (drop SLOWER than gas — shock-tube analog), κ_t=1.0, Dirac; `breakup=Pilch-Erdman`, Cd=0.5, B=0.0758; ρ_p=1000 (ATLAS-GPB `phase.txt`/`properties.dat`); outlet + walls |
@@ -93,6 +94,15 @@ oracle possible.
 | **db-2daxi** | infrastructure (no paper; promoted legacy `assigned-pos`) | *behavioral*, md5-free — both parcels integrate, exit the nozzle outlet, all fields finite; no analytic oracle (real flow field) | **NON-UNIFORM real MOSE nozzle**: `common/solfile_mose.tec`, single block I=201×J=181×K=2 (2-D axisymmetric wedge, one cell thick), ~6×10⁵ distinct field values; spatially varying ρ/U/T (~300–3600 K). Drag=Morsi-Alexander, heat=Kavanau-Drake | **assigned-position (DB)** injection: 2 parcels x=[−0.49,0.064], y=[0.55,0.66], d=[1e-4,2e-5], ṁ=[0.1,1.0]; face1 inlet, face2 outlet, **face3 symmetry** (axisymmetric fold), face4 wall; euler-only output |
 | **bc-center-2grp** | infrastructure (no paper; bug-A24 regression) | *behavioral* — no reference curve; every expectation is built from the known inputs (25 inlet cells, `fsample=2`, 2 groups), never from production output: 12 particles per group, ID set exactly {1…12} per group, group 2 an exact clone of group 1 (same cells, same properties, same physics), and every particle writing ≥5 trajectory records and exiting on the outflow plane. The suite's only execution of `pin_particles_bc_center` | shared box (`INPUT/` symlinks `standard/drag-stokes/INPUT`) | inlet-face 401, κ_ρ=0.34, κ_v=0.1, κ_t=1.0, d=11.89 µm, ρ_p=2950; outlet + walls. Two load-bearing deviations from `drag-stokes`: **`ds` deleted** from `[IGLOO-BC]` (⇒ dispatch to `pin_particles_bc_center`, not `_bc_ds`) and **`fsample = 2`** (every 2nd inlet cell ⇒ 12 particles/group), with `phase.txt` = `A 2` (**two groups**). At `fsample = 1` half the defect is invisible — do not "simplify" |
 | **periodic-y** | infrastructure (translational periodic path) | *closed form* — body-force closed form folded **modulo L_y**; velocity unchanged across each wrap (transport = exact ±L_y translation), residual ~5e-7 m | shared box + `body-accel=(0,−8000,0)` (drives 2–3 y-wraps) | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; **faces 3/4 translational-periodic (bcdef 201)**; face2 outlet; faces 5/6 wall |
+| **axis-200** | — (behavioral + conservation; the 2026-09-03 axis-face cycle and the 2026-09-13 axis dual ghost, both in git) | *behavioral* — the AXIS face tagged `axisymmetric` (bcdef 200, what ATLAS emits): no give-up message, the near-axis parcel reaches r < 1e-5 (coverage witness; `input.ini` gives it `vp = −1` because with v_r = 0 on the axis an equilibrium parcel only approaches asymptotically), both parcels exit at x > 2.0; *conservation* on the ord2 eulerian field with volumes recomputed from the tec NODES (never production's `cellVol`): E1 Σρ_p·V / Σṁ·t = 1.000787 ± 1e-3, E2 near-axis share 0.999005 ± 1e-3, E3 ρ_p/n_p = ρ_ℓ(π/6)d³ to 1e-12; floor exactly zero across runs and thread counts; RED-proven against the pre-fix source (0.931626 / 0.499503) | `db-2daxi`'s MOSE nozzle solution (symlinked) | DB, 2 parcels on one axial station: ID 1 near-axis (y = 1e-4, `vp = −1`), ID 2 off-axis control (y = 0.55); `bc.txt` = db-2daxi's with face 3 retagged 200 |
+| **khrt-e2e-rt** | `[Reitz87]` (as `khrt-e2e`) | *RT-shatter persistence gate* (`check_rt.py`) on `khrt-e2e`'s own run: the RT/shed event must fire, apply, and persist as a mass-consistent discontinuous shatter (found and gated A19; promoted from a `WILL_FAIL` sentinel 2026-07-23) | as `khrt-e2e` | as `khrt-e2e` |
+| **repeat-drag-stokes** | — (kind 8, harness contract) | *two-sweep repeatability* (`support/twosweep.f90` + `tools/check_twosweep.py`): sweep 1 ≡ sweep 0 — `.dat` sorted multisets identical, `.tec` ≤ 1e-12 scale-relative; **plus gas-cycle**: original field → `U` doubled → original, sweep 1 must differ, sweep 2 must match sweep 0 | as `drag-stokes` | as `drag-stokes` |
+| **repeat-db-injection** | — (kind 8) | *two-sweep repeatability*, steady mode (the DB `vInj` hand-off, A28) | as `db-injection` | as `db-injection` |
+| **repeat-d2law** | — (kind 8) | *two-sweep repeatability*, steady mode (evaporation state + source accumulators, A28/A29) | as `d2law` | as `d2law` |
+| **repeat-khrt** | — (kind 8) | *two-sweep repeatability*, steady mode (241 children: the child-ID census and the growable shed lists) | as `khrt-e2e` | as `khrt-e2e` |
+| **repeat-vie-plait** | — (kind 8) | *two-sweep repeatability*, steady **and gas-cycle** (the ord2 dual refreshed through `external_gas`) | as `vie-plait` | as `vie-plait` |
+| **repeat-etab** | — (kind 8) | *two-sweep repeatability*, steady mode (ETAB event state; the O12 kick) | as `etab-e2e` | as `etab-e2e` |
+| **repeat-tab** | — (kind 8) | *two-sweep repeatability*, steady mode — the RNG path: per-parcel streams make TAB's child-size sampling run-to-run and thread-count reproducible (closed O2) | as `tab-e2e` | as `tab-e2e` |
 
 ---
 
@@ -131,13 +141,35 @@ box/BC. Sub-test IDs in parentheses.
 | **self_test** | — (harness) | *meta-test* — exercises the support library itself (`verif_norms`, `verif_oracle` `rk4_ref`/`exp_relax`, `assert_lt`); no production code |
 
 ---
+| **test_mhb98_decane** | `[MHB98]` Fig. 4 **M7** (decane, T_G=1000 K, T_d,0=315 K, D0=2.0 mm, Re_d,0=17; exp Wong & Lin 1992) | *validation* (E-VAL-2b) — THE model-discriminating case: Fig. 4b spans ~200 K across M1–M8 vs 0.47 K in Fig. 2b. GATES: **DC1** IGLOO `evaporation()` CEM+LK mdot vs an independently re-coded M7 chain (eqs 10, 15–18) at 25 sampled states, 1e-12 (measured **3.5e-16**) + **DC2** IGLOO `blowingFactor()` vs eq. 19 `f2=b/(e^b−1)`, 1e-12 (measured **9.4e-15**; f2 spans **0.40–0.88**, i.e. convective heat cut up to 60 %) + **DC3** the re-coded M7 at MHB98's OWN 0.552 vs three PIXEL-MEASURED Fig. 4 quantities: β 1.579 vs 1.60 (**1.3 %**), T_d(3.5 s) 393.7 vs 397 K (**3.3 K**), D²(4.0 s) 1.908 vs 1.885 mm² (**1.2 %**) (fixture: **FIXED SLIP** (suspended drop, Re ∝ d): free flight was REFUTED by measurement (β 1.31–1.44 for every Sc). All properties = MHB98 App. A at their T_R=420.19 K; **Le=1 deliberately, NOT their App. Γ_V** (which gives Le=4.40 and misses the plateau by +40 K — paper is self-inconsistent); needs `blowing = LK`; trajectory RK4'd in-test over IGLOO's kernels — a unit test, not e2e, since fixed slip would need a no-drag flag and `t=x/U` is invalid with real slip. **Confound quantified, not hidden:** IGLOO's Ranz-Marshall carries 0.600, MHB98 eq. 6 prints 0.552 (8.7 %); DC1/DC2 use 0.600 (implementation), DC3 uses 0.552 (paper)) |
+| **test_rng_stream** | — | *stream contract* of the per-parcel splitmix64 RNG (`Lib_Statistics::rngSeedFor`/`rngNext`): seed distinctness (8 families × 4000 IDs, 0 collisions), reproducibility, uniformity — the property no e2e gate can see (one shared seed reproduces perfectly and passes every e2e oracle) |
+| **test_axis_dispatch** | — | *dispatch equivalence*: bcdef-200 faces classified by GEOMETRY (azimuthal normal ⇒ wedge rotation, radial ⇒ axis reflection) for wedges built on i, j and k at all six face indices; pins equivalence with the retired `f==6` rule; the only coverage of `bcDef`'s fold branch (`axisymFold` re-sectors first, so no e2e case reaches it) |
+| **test_graze_standoff** | — | *contract pin*: the grazing standoff is an absolute length capped at a fraction of the cell (`grazeOffset`), checked across 12 decades of cell thickness |
+| **test_dual_clip** | — | *tiling invariant*: sum(dual cellVol) == domain volume plus the per-cell 1/2, 1/4, 1/8 boundary factors, in 2D and 3D; proven RED against the unclipped dual; the only gate on the 3D dual (no e2e case gates it) |
+| **registry-docs** | — (kind 8, contract meta-test) | *regeneration diff*: `DocGen` regenerates `docs/user/registry.md` into the build tree and `tools/check_registry.cmake` fails on any difference from the tracked file (they disagreed twice on 2026-07-30) |
+
+## MPI build only (`USE_MPI=ON`, 5 entries)
+
+Each directory symlinks its parent case's `INPUT/`, `input.ini` and `check.py` — the oracle is the
+same inode — and every case first asserts the solver printed `MPI ranks = <n>`: a serial binary
+under `mpiexec` would otherwise pass every oracle while decomposing nothing.
+
+| Case | Reference source | Source-data generation | Gas solfile | Condensed-phase BC |
+|---|---|---|---|---|
+| **mpi-drag-stokes** | as `drag-stokes` | parent oracle at n=2 ranks × 2 threads + rank witness | as parent | as parent |
+| **mpi-conv-nu** | as `conv-nu` | parent oracle at n=4 × 2 + rank witness | as parent | as parent |
+| **mpi-khrt** | as `khrt-e2e` | parent oracle at n=4 × 2 + rank witness; 241 children — the only oracle that reads the child count out of the solver log | as parent | as parent |
+| **mpi-bc-center-2grp** | as `bc-center-2grp` | parent oracle at n=4 × 2 + rank witness; the suite's only `ngroups=2` case, hence the only exercise of the rank-file merge's per-zone loop | as parent | as parent |
+| **mpi-consistency** | — (kind 8) | n=1 vs n=4 of the SAME binary (`mpi/consistency/check.py` launches `mpiexec` itself): witness both ways, serial file layout (no `*.rank*.dat` survives, one `Zone` header per stream), `.dat` sorted multisets, `.tec` scale-relative ≤ 1e-12 | as `drag-stokes` | as `drag-stokes` |
 
 ## Reconciliation
 
-25 `e2e`-labelled + 24 `unit`-labelled = **49 CTest entries**, all green (counted from `ctest -N`
-2026-08-07). The `e2e` count includes `khrt-e2e-rt`, the KHRT RT-shatter persistence gate, the
-two A23/S4 additions `khrt-stress` and `khrt-e2e-threads`, and the A24 pinning case
-`bc-center-2grp`; the `unit` count includes `self_test`
+33 `e2e`-labelled + 28 `unit`-labelled = **61 CTest entries** in a serial build (+5 `mpi-*` under
+`USE_MPI`, 66), all green (counted from `tests/CMakeLists.txt` 2026-09-15). The `e2e` count
+includes `khrt-e2e-rt`, the KHRT RT-shatter persistence gate, the two A23/S4 additions
+`khrt-stress` and `khrt-e2e-threads`, the A24 pinning case `bc-center-2grp`, the seven
+`repeat-*` two-sweep gates and `axis-200`; the `unit` count includes `self_test`, `registry-docs`,
+`test_rng_stream`, `test_axis_dispatch`, `test_graze_standoff`, `test_dual_clip` and `test_mhb98_decane`
 and `registry-docs`, and the two O7 additions `test_kh_rayleigh_limit` and
 `test_khrt_interaction`. Unit families that emit
 a production-vs-reference overlay (`verif_dump` → `tools/plot_curves.py` →

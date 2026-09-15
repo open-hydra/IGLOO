@@ -21,8 +21,11 @@ cd /path/to/IGLOO/
 # One category
 ./tests/test.sh standard      # drag + heat
 ./tests/test.sh evaporation
+./tests/test.sh combustion
 ./tests/test.sh breakup
 ./tests/test.sh infrastructure
+./tests/test.sh repeatability # two-sweep state-leak gates
+USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # rank-count gates, MPI build only (see tests/mpi/INFO.md)
 
 # By kind
 ./tests/test.sh unit           # literature-grounded unit tests only
@@ -54,14 +57,19 @@ tests/
 │   ├── verif_oracle.f90
 │   ├── verif_interp.f90
 │   ├── verif_dump.f90            # unit-family production-vs-reference curve dump → SVG
-│   └── verif_driver.f90          # the only module that touches IGLOO production
+│   ├── verif_driver.f90          # the only module that touches IGLOO production
+│   ├── test_self.f90             # ctest `self_test`
+│   └── twosweep.f90              # the two-sweep repeatability driver
 ├── standard/                     # drag + heat
 │   ├── drag/  temperature/       #   unit families
 │   └── drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/   # e2e cases
-├── evaporation/                  # unit families (d2law, interface-neq, tc-analytic) + d2law/lk-neq/tc-box e2e
-├── breakup/                      # TAB, Pilch-Erdman, Reitz-Diwakar, ETAB, Reitz-KHRT
+├── evaporation/                  # unit families (root C, interface-neq, tc-analytic) + d2law/d2law-line/lk-neq/tc-box/tc-hexadecane/mhb98-water e2e
+├── breakup/                      # TAB, Pilch-Erdman, Reitz-Diwakar, ETAB, Reitz-KHRT unit families + tab/etab/pilch-erdman/reitz-diwakar/khrt e2e, khrt-stress
 ├── combustion/                   # Beckstead unit family + burn-box e2e
-└── infrastructure/               # gas_reconstruction, ini_pipeline; db-injection/coupled-body/db-2daxi/periodic-y/bc-center-2grp (e2e)
+├── infrastructure/               # gas_reconstruction, ini_pipeline, rng_stream, axis_dispatch, graze_standoff, dual_clip;
+│                                 # db-injection/coupled-body/db-2daxi/axis-200/periodic-y/bc-center-2grp (e2e)
+├── repeatability/                # two-sweep state-leak gates: drag-stokes/db-injection/d2law/khrt/vie-plait/etab/tab
+└── mpi/                          # USE_MPI build only: drag-stokes/conv-nu/khrt/bc-center-2grp/consistency
 ```
 
 ### Categories
@@ -80,7 +88,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 (`test_{drag,heat,evap}_probes`) began life as expected-fail bug reproducers, but
 every bug they cover is fixed, so they now run as ordinary bug-transcription pins.
 
-Current gate: **49/49** (25 e2e + 24 unit, `self_test` among the latter).
+Current gate: **61/61** in a serial build (33 e2e + 28 unit, `self_test` and `registry-docs` among the latter); `USE_MPI=ON` registers 5 more `mpi-*` cases, 66/66.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.
 
 ### Adding a test
@@ -88,14 +96,16 @@ One row per entry in `tests/VERIFICATION_MATRIX.md`.
 1. Pick the model category; create the family/case directory if new (unit families
    need an `INFO.md` per the §2.5 template — the aggregator gate checks it).
 2. **Unit test**: add the Fortran program + register via `igloo_unit_test(...)` in
-   `CMakeLists.txt`; add the family to `tools/aggregate_report.py::FAMILY_DIRS`.
+   `CMakeLists.txt`; add the family to `tools/aggregate_report.py::FAMILY_DIRS` and give it an
+   `INFO.md` (gate T9(b)).
 3. **E2e case**: build with `tools/make_box_case.py`, write an independent
    `check.py` (pass criterion: exit 0), register via `igloo_e2e_case(...)`.
 4. Append the test row to the family `INFO.md`; new citation tags go to
    `REFERENCES.md` (deduplicated master bibliography).
 
-The CSV row written by `verif_report` at run time must carry the same `id` as the
-`INFO.md` row — the consistency gate fails on mismatch.
+The CSV row written by `verif_report` at run time should carry the same `id` as the
+`INFO.md` row (convention; the consistency gate checks FAIL rows, `INFO.md` presence for the
+listed families and empty reports, not ids).
 
 ---
 

@@ -65,7 +65,7 @@ For anything finer, drive CTest directly — tests carry composable labels
 
 ```bash
 ctest --test-dir build/verif -L breakup --output-on-failure
-ctest --test-dir build/verif -L unit                # all 24 unit tests
+ctest --test-dir build/verif -L unit                # all 28 unit tests
 ctest --test-dir build/verif -R "test_drag.*"        # regex on names
 ```
 

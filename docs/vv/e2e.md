@@ -264,7 +264,7 @@ wrong, the measured $T_p$ would be wrong and the oracle would inherit the same
 error.  That axis is covered separately by `temp-relax`/`conv-nu` (heat) and by
 the unit families' energy checks.
 
-### evap
+### d2law
 
 See [Evaporation](evaporation.md) — **GATED GREEN** (bugs A3/A4 fixed 2026-07-07;
 25/25 particles verified vs the Godsave kernel).

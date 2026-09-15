@@ -53,7 +53,7 @@ would pass every gate in this directory.
 
 ## Two modes
 
-- **steady** (all five) — gas held fixed; sweep 1 must reproduce sweep 0.
+- **steady** (all seven) — gas held fixed; sweep 1 must reproduce sweep 0.
 - **gas-cycle** (`drag-stokes`, `vie-plait`) — three sweeps through the `external_gas` hook:
   original field, then `U` doubled, then the original again. Sweep 1 **must differ**
   (proving the refresh reaches the solver at all) and sweep 2 **must match** sweep 0

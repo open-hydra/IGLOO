@@ -31,7 +31,7 @@ if [[ $# -gt 0 && "$1" == "--" ]]; then shift; EXTRA_CMAKE_ARGS=("$@"); fi
 
 if [[ "${TARGET}" == clean ]]; then
     for d in "${SCRIPT_DIR}"/*/*/; do
-        [ -f "${d}/check.py" ] || [ -f "${d}/check_evap.py" ] || continue
+        [ -f "${d}/check.py" ] || continue
         rm -rf "${d}/OUTPUT" "${d}/run_out.txt" "${d}/run_err.txt"
         echo "cleaned ${d#"${SCRIPT_DIR}"/}"
     done
