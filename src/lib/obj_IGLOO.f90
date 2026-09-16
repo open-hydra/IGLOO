@@ -138,6 +138,14 @@ contains
       srcBodyForce = sourceSwitch .and. bodyForce
     endif
     call import_gas(own_gas,self%gasblock)
+    !> 2.5D witness for DB injection only (FB inflow takes its direction from bc.txt). vel0 exists
+    !  only on read_bc's (x,y,z) branch, absent = 10*threshold; .and. does not short-circuit.
+    if (mesh2D .and. mpi_is_root) then
+      if (allocated(vel0)) then
+        if (any(vel0(:,3) /= 0._R8 .and. abs(vel0(:,3)) < threshold)) &
+          write(*,'(A)') '  >> DB injection carries wp /= 0 (2.5D)'
+      endif
+    endif
     call read_cdp_bc_file(IGLOO_phase_prefix,self%material,self%geoblock, &
                           self%gasblock,self%source,self%euler,self%srcSwitch,self%eulSwitch)
     call initRandomSeed(rng_seed)   ! before pinning: stochastic injection diameters

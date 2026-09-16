@@ -34,6 +34,19 @@ contains
     enddo
     !> Count number of blocks and particle groups
     nb = size(orion%block)
+    !> Dimensionality is a property of the WHOLE mesh, decided once (the old per-block set let a
+    !  first Nk=1 block switch every later block onto the 2D path).
+    if (any(orion%block(:)%Nk == 1) .and. .not.all(orion%block(:)%Nk == 1)) then
+      write(*,'(A)') ' [ERROR] mixed block dimensionality: some blocks have Nk = 1, others Nk > 1.'
+      write(*,'(A)') '         IGLOO holds ONE mesh2D flag for the mesh; extrude the 2D blocks or split the case.'
+      write(*,'(A,*(I0,1X))') '         Nk per block: ', orion%block(:)%Nk
+      error stop 'IGLOO: mixed 2D/3D blocks are not supported'
+    endif
+    mesh2D = any(orion%block(:)%Nk == 1)
+    !> Tripwire, unreachable while mesh2D == any(Nk==1): the 3D dual has no k ring for a single-cell
+    !  block (obj_block allocate/fillGhostGradient key it on Nz>1; computeGasNodes reads k-1 = 0).
+    if (any(orion%block(:)%Nk == 1) .and. .not.mesh2D) &
+      error stop 'IGLOO: a block with Nk = 1 requires the 2D path (mesh2D)'
     ntot = 0
     do i = 1, size(material)
       ntot = ntot + material(i)%ngroups
@@ -46,7 +59,6 @@ contains
     do ib = 1, nb
       associate(oBlk => orion%block(ib), blk => geoblock(ib), sol => solblock(ib))
       write(*,'(A,I3,A,3I8)') '     - Block ', ib, ' size = ', oBlk%Ni, oBlk%Nj, oBlk%Nk
-      if (oBlk%Nk==1 .and. .not.mesh2D) mesh2D = .true.
       blk%Nx = oBlk%Ni; blk%Ny = oBlk%Nj; blk%Nz = oBlk%Nk
       sol%Nx = oBlk%Ni; sol%Ny = oBlk%Nj; sol%Nz = oBlk%Nk
 
@@ -91,6 +103,7 @@ contains
             write(*,'(A)') '          components 1-2. Generalise those first.'
             error stop 'IGLOO: axisymmetric axis must lie in the x-y plane'
           endif
+          write(*,'(A)') '     - 2D path: axisymmetric wedge, 2.5D (W and wp carried; fold rotates position AND velocity)'
         endif
       endif
       allocate(blk%center(3,1:blk%Nx,1:blk%Ny,1:blk%Nz))
@@ -144,6 +157,9 @@ contains
 
       end associate
     enddo
+    !> Once for the mesh: the wedge detection re-runs per block while axisym stays false.
+    if (mesh2D .and. .not.axisym) &
+      write(*,'(A)') '     - 2D path: planar single layer (W, wp integrated; nothing to fold into)'
 
   end subroutine allocate_blocks
 
@@ -197,7 +213,7 @@ contains
   !  on headers carrying particle vars (rho_p, R_p, u_p...). Species rows keep the indexed
   !  patterns 'Roi('/'rho(' and must equal allocate_blocks' count.
   subroutine import_gas(orion,solblock)
-    use IGLOO_variables,  only: nb, nspecies
+    use IGLOO_variables,  only: nb, nspecies, mesh2D
     use IGLOO_data_block, only: obj_flowblock
     use Lib_ORION_data
     implicit none
@@ -207,6 +223,7 @@ contains
     logical             :: bound(8)   !> U,V,W,T,MIL,MIT,KL,GAM + R tracked separately
     logical             :: gasConstantRead
     character(len=64)   :: vname
+    real(R8)            :: maxUV, maxW, wTol
 
     !> Guarded so import_gas is re-runnable: reset_state calls it again to refresh the
     !  background field, and nb never changes (the mesh is static).
@@ -261,6 +278,23 @@ contains
         if (.not.bound(5)) write(*,*) '   - MIL'; if (.not.bound(6)) write(*,*) '   - MIT'
         if (.not.bound(7)) write(*,*) '   - KL';  if (.not.bound(8)) write(*,*) '   - GAM'
         if (.not.gasConstantRead) write(*,*) '   - R'
+      endif
+      !> 2.5D witness: the measured W, not its presence (a W column full of 1e-14 dust is planar).
+      !  Interior only (the ord2 ghost ring is filled later, in solve); velocity is never zero-filled,
+      !  so an unbound W is reported as such rather than read.
+      if (mesh2D) then
+        if (bound(3)) then
+          associate(sol => solblock(ib))
+          maxUV = max(maxval(abs(sol%velocity(1,1:sol%Nx,1:sol%Ny,1:sol%Nz))), &
+                      maxval(abs(sol%velocity(2,1:sol%Nx,1:sol%Ny,1:sol%Nz))))
+          maxW  =     maxval(abs(sol%velocity(3,1:sol%Nx,1:sol%Ny,1:sol%Nz)))
+          end associate
+          wTol = max(1.e-10_R8, 1.e-10_R8*maxUV)
+          write(*,'(A,I0,A,ES10.3,A,ES10.3,A)') '     - block ', ib, ': max|W| = ', maxW, &
+               '  (max|U|,|V| = ', maxUV, ')  -- '//trim(merge('SWIRL   ','no swirl', maxW > wTol))
+        else
+          write(*,'(A,I0,A)') '     - block ', ib, ': W unbound -- no swirl (no azimuthal gas velocity in the file)'
+        endif
       endif
     enddo
 
