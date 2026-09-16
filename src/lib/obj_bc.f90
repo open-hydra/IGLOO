@@ -270,26 +270,34 @@ contains
   end subroutine bcDef
 
   !> AXISYMMETRIC (200) per-step fold: rotate state position+velocity back into the wedge sector
-  !  by -+delthe about axisDir when the azimuth leaves +-delthe/2. The azimuth is measured in the
-  !  frame (refDir, binormal) spanning the plane normal to axisDir, so nothing here assumes the
-  !  axis is x: with the default frame this is exactly atan2(z,y), bit for bit.
+  !  about axisDir when the azimuth leaves +-delthe/2. The azimuth is measured in the frame
+  !  (refDir, binormal) spanning the plane normal to axisDir, so nothing here assumes the axis
+  !  is x: with the default frame this is exactly atan2(z,y), bit for bit.
+  !  One rotation by -n*|delthe| with n = nint(theta/|delthe|) -- no guard loop. The loop this
+  !  replaced rotated by -+delthe per pass and had no convergence check, so with the wrong
+  !  rotation sense (O22: rotateVector returned R(-theta)) it walked the state to +-180 deg
+  !  and returned silently. The post-condition is now asserted.
   subroutine axisymFold(stateVar)
     use IGLOO_variables, only: axisym, delthe, axisDir, refDir
     implicit none
     real(R8), intent(inout) :: stateVar(:)
-    real(R8) :: theta, rot, binormal(3)
-    integer  :: guard
+    real(R8) :: theta, rot, binormal(3), d
+    integer  :: n
 
     if (.not.axisym) return
     binormal = cross(axisDir, refDir)
-    do guard = 1, 1000
-      theta = atan2(dot_product(stateVar(1:3), binormal), dot_product(stateVar(1:3), refDir))
-      if      (theta >  0.5_R8*delthe) then; rot = -delthe
-      else if (theta < -0.5_R8*delthe) then; rot =  delthe
-      else; return; endif
-      stateVar(1:3) = rotateVector(stateVar(1:3), axisDir, rot)
-      stateVar(4:6) = rotateVector(stateVar(4:6), axisDir, rot)
-    enddo
+    d     = abs(delthe)             !> the band is symmetric; delthe's sign only records the k ordering
+    theta = atan2(dot_product(stateVar(1:3), binormal), dot_product(stateVar(1:3), refDir))
+    n     = nint(theta/d)
+    if (n == 0) return
+    rot = -real(n,R8)*d
+    stateVar(1:3) = rotateVector(stateVar(1:3), axisDir, rot)
+    stateVar(4:6) = rotateVector(stateVar(4:6), axisDir, rot)
+    theta = atan2(dot_product(stateVar(1:3), binormal), dot_product(stateVar(1:3), refDir))
+    !> Can only fire if rotateVector's sense or the (axisDir, refDir) frame is wrong: refDir must be a
+    !  unit vector orthogonal to axisDir (variables.f90), which nothing enforces.
+    if (abs(theta) > 0.5_R8*d*(1._R8 + 1.e-9_R8)) &
+      error stop 'IGLOO: axisymFold left the wedge sector (rotation sense, or refDir not normal to axisDir?)'
   end subroutine axisymFold
 
   !> PERIODIC (201) TRANSPORT: shift the particle from the exit face to the partner face by

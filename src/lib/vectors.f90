@@ -36,11 +36,12 @@ contains
 
         cost = cos(theta)
         sint = sin(theta)
+        !> The literal is listed ROW-major; order=[2,1] fills it that way (the default column-major fill gave R^T, O22).
         rotation = reshape([ &
             axis(1)**2   *(1-cost)+        cost, axis(1)*axis(2)*(1-cost)-axis(3)*sint, axis(1)*axis(3)*(1-cost)+axis(2)*sint, &
             axis(2)*axis(1)*(1-cost)+axis(3)*sint, axis(2)**2   *(1-cost)+        cost, axis(2)*axis(3)*(1-cost)-axis(1)*sint, &
             axis(3)*axis(1)*(1-cost)-axis(2)*sint, axis(3)*axis(2)*(1-cost)+axis(1)*sint, axis(3)**2   *(1-cost)+        cost  &
-            ], shape=[3, 3])
+            ], shape=[3, 3], order=[2, 1])
         rotatedVect = matmul(rotation, vect)
 
     end function rotateVector

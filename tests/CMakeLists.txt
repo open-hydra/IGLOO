@@ -9,7 +9,7 @@
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ periodic-y/ bc-center-2grp/
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ periodic-y/ bc-center-2grp/
 #   repeatability/      two-sweep gates (twosweep driver): 7 cases
 #   mpi/                registered only under USE_MPI: 4 rank-count cases + consistency
 #
@@ -329,6 +329,9 @@ igloo_e2e_case(db-2daxi infrastructure/db-2daxi "e2e;infrastructure")
 # reached the axis was trapped in a period-2 rotation cycle and discarded.
 # Verified RED before the axis-face fix and GREEN after.
 igloo_e2e_case(axis-200 infrastructure/axis-200 "e2e;infrastructure")
+# wedge-fold: axis-200 + wp on the near-axis parcel -- the only case in which the 200-face fold
+# ROTATES anything (every other wedge fixture has z == 0). Proven RED on the pre-O22 binary.
+igloo_e2e_case(wedge-fold infrastructure/wedge-fold "e2e;infrastructure")
 # translational periodic pair (bcdef 201): closed-form v(x) across wraps + modular-y
 igloo_e2e_case(periodic-y infrastructure/periodic-y "e2e;infrastructure")
 # A24 (2026-08-07): first coverage for pin_particles_bc_center. Every other case sets

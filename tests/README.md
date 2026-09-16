@@ -47,7 +47,7 @@ tests/
 ├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
 │   └── tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/   # e2e
 ├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/
-│   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ periodic-y/ bc-center-2grp/        # e2e
+│   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ periodic-y/ bc-center-2grp/   # e2e
 ├── repeatability/                # two-sweep gates: drag-stokes/ db-injection/ d2law/ khrt/ vie-plait/ etab/ tab/
 └── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ bc-center-2grp/ consistency/
 ```
@@ -94,6 +94,6 @@ the fix holds, RED on regression.
 
 ## Status
 
-ctest 61/61 in a serial build (33 e2e + 28 unit, `self_test` and `registry-docs` among the
-latter); `USE_MPI=ON` registers 5 more `mpi-*` cases, 66/66. Convergence-order
+ctest 62/62 in a serial build (34 e2e + 28 unit, `self_test` and `registry-docs` among the
+latter); `USE_MPI=ON` registers 5 more `mpi-*` cases, 67/67. Convergence-order
 aggregate tables (plan §4 T8-convergence) not started.

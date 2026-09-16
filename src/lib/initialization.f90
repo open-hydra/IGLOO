@@ -367,7 +367,8 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
           tng = cellTangent(b,f,ic,jc,kc,nrm)
           Rc  = Rcell(mc,nc)
           do kd = 0, 5
-            dvec = rotateVector(tng, nrm, real(kd,R8)*pi/3._R8)
+            !> -kd: pre-O22 rotateVector was R(-theta); keep the kd<->direction pairing (IDs, RNG streams).
+            dvec = rotateVector(tng, nrm, -real(kd,R8)*pi/3._R8)
             Pc   = pt + Rc*dvec
             call locate_inj_cell(b,f,Nm,Nn,mc,nc,Pc, m2,n2,verts2,found)
             if (.not.found) cycle

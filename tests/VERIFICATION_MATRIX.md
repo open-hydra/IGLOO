@@ -1,6 +1,6 @@
 # Verification matrix
 
-One row per registered CTest entry (61 in a serial build: 33 e2e + 28 unit incl. `self_test` and
+One row per registered CTest entry (62 in a serial build: 34 e2e + 28 unit incl. `self_test` and
 `registry-docs`; a `USE_MPI` build adds the 5 `mpi-*` rows in their own section, 66).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
@@ -29,19 +29,19 @@ Columns:
 
 ---
 
-## Shared box fixture (14 of 26 e2e fixtures)
+## Shared box fixture (14 of 27 e2e fixtures)
 
-Every e2e case except `db-2daxi`, `axis-200`, `vie-plait`, `mhb98-water`,
+Every e2e case except `db-2daxi`, `axis-200`, `wedge-fold`, `vie-plait`, `mhb98-water`,
 `pilch-erdman-e2e`, `tab-e2e`, `etab-e2e`, `khrt-e2e`, `khrt-e2e-rt`, `khrt-stress`,
 `khrt-e2e-threads`, and `reitz-diwakar-e2e` runs on the
 **same** axis-aligned uniform-gas box emitted by
 [`tools/make_box_case.py`](tools/make_box_case.py). The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The twelve exceptions: `db-2daxi`
+once here, referenced as **"shared box"** below. The thirteen exceptions: `db-2daxi`
 (spatially varying, real MOSE nozzle solution), `axis-200` (the same nozzle solution with
-face 3 retagged `axisymmetric`) and `vie-plait` (spatially varying, analytic `−ε(y−1)`) are the
-three non-uniform-gas cases; `mhb98-water` keeps the box
+face 3 retagged `axisymmetric`), `wedge-fold` (axis-200 plus swirl on the near-axis parcel) and
+`vie-plait` (spatially varying, analytic `−ε(y−1)`) are the four non-uniform-gas cases; `mhb98-water` keeps the box
 *geometry* but swaps in a different **uniform** gas (water in air at T_G=298 K with
 a near-static U=1.9×10⁻⁴ clock) to match the Miller-Harstad-Bellan Fig-2 conditions;
 `pilch-erdman-e2e` likewise keeps the geometry but runs U=200 m/s water drops
@@ -95,6 +95,7 @@ oracle possible.
 | **bc-center-2grp** | infrastructure (no paper; bug-A24 regression) | *behavioral* — no reference curve; every expectation is built from the known inputs (25 inlet cells, `fsample=2`, 2 groups), never from production output: 12 particles per group, ID set exactly {1…12} per group, group 2 an exact clone of group 1 (same cells, same properties, same physics), and every particle writing ≥5 trajectory records and exiting on the outflow plane. The suite's only execution of `pin_particles_bc_center` | shared box (`INPUT/` symlinks `standard/drag-stokes/INPUT`) | inlet-face 401, κ_ρ=0.34, κ_v=0.1, κ_t=1.0, d=11.89 µm, ρ_p=2950; outlet + walls. Two load-bearing deviations from `drag-stokes`: **`ds` deleted** from `[IGLOO-BC]` (⇒ dispatch to `pin_particles_bc_center`, not `_bc_ds`) and **`fsample = 2`** (every 2nd inlet cell ⇒ 12 particles/group), with `phase.txt` = `A 2` (**two groups**). At `fsample = 1` half the defect is invisible — do not "simplify" |
 | **periodic-y** | infrastructure (translational periodic path) | *closed form* — body-force closed form folded **modulo L_y**; velocity unchanged across each wrap (transport = exact ±L_y translation), residual ~5e-7 m | shared box + `body-accel=(0,−8000,0)` (drives 2–3 y-wraps) | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; **faces 3/4 translational-periodic (bcdef 201)**; face2 outlet; faces 5/6 wall |
 | **axis-200** | — (behavioral + conservation; the 2026-09-03 axis-face cycle and the 2026-09-13 axis dual ghost, both in git) | *behavioral* — the AXIS face tagged `axisymmetric` (bcdef 200, what ATLAS emits): no give-up message, the near-axis parcel reaches r < 1e-5 (coverage witness; `input.ini` gives it `vp = −1` because with v_r = 0 on the axis an equilibrium parcel only approaches asymptotically), both parcels exit at x > 2.0; *conservation* on the ord2 eulerian field with volumes recomputed from the tec NODES (never production's `cellVol`): E1 Σρ_p·V / Σṁ·t = 1.000787 ± 1e-3, E2 near-axis share 0.999005 ± 1e-3, E3 ρ_p/n_p = ρ_ℓ(π/6)d³ to 1e-12; floor exactly zero across runs and thread counts; RED-proven against the pre-fix source (0.931626 / 0.499503) | `db-2daxi`'s MOSE nozzle solution (symlinked) | DB, 2 parcels on one axial station: ID 1 near-axis (y = 1e-4, `vp = −1`), ID 2 off-axis control (y = 0.55); `bc.txt` = db-2daxi's with face 3 retagged 200 |
+| **wedge-fold** | — (behavioral; the O22 fold-sense defect it pins) | *the 200-face FOLD must rotate a swirling parcel back into the sector*: axis-200 plus `wp = 0.5` on the near-axis parcel (r0 = 1e-4), so it leaves the 1° sector in its first ODE segment and the fold (position AND velocity rotated about the axis) is exercised — the only case in the suite with z ≠ 0 on a wedge. G1 no give-up (the O22 signature was "outer maxIter (500000); flagging gone"), G2 both parcels exit at x > 2.0, G3 every trajectory row inside the sector (print-aware: |z| ≤ |y|·tan(δ/2) + 1e-6 and y > −1e-6), G4 vacuity — W₀ = 0.5 injected and ≥ 9 z-sign flips on ID 1 (measured 18, identical at OMP 1/5 × 3), G5 the wp-free control parcel exits at axis-200's x to 1e-6 (its rows are byte-identical to axis-200's). RED on the pre-fix binary: G1, G2, G3 (500000 rows at θ ≈ 179°) | `axis-200`'s (symlinked) | DB, the two axis-200 parcels; ID 1 additionally `wp = 0.5`; `bc.txt` = axis-200's (symlink) |
 | **khrt-e2e-rt** | `[Reitz87]` (as `khrt-e2e`) | *RT-shatter persistence gate* (`check_rt.py`) on `khrt-e2e`'s own run: the RT/shed event must fire, apply, and persist as a mass-consistent discontinuous shatter (found and gated A19; promoted from a `WILL_FAIL` sentinel 2026-07-23) | as `khrt-e2e` | as `khrt-e2e` |
 | **repeat-drag-stokes** | — (kind 8, harness contract) | *two-sweep repeatability* (`support/twosweep.f90` + `tools/check_twosweep.py`): sweep 1 ≡ sweep 0 — `.dat` sorted multisets identical, `.tec` ≤ 1e-12 scale-relative; **plus gas-cycle**: original field → `U` doubled → original, sweep 1 must differ, sweep 2 must match sweep 0 | as `drag-stokes` | as `drag-stokes` |
 | **repeat-db-injection** | — (kind 8) | *two-sweep repeatability*, steady mode (the DB `vInj` hand-off, A28) | as `db-injection` | as `db-injection` |
@@ -164,11 +165,11 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-33 `e2e`-labelled + 28 `unit`-labelled = **61 CTest entries** in a serial build (+5 `mpi-*` under
-`USE_MPI`, 66), all green (counted from `tests/CMakeLists.txt` 2026-09-15). The `e2e` count
+34 `e2e`-labelled + 28 `unit`-labelled = **62 CTest entries** in a serial build (+5 `mpi-*` under
+`USE_MPI`, 67), all green (counted from `tests/CMakeLists.txt` 2026-09-16). The `e2e` count
 includes `khrt-e2e-rt`, the KHRT RT-shatter persistence gate, the two A23/S4 additions
 `khrt-stress` and `khrt-e2e-threads`, the A24 pinning case `bc-center-2grp`, the seven
-`repeat-*` two-sweep gates and `axis-200`; the `unit` count includes `self_test`, `registry-docs`,
+`repeat-*` two-sweep gates, `axis-200` and `wedge-fold`; the `unit` count includes `self_test`, `registry-docs`,
 `test_rng_stream`, `test_axis_dispatch`, `test_graze_standoff`, `test_dual_clip` and `test_mhb98_decane`
 and `registry-docs`, and the two O7 additions `test_kh_rayleigh_limit` and
 `test_khrt_interaction`. Unit families that emit
