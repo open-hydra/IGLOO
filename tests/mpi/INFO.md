@@ -35,7 +35,9 @@ green, nothing decomposed. Without the witness this whole directory would be a v
 | `mpi-conv-nu` | 4 | heat transfer, 4 ranks |
 | `mpi-khrt` | 4 | 241 children — the child-ID census, and the only oracle that reads the child count out of the solver log |
 | `mpi-bc-center-2grp` | 4 | the suite's **only** `ngroups=2` case, so the only real exercise of the rank-file merge's per-zone loop |
+| `mpi-two-mat` | 4 | the suite's **only** `nm=2` case: six shards merged per sweep, two `sourceMass` slots, two euler families reduced |
 | `mpi-consistency` | 1 vs 4 | the cross-rank-count gate (below) |
+| `mpi-consistency-two-mat` | 1 vs 4 | the same gate (same `check.py`, symlinked) on the `nm=2` fixture |
 
 Each variant directory **symlinks** its parent case's `INPUT/`, `input.ini` and `check.py`. The oracle
 is therefore the same inode as the serial case's — "the oracle passes unmodified" is not a claim to

@@ -9,9 +9,9 @@
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ periodic-y/ bc-center-2grp/
-#   repeatability/      two-sweep gates (twosweep driver): 7 cases
-#   mpi/                registered only under USE_MPI: 4 rank-count cases + consistency
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ two-mat/ periodic-y/ bc-center-2grp/
+#   repeatability/      two-sweep gates (twosweep driver): 8 cases
+#   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
 # Run everything via ../test.sh (builds bin/IGLOO too — e2e cases use it).
 
@@ -183,6 +183,8 @@ igloo_twosweep_case(repeat-drag-stokes  repeatability/drag-stokes
                     "e2e;repeatability;standard"       "INPUT/solfile.tec")
 igloo_twosweep_case(repeat-db-injection repeatability/db-injection
                     "e2e;repeatability;infrastructure" "")
+igloo_twosweep_case(repeat-two-mat      repeatability/two-mat
+                    "e2e;repeatability;infrastructure" "")
 igloo_twosweep_case(repeat-d2law        repeatability/d2law
                     "e2e;repeatability;evaporation"    "")
 igloo_twosweep_case(repeat-khrt         repeatability/khrt
@@ -332,6 +334,9 @@ igloo_e2e_case(axis-200 infrastructure/axis-200 "e2e;infrastructure")
 # wedge-fold: axis-200 + wp on the near-axis parcel -- the only case in which the 200-face fold
 # ROTATES anything (every other wedge fixture has z == 0). Proven RED on the pre-O22 binary.
 igloo_e2e_case(wedge-fold infrastructure/wedge-fold "e2e;infrastructure")
+# two-mat: the first nm = 2 case anywhere -- every per-material loop (solve, sourceMass slots, nfam,
+# per-material files, krho fan-out) executes at arity 2 here for the first time.
+igloo_e2e_case(two-mat infrastructure/two-mat "e2e;infrastructure")
 # translational periodic pair (bcdef 201): closed-form v(x) across wraps + modular-y
 igloo_e2e_case(periodic-y infrastructure/periodic-y "e2e;infrastructure")
 # A24 (2026-08-07): first coverage for pin_particles_bc_center. Every other case sets
@@ -354,6 +359,8 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
     igloo_e2e_case_mpi(mpi-khrt           mpi/khrt           4 2 "e2e;mpi;breakup")
     # the suite's ONLY ngroups=2 case, so the only real exercise of the merge's per-zone loop
     igloo_e2e_case_mpi(mpi-bc-center-2grp mpi/bc-center-2grp 4 2 "e2e;mpi;infrastructure")
+    # the suite's ONLY nm=2 case: six shards merged per sweep, two sourceMass slots, two euler families
+    igloo_e2e_case_mpi(mpi-two-mat        mpi/two-mat        4 2 "e2e;mpi;infrastructure")
     # n=1 vs n=4 of the same binary: witness, file layout, .dat multisets, .tec fields. Launches
     # mpiexec itself (khrt-e2e-threads precedent), so it is not an igloo_e2e_case_mpi.
     add_test(NAME mpi-consistency
@@ -361,6 +368,16 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
                                    "${CMAKE_SOURCE_DIR}/bin/IGLOO"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mpi/consistency")
     set_tests_properties(mpi-consistency PROPERTIES
+        LABELS "e2e;mpi;infrastructure;consistency"
+        ENVIRONMENT "OMP_NUM_THREADS=2;KMP_STACKSIZE=100M"
+        TIMEOUT 900)
+    # the same n=1 vs n=4 gate on the nm=2 fixture (same check.py, symlinked): six .dat multisets and
+    # three .tec fields must agree across the rank count
+    add_test(NAME mpi-consistency-two-mat
+        COMMAND python3 -B check.py "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}"
+                                   "${CMAKE_SOURCE_DIR}/bin/IGLOO"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mpi/consistency-two-mat")
+    set_tests_properties(mpi-consistency-two-mat PROPERTIES
         LABELS "e2e;mpi;infrastructure;consistency"
         ENVIRONMENT "OMP_NUM_THREADS=2;KMP_STACKSIZE=100M"
         TIMEOUT 900)

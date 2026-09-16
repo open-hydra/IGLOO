@@ -92,6 +92,24 @@ contains
 
     ios = tec_read_points_multivars(orion,3,'INPUT/'//trim(prefix)//'properties.dat')
     if (ios/=0) error stop ( "Error reading ideal-gas thermo file" )
+    !> Zones are matched to phase.txt lines by ORDER (the points reader keeps no zone title): check the
+    !  count -- a short file used to segfault at block(nm) below -- and that every zone spans the same
+    !  T range as zone 1, which sets Tmin/Tmax for all of them (a shorter zone 2 was an unchecked OOB read).
+    if (size(orion%block) /= nm) then
+      write(*,'(A,I0,A,I0,A)') ' [ERROR] INPUT/'//trim(prefix)//'properties.dat has ', size(orion%block), &
+                               ' zone(s) for ', nm, ' material(s) in phase.txt (one zone per material, in phase order)'
+      error stop 'IGLOO: properties.dat zone count /= number of materials'
+    endif
+    do i = 2, nm
+      if (orion%block(i)%Ni /= orion%block(1)%Ni .or. &
+          nint(orion%block(i)%mesh(1,1,1,1)) /= nint(orion%block(1)%mesh(1,1,1,1))) then
+        write(*,'(A,I0,A,I0,A,I0,A,I0,A,I0,A)') ' [ERROR] INPUT/'//trim(prefix)//'properties.dat zone ', i, &
+          ' spans ', orion%block(i)%Ni, ' rows from T = ', nint(orion%block(i)%mesh(1,1,1,1)), &
+          ' but zone 1 spans ', orion%block(1)%Ni, ' from T = ', nint(orion%block(1)%mesh(1,1,1,1)), &
+          ' (every zone must cover the same temperature table)'
+        error stop 'IGLOO: properties.dat zones do not share one temperature range'
+      endif
+    enddo
     Tmin = nint(orion%block(1)%mesh(1,1,1,1))
     Tmax = Tmin + orion%block(1)%Ni - 1
     

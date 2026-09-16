@@ -1,7 +1,7 @@
 # Verification matrix
 
-One row per registered CTest entry (62 in a serial build: 34 e2e + 28 unit incl. `self_test` and
-`registry-docs`; a `USE_MPI` build adds the 5 `mpi-*` rows in their own section, 66).
+One row per registered CTest entry (64 in a serial build: 36 e2e + 28 unit incl. `self_test` and
+`registry-docs`; a `USE_MPI` build adds the 7 `mpi-*` rows in their own section, 71).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -29,7 +29,7 @@ Columns:
 
 ---
 
-## Shared box fixture (14 of 27 e2e fixtures)
+## Shared box fixture (15 of 28 e2e fixtures)
 
 Every e2e case except `db-2daxi`, `axis-200`, `wedge-fold`, `vie-plait`, `mhb98-water`,
 `pilch-erdman-e2e`, `tab-e2e`, `etab-e2e`, `khrt-e2e`, `khrt-e2e-rt`, `khrt-stress`,
@@ -96,9 +96,11 @@ oracle possible.
 | **periodic-y** | infrastructure (translational periodic path) | *closed form* — body-force closed form folded **modulo L_y**; velocity unchanged across each wrap (transport = exact ±L_y translation), residual ~5e-7 m | shared box + `body-accel=(0,−8000,0)` (drives 2–3 y-wraps) | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; **faces 3/4 translational-periodic (bcdef 201)**; face2 outlet; faces 5/6 wall |
 | **axis-200** | — (behavioral + conservation; the 2026-09-03 axis-face cycle and the 2026-09-13 axis dual ghost, both in git) | *behavioral* — the AXIS face tagged `axisymmetric` (bcdef 200, what ATLAS emits): no give-up message, the near-axis parcel reaches r < 1e-5 (coverage witness; `input.ini` gives it `vp = −1` because with v_r = 0 on the axis an equilibrium parcel only approaches asymptotically), both parcels exit at x > 2.0; *conservation* on the ord2 eulerian field with volumes recomputed from the tec NODES (never production's `cellVol`): E1 Σρ_p·V / Σṁ·t = 1.000787 ± 1e-3, E2 near-axis share 0.999005 ± 1e-3, E3 ρ_p/n_p = ρ_ℓ(π/6)d³ to 1e-12; floor exactly zero across runs and thread counts; RED-proven against the pre-fix source (0.931626 / 0.499503) | `db-2daxi`'s MOSE nozzle solution (symlinked) | DB, 2 parcels on one axial station: ID 1 near-axis (y = 1e-4, `vp = −1`), ID 2 off-axis control (y = 0.55); `bc.txt` = db-2daxi's with face 3 retagged 200 |
 | **wedge-fold** | — (behavioral; the O22 fold-sense defect it pins) | *the 200-face FOLD must rotate a swirling parcel back into the sector*: axis-200 plus `wp = 0.5` on the near-axis parcel (r0 = 1e-4), so it leaves the 1° sector in its first ODE segment and the fold (position AND velocity rotated about the axis) is exercised — the only case in the suite with z ≠ 0 on a wedge. G1 no give-up (the O22 signature was "outer maxIter (500000); flagging gone"), G2 both parcels exit at x > 2.0, G3 every trajectory row inside the sector (print-aware: |z| ≤ |y|·tan(δ/2) + 1e-6 and y > −1e-6), G4 vacuity — W₀ = 0.5 injected and ≥ 9 z-sign flips on ID 1 (measured 18, identical at OMP 1/5 × 3), G5 the wp-free control parcel exits at axis-200's x to 1e-6 (its rows are byte-identical to axis-200's). RED on the pre-fix binary: G1, G2, G3 (500000 rows at θ ≈ 179°) | `axis-200`'s (symlinked) | DB, the two axis-200 parcels; ID 1 additionally `wp = 0.5`; `bc.txt` = axis-200's (symlink) |
+| **two-mat** | — (drag-stokes's `[Stokes]` closed form, per material) | *arity 2*: the first case anywhere with TWO materials (nm = 2) — same box, gas, inlet and parcels as `drag-stokes`, materials A (ρ = 2950) and B (ρ = 1000) from a two-zone `properties.dat`. M1 the drag-stokes oracle (imported, not copied) on `trajectories-A.dat` at 2950 and on `-B.dat` at 1000; M2 both materials inject the same parcel set (identical injection rows, m_B/m_A = 1000/2950); M3 the lighter material relaxes faster at every parcel's first interior row; M4 `source.tec` carries `wdot(A)` and `wdot(B)`, finite and zero, Fx finite/non-zero; M5 `euler1.tec`/`euler2.tec` same shape, finite, different; M6 25 exits per material. Falsified 2026-09-16: phase lines swapped → M1 RED (zones bind by ORDER); one zone for two materials → error stop (was a SIGSEGV) | `drag-stokes`'s (symlinked) | FB `krho` streams, `drag-stokes`'s `bc.txt` (symlinked): one property line per inlet cell feeds both families |
 | **khrt-e2e-rt** | `[Reitz87]` (as `khrt-e2e`) | *RT-shatter persistence gate* (`check_rt.py`) on `khrt-e2e`'s own run: the RT/shed event must fire, apply, and persist as a mass-consistent discontinuous shatter (found and gated A19; promoted from a `WILL_FAIL` sentinel 2026-07-23) | as `khrt-e2e` | as `khrt-e2e` |
 | **repeat-drag-stokes** | — (kind 8, harness contract) | *two-sweep repeatability* (`support/twosweep.f90` + `tools/check_twosweep.py`): sweep 1 ≡ sweep 0 — `.dat` sorted multisets identical, `.tec` ≤ 1e-12 scale-relative; **plus gas-cycle**: original field → `U` doubled → original, sweep 1 must differ, sweep 2 must match sweep 0 | as `drag-stokes` | as `drag-stokes` |
 | **repeat-db-injection** | — (kind 8) | *two-sweep repeatability*, steady mode (the DB `vInj` hand-off, A28) | as `db-injection` | as `db-injection` |
+| **repeat-two-mat** | — (kind 8) | *two-sweep repeatability*, steady mode, on the nm = 2 fixture: six `.dat` multisets and three `.tec` fields (`euler1`, `euler2`, `source`) sweep 1 ≡ sweep 0 — the per-material restore in `reset_state` at arity 2 | as `two-mat` | as `two-mat` |
 | **repeat-d2law** | — (kind 8) | *two-sweep repeatability*, steady mode (evaporation state + source accumulators, A28/A29) | as `d2law` | as `d2law` |
 | **repeat-khrt** | — (kind 8) | *two-sweep repeatability*, steady mode (241 children: the child-ID census and the growable shed lists) | as `khrt-e2e` | as `khrt-e2e` |
 | **repeat-vie-plait** | — (kind 8) | *two-sweep repeatability*, steady **and gas-cycle** (the ord2 dual refreshed through `external_gas`) | as `vie-plait` | as `vie-plait` |
@@ -149,7 +151,7 @@ box/BC. Sub-test IDs in parentheses.
 | **test_dual_clip** | — | *tiling invariant*: sum(dual cellVol) == domain volume plus the per-cell 1/2, 1/4, 1/8 boundary factors, in 2D and 3D; proven RED against the unclipped dual; the only gate on the 3D dual (no e2e case gates it) |
 | **registry-docs** | — (kind 8, contract meta-test) | *regeneration diff*: `DocGen` regenerates `docs/user/registry.md` into the build tree and `tools/check_registry.cmake` fails on any difference from the tracked file (they disagreed twice on 2026-07-30) |
 
-## MPI build only (`USE_MPI=ON`, 5 entries)
+## MPI build only (`USE_MPI=ON`, 7 entries)
 
 Each directory symlinks its parent case's `INPUT/`, `input.ini` and `check.py` — the oracle is the
 same inode — and every case first asserts the solver printed `MPI ranks = <n>`: a serial binary
@@ -161,15 +163,17 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 | **mpi-conv-nu** | as `conv-nu` | parent oracle at n=4 × 2 + rank witness | as parent | as parent |
 | **mpi-khrt** | as `khrt-e2e` | parent oracle at n=4 × 2 + rank witness; 241 children — the only oracle that reads the child count out of the solver log | as parent | as parent |
 | **mpi-bc-center-2grp** | as `bc-center-2grp` | parent oracle at n=4 × 2 + rank witness; the suite's only `ngroups=2` case, hence the only exercise of the rank-file merge's per-zone loop | as parent | as parent |
+| **mpi-two-mat** | as `two-mat` | parent oracle at n=4 × 2 + rank witness; the suite's only `nm=2` case — six shards merged per sweep, two `sourceMass` slots, two euler families reduced across ranks | as parent | as parent |
 | **mpi-consistency** | — (kind 8) | n=1 vs n=4 of the SAME binary (`mpi/consistency/check.py` launches `mpiexec` itself): witness both ways, serial file layout (no `*.rank*.dat` survives, one `Zone` header per stream), `.dat` sorted multisets, `.tec` scale-relative ≤ 1e-12 | as `drag-stokes` | as `drag-stokes` |
+| **mpi-consistency-two-mat** | — (kind 8) | the same n=1 vs n=4 gate (`mpi/consistency/check.py`, symlinked) on the nm = 2 fixture: six `.dat` multisets and three `.tec` fields must agree across the rank count | as `two-mat` | as `two-mat` |
 
 ## Reconciliation
 
-34 `e2e`-labelled + 28 `unit`-labelled = **62 CTest entries** in a serial build (+5 `mpi-*` under
-`USE_MPI`, 67), all green (counted from `tests/CMakeLists.txt` 2026-09-16). The `e2e` count
+36 `e2e`-labelled + 28 `unit`-labelled = **64 CTest entries** in a serial build (+7 `mpi-*` under
+`USE_MPI`, 71), all green (counted from `tests/CMakeLists.txt` 2026-09-16). The `e2e` count
 includes `khrt-e2e-rt`, the KHRT RT-shatter persistence gate, the two A23/S4 additions
 `khrt-stress` and `khrt-e2e-threads`, the A24 pinning case `bc-center-2grp`, the seven
-`repeat-*` two-sweep gates, `axis-200` and `wedge-fold`; the `unit` count includes `self_test`, `registry-docs`,
+`repeat-*` two-sweep gates (eight, `repeat-two-mat` included), `axis-200`, `wedge-fold` and `two-mat`; the `unit` count includes `self_test`, `registry-docs`,
 `test_rng_stream`, `test_axis_dispatch`, `test_graze_standoff`, `test_dual_clip` and `test_mhb98_decane`
 and `registry-docs`, and the two O7 additions `test_kh_rayleigh_limit` and
 `test_khrt_interaction`. Unit families that emit
