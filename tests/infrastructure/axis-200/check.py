@@ -172,7 +172,8 @@ def fail(msg):
 
 
 def read_tec_block(path):
-    """Parse the BLOCK-packed euler<fam>.tec: 3 NODAL coords then 6 CELLCENTERED vars."""
+    """Parse the BLOCK-packed euler<fam>.tec: 3 NODAL coords then 6 CELLCENTERED vars.
+    (db-2daxi/check.py imports this, cell_geometry and residence -- keep the signatures.)"""
     lines = open(path).read().splitlines()
     zi = next(i for i, l in enumerate(lines) if l.strip().lower().startswith("zone"))
     hdr = lines[zi]
