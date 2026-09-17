@@ -95,6 +95,6 @@ the fix holds, RED on regression.
 
 ## Status
 
-ctest 83/83 in a serial build (55 e2e + 28 unit, `self_test` and `registry-docs` among the latter);
+ctest 84/84 in a serial build (56 e2e + 28 unit, `self_test` and `registry-docs` among the latter);
 `USE_MPI=ON` registers 7 more `mpi-*` cases, 89/89. Convergence-order
 aggregate tables (plan §4 T8-convergence) not started.

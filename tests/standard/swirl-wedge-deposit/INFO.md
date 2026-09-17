@@ -73,7 +73,23 @@ fix itself, ≤ 0.5 % per cell, ungated there) and `wedge-fold` (`out-file = e`:
 rotated euler states change the SDIRK4 step sequence, trajectory rows flip by one F12.6
 ULP and ID 1 prints two more rows, 349 vs 347; gate green).
 
-**Not pinned here.** The many-sector interior sub-case of O23 (a parcel whose segment
+**Assumption the gate rests on.** `toMeridian` rotates into the frame at θ = 0 as defined by
+`refDir` (the y axis, not user-settable), so the fixture's k-planes at ∓δ/2 make cell frame and
+meridian frame coincide — a sector [0, δ] would deposit in a frame δ/2 off the cell centre, and
+this gate could not tell. That layout is now refused at mesh import
+(`refuse-wedge-offcentre`, RED-proven: the pre-tripwire binary ran it silently); the MOSE
+production wedge centres to exactly 0.0. Two more facts the residuals depend on, both
+verified in the code: `toMeridian` is fold-invariant (the fold rotates position and
+velocity by the same −nδ, so `R(−θ(p))·v` is continuous across it — that is why D4
+reaches the floor rather than sawtoothing), and rotating `Pin` and `Pout` by one `pMid`
+makes the source deposit `R(−θ_mid)·ṁ∫(v−g)/τ dt`, a midpoint quadrature of the meridian
+integral with error O(Δθ_seg²) — which is why D1 holds here and degrades exactly in the
+many-sector case below.
+
+**Not pinned here.** Four of the five `Lib_RHS` euler-moment sites (models 2–5: evaporation,
+breakup, their combinations) are exercised only on planar fixtures, where `toMeridian` is
+the identity — the index splits are the same at all five and the A/B was inert on them, but
+only model 1 runs off-plane. The many-sector interior sub-case of O23 (a parcel whose segment
 sweeps several sectors before the fold, so the dual cell located by `(x, r cos θ)` sits
 inward of its true radius and the deposit lands there): every wedge fixture folds within
 ≈ 0.6° of the sector edge, so it needs a near-axis parcel with `w ≈ |v|` and a deposit

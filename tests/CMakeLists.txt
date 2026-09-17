@@ -413,6 +413,11 @@ igloo_refusal_case(refuse-out-file         infrastructure/refusals/out-file
                    "IGLOO: unknown out-file token"                      "e2e;refusal;infrastructure")
 igloo_refusal_case(refuse-ode-solver       infrastructure/refusals/ode-solver
                    "IGLOO: unknown ode-solver"                          "e2e;refusal;infrastructure")
+# Wedge-layout contract: the fold band, the 2.5D gas sample and the meridian-frame deposits take
+# refDir as the sector CENTRE (k-planes at -+delthe/2, what MOSE/ATLAS write); a sector [0, delthe]
+# would run with everything rotated by delthe/2. Tiny generated wedge (make_wedge_case.py --theta0-deg 0.5).
+igloo_refusal_case(refuse-wedge-offcentre  infrastructure/refusals/wedge-offcentre
+                   "IGLOO: wedge sector must be centred"                "e2e;refusal;infrastructure;axisym")
 # drag-stokes-dopri5: ode-solver = H-dopri5 on drag-stokes's own oracle -- the only exercise of the
 # explicit solver. RED at OSlo fb8255d (ledger O25: dopri5.f:512 called the eleven-argument SOLOUT,
 # IGLOO's interrupt never reached DOPRI5, every parcel lost at injection with exit 0); green since the

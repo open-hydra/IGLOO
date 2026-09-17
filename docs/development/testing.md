@@ -89,7 +89,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 (`test_{drag,heat,evap}_probes`) began life as expected-fail bug reproducers, but
 every bug they cover is fixed, so they now run as ordinary bug-transcription pins.
 
-Current gate: **83/83** in a serial build (55 e2e + 28 unit, `self_test` and `registry-docs` among the latter); `USE_MPI=ON` registers 7 more `mpi-*` cases, 89/89.
+Current gate: **84/84** in a serial build (56 e2e + 28 unit, `self_test` and `registry-docs` among the latter); `USE_MPI=ON` registers 7 more `mpi-*` cases, 89/89.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.
 
 ### Adding a test

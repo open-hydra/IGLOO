@@ -34,8 +34,9 @@ output written).
 | `refuse-gas-order` | `gas-order = 3` | `IGLOO: gas-order must be 1 or 2` |
 | `refuse-out-file` | `out-file = nonsense` | `IGLOO: unknown out-file token` (accepted: E, S, E+S, ALL -- `ALL` is what hydra's MI2 cases write; `two-mat` runs it) |
 | `refuse-ode-solver` | `ode-solver = H-radau5` | `IGLOO: unknown ode-solver` |
+| `refuse-wedge-offcentre` | a generated wedge whose k-planes sit at 0 and +1° (`tools/make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`) | `IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)` — refused at mesh import (`allocation.f90`), not at the properties choke point |
 
-All fourteen exit 128 at setup with nothing injected or integrated (2026-09-17). **The four INI-contract
+All fifteen exit 128 at setup with nothing injected or integrated (2026-09-17). **The four INI-contract
 cases were RED first** (ledger O20/O21/O26, recorded on the pre-fix binary): `method = 3` ran to
 non-finite states with exit 0 and three output files; `gas-order = 3` silently ran as 2 (the warning was
 dead — the value was reassigned before the test); `out-file = nonsense` ran as both with a warning (and
@@ -44,6 +45,11 @@ the registry default `E+S` parsed as `E`); `ode-solver = H-radau5` was a plain `
 `Lib_Evaporation` printed its menu and executed a plain `stop` — exit 0, empty stderr, nothing a
 harness or an embedding parent can tell from success (recorded on the pre-fix binary in the session
 scratchpad); all twelve `stop`s became `error stop 'IGLOO: unknown …'`.
+**`refuse-wedge-offcentre` was RED first** too (2026-09-17, W-plan Q7): the fold band (`axisymFold`,
+|θ| ≤ δ/2), the 2.5D gas sample (`sampleGas2D`) and the meridian-frame deposits (`toMeridian`) all take
+`refDir` as the sector *centre* — the MOSE/ATLAS layout, k-planes at ∓δ/2, which the production nozzle
+solution centres to exactly 0.0 — and on a [0, δ] sector the binary before the tripwire ran the case to
+"All particles out of domain" with exit 0, the gas and every deposit rotated by δ/2.
 
 **Not here.** `solidification = on` (O5) has no global key — only the per-material section, whose
 name is mid-migration (`[GPB-Phase<i>]` → `[IGLOO-Material<i>]`); add it once that lands. TAB

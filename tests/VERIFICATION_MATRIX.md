@@ -1,6 +1,6 @@
 # Verification matrix
 
-One row per registered CTest entry (83 in a serial build: 55 e2e + 28 unit incl. `self_test` and
+One row per registered CTest entry (84 in a serial build: 56 e2e + 28 unit incl. `self_test` and
 `registry-docs`; a `USE_MPI` build adds the 7 `mpi-*` rows in their own section, 87).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
@@ -114,6 +114,7 @@ oracle possible.
 | **refuse-gas-order** | — (kind 8, refusal) | *setup refusal*: `gas-order = 3` → `IGLOO: gas-order must be 1 or 2` (ledger O21: silently became 2, dead warning) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-out-file** | — (kind 8, refusal) | *setup refusal*: `out-file = nonsense` → `IGLOO: unknown out-file token` (ledger O21: meant both + a warning; the registry default `E+S` parsed as `E`) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-ode-solver** | — (kind 8, refusal) | *setup refusal*: `ode-solver = H-radau5` → `IGLOO: unknown ode-solver` (ledger O26, last site: was a plain `stop`) | as `drag-stokes` | as `drag-stokes` |
+| **refuse-wedge-offcentre** | — (kind 8, refusal) | *setup refusal*: a wedge whose sector is not centred on the azimuth origin (k-planes at 0 and +1°) → `IGLOO: wedge sector must be centred on the azimuth origin` at mesh import — the fold band, the 2.5D gas sample and the meridian-frame deposits assume k-planes at ∓δ/2 (W-plan Q7 contract); RED on the pre-tripwire binary (ran to completion, exit 0) | tiny generated wedge (`make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`, 4×4×1) | one DB parcel (never placed) |
 | **drag-stokes-dopri5** | `[Stokes]` (drag-stokes's oracle, symlinked) | `ode-solver = H-dopri5`, otherwise `drag-stokes` — the only exercise of the explicit solver. RED at OSlo `fb8255d` (ledger O25): every parcel died at injection (NMAX exceeded) because `dopri5.f:512` still called Hairer's eleven-argument `SOLOUT` and IGLOO's interrupt never reached DOPRI5; green since the fork's `fix/dopri5-solout` (six-argument call, silent label 79): 25/25, resid/tol 0.014 | as `drag-stokes` | as `drag-stokes` |
 | **khrt-e2e-rt** | `[Reitz87]` (as `khrt-e2e`) | *RT-shatter persistence gate* (`check_rt.py`) on `khrt-e2e`'s own run: the RT/shed event must fire, apply, and persist as a mass-consistent discontinuous shatter (found and gated A19; promoted from a `WILL_FAIL` sentinel 2026-07-23) | as `khrt-e2e` | as `khrt-e2e` |
 | **repeat-drag-stokes** | — (kind 8, harness contract) | *two-sweep repeatability* (`support/twosweep.f90` + `tools/check_twosweep.py`): sweep 1 ≡ sweep 0 — `.dat` sorted multisets identical, `.tec` ≤ 1e-12 scale-relative; **plus gas-cycle**: original field → `U` doubled → original, sweep 1 must differ, sweep 2 must match sweep 0 | as `drag-stokes` | as `drag-stokes` |
@@ -189,12 +190,12 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-55 `e2e`-labelled + 28 `unit`-labelled = **83 CTest entries** in a serial build (+7 `mpi-*` under
-`USE_MPI`, 90), all green (counted from `tests/CMakeLists.txt` 2026-09-17; `refuse-dopri5` and the DISABLED flag on
+56 `e2e`-labelled + 28 `unit`-labelled = **84 CTest entries** in a serial build (+7 `mpi-*` under
+`USE_MPI`, 91), all green (counted from `tests/CMakeLists.txt` 2026-09-17; `refuse-dopri5` and the DISABLED flag on
 `drag-stokes-dopri5` went with the O25 fix). The `e2e` count
 includes `khrt-e2e-rt`, the KHRT RT-shatter persistence gate, the two A23/S4 additions
 `khrt-stress` and `khrt-e2e-threads`, the A24 pinning case `bc-center-2grp`, the seven
-`repeat-*` two-sweep gates (ten, `repeat-two-mat`, `repeat-drag-stokes-dopri5` and `repeat-tab-dopri5` included), `axis-200`, `wedge-fold`, `swirl-wedge`, `swirl-wedge-deposit`, `two-mat`, the fourteen `refuse-*` setup-refusal gates and `drag-stokes-dopri5`; the `unit` count includes `self_test`, `registry-docs`,
+`repeat-*` two-sweep gates (ten, `repeat-two-mat`, `repeat-drag-stokes-dopri5` and `repeat-tab-dopri5` included), `axis-200`, `wedge-fold`, `swirl-wedge`, `swirl-wedge-deposit`, `two-mat`, the fifteen `refuse-*` setup-refusal gates and `drag-stokes-dopri5`; the `unit` count includes `self_test`, `registry-docs`,
 `test_rng_stream`, `test_axis_dispatch`, `test_graze_standoff`, `test_dual_clip` and `test_mhb98_decane`
 and `registry-docs`, and the two O7 additions `test_kh_rayleigh_limit` and
 `test_khrt_interaction`. Unit families that emit

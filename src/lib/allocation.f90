@@ -20,7 +20,7 @@ contains
     type(obj_sourceblock), intent(inout), allocatable :: srcblock(:)
     type(obj_eulerblock) , intent(inout), allocatable :: eulblock(:,:)
     integer      :: ib, i, j, k, v, nsc, ntot, kmin, kmax, im, jm
-    real(R8)     :: rmax, r2, rvec(3), binormal(3)
+    real(R8)     :: rmax, r2, rvec(3), binormal(3), th0, th1
     
 
     !> Look for gas densities
@@ -81,13 +81,23 @@ contains
           r2   = sum(rvec**2)
           if (r2 > rmax) then; rmax = r2; im = i; jm = j; endif
         enddo; enddo
-        delthe = atan2(dot_product(blk%node(:,im,jm,1), binormal),                  &
-                       dot_product(blk%node(:,im,jm,1), refDir))                    &
-               - atan2(dot_product(blk%node(:,im,jm,0), binormal),                  &
-                       dot_product(blk%node(:,im,jm,0), refDir))
+        th0 = atan2(dot_product(blk%node(:,im,jm,0), binormal), dot_product(blk%node(:,im,jm,0), refDir))
+        th1 = atan2(dot_product(blk%node(:,im,jm,1), binormal), dot_product(blk%node(:,im,jm,1), refDir))
+        delthe = th1 - th0
         axisym = abs(delthe) > 1.e-9_R8
         if (axisym) then
           write(*,'(A,F12.8,A)') '     - Axisymmetric wedge: delthe = ', delthe, ' rad'
+          !> The fold band (axisymFold: |theta| <= delthe/2), the 2.5D gas sample and the meridian-frame
+          !  deposits (sampleGas2D, toMeridian) all take refDir as the SECTOR CENTRE -- the MOSE/ATLAS
+          !  convention, k-planes at -+delthe/2. A sector [0, delthe] would run with the gas and every
+          !  deposit rotated by delthe/2, silently: refuse it. MOSE wedges centre to roundoff (0.0 measured).
+          if (abs(th0 + th1) > 1.e-3_R8*abs(delthe)) then
+            write(*,'(A,2F12.8)') '  [ERROR] axisym: the wedge k-planes sit at azimuths ', th0, th1
+            write(*,'(A)')        '          (rad, about the azimuth origin refDir). The fold, the gas sample'
+            write(*,'(A)')        '          and the source/euler deposits assume the sector is CENTRED on'
+            write(*,'(A)')        '          refDir (k-planes at -+delthe/2, the MOSE/ATLAS layout).'
+            error stop 'IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)'
+          endif
           !> mesh2D flattens node component 3 (below) and interp2ndOrder2D reads only components
           !  1 and 2, so the gas dual is planar in x-y. That constrains the axis to LIE IN that
           !  plane -- it does not single out x: any direction within x-y is equally fine, and the

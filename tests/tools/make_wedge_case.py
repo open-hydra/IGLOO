@@ -27,7 +27,11 @@ land on round radii (0.20, 0.22, ..., 0.98).
 
 Usage:
     make_wedge_case.py <out_dir> [--omega OM] [--u0 U] [--delthe-deg D]
+                       [--theta0-deg T0] [--nx NX] [--nr NR]
         writes <out_dir>/solfile.tec and <out_dir>/bc.txt
+    --theta0-deg shifts the sector centre off the azimuth origin (k-planes at T0 -+ D/2):
+        only for the refusal fixture -- IGLOO takes refDir as the sector centre and refuses
+        anything else. --nx/--nr shrink the mesh (refusal fixtures need no resolution).
 """
 import argparse
 import math
@@ -57,7 +61,7 @@ VARLINE = (' VARIABLES = "X", "Y", "Z",'
 BCDEF = {1: 400, 2: 400, 3: 301, 4: 301, 5: 200, 6: 200}
 
 
-def write_solfile(path, omega, u0, delthe):
+def write_solfile(path, omega, u0, delthe, theta0=0.0):
     I, J, K = NX + 1, NR + 1, NK + 1
     dx, dr = LX / NX, (R1 - R0) / NR
     half = 0.5 * delthe
@@ -78,9 +82,9 @@ def write_solfile(path, omega, u0, delthe):
                         if comp == 0:
                             val = i * dx
                         elif comp == 1:
-                            val = r * math.cos(half)
+                            val = r * math.cos(theta0 + sgn * half)
                         else:
-                            val = sgn * r * math.sin(half)
+                            val = r * math.sin(theta0 + sgn * half)
                         buf.append(f"  {val:.15E}\n")
             f.writelines(buf)
         # cell-centred vars, same BLOCK order. Only U and W are set per cell:
@@ -114,18 +118,25 @@ def write_bc(path):
 
 
 def main():
+    global NX, NR
     p = argparse.ArgumentParser(usage=__doc__)
     p.add_argument("out_dir")
     p.add_argument("--omega", type=float, default=OMEGA)
     p.add_argument("--u0", type=float, default=U0)
     p.add_argument("--delthe-deg", type=float, default=DELTHE_DEG)
+    p.add_argument("--theta0-deg", type=float, default=0.0)
+    p.add_argument("--nx", type=int, default=NX)
+    p.add_argument("--nr", type=int, default=NR)
     a = p.parse_args()
+    NX, NR = a.nx, a.nr
     os.makedirs(a.out_dir, exist_ok=True)
     delthe = math.radians(a.delthe_deg)
     sf = os.path.join(a.out_dir, "solfile.tec")
     bc = os.path.join(a.out_dir, "bc.txt")
-    I, J, K, ncell = write_solfile(sf, a.omega, a.u0, delthe)
+    I, J, K, ncell = write_solfile(sf, a.omega, a.u0, delthe, math.radians(a.theta0_deg))
     write_bc(bc)
+    if a.theta0_deg:
+        print(f"[warn] sector centred at theta0={a.theta0_deg} deg: IGLOO REFUSES this layout")
     dx, dr = LX / NX, (R1 - R0) / NR
     print(f"[ok] wedge solfile: I={I} J={J} K={K} ncell={ncell} (Nk=1 => mesh2D, axisym)")
     print(f"     domain x[0,{LX}] r[{R0},{R1}] delthe={delthe:.8f} rad ({a.delthe_deg} deg); "
