@@ -561,16 +561,17 @@ integrates the exact cylindrical ODE $\dot r = v_r$, $\dot\theta = w/r$,
 $\dot v_r = -v_r/\tau + w^2/r$, $\dot w = (\Omega r - w)/\tau - v_r w/r$ from the
 injection state (RK4; step-halving and a 6-state Cartesian re-formulation agree to
 $10^{-12}$) and gates $r$, $w_p$, $v_r$ and the unwrapped azimuth every row, plus
-in-sector rows and a fold count equal to the oracle's sector count.  The tolerances are
-**not** the print floor: IGLOO samples the $\theta = 0$ components unrotated between folds
-(the 2.5D approximation), which the W-plan quantifies as an outward radial bias
-$\Delta t_\mathrm{seg}/2\tau = 2.5\cdot10^{-3}$ on the drift; the run reproduces the
-segment-wise model of that error to 3 % ($\max|\Delta r| = 6.8\cdot10^{-5}$,
-$5.8\cdot10^{-5}$, $7.5\cdot10^{-5}$, all outward), and the gate sits at $\approx 3\times$
-it.  Proven RED with the fold rotating position only (10–200× the tolerances, the parcel
-stops spiralling) and with $\Omega = 0$ (no folds).  When the exact 2.5D sampling (W-plan
-item E) lands, this is the case whose tolerances tighten to the floor.  **GATED GREEN**
-(2026-09-17).
+in-sector rows and a fold count equal to the oracle's sector count.  The gate sits at
+$\approx 6\times$ the F12.6 print floor ($3\cdot10^{-6}$ on $r$, $w_p$, $v_r$;
+$8\cdot10^{-6}$ on $\theta$): the gas is sampled at the parcel's $(x, r)$ and its velocity
+rotated to the parcel's azimuth (`sampleGas2D`, exact for any axisymmetric field), so the
+measured residual is $5\cdot10^{-7}$.  The case was built first against the previous
+sampling — the $\theta = 0$ components read unrotated at $(x, y)$, an outward radial bias
+$\Delta t_\mathrm{seg}/2\tau = 2.5\cdot10^{-3}$ on the drift that the run reproduced to
+3 % of the W-plan's model ($\max|\Delta r| = 6.8\cdot10^{-5}$, $5.8\cdot10^{-5}$,
+$7.5\cdot10^{-5}$, all outward) — and that sampling is now its proven-RED (19–25× on $r$
+and $v_r$), alongside the fold rotating position only (10–200×, the parcel stops
+spiralling) and $\Omega = 0$ (no folds).  **GATED GREEN** (2026-09-17).
 
 <figure>
   {% include "vv/images/swirl-wedge.svg" ignore missing %}

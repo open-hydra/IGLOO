@@ -53,13 +53,13 @@ a near-zero landing.
 **What this case does NOT pin.** The fold's cadence is not "every 1° crossing": under
 `mesh2D` the containment test is z-blind (`geometry.f90`, quad in x–y), so a k-face crossing
 never interrupts a segment and the unfolded azimuth at a segment end can reach several
-sectors (the closed-form fold handles any n). Between folds the gas is sampled at the
-unrotated (x, r cos θ) with V_g/W_g unrotated — the O(θ) frame error the W-plan's exact 2.5D
-sampling (item E) is meant to remove; this gate is behavioral (in-sector, no stall, exits)
-and does not measure that error. Worse for an INTERIOR swirling parcel (not at a gas
-boundary): its segment has no k-face cap at all (`computeDeltat` on the z-flattened dual quad
-sees only u, v), the only bound on the unfolded azimuth is the dual's y-range through
-y = r cos θ, and until the fold the gas is sampled at radius r cos θ with V_g/W_g in the k=1
-frame while the source/euler deposits land in the pre-fold cell — an O(1) sampling/deposit
-error for strongly swirling interior parcels that no gate can see (ledger O23, reviewer's
-reading, not reproduced). Item E of the W-plan is the fix; this gate is not.
+sectors (the closed-form fold handles any n). The gas sample between folds is exact since
+W-plan item E (`Lib_Equations::sampleGas2D`: evaluated at the parcel's (x, r), velocity
+rotated to its azimuth — `standard/swirl-wedge` gates it at the print floor); this gate is
+behavioral (in-sector, no stall, exits) and measures nothing quantitative. What remains open
+for an INTERIOR swirling parcel far from the sector (no k-face cap on its segment, the
+unfolded azimuth bounded only by the dual's y-range through y = r cos θ): the dual cell is
+still LOCATED by (x, y = r cos θ), so past a few sectors the interpolation extrapolates from
+a cell inward of the parcel's true radius, and the source/euler deposits land in the pre-fold
+cell — the deposit half of ledger O23 (reviewer's reading, not reproduced); the sampling half
+is closed by E.

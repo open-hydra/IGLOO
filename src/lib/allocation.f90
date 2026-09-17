@@ -104,6 +104,7 @@ contains
             error stop 'IGLOO: axisymmetric axis must lie in the x-y plane'
           endif
           write(*,'(A)') '     - 2D path: axisymmetric wedge, 2.5D (W and wp carried; fold rotates position AND velocity)'
+          write(*,'(A)') '     - gas sampled at the parcel (x, r), velocity rotated to its azimuth (exact 2.5D sampling)'
         endif
       endif
       allocate(blk%center(3,1:blk%Nx,1:blk%Ny,1:blk%Nz))

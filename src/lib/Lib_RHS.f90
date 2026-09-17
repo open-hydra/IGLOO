@@ -414,7 +414,7 @@ contains
   subroutine rhsStandard(neq, time, Z, F, aux,naux, auxst,nauxst, &
                           hTabM, rhoTabM,                  &
                           gasNodes,gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, interp2ndOrder2D
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, toll, &
                                bodyForce, bodyAccel, srcBodyForce
     use IGLOO_Lib_Properties, only: comp_TfromTab, lookupTab
@@ -440,7 +440,7 @@ contains
     if (ind_d > 0) then; d = aux(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
     ! 2nd order gas interpolation
     if (ord2) then
-      if (mesh2D) then; call interp2ndOrder2D(gasVert, gasNodes, Z(1:3), nsp, gas)
+      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
       else
         xi0_loc = auxst(ind_sxi:ind_sxi+2)
         call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
@@ -448,7 +448,7 @@ contains
       endif
     endif
 
-    Vdif = gas(2:4) - Z(4:6)
+    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
     slip = norm2(Vdif)
     !> Fase C safety net: gas degenerato (μ<=0) -> no drag, no heat.
     !  Particella propaga per inerzia; outer loop la sposta in cella interna.
@@ -501,7 +501,7 @@ contains
   subroutine rhsEvaporation(neq, time, Z, F, aux,naux, auxst,nauxst, &
                              hTabM, rhoTabM, psatTabM,         &
                              gasNodes, gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, interp2ndOrder2D
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
     use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor
@@ -531,7 +531,7 @@ contains
 
     ! 2nd order gas interpolation
     if (ord2) then
-      if (mesh2D) then; call interp2ndOrder2D(gasVert, gasNodes, Z(1:3), nsp, gas)
+      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
       else
         xi0_loc = auxst(ind_sxi:ind_sxi+2)
         call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
@@ -539,7 +539,7 @@ contains
       endif
     endif
 
-    Vdif = gas(2:4) - Z(4:6)
+    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
 
@@ -582,7 +582,7 @@ contains
   subroutine rhsBreakupOnly(neq, time, Z, F, aux,naux, auxst,nauxst, &
                              hTabM, rhoTabM, mupTabM, sigTabM, &
                              gasNodes, gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, interp2ndOrder2D
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
     use IGLOO_Lib_Breakup, only: breakupOde
@@ -613,7 +613,7 @@ contains
 
     ! 2nd order gas interpolation
     if (ord2) then
-      if (mesh2D) then; call interp2ndOrder2D(gasVert, gasNodes, Z(1:3), nsp, gas)
+      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
       else
         xi0_loc = auxst(ind_sxi:ind_sxi+2)
         call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
@@ -621,7 +621,7 @@ contains
       endif
     endif
 
-    Vdif = gas(2:4) - Z(4:6)
+    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
 
@@ -662,7 +662,7 @@ contains
   subroutine rhsEvapBreakup(neq, time, Z, F, aux,naux, auxst,nauxst,     &
                              hTabM, rhoTabM, mupTabM, sigTabM, psatTabM, &
                              gasNodes, gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, interp2ndOrder2D
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
     use IGLOO_Lib_Breakup,     only: breakupOde
@@ -698,7 +698,7 @@ contains
 
     ! 2nd order gas interpolation
     if (ord2) then
-      if (mesh2D) then; call interp2ndOrder2D(gasVert, gasNodes, Z(1:3), nsp, gas)
+      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
       else
         xi0_loc = auxst(ind_sxi:ind_sxi+2)
         call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
@@ -706,7 +706,7 @@ contains
       endif
     endif
 
-    Vdif = gas(2:4) - Z(4:6)
+    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
 
@@ -770,7 +770,7 @@ contains
   subroutine rhsAlCombustion(neq, time, Z, F, aux,naux, auxst,nauxst, &
                               hTabM, rhoTabM,                   &
                               gasNodes, gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, interp2ndOrder2D
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
     use IGLOO_Lib_Combustion,  only: becksteadRate, nmp
@@ -799,7 +799,7 @@ contains
 
     ! 2nd order gas interpolation
     if (ord2) then
-      if (mesh2D) then; call interp2ndOrder2D(gasVert, gasNodes, Z(1:3), nsp, gas)
+      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
       else
         xi0_loc = auxst(ind_sxi:ind_sxi+2)
         call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
@@ -807,7 +807,7 @@ contains
       endif
     endif
 
-    Vdif = gas(2:4) - Z(4:6)
+    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
 

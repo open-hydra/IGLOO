@@ -6,8 +6,54 @@ module Lib_Equations
     public :: interphase
     public :: interp2ndOrder
     public :: interp2ndOrder2D
+    public :: sampleGas2D
+    public :: meridianToAzimuth
 
 contains
+
+  !***********************************************************************************************************!
+  !> 2.5D gas sample on an axisymmetric wedge (W-plan item E). The 2D dual lives in the meridian plane
+  !  (axisDir, refDir) and its vectors are the theta = 0 Cartesian components, so a parcel folded to
+  !  azimuth theta must NOT read the field at its own (x, y) unrotated: evaluate the meridian field at
+  !  the parcel's (axial, radial) position and rotate the velocity to its azimuth. Exact for any
+  !  axisymmetric field; the fold (axisymFold) still keeps the parcel inside the sector. On the
+  !  meridian plane itself (s == 0, every z = 0 parcel) this is the plain bilinear call, bit for bit.
+  subroutine sampleGas2D(vertices, gasNodes, p, nsp, gas)
+    use IGLOO_variables,    only: axisym, axisDir, refDir
+    use IGLOO_VectorModule, only: cross, rotateVector
+    implicit none
+    integer,  intent(in)  :: nsp
+    real(R8), intent(in)  :: vertices(3,4), gasNodes(nsp,4), p(3)
+    real(R8), intent(out) :: gas(nsp)
+    real(R8) :: ax, c, s, p0(3)
+
+    if (axisym) then
+      s = dot_product(p, cross(axisDir, refDir))
+      if (s /= 0._R8) then
+        ax = dot_product(p, axisDir)
+        c  = dot_product(p, refDir)
+        p0 = ax*axisDir + hypot(c, s)*refDir
+        call interp2ndOrder2D(vertices, gasNodes, p0, nsp, gas)
+        gas(2:4) = rotateVector(gas(2:4), axisDir, atan2(s, c))   ! gas(2:4): velocity (nsp = 1)
+        return
+      endif
+    endif
+    call interp2ndOrder2D(vertices, gasNodes, p, nsp, gas)
+  end subroutine sampleGas2D
+
+  !> ord1 counterpart: the cell value is the meridian-frame velocity; return it at p's azimuth.
+  !  Guarded on the ord1 wedge path so the ord2 sample (already rotated) is never rotated twice.
+  pure function meridianToAzimuth(vg, p) result(v)
+    use IGLOO_variables,    only: axisym, axisDir, refDir, ord2
+    use IGLOO_VectorModule, only: cross, rotateVector
+    implicit none
+    real(R8), intent(in) :: vg(3), p(3)
+    real(R8) :: v(3), s
+    v = vg
+    if (ord2 .or. .not.axisym) return
+    s = dot_product(p, cross(axisDir, refDir))
+    if (s /= 0._R8) v = rotateVector(vg, axisDir, atan2(s, dot_product(p, refDir)))
+  end function meridianToAzimuth
 
   !***********************************************************************************************************!
   !*************************************** DRAG FORCE & HEAT EXCHANGE  ***************************************!

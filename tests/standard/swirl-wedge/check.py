@@ -21,20 +21,22 @@ input.ini (no transcribed constant), with two in-file refutations run before any
 system with the true field agrees with the cylindrical form to < RK_SELF in r and w. Two
 formulations of one physics guard the oracle against a transcription slip.
 
-What the code does NOT do (W-plan section 2, the 2.5D approximation): it samples the
-theta=0 Cartesian components (U0, 0, Om y) at the parcel's (x, y) without rotating them
-to the parcel's azimuth, so between folds the -Om z component is missing (frame error,
-first order in theta) and the fold only re-sectors at segment ends (dual-cell crossings,
-every dx/U0 = 0.01 s here). The mean spurious radial acceleration is Om w dt_seg/(2 tau),
-i.e. a relative outward bias dt_seg/(2 tau) = 2.5e-3 on the centrifugal drift; the
-azimuthal velocity settles low by delthe^2/12 = 2.5e-5. The tolerances below are ~3x the
-residuals of a segment-wise model of exactly that behaviour (scratch swirl_design.py,
-DOP853 rtol 1e-12, reproduced 2026-09-17: max|dr| 6.8e-5 / 5.8e-5 / 7.5e-5, max|dw|
-6.6e-6 / 1.5e-6 / 9.5e-6, max|dtheta| 3.2e-5 / 1.3e-5 / 8.1e-5, max|dv_r| 6.3e-5 /
-6.4e-5 / 5.8e-5 for P1/P2/P3) -- a derived budget, not the print floor. Item E of the
-W-plan (exact 2.5D sampling) removes the frame error, after which this gate tightens to
-the floor. Proven RED (INFO.md): the fold rotating position only (obj_bc.f90 axisymFold,
-velocity line disabled) breaks G3/G4/G5 by 10-200x the tolerances; omega = 0 breaks G2.
+What the code does (W-plan item E, exact 2.5D sampling): the 2D dual holds the theta=0
+Cartesian components (U0, 0, Om y); Lib_Equations::sampleGas2D evaluates them at the
+parcel's (x, r) and rotates the velocity to the parcel's azimuth, so the sampled field is
+the true (U0, -Om z, +Om y) at every RHS call and the fold (segment ends) is an exact
+isometry of the problem. The residual against the oracle is then the F12.6 print floor
+(half-ULP 5e-7 on r, v_r, w; ~5e-7/r on theta) plus the ODE tolerance: measured 2026-09-17
+max|dr| 5.0e-7, max|dw| 5.2e-7, max|dv_r| 5.9e-7, max|dtheta| 1.7e-6 (P3, r = 0.3). The
+tolerances below sit ~6x above that floor. Before E the code sampled the theta=0 components
+UNROTATED at (x, y) (the 2.5D approximation of W-plan section 2): a frame error first
+order in theta, an outward radial bias dt_seg/(2 tau) = 2.5e-3 on the centrifugal drift,
+max|dr| 6.75e-5 / 5.80e-5 / 7.52e-5 for P1/P2/P3 (within 3 % of the segment-wise model,
+scratch swirl_design.py) -- this gate's first cut absorbed that as a derived budget
+(2.5e-4 / 3.0e-5 / 2.5e-4 / 2.0e-4). Proven RED (INFO.md): E reverted (the unrotated
+sampling) breaks G3/G6 on every parcel by 19-25x, G5 on every parcel (1.6-10x) and G4 on
+P1/P3 (2-3x); the fold rotating position only breaks G3-G6 by 10-200x the OLD tolerances;
+omega = 0 breaks G2.
 
 Measured from OUTPUT/trajectories-A.dat (7F12.6,2E13.6E2,I8 = x y z u v w Tp d m ID; no
 time column): r = hypot(y, z), v_r = (y v + z w)/r, w_p = (y w - z v)/r,
@@ -64,11 +66,11 @@ U_TOL = 1e-6                                   # zero-slip clock
 RK_H = T_FLIGHT / 20000.0                      # RK4 step (self-checked below)
 RK_SELF = 1e-12                                # step-halving and cyl-vs-cart agreement
 
-# --- gate tolerances (W-plan section 4.5: ~3x the 2.5D-model residuals) ---
-TOL_R = 2.5e-4      # G3  |r - r_or|
-TOL_W = 3.0e-5      # G4  |w_p - w_or|
-TOL_TH = 2.5e-4     # G5  |theta_unwrapped - theta_or|
-TOL_VR = 2.0e-4     # G6  |v_r - v_r,or|
+# --- gate tolerances: ~6x the F12.6 print floor (exact 2.5D sampling, W-plan item E) ---
+TOL_R = 3.0e-6      # G3  |r - r_or|          floor 5.0e-7; pre-E residual 5.8e-5..7.5e-5
+TOL_W = 3.0e-6      # G4  |w_p - w_or|        floor 5.2e-7; pre-E 1.9e-6..9.8e-6 (P2 inside)
+TOL_TH = 8.0e-6     # G5  |theta_unw - th_or| floor 1.7e-6; pre-E 1.3e-5..8.2e-5
+TOL_VR = 3.0e-6     # G6  |v_r - v_r,or|      floor 5.9e-7; pre-E 5.8e-5..6.4e-5
 
 
 def fail(msg):
@@ -245,7 +247,7 @@ def main():
               f"max|dr|={worst['r']:.2e} (end {end_dr:+.2e}) max|dw|={worst['w']:.2e} "
               f"max|dtheta|={worst['th']:.2e} max|dv_r|={worst['vr']:.2e}")
     print(f"[PASS] swirl-wedge: {len(parts)} parcels, tau={TAU:.3f} St={OMEGA*TAU:.2f}, "
-          f"delthe={DELTHE:.6f}; r/w/theta/v_r within the 2.5D budget "
+          f"delthe={DELTHE:.6f}; r/w/theta/v_r at the print floor "
           f"({TOL_R:.1e}/{TOL_W:.1e}/{TOL_TH:.1e}/{TOL_VR:.1e})")
     return 0
 
