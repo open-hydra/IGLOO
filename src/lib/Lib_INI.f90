@@ -693,16 +693,8 @@ contains
     if (error/=0) ode_word='H-sdirk4'
     select case (trim(ode_word))
       ! case ('dvodef90')
-      case ('H-sdirk4')
-        ! valid
-      case ('H-dopri5')
-        !> Interim (ledger O25): OSlo's dopri5.f:512 still calls the eleven-argument SOLOUT, so IGLOO's
-        !  cell-exit interrupt never reaches DOPRI5 and every parcel dies at injection with exit 0.
-        !  Refuse until both OSlo gitlinks carry the one-line fix; then drop this case and the DISABLED
-        !  flag on tests/standard/drag-stokes-dopri5.
-        write(*,'(A)') ' [ERROR] [IGLOO-ODE] ode-solver = H-dopri5 is disabled: OSlo dopri5.f half-patched SOLOUT'
-        write(*,'(A)') '         (IGLOO ledger O25); use H-sdirk4 until the OSlo fix lands.'
-        error stop 'IGLOO: ode-solver H-dopri5 is disabled (O25)'
+      case ('H-sdirk4', 'H-dopri5')
+        ! valid (H-dopri5 needs OSlo's dopri5.f SOLOUT fix, ledger O25; gated by drag-stokes-dopri5)
       case default
         write(*,*)
         write(*,*) "Wrong ode-solver input ---> "//trim(ode_word)

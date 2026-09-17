@@ -196,7 +196,7 @@ Selects and tunes the ODE integrator.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `ode-solver` | string | `H-sdirk4` | Integrator: `H-sdirk4` (implicit SDIRK4). `H-dopri5` (explicit DOPRI5) is refused until the OSlo SOLOUT fix lands (ledger O25) |
+| `ode-solver` | string | `H-sdirk4` | Integrator: `H-sdirk4` (implicit SDIRK4) or `H-dopri5` (explicit Dormand–Prince 5(4)); any other token is refused |
 | `relative-tol` | real | `1e-10` | Relative ODE tolerance |
 | `absolute-tol` | real | `1e-10` | Absolute ODE tolerance |
 | `max-steps-ode` | integer | `100000` | Maximum ODE steps per cell crossing |

@@ -156,7 +156,7 @@ contains
 
     ! --- [IGLOO-ODE] ---
     call reg%add('IGLOO-ODE','ode-solver',d_s(10),'H-sdirk4', &
-      'ODE integrator (OSlo). H-dopri5 is accepted by the registry but refused at run time until the OSlo SOLOUT fix lands (ledger O25)','H-dopri5, H-sdirk4',.false.)
+      'ODE integrator (OSlo): H-sdirk4 implicit SDIRK4 (stiff-safe), H-dopri5 explicit Dormand-Prince 5(4)','H-dopri5, H-sdirk4',.false.)
     call reg%add('IGLOO-ODE','max-steps-ode',d_i(8),'100000', &
       'Maximum ODE steps per integrator call','',.false.)
     call reg%add('IGLOO-ODE','relative-tol',d_r(24),'1e-10', &

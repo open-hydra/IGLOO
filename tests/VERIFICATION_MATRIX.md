@@ -1,6 +1,6 @@
 # Verification matrix
 
-One row per registered CTest entry (81 in a serial build: 53 e2e + 28 unit incl. `self_test` and
+One row per registered CTest entry (80 in a serial build: 52 e2e + 28 unit incl. `self_test` and
 `registry-docs`; a `USE_MPI` build adds the 7 `mpi-*` rows in their own section, 87).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
@@ -113,8 +113,7 @@ oracle possible.
 | **refuse-gas-order** | — (kind 8, refusal) | *setup refusal*: `gas-order = 3` → `IGLOO: gas-order must be 1 or 2` (ledger O21: silently became 2, dead warning) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-out-file** | — (kind 8, refusal) | *setup refusal*: `out-file = nonsense` → `IGLOO: unknown out-file token` (ledger O21: meant both + a warning; the registry default `E+S` parsed as `E`) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-ode-solver** | — (kind 8, refusal) | *setup refusal*: `ode-solver = H-radau5` → `IGLOO: unknown ode-solver` (ledger O26, last site: was a plain `stop`) | as `drag-stokes` | as `drag-stokes` |
-| **refuse-dopri5** | — (kind 8, refusal, interim) | *setup refusal*: `ode-solver = H-dopri5` → `IGLOO: ode-solver H-dopri5 is disabled (O25)` until both OSlo gitlinks carry the SOLOUT fix (a run selecting it lost every parcel with exit 0) | as `drag-stokes` | as `drag-stokes` |
-| **drag-stokes-dopri5** | `[Stokes]` (drag-stokes's oracle, symlinked) | **DISABLED (ledger O25)** — `ode-solver = H-dopri5`, otherwise `drag-stokes`. RED at OSlo `fb8255d`: every parcel dies at injection (NMAX exceeded) because `dopri5.f:512` still calls Hairer's eleven-argument `SOLOUT` and IGLOO's interrupt never reaches DOPRI5; with the one-line OSlo fix 25/25 pass (resid/tol 0.014). Registered `DISABLED` so ctest shows "Not Run" until both OSlo gitlinks move | as `drag-stokes` | as `drag-stokes` |
+| **drag-stokes-dopri5** | `[Stokes]` (drag-stokes's oracle, symlinked) | `ode-solver = H-dopri5`, otherwise `drag-stokes` — the only exercise of the explicit solver. RED at OSlo `fb8255d` (ledger O25): every parcel died at injection (NMAX exceeded) because `dopri5.f:512` still called Hairer's eleven-argument `SOLOUT` and IGLOO's interrupt never reached DOPRI5; green since the fork's `fix/dopri5-solout` (six-argument call, silent label 79): 25/25, resid/tol 0.014 | as `drag-stokes` | as `drag-stokes` |
 | **khrt-e2e-rt** | `[Reitz87]` (as `khrt-e2e`) | *RT-shatter persistence gate* (`check_rt.py`) on `khrt-e2e`'s own run: the RT/shed event must fire, apply, and persist as a mass-consistent discontinuous shatter (found and gated A19; promoted from a `WILL_FAIL` sentinel 2026-07-23) | as `khrt-e2e` | as `khrt-e2e` |
 | **repeat-drag-stokes** | — (kind 8, harness contract) | *two-sweep repeatability* (`support/twosweep.f90` + `tools/check_twosweep.py`): sweep 1 ≡ sweep 0 — `.dat` sorted multisets identical, `.tec` ≤ 1e-12 scale-relative; **plus gas-cycle**: original field → `U` doubled → original, sweep 1 must differ, sweep 2 must match sweep 0 | as `drag-stokes` | as `drag-stokes` |
 | **repeat-db-injection** | — (kind 8) | *two-sweep repeatability*, steady mode (the DB `vInj` hand-off, A28) | as `db-injection` | as `db-injection` |
@@ -187,12 +186,12 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-53 `e2e`-labelled + 28 `unit`-labelled = **81 CTest entries** in a serial build (+7 `mpi-*` under
-`USE_MPI`, 88), all green except `drag-stokes-dopri5`, registered **DISABLED** (ledger O25; ctest
-reports it "Not Run", so the serial verdict reads 80/80) (counted from `tests/CMakeLists.txt` 2026-09-17). The `e2e` count
+52 `e2e`-labelled + 28 `unit`-labelled = **80 CTest entries** in a serial build (+7 `mpi-*` under
+`USE_MPI`, 87), all green (counted from `tests/CMakeLists.txt` 2026-09-17; `refuse-dopri5` and the DISABLED flag on
+`drag-stokes-dopri5` went with the O25 fix). The `e2e` count
 includes `khrt-e2e-rt`, the KHRT RT-shatter persistence gate, the two A23/S4 additions
 `khrt-stress` and `khrt-e2e-threads`, the A24 pinning case `bc-center-2grp`, the seven
-`repeat-*` two-sweep gates (eight, `repeat-two-mat` included), `axis-200`, `wedge-fold`, `swirl-wedge`, `two-mat`, the fifteen `refuse-*` setup-refusal gates and the disabled `drag-stokes-dopri5`; the `unit` count includes `self_test`, `registry-docs`,
+`repeat-*` two-sweep gates (eight, `repeat-two-mat` included), `axis-200`, `wedge-fold`, `swirl-wedge`, `two-mat`, the fourteen `refuse-*` setup-refusal gates and `drag-stokes-dopri5`; the `unit` count includes `self_test`, `registry-docs`,
 `test_rng_stream`, `test_axis_dispatch`, `test_graze_standoff`, `test_dual_clip` and `test_mhb98_decane`
 and `registry-docs`, and the two O7 additions `test_kh_rayleigh_limit` and
 `test_khrt_interaction`. Unit families that emit
