@@ -212,3 +212,6 @@ Selects and tunes the ODE integrator.
 
 !!! warning "`[GPB-Phase1] rho` is ignored at run time"
     Particle density at run time comes from `INPUT/properties.dat`, not from the `rho` key in `[GPB-Phase1]`. The `[GPB-Phase*]` sections are ATLAS input; IGLOO uses the property tables that ATLAS writes to `INPUT/properties.dat`.
+
+!!! warning "`properties.dat` zones bind to materials by ORDER"
+    Zone *i* of `INPUT/properties.dat` is the material on line *i* of `INPUT/phase.txt`; the zone title (`ZONE T="..."`) is not read. ATLAS writes both files in material order, so a generated case is always consistent — the trap is a hand-edited or regenerated `phase.txt` paired with a stale `properties.dat`, which is a silent density/cp swap. IGLOO refuses a file whose zone count differs from the material count or whose zones do not share one temperature table.
