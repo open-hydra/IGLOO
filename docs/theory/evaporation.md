@@ -187,7 +187,7 @@ as the `interface = LK` axis (see [Interface models](#interface-models)).
 
 The gas-side models above take the surface vapour fraction as input; the
 `interface` axis selects how it is closed.  Global default in `[IGLOO-Models]`,
-per-material override in `[GPB-PhaseX]`:
+per-material override in `[IGLOO-MaterialX]`:
 
 ```
 interface = VLE   ; equilibrium (default)
@@ -226,7 +226,7 @@ $10^{-12}$, at most 30 passes, unconverged exit returns the last full — always
 finite — evaluation).  The correction vanishes as $p\,d \to \infty$ or
 $\alpha_e \to \infty$ and recovers VLE exactly.
 
-The accommodation coefficient $\alpha_e$ is `[GPB-PhaseX] alpha-e`
+The accommodation coefficient $\alpha_e$ is `[IGLOO-MaterialX] alpha-e`
 (default 1.0).  Note that `evaporation = d2-law` is $B_T$-driven and never
 consumes $X_s$, so `interface = LK` has **no effect** on it — the setup prints
 a warning for that combination.  Verified by the

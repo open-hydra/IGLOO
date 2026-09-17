@@ -1,7 +1,7 @@
 # Metal Combustion
 
 Aluminum combustion is the first model of the metal track: a material with
-`[GPB-PhaseX] combustion = Beckstead` in `input.ini` is routed to the dedicated
+`[IGLOO-MaterialX] combustion = Beckstead` in `input.ini` is routed to the dedicated
 ODE family `model = 5` (`src/lib/Lib_RHS.f90::rhsAlCombustion`), whose closure
 lives in `src/lib/Lib_Combustion.f90`.  The state layout is identical to the
 evaporation family (model 2): position/velocity in Z(1:6), temperature (or
@@ -99,7 +99,7 @@ spawning the inert alumina residual) is phase M2.
 
 ## Inputs
 
-All in the material's `[GPB-PhaseX]` section (see the
+All in the material's `[IGLOO-MaterialX]` section (see the
 [registry](../user/registry.md)):
 
 | Key | Meaning | Default |

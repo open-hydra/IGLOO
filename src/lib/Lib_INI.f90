@@ -44,9 +44,20 @@ contains
     character(len=llen), intent(out) :: gasfile
     character(len=100) :: requiredOut
     character(len=100) :: mollify_word
+    character(len=100) :: phaseName
     character(len=1)   :: outfile
     integer            :: gasOrder, n
 
+    !> Condensed phase this solver reads: the ATLAS phase name ([GPB-Phase*] name), so the file
+    !> set is INPUT/<phase>-{phase.txt,properties.dat,bc.txt}. Optional: absent keeps the prefix
+    !> already in force (a parent app may have set it; standalone default is '' = unnamed files).
+    call fini%get(section_name='IGLOO-General', option_name='phase', val=phaseName, error=error)
+    if (error==0 .and. len_trim(adjustl(phaseName))>0) then
+      phaseName = adjustl(phaseName)
+      if (index(trim(phaseName),'-')>0) error stop '[ERROR] [IGLOO-General] phase must not contain "-"'
+      if (len_trim(phaseName)+1 > len(IGLOO_phase_prefix)) error stop '[ERROR] [IGLOO-General] phase name too long'
+      IGLOO_phase_prefix = trim(phaseName)//'-'
+    endif
     !> TEC gas solution file
     call fini%get(section_name='IGLOO-General', option_name='gas-file', val=gasfile, error=error)
     !> Gas background (recontruction) approximation order
@@ -305,10 +316,20 @@ contains
   end subroutine read_models
 
 
-  !> Per-material model overrides + phase-change properties from [GPB-Phase<imat>].
+  !> Per-material model overrides + phase-change properties from [IGLOO-Material<imat>], imat being
+  !  the material's position in INPUT/<phase>-phase.txt (the ATLAS material order).
   !  Called from IO.f90 after the global-defaults assignment; every key optional (absent =>
   !  the global default already in `mat` stands). `combustion` present => this material burns
   !  instead of evaporating (loud warning if both were configured).
+  !
+  !  TRANSITIONAL (2026-09-16). The per-material models and their parameters are ATLAS input: they belong
+  !  in [GPB-Phase<k>] and ATLAS GPB is to WRITE them into INPUT/<phase>-phase.txt, from where
+  !  read_cdp_properties will read them -- a solver reads only its own [IGLOO-*] INI sections, never the
+  !  preprocessor's. Until GPB writes the phase file that way, the keys are read from [IGLOO-Material<imat>]
+  !  (this routine). Reading [GPB-Phase*] directly is NOT an option: it mis-indexes under hydra-MI2 (where
+  !  [GPB-Phase1] is the gas) and bypasses ATLAS. A key found in a [GPB-Phase*] section is reported as
+  !  not-yet-applied by warn_igloo_keys_in_preprocessor_sections so nothing is silently inert.
+  !  When the phase-file path lands: delete this routine, the warning and the [IGLOO-Material*] docs.
   subroutine read_phase_models(imat, mat)
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Evaporation, only: assign_evaporation, assign_liquid, assign_interface, &
@@ -317,9 +338,10 @@ contains
     integer,            intent(in)    :: imat
     type(obj_material), intent(inout) :: mat
     character(len=128) :: w
-    character(len=16)  :: sec
+    character(len=20)  :: sec
 
-    write(sec,'(a,i0)') 'GPB-Phase', imat
+    if (imat == 1) call warn_igloo_keys_in_preprocessor_sections()
+    write(sec,'(a,i0)') 'IGLOO-Material', imat
 
     !> Model-axis overrides (words, same tokens as [IGLOO-Models])
     call fini%get(section_name=trim(sec), option_name='evaporation', val=w, error=error)
@@ -374,7 +396,43 @@ contains
     call fini%get(section_name=trim(sec), option_name='cp-solid', val=mat%cpSol,    error=error)
     if (error/=0) mat%cpSol = 0._R8
 
+    !> Effective per-material selection, so a case log shows what was actually resolved
+    write(*,'(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,es10.3)') '  >> ['//trim(sec)//'] evap=', mat%evapSelect, &
+      ' liq=', mat%liqSelect, ' intf=', mat%intfSelect, ' boil=', mat%boilSelect, ' comb=', mat%combSelect, &
+      ' solid=', mat%solidSelect, ' alpha-e=', mat%alphaE
+
   end subroutine read_phase_models
+
+
+  !> Transitional notice: the per-material model keys in [GPB-Phase*] are ATLAS input that GPB does not
+  !  yet write into the phase file, so IGLOO cannot see them there. Say so, instead of leaving them inert.
+  !  The preprocessor sections are opened ONLY to detect the keys -- no value is ever used by IGLOO.
+  subroutine warn_igloo_keys_in_preprocessor_sections()
+    implicit none
+    character(len=*), parameter :: keys(20) = [character(len=17) :: &
+      'evaporation', 'liquid-conduction', 'interface', 'boiling', 'combustion', 'solidification', &
+      'alpha-e', 'k-liq', 'mu-liq', 'K-burn', 'n-burn', 'X-eff', 'beta-part', 'xi-cap', 'T-ign',  &
+      'q-comb', 'T-melt', 'h-fus', 'T-nuc', 'cp-solid']
+    character(len=16)  :: sec
+    character(len=128) :: w
+    integer :: k, p, nfound
+
+    nfound = 0
+    do p = 1, 99
+      write(sec,'(a,i0)') 'GPB-Phase', p
+      if (.not. fini%has_section(section_name=trim(sec))) exit
+      do k = 1, size(keys)
+        call fini%get(section_name=trim(sec), option_name=trim(keys(k)), val=w, error=error)
+        if (error /= 0) cycle
+        nfound = nfound + 1
+        write(*,'(a)') ' [WARNING] ['//trim(sec)//'] '//trim(keys(k))//' is NOT applied: ATLAS GPB does not yet '// &
+                       'write the per-material models into the phase file, and IGLOO reads only its own sections.'
+      enddo
+    enddo
+    if (nfound > 0) write(*,'(a)') '           Until GPB writes them, set these keys in [IGLOO-Material<i>] '// &
+                                   '(i = material order in the phase file).'
+
+  end subroutine warn_igloo_keys_in_preprocessor_sections
 
 
   subroutine read_properties()

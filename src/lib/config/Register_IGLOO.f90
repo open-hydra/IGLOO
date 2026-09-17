@@ -54,15 +54,15 @@ contains
     call reg%add('IGLOO-Models','evaporation',d_s(8),'NoEvaporation', &
       'Evaporation model; presence enables phase change (LEB reserved, not implemented: hard error)','d2-law, CEM, CEM-B, ASM, TC',.false.)
     call reg%add('IGLOO-Models','liquid-conduction',d_s(11),'ITC', &
-      'Liquid-side conduction model, global default (per-material override in [GPB-PhaseX]); P2T not implemented yet (phase F3)','ITC, P2T',.false.)
+      'Liquid-side conduction model, global default (per-material override in [IGLOO-MaterialX]); P2T not implemented yet (phase F3)','ITC, P2T',.false.)
     call reg%add('IGLOO-Models','interface',d_s(12),'VLE', &
-      'Interface model, global default (per-material override in [GPB-PhaseX]): VLE equilibrium or LK Langmuir-Knudsen non-equilibrium (Miller-Harstad-Bellan 1998)','VLE, LK',.false.)
+      'Interface model, global default (per-material override in [IGLOO-MaterialX]): VLE equilibrium or LK Langmuir-Knudsen non-equilibrium (Miller-Harstad-Bellan 1998)','VLE, LK',.false.)
     call reg%add('IGLOO-Models','blowing',d_s(20),'none', &
       'Evaporative heat-transfer reduction f2 applied to the convective Qdot: none (f2=1) or LK '// &
       '= Miller-Harstad-Bellan 1998 eq.19, f2=b/(exp(b)-1) with b their eq.17 evaporation '// &
       'parameter. Off by default: it changes every evaporating case','none, LK',.false.)
     call reg%add('IGLOO-Models','boiling',d_s(13),'clamp', &
-      'Boiling branch, global default (per-material override in [GPB-PhaseX]); ZGR not implemented yet (phase F4)','clamp, ZGR',.false.)
+      'Boiling branch, global default (per-material override in [IGLOO-MaterialX]); ZGR not implemented yet (phase F4)','clamp, ZGR',.false.)
     call reg%add('IGLOO-Models','breakup',d_s(9),'NoBreakup', &
       'Breakup model','Pilch-Erdman, Reitz-Diawakar, Reitz-KHRT, TAB, ETAB',.false.)
     call reg%add('IGLOO-Models','Cd',d_r(3),'1.0', &
@@ -162,46 +162,46 @@ contains
     call reg%add('IGLOO-ODE','absolute-tol',d_r(25),'1e-10', &
       'ODE absolute tolerance','',.false.)
 
-    ! --- [GPB-PhaseX] --- per-material model overrides + phase-change properties (X = material index)
-    call reg%add('GPB-PhaseX','evaporation',d_s(14),'-', &
+    ! --- [IGLOO-MaterialX] --- per-material model overrides + phase-change properties (X = material order in the phase file)
+    call reg%add('IGLOO-MaterialX','evaporation',d_s(14),'-', &
       'Per-material override of the global evaporation model','d2-law, CEM, CEM-B, ASM, TC',.false.)
-    call reg%add('GPB-PhaseX','liquid-conduction',d_s(15),'ITC', &
+    call reg%add('IGLOO-MaterialX','liquid-conduction',d_s(15),'ITC', &
       'Per-material override of the liquid-side conduction model','ITC, P2T',.false.)
-    call reg%add('GPB-PhaseX','interface',d_s(16),'VLE', &
+    call reg%add('IGLOO-MaterialX','interface',d_s(16),'VLE', &
       'Per-material override of the interface model','VLE, LK',.false.)
-    call reg%add('GPB-PhaseX','boiling',d_s(17),'clamp', &
+    call reg%add('IGLOO-MaterialX','boiling',d_s(17),'clamp', &
       'Per-material override of the boiling branch','clamp, ZGR',.false.)
-    call reg%add('GPB-PhaseX','combustion',d_s(18),'-', &
+    call reg%add('IGLOO-MaterialX','combustion',d_s(18),'-', &
       'Metal combustion model; presence switches this material to the metal track (mutually exclusive with evaporation and breakup)','Beckstead',.false.)
-    call reg%add('GPB-PhaseX','solidification',d_s(19),'off', &
+    call reg%add('IGLOO-MaterialX','solidification',d_s(19),'off', &
       'Solidification with supercooling/recalescence; not implemented yet (phase M3)','on, off',.false.)
-    call reg%add('GPB-PhaseX','alpha-e',d_r(41),'1.0', &
+    call reg%add('IGLOO-MaterialX','alpha-e',d_r(41),'1.0', &
       'Langmuir-Knudsen evaporation accommodation coefficient (interface=LK)','',.false.)
-    call reg%add('GPB-PhaseX','k-liq',d_r(42),'0', &
+    call reg%add('IGLOO-MaterialX','k-liq',d_r(42),'0', &
       'Liquid thermal conductivity [W/m/K] (required if liquid-conduction=P2T)','',.false.)
-    call reg%add('GPB-PhaseX','mu-liq',d_r(43),'0', &
+    call reg%add('IGLOO-MaterialX','mu-liq',d_r(43),'0', &
       'Liquid viscosity [Pa s] (liquid-conduction=P2T)','',.false.)
-    call reg%add('GPB-PhaseX','K-burn',d_r(44),'0', &
+    call reg%add('IGLOO-MaterialX','K-burn',d_r(44),'0', &
       'Beckstead d^n burn-rate coefficient K at X-eff=1 [m^n-burn/s]; required > 0 with combustion=Beckstead','',.false.)
-    call reg%add('GPB-PhaseX','n-burn',d_r(45),'1.8', &
+    call reg%add('IGLOO-MaterialX','n-burn',d_r(45),'1.8', &
       'Beckstead burn-law diameter exponent (nominal 1.8, range 1.5-1.8)','',.false.)
-    call reg%add('GPB-PhaseX','X-eff',d_r(46),'1.0', &
+    call reg%add('IGLOO-MaterialX','X-eff',d_r(46),'1.0', &
       'Effective oxidizer mole fraction C_O2 + 0.6 C_H2O + 0.22 C_CO2; weights K as X-eff (linear) [Beck05]','',.false.)
-    call reg%add('GPB-PhaseX','beta-part',d_r(47),'0', &
+    call reg%add('IGLOO-MaterialX','beta-part',d_r(47),'0', &
       'Heat-partition fraction of q-comb released to the particle (weakly constrained; see theory/combustion)','',.false.)
-    call reg%add('GPB-PhaseX','xi-cap',d_r(48),'0', &
+    call reg%add('IGLOO-MaterialX','xi-cap',d_r(48),'0', &
       'Oxide-cap mass fraction retained on the burning particle','',.false.)
-    call reg%add('GPB-PhaseX','T-ign',d_r(49),'2350', &
+    call reg%add('IGLOO-MaterialX','T-ign',d_r(49),'2350', &
       'Ignition temperature [K]; the particle is inert (mdot=0) below it','',.false.)
-    call reg%add('GPB-PhaseX','q-comb',d_r(54),'0', &
+    call reg%add('IGLOO-MaterialX','q-comb',d_r(54),'0', &
       'Heat of combustion per unit Al mass [J/kg]; particle heating term = beta-part*q-comb*abs(mdot)','',.false.)
-    call reg%add('GPB-PhaseX','T-melt',d_r(50),'2327', &
+    call reg%add('IGLOO-MaterialX','T-melt',d_r(50),'2327', &
       'Melt temperature [K] (default: alumina)','',.false.)
-    call reg%add('GPB-PhaseX','h-fus',d_r(51),'0', &
+    call reg%add('IGLOO-MaterialX','h-fus',d_r(51),'0', &
       'Heat of fusion [J/kg] (solidification)','',.false.)
-    call reg%add('GPB-PhaseX','T-nuc',d_r(52),'0', &
+    call reg%add('IGLOO-MaterialX','T-nuc',d_r(52),'0', &
       'Nucleation (supercooling) temperature [K]; absent or 0 = 0.8*T-melt','',.false.)
-    call reg%add('GPB-PhaseX','cp-solid',d_r(53),'0', &
+    call reg%add('IGLOO-MaterialX','cp-solid',d_r(53),'0', &
       'Solid-phase specific heat [J/kg/K] (solidification)','',.false.)
 
   end subroutine Register_IGLOO_Params

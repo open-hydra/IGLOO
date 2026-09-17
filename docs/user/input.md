@@ -34,8 +34,16 @@ Parameters not specified take their default values. Unknown sections are silentl
 | `[IGLOO-Properties]` | Constant scalar properties for evaporation/breakup (per material) |
 | `[IGLOO-BC]` | Injection spacing (`ds`) or explicit particle coordinates |
 | `[IGLOO-ODE]` | ODE solver selection, tolerances, step count |
+| `[IGLOO-Material<i>]` | **Transitional.** Per-material model overrides and phase-change properties (`evaporation`, `combustion`, `alpha-e`, `K-burn`, ...); `i` = the material's order in the phase file. These are ATLAS input that GPB is to write into the phase file; this section exists only until it does |
 
 ## ATLAS-Generated Sections (not parsed by IGLOO)
+
+IGLOO reads only the `[IGLOO-*]` sections above. The sections below are the *preprocessor's* input:
+whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase.txt`,
+`properties.dat`, `bc.txt`). The per-material models (`evaporation`, `combustion`, `alpha-e`, ...) are
+meant to be `[GPB-Phase*]` keys written by GPB into the phase file; until GPB does that, IGLOO takes
+them from `[IGLOO-Material<i>]` and only *warns* when it sees them in a `[GPB-Phase*]` section (they
+are not applied from there — it used to read them from there and, under hydra-MI2, from the wrong phase).
 
 | Section | Role |
 |---------|------|
@@ -114,6 +122,7 @@ Controls the gas field source, output modes, and miscellaneous run-time options.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `gas-file` | string | — | Path to the Tecplot gas field (ignored when `external_gas` is provided by hydra) |
+| `phase` | string | `''` | ATLAS name of the condensed phase to read (`[GPB-Phase*] name`): the files become `INPUT/<phase>-{phase.txt,properties.dat,bc.txt}` and every output gets the `<phase>-` prefix. Absent keeps the prefix in force (unnamed `INPUT/phase.txt` standalone; the parent app's assignment under hydra-MI2). Must not contain `-` |
 | `gas-order` | integer | `2` | Gas interpolation order: `1` = cell-center value, `2` = second-order reconstruction |
 | `out-file` | string | both | Output fields: `E` = Eulerian only, `S` = source only; any other value = both |
 | `fsample-traj` | integer | `100` | Trajectory sampling: record every nth particle-state (scatter and trajectory output) |
