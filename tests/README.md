@@ -48,7 +48,7 @@ tests/
 │   └── tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/   # e2e
 ├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/
 │   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ two-mat/ periodic-y/ bc-center-2grp/   # e2e
-│   └── refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb}/   # setup-refusal gates
+│   └── refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver,dopri5}/   # setup-refusal gates
 ├── repeatability/                # two-sweep gates: drag-stokes/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/
 └── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ bc-center-2grp/ two-mat/ consistency/ consistency-two-mat/
 ```
@@ -95,7 +95,7 @@ the fix holds, RED on regression.
 
 ## Status
 
-ctest 74/74 in a serial build (75 registered: 47 e2e + 28 unit, `self_test` and `registry-docs`
+ctest 79/79 in a serial build (80 registered: 52 e2e + 28 unit, `self_test` and `registry-docs`
 among the latter; `drag-stokes-dopri5` is registered DISABLED until ledger O25's OSlo fix lands);
-`USE_MPI=ON` registers 7 more `mpi-*` cases, 81/81. Convergence-order
+`USE_MPI=ON` registers 7 more `mpi-*` cases, 86/86. Convergence-order
 aggregate tables (plan §4 T8-convergence) not started.

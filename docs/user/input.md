@@ -124,8 +124,8 @@ Controls the gas field source, output modes, and miscellaneous run-time options.
 | `gas-file` | string | — | Path to the Tecplot gas field (ignored when `external_gas` is provided by hydra) |
 | `phase` | string | `''` | ATLAS name of the condensed phase to read (`[GPB-Phase*] name`): the files become `INPUT/<phase>-{phase.txt,properties.dat,bc.txt}` and every output gets the `<phase>-` prefix. Absent keeps the prefix in force (unnamed `INPUT/phase.txt` standalone; the parent app's assignment under hydra-MI2). Must not contain `-` |
 | `gas-order` | integer | `2` | Gas interpolation order: `1` = cell-center value, `2` = second-order reconstruction |
-| `out-file` | string | both | Output fields: `E` = Eulerian only, `S` = source only; any other value = both |
-| `fsample-traj` | integer | `100` | Trajectory sampling: record every nth particle-state (scatter and trajectory output) |
+| `out-file` | string | `E+S` | Output fields: `E` = Eulerian only, `S` = source only, `E+S` or `ALL` (or absent) = both; any other token is refused |
+| `fsample-traj` | integer | `100` | Scatter-cloud density: nominal points per injection stream (sets the droplets-per-point quantum); trajectory rows follow `print-dcell`/`print-dtime`, not this key |
 | `print-dcell` | integer | `1` | Console print frequency in cell crossings |
 | `print-dtime` | real | `−1` | Console print frequency in seconds; `−1` disables time-based printing |
 | `mdot-max` | real | `0` | Maximum mass flow rate per particle [g/s]; used to auto-size injection spacing |
@@ -196,7 +196,7 @@ Selects and tunes the ODE integrator.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `ode-solver` | string | `H-sdirk4` | Integrator: `H-dopri5` (explicit DOPRI5) or `H-sdirk4` (implicit H-SDIRK4) |
+| `ode-solver` | string | `H-sdirk4` | Integrator: `H-sdirk4` (implicit SDIRK4). `H-dopri5` (explicit DOPRI5) is refused until the OSlo SOLOUT fix lands (ledger O25) |
 | `relative-tol` | real | `1e-10` | Relative ODE tolerance |
 | `absolute-tol` | real | `1e-10` | Absolute ODE tolerance |
 | `max-steps-ode` | integer | `100000` | Maximum ODE steps per cell crossing |

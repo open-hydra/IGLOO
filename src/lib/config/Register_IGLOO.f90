@@ -22,9 +22,11 @@ contains
     call reg%add('IGLOO-General','gas-order',d_i(1),'2', &
       'Gas field reconstruction order','1, 2',.false.)
     call reg%add('IGLOO-General','out-file',d_s(2),'E+S', &
-      'Output field: E = equivalent eulerian, S = coupling source; absent/other = both','E, S',.false.)
+      'Output field: E = equivalent eulerian, S = coupling source, E+S or ALL = both (also absent/blank); any other token is refused','E, S, E+S, ALL',.false.)
     call reg%add('IGLOO-General','fsample-traj',d_i(2),'100', &
-      'Particle-trajectory output sampling frequency','',.false.)
+      'Scatter-cloud density: nominal points per injection stream; sets the droplets-per-point quantum dNscat = Ndot*tauRef/(fsample-traj*nStreams). Not a trajectory sampling frequency (trajectory rows follow print-dcell/print-dtime)','',.false.)
+    call reg%add('IGLOO-General','probe-ids',d_s(21),'-', &
+      'DEBUG: integrate only the listed particle IDs, space-separated, a-b intervals allowed (e.g. 1 2 6 496-497); absent or empty = all','',.false.)
     call reg%add('IGLOO-General','print-dcell',d_i(3),'1', &
       'Trajectory print frequency in cell crossings','',.false.)
     call reg%add('IGLOO-General','print-dtime',d_r(1),'-1', &
@@ -154,7 +156,7 @@ contains
 
     ! --- [IGLOO-ODE] ---
     call reg%add('IGLOO-ODE','ode-solver',d_s(10),'H-sdirk4', &
-      'ODE integrator (OSlo)','H-dopri5, H-sdirk4',.false.)
+      'ODE integrator (OSlo). H-dopri5 is accepted by the registry but refused at run time until the OSlo SOLOUT fix lands (ledger O25)','H-dopri5, H-sdirk4',.false.)
     call reg%add('IGLOO-ODE','max-steps-ode',d_i(8),'100000', &
       'Maximum ODE steps per integrator call','',.false.)
     call reg%add('IGLOO-ODE','relative-tol',d_r(24),'1e-10', &

@@ -62,28 +62,37 @@ contains
     call fini%get(section_name='IGLOO-General', option_name='gas-file', val=gasfile, error=error)
     !> Gas background (recontruction) approximation order
     call fini%get(section_name='IGLOO-General', option_name='gas-order', val=gasOrder, error=error)
-    if (error/=0 .or. gasOrder<=0 .or. gasOrder>=2) then
+    if (error/=0) then
       gasOrder=2
       ord2=.true.
-      if (gasOrder<=0 .or. gasOrder>2) write(*,*) ' [WARNING] Gas rebuilding approximation order not valid'
       write(*,*) ' >> Defaulting to 2nd order rebuilding of the gas phase'
+    else if (gasOrder==2) then
+      ord2=.true.
+    else if (gasOrder/=1) then
+      !> Refuse rather than fall back: the old test reassigned 2 BEFORE checking, so its warning was dead (O21).
+      write(*,'(A,I0,A)') ' [ERROR] [IGLOO-General] gas-order = ', gasOrder, ' is not valid (1 or 2)'
+      error stop 'IGLOO: gas-order must be 1 or 2'
     endif
-    !> IGLOO output file [source terms or eulerian field]
-    outfile = 'A'
+    !> IGLOO output field(s): E = equivalent eulerian, S = coupling source, E+S/S+E/both = both (the
+    !  registry default); absent = both. Whole token, not its first character (O21: 'E+S' used to
+    !  parse as 'E'); an unknown token is refused instead of silently meaning both.
+    requiredOut = 'E+S'
     call fini%get(section_name='IGLOO-General', option_name='out-file', val=requiredOut, error=error)
-    if (error==0) outfile = requiredOut(1:1)
-    select case (outfile)
+    if (error/=0 .or. len_trim(requiredOut)==0) requiredOut = 'E+S'   ! absent or blank = both
+    select case (trim(adjustl(requiredOut)))
     case ('E','e')
       eulerSwitch = .true.
       write(*,*) ' >> Output field: equivalent eulerian'
     case ('S','s')
       sourceSwitch = .true.
       write(*,*) ' >> Output field: gas coupling source'
-    case default
+    case ('E+S','e+s','S+E','s+e','ES','es','SE','se','ALL','all','All','both','BOTH','Both')   ! hydra's MI2 cases write ALL
       eulerSwitch  = .true.
       sourceSwitch = .true.
-      write(*,*) ' [WARNING] Output file not recognized or not given'
       write(*,*) ' >> Output fields: gas coupling source & equivalent eulerian'
+    case default
+      write(*,'(A)') ' [ERROR] [IGLOO-General] out-file = '//trim(requiredOut)//' is not valid: E, S, E+S or ALL'
+      error stop 'IGLOO: unknown out-file token'
     end select
     srcSwitch = sourceSwitch
     eulSwitch = eulerSwitch
@@ -287,6 +296,11 @@ contains
         if (error/=0) bp(3) = 6._R8; bp(3) = 2_R8*bp(3)
         call fini%get(section_name='IGLOO-Models', option_name='method', val=bpMethod, error=error)
         if (error==0) then
+          !> 3 reaches a comment-only stub in TABmodel (rNew = 0 -> dp = 0 -> npdot divides by zero, O20).
+          if (bpMethod/=1 .and. bpMethod/=2) then
+            write(*,'(A,I0,A)') ' [ERROR] [IGLOO-Models] method = ', bpMethod, ' is not a TAB product-size method (1 or 2)'
+            error stop 'IGLOO: TAB method must be 1 or 2'
+          endif
           if (bpMethod==2) then
             call fini%get(section_name='IGLOO-Models', option_name='n', val=bp(4), error=error)
             if (error/=0) bp(4) = 3.5_R8
@@ -679,8 +693,16 @@ contains
     if (error/=0) ode_word='H-sdirk4'
     select case (trim(ode_word))
       ! case ('dvodef90')
-      case ('H-dopri5','H-sdirk4')
+      case ('H-sdirk4')
         ! valid
+      case ('H-dopri5')
+        !> Interim (ledger O25): OSlo's dopri5.f:512 still calls the eleven-argument SOLOUT, so IGLOO's
+        !  cell-exit interrupt never reaches DOPRI5 and every parcel dies at injection with exit 0.
+        !  Refuse until both OSlo gitlinks carry the one-line fix; then drop this case and the DISABLED
+        !  flag on tests/standard/drag-stokes-dopri5.
+        write(*,'(A)') ' [ERROR] [IGLOO-ODE] ode-solver = H-dopri5 is disabled: OSlo dopri5.f half-patched SOLOUT'
+        write(*,'(A)') '         (IGLOO ledger O25); use H-sdirk4 until the OSlo fix lands.'
+        error stop 'IGLOO: ode-solver H-dopri5 is disabled (O25)'
       case default
         write(*,*)
         write(*,*) "Wrong ode-solver input ---> "//trim(ode_word)
@@ -689,7 +711,7 @@ contains
         write(*,*) "- H-dopri5 "
         write(*,*) "- H-sdirk4 "
         write(*,*)
-        stop
+        error stop 'IGLOO: unknown ode-solver'
     end select
 
     call fini%get(section_name='IGLOO-ODE', option_name='max-steps-ode', val=iopt(1), error=error)

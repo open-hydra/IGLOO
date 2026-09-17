@@ -9,7 +9,7 @@
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ two-mat/ periodic-y/ bc-center-2grp/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ two-mat/ periodic-y/ bc-center-2grp/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver,dopri5}
 #   repeatability/      two-sweep gates (twosweep driver): 8 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
@@ -377,11 +377,25 @@ igloo_refusal_case(refuse-evaporation-token infrastructure/refusals/evaporation-
                    "IGLOO: unknown evaporation model"                   "e2e;refusal;evaporation")
 igloo_refusal_case(refuse-evaporation-leb   infrastructure/refusals/evaporation-leb
                    "IGLOO: evaporation=LEB is not implemented"          "e2e;refusal;evaporation")
+# INI-contract refusals (ledger O20/O21/O25/O26 last site): each was RED on the pre-fix binary --
+# method=3 ran to non-finite states, gas-order=3 silently became 2, out-file=nonsense meant both
+# with a warning, ode-solver=H-radau5 was a plain `stop`, H-dopri5 lost every parcel with exit 0.
+igloo_refusal_case(refuse-tab-method       infrastructure/refusals/tab-method
+                   "IGLOO: TAB method must be 1 or 2"                   "e2e;refusal;breakup")
+igloo_refusal_case(refuse-gas-order        infrastructure/refusals/gas-order
+                   "IGLOO: gas-order must be 1 or 2"                    "e2e;refusal;infrastructure")
+igloo_refusal_case(refuse-out-file         infrastructure/refusals/out-file
+                   "IGLOO: unknown out-file token"                      "e2e;refusal;infrastructure")
+igloo_refusal_case(refuse-ode-solver       infrastructure/refusals/ode-solver
+                   "IGLOO: unknown ode-solver"                          "e2e;refusal;infrastructure")
+igloo_refusal_case(refuse-dopri5           infrastructure/refusals/dopri5
+                   "IGLOO: ode-solver H-dopri5 is disabled (O25)"       "e2e;refusal;infrastructure")
 # Registered DISABLED: standard/drag-stokes-dopri5 (ode-solver = H-dopri5) is RED at OSlo fb8255d
 # (ledger O25: dopri5.f:512 still calls the eleven-argument SOLOUT, so IGLOO's interrupt never
-# reaches DOPRI5). ctest reports it "Not Run (Disabled)" on every run -- a visible reminder, not a
-# failure. Delete the DISABLED line when BOTH OSlo gitlinks (IGLOO's lib/OSLO and hydra's lib/OSlo)
-# carry the one-line fix; the case then runs drag-stokes's own Stokes oracle (verified 25/25).
+# reaches DOPRI5) and the token is refused at parse time meanwhile (refuse-dopri5). ctest reports
+# it "Not Run (Disabled)" on every run -- a visible reminder, not a failure. When BOTH OSlo gitlinks
+# (IGLOO's lib/OSLO and hydra's lib/OSlo) carry the one-line fix: drop the Lib_INI.f90 refusal, the
+# refuse-dopri5 registration and this DISABLED line; the case then runs drag-stokes's own oracle.
 igloo_e2e_case(drag-stokes-dopri5 standard/drag-stokes-dopri5 "e2e;standard")
 set_tests_properties(drag-stokes-dopri5 PROPERTIES DISABLED TRUE)
 # translational periodic pair (bcdef 201): closed-form v(x) across wraps + modular-y

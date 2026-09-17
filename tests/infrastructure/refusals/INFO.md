@@ -30,17 +30,24 @@ output written).
 | `refuse-breakup-token` | `breakup = no-such-breakup-model` | `IGLOO: unknown breakup model` |
 | `refuse-evaporation-token` | `evaporation = no-such-evaporation-model` | `IGLOO: unknown evaporation model` |
 | `refuse-evaporation-leb` | `evaporation = LEB` (parsed, declared not implemented) | `IGLOO: evaporation=LEB is not implemented` |
+| `refuse-tab-method` | tab-e2e (`INPUT/` symlinked) with `method = 3` | `IGLOO: TAB method must be 1 or 2` |
+| `refuse-gas-order` | `gas-order = 3` | `IGLOO: gas-order must be 1 or 2` |
+| `refuse-out-file` | `out-file = nonsense` | `IGLOO: unknown out-file token` (accepted: E, S, E+S, ALL -- `ALL` is what hydra's MI2 cases write; `two-mat` runs it) |
+| `refuse-ode-solver` | `ode-solver = H-radau5` | `IGLOO: unknown ode-solver` |
+| `refuse-dopri5` | `ode-solver = H-dopri5` (interim, ledger O25) | `IGLOO: ode-solver H-dopri5 is disabled (O25)` |
 
-All ten exit 128 at setup with nothing injected or integrated (2026-09-17). **The five token cases
-were RED first** (ledger O26): every model selector in `Lib_Drag`, `Lib_Heat`, `Lib_Breakup` and
+All fifteen exit 128 at setup with nothing injected or integrated (2026-09-17). **The five INI-contract
+cases were RED first** (ledger O20/O21/O25/O26, recorded on the pre-fix binary): `method = 3` ran to
+non-finite states with exit 0 and three output files; `gas-order = 3` silently ran as 2 (the warning was
+dead — the value was reassigned before the test); `out-file = nonsense` ran as both with a warning (and
+the registry default `E+S` parsed as `E`); `ode-solver = H-radau5` was a plain `stop`; `H-dopri5` lost
+every parcel with exit 0. **The five token cases were RED first** too (ledger O26): every model selector in `Lib_Drag`, `Lib_Heat`, `Lib_Breakup` and
 `Lib_Evaporation` printed its menu and executed a plain `stop` — exit 0, empty stderr, nothing a
 harness or an embedding parent can tell from success (recorded on the pre-fix binary in the session
-scratchpad); the eleven `stop`s became `error stop 'IGLOO: unknown … model'`. The twelfth, the
-`ode-solver` token in `Lib_INI.f90`, still exits 0 — deferred with the O20/O21 work on that file.
+scratchpad); all twelve `stop`s became `error stop 'IGLOO: unknown …'`.
 
 **Not here.** `solidification = on` (O5) has no global key — only the per-material section, whose
 name is mid-migration (`[GPB-Phase<i>]` → `[IGLOO-Material<i>]`); add it once that lands. TAB
-`method = 3` is **not** refused today (ledger O20: the parser accepts any integer and the model
-hits a comment-only stub) — it becomes a `refuse-tab-method` case with the O20 fix, and the
-`ode-solver` plain `stop` a `refuse-ode-solver` case with O26's last site. A mixed-Nk mesh
-(`allocation.f90`, `af307dd`) needs a two-zone `solfile.tec`; exercised in a throwaway only.
+A mixed-Nk mesh (`allocation.f90`, `af307dd`) needs a two-zone `solfile.tec`; exercised in a
+throwaway only. `refuse-dopri5` is interim: drop it, the `Lib_INI.f90` refusal and the `DISABLED`
+flag on `standard/drag-stokes-dopri5` together, once both OSlo gitlinks carry the SOLOUT fix.

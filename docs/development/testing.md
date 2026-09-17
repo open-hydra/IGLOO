@@ -68,7 +68,7 @@ tests/
 ├── combustion/                   # Beckstead unit family + burn-box e2e
 ├── infrastructure/               # gas_reconstruction, ini_pipeline, rng_stream, axis_dispatch, graze_standoff, dual_clip;
 │                                 # db-injection/coupled-body/db-2daxi/axis-200/wedge-fold/two-mat/periodic-y/bc-center-2grp (e2e)
-│                                 # refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,*-token,evaporation-leb} (setup-refusal gates)
+│                                 # refusals/{p2t,zgr,lk-d2law,properties-*,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver,dopri5} (setup-refusal gates)
 ├── repeatability/                # two-sweep state-leak gates: drag-stokes/db-injection/two-mat/d2law/khrt/vie-plait/etab/tab
 └── mpi/                          # USE_MPI build only: drag-stokes/conv-nu/khrt/bc-center-2grp/two-mat/consistency/consistency-two-mat
 ```
@@ -89,7 +89,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 (`test_{drag,heat,evap}_probes`) began life as expected-fail bug reproducers, but
 every bug they cover is fixed, so they now run as ordinary bug-transcription pins.
 
-Current gate: **74/74** in a serial build (75 registered: 47 e2e + 28 unit, `self_test` and `registry-docs` among the latter; `drag-stokes-dopri5` is registered DISABLED until the OSlo fix for ledger O25 lands); `USE_MPI=ON` registers 7 more `mpi-*` cases, 81/81.
+Current gate: **79/79** in a serial build (80 registered: 52 e2e + 28 unit, `self_test` and `registry-docs` among the latter; `drag-stokes-dopri5` is registered DISABLED until the OSlo fix for ledger O25 lands); `USE_MPI=ON` registers 7 more `mpi-*` cases, 86/86.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.
 
 ### Adding a test
