@@ -1,7 +1,7 @@
 # Verification matrix
 
-One row per registered CTest entry (64 in a serial build: 36 e2e + 28 unit incl. `self_test` and
-`registry-docs`; a `USE_MPI` build adds the 7 `mpi-*` rows in their own section, 71).
+One row per registered CTest entry (75 in a serial build: 47 e2e + 28 unit incl. `self_test` and
+`registry-docs`; a `USE_MPI` build adds the 7 `mpi-*` rows in their own section, 82).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -29,7 +29,7 @@ Columns:
 
 ---
 
-## Shared box fixture (15 of 28 e2e fixtures)
+## Shared box fixture (26 of 39 e2e fixtures)
 
 Every e2e case except `db-2daxi`, `axis-200`, `wedge-fold`, `vie-plait`, `mhb98-water`,
 `pilch-erdman-e2e`, `tab-e2e`, `etab-e2e`, `khrt-e2e`, `khrt-e2e-rt`, `khrt-stress`,
@@ -97,6 +97,17 @@ oracle possible.
 | **axis-200** | — (behavioral + conservation; the 2026-09-03 axis-face cycle and the 2026-09-13 axis dual ghost, both in git) | *behavioral* — the AXIS face tagged `axisymmetric` (bcdef 200, what ATLAS emits): no give-up message, the near-axis parcel reaches r < 1e-5 (coverage witness; `input.ini` gives it `vp = −1` because with v_r = 0 on the axis an equilibrium parcel only approaches asymptotically), both parcels exit at x > 2.0; *conservation* on the ord2 eulerian field with volumes recomputed from the tec NODES (never production's `cellVol`): E1 Σρ_p·V / Σṁ·t = 1.000787 ± 1e-3, E2 near-axis share 0.999005 ± 1e-3, E3 ρ_p/n_p = ρ_ℓ(π/6)d³ to 1e-12; floor exactly zero across runs and thread counts; RED-proven against the pre-fix source (0.931626 / 0.499503) | `db-2daxi`'s MOSE nozzle solution (symlinked) | DB, 2 parcels on one axial station: ID 1 near-axis (y = 1e-4, `vp = −1`), ID 2 off-axis control (y = 0.55); `bc.txt` = db-2daxi's with face 3 retagged 200 |
 | **wedge-fold** | — (behavioral; the O22 fold-sense defect it pins) | *the 200-face FOLD must rotate a swirling parcel back into the sector*: axis-200 plus `wp = 0.5` on the near-axis parcel (r0 = 1e-4), so it leaves the 1° sector in its first ODE segment and the fold (position AND velocity rotated about the axis) is exercised — the only case in the suite with z ≠ 0 on a wedge. G1 no give-up (the O22 signature was "outer maxIter (500000); flagging gone"), G2 both parcels exit at x > 2.0, G3 every trajectory row inside the sector (print-aware: |z| ≤ |y|·tan(δ/2) + 1e-6 and y > −1e-6), G4 vacuity — W₀ = 0.5 injected and ≥ 9 z-sign flips on ID 1 (measured 18, identical at OMP 1/5 × 3), G5 the wp-free control parcel exits at axis-200's x to 1e-6 (its rows are byte-identical to axis-200's). RED on the pre-fix binary: G1, G2, G3 (500000 rows at θ ≈ 179°) | `axis-200`'s (symlinked) | DB, the two axis-200 parcels; ID 1 additionally `wp = 0.5`; `bc.txt` = axis-200's (symlink) |
 | **two-mat** | — (drag-stokes's `[Stokes]` closed form, per material) | *arity 2*: the first case anywhere with TWO materials (nm = 2) — same box, gas, inlet and parcels as `drag-stokes`, materials A (ρ = 2950) and B (ρ = 1000) from a two-zone `properties.dat`. M1 the drag-stokes oracle (imported, not copied) on `trajectories-A.dat` at 2950 and on `-B.dat` at 1000; M2 both materials inject the same parcel set (identical injection rows, m_B/m_A = 1000/2950); M3 the lighter material relaxes faster at every parcel's first interior row; M4 `source.tec` carries `wdot(A)` and `wdot(B)`, finite and zero, Fx finite/non-zero; M5 `euler1.tec`/`euler2.tec` same shape, finite, different; M6 25 exits per material. Falsified 2026-09-16: phase lines swapped → M1 RED (zones bind by ORDER); one zone for two materials → error stop (was a SIGSEGV) | `drag-stokes`'s (symlinked) | FB `krho` streams, `drag-stokes`'s `bc.txt` (symlinked): one property line per inlet cell feeds both families |
+| **refuse-p2t** | — (kind 8, refusal) | *setup refusal* (`tools/check_refusal.py` via `igloo_refusal_case`): `liquid-conduction = P2T` must exit ≠ 0 with `liquid-conduction=P2T parsed but not implemented`, nothing integrated, no `OUTPUT/*.dat` (ledger O3). The harness is non-vacuous: on drag-stokes's own output it fails on all five counts | as `drag-stokes` | as `drag-stokes` |
+| **refuse-zgr** | — (kind 8, refusal) | *setup refusal*: `boiling = ZGR` → `boiling=ZGR parsed but not implemented` (ledger O4) | as `drag-stokes` | as `drag-stokes` |
+| **refuse-lk-d2law** | — (kind 8, refusal) | *setup refusal*: `evaporation = d2-law` + `interface = LK` → `interface=LK needs evaporation in` (evaporation plan F1 guard; fires before the `[IGLOO-Properties]` requirements) | as `drag-stokes` | as `drag-stokes` |
+| **refuse-properties-zones** | — (kind 8, refusal) | *setup refusal*: two materials in `phase.txt`, one zone in `properties.dat` → `zone count /= number of materials` (the error-stop payload; was a SIGSEGV before `7951f95`; ledger O24) | as `drag-stokes` | two-mat's `phase.txt`, `common/properties.dat` |
+| **refuse-properties-range** | — (kind 8, refusal) | *setup refusal*: zone B of `properties.dat` spans 3000 rows against zone 1's 5000 → `zones do not share one temperature range` (was an unchecked OOB read; ledger O24) | as `drag-stokes` | two-mat's `phase.txt`, a 3000-row zone B |
+| **refuse-drag-token** | — (kind 8, refusal) | *setup refusal*: `drag = no-such-drag-law` → `IGLOO: unknown drag model` (ledger O26: was a plain `stop`, exit 0 — RED on the pre-fix binary) | as `drag-stokes` | as `drag-stokes` |
+| **refuse-heat-token** | — (kind 8, refusal) | *setup refusal*: `heat = no-such-nusselt-law` → `IGLOO: unknown heat model` (O26) | as `drag-stokes` | as `drag-stokes` |
+| **refuse-breakup-token** | — (kind 8, refusal) | *setup refusal*: `breakup = no-such-breakup-model` → `IGLOO: unknown breakup model` (O26) | as `drag-stokes` | as `drag-stokes` |
+| **refuse-evaporation-token** | — (kind 8, refusal) | *setup refusal*: `evaporation = no-such-evaporation-model` → `IGLOO: unknown evaporation model` (O26) | as `drag-stokes` | as `drag-stokes` |
+| **refuse-evaporation-leb** | — (kind 8, refusal) | *setup refusal*: `evaporation = LEB` → `IGLOO: evaporation=LEB is not implemented` (parsed, declared not implemented; O26) | as `drag-stokes` | as `drag-stokes` |
+| **drag-stokes-dopri5** | `[Stokes]` (drag-stokes's oracle, symlinked) | **DISABLED (ledger O25)** — `ode-solver = H-dopri5`, otherwise `drag-stokes`. RED at OSlo `fb8255d`: every parcel dies at injection (NMAX exceeded) because `dopri5.f:512` still calls Hairer's eleven-argument `SOLOUT` and IGLOO's interrupt never reaches DOPRI5; with the one-line OSlo fix 25/25 pass (resid/tol 0.014). Registered `DISABLED` so ctest shows "Not Run" until both OSlo gitlinks move | as `drag-stokes` | as `drag-stokes` |
 | **khrt-e2e-rt** | `[Reitz87]` (as `khrt-e2e`) | *RT-shatter persistence gate* (`check_rt.py`) on `khrt-e2e`'s own run: the RT/shed event must fire, apply, and persist as a mass-consistent discontinuous shatter (found and gated A19; promoted from a `WILL_FAIL` sentinel 2026-07-23) | as `khrt-e2e` | as `khrt-e2e` |
 | **repeat-drag-stokes** | — (kind 8, harness contract) | *two-sweep repeatability* (`support/twosweep.f90` + `tools/check_twosweep.py`): sweep 1 ≡ sweep 0 — `.dat` sorted multisets identical, `.tec` ≤ 1e-12 scale-relative; **plus gas-cycle**: original field → `U` doubled → original, sweep 1 must differ, sweep 2 must match sweep 0 | as `drag-stokes` | as `drag-stokes` |
 | **repeat-db-injection** | — (kind 8) | *two-sweep repeatability*, steady mode (the DB `vInj` hand-off, A28) | as `db-injection` | as `db-injection` |
@@ -169,11 +180,12 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-36 `e2e`-labelled + 28 `unit`-labelled = **64 CTest entries** in a serial build (+7 `mpi-*` under
-`USE_MPI`, 71), all green (counted from `tests/CMakeLists.txt` 2026-09-16). The `e2e` count
+47 `e2e`-labelled + 28 `unit`-labelled = **75 CTest entries** in a serial build (+7 `mpi-*` under
+`USE_MPI`, 82), all green except `drag-stokes-dopri5`, registered **DISABLED** (ledger O25; ctest
+reports it "Not Run", so the serial verdict reads 74/74) (counted from `tests/CMakeLists.txt` 2026-09-17). The `e2e` count
 includes `khrt-e2e-rt`, the KHRT RT-shatter persistence gate, the two A23/S4 additions
 `khrt-stress` and `khrt-e2e-threads`, the A24 pinning case `bc-center-2grp`, the seven
-`repeat-*` two-sweep gates (eight, `repeat-two-mat` included), `axis-200`, `wedge-fold` and `two-mat`; the `unit` count includes `self_test`, `registry-docs`,
+`repeat-*` two-sweep gates (eight, `repeat-two-mat` included), `axis-200`, `wedge-fold`, `two-mat`, the ten `refuse-*` setup-refusal gates and the disabled `drag-stokes-dopri5`; the `unit` count includes `self_test`, `registry-docs`,
 `test_rng_stream`, `test_axis_dispatch`, `test_graze_standoff`, `test_dual_clip` and `test_mhb98_decane`
 and `registry-docs`, and the two O7 additions `test_kh_rayleigh_limit` and
 `test_khrt_interaction`. Unit families that emit

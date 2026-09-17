@@ -50,7 +50,7 @@ contains
             !  burn law, Al2O3 solidification) needs a NEW RHS family, not an evaporation case
             !  (ibid., "Metal-phase" section).
             write(*,*) "[ERROR] LEB evaporation model is not implemented"
-            stop
+            error stop 'IGLOO: evaporation=LEB is not implemented'
         case default
             write(*,*)
             write(*,*)
@@ -62,7 +62,7 @@ contains
             write(*,*) "- ASM   (Abramzon-Sirignano Model)"
             write(*,*) "- TC    (Tonini-Cossali analytical model)"
             write(*,*)
-            stop
+            error stop 'IGLOO: unknown evaporation model'
         end select
 
     end subroutine assign_evaporation
@@ -81,7 +81,7 @@ contains
         case default
             write(*,*) "Wrong liquid-conduction model input ---> "//trim(word)
             write(*,*) "Choose one of: ITC, P2T"
-            stop
+            error stop 'IGLOO: unknown liquid-conduction model'
         end select
     end subroutine assign_liquid
 
@@ -96,7 +96,7 @@ contains
         case default
             write(*,*) "Wrong interface model input ---> "//trim(word)
             write(*,*) "Choose one of: VLE, LK"
-            stop
+            error stop 'IGLOO: unknown interface model'
         end select
     end subroutine assign_interface
 
@@ -111,7 +111,7 @@ contains
         case default
             write(*,*) "Wrong blowing model input ---> "//trim(word)
             write(*,*) "Choose one of: none, LK"
-            stop
+            error stop 'IGLOO: unknown blowing model'
         end select
     end subroutine assign_blowing
 
@@ -145,7 +145,7 @@ contains
         case default
             write(*,*) "Wrong boiling model input ---> "//trim(word)
             write(*,*) "Choose one of: clamp, ZGR"
-            stop
+            error stop 'IGLOO: unknown boiling model'
         end select
     end subroutine assign_boiling
 
@@ -160,7 +160,7 @@ contains
         case default
             write(*,*) "Wrong combustion model input ---> "//trim(word)
             write(*,*) "Choose one of: Beckstead"
-            stop
+            error stop 'IGLOO: unknown combustion model'
         end select
     end subroutine assign_combustion
 
@@ -176,7 +176,7 @@ contains
         case default
             write(*,*) "Wrong solidification input ---> "//trim(word)
             write(*,*) "Choose one of: on, off"
-            stop
+            error stop 'IGLOO: unknown solidification token'
         end select
     end subroutine assign_solidification
 

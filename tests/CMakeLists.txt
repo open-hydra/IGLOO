@@ -9,7 +9,7 @@
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ two-mat/ periodic-y/ bc-center-2grp/
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ two-mat/ periodic-y/ bc-center-2grp/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb}
 #   repeatability/      two-sweep gates (twosweep driver): 8 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
@@ -150,6 +150,20 @@ endif()
 # A non-empty `gasfile` additionally runs the 3-sweep gas-refresh cycle.
 # Signal handling matches igloo_e2e_case: ordinary solver exit codes are not gated, death
 # by signal is.
+# A case the solver must REFUSE at setup. The e2e helper cannot host one: ifx `error stop 'msg'`
+# exits 128, which its rc >= 128 test reads as "died on signal". tools/check_refusal.py needs
+# exit == 128 AND the expected text in stderr (the error-stop payload that ended the run) AND
+# nothing set up past the choke point (no "Placing particles"/"Compute particles dynamics", no
+# OUTPUT/*.dat) -- a green solver fails it on every count (proven on drag-stokes, refusals/INFO.md).
+function(igloo_refusal_case name casedir expected labels)
+    add_test(NAME ${name}
+        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${CMAKE_SOURCE_DIR}/bin/IGLOO 1>run_out.txt 2>run_err.txt; echo $? > rc.txt; python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_refusal.py \"${expected}\""
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
+    set_tests_properties(${name} PROPERTIES
+        LABELS "${labels}"
+        ENVIRONMENT "OMP_NUM_THREADS=1;KMP_STACKSIZE=100M"
+        TIMEOUT 120)
+endfunction()
 function(igloo_twosweep_case name casedir labels gasfile)
     set(_oracle "python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_twosweep.py")
     set(_run "${CMAKE_CURRENT_BINARY_DIR}/twosweep")
@@ -337,6 +351,39 @@ igloo_e2e_case(wedge-fold infrastructure/wedge-fold "e2e;infrastructure")
 # two-mat: the first nm = 2 case anywhere -- every per-material loop (solve, sourceMass slots, nfam,
 # per-material files, krho fan-out) executes at arity 2 here for the first time.
 igloo_e2e_case(two-mat infrastructure/two-mat "e2e;infrastructure")
+
+# ---------- refusals (setup-time error stops, ledger O3/O4/O24; coverage G20) ----------------
+# Each is drag-stokes (or two-mat's phase.txt) plus ONE offending key/file. The expected text is
+# the solver's own message; check_refusal.py also requires exit /= 0 and that nothing integrated.
+igloo_refusal_case(refuse-p2t              infrastructure/refusals/p2t
+                   "liquid-conduction=P2T parsed but not implemented"   "e2e;refusal;infrastructure")
+igloo_refusal_case(refuse-zgr              infrastructure/refusals/zgr
+                   "boiling=ZGR parsed but not implemented"             "e2e;refusal;infrastructure")
+igloo_refusal_case(refuse-lk-d2law         infrastructure/refusals/lk-d2law
+                   "interface=LK needs evaporation in"                  "e2e;refusal;evaporation")
+igloo_refusal_case(refuse-properties-zones infrastructure/refusals/properties-zones
+                   "zone count /= number of materials"                  "e2e;refusal;infrastructure")
+igloo_refusal_case(refuse-properties-range infrastructure/refusals/properties-range
+                   "zones do not share one temperature range"           "e2e;refusal;infrastructure")
+# Unknown model tokens (ledger O26): the selectors used to print the menu and execute a plain
+# `stop`, exit 0 -- invisible to any harness or embedding parent. Now error stops.
+igloo_refusal_case(refuse-drag-token        infrastructure/refusals/drag-token
+                   "IGLOO: unknown drag model"                          "e2e;refusal;standard")
+igloo_refusal_case(refuse-heat-token        infrastructure/refusals/heat-token
+                   "IGLOO: unknown heat model"                          "e2e;refusal;standard")
+igloo_refusal_case(refuse-breakup-token     infrastructure/refusals/breakup-token
+                   "IGLOO: unknown breakup model"                       "e2e;refusal;breakup")
+igloo_refusal_case(refuse-evaporation-token infrastructure/refusals/evaporation-token
+                   "IGLOO: unknown evaporation model"                   "e2e;refusal;evaporation")
+igloo_refusal_case(refuse-evaporation-leb   infrastructure/refusals/evaporation-leb
+                   "IGLOO: evaporation=LEB is not implemented"          "e2e;refusal;evaporation")
+# Registered DISABLED: standard/drag-stokes-dopri5 (ode-solver = H-dopri5) is RED at OSlo fb8255d
+# (ledger O25: dopri5.f:512 still calls the eleven-argument SOLOUT, so IGLOO's interrupt never
+# reaches DOPRI5). ctest reports it "Not Run (Disabled)" on every run -- a visible reminder, not a
+# failure. Delete the DISABLED line when BOTH OSlo gitlinks (IGLOO's lib/OSLO and hydra's lib/OSlo)
+# carry the one-line fix; the case then runs drag-stokes's own Stokes oracle (verified 25/25).
+igloo_e2e_case(drag-stokes-dopri5 standard/drag-stokes-dopri5 "e2e;standard")
+set_tests_properties(drag-stokes-dopri5 PROPERTIES DISABLED TRUE)
 # translational periodic pair (bcdef 201): closed-form v(x) across wraps + modular-y
 igloo_e2e_case(periodic-y infrastructure/periodic-y "e2e;infrastructure")
 # A24 (2026-08-07): first coverage for pin_particles_bc_center. Every other case sets

@@ -71,7 +71,7 @@ contains
             write(*,*) "- TAB        (Taylor Analogy Breakup)"
             write(*,*) "- ETAB       (Enhanced TAB)"
             write(*,*)
-            stop
+            error stop 'IGLOO: unknown breakup model'
         end select
 
         ! if (allocated(bp)) deallocate(bp)

@@ -37,7 +37,7 @@ contains
       write(*,*) "- Ranz-Marshall "
       write(*,*) "- Kavanau-Drake "
       write(*,*)
-      stop
+      error stop 'IGLOO: unknown heat model'
     end select
 
   end subroutine assign_heat

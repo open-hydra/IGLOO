@@ -58,7 +58,7 @@ contains
       write(*,*) "- Crowe "
       write(*,*) "- Hermsen "
       write(*,*)
-      stop
+      error stop 'IGLOO: unknown drag model'
     end select
 
   end subroutine assign_drag
