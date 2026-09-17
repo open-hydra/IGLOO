@@ -20,7 +20,7 @@
    ./tests/test.sh all
    ```
 
-   See [Testing](testing.md) for details. The target is **79/79** (52 e2e + 28 unit, one registered DISABLED,
+   See [Testing](testing.md) for details. The target is **80/80** (53 e2e + 28 unit, one registered DISABLED,
    `self_test` among the latter). Nothing is registered `WILL_FAIL`, so any red is a
    real regression — including the three `test_*_probes` bug-transcription pins.
 

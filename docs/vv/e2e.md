@@ -106,7 +106,7 @@ promoted: `check_evap.py` was renamed to `check.py` and it now runs in the gate.
     [V&V overview](index.md), which also carries the full figure-to-category
     inventory.  Each case appears once, under the kind its figure *uniquely* pins:
     a case whose oracle is a closed form but whose only unshared content is a
-    feature path (`periodic-y`, `coupled-body`, `vie-plait`) is filed under base
+    feature path (`periodic-y`, `coupled-body`, `vie-plait`, `swirl-wedge`) is filed under base
     features, with its oracle strength stated in place.
 
 ## Tier V — closed-form solution verification
@@ -494,13 +494,15 @@ suspended at fixed slip; see
 These cases target the **non-physics machinery** every run depends on: gas-field
 reconstruction, boundary-condition transport, injection modes, mesh topology, and
 the Eulerian feedback accumulators.  Their closures are already gated elsewhere
-(`vie-plait` reuses Stokes drag, `periodic-y` and `coupled-body` reuse the
+(`vie-plait` and `swirl-wedge` reuse Stokes drag, `periodic-y` and `coupled-body` reuse the
 `body-force` oracle), so what each figure *uniquely* pins is the feature path,
 not the physics.
 
 Oracle strength varies inside the category and is stated per case: `vie-plait`,
 `periodic-y` and `coupled-body` have full Tier-V closed forms (a folded-modulo
-one, in `periodic-y`'s case); `db-injection` and `db-2daxi` are **behavioral**
+one, in `periodic-y`'s case); `swirl-wedge` has an exact ODE oracle (RK4, self-checked
+in-file) but gates against a *derived error budget* for the 2.5D wedge approximation, not
+the print floor; `db-injection` and `db-2daxi` are **behavioral**
 — they assert contracts (placement fidelity, hand-off, finiteness, exit through
 the intended boundary) with no reference curve at all, because a real MOSE nozzle
 field has no analytic solution.  `db-2daxi` is deliberately md5-free: trajectory
@@ -543,6 +545,35 @@ across six strands).
 
 <figure>
   {% include "vv/images/vie-plait.svg" ignore missing %}
+</figure>
+
+### swirl-wedge
+
+The first e2e case with a **swirling** carrier on an **axisymmetric wedge**: a generated
+one-cell-thick annular wedge (`tools/make_wedge_case.py`, $\delta = 1^\circ$,
+$r \in [0.19, 0.99]$) carrying the solid-body swirl $W = \Omega y$, $\Omega = 0.2$, into
+which three DB parcels are injected with a prescribed azimuthal velocity (co-rotating,
+spin-up from rest, over-spun; $\tau = 2$ s, $\mathrm{St} = \tau\Omega = 0.4$).  Each
+spirals outward — a parcel feels no pressure gradient, so the centrifugal term $w^2/r$ is
+unbalanced — and crosses 8–33 one-degree sectors, so the wedge fold (position **and**
+velocity rotated back into the sector, ledger O22) runs on every parcel.  `check.py`
+integrates the exact cylindrical ODE $\dot r = v_r$, $\dot\theta = w/r$,
+$\dot v_r = -v_r/\tau + w^2/r$, $\dot w = (\Omega r - w)/\tau - v_r w/r$ from the
+injection state (RK4; step-halving and a 6-state Cartesian re-formulation agree to
+$10^{-12}$) and gates $r$, $w_p$, $v_r$ and the unwrapped azimuth every row, plus
+in-sector rows and a fold count equal to the oracle's sector count.  The tolerances are
+**not** the print floor: IGLOO samples the $\theta = 0$ components unrotated between folds
+(the 2.5D approximation), which the W-plan quantifies as an outward radial bias
+$\Delta t_\mathrm{seg}/2\tau = 2.5\cdot10^{-3}$ on the drift; the run reproduces the
+segment-wise model of that error to 3 % ($\max|\Delta r| = 6.8\cdot10^{-5}$,
+$5.8\cdot10^{-5}$, $7.5\cdot10^{-5}$, all outward), and the gate sits at $\approx 3\times$
+it.  Proven RED with the fold rotating position only (10–200× the tolerances, the parcel
+stops spiralling) and with $\Omega = 0$ (no folds).  When the exact 2.5D sampling (W-plan
+item E) lands, this is the case whose tolerances tighten to the floor.  **GATED GREEN**
+(2026-09-17).
+
+<figure>
+  {% include "vv/images/swirl-wedge.svg" ignore missing %}
 </figure>
 
 ### periodic-y

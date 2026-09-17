@@ -5,7 +5,7 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ (e2e)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ (e2e)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
@@ -235,6 +235,11 @@ igloo_e2e_case(temp-relax  standard/temp-relax  "e2e;standard;heat")
 igloo_e2e_case(body-force  standard/body-force  "e2e;standard;drag")
 igloo_e2e_case(conv-nu     standard/conv-nu     "e2e;standard;heat")
 igloo_e2e_case(vie-plait   standard/vie-plait   "e2e;standard;drag;gas")
+# swirl-wedge: solid-body swirl on an annular axisymmetric wedge (mesh2D + axisym), three DB
+# parcels with prescribed wp -- the quantitative gate on the 2.5D fold (W-plan item B): r, w_p,
+# v_r and the unwrapped azimuth against the exact cylindrical ODE, tolerances = the derived
+# 2.5D frame-error budget. RED with the fold rotating position only; omega = 0 fails G2.
+igloo_e2e_case(swirl-wedge standard/swirl-wedge "e2e;standard;drag;gas;axisym")
 
 # ---------- evaporation --------------------------------------------------------
 igloo_unit_test(test_evaporation evaporation "unit;evaporation;c;t4")
