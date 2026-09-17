@@ -60,6 +60,10 @@ behavioral (in-sector, no stall, exits) and measures nothing quantitative. What 
 for an INTERIOR swirling parcel far from the sector (no k-face cap on its segment, the
 unfolded azimuth bounded only by the dual's y-range through y = r cos θ): the dual cell is
 still LOCATED by (x, y = r cos θ), so past a few sectors the interpolation extrapolates from
-a cell inward of the parcel's true radius, and the source/euler deposits land in the pre-fold
-cell — the deposit half of ledger O23 (reviewer's reading, not reproduced); the sampling half
-is closed by E.
+a cell inward of the parcel's true radius, and the source/euler deposits land in that cell —
+the many-sector sub-case of ledger O23 (reviewer's reading, not reproduced). The deposits'
+*frame* (Cartesian at the parcel's azimuth, not the meridian plane) was O23's measurable
+deposit half: fixed by `Lib_Equations::toMeridian` and gated by `standard/swirl-wedge-deposit`;
+the sampling half is closed by E. This case's `euler1.tec` moved with that fix (its ID 1
+leaves the plane) and its trajectory rows flipped by one F12.6 ULP (the rotated euler
+states change the SDIRK4 step sequence: 349 rows for ID 1, 347 before).

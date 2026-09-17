@@ -40,7 +40,7 @@ tests/
 │   └── twosweep.f90              # the two-sweep repeatability driver
 ├── standard/                     # drag + heat
 │   ├── drag/  temperature/       #   unit families
-│   └── drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/   # e2e
+│   └── drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/   # e2e
 ├── evaporation/                  # unit families: (root)  interface-neq/  tc-analytic/
 │   └── d2law/ d2law-line/ lk-neq/ tc-box/ tc-hexadecane/ mhb98-water/     # e2e
 ├── combustion/                   # unit family (root) + burn-box/ (e2e)
@@ -95,6 +95,6 @@ the fix holds, RED on regression.
 
 ## Status
 
-ctest 82/82 in a serial build (54 e2e + 28 unit, `self_test` and `registry-docs` among the latter);
+ctest 83/83 in a serial build (55 e2e + 28 unit, `self_test` and `registry-docs` among the latter);
 `USE_MPI=ON` registers 7 more `mpi-*` cases, 89/89. Convergence-order
 aggregate tables (plan §4 T8-convergence) not started.

@@ -1,6 +1,6 @@
 # Verification matrix
 
-One row per registered CTest entry (82 in a serial build: 54 e2e + 28 unit incl. `self_test` and
+One row per registered CTest entry (83 in a serial build: 55 e2e + 28 unit incl. `self_test` and
 `registry-docs`; a `USE_MPI` build adds the 7 `mpi-*` rows in their own section, 87).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
@@ -29,20 +29,20 @@ Columns:
 
 ---
 
-## Shared box fixture (30 of 45 e2e fixtures)
+## Shared box fixture (30 of 46 e2e fixtures)
 
-Every e2e case except `db-2daxi`, `axis-200`, `wedge-fold`, `vie-plait`, `swirl-wedge`, `mhb98-water`,
+Every e2e case except `db-2daxi`, `axis-200`, `wedge-fold`, `vie-plait`, `swirl-wedge`, `swirl-wedge-deposit`, `mhb98-water`,
 `pilch-erdman-e2e`, `tab-e2e`, `etab-e2e`, `khrt-e2e`, `khrt-e2e-rt`, `khrt-stress`,
 `khrt-e2e-threads`, and `reitz-diwakar-e2e` runs on the
 **same** axis-aligned uniform-gas box emitted by
 [`tools/make_box_case.py`](tools/make_box_case.py). The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The fourteen exceptions: `db-2daxi`
+once here, referenced as **"shared box"** below. The fifteen exceptions: `db-2daxi`
 (spatially varying, real MOSE nozzle solution), `axis-200` (the same nozzle solution with
 face 3 retagged `axisymmetric`), `wedge-fold` (axis-200 plus swirl on the near-axis parcel) and
-`vie-plait` (spatially varying, analytic `−ε(y−1)`) and `swirl-wedge` (generated annular wedge, analytic solid-body
-swirl `W = Ωy`) are the five non-uniform-gas cases; `mhb98-water` keeps the box
+`vie-plait` (spatially varying, analytic `−ε(y−1)`) and `swirl-wedge` / `swirl-wedge-deposit` (generated annular wedge, analytic solid-body
+swirl `W = Ωy`) are the six non-uniform-gas cases; `mhb98-water` keeps the box
 *geometry* but swaps in a different **uniform** gas (water in air at T_G=298 K with
 a near-static U=1.9×10⁻⁴ clock) to match the Miller-Harstad-Bellan Fig-2 conditions;
 `pilch-erdman-e2e` likewise keeps the geometry but runs U=200 m/s water drops
@@ -77,6 +77,7 @@ oracle possible.
 | **conv-nu** | `[RM52]` | *closed form* — Ranz–Marshall Nu=2+0.6 Re^{1/2}Pr^{1/3} at **constant** slip (parcel injected at body-force terminal velocity ⇒ Re, Nu fixed), T(x)=T_g+(T_a−T_g)e^{−(x−x_a)/L}, L=u_g·τ_T; `reference/nu_re.txt` | shared box + `body-accel=(0,−200,0)` | inlet-face 401 at terminal velocity: κ_v=1.00033, α=−0.02574 rad, κ_t=0.5, d=11.89 µm; outlet + walls |
 | **vie-plait** | `[Vie15]` | *closed form* (derived from ODE + IC, not the paper's typeset Eq. 5.4 which has a sin sign typo; scipy-validated to 1e-13) — anchored damped oscillator y(x)=1+e^{−t/2τ}[Y_a cos ωt+((V_a+Y_a/2τ)/ω)sin ωt], t=(x−x_a)/u_g0, ω=√(ε/τ−1/4τ²); recomputed in `check.py` | **NON-UNIFORM** box (first such e2e): x∈[0,6], y∈[0,2], z thin; 120×50×5; U=u_g0=0.2 uniform, **V=−ε(y−1)** (ε=1, compressive, linear in y), W=0. **`gas-order=2` required** (2nd-order rebuild; order 1 = staircase) | **assigned-position (DB)** injection: 6 parcels at x=0.125, z=0.025, y∈{0.5,0.7,0.9,1.1,1.3,1.5} (cell centres), up=0.2/vp=0 (U_p0=u_g0, V_p0=0); τ=5 s via ρ_p=1620 (local `properties.dat`), d=1 mm ⇒ St=5; outlet + walls (never hit) |
 | **swirl-wedge** | — (derived ODE oracle, cross-checked in-file) | *exact cylindrical ODE* of a Stokes parcel in the solid-body swirl `g = (U0, −Ωz, +Ωy)`: ṙ=v_r, θ̇=w/r, v̇_r=−v_r/τ+w²/r, ẇ=(Ωr−w)/τ−v_r w/r, RK4 from the exact injection state (step-halving < 1e-12; 6-state Cartesian form agrees < 1e-12); gates r, w_p, v_r and the unwrapped azimuth every row at **≈ 6× the F12.6 print floor** (3e-6/3e-6/8e-6/3e-6; measured 5e-7 with the exact 2.5D sampling `sampleGas2D`), in-sector every row, fold count = oracle sectors ± 1 (≥ 5); RED with the pre-E unrotated sampling (19–25×: it reproduced the W-plan §2 frame-error model to 3 %, max\|Δr\| 6.75e-5/5.80e-5/7.52e-5, outward bias `Δt_seg/2τ`), RED with the fold rotating position only (10–200× the first gate), RED on Ω = 0 (0 folds) | **NON-UNIFORM annular WEDGE** (`tools/make_wedge_case.py`): x∈[0,2], r∈[0.19,0.99], 200×40×1, k-planes at ∓0.5° (Nk=1 ⇒ mesh2D + axisym, delthe 1°); U=1, V=0, **W=Ω·y_c** with Ω=0.2 (linear ⇒ ord2 rebuild exact); ρ=1.2, T=300, μ=1.8e-5; `gas-order=2` required | DB, 3 parcels at x0=0.105 (θ=0): P1 r0=0.5 wp=Ωr0, P2 r0=0.5 wp=0, P3 r0=0.3 wp=2Ωr0; d=0.6 mm, ρ_p=1800 (local `properties.dat`) ⇒ τ=2 s, St=0.4; up=U (zero-slip clock); `bc.txt` f1/f2 400, f3/f4 301, f5/f6 200 — no inlet family |
+| **swirl-wedge-deposit** | — (derived force-integral oracle) | *meridian-frame deposits* (W-plan Q7, O23 deposit half) on `swirl-wedge`'s run with `out-file = ALL`, `mollify = off`: per radial band (P3 alone at r 0.30–0.35, P1+P2 at 0.50–0.53) `ΣFy`/`ΣFz` vs the force on the gas `ṁ∫(v−g)/τ dt` along the exact trajectory in (r, θ) components (2 %; measured ≤ 0.22 %), `ΣFx = 0`, azimuthal signs (P3 +, P1+P2 −), `ΣE` vs the kinetic drop (2 %), per-cell `v_p`/`w_p` in the P3 band vs the path average over the dual window (1e-4; floor 9e-7 / 1.5e-5; 382 cells), locality r ∈ [0.28, 0.56], band mass `Σρ_pV = ṁT` (5e-3; measured 1.000127); the parent's G0–G6 rerun; RED on the Cartesian deposit (`ee4482a`: 325/382 cells, `v_p` misses `−w sin θ`, 9.9e-4) and on a meridian-COMPONENT difference (F_r sign flips, 247–294 %) | as `swirl-wedge` (symlinked INPUT) | as `swirl-wedge` |
 | **d2law** | `[God53]`,`[Spa53]` (+`[RM52]`,`[Lef89]`) | *run-conditioned* — Godsave–Spalding kernel d(d²)/dt=−(8k_g/c_pg·ρ_p)·ln(1+B_T) integrated in `check.py` **along the measured T_p(x)** from production output (no static file) | shared box | inlet-face 401; `evaporation=d2-law`; κ_t=0.5, d=30 µm, ρ_p=8000; fuel L_v=2e5, M_v=100, T_boil=900, p_sat=1e4; outlet + walls |
 | **d2law-line** | `[God53]`,`[Spa53]` | *closed form* (Tier V) — input-only line d²(x)=d0²−K0·(x−x_a)/u_g, K0=8k_g·ln(1+B_T0)/(cp_g·ρ_p), B_T0 at T_p0=κ_t·T_g=300 K; tolerance = theory budget (monotone K-drift bound from measured T_p span + E13.6 truncation + floor); measured T_p bounds the budget, never the reference | shared box | inlet-face 401; `evaporation=d2-law`; κ_v=1 (Re=0), κ_t=0.5, d=30 µm; ρ_p=8000 with **cp=125000 (100×)** via local ATLAS-GPB `properties.dat` (freezes T_p: drift 0.76 K, d² loss 39 %); fuel L_v=2e5; outlet + walls |
 | **lk-neq** | `[MHB98]` | *run-conditioned* — LK-corrected CEM d²-ODE RK4-integrated along measured T_p; VLE-equilibrium curve as the regression the case must out-distance | shared box | inlet-face 401; `evaporation=CEM`+`interface=LK`, α_e=1.0; κ_t=0.5, d=20 µm, ρ_p=8000; outlet + walls |
@@ -188,12 +189,12 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-54 `e2e`-labelled + 28 `unit`-labelled = **82 CTest entries** in a serial build (+7 `mpi-*` under
-`USE_MPI`, 89), all green (counted from `tests/CMakeLists.txt` 2026-09-17; `refuse-dopri5` and the DISABLED flag on
+55 `e2e`-labelled + 28 `unit`-labelled = **83 CTest entries** in a serial build (+7 `mpi-*` under
+`USE_MPI`, 90), all green (counted from `tests/CMakeLists.txt` 2026-09-17; `refuse-dopri5` and the DISABLED flag on
 `drag-stokes-dopri5` went with the O25 fix). The `e2e` count
 includes `khrt-e2e-rt`, the KHRT RT-shatter persistence gate, the two A23/S4 additions
 `khrt-stress` and `khrt-e2e-threads`, the A24 pinning case `bc-center-2grp`, the seven
-`repeat-*` two-sweep gates (ten, `repeat-two-mat`, `repeat-drag-stokes-dopri5` and `repeat-tab-dopri5` included), `axis-200`, `wedge-fold`, `swirl-wedge`, `two-mat`, the fourteen `refuse-*` setup-refusal gates and `drag-stokes-dopri5`; the `unit` count includes `self_test`, `registry-docs`,
+`repeat-*` two-sweep gates (ten, `repeat-two-mat`, `repeat-drag-stokes-dopri5` and `repeat-tab-dopri5` included), `axis-200`, `wedge-fold`, `swirl-wedge`, `swirl-wedge-deposit`, `two-mat`, the fourteen `refuse-*` setup-refusal gates and `drag-stokes-dopri5`; the `unit` count includes `self_test`, `registry-docs`,
 `test_rng_stream`, `test_axis_dispatch`, `test_graze_standoff`, `test_dual_clip` and `test_mhb98_decane`
 and `registry-docs`, and the two O7 additions `test_kh_rayleigh_limit` and
 `test_khrt_interaction`. Unit families that emit

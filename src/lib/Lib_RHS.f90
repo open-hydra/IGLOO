@@ -414,7 +414,7 @@ contains
   subroutine rhsStandard(neq, time, Z, F, aux,naux, auxst,nauxst, &
                           hTabM, rhoTabM,                  &
                           gasNodes,gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, toll, &
                                bodyForce, bodyAccel, srcBodyForce
     use IGLOO_Lib_Properties, only: comp_TfromTab, lookupTab
@@ -468,7 +468,8 @@ contains
     if (eulerSwitch) then
       normVel = norm2(Z(4:6))
       F(8)    = normVel
-      F(9:12) = Z(4:7) * normVel
+      F(9:11) = toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
+      F(12)   = Z(7) * normVel
     endif
 
     !> Diagnostic: trap NaN in F output of rhsStandard — dump intermediates
@@ -501,7 +502,7 @@ contains
   subroutine rhsEvaporation(neq, time, Z, F, aux,naux, auxst,nauxst, &
                              hTabM, rhoTabM, psatTabM,         &
                              gasNodes, gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
     use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor
@@ -563,7 +564,8 @@ contains
     if (eulerSwitch) then
       normVel  = norm2(Z(4:6))
       F(9)     = normVel
-      F(10:13) = m * Z(4:7) * normVel
+      F(10:12) = m * toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
+      F(13)    = m * Z(7) * normVel
       F(14)    = m
     endif
     !> Body-force accumulators: W at slot neq; J at neq-1 unless euler reuses its mass moment F(14).
@@ -582,7 +584,7 @@ contains
   subroutine rhsBreakupOnly(neq, time, Z, F, aux,naux, auxst,nauxst, &
                              hTabM, rhoTabM, mupTabM, sigTabM, &
                              gasNodes, gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
     use IGLOO_Lib_Breakup, only: breakupOde
@@ -643,7 +645,8 @@ contains
     if (eulerSwitch) then
       normVel = norm2(Z(4:6))
       F(9)     = normVel
-      F(10:13) = Z(4:7) * normVel
+      F(10:12) = toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
+      F(13)    = Z(7) * normVel
       F(14)    = Z(8)
     endif
 
@@ -662,7 +665,7 @@ contains
   subroutine rhsEvapBreakup(neq, time, Z, F, aux,naux, auxst,nauxst,     &
                              hTabM, rhoTabM, mupTabM, sigTabM, psatTabM, &
                              gasNodes, gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
     use IGLOO_Lib_Breakup,     only: breakupOde
@@ -745,7 +748,8 @@ contains
       normVel  = norm2(Z(4:6))
       mTraj    = m * Z(9)
       F(10)    = normVel
-      F(11:14) = mTraj * Z(4:7) * normVel
+      F(11:13) = mTraj * toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
+      F(14)    = mTraj * Z(7) * normVel
       F(15)    = mTraj
       F(16)    = Z(9)
     endif
@@ -770,7 +774,7 @@ contains
   subroutine rhsAlCombustion(neq, time, Z, F, aux,naux, auxst,nauxst, &
                               hTabM, rhoTabM,                   &
                               gasNodes, gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
     use IGLOO_Lib_Combustion,  only: becksteadRate, nmp
@@ -823,7 +827,8 @@ contains
     if (eulerSwitch) then
       normVel  = norm2(Z(4:6))
       F(9)     = normVel
-      F(10:13) = m * Z(4:7) * normVel
+      F(10:12) = m * toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
+      F(13)    = m * Z(7) * normVel
       F(14)    = m
     endif
     !> Body-force accumulators: W at slot neq; J at neq-1 unless euler reuses its mass moment F(14).

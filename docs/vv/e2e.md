@@ -106,7 +106,8 @@ promoted: `check_evap.py` was renamed to `check.py` and it now runs in the gate.
     [V&V overview](index.md), which also carries the full figure-to-category
     inventory.  Each case appears once, under the kind its figure *uniquely* pins:
     a case whose oracle is a closed form but whose only unshared content is a
-    feature path (`periodic-y`, `coupled-body`, `vie-plait`, `swirl-wedge`) is filed under base
+    feature path (`periodic-y`, `coupled-body`, `vie-plait`, `swirl-wedge`,
+    `swirl-wedge-deposit`) is filed under base
     features, with its oracle strength stated in place.
 
 ## Tier V — closed-form solution verification
@@ -494,15 +495,15 @@ suspended at fixed slip; see
 These cases target the **non-physics machinery** every run depends on: gas-field
 reconstruction, boundary-condition transport, injection modes, mesh topology, and
 the Eulerian feedback accumulators.  Their closures are already gated elsewhere
-(`vie-plait` and `swirl-wedge` reuse Stokes drag, `periodic-y` and `coupled-body` reuse the
+(`vie-plait`, `swirl-wedge` and `swirl-wedge-deposit` reuse Stokes drag, `periodic-y` and `coupled-body` reuse the
 `body-force` oracle), so what each figure *uniquely* pins is the feature path,
 not the physics.
 
 Oracle strength varies inside the category and is stated per case: `vie-plait`,
 `periodic-y` and `coupled-body` have full Tier-V closed forms (a folded-modulo
 one, in `periodic-y`'s case); `swirl-wedge` has an exact ODE oracle (RK4, self-checked
-in-file) but gates against a *derived error budget* for the 2.5D wedge approximation, not
-the print floor; `db-injection` and `db-2daxi` are **behavioral**
+in-file) gated at the print floor since the exact 2.5D sampling, and `swirl-wedge-deposit`
+integrates the force on the gas along that oracle; `db-injection` and `db-2daxi` are **behavioral**
 — they assert contracts (placement fidelity, hand-off, finiteness, exit through
 the intended boundary) with no reference curve at all, because a real MOSE nozzle
 field has no analytic solution.  `db-2daxi` is deliberately md5-free: trajectory
@@ -576,6 +577,30 @@ spiralling) and $\Omega = 0$ (no folds).  **GATED GREEN** (2026-09-17).
 <figure>
   {% include "vv/images/swirl-wedge.svg" ignore missing %}
 </figure>
+
+### swirl-wedge-deposit
+
+The same run with `out-file = ALL` and `mollify = off`: what the swirling parcels
+**deposit**.  The momentum source and the eulerian field are meridian-plane fields — a
+cell $(x, r)$ carries (axial, radial, azimuthal) components — while a parcel on the wedge
+sits at an azimuth $\theta$ inside the sector, so every vector it deposits is rotated by
+$-\theta$ about the axis first (`Lib_Equations::toMeridian`: the segment's
+$\dot m\,(v_\mathrm{in} - v_\mathrm{out})$ at its mid azimuth, the euler moments
+$\int v|v|\,dt$ pointwise in the RHS).  With mollification off the fields split by radius
+(P3 alone at $r \in [0.30, 0.35]$, P1+P2 at $[0.50, 0.53]$), and `check.py` integrates the
+force on the gas $\dot m \int (v - g)/\tau\,dt$ along the parent's exact trajectory in
+$(r, \theta)$ components — $F_r = \dot m\int v_r/\tau\,dt$ outward, $F_\theta =
+\dot m\int (w - \Omega r)/\tau\,dt$ — and gates the band sums to 2 % (measured
+$\le 0.22$ %), the energy sum against the kinetic drop, the azimuthal signs (over-spun P3
+pushes the gas forward, P1+P2 hold it back), every P3 cell's $v_p$, $w_p$ against the path
+average over its dual window ($10^{-4}$; floor $9\cdot10^{-7}$, $1.5\cdot10^{-5}$),
+deposit locality and the band mass $\sum\rho_p V = \dot m T$ (1.000127).  The
+reference is **not** $\dot m\,\Delta(v_r, w)$: the difference of the meridian
+components carries the frame terms $w^2/r$ and $-v_r w/r$, which are not force on the gas,
+and a build depositing exactly that is one of the two proven REDs (radial sums flip sign,
+247–294 %); the other is the Cartesian deposit the code had before (325 of 382 cells,
+$v_p$ missing $-w\sin\theta$, up to $9.9\cdot10^{-4}$) — which the band *sums* cannot
+see, since the mixing cancels over a sector sweep.  **GATED GREEN** (2026-09-17).
 
 ### periodic-y
 

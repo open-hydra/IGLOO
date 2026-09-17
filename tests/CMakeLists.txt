@@ -5,7 +5,7 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ (e2e)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ (e2e)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
@@ -253,6 +253,13 @@ igloo_e2e_case(vie-plait   standard/vie-plait   "e2e;standard;drag;gas")
 # v_r and the unwrapped azimuth against the exact cylindrical ODE, tolerances = the derived
 # 2.5D frame-error budget. RED with the fold rotating position only; omega = 0 fails G2.
 igloo_e2e_case(swirl-wedge standard/swirl-wedge "e2e;standard;drag;gas;axisym")
+# swirl-wedge-deposit: the same run with out-file ALL and mollify off -- the source and euler
+# fields under swirl (W-plan Q7, ledger O23 deposit half). Radial bands isolate P3 from P1+P2:
+# F_r/F_theta per band against the force integral mdot*int (v - g)/tau dt along the exact
+# trajectory, E against the kinetic drop, per-cell v_p/w_p against the path average, band mass.
+# RED on the Cartesian deposit (325/382 cells, v_p misses -w sin theta) and on a meridian-
+# COMPONENT difference (F_r sign flips: the frame terms w^2/r are not force on the gas).
+igloo_e2e_case(swirl-wedge-deposit standard/swirl-wedge-deposit "e2e;standard;drag;gas;axisym;euler")
 
 # ---------- evaporation --------------------------------------------------------
 igloo_unit_test(test_evaporation evaporation "unit;evaporation;c;t4")

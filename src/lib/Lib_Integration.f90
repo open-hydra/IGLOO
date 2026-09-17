@@ -55,6 +55,7 @@ contains
     real(R8) :: vert(3,8), t1, t2, tStart, deltat, tlimit, tprint
     real(R8) :: Ein, Eout, Pin(3), Pout(3), massIn, massOut, vol
     real(R8) :: entryPos(3)   ! cell-entry position, for the closed-form body-force work (models 1,3)
+    real(R8) :: pMid(3)       ! segment mid position: azimuth of the meridian-frame source deposit
     real(R8) :: wAcc          ! scatter-cloud npdot-weight accumulator (host-associated into solout)
     !> Scatter-cloud output buffer. `unitScat` is written from INSIDE `!$OMP PARALLEL DO`, so emitting
     !  one record at a time took the Fortran unit lock once per record -- measured as ~47 % of serial
@@ -253,6 +254,14 @@ contains
             Pin = Pin + (part%mdot * part%Tstay) * bodyAccel
             Ein = Ein + (part%mdot * dot_product(bodyAccel, part%stateVar(1:3) - entryPos))
           end select
+        endif
+        !> Axisymmetric wedge: the segment's momentum exchange (Pin - Pout, Cartesian at the parcel's
+        !  azimuth) goes into the meridian-plane source in the (axial, radial, azimuthal) frame at
+        !  the segment's mid azimuth. Identity on the meridian plane (z = 0), so non-wedge runs are untouched.
+        if (axisym) then
+          pMid = 0.5_R8 * (entryPos + part%stateVar(1:3))
+          Pin  = toMeridian(Pin,  pMid)
+          Pout = toMeridian(Pout, pMid)
         endif
         if (ord2) then
           call computeSrcField(part, srcblock(b), part%igas(1), part%igas(2), part%igas(3), &

@@ -8,6 +8,7 @@ module Lib_Equations
     public :: interp2ndOrder2D
     public :: sampleGas2D
     public :: meridianToAzimuth
+    public :: toMeridian
 
 contains
 
@@ -54,6 +55,22 @@ contains
     s = dot_product(p, cross(axisDir, refDir))
     if (s /= 0._R8) v = rotateVector(vg, axisDir, atan2(s, dot_product(p, refDir)))
   end function meridianToAzimuth
+
+  !> Deposit counterpart (W-plan Q7): the source/euler fields are meridian-plane fields, so a
+  !  Cartesian vector carried by a parcel at azimuth theta is expressed in the (axial, radial,
+  !  azimuthal) frame at p before it is deposited. Rotating by -theta about the axis is the exact
+  !  inverse of the parcel's own frame; on the meridian plane (s == 0) it is the identity, bit for bit.
+  pure function toMeridian(v, p) result(vm)
+    use IGLOO_variables,    only: axisym, axisDir, refDir
+    use IGLOO_VectorModule, only: cross, rotateVector
+    implicit none
+    real(R8), intent(in) :: v(3), p(3)
+    real(R8) :: vm(3), s
+    vm = v
+    if (.not.axisym) return
+    s = dot_product(p, cross(axisDir, refDir))
+    if (s /= 0._R8) vm = rotateVector(v, axisDir, -atan2(s, dot_product(p, refDir)))
+  end function toMeridian
 
   !***********************************************************************************************************!
   !*************************************** DRAG FORCE & HEAT EXCHANGE  ***************************************!

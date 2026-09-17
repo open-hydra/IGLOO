@@ -109,9 +109,10 @@ thread per parcel ⇒ the residuals are deterministic per binary.
 velocity rotated to its azimuth (exact 2.5D sampling)`, `block 1: max|W| = 1.960E-01 --
 SWIRL`; no `stuck in cell` / `no net progress`; 193/192/194 rows, all three exit at x = 2.0.
 
-**Not pinned here.** The Eulerian/source outputs under swirl (W-plan Q7: `euler.tec` carries
-no `w_p`, the momentum source lacks the azimuthal component) — `out-file = S` is written and
-ignored. The fold cadence for a parcel that does not cross dual cells in x (none here). The
+**Not pinned here.** The Eulerian/source outputs under swirl — `out-file = S` is written and
+ignored; the twin `swirl-wedge-deposit` gates them (W-plan Q7: both writers carry all three
+components, the defect was their *frame*, Cartesian at the parcel's azimuth instead of the
+meridian plane — fixed by `toMeridian`, see the twin's INFO.md). The fold cadence for a parcel that does not cross dual cells in x (none here). The
 **ord1 wedge path** (`meridianToAzimuth`, the cell value rotated to the parcel azimuth): every
 axisym fixture runs `gas-order = 2`, so it is exercised by no gate — a throwaway of this case at
 `gas-order = 1` on the E binary (2026-09-17) ran clean (no error stop, in-sector every row, folds
