@@ -1,6 +1,6 @@
 # Verification matrix
 
-One row per registered CTest entry (81 in a serial build: 53 e2e + 28 unit incl. `self_test` and
+One row per registered CTest entry (82 in a serial build: 54 e2e + 28 unit incl. `self_test` and
 `registry-docs`; a `USE_MPI` build adds the 7 `mpi-*` rows in their own section, 87).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
@@ -119,6 +119,7 @@ oracle possible.
 | **repeat-db-injection** | — (kind 8) | *two-sweep repeatability*, steady mode (the DB `vInj` hand-off, A28) | as `db-injection` | as `db-injection` |
 | **repeat-two-mat** | — (kind 8) | *two-sweep repeatability*, steady mode, on the nm = 2 fixture: six `.dat` multisets and three `.tec` fields (`euler1`, `euler2`, `source`) sweep 1 ≡ sweep 0 — the per-material restore in `reset_state` at arity 2 | as `two-mat` | as `two-mat` |
 | **repeat-drag-stokes-dopri5** | — (kind 8) | *two-sweep repeatability*, steady mode, `ode-solver = H-dopri5` at OMP 5: the scatter cloud's determinism on the DOPRI5 path (ledger O27: `dopri5.f` kept XOLD in `COMMON /CONDO5/`, shared across threads, and `solout` accumulates the cloud on `x − xold` — sweeps differed run to run, 377 vs 345 records; 3/3 RED on the racy fork, 3/3 green on `fd9d178`) | as `drag-stokes` | as `drag-stokes-dopri5` |
+| **repeat-tab-dopri5** | — (kind 8) | *two-sweep repeatability*, steady mode, `tab-e2e` on `ode-solver = H-dopri5` at OMP 5: the physically consequential half of ledger O27 — `solout` advances the TAB oscillator by `x − xold`, and DOPRI5's shared `XOLD` made breakup timing depend on the other threads' steps (3/3 RED on the racy fork: 22/25 exits differ, 2855 vs 3783 trajectory records; 3/3 green on `fd9d178`) | as `tab-e2e` | as `tab-e2e` |
 | **repeat-d2law** | — (kind 8) | *two-sweep repeatability*, steady mode (evaporation state + source accumulators, A28/A29) | as `d2law` | as `d2law` |
 | **repeat-khrt** | — (kind 8) | *two-sweep repeatability*, steady mode (241 children: the child-ID census and the growable shed lists) | as `khrt-e2e` | as `khrt-e2e` |
 | **repeat-vie-plait** | — (kind 8) | *two-sweep repeatability*, steady **and gas-cycle** (the ord2 dual refreshed through `external_gas`) | as `vie-plait` | as `vie-plait` |
@@ -187,12 +188,12 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-53 `e2e`-labelled + 28 `unit`-labelled = **81 CTest entries** in a serial build (+7 `mpi-*` under
-`USE_MPI`, 88), all green (counted from `tests/CMakeLists.txt` 2026-09-17; `refuse-dopri5` and the DISABLED flag on
+54 `e2e`-labelled + 28 `unit`-labelled = **82 CTest entries** in a serial build (+7 `mpi-*` under
+`USE_MPI`, 89), all green (counted from `tests/CMakeLists.txt` 2026-09-17; `refuse-dopri5` and the DISABLED flag on
 `drag-stokes-dopri5` went with the O25 fix). The `e2e` count
 includes `khrt-e2e-rt`, the KHRT RT-shatter persistence gate, the two A23/S4 additions
 `khrt-stress` and `khrt-e2e-threads`, the A24 pinning case `bc-center-2grp`, the seven
-`repeat-*` two-sweep gates (nine, `repeat-two-mat` and `repeat-drag-stokes-dopri5` included), `axis-200`, `wedge-fold`, `swirl-wedge`, `two-mat`, the fourteen `refuse-*` setup-refusal gates and `drag-stokes-dopri5`; the `unit` count includes `self_test`, `registry-docs`,
+`repeat-*` two-sweep gates (ten, `repeat-two-mat`, `repeat-drag-stokes-dopri5` and `repeat-tab-dopri5` included), `axis-200`, `wedge-fold`, `swirl-wedge`, `two-mat`, the fourteen `refuse-*` setup-refusal gates and `drag-stokes-dopri5`; the `unit` count includes `self_test`, `registry-docs`,
 `test_rng_stream`, `test_axis_dispatch`, `test_graze_standoff`, `test_dual_clip` and `test_mhb98_decane`
 and `registry-docs`, and the two O7 additions `test_kh_rayleigh_limit` and
 `test_khrt_interaction`. Unit families that emit

@@ -32,10 +32,12 @@ this case's `scatter-A.dat` differing between two runs of one binary at OMP 5 (3
 records; identical at OMP 1). `dopri5.f` keeps the previous grid point `XOLD` in `COMMON
 /CONDO5/` (for its dense-output routine), shared by every OpenMP thread, and IGLOO's `solout`
 accumulates the scatter weight on `x − xold` — so a parcel's cloud was timed by another
-thread's step. The breakup oscillator advance in `solout` reads the same interval (no fixture
-runs breakup on DOPRI5). SOLOUT now receives a thread-private copy; the twin
-`repeatability/drag-stokes-dopri5` (two sweeps at OMP 5, scatter multiset sweep 1 ≡ sweep 0) was
-3/3 RED before and is 3/3 green after, and OMP 5 reproduces the OMP 1 cloud (376 rows).
+thread's step. The breakup oscillator advance in `solout` reads the same interval, so breakup on
+DOPRI5 was physically wrong under OpenMP. SOLOUT now receives a thread-private copy; two twins gate
+it at OMP 5 — `repeatability/drag-stokes-dopri5` (scatter multiset sweep 1 ≡ sweep 0; 3/3 RED before,
+377 vs 345 records) and `repeatability/tab-dopri5` (`tab-e2e` on H-dopri5; 3/3 RED before with 22/25
+exits and 2855 vs 3783 trajectory records differing between sweeps) — both 3/3 green after, and OMP 5
+reproduces the OMP 1 cloud (376 rows).
 
 **What it pins.** That the explicit solver's cell-crossing interrupt reaches the integrator (the
 O25 failure mode: a run that "completes" with every parcel lost and exit 0). It does not compare

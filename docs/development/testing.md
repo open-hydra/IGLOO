@@ -69,7 +69,7 @@ tests/
 ├── infrastructure/               # gas_reconstruction, ini_pipeline, rng_stream, axis_dispatch, graze_standoff, dual_clip;
 │                                 # db-injection/coupled-body/db-2daxi/axis-200/wedge-fold/two-mat/periodic-y/bc-center-2grp (e2e)
 │                                 # refusals/{p2t,zgr,lk-d2law,properties-*,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver} (setup-refusal gates)
-├── repeatability/                # two-sweep state-leak gates: drag-stokes/drag-stokes-dopri5/db-injection/two-mat/d2law/khrt/vie-plait/etab/tab
+├── repeatability/                # two-sweep state-leak gates: drag-stokes/drag-stokes-dopri5/db-injection/two-mat/d2law/khrt/vie-plait/etab/tab/tab-dopri5
 └── mpi/                          # USE_MPI build only: drag-stokes/conv-nu/khrt/bc-center-2grp/two-mat/consistency/consistency-two-mat
 ```
 
@@ -89,7 +89,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 (`test_{drag,heat,evap}_probes`) began life as expected-fail bug reproducers, but
 every bug they cover is fixed, so they now run as ordinary bug-transcription pins.
 
-Current gate: **81/81** in a serial build (53 e2e + 28 unit, `self_test` and `registry-docs` among the latter); `USE_MPI=ON` registers 7 more `mpi-*` cases, 88/88.
+Current gate: **82/82** in a serial build (54 e2e + 28 unit, `self_test` and `registry-docs` among the latter); `USE_MPI=ON` registers 7 more `mpi-*` cases, 89/89.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.
 
 ### Adding a test

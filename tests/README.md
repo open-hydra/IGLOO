@@ -49,7 +49,7 @@ tests/
 ├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/
 │   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ two-mat/ periodic-y/ bc-center-2grp/   # e2e
 │   └── refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver}/   # setup-refusal gates
-├── repeatability/                # two-sweep gates: drag-stokes/ drag-stokes-dopri5/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/
+├── repeatability/                # two-sweep gates: drag-stokes/ drag-stokes-dopri5/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/ tab-dopri5/
 └── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ bc-center-2grp/ two-mat/ consistency/ consistency-two-mat/
 ```
 
@@ -95,6 +95,6 @@ the fix holds, RED on regression.
 
 ## Status
 
-ctest 81/81 in a serial build (53 e2e + 28 unit, `self_test` and `registry-docs` among the latter);
-`USE_MPI=ON` registers 7 more `mpi-*` cases, 88/88. Convergence-order
+ctest 82/82 in a serial build (54 e2e + 28 unit, `self_test` and `registry-docs` among the latter);
+`USE_MPI=ON` registers 7 more `mpi-*` cases, 89/89. Convergence-order
 aggregate tables (plan §4 T8-convergence) not started.

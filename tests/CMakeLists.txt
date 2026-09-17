@@ -216,6 +216,12 @@ igloo_twosweep_case(repeat-etab         repeatability/etab
                     "e2e;repeatability;breakup"        "")
 igloo_twosweep_case(repeat-tab          repeatability/tab
                     "e2e;repeatability;breakup"        "")
+# repeat-tab-dopri5: TAB breakup on the explicit solver at OMP 5 -- ledger O27's physically
+# consequential half: solout advances the TAB oscillator by x - xold, and DOPRI5's XOLD was a
+# COMMON block shared by every thread, so breakup timing depended on the other threads' steps.
+# Sweep 1 must reproduce sweep 0 (trajectories, exits, scatter, source); RED on the racy fork.
+igloo_twosweep_case(repeat-tab-dopri5   repeatability/tab-dopri5
+                    "e2e;repeatability;breakup"        "")
 # docs/user/registry.md is DocGen OUTPUT that is also TRACKED, so it can silently
 # disagree with the registry it documents (it did twice on 2026-07-30). Regenerate
 # into the build tree and diff. Kind 8 (contract meta-test): no physics, no figure.

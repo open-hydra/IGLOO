@@ -111,4 +111,11 @@ SWIRL`; no `stuck in cell` / `no net progress`; 193/192/194 rows, all three exit
 
 **Not pinned here.** The Eulerian/source outputs under swirl (W-plan Q7: `euler.tec` carries
 no `w_p`, the momentum source lacks the azimuthal component) — `out-file = S` is written and
-ignored. The fold cadence for a parcel that does not cross dual cells in x (none here).
+ignored. The fold cadence for a parcel that does not cross dual cells in x (none here). The
+**ord1 wedge path** (`meridianToAzimuth`, the cell value rotated to the parcel azimuth): every
+axisym fixture runs `gas-order = 2`, so it is exercised by no gate — a throwaway of this case at
+`gas-order = 1` on the E binary (2026-09-17) ran clean (no error stop, in-sector every row, folds
+21/8/33, finite) with residuals at the piecewise-constant level (max|Δw| 3.3e-4, max|Δr| 5.4e-5),
+which is what a cell-value field gives and is not a gate; the DB velocity hand-off at
+`Lib_Integration.f90:158` still reads the unrotated cell velocity (inert while every station sits
+at θ = 0).
