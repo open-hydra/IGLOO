@@ -27,6 +27,16 @@ gitlink moved with it. With the fix: 0 NMAX exits, 1500 rows, 25/25 parcels matc
 closed form (worst resid/tol 0.014), and the interim parse-time refusal (`refuse-dopri5`) and the
 `DISABLED` flag this case carried went with it — this case is the gate now.
 
+**Second defect on the same path (ledger O27, fixed in the fork's `fd9d178`).** The E A/B found
+this case's `scatter-A.dat` differing between two runs of one binary at OMP 5 (372 / 366 / 348
+records; identical at OMP 1). `dopri5.f` keeps the previous grid point `XOLD` in `COMMON
+/CONDO5/` (for its dense-output routine), shared by every OpenMP thread, and IGLOO's `solout`
+accumulates the scatter weight on `x − xold` — so a parcel's cloud was timed by another
+thread's step. The breakup oscillator advance in `solout` reads the same interval (no fixture
+runs breakup on DOPRI5). SOLOUT now receives a thread-private copy; the twin
+`repeatability/drag-stokes-dopri5` (two sweeps at OMP 5, scatter multiset sweep 1 ≡ sweep 0) was
+3/3 RED before and is 3/3 green after, and OMP 5 reproduces the OMP 1 cloud (376 rows).
+
 **What it pins.** That the explicit solver's cell-crossing interrupt reaches the integrator (the
 O25 failure mode: a run that "completes" with every parcel lost and exit 0). It does not compare
 the two solvers against each other beyond the shared oracle; `H-sdirk4` remains the default and

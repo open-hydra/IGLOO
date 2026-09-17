@@ -195,6 +195,13 @@ endfunction()
 # because one shared seed would reproduce perfectly and pass every e2e gate.
 igloo_twosweep_case(repeat-drag-stokes  repeatability/drag-stokes
                     "e2e;repeatability;standard"       "INPUT/solfile.tec")
+# repeat-drag-stokes-dopri5: two sweeps at OMP 5 with the explicit solver. Gates the scatter
+# cloud's determinism on the DOPRI5 path (ledger O27): dopri5.f kept XOLD in COMMON /CONDO5/,
+# shared by every thread, and solout's scatter accumulator reads x - xold -- run-to-run
+# different scatter-A.dat at OMP 5 (372/366/348 rows), identical at OMP 1. Fixed in the OSlo
+# fork (thread-private XOLDS passed to SOLOUT); this twin was RED on the racy binary.
+igloo_twosweep_case(repeat-drag-stokes-dopri5 repeatability/drag-stokes-dopri5
+                    "e2e;repeatability;standard"       "")
 igloo_twosweep_case(repeat-db-injection repeatability/db-injection
                     "e2e;repeatability;infrastructure" "")
 igloo_twosweep_case(repeat-two-mat      repeatability/two-mat

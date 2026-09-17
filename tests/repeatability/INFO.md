@@ -53,7 +53,11 @@ would pass every gate in this directory.
 
 ## Two modes
 
-- **steady** (all eight) — gas held fixed; sweep 1 must reproduce sweep 0.
+- **steady** (all nine) — gas held fixed; sweep 1 must reproduce sweep 0. `repeat-drag-stokes-dopri5`
+  (2026-09-17) is the odd one out: it gates not a state leak but the scatter cloud's determinism on the
+  DOPRI5 path (ledger O27 — `dopri5.f` kept the previous grid point in a COMMON block shared by every
+  OpenMP thread, and `solout` accumulates the cloud on `x − xold`; sweeps differed run to run at OMP 5,
+  3/3 RED on the racy fork, 3/3 green on `fd9d178`).
 - **gas-cycle** (`drag-stokes`, `vie-plait`) — three sweeps through the `external_gas` hook:
   original field, then `U` doubled, then the original again. Sweep 1 **must differ**
   (proving the refresh reaches the solver at all) and sweep 2 **must match** sweep 0
