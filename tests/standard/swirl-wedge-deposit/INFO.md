@@ -91,6 +91,10 @@ breakup, their combinations) are exercised only on planar fixtures, where `toMer
 the identity — the index splits are the same at all five and the A/B was inert on them, but
 only model 1 runs off-plane. The many-sector interior sub-case of O23 (a parcel whose segment
 sweeps several sectors before the fold, so the dual cell located by `(x, r cos θ)` sits
-inward of its true radius and the deposit lands there): every wedge fixture folds within
-≈ 0.6° of the sector edge, so it needs a near-axis parcel with `w ≈ |v|` and a deposit
-oracle of its own. The `ord1` deposit path (`gas-order = 1`) is exercised by no gate.
+inward of its true radius and the deposit lands there): reproduced 2026-09-18 on this
+fixture with one over-spun parcel (`wp = 10` at r = 0.2: first segment 27°, 8 % of its
+deposit a row inward; `up = 0.05, wp = 2`: 34°, 23 %), decaying below 1° within a few
+segments as the parcel flings outward — a transient at injection here, sustained only for a
+parcel swinging past the axis. Not gated: the fix (end the segment at the sector edge) is
+outside the W-plan's scope; see `wedge-fold/INFO.md`. The `ord1` deposit path
+(`gas-order = 1`) is exercised by no gate.

@@ -61,7 +61,15 @@ for an INTERIOR swirling parcel far from the sector (no k-face cap on its segmen
 unfolded azimuth bounded only by the dual's y-range through y = r cos θ): the dual cell is
 still LOCATED by (x, y = r cos θ), so past a few sectors the interpolation extrapolates from
 a cell inward of the parcel's true radius, and the source/euler deposits land in that cell —
-the many-sector sub-case of ledger O23 (reviewer's reading, not reproduced). The deposits'
+the many-sector sub-case of ledger O23 — **reproduced 2026-09-18** on the swirl-wedge fixture with one
+over-spun parcel (`y = 0.2`, `up = 1`, `wp = 10`, or `up = 0.05`, `wp = 2`): the first segment sweeps
+≈ 27° / 34° (27 sectors folded at once), the true radius runs 0.200 → 0.224 / 0.234 while the dual
+cell is located by y = r cos θ = 0.200, so 8 % / 23 % of that segment's deposit lands a row inward;
+the sweep then decays (8°, 6°, 5° … < 1° as r grows with angular momentum). A transient here; a
+parcel swinging past the axis (r_min ~ dx) would sustain it. Mechanism: the segment is ended by
+the z-blind (x, y) containment, never by a k-face, and the fold runs only at the segment end; the
+coherent fix is to end the segment at the sector edge (a `sectorOut` interrupt in `solout`), which
+no plan has scoped — recorded, not built. The deposits'
 *frame* (Cartesian at the parcel's azimuth, not the meridian plane) was O23's measurable
 deposit half: fixed by `Lib_Equations::toMeridian` and gated by `standard/swirl-wedge-deposit`;
 the sampling half is closed by E. This case's `euler1.tec` moved with that fix (its ID 1
