@@ -17,6 +17,7 @@ module IGLOO_Lib_Breakup
 
 contains
 
+    !> TAB Rosin-Rammler scale factor from the spread parameter.
     subroutine assign_scaleFactor()
         implicit none
         select case (bpMethod)
@@ -25,6 +26,7 @@ contains
         end select
     end subroutine assign_scaleFactor
 
+    !> Map the breakup model word to brkupSelect and the ODE/event/child flags.
     subroutine assign_breakup(breakup_word,brkupSelect,brkupEqOde,brkupEvent,brkupHasChild)
         implicit none
         character(len=*), intent(in)  :: breakup_word
@@ -79,9 +81,7 @@ contains
 
     end subroutine assign_breakup
 
-!**********************************************************************************************************************!
-!********************** MODELS WITH CONTINUOUS PARCEL MODIFICATION - FUNCTIONS IN THE ODE SYSTEM **********************!
-!**********************************************************************************************************************!
+    !> Rate d(npdot)/dt of the selected continuous breakup model (0 below the velocity threshold).
     function breakupOde(dp,sigma,mup,rhop,npdot,rhog,vel,Re,time,acc,vp,var,brkupSelect,bp) result(npdotDot)
         use IGLOO_variables, only: toll
         implicit none
@@ -101,6 +101,7 @@ contains
     end function breakupOde
 
 
+    !> Pilch-Erdman (1987) breakup rate: total breakup time by We/Oh regime, stable diameter.
     function PilchErdman(dp,sigma,mup,rhop,npdot,rhog,vel, bp) result(npdotDot)
         use IGLOO_variables, only: toll
         implicit none
@@ -122,7 +123,7 @@ contains
         elseif (We >  351._R8) then
             TBT = 0.766_R8*(We - 12._R8)**0.25_R8
         elseif (We >   45._R8) then
-            TBT =  14.1_R8*(We - 12._R8)**(-0.25_R8)   !> A16 fix: PE87 45<We<=351 is NEGATIVE (Fig.7 continuous)
+            TBT =  14.1_R8*(We - 12._R8)**(-0.25_R8)   !> negative exponent per PE87 Fig.7
         elseif (We >   18._R8) then
             TBT =  2.45_R8*(We - 12._R8)**0.25_R8
         elseif (We >   12._R8) then
@@ -142,6 +143,7 @@ contains
 
     end function PilchErdman
 
+    !> Reitz-Diwakar breakup rate: bag or stripping regime with its stable diameter and time.
     function ReitzDiwakar(dp,sigma,rhop,npdot,rhog,vel,Re, bp) result(npdotDot)
         implicit none
         real(R8), intent(in) :: dp, sigma, rhop, npdot, rhog, vel, Re
@@ -165,6 +167,8 @@ contains
 
     end function ReitzDiwakar
 
+    !> Reitz KH-RT breakup rate: KH stripping toward dStable = 2 B0 lambda_KH, gated by the RT
+    !  breakup time; told/tc carry the RT timer.
     function ReitzKHRT(dp,sigma,mup,rhop,npdot,rhog,vel,time,acc,vp,told,tc, bp) result(npdotDot)
         use IGLOO_variables, only: pi, toll
         implicit none
@@ -207,9 +211,8 @@ contains
 
     end function ReitzKHRT
 
-!**********************************************************************************************************************!
-!********************** MODELS WITH PARCEL MODIFICATION "EVENTS" - SOUBROUTINE IN THE ODE SOLOUT **********************!
-!**********************************************************************************************************************!
+    !> Dispatch the selected event model (from the ODE solout): sets `event`, updates
+    !  eventvar/brkupState and, for KHRT, a child parcel (childState, addChild); ETAB kicks `vp`.
     subroutine breakupEvent(eventvar, neventvar, brkupState, nbrkst, &
                              sigma,mup,rhop,rhog,vel,Re,time,acc,vp,dt, &
                              brkupSelect,bp,bpMethod,bpScale, &
@@ -228,9 +231,7 @@ contains
         real(R8), intent(out)   :: childState(nchild)
         logical,  intent(out)   :: event, addChild
         logical,  intent(in)    :: exitLoop
-        !> The parcel's own RNG stream. TAB's child-size sampler and ETAB's azimuth both draw from
-        !  it: this routine runs INSIDE the OMP region, where the intrinsic random_number would
-        !  make the draw depend on thread scheduling (see IGLOO_Lib_Statistics::rngNext).
+        !> the parcel's own RNG stream (this routine runs inside the OMP region)
         integer(I8), intent(inout) :: rngState
         logical,  intent(in), optional :: childPending  !> a child is already banked this call
         logical :: noShed
@@ -257,6 +258,8 @@ contains
     end subroutine breakupEvent
     
 
+    !> KH-RT event: RT breakup into lambdaRT-sized drops, or KH stripping that sheds the stripped
+    !  mass into a child parcel once it exceeds mShedLim of the parent drop mass.
     subroutine ReitzKHRTevent(dp,sigma,mup,rhop,npdot,rhog,vel,time,acc,vp,m0,told,tc,KHindex, &
                                bp, event,childState,addChild,exitLoop,childPending)
         use IGLOO_variables, only: pi, toll
@@ -309,26 +312,13 @@ contains
                 m0     = pi/6._R8*rhop*dp**3
             endif
         elseif (dStable < dp .and. .not. childPending) then
-            !> `childPending` now means "the caller cannot keep a child created right now" --
-            !  it is set for the whole call on the LAST generation pass (B2), where a new child
-            !  would never be integrated and never write its exit record, so its mass would
-            !  vanish from the totals. Suppressing the shed leaves that mass on the parent,
-            !  which is exact.
-            !  It used to mean "the single child slot is already taken" (A23c): shedding twice
-            !  stripped the parent (npdot -> npdotLast) while the second child was discarded,
-            !  measured as a 45 % mass loss. That cap is gone -- each parent now owns a growable
-            !  shed list -- but the terminal-pass case is real and keeps the same guard.
+            !> no shed when the caller cannot keep a child (last generation pass): the mass stays on the parent
             if (WeGas > bp(6)) then
-                !> A23 fix — Reitz-87 p.322 product-parcel rule. The continuous ODE has been
-                !> shrinking dp while raising npdot at CONSTANT parcel mass (the paper's
-                !> N*a^3 = N0*a0^3), so no mass has actually left the parcel yet; m0 is the
-                !> per-drop mass at the last event, hence dLast is that event's diameter.
+                !> Reitz-87 p.322 product-parcel rule: m0 is the per-drop mass at the last event, dLast its diameter
                 dLast = (6._R8*m0/(pi*rhop))**(1._R8/3._R8)
                 mShed = m0 - pi/6._R8*rhop*dp**3      !> per-drop mass stripped since then
                 if (mShed/m0 > bp(5)) then
-                    !> N0 = parent count at the last event; the paper RESTORES it when the
-                    !> product parcel is created, which is what actually removes the shed
-                    !> mass. The parent keeps its current diameter dp.
+                    !> restore the parent count N0 of the last event; the parent keeps its diameter
                     npdotLast = npdot*dp**3/dLast**3
                     !> all stripped mass goes into drops of size dStable = 2*B0*lambda_KH
                     nChild = npdotLast*(dLast**3 - dp**3)/dStable**3
@@ -360,6 +350,8 @@ contains
 
     end subroutine ReitzKHRTevent
 
+    !> TAB event (O'Rourke-Amsden): oscillator state y/yDot; on breakup the parcel diameter is
+    !  resampled from a chi-square (method 1) or Rosin-Rammler (method 2) distribution.
     subroutine TABmodel(dp,sigma,mup,rhop,npdot,rhog,vel,dt,y,yDot, &
                          bp,method,scaleFactor, event,exitLoop,rngState)
         use IGLOO_variables,      only: pi, toll
@@ -420,16 +412,14 @@ contains
                         rNew = 0._R8
                         rMin = 0.01_R8*rs !> minimum value threshold
                         if     (method==1) then
-                            !> Chi-Square distribution with n degrees of freedom from the original paper
-                            !> [WARNING: number of degrees of freedom n has been chosen "arbitrarily"]
+                            !> chi-square distribution with n degrees of freedom (original paper)
                             n = nint(k)
                             rSize = rs/real(n + 4)
                             do while (rNew<rMin .or. rNew>=radius)
                                 rNew = ChiSquareS(n,rngState)*rSize
                             enddo
                         elseif (method==2) then
-                            !> Rosin-Rammler distribution with size parameter rs and spread parameter n=3.5
-                            !> Most used probability density distribution (DEFAULT CHOICE)
+                            !> Rosin-Rammler distribution with size parameter rs and spread nSpread (default)
                             nSpread = bp(4)
                             rSize   = rs*scaleFactor
                             do iter = 1, maxIter
@@ -470,6 +460,8 @@ contains
 
     end subroutine TABmodel
 
+    !> ETAB event (Tanner 1997): TAB oscillator with the enhanced exponential size law; the
+    !  product gets a normal velocity kick vperp at a random azimuth.
     subroutine ETABmodel(dp,sigma,mup,rhop,npdot,rhog,vel,Re,dt,y,yDot,vp, &
                           bp, event,exitLoop,rngState)
         use IGLOO_variables,      only: pi, toll
@@ -524,18 +516,13 @@ contains
                 if (dt>tb) then
                     sqrtWe = AWe*We**4+1._R8
                     Kbr = bp(1)*omega*sqrtWe
-                    !> stripping branch carries k2 (Tanner Eq.6); the AWe smoother reaches k2*sqrt(WeTrans)
-                    !  at WeTrans by design, so k2 here keeps Kbr continuous for k1/=k2
+                    !> stripping branch uses k2 (Tanner Eq.6); Kbr stays continuous at WeTrans
                     if (We > bp(4)) Kbr = bp(2)*omega*sqrt(We)
                     rNew = radius*exp(-Kbr/omega*acos(min(max(1._R8-1._R8/WeCr,-1._R8),1._R8)))
                     if (rNew<radius) then
                         event = .true.
                         if (exitLoop) then
-                            !> Product normal velocity vperp = A*xdot, xdot = a*ydot/2 (Tanner-97
-                            !  Eqs 8-10): A^2 = 3(1 - a/rSMR + 5*Cd*We/72)*omega0^2/ydot^2 with the
-                            !  undamped omega0^2 = Comega*sigma/(rho_l a^3) -- ydot cancels in A*xdot.
-                            !  Cd = incompressible sphere estimate (energy-balance coefficient only);
-                            !  direction: random azimuth in the plane normal to the parent path.
+                            !> product normal velocity vperp = A*xdot (Tanner-97 Eqs 8-10), random azimuth normal to the path
                             if (Re > 1000._R8) then; Cd0 = 0.43_R8
                             else;                    Cd0 = 24._R8/(Re+toll)*(1._R8+0.15_R8*Re**0.687_R8); endif
                             omega0 = sqrt(bp(5)*sigma/(rhop*radius**3))
@@ -578,10 +565,9 @@ contains
     ! function/subroutine SHFmodel(...) result(npdotDot)
     ! end function/subroutine SHFmodel
 
-!**********************************************************************************************************************!
-!****************************************** FUNCTION USED BY BREAKUP MODELS  ******************************************!
-!**********************************************************************************************************************!
+    !> Functions used by the breakup models.
 
+    !> Analytic TAB oscillator update of (y, yDot) over dt.
     subroutine YupdateTAB(omega,dt,y1,rdt,WeCr,y,yDot)
         implicit none
         real(R8), intent(in)    :: omega, dt, y1, rdt, WeCr

@@ -1,3 +1,4 @@
+!> Point-in-cell tests and ray/face intersection for hexahedral and 2D quadrilateral cells.
 module IGLOO_RayFaceIntersection3D
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_VectorModule, only: cross, chooseVector
@@ -32,8 +33,7 @@ module IGLOO_RayFaceIntersection3D
 
 contains
 
-    !> FUNCTION TO COMPUTE THE PLANE EQUATION COEFFICIENTS FOR 4-POINTS FACES
-    !> Returns faceplane(3,2): (:,1)=normal, (:,2)=centroid
+    !> Unit normal and centroid of a 4-point face: faceplane(:,1) = normal, (:,2) = centroid.
     function computeFacePlane(vertices) result(faceplane)
         implicit none
         real(R8), intent(in) :: vertices(3,4)
@@ -49,7 +49,7 @@ contains
 
     end function computeFacePlane
 
-    !> STANDARD FUNCTION FOR A 2D QUADRILATERAL (IN A 3D SPACE)
+    !> Point-in-quadrilateral test (2D cell in a 3D frame); reports the crossed edge on a miss.
     logical function isPointInsideQuadrilateral(pt, vertices, face)
       use IGLOO_VectorModule, only: normal2D
       implicit none
@@ -76,7 +76,7 @@ contains
 
     end function isPointInsideQuadrilateral
 
-    !> STANDARD FUNCTION FOR A PERFECT-PLANE-FACE HEXAHEDRON
+    !> Point-in-hexahedron test with one plane per face (planar faces).
     logical function isPointInsideHexahedron(pt, vertices)
       implicit none
       real(R8), intent(in) :: pt(3)
@@ -101,7 +101,7 @@ contains
 
     end function isPointInsideHexahedron
 
-    !> FUNCTION FOR AN HEXAHEDRON WITH EACH FACE COMPOSED BY 2 TRIANGLES (12 planes)
+    !> Point-in-hexahedron test with each face split into two triangles (12 planes).
     logical function isPointInsideHexahedron12(pt, vertices, face)
       implicit none
       real(R8), intent(in) :: pt(3)
@@ -147,7 +147,8 @@ contains
 
     end function isPointInsideHexahedron12
 
-    !> STANDARD FUNCTION FOR A PERFECT-PLANE-FACE HEXAHEDRON
+    !> Point-in-cell dispatcher: 2D quadrilateral or 3D hexahedron (precomputed planes when given);
+    !  on a wedge also reports whether the azimuth left the sector.
     logical function isPointInsideCell(pt, vertices, is2D, norms, centroids, is_degen, crossedFace, sectorOut)
       implicit none
       real(R8), intent(in) :: pt(3)
@@ -157,11 +158,10 @@ contains
       real(R8), optional, intent(in)  :: centroids(3,2,6)
       logical,  optional, intent(in)  :: is_degen(2,6)
       integer,  optional, intent(out) :: crossedFace  !> exit face on miss (3D guide 1..6 / 2D edge 1..4), 0 if inside
-      logical,  optional, intent(out) :: sectorOut    !> wedge only: azimuth outside the k-plane band (the x-y verdict is unchanged)
+      logical,  optional, intent(out) :: sectorOut    !> wedge only: azimuth outside the k-plane band
       real(R8) :: quadVert(3,4)
 
-      !> Axisymmetric wedge: the x-y quad is azimuth-blind, so a 2.5D parcel can sweep any number of
-      !  sectors inside it. Two dot products against the k-plane normals bound a segment to one sector.
+      !> Wedge: flag an azimuth outside the k-plane band.
       if (present(sectorOut)) then
         sectorOut = .false.
         if (axisym) sectorOut = dot_product(pt, sectorNorm(:,1)) > sectorTol .or. dot_product(pt, sectorNorm(:,2)) > sectorTol
@@ -191,7 +191,7 @@ contains
     end function isPointInsideCell
 
 
-    !> FUNCTION TO KNOW IF A FACE IS CONCAVE (FROM THE OUTSIDE OF THE CELL)
+    !> Whether a 4-point face is concave, seen from outside the cell.
     pure logical function isConcave(vertices)
         implicit none
         real(R8), intent(in) :: vertices(3,4)
@@ -220,7 +220,7 @@ contains
 
     end function isConcave
 
-    !> FUNCTION TO SELECT THE CLOSEST FACE OF A CELL TO THE POINT p
+    !> Index of the cell face closest to p.
     function closestFace(p,vertices) result(face)
         implicit none
         real(R8), intent(in) :: vertices(3,8)
@@ -266,7 +266,7 @@ contains
 
     end function closestFace
 
-    !> FUNCTION TO COMPUTE THE AREA OF A FACE
+    !> Area of face f of a hexahedron.
     pure function computeArea(f,vertices) result(area)
         implicit none
         integer, intent(in)  :: f
@@ -285,8 +285,7 @@ contains
 
     end function computeArea
 
-    !> FUNCTION TO COMPUTE THE PLANE EQUATION COEFFICIENTS FOR 3-POINTS FACES
-    !> Returns faceplane(3,2): (:,1)=normal, (:,2)=centroid
+    !> Unit normal (zero if degenerate) and centroid of a triangle: faceplane(:,1), (:,2).
      function computeTrianglePlanes(vertices) result(faceplane)
         implicit none
         real(R8), intent(in) :: vertices(3,3)
@@ -307,8 +306,7 @@ contains
     end function computeTrianglePlanes
 
 
-    !> Precompute the 12 triangle plane data for isInsideHex12Fast.
-    !> norms(3,2,6): unit normals; dots(2,6): dot(norm,centroid); is_degen(2,6): degenerate flag
+    !> Precomputes the 12 triangle planes (unit normals, centroids, degenerate flags) for isInsideHex12Fast.
     pure subroutine precomputeHex12(vertices, norms, centroids, is_degen)
         implicit none
         real(R8), intent(in)  :: vertices(3,8)
@@ -375,7 +373,7 @@ contains
     end function isInsideHex12Fast
 
 
-    ! FUNCTION TO FIND THE INTERECTION BETWEEN A RAY AND A QUADRILATERAL
+    !> Ray/quadrilateral intersection through the two triangles of the convex split.
     logical function intersectRayQuadrilateral(ray, quad, intersectionPoint, distance)
         implicit none
         type(Ray_t),         intent(in)  :: ray
@@ -395,12 +393,10 @@ contains
             tri2%vertices(:,2:3) = quad%vertices(:,3:4)
         endif
 
-        ! Test intersection with each triangle
         intersectRayQuadrilateral = .true.
         if (.not.intersectRayTriangle(ray, tri1, intersectionPoint, distance)) then
             if (.not.intersectRayTriangle(ray, tri2, intersectionPoint, distance)) then
-                !> A hit ON the split diagonal (e.g. an exact face-center) fails the strict
-                !  barycentric bounds of BOTH triangles although it lies on the quad: retry relaxed.
+                !> Retry with relaxed barycentric bounds for hits on the split diagonal.
                 if (.not.intersectRayTriangle(ray, tri1, intersectionPoint, distance, relax=1.0e-9_R8)) then
                     if (.not.intersectRayTriangle(ray, tri2, intersectionPoint, distance, relax=1.0e-9_R8)) then
                         intersectRayQuadrilateral = .false.  ! No intersection
@@ -412,8 +408,7 @@ contains
     end function intersectRayQuadrilateral
 
 
-    !> Ray-segment intersection in the xy plane (2D)
-    !> Returns .true. if the ray hits the segment, with distance along ray
+    !> Ray/segment intersection in the xy plane; returns the distance along the ray on a hit.
     logical function intersectRaySegment2D(origin, dir, A, B, distance)
         implicit none
         real(R8), intent(in)  :: origin(3), dir(3), A(3), B(3)
@@ -436,14 +431,14 @@ contains
     end function intersectRaySegment2D
 
 
-    !> Möller–Trumbore ALGORITHM TO FIND THE INTERECTION BETWEEN A RAY AND A TRIANGLE
+    !> Ray/triangle intersection (Möller–Trumbore); `relax` widens the barycentric bounds.
     logical function intersectRayTriangle(ray, triangle, intersectionPoint, distance, relax)
         implicit none
         type(Ray_t),      intent(in)  :: ray
         type(Triangle_t), intent(in)  :: triangle
         real(R8),         intent(out) :: intersectionPoint(3)
         real(R8),         intent(out) :: distance
-        real(R8), optional, intent(in) :: relax   !> widen the barycentric bounds (on-edge hits, B4)
+        real(R8), optional, intent(in) :: relax   !> widens the barycentric bounds (on-edge hits)
         real(R8), parameter :: toll = 1.0e-20
         real(R8) :: u, v, a, verso, e
         real(R8) :: edge1(3), edge2(3), edge3(3), h(3), s(3), q(3)
@@ -494,7 +489,8 @@ contains
 
     end function intersectRayTriangle
 
-    !> FUNCTION TO FIND THE INTERECTION BETWEEN A RAY AND A HEXAHEDRON (CELL)
+    !> Ray/cell intersection: exit (or entry) face and point of a ray through a hexahedron,
+    !  or through a 2D quadrilateral when `planar` is set.
     subroutine intersectPolyhedron(ray,vertices,intersectionPoint,face,intersecting,planar)
         implicit none
         type(Ray_t),  intent(in)    :: ray
@@ -510,10 +506,10 @@ contains
         real(R8)            :: dist, insertionDist, dseg, dbest
         real(R8)            :: insertion(3), vert(3,4)
 
-        f = 0; attempt = 0   !> runtime init: a decl initializer makes these implicit-SAVE -> shared (raced) in OMP
+        f = 0; attempt = 0   !> no declaration initializer: it would imply SAVE
         intersecting = .false.
 
-        !> 2D planar cell: ray (in xy) exits exactly one edge from an interior origin.
+        !> 2D cell: nearest exit edge.
         is2D = .false.; if (present(planar)) is2D = planar
         if (is2D) then
             dbest = huge(1._R8)

@@ -1,13 +1,11 @@
+!> Random samplers (intrinsic and per-particle streamed), Rosin-Rammler moments and
+!  injection-diameter sampling.
 module IGLOO_Lib_Statistics
     use, intrinsic :: iso_fortran_env, only : I8 => int64, R8 => real64
     implicit none
     private
-    !> Sampler functions. The bare names draw from the intrinsic `random_number`, whose state is
-    !> per-thread: correct ONLY on the serial pin-time path (sampleDiameter). The `*S`
-    !> ("streamed") twins take an explicit per-particle state and are the ONLY ones safe to call
-    !> from inside the OpenMP region -- see rngNext for why. Deliberately separate names rather
-    !> than one routine with an optional argument: a caller who forgot the optional would
-    !> silently get the thread-scheduled draw back, with no diagnostic.
+    !> Bare samplers draw from the intrinsic random_number (serial pin-time path only); the *S
+    !  twins take a per-particle stream state and are the only ones callable inside the OMP region.
     public :: RosinRammler, LogNormal, Normal, NormalStandard, ChiSquare
     public :: RosinRammlerS, NormalStandardS, ChiSquareS
     public :: rngSeedFor, rngNext
@@ -28,10 +26,7 @@ module IGLOO_Lib_Statistics
     integer, parameter :: LogNorDistr = 2
     integer, parameter :: RosRamDistr = 3
 
-    !> splitmix64 constants, as SIGNED DECIMAL rather than hex: Fortran has no 0x literal, and a
-    !  BOZ (Z'...') with the top bit set is a portability minefield. These are the exact
-    !  two's-complement images of the published splitmix64 constants
-    !  9E3779B97F4A7C15, C2B2AE3D27D4EB4F, BF58476D1CE4E5B9 and 94D049BB133111EB (hex).
+    !> splitmix64 constants as signed decimal (two's-complement images of the published hex values).
     integer(I8), parameter :: SM_GOLDEN = -7046029254386353131_I8
     integer(I8), parameter :: SM_IDMIX  = -4417276706812531889_I8
     integer(I8), parameter :: SM_MIX_A  = -4658895280553007687_I8
@@ -39,27 +34,10 @@ module IGLOO_Lib_Statistics
 
 contains
 
-    !===========================================================================================!
-    !  Per-particle deterministic RNG stream (splitmix64)                                       !
-    !                                                                                          !
-    !  The intrinsic `random_number` keeps per-thread state, so WHICH draw a particle receives  !
-    !  depends on which thread ran it and in what order -- i.e. on OMP scheduling. Any sampler  !
-    !  called from inside `!$OMP PARALLEL DO` is therefore not reproducible run to run, not     !
-    !  invariant to thread count, and (for MPI) not invariant to rank decomposition. Measured   !
-    !  on `tab-e2e`: its trajectories differ as a MULTISET between two identical runs.          !
-    !                                                                                          !
-    !  Fix: give every particle its own stream, seeded from (rng_seed, famID, ID) and advanced  !
-    !  only by that particle's own draws. The n-th draw of particle p then depends on nothing   !
-    !  but p -- reproducible, thread-count invariant, rank invariant.                           !
-    !                                                                                          !
-    !  splitmix64 (Steele-Lea-Flood 2014) is used because it is a pure integer mix with no      !
-    !  warm-up: a freshly seeded stream is immediately well-distributed, which matters here     !
-    !  because streams are re-seeded per particle per sweep rather than run long.               !
-    !===========================================================================================!
+    !> Per-particle deterministic RNG stream (splitmix64, Steele-Lea-Flood 2014): seeded from
+    !  (rng_seed, famID, ID) and advanced only by that particle's own draws.
 
-    !> Deterministic stream seed for one particle. `ID` is only unique WITHIN a group (every pin
-    !  path assigns `particle(p)%ID = p`), so `famID` must be mixed in or particle 1 of every
-    !  family would consume an identical stream.
+    !> Deterministic stream seed for one particle, mixing famID and the within-group ID.
     pure function rngSeedFor(famID, ID) result(state)
         use IGLOO_variables, only: rng_seed
         implicit none
@@ -73,7 +51,6 @@ contains
     end function rngSeedFor
 
     !> Next uniform in (0,1) from a particle's own stream; advances `state`.
-    !  Open interval: 0 is excluded because RosinRammler takes log(x).
     function rngNext(state) result(u)
         implicit none
         integer(I8), intent(inout) :: state
@@ -84,16 +61,14 @@ contains
         do
             state = state + SM_GOLDEN      ! splitmix64 Weyl increment
             z     = mix64(state)
-            !> Top 53 bits -> [0,1). ishft by -11 on a signed 64-bit needs the sign bit cleared
-            !  first, so shift right logically via ibits.
+            !> Top 53 bits -> [0,1), taken with a logical shift.
             u = real(ibits(z, 11, 53), R8) * twoM53
             if (u > 0._R8) exit
         enddo
 
     end function rngNext
 
-    !> splitmix64 finalizer. Integer overflow in the multiplies is intended (mod 2**64) and is
-    !  what makes the avalanche work; Fortran wraps here on both gnu and ifx.
+    !> splitmix64 finalizer; the multiplies wrap mod 2**64 by design.
     pure function mix64(x) result(z)
         implicit none
         integer(I8), intent(in) :: x
@@ -106,7 +81,7 @@ contains
 
     end function mix64
 
-    !> Streamed twins of the three samplers reachable from inside the OMP region.
+    !> Streamed standard normal N(0,1), Marsaglia polar method.
     function NormalStandardS(state) result(z)
         implicit none
         integer(I8), intent(inout) :: state
@@ -123,6 +98,7 @@ contains
 
     end function NormalStandardS
 
+    !> Streamed Rosin-Rammler sample with size parameter x0 and spread parameter n.
     function RosinRammlerS(x0, n, state) result(x)
         implicit none
         real(R8),    intent(in)    :: x0, n
@@ -135,6 +111,7 @@ contains
 
     end function RosinRammlerS
 
+    !> Streamed chi-squared sample with k degrees of freedom.
     function ChiSquareS(k, state) result(x)
         implicit none
         integer,     intent(in)    :: k
@@ -152,11 +129,7 @@ contains
     end function ChiSquareS
 
 
-    !> standard normal distribution N(0, 1), Marsaglia polar method.
-    !> Stateless on purpose: the second deviate v2*y is discarded rather than cached.
-    !> A module-level cache would be shared state read-modify-written from inside the
-    !> OpenMP region (via ChiSquare <- breakupEvent), and initRandomSeed could not
-    !> restore it. Cost is one extra RNG pair per call.
+    !> Standard normal N(0,1), Marsaglia polar method; stateless (the second deviate is discarded).
     function NormalStandard() result(z)
         implicit none
         real(R8) :: u1, u2, v1, v2, w, y
@@ -183,7 +156,7 @@ contains
         x = mean + sigma*NormalStandard()
     end function Normal
 
-    !> Rosin-Rammler ditribution wit size parameter x0 and spread parameter n
+    !> Rosin-Rammler distribution with size parameter x0 and spread parameter n
     function RosinRammler(x0, n) result(x)
         implicit none
         real(R8), intent(in) :: x0, n
@@ -199,6 +172,7 @@ contains
 
     end function RosinRammler
 
+    !> Rosin-Rammler probability density at r.
     pure function RosinRammlerPDF(r,x0,n) result(p)
         implicit none
         real(R8), intent(in) :: r, x0, n
@@ -248,7 +222,6 @@ contains
         real(R8) :: h, r, f, coeff
         real(R8) :: integral
 
-        ! Ampiezza del segmento
         h = (xMax - xMin) / real(Nbin)
         if (h <= 0.0_R8) then; integral = 0.0_R8; return; endif
 
@@ -264,12 +237,8 @@ contains
 
     end function RonsinRammlerMoments
 
-    !> Sample an injection diameter from the distribution law selected per BC inlet.
-    !>   p1   = mean / characteristic diameter (= dp = 2*rp), always > 0
-    !>   p2   = dispersion width (sigmap): std for Normal/LogNormal, spread n for Rosin
-    !>   code = *Distr selector (stored in cell%properties(:,8))
-    !> p2 <= 0 returns p1 verbatim with NO random_number call, so a deterministic
-    !> (Dirac) inlet is bit-identical to the legacy d = 2*rp behaviour.
+    !> Samples an injection diameter from the per-inlet distribution law `code`: p1 = mean /
+    !  characteristic diameter, p2 = width (std, or Rosin-Rammler n); p2 <= 0 returns p1 with no draw.
     function sampleDiameter(p1, p2, code) result(d)
         implicit none
         real(R8), intent(in) :: p1, p2
@@ -294,8 +263,7 @@ contains
             enddo
             if (d <= 0._R8) error stop ( ' [ERROR] sampleDiameter: Normal truncation failed (mean << sigma?).' )
         case (LogNorDistr)
-            ! p1,p2 are the statistical mean & std of the diameter; convert to the
-            ! log-space (mu, sigma) the LogNormal sampler expects.
+            ! convert the diameter mean/std to log-space (mu, sigma)
             if (p1 <= 0._R8) error stop ( ' [ERROR] sampleDiameter: LogNormal mean must be positive.' )
             sig2 = log(1._R8 + (p2/p1)**2)
             d = LogNormal(log(p1) - 0.5_R8*sig2, sqrt(sig2))
@@ -307,9 +275,8 @@ contains
 
     end function sampleDiameter
 
-    !> Map an ATLAS distribution-law name (col 8 of the BC file) to a DIST_* code.
-    !> Empty / 'none' / 'dirac' -> deterministic. A file path or any other token is
-    !> rejected (tabulated-file sampling is not implemented in IGLOO yet).
+    !> Maps a distribution-law name (empty/none/dirac, normal, lognormal, rosinrammler) to its
+    !  *Distr code; any other token is rejected.
     function lawCode(name) result(code)
         implicit none
         character(len=*), intent(in) :: name
@@ -331,8 +298,7 @@ contains
         end select
     end function lawCode
 
-    !> Seed the intrinsic RNG deterministically from a single integer seed, so a
-    !> given seed reproduces the same stochastic injection across runs.
+    !> Seeds the intrinsic RNG deterministically from one integer.
     subroutine initRandomSeed(seed)
         implicit none
         integer, intent(in) :: seed
@@ -347,6 +313,7 @@ contains
         deallocate(s)
     end subroutine initRandomSeed
 
+    !> ASCII lower-case copy of s.
     pure function to_lower(s) result(t)
         implicit none
         character(len=*), intent(in) :: s

@@ -1,3 +1,4 @@
+!> Nusselt-number correlations Nu(Re, Pr, Ma) selected by keyword.
 module IGLOO_Lib_Heat
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   implicit none
@@ -7,6 +8,7 @@ module IGLOO_Lib_Heat
 
 contains
 
+  !> Maps the [IGLOO-Models] heat-model keyword to heatSelect.
   subroutine assign_heat(heat_word,heatSelect)
     implicit none
     character(len=*), intent(in)  :: heat_word
@@ -42,6 +44,7 @@ contains
 
   end subroutine assign_heat
 
+  !> Dispatches to the selected Nusselt correlation.
   pure function heat(Re,Pr,Ma,heatSelect) result(Nu)
     use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
     implicit none

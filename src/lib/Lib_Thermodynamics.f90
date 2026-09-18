@@ -1,3 +1,5 @@
+!> Integer-temperature property tables (cp, h, rho, sigma, mu, psat) and their lookup.
+!> Integer-temperature property tables (cp, h, rho, sigma, mu, psat) and their lookup.
 module IGLOO_Lib_Properties
   implicit none
   integer :: Tmin, Tmax    ! Extreme temperatures in tables
@@ -5,7 +7,7 @@ module IGLOO_Lib_Properties
 
 contains
 
-  !> Direct lookup on pre-sliced 1D table
+  !> Linear interpolation in a 1D table indexed by integer temperature.
   pure function lookupTab(tab, T) result(val)
     implicit none
     real(8), intent(in) :: tab(Tmin:Tmax), T
@@ -13,9 +15,7 @@ contains
     real(8) :: Vij, Viij, Tdiff
     integer :: T_i
 
-    !> Clamp the table index: the solver's Newton probes trial states with T outside the
-    !  tabulated range, and an unclamped idint(T) would read out of bounds. The trial is
-    !  rejected anyway, so this only guards the probe.
+    !> Index clamped to the tabulated range.
     T_i   = min(max(idint(T), Tmin), Tmax-1)
     Tdiff = T - T_i
     Vij   = tab(T_i)       ! int(T)
@@ -24,8 +24,8 @@ contains
 
   end function lookupTab
 
+  !> Inverts a monotonic property table: T such that tab(T) = prop.
   pure function comp_TfromTab(tab,prop) result(T)
-    !> HYPOTHESIS: property is a monotonic function of T
     implicit none
     real(8), intent(in) :: prop, tab(Tmin:Tmax)
     real(8) :: T
@@ -42,6 +42,8 @@ contains
 
   end function comp_TfromTab
 
+  !> Forward difference of a property table at T.
+  !> Forward difference of a property table at T.
   pure function comp_derivativeTab(tab,T) result(dprop)
     implicit none
     real(8), intent(in) :: T, tab(Tmin:Tmax)

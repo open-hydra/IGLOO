@@ -7,13 +7,13 @@ module IGLOO_data_block
   type, public :: obj_bc_cell
     real(R8),dimension(:,:),allocatable :: properties !> first index per group (family)
     real(R8)     :: krhoTot   = 0._R8 !> sum of krho across 401 families (dimensionless, ∈[0,1))
-    real(R8)     :: mdotGas   = 0._R8 !> gas mass flow rate [kg/s]; external (coupled) OR LSQ-extrapolated (standalone)
-    real(R8)     :: mdotPart  = 0._R8 !> particle mass flow rate from 402/403 families [kg/s]; static after setup
-    real(R8)     :: area      = 0._R8 !> face area [m²]; precomputed at setup
-    integer      :: nInj      = 0     !> transient: # injection particles pinned in this cell (drives particle%Ninj)
+    real(R8)     :: mdotGas   = 0._R8 !> gas mass flow rate [kg/s]; external (coupled) or LSQ-extrapolated
+    real(R8)     :: mdotPart  = 0._R8 !> particle mass flow rate from 402/403 families [kg/s]
+    real(R8)     :: area      = 0._R8 !> face area [m²]
+    integer      :: nInj      = 0     !> injection particles pinned in this cell
     integer      :: bcdef
-    integer      :: connection(4)   !> partner cell [block,i,j,k] (101/103/201). TODO: generalize for chimera
-    integer      :: connectionFace=0!> partner face index (201 periodic): used to find the partner face center
+    integer      :: connection(4)   !> partner cell [block,i,j,k] (101/103/201)
+    integer      :: connectionFace=0!> partner face index (201 periodic)
     real(R8)     :: center(3)
     real(R8)     :: normal(3)
   end type obj_bc_cell
@@ -24,16 +24,12 @@ module IGLOO_data_block
   end type obj_face
 
   type, public :: obj_block
-    integer :: Nx = 0, Ny = 0, Nz = 0  !> 0 = unset; deterministic sentinel instead of UB
+    integer :: Nx = 0, Ny = 0, Nz = 0  !> 0 = unset
     real(R8), dimension(:,:,:,:), allocatable :: node    !> (3,0:Nx,0:Ny,0:Nz)
     real(R8), dimension(:,:,:,:), allocatable :: center  !> (3,1:Nx,1:Ny,1:Nz)
     real(R8), dimension(:,:,:,:), allocatable :: dl      !> (3,1:Nx,1:Ny,1:Nz) edge lengths
     real(R8), dimension(:,:,:),   allocatable :: dlmin
     real(R8), dimension(:,:,:,:), allocatable :: subVol  !> sub-octant volumes; allocated only when ord2=true.
-    !> Cached per-cell volumes for the local binomial mollifier (consumed by
-    !  IGLOO_Lib_Mollify). Filled once per block by precomputeMetric, unconditionally
-    !  (mollification runs in both ord2 modes). The smoother is volume-only -- no face
-    !  area / center-distance metric is needed (it cancels in the binomial flux).
     real(R8), dimension(:,:,:),   allocatable :: cellVol  !> (Nx,Ny,Nz) full cell volume [m^3]
     real(R8) :: bbox(3,2) = reshape([-huge(1._R8),-huge(1._R8),-huge(1._R8), &
                                       huge(1._R8), huge(1._R8), huge(1._R8)],[3,2]) !> (:,1)=min (:,2)=max over node
@@ -58,10 +54,7 @@ module IGLOO_data_block
     real(R8), dimension(:,:,:),   allocatable :: mit, mil
     real(R8), dimension(:,:,:),   allocatable :: kl, gam, R
     logical,  dimension(:,:,:),   allocatable :: isDeformed
-    !> Dual ghost nodes that `fill_dual_nodes` projected ONTO the symmetry axis. Set by the
-    !  same code that moves them, and read by fillGhostGradient, so the node POSITION and the
-    !  node VALUE can never disagree about where that node is -- which is exactly the defect
-    !  this pairing was introduced to close (a node sitting at r = 0 carrying v_r /= 0).
+    !> dual ghost nodes that fill_dual_nodes projected onto the symmetry axis
     logical,  dimension(:,:,:),   allocatable :: nodeOnAxis
   contains
     private
@@ -98,6 +91,7 @@ module IGLOO_data_block
 
 contains
 
+  !> Deallocate the block's geometry arrays.
   subroutine freeBlock(self)
     implicit none
     class(obj_block), intent(inout) :: self
@@ -111,6 +105,7 @@ contains
 
   end subroutine freeBlock
 
+  !> Allocate the gas-field arrays; `switch` adds the ghost ring (0:N+1).
   subroutine allocate(self,ss,ii,jj,kk,switch)
     implicit none
     class(obj_flowblock), intent(inout) :: self
@@ -135,7 +130,7 @@ contains
       allocate(self%R            (0:i,0:j,kmin:k))
       allocate(self%temperature  (0:i,0:j,kmin:k))
       self%mit = 0._R8
-      self%mil = 0._R8   !> [Init] non basarsi su kernel zero-fill (cross-platform)
+      self%mil = 0._R8
       self%kl  = 0._R8
     else
       allocate(self%density (1:ss,1:ii,1:jj,1:kk))
@@ -147,12 +142,13 @@ contains
       allocate(self%R            (1:ii,1:jj,1:kk))
       allocate(self%temperature  (1:ii,1:jj,1:kk))
       self%mit = 0._R8
-      self%mil = 0._R8   !> [Init] non basarsi su kernel zero-fill (cross-platform)
+      self%mil = 0._R8
       self%kl  = 0._R8
     endif
 
   end subroutine allocate
 
+  !> Allocate the source accumulators (mass per material, momentum, energy).
   subroutine allocateSRC(self,nmat,ii,jj,kk)
     implicit none
     class(obj_sourceblock), intent(inout) :: self
@@ -164,6 +160,7 @@ contains
 
   end subroutine allocateSRC
 
+  !> Allocate the eulerian accumulators (density, velocity, temperature, number).
   subroutine allocateEUL(self,ii,jj,kk)
     implicit none
     class(obj_eulerblock), intent(inout) :: self
@@ -177,12 +174,8 @@ contains
 
   end subroutine allocateEUL
 
-  !> When ord2=true, the source accumulators live on gasblock (staggered) cells;
-  !  reduce them to geoblock cells via sub-octant volume-weighted averaging.
-  !  The mapping per geometry recap:
-  !  geoblock cell (i,j,k) sub-octant at corner (da,db,dc) lies inside gasblock
-  !  cell (i+da, j+db, k+dc). For mesh2D, gk is clipped to 1 (single z-layer).
-  !  When ord2=false, this is a no-op.
+  !> End-of-solve source finalization: under ord2 the gasblock-shape accumulators are reduced
+  !  to geoblock cells by sub-octant volume weighting; then the field is mollified.
   subroutine finalizeSRC(self, geoblock)
     use IGLOO_variables, only: toll, ord2, mesh2D, nm, mollifyPasses
     implicit none
@@ -196,7 +189,6 @@ contains
     real(R8), allocatable :: sourceMom_geo(:,:,:,:)
     real(R8), allocatable :: sourceEn_geo(:,:,:)
 
-    !> When ord2, reduce the gasblock-shape accumulators to geoblock cells.
     if (ord2) then
       gNx = geoblock%Nx;  gNy = geoblock%Ny;  gNz = geoblock%Nz
       allocate(sourceMass_geo(1:nm, 1:gNx, 1:gNy, 1:gNz))
@@ -236,22 +228,17 @@ contains
         endif
       enddo; enddo; enddo
 
-      !> Swap reduced arrays into the public members; gasblock-shape ones get freed.
       call move_alloc(sourceMass_geo, self%sourceMass)
       call move_alloc(sourceMom_geo,  self%sourceMom)
       call move_alloc(sourceEn_geo,   self%sourceEn)
     endif
 
-    !> Mollify the (geoblock-shape, both ord2 modes) source field.
     if (mollifyPasses > 0) call mollifySource(self, geoblock)
 
   end subroutine finalizeSRC
 
-  !> Eulerian-block finalization. Always normalizes the +-accumulated
-  !  numerators (velocity = Σmom, temperature = Σenergy) into weighted averages
-  !  by dividing by density, with cpVariable groups inverting h → T via
-  !  comp_TfromTab. Then, if ord2=true, reduces the gasblock-shape arrays to
-  !  geoblock-shape via sub-octant volume-weighted averaging.
+  !> End-of-solve eulerian finalization: 1. (ord2) reduce the raw accumulators to geoblock
+  !  cells; 2. mollify the conserved densities; 3. normalize velocity and temperature by density.
   subroutine finalizeEUL(self, geoblock, hTab, cpVariable)
     use IGLOO_Lib_Properties, only: comp_TfromTab
     use IGLOO_variables,      only: toll, ord2, mesh2D, mollifyPasses
@@ -266,15 +253,7 @@ contains
     real(R8), allocatable :: density_geo(:,:,:), np_geo(:,:,:)
     real(R8), allocatable :: velocity_geo(:,:,:,:), temperature_geo(:,:,:)
 
-    !> --- Step 1 (ord2 only): reduce the RAW +-accumulated numerators
-    !>     {density, np, momentum(=velocity), energy(=temperature)} from the
-    !>     gasblock (staggered) cells to geoblock cells by sub-octant volume-
-    !>     weighted averaging, BEFORE normalizing. Reducing the raw momentum/
-    !>     energy and dividing by the reduced density afterwards (Step 2) yields
-    !>     a mass-weighted (Favre) velocity/temperature
-    !>        v_geo = reduced(rho*v) / reduced(rho)
-    !>     rather than the volume-average-of-ratios the old normalize-then-reduce
-    !>     order produced. density and np are intensive and unchanged by the swap.
+    !> Step 1 (ord2): reduce the raw numerators to geoblock cells before normalizing.
     if (ord2) then
       gNx = geoblock%Nx;  gNy = geoblock%Ny;  gNz = geoblock%Nz
       allocate(density_geo    (1:gNx, 1:gNy, 1:gNz))
@@ -324,17 +303,13 @@ contains
       call move_alloc(temperature_geo, self%temperature)
     endif
 
-    !> --- Mollify the conserved DENSITIES {rho, rho*v, rho*e, n} (all per-volume;
-    !>     see computeEulField) on the geoblock-shape arrays BEFORE normalizing, so
-    !>     velocity = mollified(rho*v)/mollified(rho). Gated; runs in both ord2 modes.
+    !> Step 2: mollify the conserved densities {rho, rho*v, rho*e, n}.
 
     if (mollifyPasses > 0) call mollifyEuler(self, geoblock)
 
 
-    !> --- Step 2: normalize the numerators in place. After Step 1 the arrays are
-    !>     geoblock-shape in BOTH ord2 modes (non-ord2 never left geoblock shape),
-    !>     so this single loop serves both. velocity = momentum/density;
-    !>     temperature from energy/density (cpVariable groups invert h -> T).
+    !> Step 3: normalize in place; velocity = momentum/density, temperature = energy/density
+    !  (h -> T for cpVariable groups).
     do k = lbound(self%density, 3), ubound(self%density, 3)
       do j = lbound(self%density, 2), ubound(self%density, 2)
         do i = lbound(self%density, 1), ubound(self%density, 1)
@@ -356,11 +331,8 @@ contains
 
   end subroutine finalizeEUL
 
-  !> Mollify the eulerian conserved DENSITIES {rho, rho*v(x3), rho*e, n}
-  !  in place. Each is per-volume (computeEulField uses factor=1/vol), so the local
-  !  binomial smoother conserves the physical totals (mass, momentum, energy, count)
-  !  directly. Called after the reduce, before the velocity/temperature normalization,
-  !  in both ord2 modes. mollifyPasses dimension-split binomial passes; volume-only.
+  !> Mollify the eulerian conserved densities {rho, rho*v, rho*e, n} in place with the
+  !  local binomial smoother.
   subroutine mollifyEuler(self, geoblock)
     use IGLOO_variables, only: mesh2D, mollifyPasses
     class(obj_eulerblock), intent(inout) :: self
@@ -370,7 +342,6 @@ contains
 
     if (mollifyPasses <= 0) return
     ndim = merge(2, 3, mesh2D)
-    !> One pre-allocated qold scratch, reused across all 6 binomial_smooth calls.
     allocate(qold(geoblock%Nx, geoblock%Ny, geoblock%Nz))
     associate(V => geoblock%cellVol)
       call binomial_smooth(self%density,     V, mollifyPasses, ndim, work=qold)
@@ -383,10 +354,8 @@ contains
     deallocate(qold)
   end subroutine mollifyEuler
 
-  !> Mollify the source EXTENSIVE per-cell totals {mass(xnm), mom(x3), en}.
-  !  Source is accumulated raw (net flux per cell, NOT per volume), so convert to a
-  !  density (/V) before smoothing and back (*V) after; the smoother's conserved
-  !  invariant Sum(q*V) then maps to the physical total Sum(sourceX).
+  !> Mollify the extensive source totals {mass, mom, en}: converted to densities (/V),
+  !  smoothed, converted back (*V).
   subroutine mollifySource(self, geoblock)
     use IGLOO_variables, only: mesh2D, mollifyPasses, nm
     class(obj_sourceblock), intent(inout) :: self
@@ -397,8 +366,6 @@ contains
     if (mollifyPasses <= 0) return
     ndim = merge(2, 3, mesh2D)
     Nx = geoblock%Nx; Ny = geoblock%Ny; Nz = geoblock%Nz
-    !> tmp = the /V density wrapper; qold = the pre-allocated smoother snapshot scratch
-    !  (both reused across all nm+4 binomial_smooth calls).
     allocate(tmp(Nx,Ny,Nz), qold(Nx,Ny,Nz))
     associate(V => geoblock%cellVol)
       do s = 1, nm
@@ -418,6 +385,7 @@ contains
     deallocate(tmp, qold)
   end subroutine mollifySource
 
+  !> Cell indices (i,j,k) on face af -> face-local pair (m,n); (0,0) if the cell is not on it.
   pure subroutine ijk2fmn(self,Ai,Aj,Ak,af,am,an)
     implicit none
     class(obj_block), intent(in) :: self
@@ -443,6 +411,7 @@ contains
 
   end subroutine ijk2fmn
 
+  !> Face-local pair (m,n) on face af -> cell indices (i,j,k).
   pure subroutine fmn2ijk(self,af,am,an,Ai,Aj,Ak)
     implicit none
     class(obj_block), intent(in) :: self
@@ -466,7 +435,7 @@ contains
 
   end subroutine fmn2ijk
 
-  !> Tetrahedra hex volume kernel: decomposes the hex into 5 tets and sums their volumes.
+  !> Hex volume as the sum of its 5-tetrahedra decomposition.
   pure function hexVolume(verts) result(vol)
     implicit none
     real(R8), intent(in) :: verts(3, 8)
@@ -493,6 +462,7 @@ contains
     enddo
   end function hexVolume
 
+  !> Volume of cell (i,j,k) from its 8 nodes.
   pure subroutine computeVolume(self, i, j, k, vol)
     implicit none
     class(obj_block), intent(in)  :: self
@@ -507,6 +477,7 @@ contains
     vol = hexVolume(verts)
   end subroutine computeVolume
 
+  !> Copy the block dimensions, nodes and centers into the flow block.
   pure subroutine pass_geometry(self,block)
     implicit none
     class(obj_flowblock), intent(inout) :: self
@@ -524,6 +495,7 @@ contains
 
   end subroutine pass_geometry
 
+  !> Copy the block dimensions, nodes and centers into the source block.
   pure subroutine pass_geometrySRC(self,block)
     implicit none
     class(obj_sourceblock), intent(inout) :: self
@@ -541,6 +513,7 @@ contains
 
   end subroutine pass_geometrySRC
 
+  !> Copy the block dimensions, nodes and centers into the euler block.
   pure subroutine pass_geometryEUL(self,block)
     implicit none
     class(obj_eulerblock), intent(inout) :: self
@@ -558,8 +531,7 @@ contains
 
   end subroutine pass_geometryEUL
 
-  !> Axis-aligned bounding box over the block's node array. Computed once at setup; consumed by
-  !  searchInBlock as a cheap early-out (p outside bbox => no cell can contain p => skip the sweep).
+  !> Axis-aligned bounding box over the block's nodes.
   subroutine computeBBox(self)
     implicit none
     class(obj_block), intent(inout) :: self
@@ -572,6 +544,7 @@ contains
   end subroutine computeBBox
 
 
+  !> Vertices of cell si (4 in 2D, 8 in 3D); optionally the 12-plane inside-test precompute (3D).
   pure subroutine getVertices(self,si,vert,is2D,norms,centroids,degen)
     use IGLOO_variables, only: mesh2D
     use IGLOO_RayFaceIntersection3D, only: precomputeHex12
@@ -580,8 +553,7 @@ contains
     integer,           intent(in)  :: si(3)
     logical, optional, intent(in)  :: is2D
     real(R8),          intent(out) :: vert(:,:)  !> (3,4) or (3,8)
-    !> Optional fast-path face-plane precompute (12-plane inside test); filled only when 3D
-    !  (untouched under mesh2D — the 2D containment path ignores planes).
+    !> 12-plane inside-test precompute, filled only in 3D
     real(R8), optional, intent(inout) :: norms(3,2,6), centroids(3,2,6)
     logical,  optional, intent(inout) :: degen(2,6)
     logical :: quad
@@ -613,6 +585,8 @@ contains
   end subroutine getVertices
 
 
+  !> Gas state (rho, u, v, w, T, mu, gamma, R, k) of cell si: the cell value, or its node
+  !  values under ord2.
   pure subroutine gasProperties(self,gas,si)
     use IGLOO_variables, only: ord2
     implicit none
@@ -639,6 +613,7 @@ contains
 
   contains
 
+    !> Gas state at the 4 (2D) or 8 (3D) nodes of cell (i,j,k).
     pure subroutine computeGasNodes(i,j,k,gasNodes)
       implicit none
       integer,  intent(in)  :: i, j, k
@@ -749,6 +724,7 @@ contains
   end subroutine gasProperties
 
 
+  !> Cell centers, edge lengths, face-cell centers/normals and (ord2) sub-octant volumes.
   pure subroutine compute_geometry(self)
     use IGLOO_variables, only: ord2
     implicit none
@@ -762,7 +738,7 @@ contains
       allocate(self%dlmin(1:self%Nx,1:self%Ny,1:self%Nz))
     endif
 
-    !> Compute the cells center coords
+    !> cell centers and edge lengths
     do k = 1, self%Nz
       do j = 1, self%Ny
         do i = 1, self%Nx
@@ -779,7 +755,7 @@ contains
       enddo
     enddo
 
-    !> Compute the face center coords
+    !> face-cell centers and normals
     self%face(1)%Nm = self%Ny; self%face(1)%Nn = self%Nz
     self%face(2)%Nm = self%Ny; self%face(2)%Nn = self%Nz
     self%face(3)%Nm = self%Nx; self%face(3)%Nn = self%Nz
@@ -879,13 +855,7 @@ contains
       enddo
       endassociate
 
-    !> Sub-octant volumes. Only needed when ord2=true (consumed by the end-of-solve
-    !  dual-to-geoblock reduction). Each geoblock cell is partitioned into 8 sub-hexes
-    !  by the planes through the cell center parallel to its faces. The 8 sub-
-    !  octants are indexed lexicographically by their cell-corner (da,db,dc):
-    !     oct = 1 + da + 2*db + 4*dc
-    !  Each sub-octant has 8 vertices: the cell corner, 3 edge midpoints,
-    !  3 face midpoints, and the cell center.
+    !> ord2: sub-octant volumes, indexed oct = 1 + da + 2*db + 4*dc by cell corner (da,db,dc)
     if (ord2) then
       if (.not. allocated(self%subVol)) then
         allocate(self%subVol(8, 1:self%Nx, 1:self%Ny, 1:self%Nz))
@@ -925,13 +895,7 @@ contains
 
   end subroutine compute_geometry
 
-  !> Cache the per-cell volumes used by the local binomial mollifier
-  !  (IGLOO_Lib_Mollify::binomial_smooth). Filled once per block, unconditionally
-  !  (the mollifier runs in both ord2 modes):
-  !    cellVol(i,j,k)  = full hex volume of cell (i,j,k)   [m^3]
-  !  The smoother is volume-only: no face area / center-distance metric is needed
-  !  (the geometric factor cancels in the binomial flux), which also makes it immune
-  !  to the near-wall dCN->0 stiffness of a physical-width diffusion. Pure.
+  !> Cache the full volume of every cell (cellVol) for the mollifier.
   pure subroutine precomputeMetric(self)
     implicit none
     class(obj_block), intent(inout) :: self
@@ -948,29 +912,9 @@ contains
 
   end subroutine precomputeMetric
 
-  !> Per-cell volumes of the ord2 staggered (dual) mesh, for the eulerian density
-  !  normalization in computeEulField. The dual cell count is [1..Nx+1] per
-  !  direction (one more than the geo cells). 3D: full hex volume via computeVolume
-  !  on the dual node (range 0:Nx+1). mesh2D: the dual node carries a single z layer,
-  !  so the slab volume is the dual-quad area times the geo slab thickness.
-  !
-  !  ⚠ That thickness is uniform only on a PLANAR extruded 2D mesh. On an AXISYMMETRIC
-  !  wedge it is r*delthe -- proportional to the local radius. This routine used to take
-  !  ONE Tgeo from a mid-mesh geo cell and apply it everywhere, which mis-scaled every dual
-  !  cell by r_ref/r: the projected condensed density came out inflated at large radius and
-  !  depleted near the axis. On the JPL nozzle r/r_ref spanned 0.02 .. 5.1, i.e. up to ~43x
-  !  too little density on the axis and ~5x too much at the wall -- which is what drove the
-  !  Chang-MPL centreline disagreement (gas too fast on the axis, too slow at the wall).
-  !  Only the eulerian projection was affected; the SOURCE path normalizes by
-  !  geoblock%cellVol (correct per-cell volumes) and was always right.
-  !
-  !  Wedge branch: the proportionality T = cSlab*r is fitted from the geo metric by least
-  !  squares through the origin, rather than taken as `delthe`, so the dual keeps matching
-  !  geoblock%cellVol's OWN convention exactly (computeVolume builds planar-faced hexes,
-  !  which differ from a true swept sector at O(delthe^2)). It is then evaluated at each dual
-  !  cell's own centroid radius -- including the boundary half-cells at the axis, where a
-  !  nearest-geo-cell copy would be ~2x wrong precisely where the error matters most.
-  !  Planar branch keeps the single-Tgeo form, which is exact there.
+  !> Per-cell volumes of the ord2 dual mesh (1..N+1 per direction), clipped to the domain:
+  !  3D hex volumes; 2D quad area times the slab thickness (uniform on a planar mesh,
+  !  cSlab*r on an axisymmetric wedge).
   subroutine precomputeDualMetric(self, is2D, geoblock)
     use IGLOO_variables, only: axisym, axisDir
     implicit none
@@ -1013,8 +957,7 @@ contains
                                                 d1(1)*d2(2)-d1(2)*d2(1)]) * cSlab * rad
       enddo; enddo
     else if (is2D) then
-      !> Planar extruded mesh: the slab thickness really is uniform.
-      !  Tgeo = geo slab thickness = geoblock%cellVol / geoArea (interior cell)
+      !> Planar mesh: uniform slab thickness Tgeo from an interior geo cell.
       i0 = max(1, geoblock%Nx/2); j0 = max(1, geoblock%Ny/2)
       call geoblock%getVertices([i0, j0, 1], v, .true.)
       d1 = v(:,3) - v(:,1); d2 = v(:,4) - v(:,2)
@@ -1036,25 +979,8 @@ contains
       enddo; enddo; enddo
     endif
 
-    !> --- Clip the boundary dual cells to the domain -------------------------------------
-    !  The dual node ring is the geo CELL CENTRES plus a ghost node placed OUTSIDE each
-    !  boundary (allocation.f90:110-118). So the first/last dual cell in every direction
-    !  STRADDLES the boundary face: part of its volume lies outside the domain, where no
-    !  parcel can ever deposit. computeEulField divides the deposited mass by this volume, so
-    !  an unclipped boundary cell reports a density diluted by exactly the outside fraction,
-    !  and finalizeEUL then averages that into the adjacent geo cell. Measured on the JPL
-    !  nozzle: the boundary geo cells carried only 0.74 of the condensed mass flux -- at the
-    !  inlet, where that flux is IMPOSED and must be reproduced exactly.
-    !
-    !  The inside fraction is MEASURED from the mesh, never assumed to be 1/2, so this stays
-    !  correct if the ghost-node placement rule changes (today it is a reflection through the
-    !  face centre, which equals extrapolation only on a uniform mesh).
-    !
-    !  Applied in every direction the mesh HAS: i/j always, k only in 3D (mesh2D carries a
-    !  single dual layer in k, which is the slab and is not a straddling direction). The
-    !  invariant this enforces is exact tiling -- the clipped dual cells sum to the domain
-    !  volume, where the unclipped ones overshoot it by (Nx+1)(Ny+1)(Nz+1)/(Nx*Ny*Nz).
-    !  test_dual_clip pins that in both 2D and 3D.
+    !> Clip the boundary dual cells to the fraction of their extent inside the domain
+    !  (i/j always, k in 3D only).
     do k = 1, nze; do j = 1, nye; do i = 1, nxe
       fi = 1._R8; fj = 1._R8; fk = 1._R8
       in = min(max(i-1, 1), geoblock%Nx)
@@ -1082,11 +1008,8 @@ contains
 
   end subroutine precomputeDualMetric
 
-  !> Fraction of a boundary dual cell's extent that lies INSIDE the domain, along one
-  !  direction: the boundary face sits somewhere between the first interior dual node and the
-  !  ghost node, and only the interior part can receive deposition. Measured, not assumed --
-  !  it is exactly 1/2 for a reflected ghost, something else for an extrapolated one.
-  !  Clamped to (0,1]: a degenerate or mis-placed ghost must not silently zero a volume.
+  !> Fraction of a boundary dual cell's extent lying inside the domain along one direction,
+  !  measured from the mesh and clamped to (0,1].
   pure function insideFrac(nodeIn, nodeGhost, faceCentre) result(f)
     implicit none
     real(R8), intent(in) :: nodeIn(3), nodeGhost(3), faceCentre(3)
@@ -1100,14 +1023,8 @@ contains
     endif
   end function insideFrac
 
-  !> Perpendicular distance of a point from the symmetry axis (through the origin, along
-  !  axisDir). Used for the axisymmetric dual-cell slab thickness.
-  !
-  !  ⚠ Callers must average the VERTEX radii, never take the radius of the vertex centroid.
-  !  Under ord2 the gasblock carries a ghost row that straddles the axis, so its vertices sit
-  !  at -+dr and the centroid lands at r ~ 0 while the cell still has finite area. Using
-  !  |centroid| there collapsed that row's volume by ~1e6 (8.0e-17 vs 9.7e-11 m^3) and the
-  !  resulting density blew the coupled run up with 'NaN or p<0' on the very first sweep.
+  !> Perpendicular distance of a point from the symmetry axis (through the origin, along axisDir).
+  !  Callers average the vertex radii of a cell, not the radius of its centroid.
   pure function axisRadius(p) result(r)
     use IGLOO_variables, only: axisDir
     implicit none
@@ -1116,6 +1033,7 @@ contains
     r = norm2( p - dot_product(p, axisDir)*axisDir )
   end function axisRadius
 
+  !> Unit normal of the quad A-B-C-D from its diagonals.
   pure function CalculateNormal(A,B,C,D) result(n)
     implicit none
     real(R8), intent(in) :: A(3), B(3), C(3), D(3)
@@ -1131,6 +1049,8 @@ contains
   end function CalculateNormal
 
 
+  !> Fill the ghost ring of the gas field by linear extrapolation: faces, then the
+  !  symmetry-axis override, then edges and corners.
   subroutine fillGhostGradient(self)
     implicit none
     class(obj_flowblock), intent(inout) :: self
@@ -1141,7 +1061,7 @@ contains
     ns = size(self%density,1)
     is3D = (Nz > 1)
 
-    !--- i-faces (face 1: i=0, face 2: i=Nx+1) ---
+    !> i-faces (face 1: i=0, face 2: i=Nx+1)
     do k = 1, Nz; do j = 1, Ny
       self%density  (:,   0,j,k) = 2.0_R8*self%density  (:, 1,j,k) - self%density  (:,   2,j,k)
       self%density  (:,Nx+1,j,k) = 2.0_R8*self%density  (:,Nx,j,k) - self%density  (:,Nx-1,j,k)
@@ -1159,7 +1079,7 @@ contains
       self%R  (Nx+1,j,k) = 2.0_R8*self%R  (Nx,j,k) - self%R  (Nx-1,j,k)
     enddo; enddo
 
-    !--- j-faces (face 3: j=0, face 4: j=Ny+1) ---
+    !> j-faces (face 3: j=0, face 4: j=Ny+1)
     do k = 1, Nz; do i = 1, Nx
       self%density  (:,i,   0,k) = 2.0_R8*self%density  (:,i, 1,k) - self%density  (:,i,   2,k)
       self%density  (:,i,Ny+1,k) = 2.0_R8*self%density  (:,i,Ny,k) - self%density  (:,i,Ny-1,k)
@@ -1177,7 +1097,7 @@ contains
       self%R  (i,Ny+1,k) = 2.0_R8*self%R  (i,Ny,k) - self%R  (i,Ny-1,k)
     enddo; enddo
 
-    !--- k-faces (face 5: k=0, face 6: k=Nz+1) ---
+    !> k-faces (face 5: k=0, face 6: k=Nz+1)
     if (is3D) then
       do j = 1, Ny; do i = 1, Nx
         self%density  (:,i,j,   0) = 2.0_R8*self%density  (:,i,j, 1) - self%density  (:,i,j,   2)
@@ -1197,22 +1117,7 @@ contains
       enddo; enddo
     endif
 
-    !--- Axis symmetry override -----------------------------------------------------------
-    !  A ghost that fill_dual_nodes projected ONTO the symmetry axis sits at r = 0, and the
-    !  constant-gradient rule above is the wrong law for it: `2*q1 - q2` is the value for a
-    !  ghost one spacing BEYOND node 1, i.e. for the mirror point at r = -r_1, not for r = 0.
-    !  Applying it to a node that has been moved to the axis put v_r = +6.7381e-01 m/s ON the
-    !  axis on axis-200 (2*(-1.9025) - (-4.4789)), pointing OUTWARD, where the radial velocity
-    !  is odd in r and must be identically zero.
-    !
-    !  The symmetry values are the only self-consistent ones at r = 0: scalars are even, so
-    !  their normal gradient vanishes and the ghost takes the interior value (2nd order); the
-    !  velocity keeps only its axis-PARALLEL part, because the radial and azimuthal components
-    !  are odd and vanish on the axis.
-    !
-    !  Runs before the edge/corner cascade below, so those inherit the corrected face ghosts.
-    !  `mit` is deliberately not touched here: fillGhostGradient does not fill it on any face
-    !  either, and silently giving it a value on one ring only would be worse than the gap.
+    !> symmetry-axis override for ghosts sitting on the axis (before the edge/corner cascade)
     if (allocated(self%nodeOnAxis)) then
       do k = 1, Nz; do j = 1, Ny
         if (self%nodeOnAxis(0,   j,k)) call axisGhost(self, 0,   j,k,  1, j,k)
@@ -1230,7 +1135,7 @@ contains
       endif
     endif
 
-    !--- Edge ghosts: cascading 1D extrapolation from face ghosts ---
+    !> edge ghosts: cascade from the face ghosts
     do k = 1, Nz
       call extrapEdge(self, 0,    0,    k, 0,    1,    k, 0,    2,    k)
       call extrapEdge(self, Nx+1, 0,    k, Nx+1, 1,    k, Nx+1, 2,    k)
@@ -1250,7 +1155,7 @@ contains
         call extrapEdge(self, i, 0,    Nz+1, i, 0,    Nz,   i, 0,    Nz-1)
         call extrapEdge(self, i, Ny+1, Nz+1, i, Ny+1, Nz,   i, Ny+1, Nz-1)
       enddo
-      !--- Corner ghosts: cascading from edge ghosts ---
+      !> corner ghosts: cascade from the edge ghosts
       call extrapEdge(self, 0,    0,    0,    0,    0,    1,    0,    0,    2   )
       call extrapEdge(self, Nx+1, 0,    0,    Nx+1, 0,    1,    Nx+1, 0,    2   )
       call extrapEdge(self, 0,    Ny+1, 0,    0,    Ny+1, 1,    0,    Ny+1, 2   )
@@ -1264,11 +1169,8 @@ contains
   end subroutine fillGhostGradient
 
 
-  !> Symmetry-axis ghost values for a node sitting AT r = 0 (indices g*), taken from its
-  !  interior partner (indices i*). Scalars are even in r, so the ghost takes the interior
-  !  value; the velocity keeps only its axis-parallel component, the radial and azimuthal
-  !  parts being odd and therefore zero on the axis. Frame-agnostic via axisDir, matching
-  !  axisRadius' convention (axis through the origin).
+  !> Ghost values for a node on the symmetry axis (g*): scalars copied from the interior
+  !  partner (i*), velocity reduced to its axis-parallel component.
   subroutine axisGhost(self, gi, gj, gk, ii, ij, ik)
     use IGLOO_variables, only: axisDir
     implicit none
@@ -1289,6 +1191,7 @@ contains
   end subroutine axisGhost
 
 
+  !> Linear extrapolation of the gas state to ghost (ig,jg,kg) from (i1,j1,k1) and (i2,j2,k2).
   subroutine extrapEdge(sol, ig,jg,kg, i1,j1,k1, i2,j2,k2)
     implicit none
     class(obj_flowblock), intent(inout) :: sol
@@ -1305,6 +1208,7 @@ contains
   end subroutine extrapEdge
 
 
+  !> Set the ghost ring of face face_id so that the face value is the ghost/interior average.
   subroutine imposeBCValues(self, face_id, face_values)
     implicit none
     class(obj_flowblock), intent(inout) :: self
@@ -1324,8 +1228,7 @@ contains
         case(5); gi = Ai; gj = Aj; gk = 0
         case(6); gi = Ai; gj = Aj; gk = self%Nz+1
         end select
-        !> f_ghost = 2*f_bc - f_interior
-        !> Density: preserve species ratios from interior, scale to ghost total
+        !> f_ghost = 2*f_bc - f_interior; density keeps the interior species ratios
         rhoInt   = sum(self%density(:,Ai,Aj,Ak))
         rhoGhost = 2.0_R8*face_values(1,m,n) - rhoInt
         if (rhoInt > 0.0_R8) then
@@ -1346,12 +1249,8 @@ contains
   end subroutine imposeBCValues
 
 
-  !> Extrapolate the gas mass flow rate at a boundary face using a 1st-order
-  !> least-squares gradient computed from the boundary cell + its interior
-  !> face-adjacent neighbors. Skipped when cell%mdotGas is already non-zero
-  !> (externally provided). cell%area must be set first.
-  !> Stencil sizes (incl. boundary cell): 4 at mesh corner, 5 at edge, 6 on face (3D).
-  !> cellCenters is the geoblock's per-cell center array
+  !> Gas mass flow rate through a boundary cell from a first-order least-squares extrapolation
+  !  of density and velocity to the face (cell%area set first); no-op when cell%mdotGas /= 0.
   subroutine initMdotGas(self, cell, cellCenters, i_b, j_b, k_b)
     implicit none
     class(obj_flowblock), intent(in)    :: self
@@ -1392,7 +1291,7 @@ contains
       Atm(2,1) = Atm(2,1) + dr(2)*dr(1); Atm(2,2) = Atm(2,2) + dr(2)*dr(2); Atm(2,3) = Atm(2,3) + dr(2)*dr(3)
       Atm(3,1) = Atm(3,1) + dr(3)*dr(1); Atm(3,2) = Atm(3,2) + dr(3)*dr(2); Atm(3,3) = Atm(3,3) + dr(3)*dr(3)
     enddo
-    ! For 2D meshes (Nz=1) the z-row/col is degenerate — patch with identity so the 3x3 inverse exists.
+    ! 2D (Nz=1): patch the degenerate z-row/col with identity.
     if (Atm(3,3) == 0._R8) then
       Atm(3,1) = 0._R8; Atm(3,2) = 0._R8; Atm(1,3) = 0._R8; Atm(2,3) = 0._R8; Atm(3,3) = 1._R8
     endif
@@ -1401,17 +1300,11 @@ contains
         - Atm(1,2)*(Atm(2,1)*Atm(3,3) - Atm(2,3)*Atm(3,1)) &
         + Atm(1,3)*(Atm(2,1)*Atm(3,2) - Atm(2,2)*Atm(3,1))
 
-    ! The Gram determinant scales like |dr|^6, so on fine meshes a well-conditioned
-    ! stencil still gives a det that is denormal-small in absolute terms: an absolute
-    ! epsilon cannot detect singularity. Compare against the Hadamard bound
-    ! (product of diagonals; the patched Atm(3,3)=1 cancels out of the ratio) — this
-    ! measures stencil collinearity independently of mesh scale. The extrapolation
-    ! result is additionally bounds-checked below, which catches any ill-conditioning
-    ! that slips through.
+    ! Singularity test relative to the Hadamard bound (product of diagonals).
     detScale = Atm(1,1) * Atm(2,2) * Atm(3,3)
 
     if (ns == 0 .or. abs(det) <= 1.e-9_R8 * detScale) then
-      ! Fall back to boundary-cell read (no extrapolation possible).
+      ! Fallback: boundary-cell read.
       rho_face = sum(self%density(:, i_b, j_b, k_b))
       u_face   = self%velocity(:, i_b, j_b, k_b)
       cell%mdotGas = rho_face * abs(dot_product(u_face, cell%normal)) * cell%area
@@ -1428,8 +1321,7 @@ contains
     invAtm(3,2) = -(Atm(1,1)*Atm(3,2) - Atm(1,2)*Atm(3,1)) / det
     invAtm(3,3) =  (Atm(1,1)*Atm(2,2) - Atm(1,2)*Atm(2,1)) / det
 
-    ! Density (sum over species): φ_face = φ_b + ∇φ · (r_face - r_b).
-    ! Track the stencil's value range for the extrapolation sanity check below.
+    ! Density: φ_face = φ_b + ∇φ · (r_face - r_b); track the stencil range for the sanity check.
     phi_b  = sum(self%density(:, i_b, j_b, k_b))
     rho_lo = phi_b;  rho_hi = phi_b
     rhs   = 0._R8
@@ -1458,10 +1350,7 @@ contains
       u_face(c) = phi_b + dot_product(grad, cell%center - r_b)
     enddo
 
-    ! Extrapolation sanity: a half-cell 1st-order extrapolation of a smooth field must
-    ! stay near the stencil's value range. An ill-conditioned solve that slips past the
-    ! det guard produces arbitrarily large garbage instead — fall back to the
-    ! boundary-cell read in that case.
+    ! Sanity bound: fall back to the boundary-cell read if the extrapolation leaves the stencil range.
     if (rho_face < 0.5_R8 * rho_lo .or. rho_face > 2._R8 * rho_hi .or. &
         norm2(u_face) > 2._R8 * u_hi) then
       rho_face = sum(self%density(:, i_b, j_b, k_b))

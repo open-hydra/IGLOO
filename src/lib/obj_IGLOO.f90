@@ -1,3 +1,5 @@
+!> Top-level IGLOO object: geometry, gas, feedback fields and materials, with the
+!  setup / reset_state / solve / writeout entry points.
 module IGLOO_module
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_data_block, only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock
@@ -7,20 +9,15 @@ module IGLOO_module
   type, public :: obj_IGLOO
     type(obj_block),       allocatable :: geoblock(:)
     type(obj_flowblock),   allocatable :: gasblock(:)
-    !> ⚠ Valid only BETWEEN a solve and the next reset_state: reset_state deallocates both
-    !> (they are re-allocated at the shape the coming sweep needs). Read them before it.
+    !> Valid only between a solve and the next reset_state (which deallocates them).
     type(obj_sourceblock), allocatable :: source(:)
     type(obj_eulerblock),  allocatable :: euler(:,:)
     type(obj_material),    allocatable :: material(:)
     logical :: eulSwitch, srcSwitch
-    !> Repeatability bookkeeping. `setup_static` is once-only (mesh, gas import and pinning
-    !  are static); `reset_state` restores the per-sweep particle state and must run before
-    !  every `solve`. A second `solve` without it silently integrates finished particles.
+    !> Sweep bookkeeping: setup_static ran; reset_state ran since the last solve.
     logical :: staticDone    = .false.
     logical :: stateIsFresh  = .false.
-    !> Output-file generation, counting reset_state calls from 0. Deliberately starts at -1 so
-    !  the FIRST reset_state lands on 0, whose tag is empty: a single-sweep standalone run
-    !  keeps byte-identical filenames, and the 49 oracles that glob fixed names still match.
+    !> Output generation: -1 before the first reset_state, 0 on the first sweep (untagged files).
     integer :: sweep = -1
   contains
     procedure, pass(self) :: setup
@@ -34,9 +31,7 @@ module IGLOO_module
 
 contains
 
-  !> Back-compat entry point: the documented hydra hook and all e2e cases call this.
-  !  A driver that integrates repeatedly should call setup_static once and reset_state
-  !  before each solve instead (see src/app/IGLOO.f90 for the single-sweep shape).
+  !> Single-sweep entry point: setup_static followed by reset_state.
   subroutine setup(self, external_gas)
     use Lib_ORION_data
     implicit none
@@ -49,25 +44,8 @@ contains
   end subroutine setup
 
 
-  !> Once-only: input parsing, gas field, block/geometry allocation, BC tagging and
-  !  particle pinning. Everything here is independent of how many sweeps follow.
-  !>
-  !> **MPI contract for `external_gas`** (same for reset_state, the other entry point that takes it):
-  !>  - The parent passes the FULL gas field, IDENTICALLY, on every rank. IGLOO replicates mesh and
-  !>    gas and decomposes over PARTICLES; it never partitions the field, so a rank given a subdomain
-  !>    would integrate particles through a hole. No consistency check is possible here -- a
-  !>    per-rank-different field produces plausible, wrong answers.
-  !>  - The PARENT owns MPI_Init/Finalize. `mpi_init_env` is idempotent (it guards on
-  !>    MPI_Initialized) so an embedded IGLOO adopts the parent's communicator; `mpi_finalize_env` is
-  !>    driver-only and must never be called from an embedding.
-  !>  - Pinning and `initRandomSeed` run replicated on every rank, deliberately: identical particle
-  !>    populations and identical RNG streams are what make rank count invisible in the output.
-  !>
-  !> Two contracts inherited from the repeated-sweep split, both easy to violate from a parent:
-  !>  - `self%source` / `self%euler` are valid only BETWEEN a `solve` and the next `reset_state`,
-  !>    which deallocates them.
-  !>  - `cell%mdotGas` must be re-imposed by the parent EVERY sweep: the seeder early-returns when it
-  !>    is already non-zero, so a write-once value silently freezes injection mass flow.
+  !> Once-only setup: input parsing, gas import (`external_gas` or the Tecplot file), block and
+  !  geometry allocation, BC tagging and particle pinning; replicated identically on every rank.
   subroutine setup_static(self, external_gas)
     use omp_lib
     use IGLOO_IO
@@ -88,18 +66,13 @@ contains
     integer              :: m, g, fam, nthreads
     character(len=2)     :: method
 
-    !> Not re-runnable: allocate_blocks declares its outputs intent(inout), allocatable and
-    !  allocates unconditionally, so a second call aborts on a double allocate. Say so
-    !  instead of letting the runtime produce that message.
     if (self%staticDone) then
       write(*,*) ' [IGLOO] setup_static already completed -- repeat call ignored'
       write(*,*) '         (mesh, gas import and pinning are static; use reset_state per sweep)'
       return
     endif
 
-    !> Root-gated banners. The "already completed" message above is NOT gated: it is a contract
-    !  violation, and a non-root rank swallowing one would strand the others at the next
-    !  collective. Same rule for solve's stateIsFresh failure.
+    !> Informational prints are root-gated; contract violations print on every rank.
     if (mpi_is_root) call print_header()
 
     nthreads = 1
@@ -109,11 +82,7 @@ contains
     if (nthreads>1 .and. mpi_is_root) then
       write(*,*)" OpenMP threads = ", nthreads
     endif
-    !> Rank count, printed only when actually decomposed -- so a serial build and `mpirun -n 1` stay
-    !  byte-identical. This is the ONLY positive witness that the particle decomposition is live: a
-    !  USE_MPI=OFF binary launched under `mpirun -n 4` runs four independent full sweeps that clobber
-    !  one another's OUTPUT/, and every after-the-fact file check passes vacuously. The MPI
-    !  consistency gate asserts this line reports exactly the rank count it asked for.
+    !> Rank count, printed only when actually decomposed.
     if (mpi_size_>1 .and. mpi_is_root) then
       write(*,'(A,I0)')" MPI ranks = ", mpi_size_
     endif
@@ -129,8 +98,7 @@ contains
     call read_cdp_properties(IGLOO_phase_prefix,self%material)
     call allocate_blocks(own_gas,self%material,self%geoblock,self%gasblock, &
                          self%source,self%euler,self%srcSwitch,self%eulSwitch)
-    !> 2D mesh: an out-of-plane body-acceleration component is unphysical (mesh2D is set in
-    !  allocate_blocks). Zero it and refresh the gating flags. (read_general set them already.)
+    !> 2D mesh: drop the out-of-plane body-acceleration component.
     if (mesh2D .and. bodyForce .and. bodyAccel(3) /= 0._R8) then
       write(*,*) ' [WARNING] 2D mesh: zeroing out-of-plane body-accel z-component'
       bodyAccel(3) = 0._R8
@@ -138,8 +106,7 @@ contains
       srcBodyForce = sourceSwitch .and. bodyForce
     endif
     call import_gas(own_gas,self%gasblock)
-    !> 2.5D witness for DB injection only (FB inflow takes its direction from bc.txt). vel0 exists
-    !  only on read_bc's (x,y,z) branch, absent = 10*threshold; .and. does not short-circuit.
+    !> 2.5D notice: DB injection with an out-of-plane velocity.
     if (mesh2D .and. mpi_is_root) then
       if (allocated(vel0)) then
         if (any(vel0(:,3) /= 0._R8 .and. abs(vel0(:,3)) < threshold)) &
@@ -160,9 +127,7 @@ contains
         gr%gID   = g
         gr%famID = fam
         call pin_particles(gr, self%geoblock, self%gasblock, method, pos0,vel0,temp0,mdot,diam, fam, gr%nparticles)
-        !> Immutable pin-time census. `solve` overwrites nparticles with nactive (children
-        !  folded in), so without this the count is unrecoverable and a second sweep
-        !  re-injects the previous sweep's children as if they were originals.
+        !> Pin-time census, never overwritten.
         gr%nInjected = gr%nparticles
         end associate
       enddo
@@ -173,19 +138,8 @@ contains
   end subroutine setup_static
 
 
-  !> Per-sweep state restore: puts the pinned population back the way pinning left it, so
-  !  the next `solve` integrates the same particles from injection again. Must run before
-  !  every `solve`; `solve` enforces that through `stateIsFresh`.
-  !
-  !  `assign_group2particle` lives here rather than in `setup_static` because it is the
-  !  per-sweep half of pinning: it is `pure`, writes only `self%particle(i)%*`, and among
-  !  other things re-zeroes `brkupVar` for originals (whose only other zeroing is the
-  !  child-range call in `solve`, which never reaches an original).
-  !
-  !  MPI: `external_gas` carries the same replication contract as in `setup_static` above -- the
-  !  parent passes the FULL field identically on every rank. This is the entry point a parent with
-  !  an evolving gas field actually calls per sweep, so it is the one where a partitioned field would
-  !  be introduced.
+  !> Per-sweep state restore: puts the pinned population back to its injection state and
+  !  re-imports the gas when `external_gas` is given. Must run before every `solve`.
   subroutine reset_state(self, external_gas)
     use IGLOO_variables,      only: nm, nb
     use IGLOO_allocation,     only: import_gas
@@ -197,38 +151,16 @@ contains
     type(orion_data) :: own_gas
     integer :: m, g, ip, b, fam
 
-    !> Next output generation. Counting here rather than in solve keeps the tag stable across
-    !  the solve/writeout pair, which write different files for the SAME sweep.
+    !> Next output generation (shared by the solve/writeout pair).
     self%sweep = self%sweep + 1
 
-    !> Refresh the background field when the parent hands one in. Without this an embedding
-    !  integrates a frozen gas forever, which defeats the point of being re-runnable.
-    !  The mesh is static, so only the field values are re-imported.
-    !  ⚠ cell%mdotGas is NOT refreshed: its seeder early-returns when non-zero
-    !  (obj_block.f90:1186), so bcdef-401 streams keep the mass flow they were seeded with.
-    !  Under an evolving gas the injected mass flow will not track it. Physics change with
-    !  its own gate; recorded, not silently inherited.
+    !> Re-import the gas field values (the mesh is static); cell%mdotGas is not refreshed.
     if (present(external_gas)) then
       call copyORION(external_gas, own_gas)
       call import_gas(own_gas, self%gasblock)
     endif
 
-    !> F7 -- the accumulators must be dropped, not reused. Under ord2 they are allocated at
-    !  gasblock shape (1..Nx+1) but `finalize` move_allocs geoblock-shaped arrays (1..Nx) over
-    !  them at end of solve (obj_block.f90:237-239, :318-321). allocateAccumulators guards on
-    !  allocation STATUS, not shape, so a second solve would keep the geoblock-shaped arrays
-    !  and then deposit through part%igas -- up to Nx+1 -- past the end, via !$OMP ATOMIC
-    !  UPDATE. That is silent heap corruption in a release build, and it was measurable:
-    !  vie-plait's source.tec moved 12 decades above its run-to-run noise floor.
-    !
-    !  Deallocate the COMPLETE set, unconditionally. allocateAccumulators guards on one array
-    !  each (sourceMass, density) but allocateSRC/allocateEUL allocate all seven, so freeing
-    !  only the guard array makes the next allocate fatal. Not ord2-gated either: it costs
-    !  nothing on sweep 1 (nothing is allocated yet, so every guard below is false) and
-    !  solve's allocateAccumulators + initialize_fields rebuild and zero them anyway.
-    !
-    !  Caller contract: self%source and self%euler are valid only BETWEEN a solve and the
-    !  next reset_state.
+    !> Drop last sweep's source/euler accumulators (all of them); solve re-allocates them at the right shape.
     do b = 1, nb
       if (allocated(self%source(b)%sourceMass)) deallocate(self%source(b)%sourceMass)
       if (allocated(self%source(b)%sourceMom))  deallocate(self%source(b)%sourceMom)
@@ -249,53 +181,37 @@ contains
         gr%nactive    = gr%nInjected
         if (size(gr%particle) /= gr%nInjected) &
           call resizeParticleArray(gr%particle, gr%nInjected)
-        !> solve re-allocates the shed lists per group when the model has children.
+        !> Shed lists are re-allocated by solve.
         if (allocated(gr%shed)) deallocate(gr%shed)
 
-        !> Fan the pin-time capture back out to the live fields the last sweep consumed.
-        !  Restoring d = dInj deliberately re-injects the SAME stochastic draw every sweep:
-        !  frozen realization vs resampled ensemble is a physics choice and belongs behind
-        !  an explicit input key, not a refactor side effect.
+        !> Restore each particle's injection state (same stochastic diameter draw every sweep).
         do ip = 1, gr%nInjected
           associate(part => gr%particle(ip))
           part%ID = ip
-          !> Re-seed this particle's RNG stream. Deterministic in (rng_seed, famID, ID), so every
-          !  sweep replays the same draws -- which is what makes an RNG-consuming model
-          !  repeatable at all. famID comes from the group (set in setup_static), not from
-          !  part%famID, which assign_group2particle only fills after this loop.
+          !> Re-seed the particle's RNG stream from (rng_seed, famID, ID).
           part%rngState = rngSeedFor(gr%famID, ip)
           part%d  = part%dInj
-          !> Assigned/DB streams only. BC streams re-derive tp and mdot from live gas in
-          !  initializePart, and their *Inj fields are 0 -- restoring those would inject
-          !  a zero-temperature, zero-mass-flow particle.
+          !> Assigned/DB streams only: BC streams re-derive tp and mdot at injection.
           if (all(part%iInj == [0,0,0,0])) then
             part%tp   = part%tpInj
             part%mdot = part%mdotInj
           endif
-          !> time == 0 IS the "needs injection init" flag integrate keys off
-          !  (Lib_Integration.f90:119), and every exit path zeroes it -- which is what makes
-          !  a finished particle re-injectable at all.
+          !> time == 0 is integrate's "needs injection init" flag.
           part%time        = 0._R8
           part%lost        = .false.
           part%exitFace    = 0
           part%gasExitFace = 0
           part%Af          = 0._R8
-          !> Redundant with integrate's injection-init block, but reset_state should read as
-          !  a statement of the fresh state, not as a transcript of integrate's internals.
           part%gone  = .false.
           part%wasin = .false.
           part%Ncell = 0
           part%angle = 0._R8
           part%i     = part%iInj
-          !> `iold` has no default initializer and only the DB pin path ever wrote it, so
-          !  bc-pinned particles carry stale/undefined values here. Latent today: at
-          !  injection findParticle succeeds (injViable guarantees it) and updateCell
-          !  returns before reaching the `retry` seed that reads iold. Defined now.
           part%iold  = [0,0,0,0]
           end associate
         enddo
 
-        !> Same order as solve's child hand-off: ODE sizing first, then properties.
+        !> ODE sizing first, then group properties.
         call gr%setup_particleODE()
         call gr%assign_group2particle()
         end associate
@@ -307,10 +223,7 @@ contains
   end subroutine reset_state
 
 
-  !> Filename tag for the current output generation: empty on the first sweep (so standalone
-  !  runs are byte-identical to before this existed), '-sweep<N>' afterwards. Applied to every
-  !  output file INCLUDING the .tec ones -- source.tec is what hydra consumes, and it clobbers
-  !  just as readily as the trajectory dumps.
+  !> Filename tag of the current output generation: empty on sweep 0, '-sweep<N>' afterwards.
   function sweepTag(self) result(tag)
     implicit none
     class(obj_IGLOO), intent(in)  :: self
@@ -327,6 +240,9 @@ contains
   end function sweepTag
 
 
+  !> Integrate every particle of every material through the gas field: opens the per-material
+  !  output files, sizes the scatter quantum, runs the OpenMP particle loop (with the child
+  !  generation loop for shedding models), then reduces and finalizes the source/euler fields.
   subroutine solve(self)
     use Lib_Integration,  only: integrate
     use IGLOO_particles,  only: obj_particle
@@ -337,7 +253,7 @@ contains
                                 probeOn, probeIDs, axisym, nSectorFold, nMultiFold
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
-    use IGLOO_Lib_Properties, only: lookupTab   !> A23c child hand-off (enthalpy slot)
+    use IGLOO_Lib_Properties, only: lookupTab   !> child hand-off (enthalpy slot)
     use IGLOO_Lib_Statistics, only: rngSeedFor
     use IGLOO_Mod_MPI,        only: mpi_size_, mpi_abort_all, owns_particle,           &
                                     mpi_allreduce_sum_i4_array, mpi_is_root, rank_suffix, &
@@ -349,10 +265,7 @@ contains
     integer, parameter :: maxLoop=5
     integer :: m, g, ip, iota, ch, e, start, nEnd, oldStart, oldEnd, newSize, b, fam
     integer :: loopCounter, maxShedSeen
-    !> Child-ID band. curBase/curCount describe the GLOBAL generation held in the current
-    !  window: its IDs are (curBase, curBase+curCount]. childLocal sizes LOCAL storage,
-    !  childGlobal fixes the next band and the rank-uniform termination test. Deliberately
-    !  uninitialized -- an initializer here would make them implicit-SAVE (work package A).
+    !> Child-ID band of the current generation. No initializer here: it would imply SAVE.
     integer :: curBase, curCount, newBase, childLocal, childGlobal, pidx, idBase
     integer :: foldStat(2)
     integer, allocatable :: nShedAll(:), shedOff(:)
@@ -363,11 +276,7 @@ contains
     real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp
     type(obj_particle) :: ptmp   ! throwaway copy for the inject-only pre-pass
 
-    !> Repeatability contract. Every exit path zeroes part%time, so a finished particle is
-    !  indistinguishable from one that never started: calling solve twice without
-    !  reset_state does not fail, it silently integrates a corrupted population (stale d,
-    !  last sweep's children counted as originals, accumulators of the wrong shape). Fail
-    !  loudly instead of returning plausible garbage.
+    !> Refuse to run on a stale particle state.
     if (.not. self%stateIsFresh) then
       write(*,'(A)') ' [IGLOO::solve] particle state is not fresh.'
       write(*,'(A)') '   Call reset_state() before each solve() (setup() does it for the first).'
@@ -378,8 +287,7 @@ contains
 
     sourceSwitch = self%srcSwitch
     eulerSwitch  = self%eulSwitch
-    !> Allocate the source/euler accumulators (sized per ord2). Idempotent:
-    !  re-running solve reuses the existing allocation.
+    !> Allocate and zero the source/euler accumulators.
     call allocateAccumulators(self%source, self%euler, sourceSwitch, eulerSwitch)
     call initialize_fields(self%source,self%euler,sourceSwitch,eulerSwitch)
     if (ord2) then
@@ -389,8 +297,6 @@ contains
     endif
 
     !> Domain length scale (bounding-box diagonal) for the scatter weight-quantum estimate.
-    !  The reference transit time tauRef = Lref/Vref is finished per material below, using the
-    !  resolved particle injection speed Vref (more representative than the gas mean).
     xmin =  huge(1._R8); xmax = -huge(1._R8)
     do b = 1, nb
       do c = 1, 3
@@ -402,12 +308,7 @@ contains
 
     do m = 1, nm
       material: associate(mat => self%material(m))
-      !> Per-rank shards. rank_suffix() composes AFTER the sweep tag, giving
-      !  `trajectories-A-sweep1.rank2.dat`: `<kind>-<material><sweeptag>` stays the logical file
-      !  identity and `.rank<r>` is a pure shard marker, so Phase 4 merges per sweep by globbing
-      !  `<logical>.rank*.dat`. Reversing the order would make that glob straddle sweeps.
-      !  Empty at one rank, so serial filenames are byte-identical. Each rank writes its own
-      !  `variables=` and Zone headers, so every shard stays independently Tecplot-loadable.
+      !> Per-material output files: <kind>-<material><sweeptag><ranksuffix>.dat (rank suffix empty at one rank).
       if (trajOn) then
         open(newunit=unitTraj,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'trajectories-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
         write(unitTraj,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'
@@ -415,32 +316,22 @@ contains
       open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
       write(unitExit,*) 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID"'
 
-      !> Scatter cloud: one flat point-cloud zone per material; auto-size the weight quantum
-      !  dNscat (real droplets/point) so the cloud holds ~trajSample points per stream. The
-      !  population estimate (Ndot*tauRef) is crude; it sets only the count, not the shape.
+      !> Scatter cloud: one zone per material; auto-size the weight quantum dNscat to ~trajSample points per stream.
       dNscat = 0._R8
       if (scatOn) then
         open(newunit=unitScat,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'scatter-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
         write(unitScat,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'
         write(unitScat,'(A,A,A)')'Zone T="Mat ',trim(mat%matName),' scatter"'
-        !> Serial inject-only pre-pass: resolve each stream's npdot (= Σ droplet rate Ndot) and
-        !  injection speed (=> Vref) without the cell search. Serial => deterministic dNscat.
-        !  ⚠ MPI: this stays a FULL REPLICATED SWEEP -- do NOT add an owns_particle guard. Every
-        !  rank computing it over ALL particles is what keeps dNscat identical everywhere; an
-        !  ownership guard would turn Ndot/Vsum/nValid/nStreams into partial sums and give each
-        !  rank a different scatter quantum. Pinning and initRandomSeed stay replicated for the
-        !  same reason.
+        !> Serial inject-only pre-pass over ALL particles (replicated on every rank so dNscat is
+        !  identical everywhere): resolves each stream's npdot and injection speed.
         Ndot = 0._R8; nStreams = 0; Vsum = 0._R8; nValid = 0
         do g = 1, mat%ngroups
           associate(gr => mat%group(g))
           call gr%setup_particleODE()
           do ip = 1, gr%nparticles
-            !> Throwaway copy: resolveInjectionRate writes mdot/v/tp on it; keep the real
-            !  particle pristine so the real sweep is bit-unchanged. It deliberately avoids the
-            !  geometric cell search (which would pollute the threadprivate myRay).
+            !> Throwaway copy keeps the real particle pristine.
             ptmp = gr%particle(ip)
-            !> DB/assigned streams: resolveInjectionRate skips initializePart, so stateVar is
-            !  allocated-but-unwritten here. Seed it as integrate does (Lib_Integration:140).
+            !> DB/assigned streams: seed the velocity as integrate does.
             if (all(ptmp%iInj == [0,0,0,0])) ptmp%stateVar(4:6) = ptmp%vInj
             call ptmp%resolveInjectionRate(self%geoblock, self%gasblock)
             if (ptmp%npdot > 0._R8) Ndot = Ndot + ptmp%npdot
@@ -455,9 +346,6 @@ contains
         if (Ndot>0._R8 .and. nStreams>0) &
           dNscat = Ndot*tauRef / real(max(trajSample*nStreams,1), R8)
         if (.not. (dNscat>0._R8)) dNscat = 0._R8       ! guard NaN/neg => scatter silently skipped
-        !> Root-gated: every rank computes the same value, so N copies would only duplicate the
-        !  line. Informational prints follow this rule throughout; WARNINGS and contract
-        !  violations stay on every rank (a silent non-root failure hangs the next collective).
         if (mpi_is_root) &
           write(*,'(A,A,A,ES10.3,A,I0,A)') '     >> scatter cloud [',trim(mat%matName),     &
               ']: dNscat=',dNscat,' droplets/pt (nominal ~',trajSample,                      &
@@ -473,8 +361,7 @@ contains
         call gr%setup_particleODE()
         if (allocated(relTol)) deallocate(relTol); allocate(relTol(gr%neq)); relTol(:) = rtol
         if (allocated(absTol)) deallocate(absTol); allocate(absTol(gr%neq)); absTol(:) = atol
-        !> Exclude the body-force accumulators from the error norm (pure output quadratures): only W
-        !  (neq) when euler-on, both J,W when euler-off. Mass-evolving models 2/4/5 only.
+        !> Exclude the body-force accumulators (output quadratures) from the error norm.
         if (srcBodyForce .and. (gr%evapSelect > 0 .or. gr%combSelect > 0)) then
           if (eulerSwitch) then       ! neq-1 is a real euler moment, keep it controlled
             relTol(gr%neq)          = 1.e30_R8; absTol(gr%neq)          = 1.e30_R8
@@ -504,21 +391,15 @@ contains
           gr%nactive = gr%nparticles
           start = 1;  nEnd = gr%nactive
           loopCounter = 0
-          !> Generation 0 = the pinned parents, IDs 1..nInjected (reset_state assigns the storage
-          !  index, and so do all three pin sites). curBase=0 makes newBase = n0 on pass 1, which
-          !  is byte-for-byte the `oldEnd` that `kid%ID = oldEnd + ch` used before the census.
-          !  Per GROUP: the ID space is per group, so this cannot be hoisted out.
+          !> Generation 0 = the pinned parents, IDs 1..nInjected (the ID space is per group).
           curBase  = 0
           curCount = gr%nInjected   !> the immutable pin-time census, never the live counter
 
           do while (loopCounter < maxLoop)
             loopCounter = loopCounter + 1
-            !> Grow BEFORE resetting the window -- the other order indexes past the end on the
-            !  pass that added children. move_alloc (not deallocate/allocate) so each list keeps
-            !  the capacity it reserved on an earlier pass.
+            !> Grow the shed-list array before resetting the window.
             if (size(gr%shed) < nEnd) call resizeShedArray(gr%shed, nEnd)
-            !> Empty each list in the window and give it room for the common case, so nothing
-            !  has to allocate inside the parallel region below.
+            !> Empty each list in the window, with room reserved outside the parallel region.
             do ip = start, nEnd
               gr%shed(ip)%n = 0
               call gr%shed(ip)%reserve(1)
@@ -527,10 +408,7 @@ contains
             !$OMP PARALLEL DO SCHEDULE(DYNAMIC)
             do ip = start, nEnd
               if (probeOn) then; if (.not.any(gr%particle(ip)%ID==probeIDs)) cycle; endif
-              !> Ownership -- FIRST PASS ONLY. Pass 1 iterates the replicated parents, of which
-              !  each rank integrates its stripe; later passes iterate [start:nEnd] = the
-              !  children this rank created, which it must integrate unconditionally. Identically
-              !  true at one rank, so the serial path is unchanged.
+              !> MPI ownership filter applies to the parent generation only.
               if (loopCounter == 1) then
                 if (.not. owns_particle(ip)) cycle
               endif
@@ -540,17 +418,9 @@ contains
             enddo
             !$OMP END PARALLEL DO
 
-            !> Shed census -- total shed EVENTS, not parents that shed, because `newSize` has to
-            !  size the particle array by the number of children actually created. One entry per
-            !  parcel of the CURRENT generation, indexed by its position in that generation's
-            !  global ID band, so MPI_SUM reconstructs the exact serial per-parent vector: every
-            !  parcel is written by exactly ONE rank (pass 1 -- a non-owned parent is cycled and
-            !  keeps the n=0 stored just above, which every rank writes unconditionally; passes
-            !  >=2 -- the window holds only locally-created children, each on its creator).
-            !  Child ordering is fixed by the ascending `ip` traversal the drain below repeats,
-            !  so it is independent of thread count and SCHEDULE(DYNAMIC).
+            !> Shed census of the current generation, indexed by position in its global ID band.
             oldStart = start
-            oldEnd   = nEnd    !> hoisted: needed on every rank every pass, childLocal==0 included
+            oldEnd   = nEnd
             if (allocated(nShedAll)) deallocate(nShedAll, shedOff)
             allocate(nShedAll(curCount), shedOff(curCount))   !> curCount is globally agreed
             nShedAll   = 0
@@ -562,7 +432,7 @@ contains
               nShedAll(pidx) = gr%shed(ip)%n
               childLocal     = childLocal + gr%shed(ip)%n
             enddo
-            !> Both premises of the pass-1 authority argument, asserted rather than assumed.
+            !> Pass-1 invariants: generation-0 IDs are the storage index; non-owned parents shed nothing.
             if (loopCounter == 1) then
               do ip = oldStart, oldEnd
                 if (gr%particle(ip)%ID /= ip) &
@@ -574,8 +444,7 @@ contains
 
             call mpi_allreduce_sum_i4_array(nShedAll, curCount)   !> the ONLY in-loop collective
 
-            !> Exclusive prefix over the GLOBAL vector: childGlobal fixes the next band and the
-            !  rank-uniform termination test, shedOff places each parent's children inside it.
+            !> Exclusive prefix over the global census: total children and each parent's offset.
             childGlobal = 0
             maxShedSeen = 0
             do e = 1, curCount
@@ -588,21 +457,14 @@ contains
               call mpi_abort_all('child ID band overflowed int32')
 
             if (childGlobal > 0) then
-              !> Root-gated, and childGlobal (not childLocal) is load-bearing: khrt-e2e's
-              !  check.py and check_threads.py parse this line out of run_out.txt and sum it, so
-              !  it has to report the same total serial does, exactly once.
+              !> Reports the global child count, once.
               if (mpi_is_root) then
                 write(*,*)"       Loop",loopCounter," => number of children = ", childGlobal
-                !> Visible tripwire: how hard the shed path is actually working. A number
-                !  climbing toward the `maxShed` guard in Lib_Integration means the case is
-                !  approaching runaway shedding well before the guard has to fire.
                 if (maxShedSeen > 1) write(*,'(A,I0,A)')                                  &
                     "                             (max ",maxShedSeen," sheds from one parcel)"
               endif
 
-              !> Grow particle array if needed (geometric 2x). Sized on childLocal, not
-              !  childGlobal: only this rank's children live in this rank's array. `oldEnd` was
-              !  hoisted above the census -- do not re-derive it here, `nEnd` moves just below.
+              !> Grow the particle array (geometric 2x) for this rank's children.
               newSize = gr%nactive + childLocal
               if (newSize > size(gr%particle)) then
                 call resizeParticleArray(gr%particle, max(2*size(gr%particle), newSize))
@@ -613,19 +475,8 @@ contains
               call gr%setup_particleODE(start, nEnd)
               call gr%assign_group2particle(start, nEnd)
 
-              !> Drain the shed lists in ascending parent index, then push order within each.
-              !  This is the same traversal the old single-slot compaction performed, so with
-              !  the one-shed cap on it visits exactly the same records in the same order --
-              !  which is what keeps `kid%ID = oldEnd + ch` landing on the same parent.
-              !  Deterministic by construction, not by luck: no sort, no thread-number
-              !  dependence, unaffected by SCHEDULE(DYNAMIC).
-              !
-              !> A23c: a child inherits time > 0, so `integrate` SKIPS its `part%time==0`
-              !  initialization block entirely. Everything that block would have established
-              !  must therefore be set here, or the child enters the solver with an
-              !  uninitialized cell index and mass state (which segfaulted on the first
-              !  getVertices). This is the child hand-off that was never written -- the path
-              !  had no trigger before A23a/A23b, so it had never executed for any model.
+              !> Drain the shed lists in ascending parent index and hand each child its full
+              !  initial state (integrate skips its injection-init block for time > 0).
               ch = 0
               do ip = oldStart, oldEnd
               idBase = newBase + shedOff(gr%particle(ip)%ID - curBase)
@@ -633,16 +484,11 @@ contains
                 ch   = ch + 1
                 iota = oldEnd + ch
                 associate(kid => gr%particle(iota), src => gr%shed(ip)%item(e))
-                !> ID comes from the GLOBAL census band; `iota` stays the LOCAL storage slot. Keep
-                !  the two axes apart -- at size 1 they coincide and the tripwire says so, but
-                !  part%ID also seeds the scatter sampling (Lib_Integration:182), so silently
-                !  re-baselining it would move which scatter points get emitted.
+                !> Global ID from the census band; iota is the local storage slot.
                 kid%ID            = idBase + e
                 if (mpi_size_ == 1 .and. kid%ID /= iota) &
                   call mpi_abort_all('child-ID census broke serial equivalence')
-                !> Own RNG stream. Without this a child keeps the default 0 -- deterministic, but
-                !  IDENTICAL for every child, which the repeatability gate cannot see. Seeded from
-                !  the global ID, so the stream is rank-invariant as well as thread-invariant.
+                !> Own RNG stream, seeded from the global ID.
                 kid%rngState      = rngSeedFor(gr%famID, kid%ID)
                 kid%stateVar(1:3) = src%pos
                 kid%stateVar(4:6) = src%vel
@@ -681,7 +527,7 @@ contains
               enddo
               enddo
               gr%nactive = newSize
-              !> Advance the band: the children just created are the next generation.
+              !> Advance the band to the new generation.
               curBase  = newBase
               curCount = childGlobal
             else
@@ -689,12 +535,7 @@ contains
             endif
           enddo
 
-          !> Trim excess capacity + sync nparticles.
-          !  ⚠ MPI: both counters are now RANK-LOCAL after a solve -- each rank holds only its own
-          !  stripe plus the children it created. Nothing downstream in standalone mode consumes
-          !  the particle arrays, and reset_state restores both from gr%nInjected before every
-          !  sweep, so the divergence cannot survive into the next one. Drive ownership and
-          !  curCount from gr%nInjected, never from these.
+          !> Trim excess capacity and sync nparticles (both rank-local after a solve).
           if (size(gr%particle) > gr%nactive) then
             call resizeParticleArray(gr%particle, gr%nactive)
           endif
@@ -703,8 +544,7 @@ contains
           !$OMP PARALLEL DO SCHEDULE(DYNAMIC)
           do ip = 1,gr%nparticles
             if (probeOn) then; if (.not.any(gr%particle(ip)%ID==probeIDs)) cycle; endif
-            !> Ownership: no children here, so every particle is a replicated parent and the
-            !  stripe is unconditional. Identically true at one rank.
+            !> MPI ownership filter.
             if (.not. owns_particle(ip)) cycle
             call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                             mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab)
@@ -719,25 +559,10 @@ contains
       close(unitExit)
     enddo
 
-    !> MPI: merge the per-rank partial grid sums BEFORE finalize, because finalize is NONLINEAR --
-    !  it divides the +=-accumulated numerators by density (Favre average), so reducing afterwards
-    !  would average averages. ALLREDUCE, not reduce-to-root: the finalize below then runs on
-    !  identical raw sums on every rank, which keeps the post-solve object state bit-identical
-    !  everywhere and is what makes the hydra embedding straightforward. The ord2
-    !  gasblock->geoblock reduction inside finalize is linear and runs once on already-reduced
-    !  arrays. Must sit HERE and not in writeout: reset_state deallocates all seven accumulators
-    !  every sweep, so they are only guaranteed allocated between allocateAccumulators and the next
-    !  reset_state -- shapes are therefore read fresh per sweep, never cached across sweeps.
-    !  INVARIANT: with the Phase-2a census this is the SECOND and last collective in solve().
+    !> Allreduce the partial grid sums across ranks before finalize, which is nonlinear.
     call reduce_accumulators(self%source, self%euler, sourceSwitch, eulerSwitch)
 
-    !> End-of-solve finalization.
-    !  - obj_eulerblock%finalize normalizes +-accumulated numerators into
-    !    weighted averages (and inverts h→T for cpVariable groups), then if
-    !    ord2=true reduces gasblock-shape arrays to geoblock-shape via the
-    !    sub-octant volume weighting.
-    !  - obj_sourceblock%finalize is a no-op when ord2=false; when ord2=true
-    !    it performs the same reduction on the source-mass/mom/en arrays.
+    !> Finalize the source/euler fields: normalize the moments, reduce to geoblock shape under ord2.
     if (sourceSwitch) then
       do b = 1, nb
         call self%source(b)%finalize(self%geoblock(b))
@@ -762,8 +587,7 @@ contains
       ! deallocate(famDone)
     endif
 
-    !> Wedge witness: every fold should rotate by exactly one sector now that segments end at
-    !  the k-plane; a multi-sector fold means a segment swept past the band unseen (O23).
+    !> Wedge fold counters.
     if (axisym) then
       foldStat = [nSectorFold, nMultiFold]
       call mpi_allreduce_sum_i4_array(foldStat, 2)
@@ -775,6 +599,7 @@ contains
   end subroutine solve
 
 
+  !> Drag force and heat rate exerted on the gas by np particles of material mID at the given state.
   pure function getSourceTerms(self,gas,vel,Tp,rhop,np,mID) result(FdragQdot)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_Lib_Properties, only: lookupTab
@@ -816,34 +641,29 @@ contains
   end function getSourceTerms
 
 
+  !> Write the grid fields (root only) and merge this sweep's per-rank particle files.
   subroutine writeout(self)
     use IGLOO_IO
     use IGLOO_Mod_MPI, only: mpi_is_root, mpi_barrier_env
     implicit none
     class(obj_IGLOO), intent(inout) :: self
 
-    !> Every rank must have closed its own .dat shards before root reads or merges them (Phase 4),
-    !  so the barrier stays even though the write below is root-only. No-op at one rank.
+    !> Every rank has closed its shards before root merges them.
     call mpi_barrier_env()
 
-    !> ROOT ONLY. write_outfield writes exclusively grid .tec files to one fixed name per
-    !  (material, sweep) -- no rank shard -- so every rank calling it is N writers on one path.
-    !  Since Phase 3 the values are correct on every rank (solve allreduces the accumulators before
-    !  finalize), so root-only is the permanent answer here, not scaffolding.
+    !> Root only from here on.
     if (.not. mpi_is_root) return
 
     call write_outfield(self%material,self%geoblock,self%source,self%euler,self%srcSwitch, &
                         self%eulSwitch, tag=self%sweepTag())
 
-    !> Choke-point 3: collapse THIS sweep's per-rank .dat shards into the serial layout, so the
-    !  oracles and any parent post-processing see one file per (kind, material, sweep). No-op at one
-    !  rank. Safe here because solve closed every shard on every rank before returning; the barrier
-    !  above makes that ordering explicit instead of incidental.
+    !> Collapse this sweep's per-rank .dat shards into the serial layout (no-op at one rank).
     call merge_rank_particle_files(self%material, tag=self%sweepTag())
 
   end subroutine writeout
 
 
+  !> Print the IGLOO banner.
   subroutine print_header()
     write(*,*)
     write(*,*) ' ============================================================================= '
@@ -859,6 +679,7 @@ contains
   end subroutine print_header
 
 
+  !> Resize a particle array to newCapacity, preserving the leading entries.
   subroutine resizeParticleArray(arr, newCapacity)
     use IGLOO_particles, only: obj_particle
     implicit none
@@ -873,8 +694,7 @@ contains
   end subroutine resizeParticleArray
 
 
-  !> Same idiom for the per-parent shed lists. Intrinsic assignment deep-copies each list's
-  !> allocatable `item` component, so previously-reserved capacity survives the growth.
+  !> Resize a shed-list array to newCapacity, preserving the leading entries and their capacity.
   subroutine resizeShedArray(arr, newCapacity)
     use IGLOO_data_phases, only: shedList
     implicit none

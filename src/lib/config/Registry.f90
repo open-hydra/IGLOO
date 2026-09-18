@@ -1,3 +1,4 @@
+!> Doc-only registry of input parameters: typed records, validation and markdown export.
 module IGLOO_Input_Registry
 
   use iso_fortran_env, only: R8 => real64
@@ -8,9 +9,7 @@ module IGLOO_Input_Registry
 
   public :: registry_t, Validate_Registry
 
-  !--------------------------------------------------------
-  ! Value container (typed pointers)
-  !--------------------------------------------------------
+  !> Value container (typed pointers)
   type :: param_value_t
     integer, pointer :: i => null()
     real(R8), pointer :: r => null()
@@ -22,9 +21,7 @@ module IGLOO_Input_Registry
   end type
 
 
-  !--------------------------------------------------------
-  ! Parameter description
-  !--------------------------------------------------------
+  !> Parameter description
   type :: param_t
     character(len=:), allocatable :: section
     character(len=:), allocatable :: name
@@ -40,9 +37,7 @@ module IGLOO_Input_Registry
   end type
 
 
-  !--------------------------------------------------------
-  ! Registry container
-  !--------------------------------------------------------
+  !> Registry container
   type :: registry_t
 
     type(param_t), allocatable :: params(:)
@@ -75,10 +70,8 @@ module IGLOO_Input_Registry
 contains
 
 
-  !========================================================
-  ! Capacity management
-  !========================================================
 
+  !> Grows the backing store to at least newcap, preserving the entries.
   subroutine reserve(this,newcap)
 
     implicit none
@@ -103,10 +96,8 @@ contains
   end subroutine reserve
 
 
-  !========================================================
-  ! Internal: ensure space
-  !========================================================
 
+  !> Doubles the capacity when the registry is full.
   subroutine ensure_space(this)
 
     implicit none
@@ -126,10 +117,8 @@ contains
   end subroutine ensure_space
 
 
-  !========================================================
-  ! Add integer parameter
-  !========================================================
 
+  !> Registers an integer parameter and applies its default.
   subroutine add_int(this,section,name,var,default,desc,allowed,required)
 
     implicit none
@@ -161,10 +150,8 @@ contains
   end subroutine
 
 
-  !========================================================
-  ! Add real parameter
-  !========================================================
 
+  !> Registers a real parameter and applies its default.
   subroutine add_real(this,section,name,var,default,desc,allowed,required)
 
     implicit none
@@ -196,10 +183,8 @@ contains
   end subroutine add_real
 
 
-  !========================================================
-  ! Add logical parameter
-  !========================================================
 
+  !> Registers a logical parameter and applies its default.
   subroutine add_logical(this,section,name,var,default,desc,allowed,required)
 
     implicit none
@@ -231,10 +216,8 @@ contains
   end subroutine add_logical
 
 
-  !========================================================
-  ! Add string parameter
-  !========================================================
 
+  !> Registers a string parameter and applies its default.
   subroutine add_string(this,section,name,var,default,desc,allowed,required)
 
     implicit none
@@ -266,10 +249,8 @@ contains
   end subroutine add_string
 
 
-  !========================================================
-  ! Integer array
-  !========================================================
 
+  !> Registers an integer array parameter and fills it with the default.
   subroutine add_int_array(this,section,name,var,default,desc,allowed,required)
 
     implicit none
@@ -302,10 +283,8 @@ contains
   end subroutine
 
 
-  !========================================================
-  ! Real array
-  !========================================================
 
+  !> Registers a real array parameter and fills it with the default.
   subroutine add_real_array(this,section,name,var,default,desc,allowed,required)
 
     implicit none
@@ -339,10 +318,8 @@ contains
   end subroutine add_real_array
 
 
-  !========================================================
-  ! Validation
-  !========================================================
 
+  !> Checks required parameters and allowed-value rules; returns an error message or "".
   function Validate_Registry() result(out)
 
     implicit none
@@ -362,7 +339,7 @@ contains
 
       if (reg%params(i)%allowed == "") cycle
 
-      ! Arrays are parsed/validated by FiNeR, skip scalar rule checks here.
+      ! arrays: no scalar rule check
       if (associated(reg%params(i)%value%iarr) .or. associated(reg%params(i)%value%rarr)) cycle
 
       select case(reg%params(i)%type_id)
@@ -400,6 +377,7 @@ contains
   end function Validate_Registry
 
 
+  !> Checks a numeric value against a ">=", "<=", ">" or "<" rule.
   subroutine validate_numeric(name,val,rule,out)
 
   implicit none
@@ -444,6 +422,7 @@ contains
   end subroutine validate_numeric
 
 
+  !> Checks a string value against a comma-separated allowed list (case-sensitive).
   subroutine validate_string(name,value,allowed,out)
 
   implicit none
@@ -465,7 +444,6 @@ contains
     if (is_sep) then
         end = i - 1
         token = adjustl(allowed(start:end))
-        !> Comparison is case-SENSITIVE: the case-insensitive path was never activated.
         lower_value = value
         if (trim(token) == trim(lower_value)) then
           return
@@ -474,23 +452,21 @@ contains
     end if
   end do
 
-  ! If we get here, no match was found in the allowed list
+  ! no token matched
   out = "[ERROR] "//trim(name)//" must be one of: "//trim(allowed)
 
   end subroutine validate_string
 
 
-  !========================================================
-  ! Markdown generator
-  !========================================================
 
+  !> Writes the registry as one markdown table per section.
   subroutine generate_markdown(this,filename,intro)
 
     implicit none
 
     class(registry_t), intent(in) :: this
     character(*), intent(in), optional :: filename
-    character(*), intent(in), optional :: intro   ! doc-only intro paragraph (IGLOO addition)
+    character(*), intent(in), optional :: intro   ! optional intro paragraph
 
     integer :: i,unit
     character(len=:), allocatable :: fileout

@@ -1,8 +1,11 @@
+!> Particle pinning (injection placement) and accumulator zeroing.
 module IGLOO_IC
   implicit none
 
 contains
 
+!> Pins the group's injection particles: boundary-centred, boundary-spaced (ds / mdotMax) or
+!  at assigned positions (DB and assigned streams).
 subroutine pin_particles(group, block, gas, method, pos0,vel,temp,mdot,diam,fam,npart)
   use IGLOO_variables,    only: ds, mdotMax, dsSwitch
   use IGLOO_RayFaceIntersection3D
@@ -35,8 +38,7 @@ subroutine pin_particles(group, block, gas, method, pos0,vel,temp,mdot,diam,fam,
         part%pInj = pos0(np,:)
         part%iInj = [0,0,0,0]
         part%iold = [0,0,0,0]
-        !> Pinning writes only the *Inj capture; reset_state fans out to the live fields
-        !  before every sweep. One code path instead of two.
+        !> Only the *Inj capture is written here; reset_state fans it out to the live fields.
         part%mdotInj = mdot(np)
         part%dInj    = diam(np)
         part%tpInj   = temp(np)
@@ -47,6 +49,7 @@ subroutine pin_particles(group, block, gas, method, pos0,vel,temp,mdot,diam,fam,
 
 contains
 
+  !> One particle every fsample injection cells, at the cell centre.
   subroutine pin_particles_bc_center(group, block, fam, npart)
     use IGLOO_variables, only: fsample
     use IGLOO_Lib_Statistics, only: sampleDiameter
@@ -106,10 +109,8 @@ contains
 end subroutine pin_particles
 
 
-!> Pin one-or-more injection particles per boundary cell on inflow faces.
-!  Spacing is set per cell by compute_ds (per-cell ds col 9, global ds, or mdotMax).
-!  2D faces (Nz==1) use the in-plane circle/line sweep; 3D faces use an
-!  advancing-front (BFS) hexagonal packing seeded from each injection cell.
+!> Pins one or more particles per inflow boundary cell at a spacing set by compute_ds:
+!  2D faces use an in-plane circle/line sweep, 3D faces an advancing-front hexagonal packing.
 subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_variables, only: ds, mdotMax, nb, pi
@@ -154,9 +155,7 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
   allocate(Inj(3,alloc))
 
   if (block(1)%Nz==1) then
-    !> -------------------------------------------------------------------------
-    !> 2D injection algorithm: in-plane circle/line sweep along m
-    !> -------------------------------------------------------------------------
+    !> 2D injection: in-plane circle/line sweep along m.
     write(*,*)' >> Using 2D injection algorithm'
     write(*,*) ''
     blockCycle: do b = 1, nb; do f = 1, 6
@@ -164,9 +163,7 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
       Nm = face%Nm; Nn = face%Nn
       allocate(singleCell(Nm,Nn))
 
-      !> Pass 0 — reset tally, classify single cells, seed their one (viable) centred
-      !  point. Single cells are always gated out of the sweep; a degenerate single
-      !  cell (collapsing slivers, center not locatable) injects nothing (injViable).
+      !> Pass 0: reset tallies, classify single cells, seed them with one centred point.
       do n = 1, Nn; do m = 1, Nm
         face%cell(m,n)%nInj = 0
         singleCell(m,n)     = .false.
@@ -184,7 +181,7 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
         endif
       enddo; enddo
 
-      !> Sweep (multi-particle cells only; single cells gated out by singleCell)
+      !> Pass 1: sweep the multi-particle cells.
       do n = 1, Nn
         mInj = 0
         do m = 1, Nm
@@ -288,8 +285,7 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
         enddo
       enddo
 
-      !> Pass 2 — coverage guarantee: every (non-degenerate) injection cell the
-      !  sweep missed gets one viable centred particle.
+      !> Pass 2: one centred particle in every injection cell the sweep missed.
       do n = 1, Nn; do m = 1, Nm
         if (.not.isInj(face%cell(m,n)%bcdef)) cycle
         if (singleCell(m,n) .or. face%cell(m,n)%nInj>0) cycle
@@ -309,14 +305,8 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
     if (allocated(singleCell)) deallocate(singleCell)
 
   else
-    !> -------------------------------------------------------------------------
-    !> 3D injection algorithm: advancing-front (BFS) hexagonal packing.
-    !  Each placed point spawns 6 hex-neighbour candidates one spacing R away,
-    !  obtained by rotating the cell's local tangent about its normal (Rodrigues).
-    !  check_distance enforces the minimum spacing; locate_inj_cell finds which
-    !  injection cell a candidate falls in. Single cells get one centred point
-    !  (Pass 0); uncovered cells are back-filled (Pass 2).
-    !> -------------------------------------------------------------------------
+    !> 3D injection: advancing-front hexagonal packing; each placed point spawns six
+    !  neighbour candidates at spacing R around the cell normal.
     write(*,*)' >> Using 3D injection algorithm'
     write(*,*) ''
     blockCycle3D: do b = 1, nb; do f = 1, 6
@@ -346,8 +336,7 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
         endif
       enddo; enddo
 
-      !> Pass 1 — advancing front over the remaining (non-single) injection cells.
-      !  The append arrays Inj/ind double as the BFS queue: head walks the tail.
+      !> Pass 1: advancing front over the remaining injection cells (Inj/ind double as the queue).
       head = npart
       do n0 = 1, Nn; do m0 = 1, Nm
         if (.not.isInj(face%cell(m0,n0)%bcdef)) cycle
@@ -367,7 +356,7 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
           tng = cellTangent(b,f,ic,jc,kc,nrm)
           Rc  = Rcell(mc,nc)
           do kd = 0, 5
-            !> -kd: pre-O22 rotateVector was R(-theta); keep the kd<->direction pairing (IDs, RNG streams).
+            !> The negative angle fixes the kd <-> direction pairing (particle IDs and RNG streams).
             dvec = rotateVector(tng, nrm, -real(kd,R8)*pi/3._R8)
             Pc   = pt + Rc*dvec
             call locate_inj_cell(b,f,Nm,Nn,mc,nc,Pc, m2,n2,verts2,found)
@@ -387,8 +376,7 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
         if (overflow) exit blockCycle3D
       enddo; enddo
 
-      !> Pass 2 — coverage guarantee: any (non-degenerate) injection cell the front
-      !  never reached gets one viable centred particle.
+      !> Pass 2: one centred particle in every injection cell the front never reached.
       do n = 1, Nn; do m = 1, Nm
         if (.not.isInj(face%cell(m,n)%bcdef)) cycle
         if (singleCell(m,n) .or. face%cell(m,n)%nInj>0) cycle
@@ -408,7 +396,7 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
     if (allocated(Dsize))      deallocate(Dsize)
   endif
 
-  !> --- Final assembly: one obj_particle per pinned point; Ninj = cell tally ---
+  !> Final assembly: one obj_particle per pinned point; Ninj = cell tally.
   allocate(group%particle(1:npart))
   associate(particle => group%particle)
   do p = 1, npart
@@ -426,15 +414,8 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
 
 contains
 
-  !> Viability guard for a centred (single / coverage) placement. Rejects a cell
-  !  that is degenerate for injection so the integrator never receives a particle
-  !  it cannot locate or that sits in a collapsing sliver:
-  !    (1) tangential size >= dsDegen (configurable floor; 0 disables the check), and
-  !    (2) the candidate point passes the *exact* per-cell acceptance test the
-  !        integrator's findParticle uses (axis-aligned bbox + z-range + point-in-
-  !        cell). Matching it guarantees findParticle re-locates the point in its
-  !        own cell instead of falling into the boundary-crossing path (which can
-  !        overshoot a domain-edge cell to index Ny+1 and crash getVertices).
+  !> Viability of a centred placement: cell tangential size >= dsDegen and the point passes
+  !  the same bbox + point-in-cell test findParticle uses.
   logical function injViable(point,verts,dcell)
     use IGLOO_variables,             only: mesh2D, dsDegen
     use IGLOO_RayFaceIntersection3D, only: isPointInsideCell
@@ -454,8 +435,7 @@ contains
     injViable = isPointInsideCell(point, verts, mesh2D)
   end function injViable
 
-  !> Append one pinned point to Inj/ind and bump the owning cell's nInj tally.
-  !  Single shared overflow guard for every placement site.
+  !> Appends one pinned point to Inj/ind and bumps the cell's nInj tally (overflow-guarded).
   subroutine place(b,i,j,k,f,m,n,point)
     implicit none
     integer,  intent(in) :: b,i,j,k,f,m,n
@@ -472,8 +452,8 @@ contains
     block(b)%face(f)%cell(m,n)%nInj = block(b)%face(f)%cell(m,n)%nInj + 1
   end subroutine place
 
-  !> Find the injection cell of face (b,f) that contains point P. Tests the
-  !  current cell and its 8 neighbours first, then a full face scan.
+  !> Injection cell of face (b,f) containing P: the current cell and its 8 neighbours first,
+  !  then a full face scan.
   subroutine locate_inj_cell(b,f,Nm,Nn,mc,nc,P, m2,n2,verts2,found)
     use IGLOO_RayFaceIntersection3D, only: isPointInsideHexahedron12
     implicit none
@@ -510,9 +490,7 @@ contains
     enddo; enddo
   end subroutine locate_inj_cell
 
-  !> Local in-plane tangent of cell (i,j,k) on face f: first m-edge of the cell,
-  !  projected onto the cell plane and normalised. (Same edge picks as the legacy
-  !  fixed-frame dSin, but evaluated per cell.)
+  !> In-plane unit tangent of cell (i,j,k) on face f: its first m-edge projected onto the cell plane.
   function cellTangent(b,f,i,j,k,normal) result(t)
     implicit none
     integer,  intent(in) :: b,f,i,j,k
@@ -535,6 +513,7 @@ contains
 end subroutine pin_particles_bc_ds
 
 
+!> Whether newInj lies at least R/2 away from every point already in Inj.
 logical function check_distance(npart,R,Inj,newInj)
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   implicit none
@@ -555,6 +534,8 @@ logical function check_distance(npart,R,Inj,newInj)
 
 end function check_distance
 
+!> Injection spacing R of one boundary cell from the per-cell/global ds or from mdotMax; flags
+!  cells that take a single centred particle and returns the cell's tangential size.
 subroutine compute_ds(block,gas,f,m,n,i,j,k,vertices,group,ds,mdotMax,R,single,dcell)
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_data_phases, only: obj_group
@@ -574,8 +555,7 @@ subroutine compute_ds(block,gas,f,m,n,i,j,k,vertices,group,ds,mdotMax,R,single,d
 
   single = .false.
 
-  ! Cell tangential size (mid-edge along the m-direction): needed both for the
-  ! mdotMax spacing and to detect ds >= cell (=> a single particle).
+  ! cell tangential size (mid-edge along m)
   select case (f)
   case (1); dl = 0.5_R8*(block%node(:,i-1, j ,k-1) - block%node(:,i-1,j-1,k-1) + &
                          block%node(:,i-1, j , k ) - block%node(:,i-1,j-1, k ))
@@ -592,7 +572,7 @@ subroutine compute_ds(block,gas,f,m,n,i,j,k,vertices,group,ds,mdotMax,R,single,d
   end select
   dcell = norm2(dl)
 
-  ! Per-cell ds (bc.txt col 9, meters) overrides the global ds; <=0 falls back to it.
+  ! per-cell ds (bc.txt col 9) overrides the global ds
   dsCell = block%face(f)%cell(m,n)%properties(group%famID, 9)
   if (dsCell > 0._R8) then; dsEff = dsCell; else; dsEff = ds; endif
 
@@ -632,11 +612,11 @@ subroutine compute_ds(block,gas,f,m,n,i,j,k,vertices,group,ds,mdotMax,R,single,d
 
 end subroutine compute_ds
 
+!> Whether a boundary cell injects mass (bcdef 401-420 inlet/outlet, 501-502 SRM grain).
 logical function isInj(bcdef)
   implicit none
   integer, intent(in) :: bcdef
 
-  ! Cells that inject mass: ATLAS 401-420 (inlet/outlet) and 501-502 (SRM grain).
   select case (bcdef)
   case (401:420, 501:502)
     isInj = .true.
@@ -646,6 +626,7 @@ logical function isInj(bcdef)
 
 end function isInj
 
+!> Zeroes the source and euler accumulators.
 subroutine initialize_fields(sourceblock,eulerblock,srcSwitch,eulSwitch)
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_variables,  only: nb

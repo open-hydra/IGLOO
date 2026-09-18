@@ -22,31 +22,8 @@ module IGLOO_bcBox
 
 contains
 
-  !> Interior offset applied after a grazing reflection, along the face normal `nn`.
-  !
-  !  `grazeStandoff` alone is an ABSOLUTE length, and its contract ("<< cell size") was never
-  !  enforced. That became load-bearing once the axisymmetric AXIS face started reflecting:
-  !  the axis is exactly where a mesh is radially thin, and a first cell thinner than
-  !  grazeStandoff would have the standoff push the particle straight through it into j=2 --
-  !  a silent teleport across a cell boundary.
-  !
-  !  So cap it at a small fraction of the cell's own extent along the normal as well. The
-  !  offset is the SMALLER of the two, hence never larger than before: on every mesh where
-  !  the old constant already satisfied its contract this returns grazeStandoff unchanged
-  !  (JPL first cell 5.7e-4 and db-2daxi 5.6e-3 both give a cap ~50x larger than 1e-6), and
-  !  it only bites where the previous behaviour was wrong.
-  !
-  !  A degenerate cell (no measurable extent) falls back to grazeStandoff: there is no cell
-  !  scale to speak of, and that is the pre-existing behaviour.
-  !
-  !  `thickness` spans all eight vertices, so on a SKEWED cell it exceeds the true clearance
-  !  normal to the face -- it is an upper bound, not the clearance itself. That fails safe here
-  !  (over-measuring loosens the cap back toward the bare constant), but anyone tightening
-  !  grazeCellFrac should know the quantity being scaled is a bound.
-  !
-  !  Measured inert: instrumented to report only when the cap actually changes the offset, the
-  !  full e2e suite and the JPL nozzle produce ZERO hits -- every boundary cell they touch is
-  !  thick enough that grazeStandoff still wins.
+  !> Interior offset applied after a grazing reflection along the face normal `nn`: the smaller
+  !  of grazeStandoff and grazeCellFrac times the cell's extent along the normal.
   pure function grazeOffset(vertices, nn) result(offset)
     use IGLOO_variables, only: toll
     implicit none
@@ -63,23 +40,9 @@ contains
 
   end function grazeOffset
 
-  !> Azimuthal projection of a boundary face's outward normal about the symmetry axis
-  !  `axisDir`, in [-1,1]. This is the orientation-independent classifier for bcdef-200 faces:
-  !
-  !    |azim| ~ 1  the face is a WEDGE face — a radial plane through the axis, whose normal
-  !                is azimuthal. The 200 fold (a rotation about axisDir) applies.
-  !    |azim| ~ 0  anything else — the AXIS face (constant radius, radial normal) or a face
-  !                normal to axisDir. A rotation about the axis cannot move such a particle
-  !                off the face, so these must reflect instead.
-  !
-  !  The SIGN identifies the wedge side: azim > 0 on the +theta boundary, whose fold is
-  !  -delthe. Deriving both from the face's geometry rather than from its index — and taking
-  !  the frame from axisDir rather than from x — keeps the BC independent of BOTH how the
-  !  block is indexed and which way the symmetry axis points. Nothing pins the wedge to
-  !  faces 5/6, and nothing pins the axis to x.
-  !
-  !  Returns 0 for a face centred exactly on the axis, where thetaHat is undefined; that
-  !  falls in the reflect class, which is the safe answer.
+  !> Azimuthal projection of a boundary face's outward normal about axisDir, in [-1,1]:
+  !  |azim| ~ 1 for a wedge face (fold), ~ 0 for the axis face or a face normal to the axis
+  !  (reflect); the sign gives the wedge side. Returns 0 for a face centred on the axis.
   pure function faceAzimuth(vertices, f, normal) result(azim)
     use IGLOO_variables, only: toll, axisDir
     implicit none
@@ -99,6 +62,8 @@ contains
 
   end function faceAzimuth
 
+  !> Ray/cell-face intersection of the step pold -> p: exit face f, hit point and face-local (m,n);
+  !  when the exit face is interior (m+n==0) the cell index steps to the neighbour and noBound is set.
   subroutine checkBoundary(block,vertices,p,pold,vold,i,j,k,intersect,f,m,n,noBound,found,planar)
     implicit none
     class(obj_block), intent(in)    :: block
@@ -108,21 +73,16 @@ contains
     integer,          intent(out)   :: m, n
     logical,          intent(out)   :: noBound, found
     logical, optional, intent(in)   :: planar   !> 2D dual mesh: 4-vertex quad cells
-    !> local variables
     integer                         :: f
     logical                         :: is2D, dum
 
     is2D = .false.; if (present(planar)) is2D = planar
     noBound = .false.
-    !> Set ray parameters
     myRay%origin = pold
     if (norm2(p-pold)>minDist) then
       myRay%direction = (p-pold)/norm2(p-pold)
     else
-      !> last and previous positions coincide! -> use velocity direction. Back the origin
-      !  off along it: an origin exactly ON the exit plane yields a rejected t~0 hit ->
-      !  inverted-ray far-face pick -> backward cell walk to the wrong boundary.
-      !  Sliding the origin along the ray leaves every intersection POINT unchanged.
+      !> coincident positions: use the velocity direction, origin backed off the exit plane
       myRay%direction = vold/norm2(vold)
       myRay%origin    = pold - 1.0e-6_R8*norm2(vertices(:,7)-vertices(:,1))*myRay%direction
     endif
@@ -144,8 +104,7 @@ contains
 
     call block%ijk2fmn(i,j,k,f,m,n)
 
-    !> If m and n are not assigned the particle may have gone through
-    !  the domain boundary crossing two cells -> new BC evaluation
+    !> exit through an interior face: step to the neighbour cell and re-evaluate
     if (m+n==0) then
       select case(f)
         case(1); i = i-1
@@ -160,6 +119,8 @@ contains
 
   end subroutine checkBoundary
 
+  !> Apply the exit cell's boundary condition to the particle state: reflection (300 and non-wedge
+  !  200), wedge fold (200), connected interface (101/103: retry in the partner cell), or exit (gone).
   subroutine bcDef(cell,vertices,pold,vold,intersect,f,p,v,time,iold,angle,Af,found,gone,retry)
     use IGLOO_variables, only: pi, toll, delthe, axisDir
     implicit none
@@ -173,7 +134,6 @@ contains
     integer,            intent(out)   :: iold(4)
     real(R8),           intent(out)   :: angle, Af
     logical,            intent(out)   :: gone, retry
-    !> local variables
     real(R8) :: nn(3), nn1(3), nn2(3), pstop(3), rot
     real(R8) :: azim
     integer      :: try
@@ -181,40 +141,11 @@ contains
     gone  = .false.
     retry = .false.
 
-    !> Classify a 200 face from its OWN GEOMETRY, never from its index. ATLAS emits 200 for
-    !  both the wedge faces and the axis face, and nothing pins the wedge to any particular
-    !  face number — the block may be oriented however the mesh author likes — so the two must
-    !  be told apart by what they are, not by where they sit in the index tuple.
-    !
-    !  A wedge face is a radial plane through the symmetry axis: its normal is AZIMUTHAL.
-    !  The axis face is a surface of constant radius: its normal is RADIAL. A face normal to
-    !  the axis is neither, and is likewise not a rotation. Projecting the face normal on
-    !  thetaHat separates all three: |azim| ~ 1 for the wedge, ~ 0 for everything else.
-    !
-    !  azim also carries the SIGN, which replaces the old `f==6` test: the face whose outward
-    !  normal points along +theta is the +delthe boundary, so the fold rotates by -delthe, and
-    !  vice versa. On a k-ordered wedge this reproduces the previous face-index behaviour;
-    !  test_axis_dispatch checks that equivalence at every face index and for wedges built on
-    !  the i- and j-directions too. (No e2e case reaches the fold branch below: axisymFold
-    !  re-sectors the particle each outer step, so bcDef sees 0 wedge-face 200 calls on both
-    !  db-2daxi and JPL — measured. The unit test is the coverage for it.)
+    !> classify a 200 face by its geometry: |azim| > wedgeAzimTol is a wedge face, else it reflects
     azim = 0._R8
     if (cell%bcdef==200) azim = faceAzimuth(vertices, f, cell%normal)
 
-    !> Reflection boundary (symmetry) — and the axisymmetric AXIS face.
-    !
-    !  ATLAS emits bcdef 200 for BOTH the wedge k-faces (5/6) and the axis face, but only the
-    !  k-faces are a rotation. Rotating about x is an isometry: it leaves hypot(y,z) unchanged,
-    !  so it can never bring a particle that reached the axis back inside the domain. Sending the
-    !  axis face down the 200 branch trapped such a particle in an exact period-2 cycle — bcDef
-    !  rotated +delthe, axisymFold rotated it back — with zero net displacement, until the nStall
-    !  guard discarded it. (JPL-Lagrangian-20micron: the 6 innermost particles, every sweep.)
-    !
-    !  The axis is a symmetry plane like any other, so it belongs here. The reflection plane is
-    !  the mesh's innermost radial line (GRIB writes it at `axis`, 1e-8 m) rather than r=0 exactly
-    !  — the resulting offset is far below any physical scale in these cases (particle diameters
-    !  are O(1e-5 m)) and no worse than the wedge discretisation already in play. Note this also
-    !  covers 200 on any other non-wedge face, which is likewise not a rotation.
+    !> Reflection: 300 and the non-wedge 200 faces (axis face included).
     if (cell%bcdef==300 .or. (cell%bcdef==200 .and. abs(azim) <= wedgeAzimTol)) then
       nn = cell%normal
       try = 0
@@ -234,7 +165,7 @@ contains
       endif
       time = time - norm2(p-pstop)/norm2(0.5_R8*(v+vold))
       if (abs(dot_product(v,nn)) < grazeFrac*norm2(v)) then
-        !> grazing: slide along the plane (kills micro-bounce skating); standoff keeps the ray off the face
+        !> grazing: slide along the plane; the standoff keeps the ray off the face
         v = v - dot_product(v,nn) * nn
         p = intersect - sign(grazeOffset(vertices,nn), dot_product(myRay%direction,nn)) * nn
       else
@@ -242,18 +173,13 @@ contains
         p = pstop - 2.0 * dot_product(pstop-intersect,nn) * nn
       endif
 
-    !> Axisymmetric WEDGE faces only (3D mesh): fold position+velocity by -+delthe about axisDir.
-    !  Reached only when the face normal is azimuthal (|azim| > wedgeAzimTol); every other 200
-    !  face took the reflection branch above. The rotation sense comes from the sign of azim and
-    !  the axis from axisDir, so neither the face ordering nor the axis direction is assumed here.
-    !  gone/retry stay .false. (cell invariant under the fold).
+    !> Wedge 200 face: fold position and velocity by -+delthe about axisDir.
     elseif (cell%bcdef==200) then
       rot = -sign(abs(delthe), azim)
       p = rotateVector(p, axisDir, rot)
       v = rotateVector(v, axisDir, rot)
 
-    !> Connected boundary (coincident conformal interface: index jump, no remap). Periodic
-    !  (201) is NOT here — its faces are separated, so updateCell transports the particle.
+    !> Connected interface (101/103): index jump into the partner cell, no remap.
     elseif (cell%bcdef==101 .or. cell%bcdef==103) then
       retry = .true.
       iold = cell%connection(1:4)
@@ -270,14 +196,8 @@ contains
 
   end subroutine bcDef
 
-  !> AXISYMMETRIC (200) per-step fold: rotate state position+velocity back into the wedge sector
-  !  about axisDir when the azimuth leaves +-delthe/2. The azimuth is measured in the frame
-  !  (refDir, binormal) spanning the plane normal to axisDir, so nothing here assumes the axis
-  !  is x: with the default frame this is exactly atan2(z,y), bit for bit.
-  !  One rotation by -n*|delthe| with n = nint(theta/|delthe|) -- no guard loop. The loop this
-  !  replaced rotated by -+delthe per pass and had no convergence check, so with the wrong
-  !  rotation sense (O22: rotateVector returned R(-theta)) it walked the state to +-180 deg
-  !  and returned silently. The post-condition is now asserted.
+  !> Axisymmetric per-step fold: rotate position and velocity back into the wedge sector about
+  !  axisDir by -nint(theta/delthe)*delthe, then assert the state is inside the sector.
   subroutine axisymFold(stateVar, nSect)
     use IGLOO_variables, only: axisym, delthe, axisDir, refDir
     implicit none
@@ -289,7 +209,7 @@ contains
     if (present(nSect)) nSect = 0
     if (.not.axisym) return
     binormal = cross(axisDir, refDir)
-    d     = abs(delthe)             !> the band is symmetric; delthe's sign only records the k ordering
+    d     = abs(delthe)             !> symmetric band about theta = 0
     theta = atan2(dot_product(stateVar(1:3), binormal), dot_product(stateVar(1:3), refDir))
     n     = nint(theta/d)
     if (present(nSect)) nSect = abs(n)
@@ -298,14 +218,12 @@ contains
     stateVar(1:3) = rotateVector(stateVar(1:3), axisDir, rot)
     stateVar(4:6) = rotateVector(stateVar(4:6), axisDir, rot)
     theta = atan2(dot_product(stateVar(1:3), binormal), dot_product(stateVar(1:3), refDir))
-    !> Can only fire if rotateVector's sense or the (axisDir, refDir) frame is wrong: refDir must be a
-    !  unit vector orthogonal to axisDir (variables.f90), which nothing enforces.
+    !> post-condition: the state is inside the sector
     if (abs(theta) > 0.5_R8*d*(1._R8 + 1.e-9_R8)) &
       error stop 'IGLOO: axisymFold left the wedge sector (rotation sense, or refDir not normal to axisDir?)'
   end subroutine axisymFold
 
-  !> Distance along `dir` from `p0` (inside the band) to the k-plane the ray leaves through, 0 if
-  !  none: the sector-edge analogue of computeDs for the segment refinement.
+  !> Distance along `dir` from `p0` (inside the band) to the k-plane the ray leaves through, 0 if none.
   pure function sectorDs(p0, dir) result(s)
     use IGLOO_variables, only: sectorNorm, sectorTol
     implicit none
@@ -321,9 +239,8 @@ contains
     enddo
   end function sectorDs
 
-  !> PERIODIC (201) TRANSPORT: shift the particle from the exit face to the partner face by
-  !  T = partner_face_center - exit_face_center (velocity unchanged). `partner` returns the ATLAS
-  !  partner cell [block,i,j,k]; the caller relocates the shifted position within that block.
+  !> Periodic (201) transport: shift the particle from the exit face to the partner face by the
+  !  face-centre difference (velocity unchanged); `partner` is the partner cell [block,i,j,k].
   subroutine periodicTransport(block, exitCell, p, partner)
     implicit none
     class(obj_block),  intent(in)    :: block(:)

@@ -1,6 +1,5 @@
-!>
-!> IGLOO - Integration of a General Lagrangian One-Way ODE set
-!>
+!> IGLOO - Integration of a General Lagrangian One-Way ODE set.
+!  Single-sweep driver: setup, solve, writeout on one obj_IGLOO.
 
 program IGLOO
   use IGLOO_module,   only: obj_IGLOO
@@ -8,9 +7,7 @@ program IGLOO
   implicit none
   type(obj_IGLOO) :: IGLOOsolver
 
-  !> MPI init/finalize live in the DRIVER only, never in the library: as a hydra submodule the
-  !  parent owns MPI, and a library that finalized would tear down the parent's environment.
-  !  Both calls are no-ops in a USE_MPI=OFF build, so no #ifdef is needed here.
+  !> MPI init/finalize belong to the driver only; both are no-ops without USE_MPI.
   call mpi_init_env()
 
   call IGLOOsolver%setup()

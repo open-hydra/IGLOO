@@ -6,7 +6,7 @@ module IGLOO_Register
   private
   public :: Register_IGLOO_Params
 
-  !> Dummy pointer targets: the registry is documentation-only, values are never read back.
+  !> Dummy pointer targets (values are never read back).
   integer,           target :: d_i(20)
   real(R8),          target :: d_r(64)
   real(R8),          target :: d_a(24,3)
@@ -14,6 +14,7 @@ module IGLOO_Register
 
 contains
 
+  !> Registers every IGLOO input key with its default, allowed values and description.
   subroutine Register_IGLOO_Params()
 
     ! --- [IGLOO-General] ---

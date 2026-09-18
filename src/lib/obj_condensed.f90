@@ -1,28 +1,19 @@
+!> Material, group and shed-list types, and the material -> group -> particle property hand-off.
 module IGLOO_data_phases
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_particles
   implicit none
   private
 
-  !> One shed child parcel, held in a growable per-parent list (`shedList`) rather than in a
-  !> single slot, so a parent can shed more than once within one pass.
+  !> One shed child parcel, held in a per-parent growable list (shedList).
   type, public:: obj_shed
     integer  :: ipos(4) = 0,      igas(3) = 0
     real(R8) :: pos(3)  = 0._R8,  vel(3)  = 0._R8
     real(R8) :: temp    = 0._R8,  diam    = 0._R8, npdot = 0._R8, time = 0._R8
   end type
 
-  !> Growable shed list, one per parent index. Vector idiom copied from `registry_t`
-  !> (config/Registry.f90): reserve + double via move_alloc.
-  !>
-  !> ⚠ THE DUMMY IN `integrate` MUST BE `intent(inout)`, NEVER `intent(out)`. `intent(out)`
-  !> on a derived type deallocates its allocatable components on entry and resets the rest to
-  !> their defaults. Here that would silently discard the capacity `solve` reserves before the
-  !> OMP region, forcing an allocation inside it on every call.
-  !> This replaces the single-slot `obj_child`, which was bitten by the other half of the same
-  !> rule (A23e): it was passed `intent(out)` and had NO default initializers, so it entered
-  !> UNDEFINED -- wiping the `diam = 0` guard `solve` set before the loop, leaving the
-  !> compaction to select on stack garbage. Defaults are load-bearing on both types; keep them.
+  !> Growable shed list, one per parent index (reserve + double via move_alloc). Dummies take it
+  !  intent(inout), never intent(out), which would deallocate the reserved capacity on entry.
   type, public:: shedList
     integer :: n = 0, capacity = 0
     type(obj_shed), allocatable :: item(:)
@@ -32,8 +23,7 @@ module IGLOO_data_phases
   end type
 
   type, public:: obj_group
-    !> nparticles is LIVE (solve overwrites it with nactive once children exist); nInjected
-    !> is the immutable pin-time census reset_state restores it from.
+    !> nInjected: pin-time census; nparticles: live count (children included).
     integer  :: nInjected = 0
     integer  :: mID, gID, famID, nparticles, childCounter=0
     integer  :: neq
@@ -54,7 +44,7 @@ module IGLOO_data_phases
     !> Evaporation properties (per-material, constant)
     character(len=50) :: evapWord
     integer  :: evapSelect=0
-    !> Composable phase-change axes (defaults = hard-wired behavior)
+    !> Composable phase-change axes
     integer  :: liqSelect=0, intfSelect=0, boilSelect=0, combSelect=0, solidSelect=0
     logical  :: psatVariable=.false.
     real(R8) :: pSat       = 0._R8
@@ -99,7 +89,7 @@ module IGLOO_data_phases
     !> Evaporation properties (per-material, constant)
     character(len=50) :: evapWord
     integer  :: evapSelect=0
-    !> Composable phase-change axes (defaults = hard-wired behavior)
+    !> Composable phase-change axes
     integer  :: liqSelect=0, intfSelect=0, boilSelect=0, combSelect=0, solidSelect=0
     logical  :: psatVariable=.false.
     real(R8) :: pSat       = 0._R8
@@ -157,6 +147,7 @@ contains
   end subroutine shed_push
 
 
+  !> Copies the material-level properties and model selections into each group.
   pure subroutine assign_material2group(self)
     implicit none
     class(obj_material), intent(inout) :: self
@@ -197,7 +188,7 @@ contains
         if (.not.self%psatVariable) gr%psat = self%psat
         gr%alphaE = self%alphaE; gr%kLiq = self%kLiq; gr%muLiq = self%muLiq
       endif
-      !> Composable axes (config, copied unconditionally) + metal properties
+      !> Composable axes + metal properties
       gr%liqSelect  = self%liqSelect;  gr%intfSelect  = self%intfSelect
       gr%boilSelect = self%boilSelect; gr%combSelect  = self%combSelect
       gr%solidSelect= self%solidSelect
@@ -212,6 +203,8 @@ contains
 
   end subroutine assign_material2group
 
+  !> Sets the group's ODE model and system size and sizes each particle's state arrays
+  !  (over rangeStart:rangeEnd when given).
   subroutine setup_particleODE(self,rangeStart,rangeEnd)
     use IGLOO_variables,  only: eulerSwitch, srcBodyForce
     use Lib_RHS,          only: determineModel, computeNeq, setupRHS
@@ -253,10 +246,7 @@ contains
 
     do i = start, end
       associate(part => self%particle(i))
-      !> ODE system configuration. Guards test SIZE, not merely allocation status: this runs
-      !  more than once per particle (the scatter inject-only pre-pass, the real sweep, and
-      !  reset_state before each further sweep), and a guard on allocation alone would keep a
-      !  wrongly-sized array whenever neq changes between calls.
+      !> State arrays are re-sized whenever neq changes between calls.
       call sizeTo(part%stateVar, self%neq)
       call sizeTo(part%oldState, self%neq)
       if (nAuxSt > 0) call sizeTo(part%auxState, nAuxSt)
@@ -278,8 +268,7 @@ contains
 
   contains
 
-    !> Ensure `arr` is allocated with exactly `n` elements, reallocating on a size change.
-    !  Contents are not preserved -- every caller overwrites them before the next read.
+    !> Allocates `arr` with exactly `n` elements, reallocating on a size change (contents not kept).
     pure subroutine sizeTo(arr, n)
       implicit none
       real(R8), allocatable, intent(inout) :: arr(:)
@@ -295,6 +284,8 @@ contains
 
   end subroutine setup_particleODE
 
+  !> Copies the group-level properties and model selections into each particle
+  !  (over rangeStart:rangeEnd when given).
   pure subroutine assign_group2particle(self,rangeStart,rangeEnd)
     implicit none
     class(obj_group),  intent(inout) :: self
@@ -326,7 +317,7 @@ contains
       endif
       !> Breakup properties
       part%brkupSelect = self%brkupSelect
-      part%brkupEvent  = self%brkupEvent   !> A18: event models (TAB/ETAB/KHRT) were never flagged per-particle
+      part%brkupEvent  = self%brkupEvent
       if (self%brkupSelect > 0) then
         part%varSig = .true.
         if (.not.self%sigVariable) then
@@ -355,7 +346,7 @@ contains
         part%invTboil     = self%invTboil
         part%alphaE = self%alphaE; part%kLiq = self%kLiq; part%muLiq = self%muLiq
       endif
-      !> Composable axes (config) + metal properties
+      !> Composable axes + metal properties
       part%liqSelect  = self%liqSelect;  part%intfSelect = self%intfSelect
       part%boilSelect = self%boilSelect; part%combSelect = self%combSelect
       part%solidSelect= self%solidSelect

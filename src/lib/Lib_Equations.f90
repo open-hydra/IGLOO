@@ -1,3 +1,4 @@
+!> Gas sampling at a particle position (trilinear, bilinear, 2.5D wedge) and interphase drag/heat.
 module Lib_Equations
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
@@ -12,13 +13,8 @@ module Lib_Equations
 
 contains
 
-  !***********************************************************************************************************!
-  !> 2.5D gas sample on an axisymmetric wedge (W-plan item E). The 2D dual lives in the meridian plane
-  !  (axisDir, refDir) and its vectors are the theta = 0 Cartesian components, so a parcel folded to
-  !  azimuth theta must NOT read the field at its own (x, y) unrotated: evaluate the meridian field at
-  !  the parcel's (axial, radial) position and rotate the velocity to its azimuth. Exact for any
-  !  axisymmetric field; the fold (axisymFold) still keeps the parcel inside the sector. On the
-  !  meridian plane itself (s == 0, every z = 0 parcel) this is the plain bilinear call, bit for bit.
+  !> 2.5D gas sample on an axisymmetric wedge: evaluates the meridian-plane field at the parcel's
+  !  (axial, radial) position and rotates the velocity to its azimuth; plain bilinear otherwise.
   subroutine sampleGas2D(vertices, gasNodes, p, nsp, gas)
     use IGLOO_variables,    only: axisym, axisDir, refDir
     use IGLOO_VectorModule, only: cross, rotateVector
@@ -42,8 +38,7 @@ contains
     call interp2ndOrder2D(vertices, gasNodes, p, nsp, gas)
   end subroutine sampleGas2D
 
-  !> ord1 counterpart: the cell value is the meridian-frame velocity; return it at p's azimuth.
-  !  Guarded on the ord1 wedge path so the ord2 sample (already rotated) is never rotated twice.
+  !> ord1 counterpart of sampleGas2D: rotates a meridian-frame cell velocity to p's azimuth (no-op under ord2).
   pure function meridianToAzimuth(vg, p) result(v)
     use IGLOO_variables,    only: axisym, axisDir, refDir, ord2
     use IGLOO_VectorModule, only: cross, rotateVector
@@ -56,10 +51,7 @@ contains
     if (s /= 0._R8) v = rotateVector(vg, axisDir, atan2(s, dot_product(p, refDir)))
   end function meridianToAzimuth
 
-  !> Deposit counterpart (W-plan Q7): the source/euler fields are meridian-plane fields, so a
-  !  Cartesian vector carried by a parcel at azimuth theta is expressed in the (axial, radial,
-  !  azimuthal) frame at p before it is deposited. Rotating by -theta about the axis is the exact
-  !  inverse of the parcel's own frame; on the meridian plane (s == 0) it is the identity, bit for bit.
+  !> Deposit counterpart: rotates a Cartesian vector carried at p's azimuth back to the meridian frame.
   pure function toMeridian(v, p) result(vm)
     use IGLOO_variables,    only: axisym, axisDir, refDir
     use IGLOO_VectorModule, only: cross, rotateVector
@@ -72,10 +64,9 @@ contains
     if (s /= 0._R8) vm = rotateVector(v, axisDir, -atan2(s, dot_product(p, refDir)))
   end function toMeridian
 
-  !***********************************************************************************************************!
-  !*************************************** DRAG FORCE & HEAT EXCHANGE  ***************************************!
-  !***********************************************************************************************************!
 
+  !> Trilinear interpolation of the gas at p0 in a hexahedron: Newton solve for the local
+  !  coordinates xi, then shape-function weighting.
   pure subroutine interp2ndOrder(vertices,gasNodes,p0,nsp,xi,gas)
     implicit none
     integer,  intent(in)    :: nsp
@@ -83,7 +74,6 @@ contains
     real(R8), intent(in)    :: p0(3)
     real(R8), intent(inout) :: xi(3)
     real(R8), intent(out)   :: gas(nsp)
-    !> Local variables
     real(R8) :: F(3), dFdxi(3,3), deltaXi(3)
     real(R8) :: N(8), dN(3,8), detJ
     integer  :: iter, i
@@ -124,6 +114,7 @@ contains
 
   contains
 
+    !> Trilinear shape functions and their derivatives at local coordinates.
     pure subroutine getShapeFunctions(coords,N,dN)
         implicit none
         real(R8), intent(in)  :: coords(3)
@@ -155,13 +146,14 @@ contains
 
   end subroutine interp2ndOrder
 
+  !> Bilinear interpolation of the gas at p0 in a quadrilateral: analytic inverse map, then
+  !  shape-function weighting.
   subroutine interp2ndOrder2D(vertices,gasNodes,p0,nsp,gas)
     implicit none
     integer,  intent(in)  :: nsp
     real(R8), intent(in)  :: vertices(3,4), gasNodes(nsp,4)
     real(R8), intent(in)  :: p0(3)
     real(R8), intent(out) :: gas(nsp)
-    !> Local variables
     real(R8) :: N(4), x1, y1, x2, y2, x3, y3, x4, y4, x, y
     real(R8) :: A, B, C, D, E, F, u, v, denom
     real(R8) :: aQuad, bQuad, cQuad, deltaQuad
@@ -174,12 +166,12 @@ contains
     A = x2 - x1; B = x4 - x1; C = x1 - x2 + x3 - x4
     D = y2 - y1; E = y4 - y1; F = y1 - y2 + y3 - y4
 
-    ! 3. Risoluzione Analitica Inversa
+    !> Analytic inverse map: quadratic in v.
     aQuad = C * E - B * F
     bQuad = C * (y1 - y) - F * (x1 - x) + A * E - B * D
     cQuad = A * (y1 - y) - D * (x1 - x)
 
-    ! Check se il termine quadratico è nullo (Parallelogramma/Rettangolo)
+    !> Parallelogram: linear in v.
     if (abs(aQuad) < 1.0e-14_R8) then
       if (abs(bQuad) > 1.0e-14_R8) then
         v = -cQuad / bQuad
@@ -214,11 +206,11 @@ contains
     N(3)  = u * v
     N(4)  = (1._R8 - u) * v
 
-    ! 5. Interpolazione delle proprietà del gas
     gas = N(1)*gasNodes(:,1) + N(2)*gasNodes(:,2) + N(3)*gasNodes(:,3) + N(4)*gasNodes(:,4)
 
   end subroutine interp2ndOrder2D
 
+  !> Drag force and, when Qdot is present, convective heat rate on a particle from the sampled gas.
   pure subroutine interphase(gas,nsp,vdiff,slip,temp,diam,Re,cpFactor, Fdrag,Qdot)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_variables, only: pi, dragSelect, heatSelect

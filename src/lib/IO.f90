@@ -7,10 +7,12 @@ module IGLOO_IO
   public:: read_cdp_bc_file
   public:: read_cdp_properties
   public:: write_outfield
-  public:: merge_rank_particle_files    !> MPI choke-point 3
+  public:: merge_rank_particle_files
 
 contains
 
+  !> Read the phase file (materials, group counts, per-material models) and properties.dat
+  !  (cp, rho, h tables); breakup/evaporation constants come from [IGLOO-Properties].
   subroutine read_cdp_properties(prefix,material)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use strings,               only: parse
@@ -66,15 +68,13 @@ contains
       material(i)%liqSelect  = liqSelect
       material(i)%intfSelect = intfSelect
       material(i)%boilSelect = boilSelect
-      !> ... then per-material overrides + phase-change properties from [GPB-Phase<i>]
+      !> ... then per-material overrides + phase-change properties from [IGLOO-Material<i>]
       call read_phase_models(i, material(i))
       if (material(i)%evapSelect > 0) phaseChange = .true.
-      !> F1 guard: LK depresses the surface vapor fraction, but d2-law is a thermal BT-driven
-      !  rate independent of it, so LK would be silently inert. Reject the misleading combo.
+      !> interface=LK requires a vapor-fraction-driven evaporation model
       if (material(i)%intfSelect == 1 .and. material(i)%evapSelect == 1) &
         error stop '[ERROR] interface=LK needs evaporation in {CEM,CEM-B,ASM,TC}; d2-law is BT-driven, LK inert'
-      !> Selectors that are parsed and threaded through but whose physics is absent are
-      !  rejected here, at a single choke point, rather than failing silently downstream.
+      !> parsed-but-unimplemented selectors are rejected here
       if (material(i)%liqSelect   > 0) error stop '[ERROR] liquid-conduction=P2T parsed but not implemented yet'
       if (material(i)%boilSelect  > 0) error stop '[ERROR] boiling=ZGR parsed but not implemented yet'
       if (material(i)%solidSelect > 0) error stop '[ERROR] solidification=on parsed but not implemented yet'
@@ -92,9 +92,7 @@ contains
 
     ios = tec_read_points_multivars(orion,3,'INPUT/'//trim(prefix)//'properties.dat')
     if (ios/=0) error stop ( "Error reading ideal-gas thermo file" )
-    !> Zones are matched to phase.txt lines by ORDER (the points reader keeps no zone title): check the
-    !  count -- a short file used to segfault at block(nm) below -- and that every zone spans the same
-    !  T range as zone 1, which sets Tmin/Tmax for all of them (a shorter zone 2 was an unchecked OOB read).
+    !> One zone per material, in phase order, all spanning the same T range (sets Tmin/Tmax).
     if (size(orion%block) /= nm) then
       write(*,'(A,I0,A,I0,A)') ' [ERROR] INPUT/'//trim(prefix)//'properties.dat has ', size(orion%block), &
                                ' zone(s) for ', nm, ' material(s) in phase.txt (one zone per material, in phase order)'
@@ -113,7 +111,7 @@ contains
     Tmin = nint(orion%block(1)%mesh(1,1,1,1))
     Tmax = Tmin + orion%block(1)%Ni - 1
     
-    !--- Verify [IGLOO-Properties] vector sizes match nm ---
+    !> [IGLOO-Properties] vectors must carry one entry per material
     if (allocated(ini_Mv))    then; if (size(ini_Mv)    /= nm) error stop '[ERROR] [IGLOO-Properties] Mv: size /= number of materials';    endif
     if (allocated(ini_Lv))    then; if (size(ini_Lv)    /= nm) error stop '[ERROR] [IGLOO-Properties] Lv: size /= number of materials';    endif
     if (allocated(ini_Tboil)) then; if (size(ini_Tboil) /= nm) error stop '[ERROR] [IGLOO-Properties] Tboil: size /= number of materials'; endif
@@ -129,22 +127,22 @@ contains
         mat%cp = blk%vars(1,1,1,1)
       else
         mat%cpVariable = .true.
-        allocate(mat%cpTab(Tmin:Tmax))       !> A20: variable-property tabs were never allocated
+        allocate(mat%cpTab(Tmin:Tmax))
         mat%cpTab(Tmin:Tmax) = blk%vars(1,:,1,1)
       endif
       if (all((blk%vars(2,Tmin+1:Tmax,1,1)-blk%vars(2,Tmin:Tmax-1,1,1))==0._R8)) then
         mat%rho = blk%vars(2,1,1,1)
       else
         mat%rhoVariable = .true.
-        allocate(mat%rhoTab(Tmin:Tmax))      !> A20
+        allocate(mat%rhoTab(Tmin:Tmax))
         mat%rhoTab(Tmin:Tmax) = blk%vars(2,:,1,1)
       endif
       if (mat%cpVariable) then
-        allocate(mat%hTab(Tmin:Tmax))        !> A20 (enthalpy inverse for the T-state when varCp)
+        allocate(mat%hTab(Tmin:Tmax))        !> h(T) table for the enthalpy state
         mat%hTab(Tmin:Tmax) = blk%vars(3,:,1,1)
       endif
 
-      !--- SIGMA/MU (breakup) ---
+      !> sigma/mu (breakup)
       if (brkupSwitch) then
         ! if (all((blk%vars(4,Tmin+1:Tmax,1,1)-blk%vars(4,Tmin:Tmax-1,1,1))==0._R8)) then
         !   mat%sigma = blk%vars(4,Tmin,1,1)
@@ -159,8 +157,7 @@ contains
         !   mat%mupTab(Tmin:Tmax) = blk%vars(5,:,1,1)
         ! endif
 
-        !> Constants from [IGLOO-Properties]; the table path above is the deferred
-        !  variable-property route (not wired yet)
+        !> constants from [IGLOO-Properties]
         if (allocated(ini_sigma)) then; material(i)%sigma = ini_sigma(i)
         else; error stop '[ERROR] Breakup requires sigma. Provide in [IGLOO-Properties]'
         endif
@@ -169,7 +166,7 @@ contains
         endif
       endif
 
-      !--- EVAPORATION properties ---
+      !> evaporation properties
       if (phaseChange) then
         ! if (all((blk%vars(6,Tmin+1:Tmax,1,1)-blk%vars(6,Tmin:Tmax-1,1,1))==0._R8)) then
         !   mat%psat = blk%vars(6,Tmin,1,1)
@@ -178,8 +175,7 @@ contains
         !   mat%psatTab(Tmin:Tmax) = blk%vars(6,:,1,1)
         ! endif
         
-        !> Constants from [IGLOO-Properties]; the table path above is the deferred
-        !  variable-property route (not wired yet)
+        !> constants from [IGLOO-Properties]
         if (allocated(ini_psat)) then;  material(i)%psat = ini_psat(i)
         else; error stop '[ERROR] Evaporation requires psat. Provide in [IGLOO-Properties]'
         endif
@@ -213,6 +209,8 @@ contains
   end subroutine read_cdp_properties
 
 
+  !> Read bc.txt: pass 1 tags every face cell and seeds the inflow cells (area, mdotGas);
+  !  pass 2 fills properties/connections and, under ord2, the boundary ghost layer of the gas.
   subroutine read_cdp_bc_file(name,material,geoblock,gasblock,sourceblock,eulerblock,srcSwitch,eulSwitch)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_variables,             only: nb, nm, ord2, mesh2D, dsSwitch
@@ -247,9 +245,7 @@ contains
 
     open(newunit=u,FILE='INPUT/'//trim(name)//'bc.txt',action='read')
 
-    ! ─────────────────────────────────────────────────────────────────────
-    ! PASS 1: scan file, allocate cell%properties for inflow cells.
-    ! ─────────────────────────────────────────────────────────────────────
+    !> PASS 1: scan the file, allocate cell%properties for inflow cells.
     do b = 1, size(geoblock)
       blkAlloc: associate(blk => geoblock(b), gas => gasblock(b))
       mend(1:2) = blk%Ny; nend(1:2) = blk%Nz
@@ -261,9 +257,7 @@ contains
         if (mesh2D) then; read(u,*,iostat=ios) dumi, dumi, dumi, dumi, dumi, cell%bcdef
         else;             read(u,*,iostat=ios) dumi, dumi, dumi, dumi, dumi, cell%bcdef
         endif
-        !> Gate misparses loudly: legacy single-digit bc.txt (or a property line consumed as a
-        !  cell line) yields codes outside {0, 100..999} — lenient list-directed readers would
-        !  otherwise mistype every face and corrupt the whole setup silently.
+        !> reject codes outside {0, 100..999} (legacy single-digit bc.txt or a misaligned line)
         if (ios /= 0 .or. (cell%bcdef /= 0 .and. (cell%bcdef < 100 .or. cell%bcdef > 999))) then
           write(*,'(A,I0,A,I0,A,I0)') ' [IGLOO::read_cdp_bc_file] bad BC cell line: block ', &
                                       b, ', face ', f, ', bcdef = ', cell%bcdef
@@ -280,8 +274,7 @@ contains
             if (allocated(cell%properties)) deallocate(cell%properties)
             allocate(cell%properties(1:totFam, 1:nPropDP))
 
-            ! Reset per-cell accumulators, compute face area, seed mdotGas from gas
-            ! via 1st-order LSQ-gradient extrapolation (skipped if externally set).
+            ! Reset the per-cell accumulators, compute the face area, seed mdotGas from the gas.
             cell%mdotPart = 0._R8
             cell%krhoTot  = 0._R8
             call blk%fmn2ijk(f, m, n, i_g, j_g, k_g)
@@ -298,9 +291,7 @@ contains
 
     rewind(u)
 
-    ! ─────────────────────────────────────────────────────────────────────
-    ! PASS 2: re-scan file, populate cell%properties + connections;
-    ! ─────────────────────────────────────────────────────────────────────
+    !> PASS 2: re-scan the file, populate cell%properties and connections.
     do b = 1, size(geoblock)
       blkDef: associate(blk => geoblock(b), gas => gasblock(b))
       mend(1:2) = blk%Ny; nend(1:2) = blk%Nz
@@ -341,24 +332,21 @@ contains
               write(*,*) ' [IGLOO::read_cdp_bc_file] failed to tokenise line: ', trim(lineString)
               error stop 1
             endif
-            ! Cols 1..7 numeric (col 6 = rp, col 7 = sigmap). The 'normal,' direction
-            ! tokens in cols 3/4 map to a sentinel via parse_dir_tok.
+            ! Cols 1..7 numeric (6 = rp, 7 = sigmap); 'normal' direction tokens map to a sentinel.
             do s = 1, min(nTok, 7)
               propBuffer(s) = parse_dir_tok(tok(s))
             enddo
             do s = nTok + 1, 7
               propBuffer(s) = 0._R8
             enddo
-            ! Col 8: distribution-law NAME (a string) -> integer law code. Absent on
-            ! legacy 7-column files (=> Dirac); sigmap<=0 also forces the deterministic path.
+            ! Col 8: distribution-law name -> code (absent or sigmap <= 0 => Dirac).
             if (nTok >= 8) then
               propBuffer(8) = real(lawCode(tok(8)), R8)
             else
               propBuffer(8) = real(DiracDistr, R8)
             endif
             if (propBuffer(7) <= 0._R8) propBuffer(8) = real(DiracDistr, R8)
-            ! Col 9: per-cell injection spacing ds [m] (token after the distribution name).
-            ! Absent on legacy files => 0 => compute_ds falls back to the global [IGLOO-BC] ds.
+            ! Col 9: per-cell injection spacing ds [m] (absent => 0 => global [IGLOO-BC] ds).
             if (nTok >= 9) then
               read(tok(9),*,iostat=ios) propBuffer(9)
               if (ios /= 0) propBuffer(9) = 0._R8
@@ -370,9 +358,7 @@ contains
               cell%properties(i,:) = propBuffer(:)
             enddo
 
-            ! Per-family classification — krho-BC families contribute to krhoTot,
-            ! gp-BC families add gp_f * cell%area into cell%mdotPart. Per-family flavor is
-            ! currently sourced from cell%bcdef (one-bcdef-per-cell assumption).
+            ! Per-family totals: krho (401) into krhoTot, gp*area (402/403) into mdotPart.
             do i = 1, totFam
               select case (cell%bcdef)
               case (401)
@@ -389,8 +375,7 @@ contains
         end associate
       enddo; enddo; enddo
 
-      ! Post-pass: second-order halo fill only — krhoTot/mdotPart/area/mdotGas are now
-      ! seeded in PASS 1 and finalized inline in PASS 2.
+      ! Post-pass (ord2): fill the boundary ghost layer of the gas.
       if (allocated(rhog)) deallocate(rhog)
       allocate(rhog(size(gas%density,1)))
       do f = 1, 6; do n = 1, nend(f); do m = 1, mend(f)
@@ -415,7 +400,7 @@ contains
               gas%kl (aa,m,n) = klg
               gas%R  (aa,m,n) = Rg
               if ((m==1.or.m==mend(f)).and.(n==1.or.n==nend(f))) then
-                !> edge/corner ghost: compose the adjacent faces' 300 mirrors (else v_n leaks at the corner line)
+                !> edge/corner ghost: compose the adjacent faces' 300 mirrors
                 vge = vg
                 associate(ac => blk%face(merge(3,4,m==1))%cell(bb,n))
                   if (ac%bcdef==300) vge = vge - 2._R8*dot_product(vge,ac%normal)*ac%normal
@@ -516,11 +501,8 @@ contains
   end subroutine read_cdp_bc_file
 
 
-  !> MOSE-analogous ord2 gas ghost state (mirrors MOSE Lib_Ghost.f90 Fill_Ghost_Cell dispatch):
-  !  101/201 partner-interior copy, 300 velocity mirror, 0/401-407/420 zero-gradient,
-  !  default 2nd-order extrapolation 3*P1-3*P2+P3 (zero-gradient fallback if positivity is
-  !  lost or the block is <3 cells deep). 200 stays zero-gradient: IGLOO only detects delthe
-  !  for mesh2D, whose flattened gas dual has no k-ghosts.
+  !> ord2 gas ghost state of one boundary cell: 101/201 partner copy, 300 velocity mirror,
+  !  0/200/401-407/420 zero-gradient, default quadratic extrapolation (zero-gradient fallback).
   subroutine ghostState(cell, gas, gasall, c1, c2, c3, deep, rhog, vg, Tg, mitg, milg, gamg, klg, Rg)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_block, only: obj_flowblock, obj_bc_cell
@@ -560,7 +542,7 @@ contains
           gamg = 3._R8*gas%gam(c1(1),c1(2),c1(3)) - 3._R8*gas%gam(c2(1),c2(2),c2(3)) + gas%gam(c3(1),c3(2),c3(3))
           klg  = 3._R8*gas%kl (c1(1),c1(2),c1(3)) - 3._R8*gas%kl (c2(1),c2(2),c2(3)) + gas%kl (c3(1),c3(2),c3(3))
           Rg   = 3._R8*gas%R  (c1(1),c1(2),c1(3)) - 3._R8*gas%R  (c2(1),c2(2),c2(3)) + gas%R  (c3(1),c3(2),c3(3))
-          !> Extrapolated gas feeds the particle RHS directly: reject any non-physical state.
+          !> reject a non-physical extrapolated state
           if (any(rhog<=0._R8) .or. Tg<=0._R8 .or. milg<=0._R8 .or. gamg<=0._R8 &
               .or. klg<=0._R8 .or. Rg<=0._R8) call zeroGrad()
           mitg = max(mitg, 0._R8)
@@ -571,6 +553,7 @@ contains
 
   contains
 
+    !> Zero-gradient ghost: copy the boundary-adjacent interior state.
     subroutine zeroGrad()
       rhog = gas%density (:,c1(1),c1(2),c1(3))
       vg   = gas%velocity(:,c1(1),c1(2),c1(3))
@@ -583,6 +566,7 @@ contains
   end subroutine ghostState
 
 
+  !> Read the background gas field from an ASCII Tecplot multiblock file.
   subroutine read_TECsolfile(filename,orion)
     use Lib_Tecplot
     use Lib_ORION_data
@@ -600,9 +584,8 @@ contains
   end subroutine read_TECsolfile
 
 
-  !> `tag` is the caller's sweep suffix (obj_IGLOO%sweepTag()); absent or empty means the
-  !  historical filenames. Applied to source.tec and euler<fam>.tec too -- source.tec is what
-  !  hydra consumes, so a repeated solve clobbers it exactly like the trajectory dumps.
+  !> Write the source (source.tec) and per-family eulerian (euler<fam>.tec) grid fields;
+  !  `tag` is the sweep suffix appended to the file names.
   subroutine write_outfield(material,geoblock,sourceblock,eulerblock,srcSwitch,eulSwitch,tag)
     use IR_Precision
     use Lib_Tecplot
@@ -695,26 +678,8 @@ contains
   end subroutine write_outfield
 
 
-  !> MPI choke-point 3 — collapse this sweep's per-rank particle-output shards into the serial file
-  !> layout, then delete them. ROOT ONLY; no-op at one rank, where `rank_suffix()` was empty and the
-  !> files already carry their logical names.
-  !>
-  !> **Current sweep only.** Shards are `<kind>-<material><sweeptag>.rank<r>.dat`, so the sweep tag
-  !> is a third key alongside kind and material. Merging once per `writeout` call matches the
-  !> one-file-set-per-sweep lifetime and avoids globbing the filesystem for historical sweeps.
-  !>
-  !> **Lockstep zone merge, not concatenation.** Every rank writes the same `variables=` line and the
-  !> same zone headers in the same order -- `solve`'s material and group loops are fully replicated
-  !> and only the particles inside them are striped -- so emitting each header once and interleaving
-  !> the data blocks reproduces the serial layout exactly, and every existing `check.py` runs
-  !> unmodified. Within a zone the records come out rank-blocked. That is deliberately NOT sorted:
-  !> the serial file is not sorted either (OMP already interleaves), and every gate treats record
-  !> order as noise. Each particle is owned by exactly one rank, so its own records stay contiguous
-  !> and in time order -- which is what the per-ID loaders in the oracles actually rely on.
-  !>
-  !> Structural disagreement between shards is fatal, never patched over: a differing header or zone
-  !> count means the replication assumption above is false, and silently concatenating would produce
-  !> a file that loads in Tecplot and is wrong.
+  !> Merge this sweep's per-rank particle-output shards into the serial file layout and delete
+  !  them (root only; no-op at one rank).
   subroutine merge_rank_particle_files(material, tag)
     use IGLOO_variables,   only: IGLOO_phase_prefix, trajOn, scatOn
     use IGLOO_data_phases, only: obj_material
@@ -732,9 +697,7 @@ contains
 
     do m = 1, size(material)
       stem = 'OUTPUT/'//trim(IGLOO_phase_prefix)
-      !> Same three streams, and the same on/off switches, as the opens in solve. Driving the list
-      !  from the switches rather than from what happens to exist on disk is what lets a missing
-      !  shard be an error instead of a silent skip.
+      !> same streams and switches as the opens in solve
       if (trajOn) call merge_one_stream(stem//'trajectories-'//trim(material(m)%matName)//sfx)
       call merge_one_stream(stem//'outloc-'//trim(material(m)%matName)//sfx)
       if (scatOn) call merge_one_stream(stem//'scatter-'//trim(material(m)%matName)//sfx)
@@ -743,18 +706,8 @@ contains
   end subroutine merge_rank_particle_files
 
 
-  !> Merge `<base>.rank0.dat` … `<base>.rank<N-1>.dat` into `<base>.dat` and delete the shards.
-  !>
-  !> **Byte-block copy, not record-by-record.** The output is byte-identical to a record loop, but the
-  !> unit of work is one block per (zone, rank) instead of one formatted read + one formatted write per
-  !> record. That matters: on `khrt-stress` at 5 ranks the old per-record loop moved ~1.1 M records and
-  !> cost 3.47 s of a 7.01 s run -- 49 %, entirely serial on root, so it was cancelling most of the
-  !> benefit of decomposing in the first place. Same structure, ~15 I/O operations instead of ~1.1 M.
-  !>
-  !> It still has to be ZONE-AWARE. Concatenating whole shards end to end would emit rank 0's zones,
-  !> then rank 1's, i.e. duplicated zone headers -- which is exactly the corruption the Phase 4
-  !> falsification produced, and which a case's own `check.py` does not notice. The reason a block copy
-  !> is possible at all is that within ONE shard the data lines of a given zone are contiguous bytes.
+  !> Merge `<base>.rank0.dat` … `<base>.rank<N-1>.dat` into `<base>.dat` zone by zone (each header
+  !  once, data blocks rank-interleaved as byte blocks) and delete the shards.
   subroutine merge_one_stream(base)
     use IGLOO_Mod_MPI, only: mpi_size_, mpi_abort_all
     implicit none
@@ -770,8 +723,7 @@ contains
              needNL(0:mpi_size_-1))
     nz = 0; needNL = .false.
 
-    !> Pass 1: index each shard. Peak memory is ONE shard, not the merged total -- the buffer is
-    !  released before the next shard is read, and pass 2 re-reads only the blocks it writes.
+    !> Pass 1: index each shard.
     do r = 0, mpi_size_-1
       call scan_shard(base, r, u(r), nz(r), vlo(r), vhi(r), hlo, hhi, dlo, dhi, needNL(r), &
                       (r == 0))
@@ -784,7 +736,7 @@ contains
          action='write', iostat=ios)
     if (ios /= 0) call mpi_abort_all('rank-file merge: cannot write '//base//'.dat')
 
-    !> `variables=` line: emit rank 0's once, verifying the others match rather than assuming it.
+    !> `variables=` line: rank 0's once, checked against the other shards
     call read_block(u(0), vlo(0), vhi(0), hdr0)
     write(uo) hdr0
     do r = 1, mpi_size_-1
@@ -794,7 +746,7 @@ contains
     enddo
 
     do z = 1, nzone
-      !> Zone header once, from rank 0, after checking every shard agrees on it byte for byte.
+      !> zone header once, from rank 0, checked against every shard
       call read_block(u(0), hlo(0,z), hhi(0,z), hdr0)
       do r = 1, mpi_size_-1
         call read_block(u(r), hlo(r,z), hhi(r,z), blk)
@@ -802,14 +754,12 @@ contains
           call mpi_abort_all('rank-file merge: shards disagree on a zone header, '//base)
       enddo
       write(uo) hdr0
-      !> This zone's data, rank-blocked. An empty segment (a rank owning no parcel in this zone) is
-      !  normal, not an error -- it happens whenever the rank count exceeds the parcel count.
+      !> this zone's data, rank-blocked (an empty segment is normal)
       do r = 0, mpi_size_-1
         if (dhi(r,z) < dlo(r,z)) cycle
         call read_block(u(r), dlo(r,z), dhi(r,z), blk)
         write(uo) blk
-        !> A shard whose final record carries no trailing newline would otherwise splice onto the
-        !  next rank's first record.
+        !> newline-terminate a shard's final record
         if (needNL(r) .and. z == nzone) write(uo) NL
       enddo
     enddo
@@ -823,16 +773,8 @@ contains
   end subroutine merge_one_stream
 
 
-  !> Index one shard: byte ranges of its `variables=` line, of each zone header, and of each zone's
-  !> data block. Leaves the unit OPEN for stream reads (and for the delete that closes the merge).
-  !> `alloc` sizes the per-zone index arrays from this shard's zone count; every later shard is
-  !> checked against it by the caller.
-  !>
-  !> ONE pass over the bytes, and it records only ZONE HEADERS -- a zone's data is by definition
-  !> everything between its header and the next one, so the data lines never need to be visited
-  !> individually. Measured on `khrt-stress` at 5 ranks (195 MB of scatter output): the first version
-  !> walked the buffer twice and called an `adjustl`-based predicate on all 1.65 M lines, ~1 s of the
-  !> 2.4 s the merge cost. What is left is one byte compare per byte plus one cheap test per line.
+  !> Index one shard: byte ranges of its `variables=` line, each zone header and each zone's data
+  !  block; leaves the unit open. `alloc` sizes the per-zone index arrays from this shard.
   subroutine scan_shard(base, r, u, nzone, vlo, vhi, hlo, hhi, dlo, dhi, needNL, alloc)
     use, intrinsic :: iso_fortran_env, only: I8 => int64
     use IGLOO_Mod_MPI, only: mpi_size_, mpi_abort_all
@@ -849,29 +791,21 @@ contains
     integer :: nbytes, i, ls, le, ios, z, cap
     integer(I8) :: nbytes64
 
-    !> Size in int64. A default integer would be int32, and a shard above 2 GB would then either come
-    !  back negative (aborting with a misleading "empty shard") or WRAP POSITIVE and silently truncate
-    !  the merge. The whole-shard buffer below is a `character(len=)`, whose length is a default
-    !  integer, so >2 GB genuinely cannot be held here -- refuse it by name instead of guessing.
+    !> shard size in int64; whole-shard buffers above 1 GB are refused
     inquire(file=shard_name(base,r), size=nbytes64)
     if (nbytes64 <= 0_I8) call mpi_abort_all('rank-file merge: empty shard '//shard_name(base,r))
     if (nbytes64 > int(huge(1)/2, I8)) &
       call mpi_abort_all('rank-file merge: shard exceeds the 1 GB whole-buffer limit, ' &
                          //shard_name(base,r)//' -- use more ranks, or turn scatter output off')
     nbytes = int(nbytes64)
-    !> No `action='read'`: the standard forbids deleting a file connected for input only, and the
-    !  shards are closed with status='delete' at the end of the merge. ifx accepts the pair,
-    !  gfortran need not.
+    !> opened without action='read' so the unit can later be closed with status='delete'
     open(newunit=u, file=shard_name(base,r), access='stream', form='unformatted', status='old', &
          iostat=ios)
     if (ios /= 0) call mpi_abort_all('rank-file merge: cannot open shard '//shard_name(base,r))
     allocate(character(len=nbytes) :: buf)
     read(u, pos=1, iostat=ios) buf
     if (ios /= 0) call mpi_abort_all('rank-file merge: short read on '//shard_name(base,r))
-    !> Every record a Fortran formatted `write` produces is newline-terminated, so this cannot happen
-    !  for a shard our own writer created. Assert rather than patch: the missing byte could belong to a
-    !  zone header as easily as to a data block, and the per-data-block patch this replaces sat after
-    !  the empty-block `cycle`, so it could not have covered either case reliably.
+    !> a shard must end in a newline
     if (buf(nbytes:nbytes) /= NL) &
       call mpi_abort_all('rank-file merge: shard does not end in a newline, '//shard_name(base,r))
     needNL = .false.
@@ -890,7 +824,7 @@ contains
       if (buf(i:i) /= NL) cycle
       if (line_is_zone(buf, ls, i)) then
         nzone = nzone + 1
-        if (nzone > cap) then                     !> grow; never taken for real group counts
+        if (nzone > cap) then                     !> grow
           allocate(tmp(2*cap)); tmp(1:cap) = hs; call move_alloc(tmp, hs)
           allocate(tmp(2*cap)); tmp(1:cap) = he; call move_alloc(tmp, he)
           cap = 2*cap
@@ -919,8 +853,7 @@ contains
     if (nzone > size(hlo,2)) &
       call mpi_abort_all('rank-file merge: shards disagree on zone count, '//shard_name(base,r))
 
-    !> A zone's data is everything between its header and the next header (or end of file). An empty
-    !  range (dhi < dlo) means this rank owned no parcel in that zone, which is normal.
+    !> zone data = bytes between its header and the next one (dhi < dlo: no parcel owned)
     do z = 1, nzone
       hlo(r,z) = hs(z); hhi(r,z) = he(z)
       dlo(r,z) = he(z) + 1
@@ -931,9 +864,7 @@ contains
   end subroutine scan_shard
 
 
-  !> Does the record in `buf(a:b)` start the `Zone` keyword? Positional and allocation-free: the
-  !> obvious `index(adjustl(line),'Zone')` builds a temporary copy of every line, which is what made
-  !> the first merge implementation slow.
+  !> True when the record buf(a:b) starts with the `Zone` keyword (allocation-free scan).
   pure logical function line_is_zone(buf, a, b)
     implicit none
     character(len=*), intent(in) :: buf
@@ -970,6 +901,7 @@ contains
   end subroutine read_block
 
 
+  !> Per-rank shard file name `<base>.rank<r>.dat`.
   function shard_name(base, r) result(fn)
     implicit none
     character(len=*), intent(in)  :: base
@@ -982,10 +914,7 @@ contains
   end function shard_name
 
 
-  !─────────────────────────────────────────────────────────────────────────────
-  ! parse_dir_tok: convert a input token (read as character) to real.
-  !   If the token contains 'normal', return 1.0e30 (face-normal flag).
-  !   Otherwise parse as a floating-point number.
+  !> Convert an input token to a real; a token containing 'normal' returns the face-normal sentinel.
   pure function parse_dir_tok(tok) result(val)
     implicit none
     character(len=*), intent(in) :: tok
@@ -1002,10 +931,7 @@ contains
   end function parse_dir_tok
 
 
-  !─────────────────────────────────────────────────────────────────────────────
-  ! countTokens: number of whitespace-separated tokens in a string.
-  !   Used by the BC reader to accept legacy (shorter) property lines without
-  !   error; missing columns default to 0 in the caller.
+  !> Number of whitespace-separated tokens in a string.
   pure function countTokens(s) result(n)
     implicit none
     character(len=*), intent(in) :: s

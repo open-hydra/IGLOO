@@ -21,6 +21,7 @@ module IGLOO_Lib_Evaporation
 
 contains
 
+    !> Map the evaporation model word to evapSelect.
     subroutine assign_evaporation(evaporation_word,evapSelect)
         implicit none
         character(len=*), intent(in)  :: evaporation_word
@@ -40,15 +41,6 @@ contains
         case('TC')
             evapSelect = 5
         case('LEB')
-            !> LEB has no dispatch case in evaporation(): selecting it silently disabled
-            !  phase change. Reject until implemented.
-            !> Intended model: Zuo-Gomes-Rutland superheat/boiling (IJER 1(4):321, 2000; OpenFOAM
-            !  liquidEvaporationBoil). Other unimplemented candidates surveyed in
-            !  plan-bucket/evaporation-models-litreview.md: finite-conductivity 2-temp
-            !  (A-S 1989/Sazhin 2004, MODERATE),
-            !  multicomponent distillation-curve (Burger 2003, MODERATE). Metal branch (Al d^n
-            !  burn law, Al2O3 solidification) needs a NEW RHS family, not an evaporation case
-            !  (ibid., "Metal-phase" section).
             write(*,*) "[ERROR] LEB evaporation model is not implemented"
             error stop 'IGLOO: evaporation=LEB is not implemented'
         case default
@@ -67,8 +59,7 @@ contains
 
     end subroutine assign_evaporation
 
-    !> Composable phase-change axes: word -> selector mappers. Selectors default to
-    !  0 = the hard-wired behavior; unimplemented nonzero values are rejected at material setup.
+    !> Composable phase-change axes: word -> selector mappers (0 = default behavior).
 
     !> Liquid-side conduction: 0 ITC (infinite conductivity), 1 P2T parabolic (not implemented).
     subroutine assign_liquid(word, liqSelect)
@@ -115,9 +106,8 @@ contains
         end select
     end subroutine assign_blowing
 
-    !> MHB98 eq.19: f2 = b/(exp(b)-1) with b = -(3/2)*Pr_G*tau_d*mdot/m_d (their eq.17), the
-    !  quasi-steady reduction of convective heat transfer by the outgoing vapour (Stefan blowing).
-    !  b->0 gives f2->1 exactly; returns 1 whenever the state cannot produce a valid b.
+    !> Stefan-blowing heat-transfer factor f2 = b/(exp(b)-1), b = -(3/2) Pr tau_d mdot/m_d
+    !  (MHB98 eq.17-19); returns 1 when b cannot be formed.
     pure function blowingFactor(gamma, Rg, mug, kg, rhop, dp, mp, mdot) result(f2)
         implicit none
         real(R8), intent(in) :: gamma, Rg, mug, kg, rhop, dp, mp, mdot
@@ -149,8 +139,7 @@ contains
         end select
     end subroutine assign_boiling
 
-    !> Metal combustion: 0 off, 1 Beckstead d^n burn law. Mutually exclusive with
-    !  evaporation per material (a particle either evaporates or burns).
+    !> Metal combustion: 0 off, 1 Beckstead d^n burn law (exclusive with evaporation per material).
     subroutine assign_combustion(word, combSelect)
         implicit none
         character(len=*), intent(in)  :: word
@@ -164,8 +153,7 @@ contains
         end select
     end subroutine assign_combustion
 
-    !> Solidification: 0 off, 1 supercool+recalescence (not implemented). String-parsed on|off
-    !  (FiNeR get(logical) does a bare read(*) and rejects on/off).
+    !> Solidification: 0 off, 1 supercool+recalescence (not implemented); on|off parsed as strings.
     subroutine assign_solidification(word, solidSelect)
         implicit none
         character(len=*), intent(in)  :: word
@@ -181,6 +169,8 @@ contains
     end subroutine assign_solidification
 
 
+    !> Evaporation rate mdot (< 0) and, for the models that provide it, the gas-side heat Qdot_evap:
+    !  Clausius-Clapeyron psat, surface fraction, Spalding BM, gas-side model, optional LK interface.
     pure subroutine evaporation(rhog, Tg, gamma, Rg, mug, kg, &
                                  Tp, dp, Re, cpFactor, evapSelect, intfSelect, ep, &
                                  mdot, Qdot_evap, override_Qdot)
@@ -282,7 +272,7 @@ contains
                     md = mdNew; Qd = QdNew; ovr = ovrNew
                     return
                 endif
-                !> Plain while contracting; damp on expansion (risk R4 oscillation guard)
+                !> damped update on expansion
                 if (diff < diffPrev) then; md = mdNew; else; md = 0.5_R8*(md + mdNew); endif
                 diffPrev = diff
             enddo
@@ -310,11 +300,7 @@ contains
     end function mass2molar
 
 
-    !===================================================================!
-    !  Model 1: d²-law (Godsave 1953)                                  !
-    !  Stagnant film (Sh=2, Nu=2), quasi-steady                        !
-    !  Ref: Godsave (1953) eq.(13), Spalding (1954)                    !
-    !===================================================================!
+    !> Model 1: d²-law (Godsave 1953, Spalding 1954); stagnant film Sh=Nu=2, quasi-steady.
     pure subroutine d2law(Tg, kg, Tp, dp, cpg, Lv, mdot)
         implicit none
         real(R8), intent(in)  :: Tg, kg, Tp, dp, cpg, Lv
@@ -331,11 +317,7 @@ contains
     end subroutine d2law
 
 
-    !===================================================================!
-    !  Model 2: CEM — Classical Evaporation Model (Spalding 1954)      !
-    !  Convective correction via Ranz-Marshall Sh                      !
-    !  Ref: Spalding (1954), Fluent diffusion-controlled model         !
-    !===================================================================!
+    !> Model 2: CEM, classical evaporation model (Spalding 1954) with Ranz-Marshall Sh.
     pure subroutine CEM_model(rhog, kg, dp, Mg, cpg, Sc, Re05, BM, Le, mdot)
         implicit none
         real(R8), intent(in)  :: rhog, kg, dp, Mg, cpg, Sc, Re05, BM, Le
@@ -349,10 +331,7 @@ contains
     end subroutine CEM_model
 
 
-    !===================================================================!
-    !  Model 3: CEM-B — CEM with 1/3 rule film correction             !
-    !  Ref: Hubbard-Denny-Mills (1975), Abramzon-Sirignano eq.(4)      !
-    !===================================================================!
+    !> Model 3: CEM-B, CEM with the 1/3-rule film correction (Hubbard-Denny-Mills 1975).
     pure subroutine CEMB_model(rhog, Tg, mug, kg, Tp, dp, Mg, cpg, Re05, Ys, BM, Le, mdot)
         implicit none
         real(R8), intent(in)  :: rhog, Tg, mug, kg, Tp, dp, Mg, cpg, Re05, Ys, BM, Le
@@ -377,11 +356,7 @@ contains
     end subroutine CEMB_model
 
 
-    !===================================================================!
-    !  Model 4: ASM — Abramzon-Sirignano Model (1989)                  !
-    !  Extended film with Stefan flow correction                       !
-    !  Ref: Abramzon & Sirignano (1989) eq.(8)-(24)                    !
-    !===================================================================!
+    !> Model 4: ASM, Abramzon-Sirignano (1989) extended film with Stefan-flow correction.
     pure subroutine ASM_model(rhog, Tg, kg, Tp, dp, Mg, cpg, Pr, Sc, Re05, Ys, BM, &
                               Le, cpv, cpFactor, mdot, Qdot_evap, override_Qdot)
         implicit none
@@ -405,8 +380,7 @@ contains
         !> Mass transfer rate [eq. 8]
         mdot = -pi * dp * rhog * Dv * Sh_star * lnBM
 
-        !> Step 2: Modified Nusselt (heat transfer)
-        !  cpv_eff: vapor specific heat (from INI or approximation)
+        !> Step 2: modified Nusselt (heat transfer)
         if (cpv > 0._R8) then
             cpv_eff = cpv
         else
@@ -415,8 +389,7 @@ contains
 
         Nu0 = 2._R8 + 0.552_R8 * Re05 * Pr**(1._R8/3._R8)  ! Frossling
 
-        !> Iterative phi-BT-FT-Nu* loop [eq. 22-23]
-        !  Initialize: phi=1 (Le=1, cpv=cpg limit)
+        !> iterative phi-BT-FT-Nu* loop [eq. 22-23]
         Nu_star = Nu0
         do iter = 1, 5
             phi = cpv_eff / cpg * Sh_star / Nu_star / Le  ! eq. 22
@@ -430,8 +403,7 @@ contains
             Nu_star = 2._R8 + (Nu0 - 2._R8) / FT         ! eq. 11
         enddo
 
-        !> Step 3: gas-side heat Q_G [eq. 20], positive into the droplet; the F(7)
-        !  assembly adds the latent sink mdot*Lv itself, so Lv must NOT appear here.
+        !> Step 3: gas-side heat Q_G [eq. 20], positive into the droplet, latent sink excluded
         if (BT > 0._R8) then
             Qdot_evap = -mdot * cpv_eff * (Tg - Tp) / BT * cpFactor
         else
@@ -441,13 +413,8 @@ contains
     end subroutine ASM_model
 
 
-    !===================================================================!
-    !  Model 5: TC — Tonini-Cossali analytical model (2012)            !
-    !  Variable-density Stefan-Fuchs: molar Stefan flow through the    !
-    !  exact quiescent T(r); single monotone transcendental for m̂      !
-    !  Ref: Tonini-Cossali IJTS 57 (2012) 45; Antonov et al. IJMF 179  !
-    !  (2024) 104922 eq.(9); derivation: plan-bucket/f2-tc-derivation  !
-    !===================================================================!
+    !> Model 5: TC, Tonini-Cossali (2012) analytical variable-density Stefan-Fuchs model
+    !  (Antonov et al. 2024 eq.9): one monotone transcendental equation for m̂.
     pure subroutine TC_model(rhog, Tg, kg, Tp, dp, Mg, cpg, Pr, Sc, Re05, Ys, &
                              Le, cpv, Yinf, Mv, cpFactor, mdot, Qdot_evap, override_Qdot)
         implicit none
@@ -508,8 +475,7 @@ contains
         Sh = 2._R8 + 0.6_R8 * Re05 * Sc**(1._R8/3._R8)
         mdot = -pi * dp * rhog * Dv * Sh * mhat   ! = (Sh/2)·4π·Rd·Dv·ρ∞·m̂, ≤ 0
 
-        !> Gas-side heat with the model's own BT = e^χ-1 (from the T(r) first integral);
-        !  latent sink added by the F(7) assembly, so Lv must NOT appear here (as ASM).
+        !> gas-side heat with the model's own BT = e^chi - 1, latent sink excluded (as ASM)
         override_Qdot = .true.
         Nu  = 2._R8 + 0.6_R8 * Re05 * Pr**(1._R8/3._R8)
         chi = min(-mdot * cpv_eff / (pi * dp * kg * Nu), 700._R8)
@@ -522,10 +488,7 @@ contains
     end subroutine TC_model
 
 
-    !===================================================================!
-    !  F(B) correction factor [Abramzon-Sirignano eq. 17]              !
-    !  F(B) = (1+B)^0.7 * ln(1+B) / B                                 !
-    !===================================================================!
+    !> Abramzon-Sirignano correction factor F(B) = (1+B)^0.7 ln(1+B)/B [eq. 17].
     pure function F_correction(B) result(F)
         implicit none
         real(R8), intent(in) :: B
@@ -540,10 +503,7 @@ contains
     end function F_correction
 
 
-    !===================================================================!
-    !  Clausius-Clapeyron saturation pressure                          !
-    !  psat(T) = Patm * exp(-LvMv/Ru * (1/T - 1/Tboil))              !
-    !===================================================================!
+    !> Clausius-Clapeyron saturation pressure psat(T) = Patm exp(-LvMv/Ru (1/T - 1/Tboil)).
     pure function psat_CC(T, LvMvOverRu, invTboil) result(psat)
         implicit none
         real(R8), intent(in) :: T, LvMvOverRu, invTboil

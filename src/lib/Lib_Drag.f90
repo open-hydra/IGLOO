@@ -1,3 +1,4 @@
+!> Drag-coefficient correlations Cd(Re, Ma, gamma, Tr) selected by keyword.
 module IGLOO_Lib_Drag
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   implicit none
@@ -7,6 +8,7 @@ module IGLOO_Lib_Drag
 
 contains
 
+  !> Maps the [IGLOO-Models] drag-model keyword to dragSelect.
   subroutine assign_drag(drag_word,dragSelect)
     implicit none
     character(len=*), intent(in)  :: drag_word
@@ -63,6 +65,7 @@ contains
 
   end subroutine assign_drag
 
+  !> Dispatches to the selected drag correlation.
   pure function drag(Re,Ma,G,Tr,dragSelect) result(Cd)
     use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
     implicit none
@@ -160,7 +163,7 @@ contains
     if (Re <= 1000) then
       Cd = 24._R8/(Re+toll) * (1._R8+0.15_R8*Re**0.687_R8)
     else
-      Cd = 0.43_R8   ! plateau per Shimada2006 eq.16 (the step at Re=1000 is in the published form)
+      Cd = 0.43_R8   ! plateau per Shimada2006 eq.16
     endif
 
   end function drag_Wen_Yu
@@ -176,7 +179,7 @@ contains
     if (Re < 1000) then
       Cd = 24._R8/(Re+toll) * (1._R8+Re**(2._R8/3._R8)/6._R8)
     else
-      Cd = 0.4392_R8 ! plateau per Shimada2006 eq.17 (the C0 jump at Re=1000 is in the published form)
+      Cd = 0.4392_R8 ! plateau per Shimada2006 eq.17
     endif
     
   end function drag_Putnam
@@ -207,8 +210,7 @@ contains
     
   end function drag_Carlson_Hoglund
 
-  !> Henderson Drag Model
-  !> Subsonic Flow
+  !> Henderson drag model, subsonic branch (Ma <= 1).
   pure function drag_Henderson_1(Re,Ma,G,Tr) result(Cd)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
@@ -223,7 +225,7 @@ contains
 
   end function drag_Henderson_1
 
-  !> High Supersonic Flow
+  !> Henderson drag model, supersonic branch (Ma >= 1.75).
   pure function drag_Henderson_2(Re,Ma,G,Tr) result(Cd)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
@@ -237,6 +239,7 @@ contains
 
   end function drag_Henderson_2
 
+  !> Henderson drag model: subsonic and supersonic branches, linear bridge for 1 < Ma < 1.75.
   pure function drag_Henderson(Re,Ma,G,Tr) result(Cd)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
@@ -252,11 +255,12 @@ contains
       Ma2 = 1.75
       Cd1 = drag_Henderson_1(Re,Ma1,G,Tr)
       Cd2 = drag_Henderson_2(Re,Ma2,G,Tr)
-      Cd = Cd1 + 4._R8/3._R8*(Ma-1._R8)*(Cd2-Cd1)  ! slope 1/(1.75-1) reaches Cd2 at Ma=1.75 (Shimada eq.22 prints 3/4: typo, discontinuous)
+      Cd = Cd1 + 4._R8/3._R8*(Ma-1._R8)*(Cd2-Cd1)  ! 4/3 = 1/(1.75-1); Shimada eq.22 prints 3/4 (typo)
     endif
 
   end function drag_Henderson
 
+  !> Crowe drag model (Shimada2006 eq.23).
   pure function drag_Crowe(Re,Ma,G,Tr) result(Cd)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
@@ -269,11 +273,11 @@ contains
     hfun = 2.3_R8 + 1.7_R8*Tr**0.5_R8 - 2.3_R8*dtanh(1.17_R8*dlog10(Ma+toll))
 
     Cd0 = drag_Wen_Yu(Re)
-    !> Shimada2006 eq.23: g(Re) multiplies M/Re in the bridge exponent; the rarefaction exp is a decaying multiplier
     Cd = 2._R8 + (Cd0-2._R8)*exp(-3.07_R8*G**0.5_R8*Ma*gfun/(Re+toll)) + hfun/(Ma*G**0.5_R8+toll)*exp(-Re/(2*Ma+toll))
 
   end function drag_Crowe
 
+  !> Hermsen drag model (Shimada2006 eq.24).
   pure function drag_Hermsen(Re,Ma,G,Tr) result(Cd)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
@@ -285,11 +289,11 @@ contains
     hfun = 5.6_R8/(1._R8+Ma) + 1.7_R8*Tr**0.5_R8
 
     Cd0 = drag_Wen_Yu(Re)
-    !> Shimada2006 eq.24: g(Re) multiplies M/Re in the bridge exponent; the rarefaction exp is a decaying multiplier
     Cd = 2._R8 + (Cd0-2._R8)*exp(-3.07_R8*G**0.5_R8*Ma*gfun/(Re+toll)) + hfun/(Ma*G**0.5_R8+toll)*exp(-Re/(2*Ma+toll))
 
   end function drag_Hermsen
 
+  !> Morsi-Alexander drag model: a1 + a2/Re + a3/Re^2, piecewise over eight Re ranges.
   pure function drag_Morsi_Alexander(Re) result(Cd)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none

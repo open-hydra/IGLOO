@@ -8,6 +8,8 @@ module Lib_Integration
 
 contains
 
+  !> Integrate one particle from its current state to domain exit (or burnout) through the
+  !  steady gas field, one cell segment at a time, depositing source and Eulerian moments.
   subroutine integrate(part,geoblock,gasblock,srcblock,eulblock,     &
                         hTab,cpTab,rhoTab,mupTab,sigTab,psatTab, shed,noShed)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
@@ -43,12 +45,9 @@ contains
     type(obj_eulerblock),  intent(inout) :: eulblock(nb)
     real(R8),              intent(in)    :: hTab(:),cpTab(:),rhoTab(:),     &
                                             mupTab(:),sigTab(:),psatTab(:)
-    !> This parent's shed list. `intent(inout)` is REQUIRED -- see the warning on the type.
+    !> This parent's shed list (intent(inout) required).
     type(shedList),        intent(inout), optional :: shed
-    !> B2: caller is on the LAST generation pass -- a child created now would never be
-    !  integrated and would never write `unitExit`, so its mdot would simply vanish from the
-    !  outloc total (silent mass loss, no crash). Told in advance, the parent keeps the mass
-    !  instead of shedding it into a parcel that gets discarded: exact by construction.
+    !> True on the last generation pass: sheds are suppressed and the parent keeps the mass.
     logical,               intent(in),    optional :: noShed
     !> local variables
     type(obj_shed) :: shedRec   !> staged child record, pushed once complete
@@ -58,23 +57,18 @@ contains
     real(R8) :: entryPos(3)   ! cell-entry position, for the closed-form body-force work (models 1,3)
     real(R8) :: pMid(3)       ! segment mid position: azimuth of the meridian-frame source deposit
     real(R8) :: wAcc          ! scatter-cloud npdot-weight accumulator (host-associated into solout)
-    !> Scatter-cloud output buffer. `unitScat` is written from INSIDE `!$OMP PARALLEL DO`, so emitting
-    !  one record at a time took the Fortran unit lock once per record -- measured as ~47 % of serial
-    !  runtime on khrt-stress and an INVERSION of thread scaling (5 threads slower than 1). Records are
-    !  formatted into this buffer and emitted by flushScat in ONE write statement, so the lock is taken
-    !  once per SCATCAP records instead of once per record. Automatic array, no initializer: an
-    !  initializer would make it implicit-SAVE and therefore shared across threads (work package A).
+    !> Scatter-cloud output buffer, flushed by flushScat in one write. No initializer: it would imply SAVE.
     integer, parameter :: SCATLEN = 128, SCATCAP = 4096
     character(len=SCATLEN) :: scatBuf(SCATCAP)
     integer  :: nScat, iScat
     integer  :: neq, nsp, ng, b, i, j, k, ngVert, iu, iw, it, iter, nCross, nE, nStall
     real(R8) :: posPrev(3)    ! last outer-iter position, for the zero-progress guard
     logical  :: doLoop, IamOut, newGas, eventType, eventFlag, exitLoop, startedOut, burnedOut
-    logical  :: sectorOut  !> wedge: the segment ended on a k-plane (azimuth left the band; the x-y cell is unchanged)
-    logical  :: foldOnly   !> ... and on nothing else: neither a crossing (no row, nCross untouched) nor residency
+    logical  :: sectorOut  !> wedge: the segment ended on a k-plane
+    logical  :: foldOnly   !> sector fold with no cell crossing
     integer  :: nSect
     logical  :: consumed   !> droplet ended INSIDE the domain with mass still on it
-    logical  :: atGasBoundary, wasBoundary   ! ord2 C2: geo consulted only at gas-boundary cells
+    logical  :: atGasBoundary, wasBoundary   ! ord2: geo consulted only at gas-boundary cells
     real(R8) :: geoHexNorms(3,2,6), geoHexCentroids(3,2,6)
     real(R8) :: gasHexNorms(3,2,6), gasHexCentroids(3,2,6)
     logical  :: geoHexDegen(2,6), gasHexDegen(2,6)
@@ -82,35 +76,21 @@ contains
     !> accessed by ODEsystem, rhs1-4, solout via host association
     real(R8) :: y(part%neq), oldLocal(part%neq)
     real(R8) :: auxLocal(nauxvar), childState(nchild)
-    logical  :: addChildLocal   !> breakupEvent's shed flag; a present target even when `shed` is absent
-    logical  :: childDone       !> B2: sheds suppressed for this whole call (terminal pass)
+    logical  :: addChildLocal   !> breakupEvent's shed flag
+    logical  :: childDone       !> sheds suppressed for this whole call
     real(R8), allocatable :: stateLocal(:), oldStLocal(:)
     real(R8), allocatable :: eventLocal(:), oldEvLocal(:)
-    !> ETAB's product-velocity kick (Tanner-97 eqs 8-10) is applied by breakupEvent to solout's
-    !  OWN state vector -- the ODE solver's working array, not `y`. On the IRTRN=-2724 abort OSlo
-    !  returns the last ACCEPTED state, so the kick never reaches the caller and is discarded.
-    !  Carry it across as a DELTA (not the whole velocity) so only the kick is transported and the
-    !  segment still resumes from the accepted state.
+    !> ETAB product-velocity kick, carried out of the aborted step as a delta.
     real(R8) :: kickDV(3)
     logical  :: kickPend
     real(R8) :: timeLocal, din, dout, deltaS(3), dir(3), taup
     integer  :: err, nDL, innerIter, jSlot
     integer,  parameter :: maxInnerIter=10, nStep=10
-    !> Runaway-shed guard: hard cap on child parcels one parent may shed in one call. Sized
-    !  ~100x the worst observed physical value (khrt-e2e peaks in the tens), so reaching it
-    !  means a mis-parameterised case (e.g. mShedLim driven to ~0), not normal operation.
+    !> Hard cap on child parcels one parent may shed in one call.
     integer,  parameter :: maxShed=1000
     real(R8), parameter :: safety=0.99, dtMin=1.e-14_R8, tauFactor=100._R8
     real(R8), parameter :: escapeDist=1.e-6_R8   ! min displacement per sliver-escape hop (startedOut)
-    !> Burnout tolerance: absolute threshold on droplet MASS [kg]. A consuming droplet
-    !  (evaporation/combustion) is declared fully consumed at m <= mBurnTol, stopping on a
-    !  still-good state and staying out of the m->0 region where d=(6m/(pi*rho))^(1/3) has
-    !  unbounded slope and the state vector goes NaN. Mass is the ODE state y(8), so the
-    !  test is exact. 1e-15 kg is d ~ 1.24 um for water.
-    !  Two limits pull opposite ways if this value is changed: particles injected below it
-    !  are killed at injection (so sub-micron injection needs it lowered), while a case whose
-    !  solver cannot reach it ends through the [WARNING] path instead (outputs stay correct).
-    !  A threshold relative to the injected mass would satisfy both.
+    !> Burnout threshold on droplet mass [kg]: a consuming droplet at m <= mBurnTol is declared consumed.
     real(R8), parameter :: mBurnTol=1.e-15_R8
 
     nScat = 0            !> before every exit path, so flushScat is always well-defined
@@ -123,8 +103,6 @@ contains
 
     !> ARRAYS ALLOCATION
     addChildLocal = .false.
-    !> Seeded true on the terminal pass (B2) so the shed is suppressed before it ever commits,
-    !  not after: `breakupEvent` reads this as `childPending` and leaves the parent intact.
     childDone     = .false.
     if (present(noShed)) childDone = noShed
     allocate(gasState(ng))
@@ -179,19 +157,8 @@ contains
 
       if (trajOn) write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID
     endif
-    !> A23f: the block index MUST be resolved for every entry, not just the `time==0` one.
-    !  It was only set at L122 inside the injection-init block, so any particle entering with
-    !  time /= 0 reached the source deposition (`srcblock(b)`) with `b` UNINITIALIZED. That was
-    !  latent forever because nothing ever entered with time /= 0 -- until KH-shed children,
-    !  which inherit the parent's time. Debug build: "Subscript #1 of SRCBLOCK has value 5271
-    !  which is greater than the upper bound of 1" -- stale stack garbage, hence intermittent.
+    !> Block index and cell-entry state for every entry (children enter with time /= 0).
     b = part%i(1)
-    !> A23g: same class as A23f, for the cell-entry geometry and gas state. `vert` (with its
-    !  norms/centroids/degen companions), `gasVert` and `gas` were filled only inside the
-    !  `time==0` block, yet computeDeltat(vert) runs on EVERY outer-loop entry below and `gas`
-    !  feeds drag, heat and the whole breakup event path -- so a particle entering with
-    !  time /= 0 sized its first step off uninitialized stack and integrated that segment
-    !  against uninitialized gas. Only the non-finite case was caught, by the deltat guard.
     call refreshCellEntry()
     !> Pack auxiliary variables once (constant throughout integration)
     call packAuxVars(part, nauxvar, auxLocal)
@@ -199,8 +166,7 @@ contains
     !> TRAJECTORY INTEGRATION LOOP
     iter = 0; nCross=0; tprint = part%time + dtprint
     nStall = 0; posPrev = part%stateVar(1:3) - 1._R8
-    !> Scatter accumulator, seeded with a per-ID phase offset (golden-ratio low-discrepancy)
-    !  so neighbouring streams don't drop points in lockstep => no banding. Deterministic.
+    !> Scatter accumulator, seeded with a per-ID golden-ratio phase offset.
     wAcc = dNscat * mod(real(part%ID,R8)*0.6180339887498949_R8, 1._R8)
     do while (part%time<tlimit.and.iter<maxIter)
       iter = iter+1
@@ -211,7 +177,7 @@ contains
       if (ord2) then; deltat = part%computeDeltat(gasVert)
                       if (atGasBoundary) deltat = min(deltat, part%computeDeltat(vert))
       else;           deltat = part%computeDeltat(vert); endif
-      !> Cap deltat by particle drag relaxation taup = rho_p*d^2/(18*mu_g).
+      !> Drag relaxation time taup; a non-finite deltat falls back to tauFactor*taup.
       if (part%d > 0._R8 .and. any(gas(6,:) > toll)) taup   = part%rho * part%d**2 / (18._R8 * maxval(gas(6,:)))
       if (.not. ieee_is_finite(deltat)) deltat = tauFactor * taup
 
@@ -222,6 +188,7 @@ contains
       innerIter = 0
       do while (doLoop)
         innerIter = innerIter + 1
+        !> Hard cap on the segment loop.
         if (innerIter > maxInnerIter) then
           write(*,'(a,i0,a,i0,a)')                          &
             '[WARNING] Inner loop > ',maxInnerIter,' iter, part=',part%ID,' ==> marking gone'
@@ -235,16 +202,13 @@ contains
             
       if (sourceSwitch) then
         call part%computeSource(massOut,Pout,Eout)
-        !> Two-phase conservation on burnout: the cell source is the net parcel flux
-        !  (in - out), so a droplet consumed inside the cell has zero outgoing flux and its
-        !  whole remnant transfers to the gas. Consumption only (models 2/5) -- a particle
-        !  that exits the domain keeps its outgoing flux.
+        !> A droplet consumed inside the cell has zero outgoing flux.
         if (consumed) then
           massOut = 0._R8
           Pout    = 0._R8
           Eout    = 0._R8
         endif
-        !> Body-force source-reaction correction: (Pin-Pout) and (Ein-Eout) absorbed the body force
+        !> Body-force source-reaction correction.
         if (srcBodyForce) then
           select case(part%model)
           case(2,5)      ! J,W at neq-1,neq;
@@ -259,9 +223,7 @@ contains
             Ein = Ein + (part%mdot * dot_product(bodyAccel, part%stateVar(1:3) - entryPos))
           end select
         endif
-        !> Axisymmetric wedge: the segment's momentum exchange (Pin - Pout, Cartesian at the parcel's
-        !  azimuth) goes into the meridian-plane source in the (axial, radial, azimuthal) frame at
-        !  the segment's mid azimuth. Identity on the meridian plane (z = 0), so non-wedge runs are untouched.
+        !> Wedge: rotate the momentum exchange into the meridian frame at the segment's mid azimuth.
         if (axisym) then
           pMid = 0.5_R8 * (entryPos + part%stateVar(1:3))
           Pin  = toMeridian(Pin,  pMid)
@@ -275,8 +237,7 @@ contains
         endif
       endif
 
-      !> Source forcing terms. ord2=true → accumulate on gasblock (staggered)
-      !  cells using part%igas; ord2=false → keep geoblock accumulation as today.
+      !> Eulerian moments, deposited on the gas dual cell (ord2) or the geo cell.
       if (eulerSwitch) then
         if (ord2) then
           call computeEulField(part, eulblock(b), part%igas(1), part%igas(2), part%igas(3))
@@ -285,10 +246,7 @@ contains
         endif
       endif
 
-      !> Sector exit (wedge): the segment ended past a k-plane (by more than sectorTol, so the fold's
-      !  nint is +-1), the (x, r) cell is unchanged and only the azimuth left the band. Fold here,
-      !  after the deposits (already in the meridian frame) and before the cell logic (no cell owns
-      !  an off-sector point).
+      !> Wedge sector exit: fold the azimuth back into the band after the deposits, before the cell logic.
       foldOnly = sectorOut .and. .not.(newGas .or. IamOut)
       if (sectorOut) then
         call axisymFold(part%stateVar, nSect=nSect)
@@ -296,7 +254,7 @@ contains
           !$OMP ATOMIC
           nSectorFold = nSectorFold + 1
         else
-          part%Ncell = part%Ncell + 1   ! cannot happen (sectorTol); if it does, nMaxCell reports it
+          part%Ncell = part%Ncell + 1   ! no fold: counted as residency
         endif
         if (nSect > 1) then
           !$OMP ATOMIC
@@ -329,18 +287,15 @@ contains
             call part%updateCell(geoblock); call handleGeoEvent()
           endif
         endif
-        !> Geo domain-exit / BC: IamOut is only ever true while already at a boundary
-        !  cell (solout gates it). bcDef may reflect -> handleGeoEvent re-resolves igas.
+        !> Geo domain exit / BC handling.
         if (IamOut) then
           call part%updateCell(geoblock); call handleGeoEvent()
         endif
-        !> Stuck detection on gas-cell residency (geo index is stale in the interior). A sector
-        !  fold is neither a crossing (no row, nCross untouched) nor residency (nMaxCell would
-        !  count the many folds a spinning parcel makes inside one cell).
+        !> Residency count on the gas cell; a pure sector fold is neither a crossing nor residency.
         if (newGas .or. IamOut) then; nCross = nCross + 1; part%Ncell = 0
         elseif (.not.foldOnly) then;  part%Ncell = part%Ncell + 1; endif
       else
-        !> ord1: geo-driven (unchanged).
+        !> ord1: geo-driven.
         if (IamOut) then
           call part%updateCell(geoblock); b = part%i(1)
           call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen)
@@ -353,8 +308,7 @@ contains
         elseif (IamOut) then;   nCross = nCross + 1;   part%Ncell = 0; endif
       endif
 
-      !> Axisymmetric wedge safety net: a segment can still end past a k-plane when an x-y crossing
-      !  and the sector edge fall within eps of each other (the crossing wins the refinement).
+      !> Wedge safety net: fold a segment that ended past a k-plane together with an x-y crossing.
       if (axisym) then
         call axisymFold(part%stateVar, nSect=nSect)
         if (nSect > 0) then
@@ -372,8 +326,7 @@ contains
         part%gone=.true.
       endif
 
-      !> Zero-progress guard: a sliver-pinned particle "crosses" every iter (resetting Ncell) with
-      !  no net motion -> invisible to nMaxCell; catch it on displacement instead.
+      !> Zero-progress guard on displacement.
       if (norm2(part%stateVar(1:3)-posPrev) > eps) then; nStall = 0
       else;                                              nStall = nStall + 1; endif
       posPrev = part%stateVar(1:3)
@@ -396,8 +349,7 @@ contains
 
     enddo
 
-    !> Outer-loop maxIter silent-exit. If we ran out of iterations without the particle being marked gone,
-    !  flag and write to unitExit so callers see a recognizable terminal state.
+    !> Outer-loop maxIter exit: flag the particle gone and write its exit record.
     if (iter >= maxIter .and. .not. part%gone) then
       write(*,'(A,I4,A,I0,A)') '       ==> Particle ',part%ID,' hit outer maxIter (',maxIter,'); flagging gone'
       part%gone = .true.
@@ -405,26 +357,21 @@ contains
       write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8)')                                          &
             part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), part%angle, part%mdot, part%Af, part%ID
     endif
-    !> Third and last exit: fall-through past the outer loop. integrate has exactly three ways out
-    !  (this one plus the two `return`s above) and every one of them flushes.
+    !> Every exit path flushes the scatter buffer.
     call flushScat()
 
   contains
 
-    !> Emit the buffered scatter records with ONE write statement: with format '(A)' the format
-    !  reverts per output item, so N items produce N records under a single unit-lock acquisition.
-    !  `trim` keeps each record byte-identical to the direct write it replaces (the format produces
-    !  118 characters; the buffer is 128 and the tail is blank).
+    !> Emit the buffered scatter records in one write statement.
     subroutine flushScat()
       if (nScat <= 0) return
       write(unit=unitScat,fmt='(A)') (trim(scatBuf(iScat)), iScat=1,nScat)
       nScat = 0
     end subroutine flushScat
 
-    !============================================================================================!
-    !  ODEsystem — internal procedure, accesses integrate's locals via host association          !
-    !============================================================================================!
 
+    !> Integrate one trajectory segment: run the ODE solver on [t1,t2] under solout interrupts,
+    !  then finalize the segment (event/aux state, euler moments) or refine deltat and retry.
     subroutine ODEsystem()
       implicit none
       real(R8) :: dtNew, dtSafe
@@ -435,22 +382,18 @@ contains
       kickPend = .false.; kickDV = 0._R8
       eventType = part%brkupEvent
       addChildLocal = .false.; childState = 0._R8
-      !> A23c: `childDone` is deliberately NOT reset here -- this is the INNER (segment) loop,
-      !  nested inside the outer cell-crossing loop, so a per-segment reset clobbered a child
-      !  created earlier in the trajectory. Its reset lives at integrate entry only.
+      !> childDone is reset at integrate entry only, never per segment.
       y = part%oldState
       timeLocal = part%time
       oldLocal  = y
       if (allocated(stateLocal)) then
         call packAuxState(part, nauxstate, stateLocal)
-        !> Segment-start init for the RT timer (told/tc in brkupState): without it a
-        !  first-solout crossing rolls the timer back to a stale prior segment.
+        !> Segment-start snapshot of the aux state.
         oldStLocal = stateLocal
       endif
       if (allocated(eventLocal)) then
         call packEventVar(part, neventvar, eventLocal)
-        !> Segment-start init for the oscillator (y,yDot): without it a first-solout
-        !  crossing rolls deformation back and the droplet never breaks.
+        !> Segment-start snapshot of the event state.
         oldEvLocal = eventLocal
       endif
       if (.not.ord2) gasState = gas(:,1)
@@ -470,26 +413,17 @@ contains
         part%gone = .true.
         return
       endif
-      !> Expected end of life: the droplet evaporated/burned away on a still-good state.
-      !  Physical, not an error => silent. Falls through to the normal finalize so
-      !  updatePart() syncs part%d/%m/%tp; returning early would leave them stale.
+      !> Burnout: the droplet was consumed on a still-good state; falls through to the normal finalize.
       if (burnedOut) then
         part%gone = .true.
         consumed  = .true.     !> remnant transfers to the gas; see the source block
       endif
 
-      !> Unexpected non-finite state: with the burnout guard above, a clean
-      !  evaporation/combustion run never reaches the degenerate m->0 region, so a NaN here is a
-      !  REAL anomaly (solver breakdown, bad gas data, ...) and must be reported. Never propagate
-      !  it: computeSource would smear NaN through the whole Eulerian source (mollifier stencil)
-      !  and write a NaN outloc record. Fall back to the last good accepted step.
+      !> Non-finite state: revert to the last good accepted step and mark the particle gone.
       if (any(y/=y)) then
         write(*,'(A,I4,A)') '[WARNING] Particle ',part%ID,                                &
                             ' non-finite state ==> reverting to last good step, marking gone'
-        !> Report how much droplet was left: if the absolute mass at failure is only somewhat
-        !  above mBurnTol, the solver simply could not integrate down to the floor (raise it, or
-        !  switch to the relative form documented at the parameter); a much larger remnant means
-        !  a genuine anomaly (solver breakdown, bad gas data) worth investigating.
+        !> Report the remaining mass fraction for mass-evolving models.
         if (mod_model==2 .or. mod_model==4 .or. mod_model==5)                              &
           write(*,'(A,ES10.3,A,ES10.3,A)') '          last good m/m0 =',                   &
                 oldLocal(8)/part%m0, '  (burnout fires at m =', mBurnTol, ' kg)'
@@ -498,31 +432,23 @@ contains
         part%oldState = oldLocal
         part%gone     = .true.
         doLoop        = .false.
-        !> A consumption model losing a droplet in-domain still has to hand its remnant to the
-        !  gas, exactly as a clean burnout does (see the source block); other models keep the
-        !  pre-existing behaviour, since their mass does not transfer by phase change.
+        !> Consumption models hand the remnant to the gas as on a clean burnout.
         if (mod_model==2 .or. mod_model==5) consumed = .true.
-        !> sync d/m/tp from the REVERTED (good) state; the normal finalize is skipped here
-        !  because stateLocal/eventLocal may themselves be contaminated.
+        !> Sync d/m/tp from the reverted state.
         call part%updatePart(rhoTab,hTab,eulerSwitch)
         return
       endif
       part%stateVar = y
       part%time     = timeLocal
       part%oldState = oldLocal
-      !> Transport ETAB's product-velocity kick out of the discarded step (see kickDV above).
-      !  Both states get it: stateVar is this segment's result, oldState is what the next
-      !  segment resumes from -- without the latter the kick is reverted one segment later.
+      !> Apply the ETAB velocity kick to both the segment result and the resume state.
       if (kickPend) then
         part%stateVar(4:6) = part%stateVar(4:6) + kickDV
         part%oldState(4:6) = part%oldState(4:6) + kickDV
       endif
-      !> Full [t1,t2] consumed with no interrupt (solver reached XEND): finalize the segment;
-      !  re-invoking on the null interval [t2,t2] hands SDIRK4 H=0 -> IDID=-1 -> spurious kill.
-      !  Outer loop re-budgets deltat from the current (possibly decelerated) velocity.
+      !> Segment consumed with no interrupt: finalize, never re-invoke on the null interval.
       if (.not.(IamOut .or. newGas .or. eventFlag .or. sectorOut)) exitLoop = .true.
-      !> startedOut escape hop: finalize at the moved position (no refinement — it would re-integrate
-      !  from the sliver start and discard the motion); updateCell then relocates from there.
+      !> Sliver-escape hop: finalize at the moved position without refinement.
       if (startedOut) exitLoop = .true.
       if (exitLoop) then
         doLoop = .false.
@@ -530,20 +456,13 @@ contains
           if (allocated(eventLocal)) then
             part%npold = oldEvLocal(ind_evn)
             call unpackEventVar(eventLocal, part, neventvar)
-            !> An event resized the droplet, but models 1/2 freeze per-droplet d and m in
-            !  auxLocal at injection: resync, else the next segment recomputes d from the
-            !  stale aux and reverts the breakup.
+            !> Resync the frozen per-droplet d and m in auxLocal after an event.
             if (ind_d > 0) auxLocal(ind_d) = part%d
             if (ind_m > 0 .and. mod_model /= 3) then
               part%m          = part%rho * part%d**3 / sixOverPi
               auxLocal(ind_m) = part%m
             endif
-            !> Model 3 keeps the per-droplet count in the ODE state y(8), with d derived from
-            !  it and the parcel mass-flow. Take the event (d, npdot) as truth: push npdot into
-            !  y(8) and re-derive mdot to match, which conserves parcel mass for both sub-events
-            !  (RT split leaves mdot alone; KH shed drops it by (dParent/dp)^3).
-            !  Guarded on eventFlag: on a no-event finalize part%npdot is stale, and writing it
-            !  into y(8) would freeze the continuous KH stripping.
+            !> Model 3: push the event's npdot into y(8) and re-derive mdot from (d, npdot).
             if (eventFlag .and. mod_model == 3 .and. part%d > 0._R8 .and. ind_m > 0) then
               part%stateVar(8) = part%npdot
               part%oldState(8) = part%npdot
@@ -554,7 +473,7 @@ contains
         endif
         if (allocated(stateLocal)) call unpackAuxState(stateLocal, part, nauxstate)
         if (eulerSwitch) then
-          !> Euler moments end at nE; with a body force only W (slot neq) trails them — drop it.
+          !> Euler moments end at nE (the body-force slot W trails them).
           nE = neq; if (part%bodyAccum) nE = neq - 1
           part%deltaL           = y(nDL)
           part%intE(1:(nE-nDL)) = y(nDL+1:nE)
@@ -562,22 +481,9 @@ contains
         part%time  = t1
         part%Tstay = t1 - tStart
         call part%updatePart(rhoTab,hTab,eulerSwitch)
-        !> A23h: capture the WHOLE child record here, at the shed point, in one latched place.
-        !  The origin half (ipos/igas/pos/temp/time) used to live in the outer loop guarded only
-        !  by `addChild`, which is latched -- so it re-ran on every later outer iteration and
-        !  walked the child forward to wherever the PARENT ended up, while vel/diam/npdot stayed
-        !  from the shed commit. Measured: all 25 children were born at the parent's exit
-        !  (x = 0.150000, the domain boundary) and left without integrating. Mass conservation
-        !  cannot see this -- the shed mass is right wherever you put it.
-        !  Placed after updatePart so part%tp is this segment's temperature, not the previous
-        !  segment's; part%i/%igas are still the shed cell (crossings are handled further down).
-        !  A23c: LATCH -- only the FIRST child of this call is kept (single child slot per
-        !  parent), and childDone then suppresses further sheds so the parent is not stripped
-        !  for a child that would be discarded.
+        !> Capture the child record at the shed point (after updatePart, before the crossing logic)
+        !  and push it onto the parent's shed list.
         if (eventType .and. present(shed)) then
-          !> Unbounded: a parent sheds as many times as the physics fires, each push appending
-          !  to its own list. The old single-slot design capped this at one shed per parent per
-          !  call -- a limit imposed by the data structure, not by Reitz-87.
           if (addChildLocal .and. .not. childDone) then
             shedRec%vel   = childState(1:3)
             shedRec%diam  = childState(4)
@@ -588,9 +494,7 @@ contains
             shedRec%temp  = part%tp
             shedRec%time  = t1
             call shed%push(shedRec)
-            !> Runaway guard. Suppressing rather than aborting keeps mass exact: the parent
-            !  simply retains what it would have shed, the same mechanism the terminal pass
-            !  uses. Loud, because reaching this means the case is mis-parameterised.
+            !> Shed cap: suppress further sheds, the parent keeps the mass.
             if (shed%n >= maxShed) then
               childDone = .true.
               write(*,'(A,I0,A,I0,A)') '[WARNING] Particle ',part%ID,                  &
@@ -609,11 +513,7 @@ contains
           elseif (newGas)    then; din = part%computeDs(gasVert,dir)
           elseif (sectorOut) then; din = sectorDs(part%oldState(1:3),dir)   ! exact: the k-plane is a plane
           else;                    din = dout/nStep; endif
-          !> computeDs is only reached once a crossing is already flagged (IamOut/newGas). din<=0
-          !  means its Möller-Trumbore refine failed to pin the just-crossed face (isPointInsideCell
-          !  vs triangle-split tolerance at sub-1e-5 proximity), NOT that there is no face. Keep
-          !  converging at the interior rate so deltat & dout shrink together (~nStep cheap steps to
-          !  re-cross) instead of collapsing hmax (-> NMAX) or overshooting (-> maxInnerIter).
+          !> Refine the step toward the crossed face; on a failed face pin keep the interior rate.
           if (din > 0._R8) then; dtNew = max(deltat*min(1._R8/nStep,din/dout),dtMin)
           else;                  dtNew = deltat/nStep; endif
         else
@@ -635,6 +535,7 @@ contains
 
     end subroutine ODEsystem
 
+    !> ODE right-hand sides for models 1-5, forwarding integrate's host-associated state.
     subroutine rhs1(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
       call rhsStandard(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab, gas,gasVert,gasState, ng,ngVert)
@@ -656,10 +557,9 @@ contains
       call rhsAlCombustion(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab, gas,gasVert,gasState, ng,ngVert)
     end subroutine rhs5
 
-    !****************************************************************************************************!
-    !*  Solver output callback                                                                          *!
-    !****************************************************************************************************!
 
+    !> Solver output callback: after each accepted step it tests cell/sector crossings,
+    !  burnout and breakup events, and emits scatter-cloud samples.
     subroutine solout(NR,XOLD,X,Y,N,IRTRN)
       use IGLOO_RayFaceIntersection3D, only: isPointInsideCell
       use IGLOO_Lib_Breakup,           only: breakupEvent
@@ -675,8 +575,7 @@ contains
 
       IRTRN = 1
 
-      !> Scatter cloud: accumulate the npdot-weight of THIS accepted step (every step, incl.
-      !  the one that ends on a crossing below, so the sampling stays mesh-independent).
+      !> Scatter cloud: accumulate this step's npdot-weight.
       if (scatOn .and. dNscat>0._R8) then
         select case(mod_model)
         case(3);      np = y(8)            ! model 3: npdot is stateVar(8)
@@ -694,19 +593,13 @@ contains
       if     ( ord2 ) then; newGas = .not.isPointInsideCell(y(1:3),gasVert,mesh2D,gasHexNorms,gasHexCentroids,gasHexDegen,part%gasExitFace,sectorOut)
       elseif (IamOut) then; newGas = .true.; endif
 
-      !> Locator-lost segment (updateCell cycle-breaker fired: no cell owns the start point) =
-      !  containment sliver, not a crossing: suppress containment interrupts until the particle
-      !  has moved a real distance (escapeDist) off the sliver, instead of looping on zero progress.
+      !> Locator-lost start: suppress containment interrupts until the particle has moved escapeDist.
       if (NR == 1) startedOut = (IamOut .or. newGas) .and. part%lost
       if (startedOut .and. norm2(y(1:3)-part%oldState(1:3)) <= escapeDist) then
         IamOut = .false.; newGas = .false.; sectorOut = .false.
       endif
 
-      !> Burnout test, models 2 and 5 only: there y(8) falls by consumption alone, so it is an
-      !  honest "how much is left" and the droplet can be declared consumed while the state is
-      !  still good. Model 4 is excluded because breakup shedding also lowers y(8), so a small
-      !  mass may mean "stripped into children" -- it falls back to the [WARNING] path instead.
-      !  Models 1/3 never lose mass to consumption.
+      !> Burnout test on the droplet mass, consumption models only.
       if (mod_model==2 .or. mod_model==5) then
         if (y(8) <= mBurnTol) burnedOut = .true.   ! y(8) IS the droplet mass [kg]
       endif
@@ -723,11 +616,7 @@ contains
         case(2,4,5);  m = y(8)
         case default; m = auxLocal(ind_m)
         end select
-        !> A23b: model 3 must derive d from the CURRENT ODE state, exactly as m is derived
-        !  just above. auxLocal is packed ONCE per integrate call (L149) and resynced only at
-        !  an event finalize, so auxLocal(ind_d) is the diameter at injection/last event.
-        !  Pairing that stale d with a current m made the event path evaluate the RT trigger
-        !  (lambda_RT < d, WeGas) at the wrong drop size.
+        !> Model 3 derives d from the current ODE state.
         if (ind_d > 0 .and. mod_model /= 3) then
           d = auxLocal(ind_d)
         else
@@ -741,12 +630,7 @@ contains
         acc  = Fdrag/m
 
         eventLocal(ind_evd) = d
-        !> A23d: npdot must be refreshed alongside d. It lives in the ODE state and evolves
-        !  continuously, but eventLocal was packed at SEGMENT START, so the event saw a
-        !  current d paired with a STALE npdot. The A19 finalize then re-derives
-        !  mdot = npdot*rho*d^3*pi/6 from that inconsistent pair, so parcel mass JUMPED at
-        !  every event: the KHRT sweep CREATED ~29% mass before A23b, ~2% residual loss after.
-        !  With both, parcel mass-flow is conserved to output precision.
+        !> Refresh npdot from the ODE state alongside d.
         if (ind_evn > 0) then
           select case (mod_model)
           case(3); eventLocal(ind_evn) = y(8)
@@ -754,14 +638,13 @@ contains
           end select
         endif
         if (ind_sb1 > 0) brkupState(1:nbrkst) = stateLocal(ind_sb1:ind_sb2)
-        !> Advance the analytic oscillator by the completed accepted-step interval (x-xold);
-        !  deltat is the outer per-segment cap and is untied to elapsed time.
+        !> Breakup event over the accepted-step interval (x-xold).
         kickDV = Y(4:6)
         call breakupEvent(eventLocal, neventvar, brkupState, nbrkst,    &
                           sigma,mup,rho,gasState(1),vel,Re,t1,acc,y(4:6),x-xold, &
                           mod_brkSelect, mod_bp,mod_bpMethod,mod_bpScale,        &
                           eventFlag,childState,addChildLocal,exitLoop,part%rngState,childDone)
-        !> ETAB kicked solout's own Y; keep the delta -- the abort below discards Y itself.
+        !> Keep the ETAB kick as a delta; the abort below discards Y.
         kickDV = Y(4:6) - kickDV
         kickPend = (mod_brkSelect == 5) .and. (maxval(abs(kickDV)) > 0._R8)
         if (ind_sb1 > 0) stateLocal(ind_sb1:ind_sb2) = brkupState(1:nbrkst)
@@ -772,8 +655,7 @@ contains
         return
       endif
 
-      !> Never latch a non-finite state as the "last good" one: it is the fallback the outer
-      !  loop reverts to on burnout, and the scatter cloud below would emit NaN markers.
+      !> Never latch a non-finite state as the last good one.
       if (any(y/=y)) return
 
       timeLocal  = x
@@ -781,9 +663,7 @@ contains
       if (allocated(stateLocal)) oldStLocal = stateLocal
       if (allocated(eventLocal)) oldEvLocal = eventLocal
 
-      !> Scatter cloud: this is a REAL accepted interior state (crossings returned above). Emit
-      !  ONE marker per weight-quantum dNscat, carrying the remainder => distinct real states,
-      !  no interpolation. Fields recovered from y exactly as the breakup branch does.
+      !> Scatter cloud: emit one marker per weight quantum dNscat, carrying the remainder.
       if (scatOn .and. dNscat>0._R8 .and. wAcc >= dNscat) then
         if (mod_propFlags(1)) then; tp  = comp_TfromTab(hTab,y(7)); else; tp  = y(7);              endif
         if (mod_propFlags(2)) then; rho = lookupTab(rhoTab, tp);    else; rho = auxLocal(ind_rho); endif
@@ -793,7 +673,6 @@ contains
         case default; m = auxLocal(ind_m)
         end select
         if (ind_d > 0) then; d = auxLocal(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
-        !> Internal write: same format, so the bytes are identical to writing the unit directly.
         nScat = nScat + 1
         write(scatBuf(nScat),'(7F12.6,2E13.6E2,I8)') y(1:3), y(4:6), tp, d, m, part%ID
         if (nScat == SCATCAP) call flushScat()
@@ -802,15 +681,8 @@ contains
 
     end subroutine solout
 
-    !****************************************************************************************************!
-    !*  Particle "position at boundary" handling                                                        *!
-    !****************************************************************************************************!
 
-    !> Cell-entry state that every `integrate` call needs, regardless of part%time (A23g).
-    !  For a time==0 particle this re-establishes what the injection block just set (inert);
-    !  for a time /= 0 entry -- a KH-shed child -- it is the only thing that sets it at all.
-    !  `gasProperties` is DUPLICATED rather than hoisted: the init block consumes `gas` for the
-    !  DB velocity/temperature hand-off before this routine is ever reached.
+    !> Cell-entry geometry and gas state of the current cell.
     subroutine refreshCellEntry()
       call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen)   ! geo cell (NOT the gas dual index igas)
       if (ord2) then
@@ -828,9 +700,7 @@ contains
                        part%igas(3)==1 .or. part%igas(3)==gasblock(b)%Nz+1
     end subroutine setAtGasBoundary
 
-    !> After updateCell processed at geo crossing, refresh the geo position
-    !  if the particle reflected (not gone), re-resolve the gas cell
-    !  from the new position (gasExitFace is stale post-reflection -> reset it).
+    !> After a geo crossing: refresh the geo cell and, if the particle stayed in, re-resolve the gas cell.
     subroutine handleGeoEvent()
       b = part%i(1)
       call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen)
@@ -844,10 +714,8 @@ contains
     end subroutine handleGeoEvent
 
 
-    !****************************************************************************************************!
-    !*  Eulerian & source field accumulators                                                            *!
-    !****************************************************************************************************!
 
+    !> Deposit the segment's net mass/momentum/energy exchange into source cell (ii,jj,kk).
     subroutine computeSrcField(particle,sblock,ii,jj,kk,masIn,masOut,momIn,momOut,enIn,enOut)
       implicit none
       class(obj_particle),   intent(in)    :: particle
@@ -858,7 +726,7 @@ contains
       integer :: nmat
 
       nmat = particle%mID
-      !> Mass deposits when the material loses mass to the gas: evaporation OR combustion (model 5)
+      !> Mass source only for materials that lose mass to the gas (evaporation or combustion).
       if (phaseChange .or. particle%model==5) then
         !$OMP ATOMIC UPDATE
         sblock%sourceMass(nmat,ii,jj,kk) = sblock%sourceMass(nmat,ii,jj,kk) + (masIn-masOut)
@@ -876,6 +744,7 @@ contains
 
     end subroutine computeSrcField
 
+    !> Deposit the segment's Eulerian moments (density, number, momentum, energy) into cell (ii,jj,kk).
     subroutine computeEulField(particle,eblock,ii,jj,kk)
       implicit none
       class(obj_particle),  intent(in)    :: particle
@@ -884,8 +753,7 @@ contains
       real(R8) :: rho, factor, np, moment(3), energy
 
       if (particle%deltaL<toll) return
-      !> Normalize by the DEPOSITION cell volume (ii,jj,kk):
-      !  gas dual cell under ord2, geo cell (== i,j,k) otherwise.
+      !> Normalize by the deposition cell volume.
       if (ord2) then; vol = gasblock(b)%cellVol(ii, jj, kk)
       else;           vol = geoblock(b)%cellVol(ii, jj, kk); endif
 
@@ -911,7 +779,7 @@ contains
       moment = particle%intE(1:3)*factor
       energy = particle%intE( 4 )*factor !> T*rho_p (cpVariable=false) or h*rho_p (cpVariable=true)
 
-      !> Pure += accumulators. velocity/temperature store numerators (Σ moment, Σ energy)
+      !> += accumulators; velocity/temperature hold numerators until finalize.
       !$OMP ATOMIC UPDATE
       eblock%density(ii,jj,kk)     = eblock%density(ii,jj,kk)     + rho
       !$OMP ATOMIC UPDATE

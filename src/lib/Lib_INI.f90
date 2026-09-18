@@ -19,6 +19,7 @@ module IGLOO_IO_INI
 contains
 
 
+  !> Reads input.ini: [IGLOO-General], [IGLOO-Models], [IGLOO-Properties], [IGLOO-BC], [IGLOO-ODE].
   subroutine read_IGLOO_input(method,srcSwitch,eulSwitch,gasfile,pos0,vel0,temp0,mdot,diam)
     use IGLOO_variables, only: llen, threshold
     implicit none
@@ -36,6 +37,8 @@ contains
   end subroutine read_IGLOO_input
 
 
+  !> [IGLOO-General]: phase name, gas file and order, output switches, print cadences, mdot-max,
+  !  seed, mollification, body acceleration, probe IDs.
   subroutine read_general(srcSwitch,eulSwitch,gasfile)
     use IGLOO_variables
     use IGLOO_Lib_Mollify, only: DEFAULT_MOLLIFY_PASSES
@@ -48,9 +51,7 @@ contains
     character(len=1)   :: outfile
     integer            :: gasOrder, n
 
-    !> Condensed phase this solver reads: the ATLAS phase name ([GPB-Phase*] name), so the file
-    !> set is INPUT/<phase>-{phase.txt,properties.dat,bc.txt}. Optional: absent keeps the prefix
-    !> already in force (a parent app may have set it; standalone default is '' = unnamed files).
+    !> phase: ATLAS phase name => INPUT/<phase>-{phase.txt,properties.dat,bc.txt}; absent keeps the prefix in force.
     call fini%get(section_name='IGLOO-General', option_name='phase', val=phaseName, error=error)
     if (error==0 .and. len_trim(adjustl(phaseName))>0) then
       phaseName = adjustl(phaseName)
@@ -69,13 +70,10 @@ contains
     else if (gasOrder==2) then
       ord2=.true.
     else if (gasOrder/=1) then
-      !> Refuse rather than fall back: the old test reassigned 2 BEFORE checking, so its warning was dead (O21).
       write(*,'(A,I0,A)') ' [ERROR] [IGLOO-General] gas-order = ', gasOrder, ' is not valid (1 or 2)'
       error stop 'IGLOO: gas-order must be 1 or 2'
     endif
-    !> IGLOO output field(s): E = equivalent eulerian, S = coupling source, E+S/S+E/both = both (the
-    !  registry default); absent = both. Whole token, not its first character (O21: 'E+S' used to
-    !  parse as 'E'); an unknown token is refused instead of silently meaning both.
+    !> out-file: E (equivalent eulerian), S (coupling source), E+S / ALL (both; default). Whole-token match.
     requiredOut = 'E+S'
     call fini%get(section_name='IGLOO-General', option_name='out-file', val=requiredOut, error=error)
     if (error/=0 .or. len_trim(requiredOut)==0) requiredOut = 'E+S'   ! absent or blank = both
@@ -108,8 +106,7 @@ contains
     !> Maximum mass flow rate per particle trajectory (g/s)
     call fini%get(section_name='IGLOO-General', option_name='mdot-max', val=mdotMax, error=error)
     if (error==0) then; mdotMax = mdotMax*1e-3_R8; else; mdotMax = 0._R8; endif  ! g/s -> kg/s; absent = off
-    !> Particle-output switches (both default ON). String off-token parse (FiNeR get(logical)
-    !> only accepts T/F) — mirror the mollify idiom: any off-token => OFF, anything else => ON.
+    !> out-traj / out-scatter: parsed as strings, any off-token => off, anything else => on.
     call fini%get(section_name='IGLOO-General', option_name='out-traj', val=mollify_word, error=error)
     trajOn = .not.( error==0 .and. is_off_token(mollify_word) )
     call fini%get(section_name='IGLOO-General', option_name='out-scatter', val=mollify_word, error=error)
@@ -117,14 +114,7 @@ contains
     !> RNG seed for stochastic injection-diameter sampling (optional; default 42)
     call fini%get(section_name='IGLOO-General', option_name='seed', val=rng_seed, error=error)
     if (error/=0) rng_seed = 42
-    !> Mollification of the geoblock eulerian/source feedback fields.
-    !>   mollify       = on|off switch (optional; default ON). Off-tokens (any case):
-    !>                   off / false / no / 0 / F ; anything else => ON.
-    !>   mollify-passes= number of local binomial passes (optional override). When absent
-    !>                   and ON, defaults to DEFAULT_MOLLIFY_PASSES, the analysis-derived
-    !>                   count that crushes <=4-cell deposition (Nyquist) noise while
-    !>                   preserving >=16-cell physical structure. 0 => off.
-    !> The smoother is mesh-local (width ~ sqrt(passes) cells); no physical width param.
+    !> mollify (on|off, default on) and mollify-passes (default DEFAULT_MOLLIFY_PASSES; 0 => off).
     call fini%get(section_name='IGLOO-General', option_name='mollify', val=mollify_word, error=error)
     if (error/=0) then
       mollifyOn = .true.
@@ -144,8 +134,7 @@ contains
     else
       write(*,*) ' >> Field mollification OFF'
     endif
-    !> [IGLOO-General] body-accel = gx gy gz [m/s^2]: optional uniform body acceleration
-    !> (generalized gravity) added to every particle's dv/dt. Absent/all-zero => no-op.
+    !> body-accel = gx gy gz [m/s^2]: optional uniform body acceleration.
     if (fini%has_option(option_name='body-accel')) then
       n = fini%count_values(section_name='IGLOO-General', option_name='body-accel')
       if (n /= 3) error stop '[ERROR] [IGLOO-General] body-accel: expected 3 values (gx gy gz) [m/s^2]'
@@ -153,12 +142,9 @@ contains
       bodyForce = any(bodyAccel /= 0._R8)
     endif
     if (bodyForce) write(*,'(a,3es12.4,a)') '  >> Body acceleration ON: g_body =', bodyAccel, ' [m/s^2]'
-    !> Gate for the EXACT two-way source-reaction correction (J/W accumulators): only needed
-    !> when the gas-coupling source is actually output AND a body force is present.
     srcBodyForce = sourceSwitch .and. bodyForce
 
-    !> [IGLOO-General] probe-ids: DEBUG subset — integrate ONLY the listed IDs (and a-b intervals),
-    !> skip the rest. Absent/empty => integrate all. e.g. `probe-ids = 1 2 6 496-497 1990`.
+    !> probe-ids: debug subset of particle IDs (IDs and a-b intervals); absent => all.
     if (fini%has_option(option_name='probe-ids')) then
       n = fini%count_values(section_name='IGLOO-General', option_name='probe-ids')
       if (n > 0) then
@@ -208,6 +194,7 @@ contains
   end subroutine read_general
 
 
+  !> [IGLOO-Models]: drag, heat, evaporation, phase-change axes, blowing, breakup and its constants.
   subroutine read_models()
     use IGLOO_variables
     use IGLOO_Lib_Drag,        only: assign_drag
@@ -227,8 +214,7 @@ contains
     !> Evaporation model definition
     call fini%get(section_name='IGLOO-Models', option_name='evaporation', val=evaporation_word, error=error)
     if (error==0) phaseChange = .true.
-    !> Composable phase-change axes: global defaults (per-material override in [GPB-PhaseN]).
-    !  Unimplemented nonzero selects are rejected at material setup.
+    !> Composable phase-change axes: global defaults (per-material override in [IGLOO-Material*]).
     call fini%get(section_name='IGLOO-Models', option_name='liquid-conduction', val=liquid_word, error=error)
     if (error/=0) liquid_word = 'ITC'
     call assign_liquid(liquid_word, liqSelect)
@@ -296,7 +282,6 @@ contains
         if (error/=0) bp(3) = 6._R8; bp(3) = 2_R8*bp(3)
         call fini%get(section_name='IGLOO-Models', option_name='method', val=bpMethod, error=error)
         if (error==0) then
-          !> 3 reaches a comment-only stub in TABmodel (rNew = 0 -> dp = 0 -> npdot divides by zero, O20).
           if (bpMethod/=1 .and. bpMethod/=2) then
             write(*,'(A,I0,A)') ' [ERROR] [IGLOO-Models] method = ', bpMethod, ' is not a TAB product-size method (1 or 2)'
             error stop 'IGLOO: TAB method must be 1 or 2'
@@ -312,7 +297,7 @@ contains
         call assign_scaleFactor()
       case (5)
         allocate(bp(6))
-        !> defaults per Tanner 1998 table: k1=k2=0.2222, WeTrans=80 (100 = Liu-Reitz alternative)
+        !> defaults per Tanner (1998)
         call fini%get(section_name='IGLOO-Models', option_name='k1'     , val=bp(1), error=error)
         if (error/=0) bp(1) = 0.2222_R8
         call fini%get(section_name='IGLOO-Models', option_name='k2'     , val=bp(2), error=error)
@@ -330,20 +315,8 @@ contains
   end subroutine read_models
 
 
-  !> Per-material model overrides + phase-change properties from [IGLOO-Material<imat>], imat being
-  !  the material's position in INPUT/<phase>-phase.txt (the ATLAS material order).
-  !  Called from IO.f90 after the global-defaults assignment; every key optional (absent =>
-  !  the global default already in `mat` stands). `combustion` present => this material burns
-  !  instead of evaporating (loud warning if both were configured).
-  !
-  !  TRANSITIONAL (2026-09-16). The per-material models and their parameters are ATLAS input: they belong
-  !  in [GPB-Phase<k>] and ATLAS GPB is to WRITE them into INPUT/<phase>-phase.txt, from where
-  !  read_cdp_properties will read them -- a solver reads only its own [IGLOO-*] INI sections, never the
-  !  preprocessor's. Until GPB writes the phase file that way, the keys are read from [IGLOO-Material<imat>]
-  !  (this routine). Reading [GPB-Phase*] directly is NOT an option: it mis-indexes under hydra-MI2 (where
-  !  [GPB-Phase1] is the gas) and bypasses ATLAS. A key found in a [GPB-Phase*] section is reported as
-  !  not-yet-applied by warn_igloo_keys_in_preprocessor_sections so nothing is silently inert.
-  !  When the phase-file path lands: delete this routine, the warning and the [IGLOO-Material*] docs.
+  !> Per-material model overrides and phase-change properties from [IGLOO-Material<imat>] (imat =
+  !  material order in the phase file); every key is optional, `combustion` disables evaporation.
   subroutine read_phase_models(imat, mat)
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Evaporation, only: assign_evaporation, assign_liquid, assign_interface, &
@@ -368,7 +341,7 @@ contains
     if (error==0) call assign_boiling(w, mat%boilSelect)
     call fini%get(section_name=trim(sec), option_name='combustion', val=w, error=error)
     if (error==0) call assign_combustion(w, mat%combSelect)
-    !> String-parsed on|off (FiNeR get(logical) does a bare read(*) — rejects on/off)
+    !> on|off parsed as a string
     call fini%get(section_name=trim(sec), option_name='solidification', val=w, error=error)
     if (error==0) call assign_solidification(w, mat%solidSelect)
 
@@ -410,7 +383,7 @@ contains
     call fini%get(section_name=trim(sec), option_name='cp-solid', val=mat%cpSol,    error=error)
     if (error/=0) mat%cpSol = 0._R8
 
-    !> Effective per-material selection, so a case log shows what was actually resolved
+    !> Log the resolved per-material selection.
     write(*,'(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,es10.3)') '  >> ['//trim(sec)//'] evap=', mat%evapSelect, &
       ' liq=', mat%liqSelect, ' intf=', mat%intfSelect, ' boil=', mat%boilSelect, ' comb=', mat%combSelect, &
       ' solid=', mat%solidSelect, ' alpha-e=', mat%alphaE
@@ -418,9 +391,7 @@ contains
   end subroutine read_phase_models
 
 
-  !> Transitional notice: the per-material model keys in [GPB-Phase*] are ATLAS input that GPB does not
-  !  yet write into the phase file, so IGLOO cannot see them there. Say so, instead of leaving them inert.
-  !  The preprocessor sections are opened ONLY to detect the keys -- no value is ever used by IGLOO.
+  !> Warns about per-material model keys found in [GPB-Phase*] sections: IGLOO does not read them there.
   subroutine warn_igloo_keys_in_preprocessor_sections()
     implicit none
     character(len=*), parameter :: keys(20) = [character(len=17) :: &
@@ -449,6 +420,8 @@ contains
   end subroutine warn_igloo_keys_in_preprocessor_sections
 
 
+  !> [IGLOO-Properties]: optional per-material property vectors (psat, Mv, Lv, Tboil, cpv, Le, Yinf,
+  !  sigma, mu), all of one length.
   subroutine read_properties()
     implicit none
     integer :: n, nref
@@ -521,6 +494,8 @@ contains
   end subroutine read_properties
 
 
+  !> [IGLOO-BC]: injection spacing and degeneracy floor, then either explicit DB positions (x, y, z
+  !  with mdot, diam, temp0, up/vp/wp) or the FB boundary method with its sampling frequency.
   subroutine read_bc(method,pos0,vel0,temp0,mdot,diam)
     use IGLOO_variables
     implicit none
@@ -536,8 +511,7 @@ contains
     ds = ds*1e-2_R8      ! cm -> m
     if (error/=0) ds = 0.0
 
-    !> Degeneracy floor (cm): skip single/coverage injection in cells whose
-    !> tangential size is below dsDegen (collapsing/degenerate boundary cells).
+    !> ds-degen (cm): no injection in boundary cells thinner than this.
     call fini%get(section_name='IGLOO-BC', option_name='ds-degen', val=dsDegen, error=error)
     dsDegen = dsDegen*1e-2_R8
     if (error/=0) dsDegen = 0.0
@@ -656,12 +630,6 @@ contains
               vel0(i,:) = [x(i), y(i), z(i)]
             enddo
           else
-            !> Name the cause: by far the commonest way to land here is FORMATTING, not a
-            !  genuinely ragged input. `count_values` counts the gaps, so aligning columns
-            !  with two or more spaces ("vp = -1.0   -3.3") reports more values than are
-            !  there and this test fails. Measured on axis-200: one space parses correctly,
-            !  two or more error-stop here. The old message named neither the offending
-            !  option nor the sizes, so the natural reading was "my arrays disagree".
             write(*,'(a)')    ' [ERROR] up, vp, wp velocity components have different sizes.'
             write(*,'(a,i0,a,i0,a,i0,a,i0)')                                              &
                  '         up = ', xSize, ',  vp = ', ySize, ',  wp = ', zSize,           &
@@ -682,11 +650,11 @@ contains
   end subroutine read_bc
 
 
+  !> [IGLOO-ODE]: solver name, maximum steps, tolerances.
   subroutine read_ode()
     use IGLOO_variables, only: ode_word, iopt, rtol, atol
     implicit none
 
-    !> ODE solver parameters.
     iopt = 0
 
     call fini%get(section_name='IGLOO-ODE', option_name='ode-solver', val=ode_word, error=error)
@@ -694,7 +662,7 @@ contains
     select case (trim(ode_word))
       ! case ('dvodef90')
       case ('H-sdirk4', 'H-dopri5')
-        ! valid (H-dopri5 needs OSlo's dopri5.f SOLOUT fix, ledger O25; gated by drag-stokes-dopri5)
+        ! valid (H-dopri5 requires the patched OSlo dopri5)
       case default
         write(*,*)
         write(*,*) "Wrong ode-solver input ---> "//trim(ode_word)
@@ -718,8 +686,7 @@ contains
   end subroutine read_ode
 
 
-  !> True if `word` is any recognized off-token (case-insensitive). Used for on|off
-  !> switches FiNeR's get(logical) cannot parse (it accepts only T/F).
+  !> True if `word` is an off-token (off / false / no / 0 / F, any case).
   logical function is_off_token(word)
     character(len=*), intent(in) :: word
     select case (trim(adjustl(word)))
