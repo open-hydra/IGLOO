@@ -20,7 +20,7 @@ segment's deposit landed there. **Fix (2026-09-18):** `isPointInsideCell` takes 
 optional `sectorOut` (two dot products against the k-plane normals, `IGLOO_variables::
 sectorNorm`, set at wedge detection); `solout` passes it, the interrupt fires like a
 face crossing, the refinement pins the segment to the plane with the exact distance
-(`IGLOO_bcBox::sectorDs`), and the outer loop calls `axisymFold(force=.true.)` before
+(`IGLOO_bcBox::sectorDs`), and the outer loop calls `axisymFold` before
 any cell logic, so every fold rotates by exactly one sector. A sector crossing is neither
 a cell crossing (no trajectory row, `nCross` untouched) nor residency (`Ncell` untouched,
 so a spinning parcel does not trip `nMaxCell`). The run prints
@@ -77,5 +77,15 @@ restarts, the next step is capping `deltat` against the sector plane in `compute
 re-sectored at injection (the location searches stay azimuth-blind on purpose — an
 off-sector point would match no cell); its first accepted step trips `sectorOut`, the
 refinement finds no plane ahead (`sectorDs` = 0, the interior /nStep fallback) and the
-forced fold rotates it home by `nint(θ/δ)` sectors at once — a multi-sector fold, so M ≠ 0
-in the witness tells you an injection station was off-sector.
+fold rotates it home by `nint(θ/δ)` sectors at once — a multi-sector fold, so M ≠ 0 in the
+witness tells you an injection station was off-sector.
+
+**Tolerance.** `sectorOut` fires past `sectorTol` = 1e-12 m (not at the plane itself) and
+`sectorDs` aims at that offset boundary, so whenever it fires `nint(θ/δ)` is ±1 by
+construction — the strict form had a 1-ULP window where the dot product said "outside"
+and `atan2` said "inside" (a forced one-sector fold covered it in the first cut, `4d1b0c5`,
+untested by any fixture). Moving the boundary by 1e-12 shifts the SDIRK4 step sequence:
+`euler1.tec` moved ≤ 2.5e-7 of scale on the deposit twin and one `wedge-fold` row by
+1.7e-5 (near the axis, r = 4.5e-5); this fixture's fields by ≤ 1.4e-8. The witness line is
+printed only when something folded (an MI2 sweep on a wedge with every parcel on the
+meridian plane stays quiet); a run of this case without the line is an old binary.

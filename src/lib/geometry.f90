@@ -1,7 +1,7 @@
 module IGLOO_RayFaceIntersection3D
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_VectorModule, only: cross, chooseVector
-    use IGLOO_variables,    only: axisym, sectorNorm
+    use IGLOO_variables,    only: axisym, sectorNorm, sectorTol
     implicit none
 
     integer, dimension(6,4), parameter :: guide = reshape([1,2,3,4, &
@@ -164,7 +164,7 @@ contains
       !  sectors inside it. Two dot products against the k-plane normals bound a segment to one sector.
       if (present(sectorOut)) then
         sectorOut = .false.
-        if (axisym) sectorOut = dot_product(pt, sectorNorm(:,1)) > 0._R8 .or. dot_product(pt, sectorNorm(:,2)) > 0._R8
+        if (axisym) sectorOut = dot_product(pt, sectorNorm(:,1)) > sectorTol .or. dot_product(pt, sectorNorm(:,2)) > sectorTol
       endif
 
       if (present(is2D)) then

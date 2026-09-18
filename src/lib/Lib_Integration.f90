@@ -285,15 +285,19 @@ contains
         endif
       endif
 
-      !> Sector exit (wedge): the segment ended on a k-plane, so the (x, r) cell is unchanged and only
-      !  the azimuth left the band. Fold by ONE sector here, after the deposits (already in the
-      !  meridian frame) and before the cell logic (no cell owns an off-sector point). `force`
-      !  covers a segment ending on the plane to roundoff, where nint would leave it pinned there.
+      !> Sector exit (wedge): the segment ended past a k-plane (by more than sectorTol, so the fold's
+      !  nint is +-1), the (x, r) cell is unchanged and only the azimuth left the band. Fold here,
+      !  after the deposits (already in the meridian frame) and before the cell logic (no cell owns
+      !  an off-sector point).
       foldOnly = sectorOut .and. .not.(newGas .or. IamOut)
       if (sectorOut) then
-        call axisymFold(part%stateVar, force=.true., nSect=nSect)
-        !$OMP ATOMIC
-        nSectorFold = nSectorFold + 1
+        call axisymFold(part%stateVar, nSect=nSect)
+        if (nSect > 0) then
+          !$OMP ATOMIC
+          nSectorFold = nSectorFold + 1
+        else
+          part%Ncell = part%Ncell + 1   ! cannot happen (sectorTol); if it does, nMaxCell reports it
+        endif
         if (nSect > 1) then
           !$OMP ATOMIC
           nMultiFold = nMultiFold + 1

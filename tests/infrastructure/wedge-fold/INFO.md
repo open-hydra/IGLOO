@@ -55,7 +55,7 @@ a near-zero landing.
 **What this case does NOT pin.** The fold's cadence IS now "every 1° crossing": since
 2026-09-18 the containment test carries the azimuth band (`geometry.f90::isPointInsideCell`,
 optional `sectorOut`), so a k-plane crossing ends the ODE segment like any other face, the
-refinement pins it to the plane (`IGLOO_bcBox::sectorDs`) and `axisymFold(force=.true.)` rotates
+refinement pins it to the plane (`IGLOO_bcBox::sectorDs`) and `axisymFold` rotates
 by exactly one sector before the cell logic runs; the run prints `wedge sector folds: N
 (multi-sector: M)` and M must be 0. This gate is still behavioral (in-sector, no stall, exits) and
 measures nothing quantitative about it — `standard/swirl-wedge-spin` does (fold count against the

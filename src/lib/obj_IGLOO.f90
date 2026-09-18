@@ -767,8 +767,8 @@ contains
     if (axisym) then
       foldStat = [nSectorFold, nMultiFold]
       call mpi_allreduce_sum_i4_array(foldStat, 2)
-      if (mpi_is_root) write(*,'(A,I0,A,I0,A)') '     - wedge sector folds: ', foldStat(1), &
-                                                 ' (multi-sector: ', foldStat(2), ')'
+      if (mpi_is_root .and. sum(foldStat) > 0) write(*,'(A,I0,A,I0,A)') '     - wedge sector folds: ', &
+                                                 foldStat(1), ' (multi-sector: ', foldStat(2), ')'
     endif
     if (mpi_is_root) write(*,*)" Stop condition : All particles out of domain!"
 

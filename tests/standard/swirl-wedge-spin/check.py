@@ -50,7 +50,8 @@ EUL = "OUTPUT/euler1.tec"
 RUN_OUT = "run_out.txt"
 MDOT = 1.0e-4
 R_WALL = 0.99                 # outer wall (make_wedge_case.py R1): the parcel ends there
-N_PATH = 40000                # oracle path samples to the wall
+N_PATH = 40000                # oracle path samples per second (h = 2.5e-5 s; the wall is at 0.554 s)
+RK_SELF = 1.0e-10             # step-halving self-check on the wall state (measured ~1e-13)
 MIN_ROWS = 40                 # ~50 rows measured
 N_FOLD_MIN = 60               # non-vacuity (79 measured; the parent's parcels fold 8-33x)
 N_FOLD_TOL = 2                # |N - oracle| (the last sector before the wall may or may not fold)
@@ -69,13 +70,11 @@ def fail(msg):
     return 1
 
 
-def oracle_to_wall(row0):
+def oracle_to_wall(row0, h=1.0 / N_PATH):
     """Fine Cartesian path from the injection row until r = R_WALL: samples (t, x, r) at step
     midpoints, the unwrapped azimuth, the wall time, and a bisected state at every requested x."""
     x0, y0, z0, u0, v0, w0 = row0[:6]
     s = (x0, y0, z0, u0, v0, w0)
-    # a generous span; the loop stops at the wall
-    h = 1.0 / N_PATH
     samp = []
     t = 0.0
     th_unw = math.atan2(z0, y0)
@@ -97,7 +96,7 @@ def oracle_to_wall(row0):
             thw = math.atan2(sw[2], sw[1])
             th_unw += (thw - th_prev + math.pi) % (2 * math.pi) - math.pi
             samp.append((t + 0.5 * hi, 0.5 * (s[0] + sw[0]), 0.5 * (math.hypot(s[1], s[2]) + R_WALL), hi))
-            return samp, th_unw, t + hi
+            return samp, th_unw, t + hi, sw
         th = math.atan2(s2[2], s2[1])
         th_unw += (th - th_prev + math.pi) % (2 * math.pi) - math.pi
         th_prev = th
@@ -153,8 +152,14 @@ def main():
     delthe = base.DELTHE
 
     # ---- oracle to the wall
-    samp, th_unw, t_wall = oracle_to_wall(rows[0])
+    samp, th_unw, t_wall, s_wall = oracle_to_wall(rows[0])
     n_exp = int(math.floor(abs(th_unw) / delthe + 0.5))
+    # self-refutation (house practice, as the parent's): halving the RK4 step must not move the
+    # wall state, the wall time or the unwrapped sweep
+    _, th2, t2, s2 = oracle_to_wall(rows[0], h=0.5 / N_PATH)
+    drift = max(abs(t_wall - t2), abs(th_unw - th2), max(abs(a - b) for a, b in zip(s_wall, s2)))
+    if drift > RK_SELF:
+        return fail(f"oracle not step-converged: halving h moves the wall state by {drift:.2e}")
 
     # ---- S0 fold witness
     txt = open(RUN_OUT).read()
