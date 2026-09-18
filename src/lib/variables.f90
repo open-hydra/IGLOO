@@ -40,6 +40,8 @@ module IGLOO_variables
   !  arbitrary plane is the remaining work; the BC layer no longer blocks it.
   real(R8) :: axisDir(3) = [1._R8, 0._R8, 0._R8]   !> symmetry axis (unit)
   real(R8) :: refDir(3)  = [0._R8, 1._R8, 0._R8]   !> azimuth origin, theta=0 (unit, ⟂ axisDir)
+  real(R8) :: sectorNorm(3,2) = 0._R8  !> outward unit normals of the wedge k-planes at -delthe/2 (1) and +delthe/2 (2)
+  integer  :: nSectorFold = 0, nMultiFold = 0  !> per-sweep witnesses: sector folds done, folds that rotated by > 1 sector
   integer  :: fsample, nb, nm, nfam, iprint, trajSample
   integer, allocatable :: nspecies(:)
   real(R8) :: ds, mdotMax, dtprint

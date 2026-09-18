@@ -6,7 +6,7 @@ contains
 
 
   subroutine allocate_blocks(orion,material,geoblock,solblock,srcblock,eulblock,srcSwitch,eulSwitch)
-    use IGLOO_variables,   only: nb, ord2, mesh2D, axisym, delthe, axisDir, refDir
+    use IGLOO_variables,   only: nb, ord2, mesh2D, axisym, delthe, axisDir, refDir, sectorNorm
     use IGLOO_VectorModule, only: cross
     use IGLOO_data_block,  only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock
     use IGLOO_data_phases, only: obj_material
@@ -116,6 +116,11 @@ contains
           write(*,'(A)') '     - 2D path: axisymmetric wedge, 2.5D (W and wp carried; fold rotates position AND velocity)'
           write(*,'(A)') '     - gas sampled at the parcel (x, r), velocity rotated to its azimuth (exact 2.5D sampling)'
           write(*,'(A)') '     - source/euler deposits rotated to the meridian frame (axial, radial, azimuthal)'
+          !> Outward normals of the two k-planes: the containment test reads p.n > 0 as "azimuth
+          !  outside the band", so a segment ends at the sector edge like at any other cell face.
+          sectorNorm(:,1) = -sin(0.5_R8*abs(delthe))*refDir - cos(0.5_R8*abs(delthe))*binormal
+          sectorNorm(:,2) = -sin(0.5_R8*abs(delthe))*refDir + cos(0.5_R8*abs(delthe))*binormal
+          write(*,'(A)') '     - segments end at the sector edge (azimuth band carried by the containment test)'
         endif
       endif
       allocate(blk%center(3,1:blk%Nx,1:blk%Ny,1:blk%Nz))

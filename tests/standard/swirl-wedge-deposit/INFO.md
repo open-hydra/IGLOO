@@ -5,8 +5,8 @@ those parcels *deposit*: the momentum source (`OUTPUT/source.tec`, the per-segme
 momentum exchange `Pin − Pout`) and the eulerian field (`OUTPUT/euler1.tec`, the
 path-weighted parcel velocity). Both are meridian-plane fields — a cell (x, r) carries
 (axial, radial, azimuthal) components for an axisymmetric parent solver — while a parcel on
-the wedge sits at an azimuth θ inside the sector (|θ| ≤ δ/2 plus the overshoot before the
-fold), so the Cartesian vectors it carries must be rotated by −θ about the axis before they
+the wedge sits at an azimuth θ inside the sector (|θ| ≤ δ/2: segments end at the sector
+edge), so the Cartesian vectors it carries must be rotated by −θ about the axis before they
 are deposited: `Lib_Equations::toMeridian`, applied to the segment's (Pin, Pout) at the
 segment's mid azimuth (`Lib_Integration.f90`, before `computeSrcField`) and to the euler
 moment states `∫v|v|dt` in every `Lib_RHS` system. Same fixture, parcels and ODE settings
@@ -83,18 +83,17 @@ verified in the code: `toMeridian` is fold-invariant (the fold rotates position 
 velocity by the same −nδ, so `R(−θ(p))·v` is continuous across it — that is why D4
 reaches the floor rather than sawtoothing), and rotating `Pin` and `Pout` by one `pMid`
 makes the source deposit `R(−θ_mid)·ṁ∫(v−g)/τ dt`, a midpoint quadrature of the meridian
-integral with error O(Δθ_seg²) — which is why D1 holds here and degrades exactly in the
-many-sector case below.
+integral with error O(Δθ_seg²) — bounded by O(δ²) now that a segment never leaves its sector
+(before 2026-09-18 it degraded exactly in the many-sector case below).
 
 **Not pinned here.** Four of the five `Lib_RHS` euler-moment sites (models 2–5: evaporation,
 breakup, their combinations) are exercised only on planar fixtures, where `toMeridian` is
 the identity — the index splits are the same at all five and the A/B was inert on them, but
 only model 1 runs off-plane. The many-sector interior sub-case of O23 (a parcel whose segment
 sweeps several sectors before the fold, so the dual cell located by `(x, r cos θ)` sits
-inward of its true radius and the deposit lands there): reproduced 2026-09-18 on this
-fixture with one over-spun parcel (`wp = 10` at r = 0.2: first segment 27°, 8 % of its
-deposit a row inward; `up = 0.05, wp = 2`: 34°, 23 %), decaying below 1° within a few
-segments as the parcel flings outward — a transient at injection here, sustained only for a
-parcel swinging past the axis. Not gated: the fix (end the segment at the sector edge) is
-outside the W-plan's scope; see `wedge-fold/INFO.md`. The `ord1` deposit path
+inward of its true radius and the deposit lands there) is closed and gated by the third twin,
+`swirl-wedge-spin` (sector-edge segments, 2026-09-18) — the parcels here never came close
+(≤ 0.115 of a sector per segment), which is why D1 held with a midpoint quadrature. With the
+segments bounded to one sector the quadrature error is ≤ O(δ²) everywhere; this run's fields
+moved by ≤ 3e-7 of scale (ρ_p) and its trajectories not at all. The `ord1` deposit path
 (`gas-order = 1`) is exercised by no gate.

@@ -107,7 +107,7 @@ promoted: `check_evap.py` was renamed to `check.py` and it now runs in the gate.
     inventory.  Each case appears once, under the kind its figure *uniquely* pins:
     a case whose oracle is a closed form but whose only unshared content is a
     feature path (`periodic-y`, `coupled-body`, `vie-plait`, `swirl-wedge`,
-    `swirl-wedge-deposit`) is filed under base
+    `swirl-wedge-deposit`, `swirl-wedge-spin`) is filed under base
     features, with its oracle strength stated in place.
 
 ## Tier V — closed-form solution verification
@@ -495,15 +495,16 @@ suspended at fixed slip; see
 These cases target the **non-physics machinery** every run depends on: gas-field
 reconstruction, boundary-condition transport, injection modes, mesh topology, and
 the Eulerian feedback accumulators.  Their closures are already gated elsewhere
-(`vie-plait`, `swirl-wedge` and `swirl-wedge-deposit` reuse Stokes drag, `periodic-y` and `coupled-body` reuse the
+(`vie-plait`, `swirl-wedge`, `swirl-wedge-deposit` and `swirl-wedge-spin` reuse Stokes drag, `periodic-y` and `coupled-body` reuse the
 `body-force` oracle), so what each figure *uniquely* pins is the feature path,
 not the physics.
 
 Oracle strength varies inside the category and is stated per case: `vie-plait`,
 `periodic-y` and `coupled-body` have full Tier-V closed forms (a folded-modulo
 one, in `periodic-y`'s case); `swirl-wedge` has an exact ODE oracle (RK4, self-checked
-in-file) gated at the print floor since the exact 2.5D sampling, and `swirl-wedge-deposit`
-integrates the force on the gas along that oracle; `db-injection` and `db-2daxi` are **behavioral**
+in-file) gated at the print floor since the exact 2.5D sampling, `swirl-wedge-deposit`
+integrates the force on the gas along that oracle and `swirl-wedge-spin` projects its
+residence time onto the euler cells; `db-injection` and `db-2daxi` are **behavioral**
 — they assert contracts (placement fidelity, hand-off, finiteness, exit through
 the intended boundary) with no reference curve at all, because a real MOSE nozzle
 field has no analytic solution.  `db-2daxi` is deliberately md5-free: trajectory
@@ -601,6 +602,31 @@ and a build depositing exactly that is one of the two proven REDs (radial sums f
 247–294 %); the other is the Cartesian deposit the code had before (325 of 382 cells,
 $v_p$ missing $-w\sin\theta$, up to $9.9\cdot10^{-4}$) — which the band *sums* cannot
 see, since the mixing cancels over a sector sweep.  **GATED GREEN** (2026-09-17).
+
+### swirl-wedge-spin
+
+The third wedge twin: one **over-spun** parcel ($r_0 = 0.2$, $u_p = 0.05$, $w_p = 2$, ten
+times the co-rotating speed) whose azimuth advances at $\sim 10$ rad/s at injection, so it
+would sweep $\sim 34$ one-degree sectors inside its first $(x, r)$ cell.  Until 2026-09-18
+the point-in-cell test was azimuth-blind, a segment could span any number of sectors, the
+fold rotated back by $n\,\delta$ at once, and the whole segment's deposit went to the dual
+cell located by $(x, r\cos	heta)$ at the segment start — a row inward of the parcel's true
+radius.  Now the test carries the sector band (`isPointInsideCell`'s `sectorOut`), the
+refinement pins the segment to the sector plane, and every fold rotates by exactly one
+sector.  `check.py` reads the run's fold witness `wedge sector folds: N (multi-sector: M)`
+and requires $M = 0$ and $N$ within 2 of the oracle sweep to the outer wall (79 sectors,
+measured 79); every row inside the sector; $w_p$, $v_r$, $u$ at every row against the
+Cartesian Stokes oracle in the true field, each row matched to the oracle's closest approach
+in $(x, r)$ since $u$ is no longer the clock (tolerance $2\cdot10^{-5}$, the print floor
+through the parcel's $20\ \mathrm{m/s^2}$ acceleration; measured $\le 7\cdot10^{-6}$); and
+the eulerian **mass per geo cell** against the oracle's residence time per dual cell
+projected with the solver's own dual-to-geo rule (sub-quadrant volume weights), 2 % on the
+97 cells holding $\ge 1$ % of the peak (measured $4\cdot10^{-3}$), plus the tiling total
+$\sum
+ho_p V = \dot m T$ (1.000044).  **Proven RED** on the previous binary: no witness
+line, and the first two rows of the injection column at $+33$ % / $-37$ % — while the mass
+total reads the same 1.000044 there, so the tiling invariant alone could not have seen it.
+**GATED GREEN** (2026-09-18).
 
 ### periodic-y
 

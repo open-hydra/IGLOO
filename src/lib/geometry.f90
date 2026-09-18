@@ -1,6 +1,7 @@
 module IGLOO_RayFaceIntersection3D
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_VectorModule, only: cross, chooseVector
+    use IGLOO_variables,    only: axisym, sectorNorm
     implicit none
 
     integer, dimension(6,4), parameter :: guide = reshape([1,2,3,4, &
@@ -147,7 +148,7 @@ contains
     end function isPointInsideHexahedron12
 
     !> STANDARD FUNCTION FOR A PERFECT-PLANE-FACE HEXAHEDRON
-    logical function isPointInsideCell(pt, vertices, is2D, norms, centroids, is_degen, crossedFace)
+    logical function isPointInsideCell(pt, vertices, is2D, norms, centroids, is_degen, crossedFace, sectorOut)
       implicit none
       real(R8), intent(in) :: pt(3)
       real(R8), intent(in) :: vertices(:,:)  !> (3,4) or (3,8)
@@ -156,7 +157,15 @@ contains
       real(R8), optional, intent(in)  :: centroids(3,2,6)
       logical,  optional, intent(in)  :: is_degen(2,6)
       integer,  optional, intent(out) :: crossedFace  !> exit face on miss (3D guide 1..6 / 2D edge 1..4), 0 if inside
+      logical,  optional, intent(out) :: sectorOut    !> wedge only: azimuth outside the k-plane band (the x-y verdict is unchanged)
       real(R8) :: quadVert(3,4)
+
+      !> Axisymmetric wedge: the x-y quad is azimuth-blind, so a 2.5D parcel can sweep any number of
+      !  sectors inside it. Two dot products against the k-plane normals bound a segment to one sector.
+      if (present(sectorOut)) then
+        sectorOut = .false.
+        if (axisym) sectorOut = dot_product(pt, sectorNorm(:,1)) > 0._R8 .or. dot_product(pt, sectorNorm(:,2)) > 0._R8
+      endif
 
       if (present(is2D)) then
         if (is2D) then

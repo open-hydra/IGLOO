@@ -15,6 +15,7 @@ module IGLOO_bcBox
   public :: checkBoundary
   public :: bcDef
   public :: axisymFold
+  public :: sectorDs
   public :: periodicTransport
   public :: faceAzimuth, wedgeAzimTol
   public :: grazeOffset, grazeStandoff, grazeCellFrac
@@ -277,18 +278,23 @@ contains
   !  replaced rotated by -+delthe per pass and had no convergence check, so with the wrong
   !  rotation sense (O22: rotateVector returned R(-theta)) it walked the state to +-180 deg
   !  and returned silently. The post-condition is now asserted.
-  subroutine axisymFold(stateVar)
+  subroutine axisymFold(stateVar, force, nSect)
     use IGLOO_variables, only: axisym, delthe, axisDir, refDir
     implicit none
     real(R8), intent(inout) :: stateVar(:)
+    logical, optional, intent(in)  :: force   !> fold by one sector even at |theta| = delthe/2 to roundoff (segment ended ON the k-plane)
+    integer, optional, intent(out) :: nSect   !> sectors rotated (0 = no fold)
     real(R8) :: theta, rot, binormal(3), d
     integer  :: n
 
+    if (present(nSect)) nSect = 0
     if (.not.axisym) return
     binormal = cross(axisDir, refDir)
     d     = abs(delthe)             !> the band is symmetric; delthe's sign only records the k ordering
     theta = atan2(dot_product(stateVar(1:3), binormal), dot_product(stateVar(1:3), refDir))
     n     = nint(theta/d)
+    if (present(force)) then; if (force .and. n == 0) n = int(sign(1._R8, theta)); endif
+    if (present(nSect)) nSect = abs(n)
     if (n == 0) return
     rot = -real(n,R8)*d
     stateVar(1:3) = rotateVector(stateVar(1:3), axisDir, rot)
@@ -299,6 +305,23 @@ contains
     if (abs(theta) > 0.5_R8*d*(1._R8 + 1.e-9_R8)) &
       error stop 'IGLOO: axisymFold left the wedge sector (rotation sense, or refDir not normal to axisDir?)'
   end subroutine axisymFold
+
+  !> Distance along `dir` from `p0` (inside the band) to the k-plane the ray leaves through, 0 if
+  !  none: the sector-edge analogue of computeDs for the segment refinement.
+  pure function sectorDs(p0, dir) result(s)
+    use IGLOO_variables, only: sectorNorm
+    implicit none
+    real(R8), intent(in) :: p0(3), dir(3)
+    real(R8) :: s, den, si
+    integer  :: f
+    s = 0._R8
+    do f = 1, 2
+      den = dot_product(dir, sectorNorm(:,f))
+      if (den <= 0._R8) cycle
+      si = -dot_product(p0, sectorNorm(:,f))/den
+      if (si >= 0._R8 .and. (s == 0._R8 .or. si < s)) s = si
+    enddo
+  end function sectorDs
 
   !> PERIODIC (201) TRANSPORT: shift the particle from the exit face to the partner face by
   !  T = partner_face_center - exit_face_center (velocity unchanged). `partner` returns the ATLAS

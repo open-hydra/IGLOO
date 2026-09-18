@@ -16,9 +16,10 @@ contains
                                 nb,toll,ord2,mesh2D,threshold,            &
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
+                                nSectorFold, nMultiFold,                   &
                                 trajOn, scatOn, dNscat, sixOverPi
     use IGLOO_particles,  only: obj_particle, eps
-    use IGLOO_bcBox,      only: axisymFold
+    use IGLOO_bcBox,      only: axisymFold, sectorDs
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock
     use IGLOO_Lib_Properties
     use Lib_Equations
@@ -69,6 +70,9 @@ contains
     integer  :: neq, nsp, ng, b, i, j, k, ngVert, iu, iw, it, iter, nCross, nE, nStall
     real(R8) :: posPrev(3)    ! last outer-iter position, for the zero-progress guard
     logical  :: doLoop, IamOut, newGas, eventType, eventFlag, exitLoop, startedOut, burnedOut
+    logical  :: sectorOut  !> wedge: the segment ended on a k-plane (azimuth left the band; the x-y cell is unchanged)
+    logical  :: foldOnly   !> ... and on nothing else: neither a crossing (no row, nCross untouched) nor residency
+    integer  :: nSect
     logical  :: consumed   !> droplet ended INSIDE the domain with mass still on it
     logical  :: atGasBoundary, wasBoundary   ! ord2 C2: geo consulted only at gas-boundary cells
     real(R8) :: geoHexNorms(3,2,6), geoHexCentroids(3,2,6)
@@ -281,6 +285,21 @@ contains
         endif
       endif
 
+      !> Sector exit (wedge): the segment ended on a k-plane, so the (x, r) cell is unchanged and only
+      !  the azimuth left the band. Fold by ONE sector here, after the deposits (already in the
+      !  meridian frame) and before the cell logic (no cell owns an off-sector point). `force`
+      !  covers a segment ending on the plane to roundoff, where nint would leave it pinned there.
+      foldOnly = sectorOut .and. .not.(newGas .or. IamOut)
+      if (sectorOut) then
+        call axisymFold(part%stateVar, force=.true., nSect=nSect)
+        !$OMP ATOMIC
+        nSectorFold = nSectorFold + 1
+        if (nSect > 1) then
+          !$OMP ATOMIC
+          nMultiFold = nMultiFold + 1
+        endif
+      endif
+
       if (ord2) then
         !> Gas crossing: advance igas on the dual mesh (gas-primary tracking).
         if (newGas) then
@@ -311,9 +330,11 @@ contains
         if (IamOut) then
           call part%updateCell(geoblock); call handleGeoEvent()
         endif
-        !> Stuck detection on gas-cell residency (geo index is stale in the interior).
+        !> Stuck detection on gas-cell residency (geo index is stale in the interior). A sector
+        !  fold is neither a crossing (no row, nCross untouched) nor residency (nMaxCell would
+        !  count the many folds a spinning parcel makes inside one cell).
         if (newGas .or. IamOut) then; nCross = nCross + 1; part%Ncell = 0
-        else;                         part%Ncell = part%Ncell + 1; endif
+        elseif (.not.foldOnly) then;  part%Ncell = part%Ncell + 1; endif
       else
         !> ord1: geo-driven (unchanged).
         if (IamOut) then
@@ -324,12 +345,23 @@ contains
           part%igas = part%i(2:4)
           call gasblock(b)%gasProperties(gas,part%igas)
         endif
-        if (all(part%i==part%iold)) then; part%Ncell = part%Ncell+1
+        if (all(part%i==part%iold)) then; if (.not.foldOnly) part%Ncell = part%Ncell+1
         elseif (IamOut) then;   nCross = nCross + 1;   part%Ncell = 0; endif
       endif
 
-      !> Axisymmetric wedge: fold the particle back into the sector if it crossed faces 5/6.
-      if (axisym) call axisymFold(part%stateVar)
+      !> Axisymmetric wedge safety net: a segment can still end past a k-plane when an x-y crossing
+      !  and the sector edge fall within eps of each other (the crossing wins the refinement).
+      if (axisym) then
+        call axisymFold(part%stateVar, nSect=nSect)
+        if (nSect > 0) then
+          !$OMP ATOMIC
+          nSectorFold = nSectorFold + 1
+        endif
+        if (nSect > 1) then
+          !$OMP ATOMIC
+          nMultiFold = nMultiFold + 1
+        endif
+      endif
 
       if (part%Ncell>nMaxCell) then
         write(*,'(A,I4,A,4I4,A)') '       ==> Particle ',part%ID,' stuck in cell:',part%iold
@@ -346,7 +378,7 @@ contains
         part%gone = .true.
       endif
 
-      if ((dtprint>0._R8.and.part%time>=tprint).or.(mod(nCross,iprint)==0.and.part%Ncell==0)) then
+      if ((dtprint>0._R8.and.part%time>=tprint).or.(mod(nCross,iprint)==0.and.part%Ncell==0.and..not.foldOnly)) then
         if (trajOn) write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID
         tprint = tprint + dtprint
       endif
@@ -395,7 +427,7 @@ contains
 
       deltat = safety*deltat
       newGas = .false.; IamOut = .false.; exitLoop = .false.; eventFlag = .false.; startedOut = .false.
-      burnedOut = .false.
+      burnedOut = .false.; sectorOut = .false.
       kickPend = .false.; kickDV = 0._R8
       eventType = part%brkupEvent
       addChildLocal = .false.; childState = 0._R8
@@ -484,7 +516,7 @@ contains
       !> Full [t1,t2] consumed with no interrupt (solver reached XEND): finalize the segment;
       !  re-invoking on the null interval [t2,t2] hands SDIRK4 H=0 -> IDID=-1 -> spurious kill.
       !  Outer loop re-budgets deltat from the current (possibly decelerated) velocity.
-      if (.not.(IamOut .or. newGas .or. eventFlag)) exitLoop = .true.
+      if (.not.(IamOut .or. newGas .or. eventFlag .or. sectorOut)) exitLoop = .true.
       !> startedOut escape hop: finalize at the moved position (no refinement — it would re-integrate
       !  from the sliver start and discard the motion); updateCell then relocates from there.
       if (startedOut) exitLoop = .true.
@@ -569,9 +601,10 @@ contains
         dout = norm2(deltaS)
         if (dout>eps) then
           dir  = deltaS/dout
-          if     (IamOut) then; din = part%computeDs(vert,dir)
-          elseif (newGas) then; din = part%computeDs(gasVert,dir)
-          else;                 din = dout/nStep; endif
+          if     (IamOut)    then; din = part%computeDs(vert,dir)
+          elseif (newGas)    then; din = part%computeDs(gasVert,dir)
+          elseif (sectorOut) then; din = sectorDs(part%oldState(1:3),dir)   ! exact: the k-plane is a plane
+          else;                    din = dout/nStep; endif
           !> computeDs is only reached once a crossing is already flagged (IamOut/newGas). din<=0
           !  means its Möller-Trumbore refine failed to pin the just-crossed face (isPointInsideCell
           !  vs triangle-split tolerance at sub-1e-5 proximity), NOT that there is no face. Keep
@@ -651,10 +684,10 @@ contains
 
       !> Geo containment only when the gas cell is on a boundary  (ord2==true)
       if (.not.ord2 .or. atGasBoundary) then
-            IamOut = .not. isPointInsideCell(y(1:3),vert,mesh2D,geoHexNorms,geoHexCentroids,geoHexDegen,part%exitFace)
+            IamOut = .not. isPointInsideCell(y(1:3),vert,mesh2D,geoHexNorms,geoHexCentroids,geoHexDegen,part%exitFace,sectorOut)
       else; IamOut = .false.
       endif
-      if     ( ord2 ) then; newGas = .not.isPointInsideCell(y(1:3),gasVert,mesh2D,gasHexNorms,gasHexCentroids,gasHexDegen,part%gasExitFace)
+      if     ( ord2 ) then; newGas = .not.isPointInsideCell(y(1:3),gasVert,mesh2D,gasHexNorms,gasHexCentroids,gasHexDegen,part%gasExitFace,sectorOut)
       elseif (IamOut) then; newGas = .true.; endif
 
       !> Locator-lost segment (updateCell cycle-breaker fired: no cell owns the start point) =
@@ -662,7 +695,7 @@ contains
       !  has moved a real distance (escapeDist) off the sliver, instead of looping on zero progress.
       if (NR == 1) startedOut = (IamOut .or. newGas) .and. part%lost
       if (startedOut .and. norm2(y(1:3)-part%oldState(1:3)) <= escapeDist) then
-        IamOut = .false.; newGas = .false.
+        IamOut = .false.; newGas = .false.; sectorOut = .false.
       endif
 
       !> Burnout test, models 2 and 5 only: there y(8) falls by consumption alone, so it is an
@@ -730,7 +763,7 @@ contains
         if (ind_sb1 > 0) stateLocal(ind_sb1:ind_sb2) = brkupState(1:nbrkst)
       endif
 
-      if (IamOut .or. newGas .or. eventFlag .or. burnedOut) then
+      if (IamOut .or. newGas .or. eventFlag .or. burnedOut .or. sectorOut) then
         IRTRN = -2724
         return
       endif

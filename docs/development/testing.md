@@ -62,7 +62,7 @@ tests/
 │   └── twosweep.f90              # the two-sweep repeatability driver
 ├── standard/                     # drag + heat
 │   ├── drag/  temperature/       #   unit families
-│   └── drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/   # e2e cases
+│   └── drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/   # e2e cases
 ├── evaporation/                  # unit families (root C, interface-neq, tc-analytic) + d2law/d2law-line/lk-neq/tc-box/tc-hexadecane/mhb98-water e2e
 ├── breakup/                      # TAB, Pilch-Erdman, Reitz-Diwakar, ETAB, Reitz-KHRT unit families + tab/etab/pilch-erdman/reitz-diwakar/khrt e2e, khrt-stress
 ├── combustion/                   # Beckstead unit family + burn-box e2e
@@ -77,7 +77,7 @@ tests/
 
 | Category | Contents | Status |
 |----------|----------|--------|
-| `standard` | Drag (A) and temperature (B) unit families; drag-stokes, temp-relax, body-force, conv-nu, vie-plait, swirl-wedge, swirl-wedge-deposit e2e | **GREEN** |
+| `standard` | Drag (A) and temperature (B) unit families; drag-stokes, temp-relax, body-force, conv-nu, vie-plait, swirl-wedge, swirl-wedge-deposit, swirl-wedge-spin e2e | **GREEN** |
 | `evaporation` | Evaporation (C), LK-interface, TC-analytical unit families; d²-law, lk-neq, tc-box e2e + **mhb98-water** (E-VAL-2, paper-reproduction validation) | **GREEN** (bugs A3/A4/A8/A9/A10 fixed; F1/F2 e2e 2026-07-11; E-VAL-2 2026-07-21) |
 | `breakup` | TAB/ETAB, Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT families + TAB stochastic moments | **GREEN** (8 tests; A2/A13/A14/A15 fixed; ETAB event path implemented 2026-07-16) |
 | `combustion` | Beckstead $d^n$ Al-burn unit family; burn-box e2e | **GREEN** (M1, 2026-07-11) |
@@ -89,7 +89,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 (`test_{drag,heat,evap}_probes`) began life as expected-fail bug reproducers, but
 every bug they cover is fixed, so they now run as ordinary bug-transcription pins.
 
-Current gate: **84/84** in a serial build (56 e2e + 28 unit, `self_test` and `registry-docs` among the latter); `USE_MPI=ON` registers 7 more `mpi-*` cases, 89/89.
+Current gate: **85/85** in a serial build (57 e2e + 28 unit, `self_test` and `registry-docs` among the latter); `USE_MPI=ON` registers 7 more `mpi-*` cases, 92/92.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.
 
 ### Adding a test

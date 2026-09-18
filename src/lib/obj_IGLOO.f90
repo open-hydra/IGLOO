@@ -334,7 +334,7 @@ contains
                                 eulerSwitch, sourceSwitch, unitTraj, unitScat, &
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
                                 trajOn, scatOn, dNscat, trajSample, threshold, &
-                                probeOn, probeIDs
+                                probeOn, probeIDs, axisym, nSectorFold, nMultiFold
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
     use IGLOO_Lib_Properties, only: lookupTab   !> A23c child hand-off (enthalpy slot)
@@ -354,6 +354,7 @@ contains
     !  childGlobal fixes the next band and the rank-uniform termination test. Deliberately
     !  uninitialized -- an initializer here would make them implicit-SAVE (work package A).
     integer :: curBase, curCount, newBase, childLocal, childGlobal, pidx, idBase
+    integer :: foldStat(2)
     integer, allocatable :: nShedAll(:), shedOff(:)
     ! logical, allocatable :: famDone(:)
     real(R8), allocatable :: relTol(:), absTol(:)
@@ -373,6 +374,7 @@ contains
       error stop 1
     endif
     self%stateIsFresh = .false.
+    nSectorFold = 0; nMultiFold = 0
 
     sourceSwitch = self%srcSwitch
     eulerSwitch  = self%eulSwitch
@@ -760,6 +762,14 @@ contains
       ! deallocate(famDone)
     endif
 
+    !> Wedge witness: every fold should rotate by exactly one sector now that segments end at
+    !  the k-plane; a multi-sector fold means a segment swept past the band unseen (O23).
+    if (axisym) then
+      foldStat = [nSectorFold, nMultiFold]
+      call mpi_allreduce_sum_i4_array(foldStat, 2)
+      if (mpi_is_root) write(*,'(A,I0,A,I0,A)') '     - wedge sector folds: ', foldStat(1), &
+                                                 ' (multi-sector: ', foldStat(2), ')'
+    endif
     if (mpi_is_root) write(*,*)" Stop condition : All particles out of domain!"
 
   end subroutine solve

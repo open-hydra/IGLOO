@@ -43,35 +43,31 @@ comment lines — this file tripped the second one once while being written).
 lost that way fails G2 (never reaches the outlet).
 
 **Measured on the fixed binary** (OMP 1 and 5, three runs each): every output identical as
-a sorted multiset (record order is the only OMP effect); ID 1: 347 rows, 18 z-sign flips,
+a sorted multiset (record order is the only OMP effect); ID 1: 337 rows (347 before the
+meridian-frame deposits, 349 after them, 337 with sector-edge segments), 18 z-sign flips (10 with
+sector-edge segments),
 min y = 4.5e-5 (its closest approach to the axis, at |p × v̂| = 1e-4·0.5/√1.25 = 4.47e-5),
 exits at x = 2.058712 (axis-200's swirl-free ID 1 exits at 2.058713); ID 2: 260 rows,
 byte-identical to axis-200's. `N_FOLD_MIN = 9` is half the measured count; it is
 deterministic per binary (one thread per parcel) and only 1-ULP generation drift could move
 a near-zero landing.
 
-**What this case does NOT pin.** The fold's cadence is not "every 1° crossing": under
-`mesh2D` the containment test is z-blind (`geometry.f90`, quad in x–y), so a k-face crossing
-never interrupts a segment and the unfolded azimuth at a segment end can reach several
-sectors (the closed-form fold handles any n). The gas sample between folds is exact since
-W-plan item E (`Lib_Equations::sampleGas2D`: evaluated at the parcel's (x, r), velocity
-rotated to its azimuth — `standard/swirl-wedge` gates it at the print floor); this gate is
-behavioral (in-sector, no stall, exits) and measures nothing quantitative. What remains open
-for an INTERIOR swirling parcel far from the sector (no k-face cap on its segment, the
-unfolded azimuth bounded only by the dual's y-range through y = r cos θ): the dual cell is
-still LOCATED by (x, y = r cos θ), so past a few sectors the interpolation extrapolates from
-a cell inward of the parcel's true radius, and the source/euler deposits land in that cell —
-the many-sector sub-case of ledger O23 — **reproduced 2026-09-18** on the swirl-wedge fixture with one
-over-spun parcel (`y = 0.2`, `up = 1`, `wp = 10`, or `up = 0.05`, `wp = 2`): the first segment sweeps
-≈ 27° / 34° (27 sectors folded at once), the true radius runs 0.200 → 0.224 / 0.234 while the dual
-cell is located by y = r cos θ = 0.200, so 8 % / 23 % of that segment's deposit lands a row inward;
-the sweep then decays (8°, 6°, 5° … < 1° as r grows with angular momentum). A transient here; a
-parcel swinging past the axis (r_min ~ dx) would sustain it. Mechanism: the segment is ended by
-the z-blind (x, y) containment, never by a k-face, and the fold runs only at the segment end; the
-coherent fix is to end the segment at the sector edge (a `sectorOut` interrupt in `solout`), which
-no plan has scoped — recorded, not built. The deposits'
-*frame* (Cartesian at the parcel's azimuth, not the meridian plane) was O23's measurable
-deposit half: fixed by `Lib_Equations::toMeridian` and gated by `standard/swirl-wedge-deposit`;
-the sampling half is closed by E. This case's `euler1.tec` moved with that fix (its ID 1
-leaves the plane) and its trajectory rows flipped by one F12.6 ULP (the rotated euler
-states change the SDIRK4 step sequence: 349 rows for ID 1, 347 before).
+**What this case does NOT pin.** The fold's cadence IS now "every 1° crossing": since
+2026-09-18 the containment test carries the azimuth band (`geometry.f90::isPointInsideCell`,
+optional `sectorOut`), so a k-plane crossing ends the ODE segment like any other face, the
+refinement pins it to the plane (`IGLOO_bcBox::sectorDs`) and `axisymFold(force=.true.)` rotates
+by exactly one sector before the cell logic runs; the run prints `wedge sector folds: N
+(multi-sector: M)` and M must be 0. This gate is still behavioral (in-sector, no stall, exits) and
+measures nothing quantitative about it — `standard/swirl-wedge-spin` does (fold count against the
+oracle sweep, eulerian mass per cell against the projected residence). History: the many-sector
+sub-case of ledger O23 was reproduced 2026-09-18 on the swirl-wedge fixture with one over-spun
+parcel (`y = 0.2`, `up = 0.05`, `wp = 2`): the first segment swept ≈ 34° (34 sectors folded at
+once) while the dual cell stayed the one located by `y = r cos θ = 0.200`, so 23 % of that
+segment's deposit landed a row inward (+33 % / −37 % on the first two rows of the injection
+column) — the sector-edge segments closed it the same day (`swirl-wedge-spin` RED-proves it on
+the previous binary). The deposits' *frame* (Cartesian at the parcel's azimuth, not the meridian
+plane) was O23's other half: fixed by `Lib_Equations::toMeridian` and gated by
+`standard/swirl-wedge-deposit`; the sampling half is closed by E. This case's `euler1.tec` moved
+with both fixes (its ID 1 leaves the plane; ≤ 3.6e-6 of scale for the sector-edge segments) and
+its trajectory rows changed with each (347 → 349 → 337 for ID 1: the segment sequence sets the
+SDIRK4 steps).

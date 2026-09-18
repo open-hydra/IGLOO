@@ -5,7 +5,7 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ (e2e)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ (e2e)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
@@ -260,6 +260,13 @@ igloo_e2e_case(swirl-wedge standard/swirl-wedge "e2e;standard;drag;gas;axisym")
 # RED on the Cartesian deposit (325/382 cells, v_p misses -w sin theta) and on a meridian-
 # COMPONENT difference (F_r sign flips: the frame terms w^2/r are not force on the gas).
 igloo_e2e_case(swirl-wedge-deposit standard/swirl-wedge-deposit "e2e;standard;drag;gas;axisym;euler")
+# swirl-wedge-spin: one over-spun parcel (wp = 2 at r = 0.2, up = 0.05) -- the many-sector case of
+# O23. The containment test carries the azimuth band (isPointInsideCell sectorOut), so every
+# segment ends at the sector edge and folds by ONE sector. Gates the run's fold witness against
+# the oracle sweep (79 sectors, no multi-sector fold), the trajectory (u is a state, not the
+# clock) and the eulerian mass per geo cell against the oracle residence projected with the
+# solver's dual-to-geo rule. RED on the pre-fix binary: no witness, first cells +33 % / -37 %.
+igloo_e2e_case(swirl-wedge-spin standard/swirl-wedge-spin "e2e;standard;drag;gas;axisym;euler")
 
 # ---------- evaporation --------------------------------------------------------
 igloo_unit_test(test_evaporation evaporation "unit;evaporation;c;t4")

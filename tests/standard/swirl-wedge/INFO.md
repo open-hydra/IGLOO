@@ -29,8 +29,9 @@ extrapolation error at f3/f4. `properties.dat` is vie-plait's with Density 1800 
 station (x0 = 0.105, cell 11 centre, θ = 0) with `up = 1 = U` so `u ≡ 1` and
 `t = (x − x0)/1` is the clock: P1 co-rotating (r0 = 0.5, w0 = Ωr0 = 0.1), P2 spin-up
 (r0 = 0.5, w0 = 0), P3 over-spun (r0 = 0.3, w0 = 2Ωr0 = 0.12). Flight T = 1.895 s;
-segment length `Δt_seg = dx/U0 = 0.01 s` (one dual crossing per segment); overshoot per
-sector `θ̇Δt_seg/δ ≈ 0.115`.
+segment length `Δt_seg = dx/U0 = 0.01 s` (one dual crossing per segment) — and, since
+2026-09-18, a segment also ends at the sector edge (`isPointInsideCell` `sectorOut`), so the
+fold never sees an overshoot beyond `eps` (it was up to `θ̇Δt_seg/δ ≈ 0.115` of a sector).
 
 **Oracle** (`check.py`, derived in-file). In cylindrical coordinates about x, a Stokes
 parcel (`a = (g − v)/τ` exactly, Cd = 24/Re) in the true field `g = (U0, −Ωz, +Ωy)` obeys
