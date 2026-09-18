@@ -84,17 +84,15 @@ $v$ error maps to an unbounded $x$ error — not a code defect, so correctly exc
 
 ```bash
 cd tests/standard/drag-stokes/
-python3 -B check.py          # verify committed OUTPUT/
-# or regenerate first:
+# run the case, then verify OUTPUT/
 ../../../bin/IGLOO && python3 -B check.py
 ```
 
 ---
 
-## Status
+## Result
 
-**GREEN** — confirmed by `check.py` exit 0.
-25/25 particles match the Stokes closed form within theoretical tolerance.
+`check.py` exit 0: 25/25 particles match the Stokes closed form within theoretical tolerance.
 Worst relative residual $\ll 1$.
 
 ---

@@ -12,12 +12,11 @@ the [taxonomy](index.md#kinds-of-verification).  Because the call is direct, the
 tests are the sharpest instrument available for the *formula*: a wrong coefficient
 shows up pointwise, at machine precision, with nothing to hide behind.  For the
 same reason they cannot see whether the routine is reached at all, whether its
-inputs arrive intact, or whether the surrounding integration uses its result — the
-A16/A18/A19 finds all passed their unit family and were caught only by the
-end-to-end paper reproductions in [End-to-End Cases](e2e.md).  Where the test's
-oracle is a re-coding of the same paper the production code was written from, the
-two can also lockstep on the same error (A13 did); the fix for that is an external
-reference, not a tighter tolerance.
+inputs arrive intact, or whether the surrounding integration uses its result —
+that is what the end-to-end paper reproductions in [End-to-End Cases](e2e.md) are
+for.  Where the test's oracle is a re-coding of the same paper the production code
+was written from, the two can also lockstep on the same error; the guard against
+that is an external reference, not a tighter tolerance.
 
 One family here is not a physics closure: `test_gas_reconstruction`
 (§ Infrastructure) checks the trilinear interpolation and hex-inverse machinery,
@@ -43,19 +42,20 @@ Tests the 13 drag closures in `Lib_Drag.f90`, exercised through the production
 **What is tested.** The Stokes limit `Cd·Re → 24` for every full-range correlation
 (internal self-check, no external citation needed); the relaxation integral for
 Stokes (`[CGW78]`) and Schiller–Naumann (`[SN33]`) against independent oracles; the
-SDIRK4 tableau order ($p \approx 4$) on the linearized Stokes RHS; and probes XD1–XD5
-for the model-formula bugs A1/A5/A6 (fixed 2026-07-07) and the Wen-Yu value
-correction.
+SDIRK4 tableau order ($p \approx 4$) on the linearized Stokes RHS; and the value
+pins XD1–XD5 (finite Crowe and Hermsen $C_d$ at $\mathrm{Re} = 10^3$, $\mathrm{Ma} = 2$;
+the Putnam plateau $0.4392$ and the Wen–Yu plateau $0.43$ as published; continuity of
+the Henderson transonic bridge at $\mathrm{Ma} = 1.75$).
 
-**Oracle type.** Closed-form exponential relaxation for Stokes (A1); independent
-Python RK4 re-implementation of the Schiller–Naumann RHS (A3); direct algebraic
-evaluation at tabulated Re for the probe tests.
+**Oracle type.** Closed-form exponential relaxation for Stokes; independent
+Python RK4 re-implementation of the Schiller–Naumann RHS; direct algebraic
+evaluation at tabulated Re for the pins.
 
 **Literature references.** `[CGW78]` (Clift, Grace & Weber 1978 — all correlations);
-`[SN33]` (Schiller & Naumann 1933).
+`[SN33]` (Schiller & Naumann 1933); Shimada 2006 eqs. 12–24 and NASA SP-8039 Table I
+for the compressible correlations and the plateaus.
 
-**Status.** `test_drag_lit` GREEN (DL1–DL3); `test_drag_probes` **GATED GREEN**
-(XD1–XD5 — bugs A1/A5/A6 + Wen-Yu C-flag fixed 2026-07-07).
+**Gates.** `test_drag_lit` (DL1–DL3); `test_drag_probes` (XD1–XD5).
 
 <figure>
   {% include "vv/images/unit-standard-drag.svg" ignore missing %}
@@ -72,19 +72,21 @@ production `rhsStandard` path.
 and JAXA3 (analytic, source-free); the full Ranz–Marshall correlation `[RM52]`
 against a table of (Re, Pr) values; SDIRK4 tableau order on the linearized (Nu = 2)
 thermal RHS; and the full coupled (velocity + temperature) ODE under Ranz–Marshall
-against an independent RK4 re-implementation.  JAXA4 ≡ Kavanau–Drake bridging is
-verified algebraically (S1 in `standard/temperature/LITERATURE_TESTS.md`).
+against an independent RK4 re-implementation.  JAXA4 and Kavanau–Drake share the same
+compressibility bridge, verified algebraically (S1 in
+`standard/temperature/LITERATURE_TESTS.md`); JAXA4's base coefficient is $0.654$
+(Shimada 2006 eq. 50 / NASA SP-8039 Table II).
 
 **Oracle type.** Analytic Nu = 2 anchor (source-free); Ranz–Marshall table values
 from `[RM52]`; independent RK4 of the coupled system for B2; machine-zero inter-model
 identity checks.
 
-**Literature references.** `[RM52]` (Ranz & Marshall 1952).
+**Literature references.** `[RM52]` (Ranz & Marshall 1952); Shimada 2006 eqs. 45–50
+quoting NASA SP-8039 Table II.
 
-**Status.** `test_heat_nu` GREEN (HN1–HN3); `test_heat_probes` GREEN — A7 closed
-2026-07-15/16 as SOURCE-FAITHFUL (the published correlation, Shimada2006 eq. 45
-quoting NASA-SP-8039 Table II, has no +2 floor; the probe now pins the exact
-transcription).  JAXA4 base coefficient 0.645 → **0.654** (A12, both sources).
+**Gates.** `test_heat_nu` (HN1–HN3); `test_heat_probes` (XH1: JAXA1 pinned to the
+published $2.5\,\mathrm{Re}^{0.15} + 0.04\,\mathrm{Re}$, which has no $+2$ floor — a
+source-faithful transcription, see [Heat transfer](../theory/heat.md)).
 
 <figure>
   {% include "vv/images/unit-standard-heat.svg" ignore missing %}
@@ -94,15 +96,16 @@ transcription).  JAXA4 base coefficient 0.645 → **0.654** (A12, both sources).
 
 ## Evaporation — family C (`tests/evaporation`)
 
-Tests the four evaporation closures in `Lib_Evaporation.f90` at function level.
+Tests the evaporation closures in `Lib_Evaporation.f90` at function level.
 
-**What is tested.** The Sherwood / Nusselt prefactor structure at Re = 0 for all
-four models (d²-law, CEM, CEM-B, ASM); cross-model Re = 0 consistency (CEM/CEM-B/ASM
+**What is tested.** The Sherwood / Nusselt prefactor structure at Re = 0 for the
+d²-law, CEM, CEM-B and ASM models; cross-model Re = 0 consistency (CEM/CEM-B/ASM
 must agree to machine precision; d²-law agrees at $\mathrm{Nu}=2$); the
 Abramzon–Sirignano $F(B)$ correction factor `[AS89]`; Ranz–Marshall Sh coefficient
-in CEM `[RM52]`.  Probes: XE1 verifies the d²-law / CEM ratio ($= 1$ after A3 fix);
-XE2 verifies $\dot{m} > 0$ from the corrected call sites (A4 fix); XE3 verifies
-$\dot{Q}_G > 0$ for hot gas (A9 fix).
+in CEM `[RM52]`.  Value pins: XE1 the d²-law / CEM ratio at $\mathrm{Nu} = 2$ ($= 1$);
+XE2 $\dot{m} < 0$ (mass loss) from the production call sites with the gas state in
+the documented argument order; XE3 $\dot{Q}_G > 0$ for hot gas from the ASM heat
+override.
 
 **Oracle type.** Algebraic (function-level direct calls); cross-model consistency
 (source-free).
@@ -110,9 +113,8 @@ $\dot{Q}_G > 0$ for hot gas (A9 fix).
 **Literature references.** `[RM52]`; `[Lef89]` (Lefebvre 1989 — d²-law canonical
 constant $K = 8 k_g \ln(1+B_T)/(\rho_l c_{pg})$); Abramzon & Sirignano (1989) eq. 20/24.
 
-**Status.** `test_evap_probes` **GATED GREEN** (XE1/XE2/XE3 — bugs A3/A4/A9 fixed
-2026-07-07).  The end-to-end d²-law case (`evaporation/d2law`) is also GATED GREEN —
-see [Evaporation](evaporation.md).
+**Gates.** `test_evaporation`; `test_evap_probes` (XE1/XE2/XE3).  The end-to-end
+d²-law case (`evaporation/d2law`) is described in [Evaporation](evaporation.md).
 
 <figure>
   {% include "vv/images/unit-evaporation-cem.svg" ignore missing %}
@@ -123,7 +125,7 @@ see [Evaporation](evaporation.md).
 Langmuir–Knudsen interface depression (MHB98 model M2) around the CEM gas-side
 rate: fixed-point self-consistency, deep-Picard oracle agreement, VLE limit,
 the exact $1/(p\,d)$ scaling inversion, and a 27-point convergence envelope
-(LK1–LK6).  **GATED GREEN.**
+(LK1–LK6).
 
 <figure>
   {% include "vv/images/unit-evaporation-lk.svg" ignore missing %}
@@ -133,7 +135,7 @@ the exact $1/(p\,d)$ scaling inversion, and a 27-point convergence envelope
 
 TC2012 eq. 9 Stefan–Fuchs rate: residual self-oracle on a 27-point grid, boiling
 clamp, exact isothermal Stefan–Fuchs limit, CEM-collapse identity, heat coupling,
-and the bracket theorem (TC1–TC7).  **GATED GREEN.**
+and the bracket theorem (TC1–TC7).
 
 <figure>
   {% include "vv/images/unit-evaporation-tc.svg" ignore missing %}
@@ -141,7 +143,7 @@ and the bracket theorem (TC1–TC7).  **GATED GREEN.**
 
 ### Stefan-blowing reduction $f_2$ — MHB98 Fig. 4 decane
 
-`tests/evaporation/test_mhb98_decane.f90` — E-VAL-2b, the **model-discriminating**
+`tests/evaporation/test_mhb98_decane.f90` — the **model-discriminating**
 MHB98 case: Fig. 4(b) spans ~200 K across
 their eight models, against 0.47 K in the Fig. 2(b) water case gated by
 [mhb98-water](e2e.md#mhb98-water).  What separates them here is *not*
@@ -169,7 +171,7 @@ Three legs: **DC1** production `evaporation` (CEM+LK) $\dot m$ vs an independent
 re-coded M7 chain ($3.5\cdot10^{-16}$); **DC2** `blowingFactor` vs eq. 19
 ($9.4\cdot10^{-15}$); **DC3** the re-code at MHB98's *own* Sh/Nu coefficient 0.552 vs
 three pixel-measured Fig. 4 quantities — $\beta$ 1.3 %, $T_d(3.5\,\mathrm{s})$ 3.3 K,
-$D^2(4.0\,\mathrm{s})$ 1.2 %.  **GATED GREEN** (5/5).
+$D^2(4.0\,\mathrm{s})$ 1.2 %.  All five checks pass.
 
 **Documented deviations, quantified not hidden.** IGLOO's Ranz–Marshall carries
 $0.600$ where `[MHB98]` eq. (6) prints $0.552$ (8.7 %), so DC1/DC2 run the oracle at
@@ -205,19 +207,20 @@ $$
 
 with constants $C_k=8$, $C_d=5$, $C_f=1/3$, $C_b=1/2$, $K=10/3$ verified
 term-for-term against `[ORA87]` (and the ANSYS/CFX theory guide transcription).
-`YupdateTAB` is an exact closed-form transcription — all constants confirmed.
+`YupdateTAB` is an exact closed-form transcription.
 
-**ETAB.** The `Kbr` mass-rate coefficient is continuous at `We = WeTrans` iff
-$k_1 = k_2$ (default); the test is a continuity probe sweeping `We` through
-`WeTrans`.
+**ETAB.** The `Kbr` mass-rate coefficient is continuous at `We = WeTrans` for any
+$(k_1, k_2)$, because $A_{We} = (k_2\sqrt{\mathrm{We}_\mathrm{trans}}/k_1 - 1)/\mathrm{We}_\mathrm{trans}^4$
+is built from both; the test is a continuity probe sweeping `We` through `WeTrans` with
+$k_1 \ne k_2$.
 
-**Status.** **GREEN.** `test_breakup_tab` (TAB1 oscillator vs the closed form,
+**Gates.** `test_breakup_tab` (TAB1 oscillator vs the closed form,
 TAB2 independent RK4 of the raw `[ORA87]` ODE, TAB3 rest-drop critical Weber,
 TAB4 breakup time via bisection); `test_tab_moments` (child-size $E[r]$, $E[r^2]$
 over 20 000 sampled breakups vs a truncated Rosin–Rammler moment oracle,
-CLT-band tolerance); `test_breakup_etab` (ET1–ET4 product-size ratio
+CLT-band tolerance); `test_breakup_etab` (ET1–ET4: product-size ratio
 $\ln(r_\mathrm{new}/r)$ vs the Tanner $K_\mathrm{br}$ branches, continuity across
-`WeTrans`, ET4 child $v_\perp = A\dot{x}$).
+`WeTrans`, ET4 child $v_\perp = A\dot{x}$ magnitude, direction and the no-kick regime).
 
 <figure>
   {% include "vv/images/unit-breakup-tab.svg" ignore missing %}
@@ -236,9 +239,9 @@ representative Weber numbers plus just inside each breakpoint — branch values 
 discontinuities confirmed against the paper table; $W_c(\mathrm{Oh})$ critical Weber
 at Oh = 0, 0.1, 1.
 
-**Status.** `test_breakup_pe` **GATED GREEN** (PE1–PE4: the $T(\mathrm{We})$
+**Gates.** `test_breakup_pe` (PE1–PE4: the $T(\mathrm{We})$
 breakup-time table with the Oh-override branch and the $d<d_\mathrm{stable}$
-stability guard; all constants confirmed against `[PE87]`, 2026-07-15).
+stability guard; all constants as in `[PE87]`).
 
 <figure>
   {% include "vv/images/unit-breakup-pe.svg" ignore missing %}
@@ -253,14 +256,13 @@ OpenFOAM v7 `ReitzDiwakar.C`.
 formulas, confirmed by repackaging the `bp` coefficients to match the OpenFOAM
 reference form.
 
-**Status.** `test_breakup_rd` **GATED GREEN** (RD1–RD4: bag/stripping stable-diameter
-and breakup-time branches plus the regime handoff; the Reynolds convention was
-resolved — `breakupOde` receives $Re = \rho_g\,|\mathrm{slip}|\,d/\mu_g$, which is
-what RD needs).  The $C_s = 20$ stripping constant is **closed source-faithful**
-(2026-07-23): its primary source `[RD87]` (SAE 870598) obtains $C=20$ explicitly
-by curve-fitting, and the bag constant $D=\pi$ — so `[RD86]`'s earlier
-"of order unity" wording does not apply to the calibrated form production uses.
-The e2e companion is `reitz-diwakar-e2e` — see [End-to-End Cases](e2e.md).
+**Gates.** `test_breakup_rd` (RD1–RD4: bag/stripping stable-diameter
+and breakup-time branches plus the regime handoff; `breakupOde` receives
+$Re = \rho_g\,|\mathrm{slip}|\,d/\mu_g$, which is what RD needs).  The $C_s = 20$
+stripping constant is source-faithful: its primary source `[RD87]` (SAE 870598)
+obtains $C=20$ explicitly by curve-fitting, and the bag constant $D=\pi$ — so
+`[RD86]`'s "of order unity" wording does not apply to the calibrated form production
+uses.  The e2e companion is `reitz-diwakar-e2e` — see [End-to-End Cases](e2e.md).
 
 <figure>
   {% include "vv/images/unit-breakup-rd.svg" ignore missing %}
@@ -270,17 +272,22 @@ The e2e companion is `reitz-diwakar-e2e` — see [End-to-End Cases](e2e.md).
 
 ### Reitz-KHRT (`tests/breakup/reitz-khrt`)
 
-**What is tested.** The corrected $\omega_\mathrm{KH}$ chain against the Reitz (1987)
+**What is tested.** The $\omega_\mathrm{KH}$ chain against the Reitz (1987)
 dimensional form: sub-critical $\omega_\mathrm{KH} = 0$ (KH1); two representative
 $(We_g, Oh, Ta)$ points code ≡ Reitz-1987 formula to 1e-12 (KH2/KH3); pure-KH path
-with acc = 0.  RT quantities, event path, and child-drop moments are deferred.
+with acc = 0.  The RT quantities and the event path (RT shatter, KH shed child) are
+covered end-to-end by `khrt-e2e` / `khrt-e2e-rt`.
 
 **Oracle type.** Direct algebraic evaluation against the published Reitz-1987 chain.
 
-**Literature references.** `[RD86]` (Reitz & Diwakar / Reitz 1987 KH formulation).
+**Literature references.** `[RD86]` (Reitz & Diwakar / Reitz 1987 KH formulation);
+`[Reitz87]`; Beale & Reitz 1999 for the RT child size.
 
-**Status.** `test_breakup_khrt` **GATED GREEN** (bug A2 fixed 2026-07-07; KH1/KH2/KH3
-pass to 1e-12; RT/event path deferred).
+**Gates.** `test_breakup_khrt` (KH1/KH2/KH3 to 1e-12); `test_kh_rayleigh_limit` (the
+$\mathrm{We}_g \to 0$, $Z \to 0$ corner of the Reitz-87 fit against Rayleigh's inviscid
+capillary-jet dispersion relation, $\lambda = 9.02\,a$ and $\omega^\ast$ recovered from two
+`breakupOde` calls); `test_khrt_interaction` (the ODE path's KH rate is zero exactly when
+the event path takes the RT branch, at identical state).
 
 <figure>
   {% include "vv/images/unit-breakup-khrt.svg" ignore missing %}
@@ -295,11 +302,11 @@ model 5): closed-form mass evolution $m(t)$ with complex-step derivative checks
 (CB1/CB2), the bitwise ignition gate at $T_\mathrm{ign}$ (CB3), and the
 $X_\mathrm{eff}$-exponent discriminator calibrated at the paper anchor (CB4).
 
-**Literature references.** `[Beck05]` (Beckstead 2005); exponent $X_\mathrm{eff}^{1.0}$
-primary-verified 2026-07-13.
+**Literature references.** `[Beck05]` (Beckstead 2005); the exponent
+$X_\mathrm{eff}^{1.0}$ is the paper's final correlation.
 
-**Status.** `test_combustion` **GATED GREEN** (CB1–CB4); e2e companion `burn-box`
-GATED GREEN — see [End-to-End Cases](e2e.md).
+**Gates.** `test_combustion` (CB1–CB4); e2e companion `burn-box` — see
+[End-to-End Cases](e2e.md).
 
 <figure>
   {% include "vv/images/unit-combustion-beckstead.svg" ignore missing %}
@@ -307,7 +314,7 @@ GATED GREEN — see [End-to-End Cases](e2e.md).
 
 ---
 
-## Infrastructure — family E + T9
+## Infrastructure — family E
 
 ### Gas reconstruction (`tests/infrastructure/gas_reconstruction`)
 
@@ -317,10 +324,7 @@ map — the cell-tracking and interpolation routines used on every time step.
 **Tests.** E1 constant field (machine eps); E2 multilinear field on parallelepiped
 (machine eps); E3 smooth field convergence order ($p_\mathrm{obs} \approx 2 \pm 0.3$
 over four refinement levels); E4 forward/inverse hex map round-trip (residual
-$< 10^{-4}$); E5 partition-of-unity and node recovery.  E6 (Stokes-in-linear-field,
-matrix-exponential oracle) deferred.
-
-**Status.** E1–E5 GREEN; E6 scaffolded.
+$< 10^{-4}$); E5 partition-of-unity and node recovery.
 
 <figure>
   {% include "vv/images/unit-infrastructure-interp.svg" ignore missing %}
@@ -330,41 +334,21 @@ matrix-exponential oracle) deferred.
 
 Pins the `input.ini` → module-variable round-trip through `read_IGLOO_input` (FiNeR
 parsing) for five representative parameter groups: TAB defaults, model selectors,
-body force, ODE tolerances, and RNG seed.
+body force, ODE tolerances, and RNG seed (IP1–IP5).  No overlay figure — a
+configuration contract has nothing physical to plot.
 
-**Status.** IP1–IP5 GREEN.  No overlay figure — a configuration contract has
-nothing physical to plot.
+### Further infrastructure families
+
+`rng_stream` (the per-parcel RNG stream contract: `rngSeedFor`/`rngNext`, draws
+independent of thread and rank), `axis_dispatch` (bcdef-200 face classification: the
+axis face reflects, the wedge faces fold, independent of face index and axis
+direction), `graze_standoff` (the grazing-reflection standoff never exceeds the cell it
+places a particle into) and `dual_clip` (the ord2 dual mesh tiles the domain:
+$\sum$ dual cell volumes $=$ domain volume, boundary duals clipped) are routine-level
+checks of the tracking and BC machinery; each carries its own `INFO.md`.
 
 ### DB injection (`tests/infrastructure/db-injection`)
 
-End-to-end case for the assigned-position (`AP`) injection path.  Places 5 particles
+End-to-end case for the assigned-position (`DB`) injection path.  Places 5 particles
 on a uniform box with `up=1`; checks placement fidelity, first-step $u = u_p$
 hand-off via `obj_particle%vInj`, Stokes velocity relaxation, and domain exits.
-
-**Status.** **GATED GREEN** (bug B1 fixed 2026-07-08).
-
----
-
-## Production bugs found
-
-The verification campaign catalogued **fifteen model-formula bugs (A1–A15)**, one
-combustion-constant fix (M1), and six infrastructure bugs (B1–B6); as of 2026-07-16
-**all are fixed, refuted, or closed as source-faithful** — every fix is gated by a
-CTest probe or e2e oracle.  Highlights by physics area:
-
-- **Drag** — A1 (Crowe/Hermsen exp placement) and A11 (their $g(Re)$ bridge factor,
-  off by $g^2$) fixed and confirmed at the true primary (NASA-SP-8039 Table I);
-  A6 Henderson blend $4/3$; Putnam/Wen-Yu plateaus source-faithful (0.4392 / 0.43,
-  Shimada2006 authoritative per the 2026-07-16 decision).
-- **Heat** — A12 (JAXA4 0.654) fixed; A7 (JAXA1 floor) closed *not-a-bug*: the
-  published correlation has no +2 term (NASA-SP-8039 Table II).
-- **Evaporation & droplet energy** — A3 (d²-law factor 2), A4 (scrambled gas args),
-  A8 (LEB stub), A9 (ASM heat), A10 (spurious sensible-carry in F(7), ~65 % of the
-  latent sink for water) all fixed.
-- **Breakup** — A2 (Ω_KH sqrt), A13 (KHRT Z/T definitions, T was ~29× high),
-  A14 (RT child count missing cube), A15 (ETAB stripping k₂ + Tanner defaults)
-  fixed against the primary PDFs; Pilch-Erdman and TAB verified with zero
-  discrepancies.
-
-Each fix is gated by the test named in its row above; `tests/VERIFICATION_MATRIX.md`
-maps every CTest entry to its reference source and oracle.

@@ -57,7 +57,7 @@ contains
     call reg%add('IGLOO-Models','evaporation',d_s(8),'NoEvaporation', &
       'Evaporation model; presence enables phase change (LEB reserved, not implemented: hard error)','d2-law, CEM, CEM-B, ASM, TC',.false.)
     call reg%add('IGLOO-Models','liquid-conduction',d_s(11),'ITC', &
-      'Liquid-side conduction model, global default (per-material override in [IGLOO-MaterialX]); P2T not implemented yet (phase F3)','ITC, P2T',.false.)
+      'Liquid-side conduction model, global default (per-material override in [IGLOO-MaterialX]); P2T not implemented: refused at setup','ITC, P2T',.false.)
     call reg%add('IGLOO-Models','interface',d_s(12),'VLE', &
       'Interface model, global default (per-material override in [IGLOO-MaterialX]): VLE equilibrium or LK Langmuir-Knudsen non-equilibrium (Miller-Harstad-Bellan 1998)','VLE, LK',.false.)
     call reg%add('IGLOO-Models','blowing',d_s(20),'none', &
@@ -65,7 +65,7 @@ contains
       '= Miller-Harstad-Bellan 1998 eq.19, f2=b/(exp(b)-1) with b their eq.17 evaporation '// &
       'parameter. Off by default: it changes every evaporating case','none, LK',.false.)
     call reg%add('IGLOO-Models','boiling',d_s(13),'clamp', &
-      'Boiling branch, global default (per-material override in [IGLOO-MaterialX]); ZGR not implemented yet (phase F4)','clamp, ZGR',.false.)
+      'Boiling branch, global default (per-material override in [IGLOO-MaterialX]); ZGR not implemented: refused at setup','clamp, ZGR',.false.)
     call reg%add('IGLOO-Models','breakup',d_s(9),'NoBreakup', &
       'Breakup model','Pilch-Erdman, Reitz-Diawakar, Reitz-KHRT, TAB, ETAB',.false.)
     call reg%add('IGLOO-Models','Cd',d_r(3),'1.0', &
@@ -177,7 +177,7 @@ contains
     call reg%add('IGLOO-MaterialX','combustion',d_s(18),'-', &
       'Metal combustion model; presence switches this material to the metal track (mutually exclusive with evaporation and breakup)','Beckstead',.false.)
     call reg%add('IGLOO-MaterialX','solidification',d_s(19),'off', &
-      'Solidification with supercooling/recalescence; not implemented yet (phase M3)','on, off',.false.)
+      'Solidification with supercooling/recalescence; not implemented: on is refused at setup','on, off',.false.)
     call reg%add('IGLOO-MaterialX','alpha-e',d_r(41),'1.0', &
       'Langmuir-Knudsen evaporation accommodation coefficient (interface=LK)','',.false.)
     call reg%add('IGLOO-MaterialX','k-liq',d_r(42),'0', &

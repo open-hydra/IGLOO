@@ -15,13 +15,14 @@ IGLOO is an open-source Lagrangian particle solver written in modern Fortran. It
 
 ## Features
 
-- **Drag & heat transfer** — momentum and thermal coupling with the carrier gas through a library of literature drag laws and Nusselt-number correlations.
-- **Evaporation** — opt-in phase change with vapor-pressure driven mass transfer and coupled diameter/temperature evolution.
-- **Secondary breakup** — five breakup models with optional child-particle generation; the particle array is compacted and grown on the fly.
+- **Drag & heat transfer** — momentum and thermal coupling with the carrier gas through 13 literature drag laws (incompressible and compressible) and six Nusselt-number correlations.
+- **Evaporation** — opt-in phase change (d²-law, CEM, CEM-B, Abramzon–Sirignano, Tonini–Cossali) with equilibrium or Langmuir–Knudsen interface and coupled diameter/temperature evolution.
+- **Metal combustion** — Beckstead d^n aluminium burn law with ignition gate, heat release and burnout.
+- **Secondary breakup** — five breakup models (Pilch–Erdman, Reitz–Diwakar, Reitz-KHRT, TAB, ETAB) with KHRT child-particle generation; the particle array is compacted and grown on the fly.
 - **Injection** — assigned particle positions or boundary-patch injection with per-cell spacing, 3D advancing-front packing, and stochastic diameter sampling (Dirac, Normal, LogNormal, Rosin–Rammler).
 - **Eulerian feedback** — particle statistics deposited back onto the gas mesh as eulerian and source fields, smoothed by a volume-weighted binomial mollifier.
 - **Adaptive time integration** — explicit (DOPRI5) or stiff implicit (SDIRK4) ODE stepping via the OSlo library, with geometric cell tracking by ray/face intersection.
-- **Parallel execution** — the hot loop is OpenMP-parallel over particles.
+- **Parallel execution** — the hot loop is OpenMP-parallel over particles; an optional hybrid MPI + OpenMP build distributes particles over ranks with rank-count-invariant output.
 - **Flexible I/O** — Tecplot input/output via ORION; trajectory, eulerian-field, and scatter-cloud output.
 
 ## Quick Start
@@ -48,6 +49,9 @@ cd IGLOO
 
 # As a hydra submodule (reuses $HYDRADIR's dependency tree)
 ./install.sh build --master=hydra --compilers=intel --use-openmp
+
+# Hybrid MPI + OpenMP (not combinable with --use-tecio)
+./install.sh build --master=None --compilers=intel --use-openmp --use-mpi
 ```
 
 The executable is placed in `bin/IGLOO`. `./install.sh compile` performs an incremental rebuild from the existing CMake preset.
@@ -60,7 +64,7 @@ See the [Installation Guide](https://open-hydra.github.io/IGLOO/getting-started/
 ./tests/test.sh all
 ```
 
-`tests/` is a single model-first tree (`standard/`, `evaporation/`, `breakup/`, `infrastructure/`); each category holds oracle-checked end-to-end cases and literature-grounded model tests, all registered in ctest. The legacy `test/` cases are deprecated and will be removed once `tests/` is complete. See the [Quick Start](https://open-hydra.github.io/IGLOO/getting-started/quick-start/) for a full walkthrough.
+`tests/` is a single model-first tree (`standard/`, `evaporation/`, `combustion/`, `breakup/`, `infrastructure/`, plus `repeatability/` and `mpi/`); each category holds oracle-checked end-to-end cases and literature-grounded model tests, all registered in ctest. See the [Quick Start](https://open-hydra.github.io/IGLOO/getting-started/quick-start/) for a full walkthrough.
 
 ## Dependencies
 
@@ -79,15 +83,17 @@ Optional external libraries: **OpenMP**, **TecIO** (pulled in transitively by OR
 ```
 IGLOO/
 ├── src/
-│   ├── app/           # IGLOO executable (8-line driver) + DocGen
+│   ├── app/           # IGLOO executable (driver) + DocGen
 │   └── lib/           # Solver library (IGLOOL)
 ├── lib/               # Git submodule dependencies (standalone build)
 ├── tests/             # Verification & validation suite (ctest, model-first)
 │   ├── standard/      # Drag + heat: unit families & e2e cases
-│   ├── evaporation/   # Evaporation unit family + d²-law e2e
-│   ├── breakup/       # TAB, Pilch–Erdman, Reitz–Diwakar, ETAB
-│   └── infrastructure/# Gas reconstruction & INI pipeline
-├── test/              # Legacy cases (deprecated, superseded by tests/)
+│   ├── evaporation/   # Evaporation unit families + d²-law, LK, TC and MHB98 e2e
+│   ├── combustion/    # Beckstead burn-law unit family + burn-box e2e
+│   ├── breakup/       # TAB, ETAB, Pilch–Erdman, Reitz–Diwakar, Reitz-KHRT
+│   ├── infrastructure/# Gas reconstruction, INI pipeline, injection/BC/wedge cases, refusals
+│   ├── repeatability/ # Two-sweep state-leak gates
+│   └── mpi/           # Rank-count gates (USE_MPI builds)
 ├── docs/              # MkDocs documentation source
 ├── install.sh         # Build helper script
 └── CMakeLists.txt
@@ -99,7 +105,7 @@ Full documentation is available at **[open-hydra.github.io/IGLOO](https://open-h
 
 - Installation & quick start
 - User guide & input file reference
-- Theory guide (Lagrangian formulation, drag, heat, evaporation, breakup, mollification)
+- Theory guide (Lagrangian formulation, drag, heat, evaporation, combustion, breakup, injection, Eulerian feedback, mollification, time integration, geometry)
 - Verification & validation cases
 
 ## License

@@ -15,13 +15,6 @@ library and exercise each physical model against results derived from the source
 papers.  Pass/fail is reported by CTest; a Python aggregation step writes
 per-family CSV reports.
 
-!!! note "Legacy test suite — retired"
-    The legacy `test/` directory (zero-byte-stderr pass criterion, no physics
-    verification) was retired on 2026-07-16 and parked out-of-git at
-    `~/Desktop/Software/toBeRemoved/IGLOO-legacy-test/` as a manual byte-level
-    A/B provider.  Its only physics-bearing case lives on in this suite as
-    `infrastructure/db-2daxi`.  See [Testing](../development/testing.md).
-
 ---
 
 ## Kinds of verification
@@ -46,27 +39,31 @@ to overlook when counting coverage:
 - **6 — Conservation / consistency audits** — not standalone tests but secondary
   gates *inside* other cases: the mass-telescoping audits $\sum\dot w =
   \sum\dot n\,\Delta m$ in `lk-neq` and `burn-box`, the source-deposit identity in
-  `coupled-body` (the deposit must be the drag reaction only), and the two-phase
-  mass-closure gate in `mhb98-water` (injected vs deposited mass flow to 1 %, added
-  with the A22 burnout-remnant fix).  These are the only checks that
+  `coupled-body` (the deposit must be the drag reaction only), the two-phase
+  mass-closure gate in `mhb98-water` (injected vs deposited mass flow to 1 %), and
+  the eulerian tiling invariant $\sum\rho_p V = \dot m\,T$ in `axis-200`,
+  `swirl-wedge-deposit` and `swirl-wedge-spin`.  These are the only checks that
   test IGLOO *against itself* rather than against a model, and they catch a class
   nothing else does — a trajectory can be right while the Eulerian feedback is
   not.
-- **7 — Bug-transcription pins** — `test_drag_probes`, `test_heat_probes`,
-  `test_evap_probes`.  They assert a *known* value (including deliberately
-  source-faithful transcriptions with documented limitations), so they stay green
-  while a fixed bug stays fixed and turn RED on regression.  They verify no model;
-  they pin history.  Each was *written* as an expected-failure probe — exit 1 while
-  the bug it documents is still live — but **every probed bug is now fixed** (A1/A5/A6
-  + the Wen-Yu C-flag, A3/A4/A9, and A7 closed as *source-faithful*), so all three
-  exit 0 and run as **ordinary gates**: no `WILL_FAIL` property is set on any of them,
-  and a regression turns them red the normal way.  Their "promote probes to the gate"
-  message is a leftover instruction to fold them into the parent families — they are
-  already gating.
+- **7 — Value pins** — `test_drag_probes`, `test_heat_probes`, `test_evap_probes`.
+  They assert a *known* value of a specific correlation at fixed inputs (including
+  deliberately source-faithful transcriptions with documented limitations, such as
+  JAXA1's missing $\mathrm{Nu}=2$ floor), so any change to those constants turns them
+  RED.  They verify no model; they pin the transcription.  All three are ordinary
+  gates (no `WILL_FAIL` property anywhere in the registry).
 - **8 — Contract and harness meta-tests** — `test_ini_pipeline` (the
-  `input.ini` → module-variable round-trip through the production reader) and
-  `self_test` (which exercises the verification support library itself).  No
-  physics, no curve, by design.
+  `input.ini` → module-variable round-trip through the production reader),
+  `registry-docs` (the tracked parameter registry page equals DocGen's output),
+  the fifteen `refusals/*` cases (inputs the solver must refuse at setup with exit
+  128 and nothing integrated), and `self_test` (which exercises the verification
+  support library itself).  No physics, no curve, by design.
+
+Kinds 1 and 4 are complementary on purpose.  A routine-level oracle re-coded from the
+same paper the production code was written from can lockstep with a transcription
+error, and a direct call cannot see whether the routine is reached, whether its inputs
+arrive intact, or whether the surrounding integration uses its result; the end-to-end
+paper reproductions close exactly that gap.
 
 ### Figure inventory by kind
 
@@ -108,14 +105,14 @@ documentation concern.
 | `mhb98-water.svg` | `mhb98-water` | 4 Tier P (digitized), + 3 + audit | three gates, classified by the most external one: the **digitized `[MHB98]` Fig. 2 M7 line** ($\beta$ slope ±10 %, wet-bulb plateau ±0.5 K); also the LK kernel along measured $T_p$ (kind 3), the $K=(T_G-T_\mathrm{wb})8k_g/\rho_\ell L_v$ identity, and the two-phase mass closure (audit) | the reference is the paper's own plotted result for the paper's own case |
 | `unit-infrastructure-interp.svg` | `test_gas_reconstruction` | 5 base feature (routine) | analytic constant/multilinear fields at machine eps; observed order $p\approx2$; hex Newton round-trip | interpolation, not a closure — the routine-level base-feature check |
 | `vie-plait.svg` | `vie-plait` | 5 base feature (Tier-V oracle) | `[Vie15]` §5.1 closed-form damped oscillator per strand, scipy-validated to 1e-13 | drag already gated elsewhere; what is unique is the in-solver non-uniform gas rebuild (`gas-order = 2`) |
-| `swirl-wedge.svg` | `swirl-wedge` | 5 base feature (exact ODE oracle) | exact cylindrical ODE of a Stokes parcel in a solid-body swirl, RK4 self-checked to 1e-12, at ~6× the print floor; proven RED on the pre-E unrotated sampling (19–25×) and on a position-only fold (10–200×) | drag reused from `drag-stokes`; what is unique is the axisymmetric wedge fold with a real azimuthal velocity and the exact 2.5D sampling (`sampleGas2D`) |
+| `swirl-wedge.svg` | `swirl-wedge` | 5 base feature (exact ODE oracle) | exact cylindrical ODE of a Stokes parcel in a solid-body swirl, RK4 self-checked to 1e-12, at ~6× the print floor; the gate discriminates — unrotated gas sampling misses it by 19–25×, a position-only fold by 10–200× | drag reused from `drag-stokes`; what is unique is the axisymmetric wedge fold with a real azimuthal velocity and the exact 2.5D sampling (`sampleGas2D`) |
 | `periodic-y.svg` | `periodic-y` | 5 base feature (Tier-V oracle) | the `body-force` closed form folded **modulo $L_y$**; velocity unchanged across each wrap | physics reused from `body-force`; what is unique is the bcdef-201 transport |
 | `coupled-body.svg` | `coupled-body` | 5 base feature (Tier-V oracle + audit) | `body-force` $v(x)$ verbatim **plus** source totals vs closed forms (drag reaction only) | the only case exercising euler + source + body together; carries a conservation audit |
-| `db-injection.svg` | `db-injection` | 5 base feature (**behavioral**) | no reference curve — placement fidelity, `vInj` hand-off, monotone relaxation, domain exit | assigned-position injection plumbing; bug-B1 regression gate |
+| `db-injection.svg` | `db-injection` | 5 base feature (**behavioral**) | no reference curve — placement fidelity, `vInj` hand-off, monotone relaxation, domain exit | assigned-position injection plumbing |
 | `db-2daxi.svg` | `db-2daxi` | 5 base feature (**behavioral**) | no reference curve — both parcels integrate, exit the nozzle outlet, all fields finite and in range | a real MOSE nozzle field has no analytic solution; deliberately md5-free |
 
-Note that one entry is deliberately **hybrid**: `test_mhb98_decane` (E-VAL-2b,
-MHB98 Fig. 4, $T_G=1000$ K decane) is the strong discriminator Fig. 2 is not — its
+Note that one entry is deliberately **hybrid**: `test_mhb98_decane` (MHB98 Fig. 4,
+$T_G=1000$ K decane) is the strong discriminator Fig. 2 is not — its
 panel (b) spans ~200 K across the paper's eight models against 0.47 K in Fig. 2(b) —
 and it carries both a kind-1 leg (production kernels vs an independently re-coded M7
 chain, 1e-12) and a kind-4 leg (the same re-code at the paper's own coefficient
@@ -126,53 +123,53 @@ solver could only emulate with a no-drag production flag.  See
 
 ---
 
-## End-to-end case status
+## End-to-end cases
 
-| Case | Physics exercised | Oracle | Status |
+| Case | Physics exercised | Oracle | Result |
 |------|-------------------|--------|--------|
-| [Stokes drag](drag-stokes.md) | Stokes drag, velocity relaxation | Closed-form $x(v)$ | **GREEN** |
-| [Temperature relaxation](temp-relax.md) | Lumped-capacitance heat, $\mathrm{Nu}=2$ (conduction limit) | Closed-form $T(x)$ | **GREEN** |
-| [Body-force drift](body-force.md) | Transverse body acceleration + exact linear Stokes drag | Closed-form $v(x)$ | **GREEN** |
-| [Convective Nu](../vv/e2e.md#conv-nu) | Ranz–Marshall heat at constant non-zero slip ($\mathrm{Re}=0.20$, $\mathrm{Nu}=2.24$) | Closed-form $T(x)$ | **GREEN** |
-| [Vié plait](../vv/e2e.md#vie-plait) | Inertial particles in a compressive field $v_g=-\epsilon(y-1)$; trajectory crossing at $\mathrm{St}=5$ (first non-uniform-gas e2e) | Closed-form damped oscillator $y(x)$ per strand | **GREEN** (2026-07-20; Vié 2015 Eq. 5.4 sin sign-typo caught) |
-| [Swirl wedge](../vv/e2e.md#swirl-wedge) | Solid-body swirl $W=\Omega y$ on a one-cell axisymmetric wedge; three DB parcels with prescribed $w_p$ spiral outward through 8–33 sectors (first swirling e2e; the 2.5D fold with a real azimuthal velocity) | Exact cylindrical ODE (RK4, self-checked) on $r$, $w_p$, $v_r$, unwrapped $\theta$ at ~6× the print floor; fold count = oracle sectors | **GREEN** (2026-09-17; first cut absorbed the 2.5D frame error as a budget, within 3 % of the W-plan §2 model; exact sampling then took it to the floor — RED 19–25× with that sampling reverted, 10–200× on a position-only fold) |
-| [Swirl wedge deposit](../vv/e2e.md#swirl-wedge-deposit) | The same run with `out-file = ALL`, `mollify = off`: momentum source and eulerian field under swirl, split by radial band (first gate on the deposits' frame — meridian, not Cartesian at the parcel azimuth) | Force on the gas $\dot m\int(v-g)/\tau\,dt$ in $(r,\theta)$ components along the exact trajectory (band sums 2 %), energy vs kinetic drop, per-cell $v_p$/$w_p$ vs the path average ($10^{-4}$), band mass | **GREEN** (2026-09-17; RED 325/382 cells on the Cartesian deposit, RED sign-flipped on a meridian-component difference) |
-| [Swirl wedge spin](../vv/e2e.md#swirl-wedge-spin) | One over-spun parcel ($w_p = 2$ at $r = 0.2$): ~34 sectors per cell at injection — the many-sector case of O23. Segments now end at the sector edge (the point-in-cell test carries the azimuth band) and fold by one sector | Fold witness vs the oracle sweep (79, no multi-sector fold), $w_p$/$v_r$/$u$ vs the Cartesian oracle matched by closest approach ($2\cdot10^{-5}$), eulerian mass per geo cell vs the projected oracle residence (2 %), tiling total | **GREEN** (2026-09-18; RED on the previous binary: no witness, first cells $+33$ % / $-37$ %) |
-| [Evaporation](evaporation.md) | d²-law mass transfer | Godsave kernel integrated along measured $T_p(x)$ | **GREEN** (bugs A3/A4 fixed 2026-07-07; 25/25 particles) |
-| [d²-law analytic line](../vv/e2e.md#d2law-line) | d²-law in the frozen-$B_T$ textbook regime ($c_{p,p}\times100$, $T_p$ drift 0.76 K) | Input-only closed form $d^2 = d_0^2 - K_0 x/u_g$, theory tolerance budget | **GREEN** (E-VAL-1, 2026-07-22; worst residual $3\cdot10^{-4}$ vs $7\cdot10^{-4}$ budget) |
-| LK non-equilibrium (`evaporation/lk-neq`) | Langmuir-Knudsen interface correction on CEM (MHB98 M2) | LK-corrected kernel RK4-integrated along measured $T_p(x)$; LK-vs-VLE discrimination; mass telescoping | **GREEN** (F1, 2026-07-11; telescoping tail-extrapolation 2026-07-15) |
-| Tonini–Cossali (`evaporation/tc-box`) | TC analytical evaporation (Stefan–Fuchs) | Own re-derivation kernel along measured $T_p(x)$ | **GREEN** (F2, 2026-07-11) |
-| [MHB98 water (validation)](../vv/e2e.md#mhb98-water) | Single water droplet vs a paper's own case ($D_0$=1.1 mm, quiescent); CEM+LK = MHB98 **M7** | IGLOO-vs-LK-kernel + wet-bulb identity + **IGLOO β vs the digitized M7 slope β_M7≈6.35e-3 (±10%)** + **wet-bulb vs M7 plateau (±0.5 K)**, all gated | **GREEN** (E-VAL-2; 2026-07-29 the case was set to MHB98's **own Appendix-A properties** at their T_R=293.97 K — IGLOO lands on M7, β **0.8%**, wet-bulb **0.10 K**; eyeball exp dropped — re-digitize follow-up) |
-| [TC n-hexadecane (validation)](../vv/e2e.md#tc-hexadecane) | Variable-liquid-density TC evaporation (TC2012 Fig. 11: n-hexadecane swells then $D^2$-law); first T-varying-property case | IGLOO-vs-TC-kernel variable-$\rho$ mass rate + swelling (gated) + digitized TC2012 Fig. 11 (non-gating overlay) | **GREEN** (E-VAL-3, 2026-07-23; 25/25 <0.2%; found+fixed A20/A21) |
-| [Pilch–Erdman breakup (validation)](../vv/e2e.md#pilch-erdman-e2e) | 25-drop Weber sweep ($We$ 20–1000) vs PE87's published $T^*(We)$ correlation (Fig. 7) + $d_\mathrm{stable}(We)$ closed form (B-VAL-2) | Windowed initial breakup rate vs the paper kernel (22 drops, tol 1 %) + plateau $d_\mathrm{stable}$ (5 drops, tol 12 %) | **GREEN** (B-VAL-1+2, 2026-07-22; gated the A16 sign fix, found+gated the A17 bp-wipe fix) |
-| [TAB breakup (validation)](../vv/e2e.md#tab-e2e) | 25-drop radius-based We sweep across the ORA87 onset $We_r=6$; damped-oscillator $t_{bu}$ closed form | Onset (no-break) + first-breakup time vs ORA87 eq. 5 (Tier V) | **GREEN** (B-VAL-3, 2026-07-22; found + gated the A18 fix — event path was dead; 16/16 breaks, $t_{bu}$ sub-percent) |
-| [ETAB breakup (validation)](../vv/e2e.md#etab-e2e) | 25-drop radius-based We sweep across onset $We_r=6$ and $We_\mathrm{trans}=80$; ETAB cascade product size + shared TAB $t_{bu}$ | Onset + $t_{bu}$ (ORA87) + child-size ratio vs Tanner eq. 6/8 (Tier V) | **GREEN** (B-VAL-5, 2026-07-22; 20/20 breaks, cascade size within 0.03 % over bag+strip branches) |
-| [KHRT breakup (validation)](../vv/e2e.md#khrt-e2e) | 25-drop radius-based We sweep ($We_r$ 30–1000); continuous KH-stripping rate + RT/shed shatter vs Reitz-87 | Initial $\mathrm{d}d/\mathrm{d}t$ vs the Reitz-87 KH rate ($We_r\ge340$) + `khrt-e2e-rt` RT-shatter persistence gate | **GREEN** (B-VAL-6, 2026-07-22; KH stripping <0.03 %; found + gated the A19 fix 2026-07-23 — RT shatter now persists) |
-| [Reitz–Diwakar breakup (validation)](../vv/e2e.md#reitz-diwakar-e2e) | 25-drop radius-based We sweep ($We_r$ 8–1000) across the bag$\to$stripping handoff vs RD 1987 (SAE 870598) | Initial $\mathrm{d}d/\mathrm{d}t$ per drop vs the RD closed form for its regime (bag/stripping) | **GREEN** (B-VAL-4, 2026-07-23; 25/25 <0.1 %; $C_s{=}20$ confirmed curve-fit in SAE 870598 — no bug) |
-| Al combustion (`combustion/burn-box`) | Beckstead $d^n$ burn law (model 5) | Closed-form burn-time kernel | **GREEN** (M1, 2026-07-11) |
-| DB injection | Assigned-position particle placement, `vInj` hand-off, Stokes velocity relaxation, domain exit | Placement fidelity + analytic Stokes relaxation | **GREEN** (bug B1 fixed 2026-07-08) |
-| Coupled outputs (`infrastructure/coupled-body`) | euler + source + body-force accumulators together (model 1) | Body-force $v(x)$ + source totals vs closed forms (drag-reaction-only deposit, agreement ~4·10⁻⁷) | **GREEN** (2026-07-15) |
-| 2Daxi + DB (`infrastructure/db-2daxi`) | Axisymmetric wedge, real MOSE gas field, DB injection, euler-only output | Behavioral (both particles integrate to the outlet, fields finite) | **GREEN** (B5/B6 fixed 2026-07-15) |
-| Periodic BC (`infrastructure/periodic-y`) | Translational periodic pair (bcdef 201): transport, velocity-unchanged contract, relocation | Body-force $v(x)$ closed form across 2–3 wraps + $y(x)$ modulo $L_y$ (residual ~$5\cdot10^{-7}$ m) | **GREEN** (2026-07-16, first exercise of the path) |
-| Multi-group `bc_center` pinning (`infrastructure/bc-center-2grp`) | Inlet-face pinning through `pin_particles_bc_center` with **two** particle groups and `fsample = 2` — the suite's only execution of that routine | Behavioral, no reference curve — per-group population, ID identity, group 2 as a faithful clone of group 1, and integration to the outflow plane, all derived from the known inputs (mesh size, `fsample`, group count) | **GREEN** (A24 fixed 2026-08-07; RED at `d857aba^`, GREEN at `d857aba`) |
-| Axis face tagged `axisymmetric` (`infrastructure/axis-200`) | The wedge AXIS face carrying bcdef 200 (what ATLAS emits): reflection instead of the k-face rotation; a near-axis DB parcel with inward `vp`; the ord2 eulerian deposit on the MOSE nozzle field | Behavioral (no give-up, axis reached, outlet exit) + eulerian conservation with cell volumes recomputed from the tec nodes: E1 $\Sigma\rho_p V/\Sigma\dot m t = 1.000787\pm10^{-3}$, E2 near-axis share $0.999005\pm10^{-3}$, E3 $\rho_p/n_p=\rho_\ell\pi d^3/6$ to $10^{-12}$ | **GREEN** (axis-face cycle fixed 2026-09-03; axis dual ghost + E1–E3 2026-09-13) |
-| Wedge fold with swirl (`infrastructure/wedge-fold`) | axis-200 plus an azimuthal injection velocity on the near-axis parcel: the parcel leaves the 1° sector every few segments, so the bcdef-200 fold (position and velocity rotated about the axis) is exercised — the only case with $z \neq 0$ on a wedge | Behavioral: no give-up, both parcels exit, every trajectory row inside the sector (print-aware), swirl injected and $\geq 9$ sector crossings on the swirling parcel (18 measured), control parcel byte-identical to axis-200 | **GREEN** (O22 fixed 2026-09-16: `rotateVector` returned $R(-\theta)$ — row-major literal, column-major `reshape` — and the fold walked the parcel to $\pm 180^\circ$) |
-| Two materials (`infrastructure/two-mat`) | `drag-stokes` run for two materials that differ only by density ($\rho_p$ = 2950 and 1000), the first case anywhere with $n_m = 2$: per-material loops, `sourceMass` slots, two euler families, per-material files and the krho fan-out all execute at arity 2 | The drag-stokes Stokes closed form imported and re-parametrised per material; identical injection rows across materials with $m_B/m_A = 1000/2950$; the lighter material relaxes faster; the shared momentum/energy slots balance both materials' parcels; each euler file carries its own material ($\rho_p/n_p = \rho_{mat}\pi d^3/6$); per-parcel $\dot m$ from the krho fan-out; plus `repeat-two-mat` (two-sweep) and, under `USE_MPI`, `mpi-two-mat` and `mpi-consistency-two-mat` | **GREEN** (2026-09-16; falsified by swapping the phase lines — zones bind by order — and by a one-zone `properties.dat`, now an error stop instead of a SIGSEGV) |
-| Setup refusals (`infrastructure/refusals/*`) | Fifteen inputs the solver must refuse at setup: `liquid-conduction = P2T`, `boiling = ZGR` (parsed, physics absent), `interface = LK` with `evaporation = d2-law`, a `properties.dat` with the wrong zone count or temperature range, five unknown/unimplemented model tokens (drag, heat, breakup, evaporation, `LEB`) that used to end in a plain `stop` with exit 0, and four INI-contract violations — TAB `method = 3` (ran into non-finite states), `gas-order = 3` (silently 2), an unknown `out-file` token (silently both), an unknown `ode-solver` (plain `stop`) — and a wedge whose sector is not centred on the azimuth origin (the fold, the 2.5D sample and the meridian-frame deposits assume k-planes at $\mp\delta/2$; it ran silently rotated by $\delta/2$ before) | `tools/check_refusal.py`: exit exactly 128, the `error stop` payload in stderr, nothing injected or integrated, no output — proven non-vacuous on a healthy case; all ten fix-backed cases were RED on the pre-fix binary | **GREEN** (2026-09-17) |
+| [Stokes drag](drag-stokes.md) | Stokes drag, velocity relaxation | Closed-form $x(v)$ | 25/25 particles within the derived tolerance |
+| [Temperature relaxation](temp-relax.md) | Lumped-capacitance heat, $\mathrm{Nu}=2$ (conduction limit) | Closed-form $T(x)$ | 25/25 |
+| [Body-force drift](body-force.md) | Transverse body acceleration + exact linear Stokes drag | Closed-form $v(x)$ | 25/25 |
+| [Convective Nu](../vv/e2e.md#conv-nu) | Ranz–Marshall heat at constant non-zero slip ($\mathrm{Re}=0.20$, $\mathrm{Nu}=2.24$) | Closed-form $T(x)$ | 25/25; a $\mathrm{Nu}=2$ wiring would be thousands of tolerances off |
+| [Vié plait](../vv/e2e.md#vie-plait) | Inertial particles in a compressive field $v_g=-\epsilon(y-1)$; trajectory crossing at $\mathrm{St}=5$ (the only non-uniform-gas e2e) | Closed-form damped oscillator $y(x)$ per strand | worst residual $\sim5\cdot10^{-7}$ over six strands |
+| [Swirl wedge](../vv/e2e.md#swirl-wedge) | Solid-body swirl $W=\Omega y$ on a one-cell axisymmetric wedge; three DB parcels with prescribed $w_p$ spiral outward through 8–33 sectors (the 2.5D fold with a real azimuthal velocity) | Exact cylindrical ODE (RK4, self-checked) on $r$, $w_p$, $v_r$, unwrapped $\theta$ at ~6× the print floor; fold count = oracle sectors | residual $5\cdot10^{-7}$ against a $3\cdot10^{-6}$ gate |
+| [Swirl wedge deposit](../vv/e2e.md#swirl-wedge-deposit) | The same run with `out-file = ALL`, `mollify = off`: momentum source and eulerian field under swirl, split by radial band (the deposits' meridian frame) | Force on the gas $\dot m\int(v-g)/\tau\,dt$ in $(r,\theta)$ components along the exact trajectory (band sums 2 %), energy vs kinetic drop, per-cell $v_p$/$w_p$ vs the path average ($10^{-4}$), band mass | band sums within 0.22 %; band mass 1.000127 |
+| [Swirl wedge spin](../vv/e2e.md#swirl-wedge-spin) | One over-spun parcel ($w_p = 2$ at $r = 0.2$): ~34 sectors per cell at injection; segments end at the sector edge and fold by one sector | Fold witness vs the oracle sweep (79 sectors, no multi-sector fold), $w_p$/$v_r$/$u$ vs the Cartesian oracle matched by closest approach ($2\cdot10^{-5}$), eulerian mass per geo cell vs the projected oracle residence (2 %), tiling total | 79 folds measured; velocity residual $\le 7\cdot10^{-6}$; cell mass $4\cdot10^{-3}$; tiling 1.000044 |
+| [Evaporation](evaporation.md) | d²-law mass transfer | Godsave kernel integrated along measured $T_p(x)$ | 25/25 particles |
+| [d²-law analytic line](../vv/e2e.md#d2law-line) | d²-law in the frozen-$B_T$ textbook regime ($c_{p,p}\times100$, $T_p$ drift 0.76 K) | Input-only closed form $d^2 = d_0^2 - K_0 x/u_g$, theory tolerance budget | worst residual $3\cdot10^{-4}$ vs $7\cdot10^{-4}$ budget |
+| LK non-equilibrium (`evaporation/lk-neq`) | Langmuir-Knudsen interface correction on CEM (MHB98 M2) | LK-corrected kernel RK4-integrated along measured $T_p(x)$; LK-vs-VLE discrimination; mass telescoping | 25/25; telescoping residual $2\cdot10^{-4}$ |
+| Tonini–Cossali (`evaporation/tc-box`) | TC analytical evaporation (Stefan–Fuchs) | Own re-derivation kernel along measured $T_p(x)$ | 25/25 |
+| [MHB98 water (validation)](../vv/e2e.md#mhb98-water) | Single water droplet vs a paper's own case ($D_0$=1.1 mm, quiescent); CEM+LK = MHB98 **M7** | IGLOO-vs-LK-kernel + wet-bulb identity + **IGLOO β vs the digitized M7 slope β_M7≈6.35e-3 (±10%)** + **wet-bulb vs M7 plateau (±0.5 K)**, all gated | β within **0.8 %**, wet-bulb within **0.10 K** of M7 |
+| [TC n-hexadecane (validation)](../vv/e2e.md#tc-hexadecane) | Variable-liquid-density TC evaporation (TC2012 Fig. 11: n-hexadecane swells then $D^2$-law); the T-varying-property path | IGLOO-vs-TC-kernel variable-$\rho$ mass rate + swelling (gated) + digitized TC2012 Fig. 11 (non-gating overlay) | 25/25 within 0.2 %; plateau within 0.7 % of the paper |
+| [Pilch–Erdman breakup (validation)](../vv/e2e.md#pilch-erdman-e2e) | 25-drop Weber sweep ($We$ 20–1000) vs PE87's published $T^*(We)$ correlation (Fig. 7) + $d_\mathrm{stable}(We)$ closed form | Windowed initial breakup rate vs the paper kernel (22 drops, tol 1 %) + plateau $d_\mathrm{stable}$ (5 drops, tol 12 %) | rate within $\sim10^{-4}$ on all 22 drops |
+| [TAB breakup (validation)](../vv/e2e.md#tab-e2e) | 25-drop radius-based We sweep across the ORA87 onset $We_r=6$; damped-oscillator $t_{bu}$ closed form | Onset (no-break) + first-breakup time vs ORA87 eq. 5 (Tier V) | 16/16 supercritical drops break; $t_{bu}$ sub-percent |
+| [ETAB breakup (validation)](../vv/e2e.md#etab-e2e) | 25-drop radius-based We sweep across onset $We_r=6$ and $We_\mathrm{trans}=80$; ETAB cascade product size + shared TAB $t_{bu}$ | Onset + $t_{bu}$ (ORA87) + child-size ratio vs Tanner eq. 6/8 (Tier V) | 20/20 breaks; cascade size within 0.03 % over bag+strip branches |
+| [KHRT breakup (validation)](../vv/e2e.md#khrt-e2e) | 25-drop radius-based We sweep ($We_r$ 30–1000); continuous KH-stripping rate + RT/shed shatter vs Reitz-87 | Initial $\mathrm{d}d/\mathrm{d}t$ vs the Reitz-87 KH rate ($We_r\ge340$) + `khrt-e2e-rt` RT-shatter persistence gate | KH stripping within 0.03 %; eight drops shatter and persist |
+| [Reitz–Diwakar breakup (validation)](../vv/e2e.md#reitz-diwakar-e2e) | 25-drop radius-based We sweep ($We_r$ 8–1000) across the bag$\to$stripping handoff vs RD 1987 (SAE 870598) | Initial $\mathrm{d}d/\mathrm{d}t$ per drop vs the RD closed form for its regime (bag/stripping) | 25/25 within 0.1 % |
+| Al combustion (`combustion/burn-box`) | Beckstead $d^n$ burn law (model 5) | Closed-form burn-time kernel + independent RK4 energy balance + mass telescoping | all gates pass |
+| DB injection | Assigned-position particle placement, `vInj` hand-off, Stokes velocity relaxation, domain exit | Placement fidelity + analytic Stokes relaxation | 5/5 particles |
+| Coupled outputs (`infrastructure/coupled-body`) | euler + source + body-force accumulators together (model 1) | Body-force $v(x)$ + source totals vs closed forms (drag-reaction-only deposit) | agreement ~4·10⁻⁷ |
+| 2Daxi + DB (`infrastructure/db-2daxi`) | Axisymmetric wedge, real MOSE gas field, DB injection, euler-only output | Behavioral (both particles integrate to the outlet, fields finite) | pass |
+| Periodic BC (`infrastructure/periodic-y`) | Translational periodic pair (bcdef 201): transport, velocity-unchanged contract, relocation | Body-force $v(x)$ closed form across 2–3 wraps + $y(x)$ modulo $L_y$ | residual ~$5\cdot10^{-7}$ m |
+| Multi-group `bc_center` pinning (`infrastructure/bc-center-2grp`) | Inlet-face pinning through `pin_particles_bc_center` with **two** particle groups and `fsample = 2` — the suite's only execution of that routine | Behavioral, no reference curve — per-group population, ID identity, group 2 as a faithful clone of group 1, and integration to the outflow plane, all derived from the known inputs (mesh size, `fsample`, group count) | pass |
+| Axis face tagged `axisymmetric` (`infrastructure/axis-200`) | The wedge AXIS face carrying bcdef 200 (what ATLAS emits): reflection instead of the k-face rotation; a near-axis DB parcel with inward `vp`; the ord2 eulerian deposit on the MOSE nozzle field | Behavioral (no give-up, axis reached, outlet exit) + eulerian conservation with cell volumes recomputed from the tec nodes: E1 $\Sigma\rho_p V/\Sigma\dot m t$, E2 near-axis share, E3 $\rho_p/n_p=\rho_\ell\pi d^3/6$ | E1 $= 1.000787\pm10^{-3}$, E2 $= 0.999005\pm10^{-3}$, E3 to $10^{-12}$ |
+| Wedge fold with swirl (`infrastructure/wedge-fold`) | axis-200 plus an azimuthal injection velocity on the near-axis parcel: the parcel leaves the 1° sector every few segments, so the bcdef-200 fold (position and velocity rotated about the axis) is exercised on the nozzle field | Behavioral: no give-up, both parcels exit, every trajectory row inside the sector (print-aware), swirl injected and $\geq 9$ sector crossings on the swirling parcel, control parcel byte-identical to axis-200 | 18 sector crossings measured |
+| Two materials (`infrastructure/two-mat`) | `drag-stokes` run for two materials that differ only by density ($\rho_p$ = 2950 and 1000), the case with $n_m = 2$: per-material loops, `sourceMass` slots, two euler families, per-material files and the krho fan-out all execute at arity 2 | The drag-stokes Stokes closed form imported and re-parametrised per material; identical injection rows across materials with $m_B/m_A = 1000/2950$; the lighter material relaxes faster; the shared momentum/energy slots balance both materials' parcels; each euler file carries its own material ($\rho_p/n_p = \rho_{mat}\pi d^3/6$); per-parcel $\dot m$ from the krho fan-out; plus `repeat-two-mat` (two-sweep) and, under `USE_MPI`, `mpi-two-mat` and `mpi-consistency-two-mat` | pass; swapping the phase lines (zones bind by order) or supplying a one-zone `properties.dat` is refused |
+| Setup refusals (`infrastructure/refusals/*`) | Fifteen inputs the solver must refuse at setup: `liquid-conduction = P2T` and `boiling = ZGR` (parsed, physics absent), `interface = LK` with `evaporation = d2-law`, a `properties.dat` with the wrong zone count or temperature range, five unknown/unimplemented model tokens (drag, heat, breakup, evaporation, `LEB`), four INI-contract violations (TAB `method = 3`, `gas-order = 3`, an unknown `out-file` token, an unknown `ode-solver`), and a wedge whose sector is not centred on the azimuth origin | `tools/check_refusal.py`: exit exactly 128, the `error stop` payload in stderr, nothing injected or integrated, no output — proven non-vacuous on a healthy case | 15/15 refused |
 
 ---
 
-## Verification family status
+## Verification families
 
-| Family (tag) | What it grounds | Pass criterion | Status |
-|---|---|---|---|
-| Drag (A) | Full 13-model catalog vs Shimada2006 (eqs. 12–24, the provenance) + NASA-SP-8039 Table I | CTest; `test_drag_lit` GREEN, `test_drag_probes` GATED GREEN (XD1–XD5; A1/A6/A11 fixed; Putnam/Wen-Yu plateaus source-faithful per the 2026-07-16 decision) | **GREEN** — no inferred constants remain |
-| Temperature (B) | Full 6-model Nu catalog vs Shimada2006 (eqs. 45–50) + NASA-SP-8039 Table II (the true primary) | CTest; `test_heat_nu` GREEN, `test_heat_probes` GREEN (A7 closed source-faithful; A12 fixed) | **GREEN** — no inferred constants remain |
-| Evaporation (C) | `evaporation()` function-level; d²-law, CEM, LK, TC; droplet energy F(7) | CTest; `test_evap_probes` GATED GREEN (XE1/XE2/XE3 — A3/A4/A9 fixed); A10 sensible-carry fixed 2026-07-15; d²-law/lk-neq/tc e2e GATED GREEN | **GREEN** |
-| Gas reconstruction (E) | `ord2` interpolation, E1–E5 sub-tests | CTest GREEN (E6 deferred) | **GREEN** |
-| INI pipeline (T9) | INI → module-variable round-trip, IP1–IP5 | CTest GREEN | **GREEN** |
-| Breakup (TAB/ETAB/RD/PE/KHRT) | All five models vs the primary papers (PE87, TAB-872089, Tanner 97/98, Reitz-87, RD-860469, Beale-Reitz-99) | CTest; 7 gated tests GREEN (A2/A13/A14/A15 fixed; PE87+TAB fully closed; ETAB child $v_\perp = A\dot{x}$ implemented 2026-07-16, gated ET4) | **GREEN** (RD Cs=20 confirmed curve-fit in SAE 870598, 2026-07-23) |
-| Combustion (M1) | Beckstead $d^n$ Al burn law | CTest; `test_combustion` + burn-box e2e GREEN | **GREEN** |
+| Family | What it grounds | Gates |
+|---|---|---|
+| Drag | Full 13-model catalog vs Shimada2006 (eqs. 12–24, the provenance) + NASA-SP-8039 Table I | `test_drag`, `test_drag_lit` (DL1–DL3), `test_drag_probes` (XD1–XD5: finite Crowe/Hermsen at Re/Ma ≫ 1, Putnam and Wen–Yu plateaus as published, Henderson bridge continuity) |
+| Temperature | Full 6-model Nu catalog vs Shimada2006 (eqs. 45–50) + NASA-SP-8039 Table II (the true primary) | `test_heat_nu` (HN1–HN3), `test_temperature`, `test_heat_probes` (XH1: JAXA1 transcription pin, no $+2$ floor by design of the source) |
+| Evaporation | `evaporation()` function-level; d²-law, CEM, LK, TC; droplet energy F(7) | `test_evaporation`, `test_evap_probes` (XE1–XE3: d²-law/CEM Re = 0 ratio, $\dot m$ sign from the call sites, $\dot Q_G > 0$ for hot gas), `test_interface_lk`, `test_tc_analytic`, `test_mhb98_decane`; d²-law/lk-neq/tc e2e |
+| Gas reconstruction | `ord2` interpolation, E1–E5 sub-tests | `test_gas_reconstruction` |
+| INI pipeline | INI → module-variable round-trip, IP1–IP5 | `test_ini_pipeline`; `registry-docs` |
+| Breakup (TAB/ETAB/RD/PE/KHRT) | All five models vs the primary papers (PE87, TAB-872089, Tanner 97/98, Reitz-87, RD-860469, Beale-Reitz-99) | 8 unit tests (including `test_tab_moments` and the ETAB child $v_\perp = A\dot{x}$ check ET4); five Weber-sweep e2e cases |
+| Combustion | Beckstead $d^n$ Al burn law | `test_combustion` (CB1–CB4) + `burn-box` e2e |
 
 ---
 
@@ -188,26 +185,7 @@ solver could only emulate with a no-drag production flag.  See
 ./tests/test.sh standard     # a single model category
 ```
 
-Step-by-step walkthrough (reading reports, diagnosing failures, xfail promotion):
+Step-by-step walkthrough (reading reports, diagnosing failures, adding a case):
 [Using the Suite](guide.md). Layout and conventions: [Testing](../development/testing.md).
-
----
-
-## Production bugs found
-
-The verification effort has catalogued **twenty-nine model-formula, event and state bugs
-(A1–A29; the A23 KHRT child-creation family counted once)**, one combustion-constant fix (M1),
-and six infrastructure bugs (B1–B6).  As of 2026-09-13 **every one is fixed, refuted, or closed
-as source-faithful**, each gated by a CTest
-probe or e2e oracle: A7 (JAXA1 floor) and B2 closed *not-a-bug*; A16/A17 (`pilch-erdman-e2e`),
-A18 (the event-breakup path had never executed; `tab-e2e`), and A19 (the KHRT
-Rayleigh–Taylor child/shed event reverted because its droplet count was never written to
-the ODE state; `khrt-e2e-rt`) all fixed.  The A16/A18/A19 finds — and the fixes they gate —
-came out of the paper-reproduction validation campaign.
-Three reproducers survive as transcription pins — `test_drag_probes`, `test_heat_probes`,
-`test_evap_probes` — holding the fixed values (and the source-faithful JAXA1 limitation) so a
-regression turns them RED.  They are **ordinary gates**, not expected failures: every bug they
-probe is fixed, so each exits 0 and no `WILL_FAIL` property is set.
-See [Literature tests](literature.md#production-bugs-found)
-for the model-formula table, and `tests/VERIFICATION_MATRIX.md` (one row per CTest
-entry, reference-source and oracle provenance) for the source of truth.
+`tests/VERIFICATION_MATRIX.md` holds one row per CTest entry with its reference source
+and oracle provenance.

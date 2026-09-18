@@ -5,17 +5,20 @@
 ## Library/executable split
 
 `src/lib/` compiles to a static library `IGLOOL`; `src/app/IGLOO.f90` is an
-eight-line driver that links against it:
+short driver that links against it:
 
 ```fortran
 program IGLOO
-  use IGLOO_module, only: obj_IGLOO
+  use IGLOO_module,   only: obj_IGLOO
+  use IGLOO_Mod_MPI,  only: mpi_init_env, mpi_finalize_env
   implicit none
   type(obj_IGLOO) :: IGLOOsolver
 
+  call mpi_init_env()          ! no-op without USE_MPI
   call IGLOOsolver%setup()
   call IGLOOsolver%solve()
   call IGLOOsolver%writeout()
+  call mpi_finalize_env()
 end program IGLOO
 ```
 
@@ -40,7 +43,9 @@ Methods:
 
 | Method | Purpose |
 |--------|---------|
-| `setup([external_gas])` | Read config and gas field, pin particles at injection points |
+| `setup([external_gas])` | `setup_static` + `reset_state`: read config and gas field, pin particles at injection points |
+| `setup_static([external_gas])` | Once per run: INI, mesh, BCs, particle pinning |
+| `reset_state([external_gas])` | Once per sweep: restore the pinned population to its injection state and re-import the gas |
 | `solve()` | OpenMP-parallel sweep of all particles |
 | `writeout()` | Write Eulerian and source fields to `OUTPUT/` |
 | `getSourceTerms(...)` | `pure` function; returns drag force and heat-transfer rate for given local state (used by hydra) |
@@ -54,8 +59,10 @@ Methods:
 field from memory via `copyORION` and skips reading a Tecplot file; `gas-file` in
 `[IGLOO-General]` is ignored.
 
-This is the **only** entry point hydra calls. IGLOO does not participate in the
-gas time loop; it integrates all particles in a single sweep over the frozen field.
+A single-sweep embedder calls `setup` → `solve` → `writeout`; a parent with an evolving gas
+field calls `setup_static` once and then `reset_state` → `solve` → `writeout` per sweep (see
+[Using IGLOO](../user/using.md#embedding-in-hydra)). IGLOO does not participate
+in the gas time loop; each sweep integrates every particle over the frozen field.
 
 ---
 
@@ -63,7 +70,8 @@ gas time loop; it integrates all particles in a single sweep over the frozen fie
 
 Called from `obj_IGLOO%solve` inside `!$OMP PARALLEL DO`. For each particle it:
 
-1. Selects one of four ODE RHS functions via `Lib_RHS.f90::determineModel(phaseChange, brkupEqOde)`:
+1. Selects the ODE RHS function via `Lib_RHS.f90::determineModel(phaseChange, brkupEqOde)`
+   (a material with `combustion = Beckstead` is routed to `rhsAlCombustion` instead):
 
    | `phaseChange` | `brkupEqOde` | RHS |
    |:---:|:---:|-----|
@@ -75,9 +83,9 @@ Called from `obj_IGLOO%solve` inside `!$OMP PARALLEL DO`. For each particle it:
 2. Advances the ODE state via `oslo::Run_ODESolver`.
 3. Tracks geometric cell crossings via `IGLOO_RayFaceIntersection3D` (ray/face
    intersection on hexahedral cells).
-4. On breakup events, records child-particle state in `gr%child(ip)`. The outer
-   `maxLoop` iteration in `solve` compacts scattered children and grows the
-   particle array geometrically (2×) as needed.
+4. On KH-shed events, appends the child parcel to the parent's growable `shedList`
+   (`gr%shed(ip)`). The outer `maxLoop` iteration in `solve` drains the lists into new
+   particles and grows the particle array geometrically (2×) as needed.
 
 ---
 

@@ -1,14 +1,15 @@
 # Testing
 
-IGLOO has two test trees: the new `tests/` V&V suite (the reference gate) and the
-legacy `test/` directory (deprecated). Use `tests/` for all new work.
+IGLOO's tests live in the `tests/` V&V suite: one model-first tree whose every entry is
+registered in CTest and gated by an independent oracle.
 
 ---
 
 ## `tests/` — the reference suite
 
 A single model-first tree, MOSE-style, categorized by physics. All tests are
-registered in CTest. Authoritative layout and status: `tests/README.md`.
+registered in CTest. Authoritative layout: `tests/README.md`; one row per gate with its
+reference source and oracle: `tests/VERIFICATION_MATRIX.md`.
 
 ### Running
 
@@ -42,6 +43,12 @@ USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # rank-count gates, MPI buil
 (default OFF, so the production build is unchanged). It also refreshes `bin/IGLOO`
 (same source, RELEASE, `--master=None`) — the executable the e2e cases run.
 
+!!! warning "`bin/IGLOO` is one link target shared by every build tree"
+    `cmake --build <tree>` is a no-op when that tree has nothing to recompile, so it can
+    leave another tree's binary in place and the gates run that instead. After any
+    cross-tree build (e.g. serial ↔ MPI): `rm -f bin/IGLOO && cmake --build build/verif -j 8`,
+    then confirm with `ldd bin/IGLOO | grep -c libmpi` (0 = serial).
+
 ### Layout
 
 ```
@@ -49,8 +56,9 @@ tests/
 ├── README.md  REFERENCES.md  VERIFICATION_MATRIX.md
 ├── CMakeLists.txt                # single ctest registry (unit + e2e, labeled)
 ├── test.sh                       # MOSE-style runner
-├── common/                       # shared box fixtures
-├── tools/                        # make_box_case.py, make_vie_case.py, plot_curves.py, …
+├── vv_style.py                   # the single plot-style source for every SVG
+├── common/                       # shared box fixtures + the MOSE nozzle solfile
+├── tools/                        # make_box_case.py, make_vie_case.py, make_wedge_case.py, plot_curves.py, …
 ├── support/                      # shared Fortran library (NOT a test family)
 │   ├── verif_norms.f90
 │   ├── verif_report.f90
@@ -62,43 +70,47 @@ tests/
 │   └── twosweep.f90              # the two-sweep repeatability driver
 ├── standard/                     # drag + heat
 │   ├── drag/  temperature/       #   unit families
-│   └── drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/   # e2e cases
+│   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/   # e2e cases
 ├── evaporation/                  # unit families (root C, interface-neq, tc-analytic) + d2law/d2law-line/lk-neq/tc-box/tc-hexadecane/mhb98-water e2e
 ├── breakup/                      # TAB, Pilch-Erdman, Reitz-Diwakar, ETAB, Reitz-KHRT unit families + tab/etab/pilch-erdman/reitz-diwakar/khrt e2e, khrt-stress
 ├── combustion/                   # Beckstead unit family + burn-box e2e
 ├── infrastructure/               # gas_reconstruction, ini_pipeline, rng_stream, axis_dispatch, graze_standoff, dual_clip;
 │                                 # db-injection/coupled-body/db-2daxi/axis-200/wedge-fold/two-mat/periodic-y/bc-center-2grp (e2e)
-│                                 # refusals/{p2t,zgr,lk-d2law,properties-*,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver} (setup-refusal gates)
+│                                 # refusals/{p2t,zgr,lk-d2law,properties-*,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver,wedge-offcentre} (setup-refusal gates)
 ├── repeatability/                # two-sweep state-leak gates: drag-stokes/drag-stokes-dopri5/db-injection/two-mat/d2law/khrt/vie-plait/etab/tab/tab-dopri5
 └── mpi/                          # USE_MPI build only: drag-stokes/conv-nu/khrt/bc-center-2grp/two-mat/consistency/consistency-two-mat
 ```
 
 ### Categories
 
-| Category | Contents | Status |
-|----------|----------|--------|
-| `standard` | Drag (A) and temperature (B) unit families; drag-stokes, temp-relax, body-force, conv-nu, vie-plait, swirl-wedge, swirl-wedge-deposit, swirl-wedge-spin e2e | **GREEN** |
-| `evaporation` | Evaporation (C), LK-interface, TC-analytical unit families; d²-law, lk-neq, tc-box e2e + **mhb98-water** (E-VAL-2, paper-reproduction validation) | **GREEN** (bugs A3/A4/A8/A9/A10 fixed; F1/F2 e2e 2026-07-11; E-VAL-2 2026-07-21) |
-| `breakup` | TAB/ETAB, Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT families + TAB stochastic moments | **GREEN** (8 tests; A2/A13/A14/A15 fixed; ETAB event path implemented 2026-07-16) |
-| `combustion` | Beckstead $d^n$ Al-burn unit family; burn-box e2e | **GREEN** (M1, 2026-07-11) |
-| `infrastructure` | Gas reconstruction (E), INI pipeline (T9); db-injection, coupled-body, db-2daxi, periodic-y, bc-center-2grp e2e | **GREEN** (B1/B5/B6 fixed; 201-periodic exercised 2026-07-16; A24 `bc_center` pinning gated 2026-08-07) |
+| Category | Contents |
+|----------|----------|
+| `standard` | Drag and temperature unit families; drag-stokes, temp-relax, body-force, conv-nu, vie-plait, swirl-wedge, swirl-wedge-deposit, swirl-wedge-spin e2e |
+| `evaporation` | Evaporation, LK-interface and TC-analytical unit families (plus the MHB98 decane kernel test); d²-law, d²-law line, lk-neq, tc-box, tc-hexadecane and mhb98-water e2e |
+| `breakup` | TAB/ETAB, Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT unit families + TAB stochastic moments; five Weber-sweep e2e cases and the khrt-stress load case |
+| `combustion` | Beckstead $d^n$ Al-burn unit family; burn-box e2e |
+| `infrastructure` | Gas reconstruction, INI pipeline, RNG stream, axis dispatch, grazing stand-off and dual-clip unit families; injection, coupling, wedge, periodic and two-material e2e cases; fifteen setup-refusal gates |
+| `repeatability` | Every e2e physics path run twice through `setup_static` → `reset_state` → `solve` with the second sweep compared to the first (see `tests/repeatability/INFO.md`) |
+| `mpi` | The serial gates re-run under `mpiexec` with a rank-count witness, plus cross-rank-count consistency (see `tests/mpi/INFO.md`) |
 
 CTest labels combine category (`standard`/`evaporation`/…), kind (`unit`/`e2e`),
 and family tags. **No test is registered `WILL_FAIL`** — every entry is a real gate,
 so PASS means PASS and RED means a regression. Three unit tests
-(`test_{drag,heat,evap}_probes`) began life as expected-fail bug reproducers, but
-every bug they cover is fixed, so they now run as ordinary bug-transcription pins.
+(`test_{drag,heat,evap}_probes`) are value pins: they assert the correct value of
+specific correlations at fixed inputs (including deliberately source-faithful
+transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **85/85** in a serial build (57 e2e + 28 unit, `self_test` and `registry-docs` among the latter); `USE_MPI=ON` registers 7 more `mpi-*` cases, 92/92.
+Current gate: **85 tests** in a serial build (57 e2e + 28 unit, `self_test` and
+`registry-docs` among the latter); `USE_MPI=ON` registers 7 more `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.
 
 ### Adding a test
 
 1. Pick the model category; create the family/case directory if new (unit families
-   need an `INFO.md` per the §2.5 template — the aggregator gate checks it).
+   need an `INFO.md` — the aggregator gate checks it).
 2. **Unit test**: add the Fortran program + register via `igloo_unit_test(...)` in
    `CMakeLists.txt`; add the family to `tools/aggregate_report.py::FAMILY_DIRS` and give it an
-   `INFO.md` (gate T9(b)).
+   `INFO.md`.
 3. **E2e case**: build with `tools/make_box_case.py`, write an independent
    `check.py` (pass criterion: exit 0), register via `igloo_e2e_case(...)`.
 4. Append the test row to the family `INFO.md`; new citation tags go to
@@ -108,17 +120,8 @@ The CSV row written by `verif_report` at run time should carry the same `id` as 
 `INFO.md` row (convention; the consistency gate checks FAIL rows, `INFO.md` presence for the
 listed families and empty reports, not ids).
 
----
-
-## Legacy `test/` — retired (2026-07-16)
-
-!!! note "Removed from the repository"
-    The legacy `test/` cases (`assigned-inj/`, `assigned-pos/`, `sym-bc/`, `Vie/`)
-    used a zero-byte-stderr pass criterion only — a run could **pass while every
-    particle died at injection**. The tree was removed from git and parked at
-    `~/Desktop/Software/toBeRemoved/IGLOO-legacy-test/` (see its `README-PARKED.md`)
-    where it remains usable as a **manual byte-level A/B provider** for refactors:
-    trajectory multiset md5s (`cat OUTPUT/trajectories-*.dat | tail -n +3 | sort |
-    md5sum`) compared strictly within one compiler + one cmake-configure generation.
-    `assigned-pos` lives on in the suite as `infrastructure/db-2daxi`; `Vie` was
-    dead at injection (pre-existing NaN) and is archived only.
+A new gate must be shown to fail on a deliberately broken build before it is accepted:
+a gate that has never been seen red is not evidence of anything.  Measure the
+nondeterminism floor of the artifacts it compares (OpenMP record order, floating-point
+re-association across thread counts) and choose the comparison rule — exact,
+order-insensitive, or numeric tolerance — from that measurement.

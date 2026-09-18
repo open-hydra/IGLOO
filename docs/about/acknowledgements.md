@@ -12,7 +12,7 @@ IGLOO was created and is maintained by:
 | Marco Grossi | Original author, present maintainer |
 | Paolo Zolla | Original author |
 
-See [`AUTHORS.md`](https://github.com/open-hydra/IGLOO/blob/master/AUTHORS.md) at
+See [`AUTHORS.md`](https://github.com/open-hydra/IGLOO/blob/main/AUTHORS.md) at
 the repository root for the authoritative list.
 
 ---

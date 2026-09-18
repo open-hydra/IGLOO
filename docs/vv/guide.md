@@ -11,8 +11,8 @@ The suite is built on four integrity rules — they explain most of what follows
    papers' equations.
 2. **Tolerances from theory.** Every gate is derived (output precision, truncation
    bounds, CLT margins) — never tuned to make a run pass.
-3. **Production is never patched to make a test pass.** A test that exposes a bug
-   is kept as a probe asserting the correct behaviour until the fix lands.
+3. **Production is never patched to make a test pass.** A test that disagrees with
+   production asserts the correct behaviour; the code is fixed, not the oracle.
 4. **Everything closes the loop.** Every registered test builds and runs in seconds
    and is deterministic.
 
@@ -37,8 +37,8 @@ No prior build is needed. The script:
 A healthy run ends like:
 
 ```
-100% tests passed, 0 tests failed out of 49
-[report] .../build/verif/tests/verification_report.md: 97/97 rows PASS, 19 csv files
+100% tests passed, 0 tests failed out of 85
+[report] .../build/verif/tests/verification_report.md: N/N rows PASS, M csv files
 ```
 
 ---
@@ -48,7 +48,7 @@ A healthy run ends like:
 | Command | Runs |
 |---|---|
 | `./tests/test.sh all` | everything + aggregated report + consistency gate |
-| `./tests/test.sh standard` | one model category: `standard`, `evaporation`, `breakup`, `infrastructure` |
+| `./tests/test.sh standard` | one model category: `standard`, `evaporation`, `combustion`, `breakup`, `infrastructure`, `repeatability`, `mpi` |
 | `./tests/test.sh unit` / `e2e` | by kind: compiled unit tests / end-to-end solver cases |
 | `./tests/test.sh conv-nu` | a single test by its CTest name (e.g. `test_breakup_tab`, `drag-stokes`) |
 | `./tests/test.sh clean` | wipe e2e `OUTPUT/` + run logs + `build/verif/` |
@@ -65,31 +65,28 @@ For anything finer, drive CTest directly — tests carry composable labels
 
 ```bash
 ctest --test-dir build/verif -L breakup --output-on-failure
-ctest --test-dir build/verif -L unit                # all 28 unit tests
+ctest --test-dir build/verif -L unit                # all unit tests
 ctest --test-dir build/verif -R "test_drag.*"        # regex on names
 ```
 
 There is **no `xfail` label** — every test in the registry is a real gate, so there
-is nothing to exclude (`-LE xfail` is a no-op).
+is nothing to exclude.
 
 ---
 
 ## Reading the results
 
-**CTest summary.** All 49 tests should pass, and "Passed" means what it says
+**CTest summary.** Every registered test should pass, and "Passed" means what it says
 everywhere — **no test is registered `WILL_FAIL`**.
 
 Three of them (`test_drag_probes`, `test_heat_probes`, `test_evap_probes`) are
-*bug-transcription pins*: they assert the **correct** physics for what were once
-open production bugs. They were written as expected-fail probes — exit 1 while the
-bug is live, so a probe turning RED was good news — but every bug they cover is now
-fixed (A1/A5/A6 + the Wen-Yu C-flag; A3/A4/A9; A7 closed as *source-faithful*), so
-they exit 0 and behave like any other gate: **RED now means a regression.** Their
-"promote probes to the gate" message is a leftover instruction to fold them into the
-parent families; they already gate as they stand.
+*value pins*: they assert the value of specific correlations at fixed inputs — the
+published Putnam and Wen–Yu plateaus, finite Crowe/Hermsen drag at high Re/Ma, the
+JAXA1 transcription without a $\mathrm{Nu}=2$ floor, the d²-law/CEM ratio — so that
+a change to any of those constants turns them RED.
 
 **Aggregated report.** `build/verif/tests/verification_report.md` — one row per
-verified quantity (97 currently), with the measured error, the derived tolerance,
+verified quantity, with the measured error, the derived tolerance,
 and PASS/FAIL. The same data lives in per-test `verif_*.csv` files next to it
 (schema: `case, variable, Linf, L2, p_obs, p_expected, tol, result`).
 
@@ -142,27 +139,15 @@ Rerun with `OMP_NUM_THREADS=1` vs `5`: the sorted hash must not change.
 
 ---
 
-## Known-bug machinery
+## When a test disagrees with production
 
-The suite is deliberately green *while documenting open production bugs*:
-
-- Every production bug the suite exposed is fixed, refuted, or closed as
-  source-faithful. `tests/VERIFICATION_MATRIX.md` maps every CTest entry to its
-  reference source and oracle.
-- **Bug-transcription pins** — three unit tests pin the fixed values and the
-  source-faithful transcriptions (`test_drag_probes`, `test_heat_probes`,
-  `test_evap_probes`); a regression flips them RED. All three are **ordinary gates**
-  today (no `WILL_FAIL` property anywhere in the registry), not expected failures.
-- `test_drag_probes` promoted from xfail to gated 2026-07-07 (XD1–XD5 all pass).
-- `tests/breakup/reitz-khrt/` added as a new gated family (A2 fix, pure-KH path).
-- The `tests/evaporation/d2law/` case was promoted 2026-07-07: `check_evap.py`
-  renamed to `check.py`, registered via `igloo_e2e_case(...)` in `tests/CMakeLists.txt`.
-- `tests/infrastructure/db-injection/` added as a new gated e2e case 2026-07-08
-  (B1 fix — placement, `vInj` hand-off, Stokes relaxation, exits).
-
-The workflow after fixing a production bug is therefore: run `./tests/test.sh all`,
-watch the relevant probe flip RED, then promote it (and any blocked case) so the
-suite is strict again — one ratchet per bug.
+The rule is that the oracle wins until proven wrong against an *external* reference
+(the paper, a closed form, a second independent implementation) — never against
+production itself. Fix the code, re-run `./tests/test.sh all`, and if the defect was
+of a kind the existing gates could not see, add a gate that fails without the fix
+before landing it. `tests/VERIFICATION_MATRIX.md` maps every CTest entry to its
+reference source and oracle, so the first question — "what does this test actually
+compare against?" — has a one-line answer.
 
 ---
 
@@ -172,7 +157,7 @@ Short version (full recipe in [Testing](../development/testing.md)):
 
 1. Pick the model category. Unit families need an `INFO.md` row per test
    (id, oracle source + DOI, compared quantity, tolerance provenance) — the
-   consistency gate enforces the file's existence and id match.
+   consistency gate checks that the file exists (ids are not cross-checked).
 2. Unit: one Fortran program linked against `verif_support`, registered with
    `igloo_unit_test(name srcdir labels)`; add the family dir to
    `tools/aggregate_report.py::FAMILY_DIRS`.
@@ -182,7 +167,8 @@ Short version (full recipe in [Testing](../development/testing.md)):
 
 Design rules that keep the suite honest: derive the tolerance before running the
 test; make every decoupling assumption a runtime guard; if the test disagrees with
-production, file the finding — do not adjust the oracle.
+production, treat the disagreement as a solver defect to investigate — do not adjust the
+oracle.
 
 ---
 
@@ -192,7 +178,6 @@ production, file the finding — do not adjust the oracle.
   into `tests/common/` — if you copy or move a case, re-point them (`ln -sfn`).
   They are invisible to `find -type f`.
 - `test.sh` refreshes `bin/IGLOO` (RELEASE, `MASTER=None`, OpenMP). If your last
-  production build used different flags (e.g. TecIO), rebuild it after testing.
-- The legacy `test/` tree was **retired 2026-07-16** (parked out-of-git at
-  `~/Desktop/Software/toBeRemoved/IGLOO-legacy-test/` as a manual A/B md5 provider) —
-  see [Testing](../development/testing.md).
+  production build used different flags (e.g. TecIO or MPI), rebuild it after testing;
+  `bin/IGLOO` is a single link target shared by every build tree (see
+  [Testing](../development/testing.md)).

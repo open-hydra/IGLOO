@@ -44,5 +44,5 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ```
 
-The complete text is in [`LICENSE`](https://github.com/open-hydra/IGLOO/blob/master/LICENSE)
+The complete text is in [`LICENSE`](https://github.com/open-hydra/IGLOO/blob/main/LICENSE)
 at the repository root.

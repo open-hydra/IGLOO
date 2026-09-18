@@ -12,7 +12,7 @@ Each structured-hex cell has 8 vertices indexed 1–8.  The module-level paramet
 
 ```fortran
 integer, parameter :: guide(6,4) = reshape([1,2,3,4, 7,6,5,8, 6,2,1,5,
-                                             4,3,7,8, 5,1,4,8, 3,2,6,7], [6,4])
+                                             4,3,7,8, 5,1,4,8, 3,2,6,7], [6,4], order=[2,1])
 ```
 
 maps each of the 6 faces to its 4 corner vertex indices.  Every containment test loops
@@ -111,16 +111,18 @@ Full boundary condition documentation is at [../user/boundary-conditions.md](../
 The hooks integrated into the tracking loop are:
 
 **Axisymmetric fold (bcdef 200)**:
-`axisymFold(part%stateVar)` in `src/lib/obj_bc.f90` is called after every cell-tracking
-step when `axisym = .true.`.  It folds the particle back into the wedge sector if it
-crossed the symmetry faces (faces 5 or 6), using the wedge half-angle derived from the
-mesh.  The fold is a rotation of position and velocity; it is a no-op for particles
-already in-plane.
+On a wedge the point-in-cell test also carries the azimuth band, so an ODE segment ends
+when the particle reaches a sector plane (`sectorOut`) exactly as it ends at any other
+face.  `axisymFold(part%stateVar)` in `src/lib/obj_bc.f90` then rotates position and
+velocity about the axis by one sector, back into $[-\Delta\theta/2, +\Delta\theta/2]$,
+with the sector angle derived from the mesh k-layer geometry.  A sector crossing is not
+a cell crossing: no trajectory row is written and the stuck-in-cell counter ignores it.
+The fold is the identity for particles on the meridian plane.
 
 **Periodic transport (bcdef 201)**:
 Translational periodic BC.  The particle is translated to the partner face position,
-velocity is unchanged.  Distinct from connected faces (101/103); the partner face is read
-explicitly.
+velocity is unchanged.  Distinct from conformal connections (101); the partner face is
+read explicitly.
 
 **Domain exit / `gone`**:
 When `updateCell` cannot locate the particle (or `bcDef` marks it as exited), `part%gone`

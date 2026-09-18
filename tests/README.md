@@ -4,8 +4,7 @@ One tree, MOSE-style, categorized by **model**: each category holds compiled
 unit-test families (literature-grounded, independent oracles) and end-to-end
 solver cases (box case + `check.py` oracle). Everything is registered in ctest.
 Registry of record: [`CMakeLists.txt`](CMakeLists.txt) (every gate) and
-[`VERIFICATION_MATRIX.md`](VERIFICATION_MATRIX.md) (one row per gate). The original phase-1
-verification plan is a local, gitignored working note (`plan-bucket/implemented/`), absent from a fresh clone.
+[`VERIFICATION_MATRIX.md`](VERIFICATION_MATRIX.md) (one row per gate).
 
 ## Run
 
@@ -26,7 +25,7 @@ that is the executable the e2e cases run.
 
 ```
 tests/
-├── README.md  REFERENCES.md  VERIFICATION_MATRIX.md      # (BUGS.md, FINDINGS.md: local working notes, gitignored)
+├── README.md  REFERENCES.md  VERIFICATION_MATRIX.md
 ├── CMakeLists.txt                # single ctest registry (unit + e2e, labeled)
 ├── test.sh                       # MOSE-style runner: standard evaporation combustion breakup infrastructure repeatability mpi unit e2e
 ├── vv_style.py                   # the single plot-style source for every SVG
@@ -40,7 +39,7 @@ tests/
 │   └── twosweep.f90              # the two-sweep repeatability driver
 ├── standard/                     # drag + heat
 │   ├── drag/  temperature/       #   unit families
-│   └── drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/   # e2e
+│   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/   # e2e
 ├── evaporation/                  # unit families: (root)  interface-neq/  tc-analytic/
 │   └── d2law/ d2law-line/ lk-neq/ tc-box/ tc-hexadecane/ mhb98-water/     # e2e
 ├── combustion/                   # unit family (root) + burn-box/ (e2e)
@@ -48,13 +47,13 @@ tests/
 │   └── tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/   # e2e
 ├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/
 │   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ two-mat/ periodic-y/ bc-center-2grp/   # e2e
-│   └── refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver}/   # setup-refusal gates
+│   └── refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver,wedge-offcentre}/   # setup-refusal gates
 ├── repeatability/                # two-sweep gates: drag-stokes/ drag-stokes-dopri5/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/ tab-dopri5/
 └── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ bc-center-2grp/ two-mat/ consistency/ consistency-two-mat/
 ```
 
 Each unit family carries an `INFO.md` cataloguing its tests; `tools/aggregate_report.py`
-(gate T9(b)) fails the run if a family listed in its `FAMILY_DIRS` lacks one
+(the aggregator consistency gate) fails the run if a family listed in its `FAMILY_DIRS` lacks one
 for the schema and `REFERENCES.md` for the master bibliography. E2e cases are
 self-contained: `input.ini`, `INPUT/`, independent oracle `check.py`
 (PASS == exit 0; the solver's stderr is NOT the gate).
@@ -62,23 +61,22 @@ self-contained: `input.ini`, `INPUT/`, independent oracle `check.py`
 ctest labels: category (`standard`/`evaporation`/`breakup`/`combustion`/`infrastructure`)
 + kind (`unit`/`e2e`) + family tags (`drag`, `heat`, `tab`, …). There is **no `xfail`
 label and no `WILL_FAIL` property** anywhere in the registry — every entry is a real
-gate. The `test_*_probes` trio began as expected-fail bug reproducers, but every bug
-they cover is fixed, so they now run as ordinary bug-transcription pins: green while
-the fix holds, RED on regression.
+gate. The `test_*_probes` trio are value pins: they assert the value of specific
+correlations at fixed inputs, green while those constants hold, RED on regression.
 
 ## Adding a new test
 
 1. Pick the model category; create the family/case dir if new (unit families
-   need an `INFO.md` per the §2.5 template — the aggregator gate checks it).
+   need an `INFO.md` — the aggregator gate checks it).
 2. Unit: add the Fortran program + register via `igloo_unit_test(...)` in
    `CMakeLists.txt`, add the family dir to `tools/aggregate_report.py::FAMILY_DIRS`, and give
-   it an `INFO.md` (T9(b) refuses a listed family without one).
+   it an `INFO.md` (the aggregator refuses a listed family without one).
    E2e: build the case with `tools/make_box_case.py`, write an independent
    `check.py`, register via `igloo_e2e_case(...)`.
 3. Append the test row to the family `INFO.md`; new citation tags go to
    `REFERENCES.md` (deduplicated master bibliography).
 4. The CSV row appended by `verif_report` at run time should carry the same `id`
-   as the `INFO.md` row (convention — the consistency gate T9 checks FAIL rows, a missing
+   as the `INFO.md` row (convention — the consistency gate checks FAIL rows, a missing
    `INFO.md` per listed family and empty reports; it does not cross-check ids).
 5. Optional e2e overlay: copy an existing `verify.py` scaffold (non-gating,
    writes `OUTPUT/<case>.svg`; `test.sh` syncs into `docs/vv/images/`). Plot
@@ -96,5 +94,4 @@ the fix holds, RED on regression.
 ## Status
 
 ctest 85/85 in a serial build (57 e2e + 28 unit, `self_test` and `registry-docs` among the latter);
-`USE_MPI=ON` registers 7 more `mpi-*` cases, 89/89. Convergence-order
-aggregate tables (plan §4 T8-convergence) not started.
+`USE_MPI=ON` registers 7 more `mpi-*` cases, 92/92.

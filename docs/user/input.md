@@ -34,16 +34,15 @@ Parameters not specified take their default values. Unknown sections are silentl
 | `[IGLOO-Properties]` | Constant scalar properties for evaporation/breakup (per material) |
 | `[IGLOO-BC]` | Injection spacing (`ds`) or explicit particle coordinates |
 | `[IGLOO-ODE]` | ODE solver selection, tolerances, step count |
-| `[IGLOO-Material<i>]` | **Transitional.** Per-material model overrides and phase-change properties (`evaporation`, `combustion`, `alpha-e`, `K-burn`, ...); `i` = the material's order in the phase file. These are ATLAS input that GPB is to write into the phase file; this section exists only until it does |
+| `[IGLOO-Material<i>]` | Per-material model overrides and phase-change properties (`evaporation`, `interface`, `combustion`, `alpha-e`, `K-burn`, ...); `i` = the material's order in the phase file |
 
 ## ATLAS-Generated Sections (not parsed by IGLOO)
 
 IGLOO reads only the `[IGLOO-*]` sections above. The sections below are the *preprocessor's* input:
 whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase.txt`,
-`properties.dat`, `bc.txt`). The per-material models (`evaporation`, `combustion`, `alpha-e`, ...) are
-meant to be `[GPB-Phase*]` keys written by GPB into the phase file; until GPB does that, IGLOO takes
-them from `[IGLOO-Material<i>]` and only *warns* when it sees them in a `[GPB-Phase*]` section (they
-are not applied from there — it used to read them from there and, under hydra-MI2, from the wrong phase).
+`properties.dat`, `bc.txt`). Per-material model keys (`evaporation`, `combustion`, `alpha-e`, ...)
+are read from `[IGLOO-Material<i>]` only; if IGLOO sees one of them in a `[GPB-Phase*]` section it
+prints a "NOT applied" warning and ignores it.
 
 | Section | Role |
 |---------|------|
@@ -124,7 +123,7 @@ Controls the gas field source, output modes, and miscellaneous run-time options.
 | `gas-file` | string | — | Path to the Tecplot gas field (ignored when `external_gas` is provided by hydra) |
 | `phase` | string | `''` | ATLAS name of the condensed phase to read (`[GPB-Phase*] name`): the files become `INPUT/<phase>-{phase.txt,properties.dat,bc.txt}` and every output gets the `<phase>-` prefix. Absent keeps the prefix in force (unnamed `INPUT/phase.txt` standalone; the parent app's assignment under hydra-MI2). Must not contain `-` |
 | `gas-order` | integer | `2` | Gas interpolation order: `1` = cell-center value, `2` = second-order reconstruction |
-| `out-file` | string | `E+S` | Output fields: `E` = Eulerian only, `S` = source only, `E+S` or `ALL` (or absent) = both; any other token is refused |
+| `out-file` | string | `E+S` | Output fields: `E` = Eulerian only, `S` = source only, `E+S` (also `S+E`, `ES`, `SE`, `ALL`, `both`, case-insensitive; or absent) = both; any other token is refused |
 | `fsample-traj` | integer | `100` | Scatter-cloud density: nominal points per injection stream (sets the droplets-per-point quantum); trajectory rows follow `print-dcell`/`print-dtime`, not this key |
 | `print-dcell` | integer | `1` | Console print frequency in cell crossings |
 | `print-dtime` | real | `−1` | Console print frequency in seconds; `−1` disables time-based printing |
@@ -133,7 +132,7 @@ Controls the gas field source, output modes, and miscellaneous run-time options.
 | `out-scatter` | string | `on` | Enable scatter-cloud output (`off` to disable) |
 | `seed` | integer | `42` | RNG seed for stochastic diameter sampling |
 | `mollify` | string | `on` | Enable field mollification smoother (`off` to disable) |
-| `mollify-passes` | integer | auto | Binomial smoother passes; default suppresses ≤4-cell deposition noise |
+| `mollify-passes` | integer | `8` | Binomial smoother passes; `0` = off |
 | `body-accel` | real(3) | `0 0 0` | Uniform body acceleration [m/s²]: `gx gy gz`; absent or all-zero = no-op |
 
 !!! warning "on/off switches are strings, not Fortran logicals"
@@ -145,12 +144,14 @@ Selects physical model closures.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `drag` | string | — | Drag law: `Stokes`, `Morsi-Alexander`, `Crowe`, `Hermsen`, `Henderson`, `Putnam` |
-| `heat` | string | — | Nusselt correlation: `Ranz-Marshall`, `Kavanau-Drake` |
-| `evaporation` | string | absent | Evaporation model; when present, enables phase change |
-| `breakup` | string | absent | Breakup model; when present, enables secondary breakup |
+| `drag` | string | — | Drag law: one of the 13 correlations in [Drag](../theory/drag.md) (`Stokes`, `Schiller-Naumann`, `Morsi-Alexander`, `Henderson`, `Crowe`, ...) |
+| `heat` | string | — | Nusselt correlation: `Ranz-Marshall`, `Kavanau-Drake`, `JAXA1`–`JAXA4` |
+| `evaporation` | string | absent | Evaporation model (`d2-law`, `CEM`, `CEM-B`, `ASM`, `TC`); when present, enables phase change |
+| `interface` | string | `VLE` | Surface state: `VLE` equilibrium or `LK` Langmuir–Knudsen non-equilibrium |
+| `blowing` | string | `none` | Stefan-blowing reduction of the convective heat: `none` or `LK` |
+| `breakup` | string | absent | Breakup model (`Pilch-Erdman`, `Reitz-Diawakar`, `Reitz-KHRT`, `TAB`, `ETAB`); when present, enables secondary breakup |
 
-Breakup model–specific tuning constants (`B0`, `B1`, `Cs`, etc.) are also read from `[IGLOO-Models]` when a breakup model is active; see the [Parameter Registry](registry.md) for per-model keys.
+Breakup model–specific tuning constants (`B0`, `B1`, `Cs`, etc.) are also read from `[IGLOO-Models]` when a breakup model is active; see the [Parameter Registry](registry.md) for per-model keys. Unknown model tokens, and the reserved `evaporation = LEB`, are refused at setup.
 
 ### `[IGLOO-Properties]`
 
@@ -159,7 +160,7 @@ Constant evaporation and breakup properties, one value per material in the order
 | Key | Description |
 |-----|-------------|
 | `psat` | Saturation pressure [Pa] |
-| `Mv` | Vapor molecular weight [kg/mol] |
+| `Mv` | Vapor molar mass [kg/kmol] |
 | `Lv` | Latent heat of vaporization [J/kg] |
 | `Tboil` | Boiling temperature [K] |
 | `cpv` | Vapor specific heat [J/(kg·K)] |
@@ -172,7 +173,7 @@ Constant evaporation and breakup properties, one value per material in the order
 
 Controls injection particle placement.
 
-**Boundary-patch injection** (default, `method = FB`): particles are placed on all faces tagged as inlet in `INPUT/bc.txt`. Controlled by:
+**Boundary-patch injection** (method `FB`, selected when no `x`/`y`/`z` is given): particles are placed on all faces tagged as inlet in `INPUT/bc.txt`. Controlled by:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -180,12 +181,12 @@ Controls injection particle placement.
 | `ds-degen` | real | `0` | Degeneracy floor [cm]: skip injection in boundary cells whose tangential size is below this threshold. |
 | `fsample` | integer | `1` | Injection cell subsampling factor. |
 
-**Assigned-position injection** (`method = DB`): provide explicit coordinates instead of boundary-face scanning. Requires `x`, `y`, `z` (or any combination), plus `mdot` and `diam`.
+**Assigned-position injection** (method `DB`, selected by the presence of `x`/`y`/`z`): provide explicit coordinates instead of boundary-face scanning. Requires `x`, `y`, `z` (or any combination), plus `mdot` and `diam`.
 
 | Key | Description |
 |-----|-------------|
 | `x`, `y`, `z` | Injection point coordinates (scalar or array) [m] |
-| `mdot` | Mass flow rate per particle [g/s] (scalar or array) |
+| `mdot` | Mass flow rate per particle [kg/s] (scalar or array) |
 | `diam` | Particle diameter [m] (scalar or array) |
 | `temp0` | Initial temperature [K] (optional, defaults to gas temperature) |
 | `up`, `vp`, `wp` | Initial velocity components [m/s] (optional) |
@@ -199,7 +200,7 @@ Selects and tunes the ODE integrator.
 | `ode-solver` | string | `H-sdirk4` | Integrator: `H-sdirk4` (implicit SDIRK4) or `H-dopri5` (explicit Dormand–Prince 5(4)); any other token is refused |
 | `relative-tol` | real | `1e-10` | Relative ODE tolerance |
 | `absolute-tol` | real | `1e-10` | Absolute ODE tolerance |
-| `max-steps-ode` | integer | `100000` | Maximum ODE steps per cell crossing |
+| `max-steps-ode` | integer | `100000` | Maximum internal steps per integrator call (`iopt(1)`) |
 
 `H-sdirk4` is recommended for stiff cases (evaporation, small Stokes number). `H-dopri5` is faster for non-stiff drag-only cases.
 

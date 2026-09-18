@@ -90,20 +90,29 @@ To clean output files and the verification build:
 The solver prints a header, then per-material and per-group progress:
 
 ```
- =============================================================================
-|                  ///    /////    //       /////    /////                    |
-...
- =============================================================================
+  =============================================================================
+ |                  ///    /////    //       /////    /////                    |
+ ...
+  =============================================================================
 
-  OpenMP threads =  5
- >> Background flow field =>  INPUT/solfile.tec
- >> Output fields: gas coupling source & equivalent eulerian
- >> Field mollification ON: 3 binomial pass(es)
- Compute particles dynamics for material: A
-     Group  1 => number of particles =   25
+  OpenMP threads =            5
+  >> Output field: gas coupling source
+  >> Field mollification ON: 8 binomial pass(es)
+  >> Background flow field => INPUT/solfile.tec
+  >> [IGLOO-Material1] evap=0 liq=0 intf=0 boil=0 comb=0 solid=0 alpha-e= 1.000E+00
+     - Block   1 size =       60       5       5
+
+  Placing particles at the bounday every 10.00000 cm...
+  >> Using 3D injection algorithm
+
+     >> scatter cloud [A]: dNscat= 3.948E+05 droplets/pt (nominal ~100/stream; ...)
+  Compute particles dynamics for material: A
+     Group  1 => number of particles =     25
      >> ODE system (neq= 7):
-       - constant particle mass and size
- Stop condition : All particles out of domain!
+        - constant particle mass and size
+  Stop condition : All particles out of domain!
+
+  Writing tec-fomat file: source.tec
 ```
 
 Output files written to `OUTPUT/`:
@@ -138,7 +147,7 @@ A passing run prints:
 ```
 
 !!! warning "Pass criterion"
-    The e2e harness uses the oracle (`check.py` exit code), not the legacy "stderr empty" criterion. A run that crashes mid-integration will fail the oracle because `OUTPUT/trajectories-A.dat` will be absent or empty.
+    The e2e harness uses the oracle (`check.py` exit code), not the solver's exit status or an empty stderr. A run that crashes mid-integration will fail the oracle because `OUTPUT/trajectories-A.dat` will be absent or empty.
 
 ---
 

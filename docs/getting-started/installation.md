@@ -12,6 +12,7 @@ This page describes how to build IGLOO. Two build modes exist: **standalone** (I
 | **Fortran compiler** | GNU (`gfortran`) or Intel/oneAPI (`ifx`) |
 | **C/C++ compiler** | Required only for optional TecIO support |
 | **OpenMP** | Optional; required for multi-threaded execution |
+| **MPI** | Optional; hybrid MPI + OpenMP execution (`--use-mpi`) |
 
 ---
 
@@ -53,6 +54,7 @@ When IGLOO is a submodule of hydra, the build reuses `$HYDRADIR/lib/{ORION,OSlo,
 | `--compilers=intel` or `--compilers=gnu` | Selects the compiler family. When omitted, CMake decides. |
 | `--use-openmp` | Enables OpenMP parallelization. |
 | `--use-tecio` | Enables Tecplot binary I/O (requires C++ compiler). |
+| `--use-mpi` | Enables the hybrid MPI + OpenMP build (see [Parallelization](../development/parallelization.md)). Cannot be combined with `--use-tecio`. |
 
 The `build` command wipes `build/`, runs a clean CMake configure and build, then writes `CMakePresets.json` from the populated `CMakeCache.txt`. The executable is placed at `bin/IGLOO`.
 

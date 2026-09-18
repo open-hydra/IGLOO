@@ -35,9 +35,9 @@ flowchart TB
 
 `integrate` is **write-only** with respect to the grid accumulators — `srcblock` and
 `eulblock` appear only as arguments — so a parcel's trajectory never depends on another
-parcel's deposition. The only shared writes in the entire tree are **11 `!$OMP ATOMIC`
-grid accumulations** in `src/lib/Lib_Integration.f90` (5 for the
-source field in `computeSrcField`, 6 for the euler field in `computeEulField`).
+parcel's deposition. The only shared writes in the entire tree are **15 `!$OMP ATOMIC` updates** in
+`src/lib/Lib_Integration.f90`: 11 grid accumulations (5 for the source field in
+`computeSrcField`, 6 for the euler field in `computeEulField`) and 4 wedge-fold counters.
 
 Consequence: any partition of the parcel set produces the same trajectories. Only the
 *grid* accumulators need combining, and summation is associative up to floating-point
@@ -73,20 +73,20 @@ The whole MPI surface is three places. Everything else is serial-identical code.
 | 2 | `reduce_accumulators` at the end of `solve` | `MPI_Allreduce(SUM)` over the source and euler accumulators |
 | 3 | `merge_rank_particle_files` in `writeout` | root collapses per-rank `.dat` shards into the serial file layout |
 
-`src/` carries only **11 `USE_MPI` guards** in total — 9 inside the MPI module itself, one
-in `obj_IGLOO.f90`, one in the driver. A serial build compiles the module to no-ops
-(`mpi_size_ = 1`, `mpi_is_root = .true.`, `rank_suffix()` empty), so **the serial code path
-is byte-identical to what it was before MPI existed**.
+Every `#ifdef USE_MPI` in `src/` lives inside `IGLOO_Mod_MPI.f90`; the rest of the tree
+calls its wrappers (`mpi_init_env`, `owns_particle`, `reduce_accumulators`, …). A serial
+build compiles the module to no-ops (`mpi_size_ = 1`, `mpi_is_root = .true.`,
+`rank_suffix()` empty), so **the serial code path carries no MPI logic at all**.
 
 ### Rank-invariance is the hard part
 
 Splitting the work is easy; getting *identical numbers* out of any rank count is not. Three
 mechanisms carry it:
 
-**1 — Per-parcel RNG streams.** Every parcel's stream is seeded from `(rng_seed, famID, ID)`.
-Before this, TAB's child-size sampler drew `random_number` *inside* the OpenMP region, so
-even identically-seeded ranks diverged with thread scheduling. Replication alone was **not**
-sufficient.
+**1 — Per-parcel RNG streams.** Every parcel's stream is seeded from `(rng_seed, famID, ID)`,
+so a stochastic draw (TAB child sizes, ETAB kick azimuths) depends only on the parcel, never
+on which thread or rank happens to integrate it. A shared `random_number` stream inside the
+parallel region would diverge with thread scheduling even on identically-seeded ranks.
 
 **2 — Globally-banded parcel IDs.** Parcel IDs must be rank-*invariant*, not merely unique,
 because `part%ID` seeds scatter emission (`wAcc = dNscat·mod(ID·φ, 1)`). A storage index
@@ -167,60 +167,47 @@ For a parent solver driving IGLOO:
 Recommended placement: `mpirun --map-by numa --bind-to numa`, `OMP_PLACES=cores`,
 `OMP_PROC_BIND=close`, `KMP_STACKSIZE=100M`, `ulimit -s unlimited`.
 
+## Scatter-cloud output path
+
+Scatter records are the one output stream large enough to matter for scaling
+(`khrt-stress` emits 1.64 M of them). Each parcel buffers its own records inside
+`integrate` and emits them with **one write** when it finishes, instead of one write per
+record: on `khrt-stress` that is ~2270 records per parcel, so the number of lock
+acquisitions on the output unit is the number of parcels, not the number of records, and
+the formatting happens *inside* the parallel region where it scales. Memory is bounded by
+one parcel's records (~270 kB), not by the total cloud.
+
 ## Measured performance
 
-!!! danger "Check `uptime` before believing any timing here"
-    These hosts are shared. Steady contention once faked a 2× error *invisibly* — it shifts
-    the mean without widening the spread, so tightly-clustered repeats look trustworthy and
-    are not. Always time both arms adjacently, in one batch, on one host, from local `/tmp`
-    (`/data10` is an NFS export).
+`khrt-stress`, **single rank** (pure OpenMP scaling), measured on sprop1 at load 41–42,
+median of 3:
 
-`khrt-stress` (1.64 M scatter records), **single rank**, so this is pure OpenMP scaling —
-measured on sprop1, load 41–42, median of 3, before/after the scatter-buffering fix
-(`fa1a9b2`):
-
-| threads | before | after |
+| threads | wall time | speed-up |
 |---|---|---|
-| 1 | 13645 ms | 13818 ms (+1.3 %) |
-| 2 | 17366 ms — **0.79×** | 8385 ms — **1.65×** |
-| 5 | 19121 ms — **0.71×** | 5591 ms — **2.47×** |
+| 1 | 13818 ms | 1.00× |
+| 2 | 8385 ms | 1.65× |
+| 5 | 5591 ms | 2.47× |
 
 Hybrid grid, 4 slots, same host:
 
-| configuration | before | after |
-|---|---|---|
-| 4 ranks × 1 thread | 7537 ms | 7223 ms |
-| 2 ranks × 2 threads | 11707 ms | 7451 ms |
-| 1 rank × 4 threads | 19176 ms | **5652 ms** |
+| configuration | wall time |
+|---|---|
+| 4 ranks × 1 thread | 7223 ms |
+| 2 ranks × 2 threads | 7451 ms |
+| 1 rank × 4 threads | **5652 ms** |
 
-Threads went from a **2.54× penalty to a 1.28× benefit**, and `1 rank × 4 threads` is now the
-fastest of the three. **That is what makes hybrid MPI+OpenMP worth configuring at all** — before
-`fa1a9b2`, adding threads actively hurt, so the only sane configuration was rank-only.
+`1 rank × 4 threads` is the fastest of the three, which is what makes hybrid MPI+OpenMP worth
+configuring: within a rank, threads share the replicated mesh and gas field for free, while
+extra ranks pay the replicated setup. The remaining thread-scaling limit is in the
+**compute** path (OSlo implicit solver 37–38 %, `pow` 32 %, memory bandwidth), not in output.
 
-The `+1.3 %` at one thread is the buffering overhead with no lock contention to remove: the
-honest cost of the fix.
-
-### What was fixed, and what is left
-
-`fa1a9b2` buffers each parcel's scatter records inside `integrate` and emits them with **one
-write** when the parcel finishes, instead of one write per record. On `khrt-stress` that is
-~2270 records per parcel, so lock acquisitions drop ~2000× (1.65 M → 726) and the formatting
-moves *inside* the parallel region where it scales. Memory is bounded by one parcel's records
-(~270 kB), not the 195 MB total. Values are bit-for-bit unchanged.
-
-**Per-thread shard files were measured and rejected** — net worse. The remaining thread-scaling
-limit is in the **compute** path (OSlo implicit solver 37–38 %, `pow` 32 %, memory bandwidth),
-not in output.
-
-Levers that do work, in order of cost:
-
-1. **Zero code: put `OUTPUT/` on tmpfs** — worth 1.7 s here, 14 % at one thread, **30 % at five**.
-2. Fewer bytes: binary scatter records, or a sampling stride on the cloud.
-3. MPI-IO at computed offsets, so ranks write one file with no merge at all.
+Two output-side levers are available to the user: putting `OUTPUT/` on tmpfs (14 % at one
+thread, **30 % at five** on `khrt-stress`), and lowering `fsample-traj` to thin the scatter
+cloud.
 
 ## How this is verified
 
-Rank-count invariance is **gated**, not assumed. Five MPI cases run under `mpiexec`
+Rank-count invariance is **gated**, not assumed. Seven MPI cases run under `mpiexec`
 (`tests/mpi/`), registered only in a `USE_MPI` build:
 
 | gate | ranks × threads |
@@ -229,7 +216,9 @@ Rank-count invariance is **gated**, not assumed. Five MPI cases run under `mpiex
 | `mpi-conv-nu` | 4 × 2 |
 | `mpi-khrt` | 4 × 2 |
 | `mpi-bc-center-2grp` | 4 × 2 |
+| `mpi-two-mat` | 4 × 2 |
 | `mpi-consistency` | cross-rank-count comparison |
+| `mpi-consistency-two-mat` | cross-rank-count comparison, two materials |
 
 Each case symlinks its parent case's `INPUT/`, `input.ini` and `check.py`, so the fixture and
 the oracle are shared with the serial gate — the MPI case adds only the launch and the
@@ -245,10 +234,8 @@ Measured invariance: `.dat` sorted multisets identical at n = 1, 2, 3, 4, 5, 7; 
 bit-identical at n = 1, 2, 4 on most cases (worst 1.8e-23 of field scale on `vie-plait`, from
 `!$OMP ATOMIC` re-association). Shard count scales as 3n while the merged record total stays
 invariant — **that is what proves partitioning rather than replication**. Balance at n = 7:
-33–47 exit records per rank.
-
-Falsifiability was checked: reverting `kid%ID` to the storage index turns `mpi-khrt` RED at
-n ≥ 2, and the scatter record count itself moves (566572 → 566580).
+33–47 exit records per rank. The gates are falsifiable: seeding child IDs from the storage
+index instead of the global band turns `mpi-khrt` red at n ≥ 2.
 
 ## Build
 
@@ -274,11 +261,10 @@ mpirun -n 4 ./bin/IGLOO
 
 ## Known limits
 
-- **`nm > 1` is untested suite-wide** — no case has more than one material.
-- **Setup is replicated, including the Tecplot read**: N ranks read the same file. Accepted
-  one-time cost at this scale; a rank-0 read + broadcast is the obvious V2.
+- **Setup is replicated, including the Tecplot read**: N ranks read the same file — a
+  one-time cost at this scale.
 - **Memory does not scale**: every rank holds the full mesh, gas field and accumulators
-  (`O(nb × nfam × cells)` per rank). Breaking that wall needs shared-memory windows
+  (`O(nb × nfam × cells)` per rank). Breaking that wall would need shared-memory windows
   (`MPI_Win_allocate_shared`) or genuine domain decomposition — neither is implemented.
 - The parallelization is **one-way**: the gas field is steady and read-only within a sweep.
   Two-way coupling would need the accumulators fed back, which changes the communication

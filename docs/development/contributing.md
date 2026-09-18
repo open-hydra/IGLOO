@@ -20,9 +20,9 @@
    ./tests/test.sh all
    ```
 
-   See [Testing](testing.md) for details. The target is **85/85** (57 e2e + 28 unit,
-   `self_test` among the latter). Nothing is registered `WILL_FAIL`, so any red is a
-   real regression — including the three `test_*_probes` bug-transcription pins.
+   See [Testing](testing.md) for details. Every registered test must pass: nothing is
+   registered `WILL_FAIL`, so any red is a real regression — including the three
+   `test_*_probes` value pins.
 
 ---
 
@@ -75,8 +75,9 @@ attempt = 0
 
 **Module-level scratch must be `!$omp threadprivate`.** Any module variable
 used as per-call scratch inside the parallel region must be declared threadprivate
-or moved into a local. The `myRay` variable in `IGLOO_RayFaceIntersection3D` is an
-example that caused non-deterministic md5 gates before this fix.
+or moved into a local; a shared scratch produces plausible, thread-count-dependent
+numbers rather than a crash. Likewise, never call `random_number` inside the
+parallel region — every parcel draws from its own seeded stream (`part%rngState`).
 
 ---
 

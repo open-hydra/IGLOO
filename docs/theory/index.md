@@ -15,22 +15,23 @@ system is assembled by `determineModel` in `Lib_RHS.f90`:
 
 - **`phaseChange`** — evaporation is active (requires an evaporation model and species data).
 - **`brkupEqOde`** — at least one continuous-rate breakup model is active (Pilch-Erdman,
-  Reitz-Diawakar, or Reitz-KHRT).  TAB and ETAB do *not* set this flag; they inject a discrete
+  Reitz-Diwakar, or Reitz-KHRT).  TAB and ETAB do *not* set this flag; they inject a discrete
   breakup event through the `solout` callback while the particle advances under model 1 or 2.
 
 | `phaseChange` | `brkupEqOde` | Model | RHS routine | State dimension |
 | :---: | :---: | :---: | :--- | :---: |
 | false | false | 1 | `rhsStandard` | 7 (+ 5 euler) |
-| true | false | 2 | `rhsEvaporation` | 8 (+ 5 euler) |
-| false | true | 3 | `rhsBreakupOnly` | 8 (+ 5 euler) |
-| true | true | 4 | `rhsEvapBreakup` | 9 (+ 5 euler) |
+| true | false | 2 | `rhsEvaporation` | 8 (+ 6 euler) |
+| false | true | 3 | `rhsBreakupOnly` | 8 (+ 6 euler) |
+| true | true | 4 | `rhsEvapBreakup` | 9 (+ 7 euler) |
 
 A material with `combustion = Beckstead` overrides this matrix and is routed to
-model 5, `rhsAlCombustion` (state dimension 8, model-2 layout) — see
+model 5, `rhsAlCombustion` (state dimension 8 + 6 euler, model-2 layout) — see
 [Metal Combustion](combustion.md).
 
-The euler extra equations (arc length $\ell$ and momentum integrand $\mathbf{v}\ell$) are appended
-only when `eulerSwitch` is enabled; they do not change the model index.
+The euler extra equations (arc length $\ell$, the momentum, energy and mass moments) are
+appended only when eulerian output is requested (`out-file` includes `E`); they do not
+change the model index.
 
 !!! note "TAB and ETAB use model 1 or 2"
     The Taylor Analogy Breakup (TAB) and Enhanced TAB (ETAB) models treat breakup as a
@@ -46,7 +47,7 @@ only when `eulerSwitch` is enabled; they do not change the model index.
 
 -   :material-math-integral: **[Governing equations](governing-equations.md)**
 
-    Per-particle state vector, the four RHS systems, and the body-acceleration term.
+    Per-particle state vector, the RHS systems, and the body-acceleration term.
 
 -   :material-arrow-expand-all: **[Drag](drag.md)**
 
@@ -58,7 +59,8 @@ only when `eulerSwitch` is enabled; they do not change the model index.
 
 -   :material-water-percent: **[Evaporation](evaporation.md)**
 
-    d²-law, CEM, CEM-B, and Abramzon-Sirignano mass-transfer models.
+    d²-law, CEM, CEM-B, Abramzon-Sirignano and Tonini-Cossali mass-transfer models;
+    Langmuir-Knudsen interface and Stefan-blowing options.
 
 -   :material-fire: **[Metal combustion](combustion.md)**
 
@@ -66,7 +68,7 @@ only when `eulerSwitch` is enabled; they do not change the model index.
 
 -   :material-explosion: **[Breakup](breakup.md)**
 
-    Pilch-Erdman, Reitz-Diawakar, Reitz-KHRT, TAB, and ETAB; child-particle appending.
+    Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT, TAB, and ETAB; child-particle appending.
 
 -   :material-spray: **[Injection](injection.md)**
 
@@ -103,7 +105,7 @@ only when `eulerSwitch` is enabled; they do not change the model index.
 | [Metal combustion](combustion.md) | `Lib_Combustion.f90`, `Lib_RHS.f90` |
 | [Breakup](breakup.md) | `Lib_Breakup.f90`, `Lib_Integration.f90` |
 | [Injection](injection.md) | `initialization.f90`, `Lib_Statistics.f90` |
-| [Eulerian feedback](eulerian-feedback.md) | `Lib_Integration.f90`, `obj_gas.f90`, `obj_condensed.f90`, `obj_block.f90` |
+| [Eulerian feedback](eulerian-feedback.md) | `Lib_Integration.f90`, `obj_block.f90`, `obj_condensed.f90` |
 | [Mollification](mollification.md) | `Lib_Mollify.f90`, `obj_block.f90` |
 | [Time integration](time-integration.md) | `Lib_Integration.f90` |
 | [Geometry](geometry.md) | `geometry.f90`, `obj_block.f90` |

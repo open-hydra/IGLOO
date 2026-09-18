@@ -1,13 +1,12 @@
 # Metal Combustion
 
-Aluminum combustion is the first model of the metal track: a material with
-`[IGLOO-MaterialX] combustion = Beckstead` in `input.ini` is routed to the dedicated
-ODE family `model = 5` (`src/lib/Lib_RHS.f90::rhsAlCombustion`), whose closure
-lives in `src/lib/Lib_Combustion.f90`.  The state layout is identical to the
+A material with `[IGLOO-MaterialX] combustion = Beckstead` in `input.ini` is routed to
+the dedicated ODE family `model = 5` (`src/lib/Lib_RHS.f90::rhsAlCombustion`), whose
+closure lives in `src/lib/Lib_Combustion.f90`.  The state layout is identical to the
 evaporation family (model 2): position/velocity in Z(1:6), temperature (or
 enthalpy) at Z(7), the particle **Al mass** at Z(8).  Combustion is mutually
 exclusive per material with evaporation (a loud warning drops evaporation) and
-with breakup (hard error; the coupling is deferred).
+with breakup (setup error).
 
 ---
 
@@ -48,11 +47,10 @@ $$
 The effective oxidizer enters *linearly* ($X_\mathrm{eff}^{1.0}$) — Beckstead's
 final correlation ([Beck05], Eq. p.541: $t_b X_\mathrm{eff}\,p^{0.1}T_0^{0.2} =
 0.00735\,D^{1.8}$); the 0.9 sometimes quoted is Belyaev's *earlier* $D^{1.5}$ fit
-(exposed as the named parameter `aXeff` in `Lib_Combustion`).  The correlation's *weak* pressure and initial
-temperature dependence ($p^{0.1}\,T_0^{0.2}$) is **not** applied in-code — it
-is folded into the user-supplied `K-burn` (units m^`n-burn`/s, defined at
-`X-eff = 1`).  Per-cell oxidizer composition is deferred until the ORION gas
-import grows species fields.
+(the exponent is the named parameter `aXeff` in `Lib_Combustion`).  The
+correlation's *weak* pressure and initial temperature dependence
+($p^{0.1}\,T_0^{0.2}$) is **not** applied in-code — it is folded into the
+user-supplied `K-burn` (units m^`n-burn`/s, defined at `X-eff = 1`).
 
 ### Ignition gate
 
@@ -64,7 +62,7 @@ particle at exactly `T-ign` burns.
 ### Heat release
 
 Combustion *releases* heat to the particle — the sign is opposite to the
-evaporation latent-heat sink hard-coded in the model-2 $F(7)$.  The energy
+evaporation latent-heat sink of the model-2 $F(7)$.  The energy
 equation of `rhsAlCombustion` is
 
 $$
@@ -77,7 +75,7 @@ already carries the `cpFactor` unit convention: 1 for the enthalpy state,
 $1/c_p$ for the temperature state — see [Heat Transfer](heat.md)), and the
 release term is scaled by the same factor so both live in consistent units.
 
-!!! warning "beta-part sensitivity (plan risk R5)"
+!!! warning "beta-part sensitivity"
     The heat-partition fraction $\beta_\mathrm{part}$ (share of the reaction
     enthalpy deposited on the condensed phase rather than in the detached
     flame) is **weakly constrained in the literature**.  It is therefore an
@@ -87,13 +85,20 @@ release term is scaled by the same factor so both live in consistent units.
     regimes can be sensitive to $\beta_\mathrm{part}\,q_\mathrm{comb}$;
     sweep it before trusting particle-temperature predictions.
 
+### Burnout
+
+A burning (or evaporating) droplet whose mass falls to $m \le 10^{-15}$ kg on an
+accepted step is declared **consumed**: the parcel ends inside the domain, its
+outgoing flux for the cell is zero, and the mass, momentum and energy it still carried
+at cell entry are deposited on the gas through the source block.  The same hand-off
+applies when a consuming model reverts a non-finite state to its last good step.
+
 ### Robustness
 
 Near burnout an implicit-solver trial step can drive $m \le 0$, making
 $d = (6m/\rho\pi)^{1/3}$ NaN; like models 3/4, any non-finite RHS entry is
 scrubbed to the `1e30` penalty so SDIRK4 rejects the trial instead of
-poisoning the integration.  Burnout itself (terminating the parent and
-spawning the inert alumina residual) is phase M2.
+poisoning the integration.
 
 ---
 

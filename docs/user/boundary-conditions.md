@@ -54,7 +54,7 @@ ATLAS translates these to numeric `bcdef` codes in `bc.txt`. IGLOO does not pars
 
 ## `bcdef` Codes in `INPUT/bc.txt`
 
-The `bc.txt` file has one data row per boundary face cell. Column 6 is the integer `bcdef` code; IGLOO dispatches on it in `obj_bc.f90::bcDef` and `IO.f90::read_cdp_bc_file`.
+The `bc.txt` file has one data row per boundary face cell. Column 6 is the integer `bcdef` code; `IO.f90::read_cdp_bc_file` reads it and `obj_bc.f90::bcDef` dispatches on it (code 201 is handled by `obj_particles.f90::updateCell` → `periodicTransport`).
 
 | Code | Name | Behavior |
 |------|------|----------|
@@ -68,7 +68,7 @@ The `bc.txt` file has one data row per boundary face cell. Column 6 is the integ
 | All others | Wall / outflow | Particle is marked as exited (`gone = true`). Its exit position, speed, impact angle, and cell face area are recorded in `outloc-<mat>.dat`. |
 
 !!! note "Default is wall/outflow"
-    Any `bcdef` code not listed above (e.g. 0, 404–407, 420) is treated as a wall or outflow: the particle is removed from the domain at the crossing point.
+    Any `bcdef` code not listed above (e.g. 0, 404–407, 420) is treated as a wall or outflow: the particle is removed from the domain at the crossing point. Code `103` is dispatched like `101` by `bcDef`, but `bc.txt` supplies partner data only for `101` and `201`, so it is not a usable code.
 
 ---
 
@@ -107,7 +107,7 @@ For grazing impacts ($|v_n|/|v| < 0.02$), the tangential component is preserved 
 
 In addition, on axisymmetric (`bcdef` 200) meshes the point-in-cell test carries the azimuth band: an ODE segment ends when the particle reaches a sector plane, exactly as it ends at any other cell face (`geometry.f90::isPointInsideCell`, `sectorOut`), and `obj_bc.f90::axisymFold` then rotates position and velocity by one sector, back into $[-\Delta\theta/2,\,+\Delta\theta/2]$. A segment therefore never sweeps more than one sector — the run reports `wedge sector folds: N (multi-sector: M)` at the end of `solve` whenever a fold happened, and M is zero by construction (a multi-sector fold can only come from an injection station outside the sector). A sector crossing is not a cell crossing: no trajectory row is written for it and the stuck-in-cell counter ignores it.
 
-On such a wedge the gas and the deposited fields live in the **meridian plane**, while the particle's state is Cartesian at its own azimuth $\theta$. IGLOO keeps the two frames consistent in both directions: the gas is evaluated at the particle's $(x, r)$ and its velocity rotated to $\theta$ before it enters the ODE (`Lib_Equations::sampleGas2D`), and every vector the particle deposits — the momentum source $\dot m\,(v_\mathrm{in} - v_\mathrm{out})$ per segment and the eulerian moments $\int v\,|v|\,dt$ — is rotated by $-\theta$ about the axis first (`Lib_Equations::toMeridian`), so `source.tec` and `euler<fam>.tec` carry (axial, radial, azimuthal) components in every cell. Both are the identity on the meridian plane ($z = 0$). All of this takes the azimuth origin as the **sector centre** — k-planes at $\mp\Delta\theta/2$, the layout MOSE/ATLAS write — and a wedge laid out otherwise (say $[0, \Delta\theta]$) is refused at mesh import rather than run with every vector rotated by $\Delta\theta/2$. Gated by `standard/swirl-wedge`, `standard/swirl-wedge-deposit`, `standard/swirl-wedge-spin` (an over-spun parcel: one fold per sector, deposits in the right cell) and `refuse-wedge-offcentre`.
+On such a wedge the gas and the deposited fields live in the **meridian plane**, while the particle's state is Cartesian at its own azimuth $\theta$. IGLOO keeps the two frames consistent in both directions: the gas is evaluated at the particle's $(x, r)$ and its velocity rotated to $\theta$ before it enters the ODE (`Lib_Equations::sampleGas2D`), and every vector the particle deposits — the momentum source $\dot m\,(v_\mathrm{in} - v_\mathrm{out})$ per segment and the eulerian moments $\int v\,|v|\,dt$ — is rotated by $-\theta$ about the axis first (`Lib_Equations::toMeridian`), so `source.tec` and `euler<fam>.tec` carry (axial, radial, azimuthal) components in every cell. Both are the identity on the meridian plane ($z = 0$). All of this takes the azimuth origin as the **sector centre** — k-planes at $\mp\Delta\theta/2$, the layout MOSE/ATLAS write — and a wedge laid out otherwise (say $[0, \Delta\theta]$) is refused at mesh import rather than run with every vector rotated by $\Delta\theta/2$. The fold, the sampling and the meridian-frame deposits are verified by the `swirl-wedge`, `swirl-wedge-deposit` and `swirl-wedge-spin` cases ([End-to-end cases](../vv/e2e.md#swirl-wedge)); the off-centre refusal by `infrastructure/refusals/wedge-offcentre`.
 
 ---
 
@@ -117,7 +117,7 @@ Periodic faces (`bcdef` 201) use `obj_bc.f90::periodicTransport` to shift the pa
 
 $$p \;\leftarrow\; p + (\text{partner face center} - \text{exit face center})$$
 
-Velocity is unchanged. After the shift the integration continues from the partner cell in the partner block. This mirrors the MOSE translational-periodic convention; rotational periodicity is not currently implemented.
+Velocity is unchanged. After the shift the integration continues from the partner cell in the partner block. This mirrors the MOSE translational-periodic convention; rotational periodicity is not implemented.
 
 ---
 

@@ -1,17 +1,8 @@
 # Evaporation — End-to-End Case
 
 Tests the d²-law evaporation path on a uniform-gas box case
-(`tests/evaporation/d2law`).
-
-!!! success "GATED — bugs A3 and A4 fixed 2026-07-07"
-    The d²-law case is now part of the automated gate.  `check.py` exits 0;
-    25/25 particles verified against the Godsave/Spalding kernel integrated along
-    the measured $T_p(x)$.
-
-    **Open tracking bug B4:** the $y = z = 0.045\,\mathrm{m}$ corner stream of pure-axial
-    box cases exits at its injection point (`outloc x = 0`, angle = 180°) and appends one
-    phantom trajectory row.  `check.py` drops non-monotone-$x$ rows and prints a `[NOTE]`;
-    this does not affect the 25/25 particle count.
+(`tests/evaporation/d2law`): 25/25 particles verified against the Godsave/Spalding
+kernel integrated along the measured $T_p(x)$.
 
 ---
 
@@ -30,7 +21,7 @@ vector, and the resulting $d^2(x)$ trajectory against an independent oracle.
 | Gas axial velocity | $u_g = 10\,\mathrm{m/s}$ | `make_box_case.py` |
 | Inlet velocity scaling | $k_V = 1.0$ → zero axial slip | `bc.txt` |
 | Particle density | $\rho_p = 2950\,\mathrm{kg/m^3}$ | `properties.dat` |
-| Evaporation model | d²-law (`evapSelect = 1`) | `input.ini` |
+| Evaporation model | `evaporation = d2-law` | `input.ini` |
 
 ---
 
@@ -49,7 +40,9 @@ $\dot{m} = 2\pi d\,(k_g/c_{pg})\ln(1+B_T)$ at $\mathrm{Nu}=2$).  With
 $x = u_g t$ this gives a closed-form $d^2(x)$ along the trajectory.
 
 The oracle (`check.py`) integrates the rate kernel along the *measured*
-$T_p(x)$, making it independent of the thermal sub-model.
+$T_p(x)$, making it independent of the thermal sub-model.  Only rows with strictly
+increasing $x$ are used (a guard against any non-monotone exit row); the guard is
+reported with a `[NOTE]` line when it drops anything.
 
 ---
 
@@ -68,11 +61,11 @@ Or via the test harness:
 
 ---
 
-## Status
+## Result
 
-**GATED GREEN** — the two evaporation-rate bugs were fixed 2026-07-07.  25/25 particles
-pass the Godsave oracle.  `check.py` prints a `[NOTE]` for the B4 phantom corner row
-(open bug, not a gate failure).
+25/25 particles pass the Godsave oracle (`check.py` exit 0).  The frozen-$B_T$
+companion `d2law-line` gates the same physics against an input-only closed form; see
+[End-to-End Cases](e2e.md#d2law-line).
 
 ---
 
