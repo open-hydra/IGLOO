@@ -18,6 +18,8 @@ OUTPUT
 # twosweep, or any manual A/B, drops these. Glob, not `.sweep1`: an exact rule let 6.7 MB of
 # generated source.tec into the P6 commit (since stripped) -- the gas-cycle mode writes .sweep2.
 OUTPUT.sweep*
+# datum-abs runs its relative sibling into ref-rel/ (tests/evaporation/datum-abs/check.py)
+ref-rel
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/

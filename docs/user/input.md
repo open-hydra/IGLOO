@@ -34,15 +34,14 @@ Parameters not specified take their default values. Unknown sections are silentl
 | `[IGLOO-Properties]` | Constant scalar properties for evaporation/breakup (per material) |
 | `[IGLOO-BC]` | Injection spacing (`ds`) or explicit particle coordinates |
 | `[IGLOO-ODE]` | ODE solver selection, tolerances, step count |
-| `[IGLOO-Material<i>]` | Per-material model overrides and phase-change properties (`evaporation`, `interface`, `combustion`, `alpha-e`, `K-burn`, ...); `i` = the material's order in the phase file |
 
 ## ATLAS-Generated Sections (not parsed by IGLOO)
 
 IGLOO reads only the `[IGLOO-*]` sections above. The sections below are the *preprocessor's* input:
 whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase.txt`,
-`properties.dat`, `bc.txt`). Per-material model keys (`evaporation`, `combustion`, `alpha-e`, ...)
-are read from `[IGLOO-Material<i>]` only; if IGLOO sees one of them in a `[GPB-Phase*]` section it
-prints a "NOT applied" warning and ignores it.
+`properties.dat`, `bc.txt`). The per-material model keys (`evaporation`, `combustion`, `alpha-e`,
+...) are `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after `<name> <groups>`
+on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
 
 | Section | Role |
 |---------|------|
@@ -216,3 +215,6 @@ Selects and tunes the ODE integrator.
 
 !!! warning "`properties.dat` zones bind to materials by ORDER"
     Zone *i* of `INPUT/properties.dat` is the material on line *i* of `INPUT/phase.txt`; the zone title (`ZONE T="..."`) is not read. ATLAS writes both files in material order, so a generated case is always consistent — the trap is a hand-edited or regenerated `phase.txt` paired with a stale `properties.dat`, which is a silent density/cp swap. IGLOO refuses a file whose zone count differs from the material count or whose zones do not share one temperature table.
+
+!!! note "The enthalpy column carries a datum"
+    Column 4 of `properties.dat` is named `Enthalpy` (relative: `cp·T`, or the SP-database integral from `Tmin`) or `Enthalpy_abs` (absolute: formation enthalpy included — thermo tables, or a fixed `cp` with `[GPB-Phase*] h0`). For a constant-`cp` material IGLOO integrates the temperature and takes the table's level once, `hOff = h(Tmin) − cp·Tmin` (0 for a relative table), and the gas coupling source credits the transferred mass at `cp·T + hOff`; a variable-`cp` material integrates the enthalpy state read from the table, which carries its datum by itself. The datum only matters when mass is transferred to a gas solver whose energy is absolute (hydra-MI2): a relative table then leaves the coupler to correct the level. A relative-tagged constant-`cp` column that is not `cp·T` is refused at setup. The datum is printed per material at setup (`enthalpy datum absolute|relative (hOff = ...)`).

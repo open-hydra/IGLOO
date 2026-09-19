@@ -84,6 +84,7 @@ module IGLOO_particles
     logical      :: bodyAccum = .false. !> body-force J/W accumulators present (only models 2,4,5 & srcBodyForce)
     !> Basic properties       (per-material, constant)
     real(R8)     :: cp        !> specific heat
+    real(R8)     :: hOff = 0._R8 !> enthalpy datum of the table for cp=const: h(T) = cp*T + hOff
     real(R8)     :: rho       !> material density
     !> Breakup properties     (per-material, constant)
     real(R8)     :: sigma     !> particle surface tension (N/m)
@@ -171,8 +172,10 @@ contains
     real(R8) :: v(3), normVel, enthalpy, mdot_inst
 
     v = self%stateVar(4:6); normVel = norm2(v)
+    !> the mass handed to the gas is valued at the TABLE's enthalpy datum: the h state carries it,
+    !  the T state (cp=const) needs cp*T + hOff (hOff = 0 for a relative table)
     enthalpy = self%stateVar(7)
-    if (.not.self%varCp) enthalpy = self%cp*enthalpy
+    if (.not.self%varCp) enthalpy = self%cp*enthalpy + self%hOff
     select case (self%model)
     case (2,4,5); mdot_inst = self%npdot * self%m
     case default; mdot_inst = self%mdot

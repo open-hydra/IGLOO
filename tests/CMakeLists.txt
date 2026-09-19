@@ -6,10 +6,10 @@
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ (e2e)
-#   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-hexadecane/ mhb98-water/ (e2e)
+#   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ datum-abs/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ two-mat/ periodic-y/ bc-center-2grp/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver,dopri5}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5}
 #   repeatability/      two-sweep gates (twosweep driver): 8 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
@@ -285,6 +285,10 @@ igloo_e2e_case(lk-neq evaporation/lk-neq "e2e;evaporation")
 # F2 (2026-07-11): Tonini-Cossali analytical evaporation (TC2012 Stefan-Fuchs; Antonov 2024 eq.9)
 igloo_unit_test(test_tc_analytic evaporation/tc-analytic "unit;evaporation;tc;c;t5")
 igloo_e2e_case(tc-box evaporation/tc-box "e2e;evaporation")
+# datum-abs: tc-box with an ABSOLUTE (Enthalpy_abs) table -- the table datum hOff must reach the gas
+# energy source and nothing else (E_abs - E_rel == hOff*wdot; the gate runs the relative sibling
+# itself into ref-rel/). Proven RED on the pre-hOff binary (residual = 100 % of scale).
+igloo_e2e_case(datum-abs evaporation/datum-abs "e2e;evaporation")
 # E-VAL-2 (2026-07-21): VALIDATION vs a paper's own case — single water droplet vs
 # Miller-Harstad-Bellan 1998 Fig.2 (exp. Ranz-Marshall 1952b). Gate = IGLOO-vs-LK-kernel
 # (tight); the digitized experiment is a NON-gating overlay in verify.py.
@@ -380,6 +384,14 @@ igloo_e2e_case(axis-200 infrastructure/axis-200 "e2e;infrastructure")
 # wedge-fold: axis-200 + wp on the near-axis parcel -- the only case in which the 200-face fold
 # ROTATES anything (every other wedge fixture has z == 0). Proven RED on the pre-O22 binary.
 igloo_e2e_case(wedge-fold infrastructure/wedge-fold "e2e;infrastructure")
+# planar-slab: a single-layer box of finite thickness is a planar 2D case, not a wedge -- the
+# detector must compare the k-plane span at two radii (a slab's decays as 1/r). Proven RED on
+# the pre-fix binary (refused as an off-centre wedge), GREEN after.
+igloo_e2e_case(planar-slab infrastructure/planar-slab "e2e;infrastructure;axisym")
+# wedge-axis-row: the converse -- a wedge whose axis row sits at r = 1e-8 with roundoff z (the JPL
+# nozzle layout) must stay a wedge: the classifier's inner node must be clearly off the axis
+# (r > 1e-3 r_max). Proven RED on the first classifier (JPL 3-solver centreline Mach 2.10 -> 2.45).
+igloo_e2e_case(wedge-axis-row infrastructure/wedge-axis-row "e2e;infrastructure;axisym")
 # two-mat: the first nm = 2 case anywhere -- every per-material loop (solve, sourceMass slots, nfam,
 # per-material files, krho fan-out) executes at arity 2 here for the first time.
 igloo_e2e_case(two-mat infrastructure/two-mat "e2e;infrastructure")
@@ -409,6 +421,12 @@ igloo_refusal_case(refuse-evaporation-token infrastructure/refusals/evaporation-
                    "IGLOO: unknown evaporation model"                   "e2e;refusal;evaporation")
 igloo_refusal_case(refuse-evaporation-leb   infrastructure/refusals/evaporation-leb
                    "IGLOO: evaporation=LEB is not implemented"          "e2e;refusal;evaporation")
+# Material-line tokens of the phase file (key=value after "<name> <groups>", written by ATLAS GPB):
+# an unknown key and a non-numeric real must both stop the run at setup.
+igloo_refusal_case(refuse-phase-token       infrastructure/refusals/phase-token
+                   "IGLOO: unknown per-material key in the phase file"  "e2e;refusal;standard")
+igloo_refusal_case(refuse-phase-token-real  infrastructure/refusals/phase-token-real
+                   "IGLOO: non-numeric per-material value in the phase file" "e2e;refusal;standard")
 # INI-contract refusals (ledger O20/O21/O26 last site): each was RED on the pre-fix binary --
 # method=3 ran to non-finite states, gas-order=3 silently became 2, out-file=nonsense meant both
 # with a warning, ode-solver=H-radau5 was a plain `stop`.

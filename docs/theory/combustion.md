@@ -1,6 +1,7 @@
 # Metal Combustion
 
-A material with `[IGLOO-MaterialX] combustion = Beckstead` in `input.ini` is routed to
+A material carrying `combustion=Beckstead` on its line of the phase file (from
+`[GPB-Phase*] combustion = Beckstead` in the ATLAS input) is routed to
 the dedicated ODE family `model = 5` (`src/lib/Lib_RHS.f90::rhsAlCombustion`), whose
 closure lives in `src/lib/Lib_Combustion.f90`.  The state layout is identical to the
 evaporation family (model 2): position/velocity in Z(1:6), temperature (or
@@ -104,8 +105,8 @@ poisoning the integration.
 
 ## Inputs
 
-All in the material's `[IGLOO-MaterialX]` section (see the
-[registry](../user/registry.md)):
+All per material, as `key=value` tokens on the material line of the phase file (ATLAS GPB writes
+them from `[GPB-Phase*]`; see the [registry](../user/registry.md) for the vocabulary):
 
 | Key | Meaning | Default |
 | :--- | :--- | :---: |

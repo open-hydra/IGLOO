@@ -30,6 +30,8 @@ output written).
 | `refuse-breakup-token` | `breakup = no-such-breakup-model` | `IGLOO: unknown breakup model` |
 | `refuse-evaporation-token` | `evaporation = no-such-evaporation-model` | `IGLOO: unknown evaporation model` |
 | `refuse-evaporation-leb` | `evaporation = LEB` (parsed, declared not implemented) | `IGLOO: evaporation=LEB is not implemented` |
+| `refuse-phase-token` | own `INPUT/phase.txt` (`A 1 no-such-key=1`), drag-token's `bc.txt`/`solfile.tec` symlinked | `IGLOO: unknown per-material key in the phase file` |
+| `refuse-phase-token-real` | own `INPUT/phase.txt` (`A 1 alpha-e=one`) | `IGLOO: non-numeric per-material value in the phase file` |
 | `refuse-tab-method` | tab-e2e (`INPUT/` symlinked) with `method = 3` | `IGLOO: TAB method must be 1 or 2` |
 | `refuse-gas-order` | `gas-order = 3` | `IGLOO: gas-order must be 1 or 2` |
 | `refuse-out-file` | `out-file = nonsense` | `IGLOO: unknown out-file token` (accepted: E, S, E+S, ALL -- `ALL` is what hydra's MI2 cases write; `two-mat` runs it) |
@@ -51,8 +53,8 @@ scratchpad); all twelve `stop`s became `error stop 'IGLOO: unknown …'`.
 solution centres to exactly 0.0 — and on a [0, δ] sector the binary before the tripwire ran the case to
 "All particles out of domain" with exit 0, the gas and every deposit rotated by δ/2.
 
-**Not here.** `solidification = on` (O5) has no global key — only the per-material section, whose
-name is mid-migration (`[GPB-Phase<i>]` → `[IGLOO-Material<i>]`); add it once that lands. TAB
+**Not here.** `solidification = on` (O5) has no global key — only the per-material token
+(`solidification=on` on the material line of the phase file); add it as a phase-file refusal. TAB
 A mixed-Nk mesh (`allocation.f90`, `af307dd`) needs a two-zone `solfile.tec`; exercised in a
 throwaway only. `refuse-dopri5` (the interim `H-dopri5` refusal of ledger O25) was dropped with the
 `Lib_INI.f90` refusal and the `DISABLED` flag on `standard/drag-stokes-dopri5` once the OSlo fork carried

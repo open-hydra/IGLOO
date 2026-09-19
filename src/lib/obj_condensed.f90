@@ -30,6 +30,7 @@ module IGLOO_data_phases
     logical  :: cpVariable
     logical  :: rhoVariable
     real(R8) :: cp    !> specific heat (defined if cp=const)
+    real(R8) :: hOff = 0._R8   !> enthalpy datum of the table for cp=const: h(T) = cp*T + hOff
     real(R8) :: rho   !> material density (defined if rho=const)
     !> Breakup properties (per-material, constant)
     character(len=50) :: brkupWord
@@ -75,6 +76,8 @@ module IGLOO_data_phases
     logical           :: cpVariable=.false.
     logical           :: rhoVariable=.false.
     real(R8)          :: cp    !> specific heat                   (defined if cp=const)
+    real(R8)          :: hOff = 0._R8       !> enthalpy datum of the table for cp=const: h(T) = cp*T + hOff
+    character(len=8)  :: hDatum = 'relative' !> 'relative' (Enthalpy = cp*T) | 'absolute' (Enthalpy_abs)
     real(R8)          :: rho   !> material density                (defined if rho=const)
     !> Breakup properties (per-material, constant)
     character(len=50) :: brkupWord
@@ -159,6 +162,7 @@ contains
       gr%cpVariable  = self%cpVariable
       gr%rhoVariable = self%rhoVariable
       if (.not.self%cpVariable ) gr%cp    = self%cp
+      gr%hOff = self%hOff
       if (.not.self%rhoVariable) gr%rho   = self%rho
       !> Breakup properties
       if (self%brkupSelect > 0) then
@@ -310,6 +314,7 @@ contains
         part%cp    = self%cp
         part%varCp = .false.
       endif
+      part%hOff = self%hOff
       part%varRho = .true.
       if (.not.self%rhoVariable) then
         part%rho    = self%rho

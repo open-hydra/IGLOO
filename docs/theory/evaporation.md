@@ -1,8 +1,8 @@
 # Evaporation
 
 Phase change is active when `phaseChange = true`; the evaporation model is selected by
-`[IGLOO-Models] evaporation` in `input.ini` (per-material override in
-`[IGLOO-Material<i>] evaporation`) and dispatched from
+`[IGLOO-Models] evaporation` in `input.ini` (per-material override: the `evaporation=` token on
+the material line of the phase file, written by ATLAS GPB from `[GPB-Phase*]`) and dispatched from
 `src/lib/Lib_Evaporation.f90::evaporation`.  The model integrates a mass-rate equation
 $\dot{m}$ as state variable 8 (models 2 and 4; see
 [Governing equations](governing-equations.md)).
@@ -215,7 +215,7 @@ at parse time.  Use one of the five functional models above.
 
 The gas-side models above take the surface vapour fraction as input; the
 `interface` axis selects how it is closed.  Global default in `[IGLOO-Models]`,
-per-material override in `[IGLOO-MaterialX]`:
+per-material override by the `interface=` token on the material line of the phase file:
 
 ```
 interface = VLE   ; equilibrium (default)
@@ -253,7 +253,7 @@ $10^{-12}$, at most 30 passes, unconverged exit returns the last full — always
 finite — evaluation).  The correction vanishes as $p\,d \to \infty$ or
 $\alpha_e \to \infty$ and recovers VLE exactly.
 
-The accommodation coefficient $\alpha_e$ is `[IGLOO-MaterialX] alpha-e`
+The accommodation coefficient $\alpha_e$ is the material-line token `alpha-e=`
 (default 1.0).  Because `evaporation = d2-law` is $B_T$-driven and never
 consumes $X_s$, `interface = LK` has **no effect** on it — that combination is
 refused at setup.  Verified by the `tests/evaporation/interface-neq/` unit

@@ -2,7 +2,7 @@
 
 Verifies the metal-combustion track: the Beckstead d^n burn law (`model=5`,
 `rhsAlCombustion` / `IGLOO_Lib_Combustion::becksteadRate`), selected per material
-by `[IGLOO-MaterialX] combustion = Beckstead`. State layout is identical to model 2
+by the `combustion=Beckstead` token on the material line of `INPUT/phase.txt`. State layout is identical to model 2
 (T at Z(7), Al mass at Z(8)); the heat term RELEASES `beta-part*q-comb*|mdot|`
 to the particle (sign opposite to the evaporation latent sink).
 

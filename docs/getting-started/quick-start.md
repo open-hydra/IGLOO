@@ -99,7 +99,7 @@ The solver prints a header, then per-material and per-group progress:
   >> Output field: gas coupling source
   >> Field mollification ON: 8 binomial pass(es)
   >> Background flow field => INPUT/solfile.tec
-  >> [IGLOO-Material1] evap=0 liq=0 intf=0 boil=0 comb=0 solid=0 alpha-e= 1.000E+00
+  >> [material 1] evap=0 liq=0 intf=0 boil=0 comb=0 solid=0 alpha-e= 1.000E+00
      - Block   1 size =       60       5       5
 
   Placing particles at the bounday every 10.00000 cm...

@@ -5,8 +5,8 @@ module IGLOO_variables
 
   character(len=32)  :: IGLOO_phase_prefix=''
   character(len=128) :: drag_word, heat_word, breakup_word, evaporation_word
-  !> [IGLOO-Models] composable phase-change axes: global defaults, per-material override in
-  !  [IGLOO-Material*]; combustion/solidification are per-material only.
+  !> [IGLOO-Models] composable phase-change axes: global defaults, per-material override by the
+  !  key=value tokens on the material line of the phase file; combustion/solidification are per-material only.
   character(len=128) :: liquid_word='ITC', interface_word='VLE', boiling_word='clamp'
   character(len=128) :: blowing_word='none'
   integer  :: dragSelect=0

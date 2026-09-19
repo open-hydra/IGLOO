@@ -11,17 +11,18 @@ module IGLOO_IO
 
 contains
 
-  !> Read the phase file (materials, group counts, per-material models) and properties.dat
-  !  (cp, rho, h tables); breakup/evaporation constants come from [IGLOO-Properties].
+  !> Read the phase file (one line per material: "<name> <groups> [key=value ...]", the tokens being
+  !  the per-material models ATLAS GPB writes from [GPB-Phase*]) and properties.dat (cp, rho, h tables);
+  !  breakup/evaporation constants come from [IGLOO-Properties].
   subroutine read_cdp_properties(prefix,material)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
-    use strings,               only: parse
     use IGLOO_variables,       only: nm, brkupSwitch, phaseChange, breakup_word, evaporation_word, &
                                      liqSelect, intfSelect, boilSelect
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Properties,  only: Tmin, Tmax
     use IGLOO_IO_INI,          only: ini_Mv, ini_Lv, ini_Tboil, ini_cpv, ini_Le, ini_Yinf, &
-                                        ini_sigma, ini_mu, ini_psat, read_phase_models
+                                        ini_sigma, ini_mu, ini_psat, &
+                                        set_material_defaults, apply_material_key, finalize_material_models
     use Lib_ORION_data
     use Lib_Tecplot
     use IGLOO_Lib_Breakup,     only: assign_breakup
@@ -29,9 +30,11 @@ contains
     implicit none
     character(len=32),  intent(in)  :: prefix
     type(obj_material), intent(out), allocatable :: material(:)
-    integer           :: ios, unit, i
-    character(len=30) :: wholestring, args(2)
-    type(orion_data)  :: orion
+    integer            :: ios, unit, i, p, e
+    character(len=512) :: wholestring
+    character(len=128) :: tok
+    character(len=8)   :: hDatum
+    type(orion_data)   :: orion
 
     open(newunit=unit,file='INPUT/'//trim(prefix)//'phase.txt',status='old',iostat=ios)
     if (ios/=0) error stop ( "Error reading phase file" )
@@ -49,14 +52,24 @@ contains
     
     rewind(unit)
     read(unit,*)!skip first line
-    !> Saving number of groups for each material
+    !> Material lines: name, group count, then the key=value tokens
     do i = 1, nm
       read(unit,'(A)') wholestring
-      call parse(wholestring,' ',args)
-      read(args(1),*) material(i)%matName
-      read(args(2),*) material(i)%ngroups
-      ! read(args(3),*) evaporation_word
-      ! read(args(4),*) breakup_word
+      p = 1
+      call next_token(wholestring, p, tok)
+      if (len_trim(tok) == 0 .or. len_trim(tok) > len(material(i)%matName)) then
+        write(*,'(A,I0,A)') ' [ERROR] INPUT/'//trim(prefix)//'phase.txt line ', i+1, &
+                            ': expected "<material> <groups> [key=value ...]", got "'//trim(wholestring)//'"'
+        error stop 'IGLOO: malformed material line in the phase file'
+      endif
+      material(i)%matName = tok
+      call next_token(wholestring, p, tok)
+      read(tok,*,iostat=ios) material(i)%ngroups
+      if (ios /= 0) then
+        write(*,'(A,I0,A)') ' [ERROR] INPUT/'//trim(prefix)//'phase.txt line ', i+1, &
+                            ': group count "'//trim(tok)//'" is not an integer'
+        error stop 'IGLOO: malformed material line in the phase file'
+      endif
 
       !> Global defaults from [IGLOO-Models] ...
       material(i)%brkupWord = breakup_word
@@ -68,8 +81,20 @@ contains
       material(i)%liqSelect  = liqSelect
       material(i)%intfSelect = intfSelect
       material(i)%boilSelect = boilSelect
-      !> ... then per-material overrides + phase-change properties from [IGLOO-Material<i>]
-      call read_phase_models(i, material(i))
+      call set_material_defaults(material(i))
+      !> ... then the per-material tokens ATLAS GPB wrote on the material line
+      do
+        call next_token(wholestring, p, tok)
+        if (len_trim(tok) == 0) exit
+        e = index(tok, '=')
+        if (e < 2 .or. e == len_trim(tok)) then
+          write(*,'(A,I0,A)') ' [ERROR] INPUT/'//trim(prefix)//'phase.txt line ', i+1, &
+                              ': token "'//trim(tok)//'" is not key=value'
+          error stop 'IGLOO: malformed material token in the phase file'
+        endif
+        call apply_material_key(i, material(i), tok(1:e-1), tok(e+1:len_trim(tok)))
+      enddo
+      call finalize_material_models(i, material(i))
       if (material(i)%evapSelect > 0) phaseChange = .true.
       !> interface=LK requires a vapor-fraction-driven evaporation model
       if (material(i)%intfSelect == 1 .and. material(i)%evapSelect == 1) &
@@ -110,7 +135,17 @@ contains
     enddo
     Tmin = nint(orion%block(1)%mesh(1,1,1,1))
     Tmax = Tmin + orion%block(1)%Ni - 1
-    
+    !> Datum of the Enthalpy column (line 2, VARIABLES): "Enthalpy" = relative (cp*T, or the SP-database
+    !  integral), "Enthalpy_abs" = formation enthalpy included (thermo tables, or fixed cp with h0).
+    hDatum = 'relative'
+    open(newunit=unit,file='INPUT/'//trim(prefix)//'properties.dat',status='old',action='read',iostat=ios)
+    if (ios == 0) then
+      read(unit,'(A)',iostat=ios) wholestring
+      read(unit,'(A)',iostat=ios) wholestring
+      if (ios == 0 .and. index(wholestring,'Enthalpy_abs') > 0) hDatum = 'absolute'
+      close(unit)
+    endif
+
     !> [IGLOO-Properties] vectors must carry one entry per material
     if (allocated(ini_Mv))    then; if (size(ini_Mv)    /= nm) error stop '[ERROR] [IGLOO-Properties] Mv: size /= number of materials';    endif
     if (allocated(ini_Lv))    then; if (size(ini_Lv)    /= nm) error stop '[ERROR] [IGLOO-Properties] Lv: size /= number of materials';    endif
@@ -137,10 +172,21 @@ contains
         allocate(mat%rhoTab(Tmin:Tmax))
         mat%rhoTab(Tmin:Tmax) = blk%vars(2,:,1,1)
       endif
-      if (mat%cpVariable) then
-        allocate(mat%hTab(Tmin:Tmax))        !> h(T) table for the enthalpy state
-        mat%hTab(Tmin:Tmax) = blk%vars(3,:,1,1)
+      !> h(T) table: the enthalpy state when cp varies; its datum (hOff) for the cp=const source term.
+      allocate(mat%hTab(Tmin:Tmax))
+      mat%hTab(Tmin:Tmax) = blk%vars(3,:,1,1)
+      mat%hDatum = hDatum
+      if (.not. mat%cpVariable) then
+        mat%hOff = mat%hTab(Tmin) - mat%cp*real(Tmin,R8)
+        if (hDatum == 'relative' .and. abs(mat%hOff) > 1.e-6_R8*mat%cp*real(Tmin,R8)) then
+          write(*,'(A,I0,A,ES12.4,A)') ' [ERROR] INPUT/'//trim(prefix)//'properties.dat zone ', i, &
+            ': the header names a relative "Enthalpy" column but h(Tmin) - cp*Tmin = ', mat%hOff, &
+            ' J/kg (a constant-cp relative table is cp*T)'
+          error stop 'IGLOO: properties.dat enthalpy column does not match its datum tag'
+        endif
       endif
+      write(*,'(A,I0,A,ES12.4,A)') '  >> [material ', i, '] enthalpy datum '//trim(mat%hDatum)// &
+                                   ' (hOff = ', mat%hOff, ' J/kg)'
 
       !> sigma/mu (breakup)
       if (brkupSwitch) then
@@ -952,6 +998,31 @@ contains
       endif
     enddo
   end function countTokens
+
+
+  !> Next blank/tab-delimited token of str from position p (advanced past it); '' at the end.
+  subroutine next_token(str, p, tok)
+    implicit none
+    character(len=*), intent(in)    :: str
+    integer,          intent(inout) :: p
+    character(len=*), intent(out)   :: tok
+    integer :: q, n
+
+    n = len_trim(str)
+    tok = ''
+    do while (p <= n)
+      if (str(p:p) /= ' ' .and. str(p:p) /= achar(9)) exit
+      p = p + 1
+    enddo
+    if (p > n) return
+    q = p
+    do while (q <= n)
+      if (str(q:q) == ' ' .or. str(q:q) == achar(9)) exit
+      q = q + 1
+    enddo
+    tok = str(p:q-1)
+    p = q
+  end subroutine next_token
 
 
 end module IGLOO_IO

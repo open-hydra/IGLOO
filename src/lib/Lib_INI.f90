@@ -5,7 +5,7 @@ module IGLOO_IO_INI
   implicit none
   private
   public :: read_IGLOO_input
-  public :: read_phase_models
+  public :: set_material_defaults, apply_material_key, finalize_material_models
 
   type(file_ini) :: fini
   integer        :: error
@@ -214,7 +214,8 @@ contains
     !> Evaporation model definition
     call fini%get(section_name='IGLOO-Models', option_name='evaporation', val=evaporation_word, error=error)
     if (error==0) phaseChange = .true.
-    !> Composable phase-change axes: global defaults (per-material override in [IGLOO-Material*]).
+    !> Composable phase-change axes: global defaults (per-material override: key=value on the material
+    !  line of the phase file, written by ATLAS GPB from [GPB-Phase*]).
     call fini%get(section_name='IGLOO-Models', option_name='liquid-conduction', val=liquid_word, error=error)
     if (error/=0) liquid_word = 'ITC'
     call assign_liquid(liquid_word, liqSelect)
@@ -315,109 +316,97 @@ contains
   end subroutine read_models
 
 
-  !> Per-material model overrides and phase-change properties from [IGLOO-Material<imat>] (imat =
-  !  material order in the phase file); every key is optional, `combustion` disables evaporation.
-  subroutine read_phase_models(imat, mat)
+  !> Per-material defaults for the phase-change properties, set before the material-line tokens are
+  !  applied (T-nuc stays 0 here: finalize_material_models resolves it to 0.8*T-melt).
+  subroutine set_material_defaults(mat)
+    use IGLOO_data_phases, only: obj_material
+    implicit none
+    type(obj_material), intent(inout) :: mat
+
+    mat%alphaE   = 1._R8
+    mat%kLiq     = 0._R8
+    mat%muLiq    = 0._R8
+    mat%Kburn    = 0._R8
+    mat%nBurn    = 1.8_R8            ! Beckstead nominal exponent
+    mat%Xeff     = 1._R8             ! pure effective oxidizer => Keff = K-burn
+    mat%betaPart = 0._R8
+    mat%xiCap    = 0._R8
+    mat%Tign     = 2350._R8          ! Al2O3-shell melting anchor
+    mat%qComb    = 0._R8
+    mat%Tmelt    = 2327._R8          ! alumina default
+    mat%hFus     = 0._R8
+    mat%Tnuc     = 0._R8
+    mat%cpSol    = 0._R8
+  end subroutine set_material_defaults
+
+
+  !> One key=value token from the material line of the phase file (written by ATLAS GPB from
+  !  [GPB-Phase*]): the six model words call the assign_* selectors, the fourteen reals are read;
+  !  an unknown key or a non-numeric real stops the run.
+  subroutine apply_material_key(imat, mat, key, value)
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Evaporation, only: assign_evaporation, assign_liquid, assign_interface, &
                                      assign_boiling, assign_combustion, assign_solidification
     implicit none
     integer,            intent(in)    :: imat
     type(obj_material), intent(inout) :: mat
-    character(len=128) :: w
-    character(len=20)  :: sec
+    character(len=*),   intent(in)    :: key, value
+    integer :: ios
 
-    if (imat == 1) call warn_igloo_keys_in_preprocessor_sections()
-    write(sec,'(a,i0)') 'IGLOO-Material', imat
+    ios = 0
+    select case (trim(key))
+    case ('evaporation');       mat%evapWord = value; call assign_evaporation(value, mat%evapSelect)
+    case ('liquid-conduction'); call assign_liquid(value, mat%liqSelect)
+    case ('interface');         call assign_interface(value, mat%intfSelect)
+    case ('boiling');           call assign_boiling(value, mat%boilSelect)
+    case ('combustion');        call assign_combustion(value, mat%combSelect)
+    case ('solidification');    call assign_solidification(value, mat%solidSelect)
+    case ('alpha-e');   read(value,*,iostat=ios) mat%alphaE
+    case ('k-liq');     read(value,*,iostat=ios) mat%kLiq
+    case ('mu-liq');    read(value,*,iostat=ios) mat%muLiq
+    case ('K-burn');    read(value,*,iostat=ios) mat%Kburn
+    case ('n-burn');    read(value,*,iostat=ios) mat%nBurn
+    case ('X-eff');     read(value,*,iostat=ios) mat%Xeff
+    case ('beta-part'); read(value,*,iostat=ios) mat%betaPart
+    case ('xi-cap');    read(value,*,iostat=ios) mat%xiCap
+    case ('T-ign');     read(value,*,iostat=ios) mat%Tign
+    case ('q-comb');    read(value,*,iostat=ios) mat%qComb
+    case ('T-melt');    read(value,*,iostat=ios) mat%Tmelt
+    case ('h-fus');     read(value,*,iostat=ios) mat%hFus
+    case ('T-nuc');     read(value,*,iostat=ios) mat%Tnuc
+    case ('cp-solid');  read(value,*,iostat=ios) mat%cpSol
+    case default
+      write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': unknown key "'//trim(key)// &
+                          '" (value "'//trim(value)//'") on the material line'
+      error stop 'IGLOO: unknown per-material key in the phase file'
+    end select
+    if (ios /= 0) then
+      write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': '//trim(key)//'='//trim(value)// &
+                          ' is not a real number'
+      error stop 'IGLOO: non-numeric per-material value in the phase file'
+    endif
+  end subroutine apply_material_key
 
-    !> Model-axis overrides (words, same tokens as [IGLOO-Models])
-    call fini%get(section_name=trim(sec), option_name='evaporation', val=w, error=error)
-    if (error==0) then; mat%evapWord = w; call assign_evaporation(w, mat%evapSelect); endif
-    call fini%get(section_name=trim(sec), option_name='liquid-conduction', val=w, error=error)
-    if (error==0) call assign_liquid(w, mat%liqSelect)
-    call fini%get(section_name=trim(sec), option_name='interface', val=w, error=error)
-    if (error==0) call assign_interface(w, mat%intfSelect)
-    call fini%get(section_name=trim(sec), option_name='boiling', val=w, error=error)
-    if (error==0) call assign_boiling(w, mat%boilSelect)
-    call fini%get(section_name=trim(sec), option_name='combustion', val=w, error=error)
-    if (error==0) call assign_combustion(w, mat%combSelect)
-    !> on|off parsed as a string
-    call fini%get(section_name=trim(sec), option_name='solidification', val=w, error=error)
-    if (error==0) call assign_solidification(w, mat%solidSelect)
 
+  !> After the material-line tokens: T-nuc default, combustion/evaporation exclusivity, resolved-model log.
+  subroutine finalize_material_models(imat, mat)
+    use IGLOO_data_phases, only: obj_material
+    implicit none
+    integer,            intent(in)    :: imat
+    type(obj_material), intent(inout) :: mat
+
+    if (mat%Tnuc <= 0._R8) mat%Tnuc = 0.8_R8*mat%Tmelt   ! supercooling default
     !> Combustion and evaporation are mutually exclusive per material
     if (mat%combSelect > 0 .and. mat%evapSelect > 0) then
-      write(*,'(a,i0,a)') '[WARNING] ['//trim(sec)//'] combustion set with evaporation also ' // &
-        'configured for material ', imat, ': a particle either burns or evaporates — ' // &
-        'DISABLING evaporation for this material.'
+      write(*,'(a,i0,a)') '[WARNING] phase file: combustion set with evaporation also configured for material ', &
+        imat, ': a particle either burns or evaporates -- DISABLING evaporation for this material.'
       mat%evapSelect = 0
     endif
-
-    !> Phase-change properties; each is read only by the model that needs it.
-    call fini%get(section_name=trim(sec), option_name='alpha-e',  val=mat%alphaE,   error=error)
-    if (error/=0) mat%alphaE = 1._R8
-    call fini%get(section_name=trim(sec), option_name='k-liq',    val=mat%kLiq,     error=error)
-    if (error/=0) mat%kLiq = 0._R8
-    call fini%get(section_name=trim(sec), option_name='mu-liq',   val=mat%muLiq,    error=error)
-    if (error/=0) mat%muLiq = 0._R8
-    call fini%get(section_name=trim(sec), option_name='K-burn',   val=mat%Kburn,    error=error)
-    if (error/=0) mat%Kburn = 0._R8
-    call fini%get(section_name=trim(sec), option_name='n-burn',   val=mat%nBurn,    error=error)
-    if (error/=0) mat%nBurn = 1.8_R8            ! Beckstead nominal exponent
-    call fini%get(section_name=trim(sec), option_name='X-eff',    val=mat%Xeff,     error=error)
-    if (error/=0) mat%Xeff = 1._R8              ! pure effective oxidizer => Keff = K-burn
-    call fini%get(section_name=trim(sec), option_name='beta-part',val=mat%betaPart, error=error)
-    if (error/=0) mat%betaPart = 0._R8
-    call fini%get(section_name=trim(sec), option_name='xi-cap',   val=mat%xiCap,    error=error)
-    if (error/=0) mat%xiCap = 0._R8
-    call fini%get(section_name=trim(sec), option_name='T-ign',    val=mat%Tign,     error=error)
-    if (error/=0) mat%Tign = 2350._R8           ! Al2O3-shell melting anchor
-    call fini%get(section_name=trim(sec), option_name='q-comb',   val=mat%qComb,    error=error)
-    if (error/=0) mat%qComb = 0._R8
-    call fini%get(section_name=trim(sec), option_name='T-melt',   val=mat%Tmelt,    error=error)
-    if (error/=0) mat%Tmelt = 2327._R8          ! alumina default
-    call fini%get(section_name=trim(sec), option_name='h-fus',    val=mat%hFus,     error=error)
-    if (error/=0) mat%hFus = 0._R8
-    call fini%get(section_name=trim(sec), option_name='T-nuc',    val=mat%Tnuc,     error=error)
-    if (error/=0) mat%Tnuc = 0.8_R8*mat%Tmelt   ! supercooling default
-    call fini%get(section_name=trim(sec), option_name='cp-solid', val=mat%cpSol,    error=error)
-    if (error/=0) mat%cpSol = 0._R8
-
     !> Log the resolved per-material selection.
-    write(*,'(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,es10.3)') '  >> ['//trim(sec)//'] evap=', mat%evapSelect, &
+    write(*,'(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,es10.3)') '  >> [material ', imat, '] evap=', mat%evapSelect, &
       ' liq=', mat%liqSelect, ' intf=', mat%intfSelect, ' boil=', mat%boilSelect, ' comb=', mat%combSelect, &
       ' solid=', mat%solidSelect, ' alpha-e=', mat%alphaE
-
-  end subroutine read_phase_models
-
-
-  !> Warns about per-material model keys found in [GPB-Phase*] sections: IGLOO does not read them there.
-  subroutine warn_igloo_keys_in_preprocessor_sections()
-    implicit none
-    character(len=*), parameter :: keys(20) = [character(len=17) :: &
-      'evaporation', 'liquid-conduction', 'interface', 'boiling', 'combustion', 'solidification', &
-      'alpha-e', 'k-liq', 'mu-liq', 'K-burn', 'n-burn', 'X-eff', 'beta-part', 'xi-cap', 'T-ign',  &
-      'q-comb', 'T-melt', 'h-fus', 'T-nuc', 'cp-solid']
-    character(len=16)  :: sec
-    character(len=128) :: w
-    integer :: k, p, nfound
-
-    nfound = 0
-    do p = 1, 99
-      write(sec,'(a,i0)') 'GPB-Phase', p
-      if (.not. fini%has_section(section_name=trim(sec))) exit
-      do k = 1, size(keys)
-        call fini%get(section_name=trim(sec), option_name=trim(keys(k)), val=w, error=error)
-        if (error /= 0) cycle
-        nfound = nfound + 1
-        write(*,'(a)') ' [WARNING] ['//trim(sec)//'] '//trim(keys(k))//' is NOT applied: ATLAS GPB does not yet '// &
-                       'write the per-material models into the phase file, and IGLOO reads only its own sections.'
-      enddo
-    enddo
-    if (nfound > 0) write(*,'(a)') '           Until GPB writes them, set these keys in [IGLOO-Material<i>] '// &
-                                   '(i = material order in the phase file).'
-
-  end subroutine warn_igloo_keys_in_preprocessor_sections
+  end subroutine finalize_material_models
 
 
   !> [IGLOO-Properties]: optional per-material property vectors (psat, Mv, Lv, Tboil, cpv, Le, Yinf,

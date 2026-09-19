@@ -23,8 +23,8 @@ contains
     type(obj_flowblock)  , intent(inout), allocatable :: solblock(:)
     type(obj_sourceblock), intent(inout), allocatable :: srcblock(:)
     type(obj_eulerblock) , intent(inout), allocatable :: eulblock(:,:)
-    integer      :: ib, i, j, k, v, nsc, ntot, kmin, kmax, im, jm
-    real(R8)     :: rmax, r2, rvec(3), binormal(3), th0, th1
+    integer      :: ib, i, j, k, v, nsc, ntot, kmin, kmax, im, jm, in, jn
+    real(R8)     :: rmax, rmin, r2, rvec(3), binormal(3), th0, th1, th0n, th1n
     
 
     !> Look for gas densities
@@ -83,6 +83,26 @@ contains
         th1 = atan2(dot_product(blk%node(:,im,jm,1), binormal), dot_product(blk%node(:,im,jm,1), refDir))
         delthe = th1 - th0
         axisym = abs(delthe) > 1.e-9_R8
+        !> A planar slab (two parallel k-planes) also spans a non-zero angle at the outermost node,
+        !  atan(thickness/r). A wedge spans the SAME angle at every radius; a slab's span decays as 1/r.
+        !  Compare with the innermost node that is clearly off the axis (r > 1e-3 r_max: an axis row
+        !  sitting at r ~ 1e-8 with roundoff z carries no azimuth) before committing to the wedge path.
+        rmin = huge(1._R8); in = -1; jn = -1
+        do j = 0, blk%Ny; do i = 0, blk%Nx
+          rvec = blk%node(:,i,j,1) - dot_product(blk%node(:,i,j,1), axisDir)*axisDir
+          r2   = sum(rvec**2)
+          if (r2 < rmin .and. r2 > 1.e-6_R8*rmax) then; rmin = r2; in = i; jn = j; endif
+        enddo; enddo
+        if (axisym .and. in >= 0 .and. .not.(in == im .and. jn == jm)) then
+          th0n = atan2(dot_product(blk%node(:,in,jn,0), binormal), dot_product(blk%node(:,in,jn,0), refDir))
+          th1n = atan2(dot_product(blk%node(:,in,jn,1), binormal), dot_product(blk%node(:,in,jn,1), refDir))
+          if (abs((th1n - th0n) - delthe) > 1.e-6_R8*abs(delthe)) then
+            write(*,'(A,F12.8,A,F12.8,A)') '     - Planar slab (parallel k-planes): span ', delthe, &
+              ' rad at the outermost node, ', th1n - th0n, ' rad at the innermost -- 2D path, no wedge fold'
+            axisym = .false.
+            delthe = 0._R8
+          endif
+        endif
         if (axisym) then
           write(*,'(A,F12.8,A)') '     - Axisymmetric wedge: delthe = ', delthe, ' rad'
           !> Refuse a sector not centred on refDir (k-planes must sit at -+delthe/2).
