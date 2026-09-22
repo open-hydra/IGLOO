@@ -771,7 +771,7 @@ contains
         factor = rho/particle%deltaL
       case(2,5)
         np  = particle%npdot*particle%Tstay*factor
-        rho = particle%intE(5)             *factor
+        rho = particle%npdot*particle%intE(5)*factor   !> intE(5) = int m dt per droplet; times the number rate
         factor = np /particle%deltaL
       case default
         np  = particle%npold*particle%Tstay*factor

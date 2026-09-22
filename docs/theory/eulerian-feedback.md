@@ -78,6 +78,21 @@ The Euler block type `obj_eulerblock` stores per-material numerators:
 | `velocity(3,Nx,Ny,Nz)` | $\sum \rho_p\,\mathbf{v}_p \cdot \delta L^{-1} \cdot T_\mathrm{stay} / V$ (numerator) |
 | `temperature(Nx,Ny,Nz)` | $\sum \rho_p\,T_p \cdot \delta L^{-1} \cdot T_\mathrm{stay} / V$ (numerator) |
 
+The density row above is the **constant-mass** form (model 1, and model 3 with
+$\rho_p\,T_\mathrm{stay} = \dot{m}\,T_\mathrm{stay}$). For a material that loses mass the
+droplet mass is inside the integral, and the **number rate multiplies it** — the parcel
+carries $\dot{n}_p$ droplets per second, not one:
+
+$$
+\rho_p^{\,\mathrm{cell}} \;=\; \frac{1}{V}\sum_p \dot{n}_p \int_{\mathrm{cell}} m_p\,\mathrm{d}t
+$$
+
+Models 2 and 5 integrate $m_p$ alone and pick up $\dot{n}_p$ at the deposit; model 4
+integrates $m_p\,\dot{n}_p$ directly, so its deposit needs no extra factor. The two routes
+give the same quantity. This matters beyond the density itself: `finalizeEUL` divides the
+velocity and temperature numerators **by** $\rho_p^{\,\mathrm{cell}}$, so a density missing
+$\dot{n}_p$ also scales $\mathbf{u}_p$ and $T_p$ by it.
+
 `computeEulField` maps the ODE moment integrals `intE(:)` (arc-length $\delta L$ and
 $\mathbf{v}_p\,\delta L$, $T_p\,\delta L$, plus the mass or number moment for models
 2–5) into these cell accumulators, normalised by the deposition cell volume $V$ (the gas

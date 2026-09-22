@@ -41,7 +41,7 @@ tests/
 │   ├── drag/  temperature/       #   unit families
 │   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/   # e2e
 ├── evaporation/                  # unit families: (root)  interface-neq/  tc-analytic/
-│   └── d2law/ d2law-line/ lk-neq/ tc-box/ tc-hexadecane/ mhb98-water/     # e2e
+│   └── d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-hexadecane/ mhb98-water/     # e2e
 ├── combustion/                   # unit family (root) + burn-box/ (e2e)
 ├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
 │   └── tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/   # e2e

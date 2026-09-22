@@ -6,7 +6,7 @@
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ (e2e)
-#   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ datum-abs/ tc-hexadecane/ mhb98-water/ (e2e)
+#   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ datum-abs/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5}
@@ -297,6 +297,14 @@ igloo_e2e_case(mhb98-water evaporation/mhb98-water "e2e;evaporation;val;mhb98")
 # case (thermal swelling). Found+fixed A20 (variable tabs never allocated) + A21 (lookupTab
 # OOB). Gate = variable-density TC mass rate + swelling; digitized paper curves non-gating.
 igloo_e2e_case(tc-hexadecane evaporation/tc-hexadecane "e2e;evaporation;val;tc")
+# O31: the equivalent-Eulerian field of a MASS-LOSING material (ODE model 2). tc-box's case
+# with out-file = ALL and mollify = off -- nothing else in the suite covers the model-2/5 branch
+# of computeEulField, because every Euler writer here is model 1 and every model-2/5 fixture
+# writes out-file = S. Oracle is the per-cell ratio rho_p/n_p (the time-mean droplet mass, an
+# INTENSIVE quantity) against the two trajectory rows bounding the cell. RED without the npdot
+# factor: E3 reads 1.0 (ratio is 1/npdot ~ 2e-8 of the truth), u_p = 5.0e8 m/s, T_p = 1.5e10 K.
+# Every oracle quantity is bit-stable at OMP 1/2/5 -- each parcel rides its own (j,k) column.
+igloo_e2e_case(tc-box-euler evaporation/tc-box-euler "e2e;evaporation;euler")
 
 # ---------- combustion (M1: Beckstead d^n burn law) -----------------------------
 igloo_unit_test(test_combustion combustion "unit;combustion;m1;t4")
