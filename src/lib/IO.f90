@@ -256,10 +256,11 @@ contains
 
 
   !> Read bc.txt: pass 1 tags every face cell and seeds the inflow cells (area, mdotGas);
-  !  pass 2 fills properties/connections and, under ord2, the boundary ghost layer of the gas.
+  !  pass 2 fills properties/connections. The ord2 gas ghost ring is IGLOO's, filled per sweep
+  !  by fillGhostGradient/fillGhostPartners -- never here.
   subroutine read_cdp_bc_file(name,material,geoblock,gasblock,sourceblock,eulerblock,srcSwitch,eulSwitch)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
-    use IGLOO_variables,             only: nb, nm, ord2, mesh2D, dsSwitch
+    use IGLOO_variables,             only: nb, nm, mesh2D, dsSwitch
     use IGLOO_data_block,            only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, obj_bc_cell
     use IGLOO_data_phases,           only: obj_material
     use IGLOO_RayFaceIntersection3D, only: computeArea
@@ -273,12 +274,11 @@ contains
     type(obj_sourceblock), intent(inout) :: sourceblock(nb)
     type(obj_eulerblock) , intent(inout) :: eulerblock(:,:)
     integer, parameter :: nPropDP = 9
-    integer            :: b, mat, p, f, m, n, i, mend(6), nend(6), mm, nn, aa, bb, b2, b3
+    integer            :: b, mat, p, f, m, n, i, mend(6), nend(6)
     integer            :: u, dumi, totFam, ci_n, s, ios, nTok, readLine(9)
     integer            :: i_g, j_g, k_g
     real(R8)           :: propBuffer(nPropDP)
-    real(R8)           :: vertices(3, 8), vg(3), vge(3), Tg, mitg, milg, gamg, klg, Rg
-    real(R8), allocatable :: rhog(:)
+    real(R8)           :: vertices(3, 8)
     character(len=64)  :: tok(nPropDP)
     character(len=512) :: lineString
 
@@ -420,196 +420,11 @@ contains
 
         end associate
       enddo; enddo; enddo
-
-      ! Post-pass (ord2): fill the boundary ghost layer of the gas.
-      if (allocated(rhog)) deallocate(rhog)
-      allocate(rhog(size(gas%density,1)))
-      do f = 1, 6; do n = 1, nend(f); do m = 1, mend(f)
-        associate(cell => blk%face(f)%cell(m,n))
-        if (ord2) then
-          if (m==1) then; mm = 0; elseif (m==mend(f)) then; mm = m + 1; endif
-          if (.not.mesh2D) then
-            if (n==1) then; nn = 0; elseif (n==nend(f)) then; nn = n + 1; endif
-          else; nn = 1; endif
-          select case (f)
-            case(1,2)
-              if (f==1) then; bb = 1;      aa = 0;         b2 = 2;         b3 = 3
-              else;           bb = gas%Nx; aa = gas%Nx+1;  b2 = gas%Nx-1;  b3 = gas%Nx-2; endif
-              call ghostState(cell, gas, gasblock, [bb,m,n], [b2,m,n], [b3,m,n], gas%Nx>=3, &
-                              rhog, vg, Tg, mitg, milg, gamg, klg, Rg)
-              gas%density  (:,aa,m,n) = rhog
-              gas%velocity (:,aa,m,n) = vg
-              gas%temperature(aa,m,n) = Tg
-              gas%mit(aa,m,n) = mitg
-              gas%mil(aa,m,n) = milg
-              gas%gam(aa,m,n) = gamg
-              gas%kl (aa,m,n) = klg
-              gas%R  (aa,m,n) = Rg
-              if ((m==1.or.m==mend(f)).and.(n==1.or.n==nend(f))) then
-                !> edge/corner ghost: compose the adjacent faces' 300 mirrors
-                vge = vg
-                associate(ac => blk%face(merge(3,4,m==1))%cell(bb,n))
-                  if (ac%bcdef==300) vge = vge - 2._R8*dot_product(vge,ac%normal)*ac%normal
-                end associate
-                if (.not.mesh2D) then
-                  associate(ac => blk%face(merge(5,6,n==1))%cell(bb,m))
-                    if (ac%bcdef==300) vge = vge - 2._R8*dot_product(vge,ac%normal)*ac%normal
-                  end associate
-                endif
-                gas%density  (:,aa,mm,nn) = rhog
-                gas%velocity (:,aa,mm,nn) = vge
-                gas%temperature(aa,mm,nn) = Tg
-                gas%mit(aa,mm,nn) = mitg
-                gas%mil(aa,mm,nn) = milg
-                gas%gam(aa,mm,nn) = gamg
-                gas%kl (aa,mm,nn) = klg
-                gas%R  (aa,mm,nn) = Rg
-              elseif (m==1.or.m==mend(f)) then
-                vge = vg
-                associate(ac => blk%face(merge(3,4,m==1))%cell(bb,n))
-                  if (ac%bcdef==300) vge = vge - 2._R8*dot_product(vge,ac%normal)*ac%normal
-                end associate
-                gas%density  (:,aa,mm,n) = rhog
-                gas%velocity (:,aa,mm,n) = vge
-                gas%temperature(aa,mm,n) = Tg
-                gas%mit(aa,mm,n) = mitg
-                gas%mil(aa,mm,n) = milg
-                gas%gam(aa,mm,n) = gamg
-                gas%kl (aa,mm,n) = klg
-                gas%R  (aa,mm,n) = Rg
-              elseif (n==1.or.n==nend(f)) then
-                vge = vg
-                if (.not.mesh2D) then
-                  associate(ac => blk%face(merge(5,6,n==1))%cell(bb,m))
-                    if (ac%bcdef==300) vge = vge - 2._R8*dot_product(vge,ac%normal)*ac%normal
-                  end associate
-                endif
-                gas%density  (:,aa,m,nn) = rhog
-                gas%velocity (:,aa,m,nn) = vge
-                gas%temperature(aa,m,nn) = Tg
-                gas%mit(aa,m,nn) = mitg
-                gas%mil(aa,m,nn) = milg
-                gas%gam(aa,m,nn) = gamg
-                gas%kl (aa,m,nn) = klg
-                gas%R  (aa,m,nn) = Rg
-              endif
-            case(3,4)
-              if (f==3) then; bb = 1;      aa = 0;         b2 = 2;         b3 = 3
-              else;           bb = gas%Ny; aa = gas%Ny+1;  b2 = gas%Ny-1;  b3 = gas%Ny-2; endif
-              call ghostState(cell, gas, gasblock, [m,bb,n], [m,b2,n], [m,b3,n], gas%Ny>=3, &
-                              rhog, vg, Tg, mitg, milg, gamg, klg, Rg)
-              gas%density  (:,m,aa,n) = rhog
-              gas%velocity (:,m,aa,n) = vg
-              gas%temperature(m,aa,n) = Tg
-              gas%mit(m,aa,n) = mitg
-              gas%mil(m,aa,n) = milg
-              gas%gam(m,aa,n) = gamg
-              gas%kl (m,aa,n) = klg
-              gas%R  (m,aa,n) = Rg
-              if (n==1.or.n==nend(f)) then
-                vge = vg
-                if (.not.mesh2D) then
-                  associate(ac => blk%face(merge(5,6,n==1))%cell(m,bb))
-                    if (ac%bcdef==300) vge = vge - 2._R8*dot_product(vge,ac%normal)*ac%normal
-                  end associate
-                endif
-                gas%density  (:,m,aa,nn) = rhog
-                gas%velocity (:,m,aa,nn) = vge
-                gas%temperature(m,aa,nn) = Tg
-                gas%mit(m,aa,nn) = mitg
-                gas%mil(m,aa,nn) = milg
-                gas%gam(m,aa,nn) = gamg
-                gas%kl (m,aa,nn) = klg
-                gas%R  (m,aa,nn) = Rg
-              endif
-            case(5,6)
-              if (mesh2D) cycle
-              if (f==5) then; bb = 1;      aa = 0;         b2 = 2;         b3 = 3
-              else;           bb = gas%Nz; aa = gas%Nz+1;  b2 = gas%Nz-1;  b3 = gas%Nz-2; endif
-              call ghostState(cell, gas, gasblock, [m,n,bb], [m,n,b2], [m,n,b3], gas%Nz>=3, &
-                              rhog, vg, Tg, mitg, milg, gamg, klg, Rg)
-              gas%density  (:,m,n,aa) = rhog
-              gas%velocity (:,m,n,aa) = vg
-              gas%temperature(m,n,aa) = Tg
-              gas%mit(m,n,aa) = mitg
-              gas%mil(m,n,aa) = milg
-              gas%gam(m,n,aa) = gamg
-              gas%kl (m,n,aa) = klg
-              gas%R  (m,n,aa) = Rg
-          end select
-        endif
-        end associate
-      enddo; enddo; enddo
       end associate blkDef
     enddo
     close(u)
 
   end subroutine read_cdp_bc_file
-
-
-  !> ord2 gas ghost state of one boundary cell: 101/201 partner copy, 300 velocity mirror,
-  !  0/200/401-407/420 zero-gradient, default quadratic extrapolation (zero-gradient fallback).
-  subroutine ghostState(cell, gas, gasall, c1, c2, c3, deep, rhog, vg, Tg, mitg, milg, gamg, klg, Rg)
-    use, intrinsic :: iso_fortran_env, only : R8 => real64
-    use IGLOO_data_block, only: obj_flowblock, obj_bc_cell
-    implicit none
-    type(obj_bc_cell),   intent(in)  :: cell
-    type(obj_flowblock), intent(in)  :: gas
-    type(obj_flowblock), intent(in)  :: gasall(:)
-    integer,             intent(in)  :: c1(3), c2(3), c3(3)
-    logical,             intent(in)  :: deep
-    real(R8),            intent(out) :: rhog(:), vg(3), Tg, mitg, milg, gamg, klg, Rg
-
-    select case (cell%bcdef)
-      case (101, 201)   !> conformal/periodic partner: ghost = partner boundary-adjacent interior
-        associate(p => gasall(cell%connection(1)), ip => cell%connection(2), &
-                  jp => cell%connection(3),        kp => cell%connection(4))
-        rhog = p%density (:,ip,jp,kp)
-        vg   = p%velocity(:,ip,jp,kp)
-        Tg   = p%temperature(ip,jp,kp)
-        mitg = p%mit(ip,jp,kp); milg = p%mil(ip,jp,kp)
-        gamg = p%gam(ip,jp,kp); klg  = p%kl (ip,jp,kp); Rg = p%R(ip,jp,kp)
-        end associate
-      case (300)        !> symmetry: mirror velocity so interpolated v_n -> 0 at the plane
-        call zeroGrad()
-        vg = vg - 2._R8*dot_product(vg,cell%normal)*cell%normal
-      case (0, 200, 401:407, 420)  !> inlet/outlet & wedge: zero-gradient
-        call zeroGrad()
-      case default      !> wall & others: quadratic extrapolation, positivity-guarded
-        if (deep) then
-          rhog = 3._R8*gas%density (:,c1(1),c1(2),c1(3)) - 3._R8*gas%density (:,c2(1),c2(2),c2(3)) &
-               +       gas%density (:,c3(1),c3(2),c3(3))
-          vg   = 3._R8*gas%velocity(:,c1(1),c1(2),c1(3)) - 3._R8*gas%velocity(:,c2(1),c2(2),c2(3)) &
-               +       gas%velocity(:,c3(1),c3(2),c3(3))
-          Tg   = 3._R8*gas%temperature(c1(1),c1(2),c1(3)) - 3._R8*gas%temperature(c2(1),c2(2),c2(3)) &
-               +       gas%temperature(c3(1),c3(2),c3(3))
-          mitg = 3._R8*gas%mit(c1(1),c1(2),c1(3)) - 3._R8*gas%mit(c2(1),c2(2),c2(3)) + gas%mit(c3(1),c3(2),c3(3))
-          milg = 3._R8*gas%mil(c1(1),c1(2),c1(3)) - 3._R8*gas%mil(c2(1),c2(2),c2(3)) + gas%mil(c3(1),c3(2),c3(3))
-          gamg = 3._R8*gas%gam(c1(1),c1(2),c1(3)) - 3._R8*gas%gam(c2(1),c2(2),c2(3)) + gas%gam(c3(1),c3(2),c3(3))
-          klg  = 3._R8*gas%kl (c1(1),c1(2),c1(3)) - 3._R8*gas%kl (c2(1),c2(2),c2(3)) + gas%kl (c3(1),c3(2),c3(3))
-          Rg   = 3._R8*gas%R  (c1(1),c1(2),c1(3)) - 3._R8*gas%R  (c2(1),c2(2),c2(3)) + gas%R  (c3(1),c3(2),c3(3))
-          !> reject a non-physical extrapolated state
-          if (any(rhog<=0._R8) .or. Tg<=0._R8 .or. milg<=0._R8 .or. gamg<=0._R8 &
-              .or. klg<=0._R8 .or. Rg<=0._R8) call zeroGrad()
-          mitg = max(mitg, 0._R8)
-        else
-          call zeroGrad()
-        endif
-    end select
-
-  contains
-
-    !> Zero-gradient ghost: copy the boundary-adjacent interior state.
-    subroutine zeroGrad()
-      rhog = gas%density (:,c1(1),c1(2),c1(3))
-      vg   = gas%velocity(:,c1(1),c1(2),c1(3))
-      Tg   = gas%temperature(c1(1),c1(2),c1(3))
-      mitg = gas%mit(c1(1),c1(2),c1(3)); milg = gas%mil(c1(1),c1(2),c1(3))
-      gamg = gas%gam(c1(1),c1(2),c1(3)); klg  = gas%kl (c1(1),c1(2),c1(3))
-      Rg   = gas%R  (c1(1),c1(2),c1(3))
-    end subroutine zeroGrad
-
-  end subroutine ghostState
 
 
   !> Read the background gas field from an ASCII Tecplot multiblock file.

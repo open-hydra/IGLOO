@@ -45,8 +45,8 @@ tests/
 ├── combustion/                   # unit family (root) + burn-box/ (e2e)
 ├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
 │   └── tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/   # e2e
-├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/
-│   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/   # e2e
+├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/
+│   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/   # e2e
 │   └── refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver,wedge-offcentre}/   # setup-refusal gates
 ├── repeatability/                # two-sweep gates: drag-stokes/ drag-stokes-dopri5/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/ tab-dopri5/
 └── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ bc-center-2grp/ two-mat/ consistency/ consistency-two-mat/
@@ -93,5 +93,7 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 85/85 in a serial build (57 e2e + 28 unit, `self_test` and `registry-docs` among the latter);
-`USE_MPI=ON` registers 7 more `mpi-*` cases, 92/92.
+ctest 97/97 in a serial build (67 e2e + 30 unit, `self_test` and `registry-docs` among the latter);
+`USE_MPI=ON` registers 7 more `mpi-*` cases, 104/104. (Was 85/85 before the five review-residual
+plans of 2026-09-22/23 added `ini-comment-eq`, `solver-fail-consumed`, `tc-box-euler`,
+`test_source_reduction`, `tc-box-ord2-row`, `test_ghost_bc` and `wall-approach`.)

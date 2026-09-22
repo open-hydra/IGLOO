@@ -3,6 +3,7 @@ module IGLOO_data_block
   use IGLOO_Lib_Mollify, only: binomial_smooth
   implicit none
   private
+  public :: fillGhostPartners
 
   type, public :: obj_bc_cell
     real(R8),dimension(:,:),allocatable :: properties !> first index per group (family)
@@ -64,7 +65,6 @@ module IGLOO_data_block
     procedure, pass(self), public :: pass_geometry
     procedure, pass(self), public :: gasProperties
     procedure, pass(self), public :: fillGhostGradient
-    procedure, pass(self), public :: imposeBCValues
     procedure, pass(self), public :: initMdotGas
   end type obj_flowblock
 
@@ -1071,9 +1071,10 @@ contains
 
   !> Fill the ghost ring of the gas field by linear extrapolation: faces, then the
   !  symmetry-axis override, then edges and corners.
-  subroutine fillGhostGradient(self)
+  subroutine fillGhostGradient(self, geoblock)
     implicit none
     class(obj_flowblock), intent(inout) :: self
+    type(obj_block),      intent(in)    :: geoblock
     integer :: i, j, k, Nx, Ny, Nz, ns
     logical :: is3D
 
@@ -1137,6 +1138,24 @@ contains
       enddo; enddo
     endif
 
+    !> bc-aware face ghosts: gas-solid planes (300/301) get the interior normal velocity
+    !  mirrored so the sampled v_n at the plane is 0; extrapolated scalars are guarded there.
+    do k = 1, Nz; do j = 1, Ny
+      call bcFaceGhost(self, geoblock%face(1)%cell(j,k), 0,    j, k,  1, j, k)
+      call bcFaceGhost(self, geoblock%face(2)%cell(j,k), Nx+1, j, k, Nx, j, k)
+    enddo; enddo
+    do k = 1, Nz; do i = 1, Nx
+      call bcFaceGhost(self, geoblock%face(3)%cell(i,k), i, 0,    k, i, 1,  k)
+      call bcFaceGhost(self, geoblock%face(4)%cell(i,k), i, Ny+1, k, i, Ny, k)
+    enddo; enddo
+    if (is3D) then
+      do j = 1, Ny; do i = 1, Nx
+        call bcFaceGhost(self, geoblock%face(5)%cell(i,j), i, j, 0,    i, j, 1 )
+        call bcFaceGhost(self, geoblock%face(6)%cell(i,j), i, j, Nz+1, i, j, Nz)
+      enddo; enddo
+    endif
+    !> mit is not refilled: nothing packs it (gasProperties packs rho, u, v, w, T, mil, gam, R, kl).
+
     !> symmetry-axis override for ghosts sitting on the axis (before the edge/corner cascade)
     if (allocated(self%nodeOnAxis)) then
       do k = 1, Nz; do j = 1, Ny
@@ -1162,6 +1181,11 @@ contains
       call extrapEdge(self, 0,    Ny+1, k, 0,    Ny,   k, 0,    Ny-1, k)
       call extrapEdge(self, Nx+1, Ny+1, k, Nx+1, Ny,   k, Nx+1, Ny-1, k)
     enddo
+    !> (a1) mirrors on the i/j-edge ghosts; partners are face ghosts. In 2D these ARE the corners.
+    do k = 1, Nz
+      call bcEdgeGhost(self, geoblock, 0,    0,    k); call bcEdgeGhost(self, geoblock, Nx+1, 0,    k)
+      call bcEdgeGhost(self, geoblock, 0,    Ny+1, k); call bcEdgeGhost(self, geoblock, Nx+1, Ny+1, k)
+    enddo
     if (is3D) then
       do j = 1, Ny
         call extrapEdge(self, 0,    j, 0,    0,    j, 1,    0,    j, 2   )
@@ -1175,6 +1199,15 @@ contains
         call extrapEdge(self, i, 0,    Nz+1, i, 0,    Nz,   i, 0,    Nz-1)
         call extrapEdge(self, i, Ny+1, Nz+1, i, Ny+1, Nz,   i, Ny+1, Nz-1)
       enddo
+      !> (a2) mirrors on the k-edge ghosts; partners are face ghosts
+      do j = 1, Ny
+        call bcEdgeGhost(self, geoblock, 0,    j, 0   ); call bcEdgeGhost(self, geoblock, Nx+1, j, 0   )
+        call bcEdgeGhost(self, geoblock, 0,    j, Nz+1); call bcEdgeGhost(self, geoblock, Nx+1, j, Nz+1)
+      enddo
+      do i = 1, Nx
+        call bcEdgeGhost(self, geoblock, i, 0,    0   ); call bcEdgeGhost(self, geoblock, i, Ny+1, 0   )
+        call bcEdgeGhost(self, geoblock, i, 0,    Nz+1); call bcEdgeGhost(self, geoblock, i, Ny+1, Nz+1)
+      enddo
       !> corner ghosts: cascade from the edge ghosts
       call extrapEdge(self, 0,    0,    0,    0,    0,    1,    0,    0,    2   )
       call extrapEdge(self, Nx+1, 0,    0,    Nx+1, 0,    1,    Nx+1, 0,    2   )
@@ -1184,6 +1217,11 @@ contains
       call extrapEdge(self, Nx+1, 0,    Nz+1, Nx+1, 0,    Nz,   Nx+1, 0,    Nz-1)
       call extrapEdge(self, 0,    Ny+1, Nz+1, 0,    Ny+1, Nz,   0,    Ny+1, Nz-1)
       call extrapEdge(self, Nx+1, Ny+1, Nz+1, Nx+1, Ny+1, Nz,   Nx+1, Ny+1, Nz-1)
+      !> (b) mirrors on the eight corner ghosts; partners are the edge ghosts mirrored in (a1)/(a2)
+      call bcEdgeGhost(self, geoblock, 0,    0,    0   ); call bcEdgeGhost(self, geoblock, Nx+1, 0,    0   )
+      call bcEdgeGhost(self, geoblock, 0,    Ny+1, 0   ); call bcEdgeGhost(self, geoblock, Nx+1, Ny+1, 0   )
+      call bcEdgeGhost(self, geoblock, 0,    0,    Nz+1); call bcEdgeGhost(self, geoblock, Nx+1, 0,    Nz+1)
+      call bcEdgeGhost(self, geoblock, 0,    Ny+1, Nz+1); call bcEdgeGhost(self, geoblock, Nx+1, Ny+1, Nz+1)
     endif
 
   end subroutine fillGhostGradient
@@ -1211,6 +1249,119 @@ contains
   end subroutine axisGhost
 
 
+  !> bc value of one face ghost (g*) after the linear fill: gas-solid planes (300/301) mirror the
+  !  interior partner's (i*) normal velocity; a non-positive extrapolated scalar falls back to
+  !  zero-gradient. Every other code keeps the linear fill -- 100 is the box generators'
+  !  outlet/side code, not a gas-solid plane, and 101/201 are the partner pass.
+  subroutine bcFaceGhost(self, cell, gi, gj, gk, ii, ij, ik)
+    implicit none
+    class(obj_flowblock), intent(inout) :: self
+    type(obj_bc_cell),    intent(in)    :: cell
+    integer,              intent(in)    :: gi, gj, gk, ii, ij, ik
+
+    select case (cell%bcdef)
+    case (300, 301)
+      call mirrorNormal(self%velocity(:, gi,gj,gk), self%velocity(:, ii,ij,ik), cell%normal)
+      if (any(self%density(:, gi,gj,gk) <= 0._R8) .or. self%temperature(gi,gj,gk) <= 0._R8 .or. &
+          self%mil(gi,gj,gk) <= 0._R8 .or. self%kl(gi,gj,gk) <= 0._R8 .or.                      &
+          self%gam(gi,gj,gk) <= 0._R8 .or. self%R(gi,gj,gk) <= 0._R8) then
+        self%density    (:, gi,gj,gk) = self%density    (:, ii,ij,ik)
+        self%temperature(   gi,gj,gk) = self%temperature(   ii,ij,ik)
+        self%mil        (   gi,gj,gk) = self%mil        (   ii,ij,ik)
+        self%kl         (   gi,gj,gk) = self%kl         (   ii,ij,ik)
+        self%gam        (   gi,gj,gk) = self%gam        (   ii,ij,ik)
+        self%R          (   gi,gj,gk) = self%R          (   ii,ij,ik)
+      endif
+    case default   !> 0, 100, 4xx, non-axis 200 (axisGhost overrides on-axis nodes), 101/201: linear fill
+    end select
+  end subroutine bcFaceGhost
+
+
+  !> Ghost velocity with the normal component mirrored from the partner (vg.n = -vi.n), tangential
+  !  part kept from the linear fill. n's orientation is irrelevant; CalculateNormal returns either a
+  !  unit vector or a ~0 raw cross product on a degenerate face, and the latter makes this a no-op.
+  pure subroutine mirrorNormal(vg, vi, n)
+    implicit none
+    real(R8), intent(inout) :: vg(3)
+    real(R8), intent(in)    :: vi(3), n(3)
+    vg = vg - dot_product(vg + vi, n)*n
+  end subroutine mirrorNormal
+
+
+  !> Re-impose the mirrors of the solid faces adjacent to an edge/corner ghost, after the cascade:
+  !  across each such face the partner is the neighbouring ghost one step inward, itself already
+  !  extrapolated and mirrored. Orthogonal mirrors commute, so a corner carries all three.
+  subroutine bcEdgeGhost(self, geoblock, gi, gj, gk)
+    implicit none
+    class(obj_flowblock), intent(inout) :: self
+    type(obj_block),      intent(in)    :: geoblock
+    integer,              intent(in)    :: gi, gj, gk
+    integer :: ci, cj, ck
+
+    ci = min(max(gi,1), self%Nx); cj = min(max(gj,1), self%Ny); ck = min(max(gk,1), self%Nz)
+    if (gi == 0)         call edgeMirror(geoblock%face(1)%cell(cj,ck), 1,       gj, gk)
+    if (gi == self%Nx+1) call edgeMirror(geoblock%face(2)%cell(cj,ck), self%Nx, gj, gk)
+    if (gj == 0)         call edgeMirror(geoblock%face(3)%cell(ci,ck), gi, 1,       gk)
+    if (gj == self%Ny+1) call edgeMirror(geoblock%face(4)%cell(ci,ck), gi, self%Ny, gk)
+    if (self%Nz > 1) then
+      if (gk == 0)         call edgeMirror(geoblock%face(5)%cell(ci,cj), gi, gj, 1      )
+      if (gk == self%Nz+1) call edgeMirror(geoblock%face(6)%cell(ci,cj), gi, gj, self%Nz)
+    endif
+
+  contains
+
+    subroutine edgeMirror(cell, pi, pj, pk)
+      type(obj_bc_cell), intent(in) :: cell
+      integer,           intent(in) :: pi, pj, pk
+      if (cell%bcdef == 300 .or. cell%bcdef == 301) &
+        call mirrorNormal(self%velocity(:,gi,gj,gk), self%velocity(:,pi,pj,pk), cell%normal)
+    end subroutine edgeMirror
+
+  end subroutine bcEdgeGhost
+
+
+  !> 101/201 face ghosts: the partner block's boundary-adjacent interior state, per sweep. The
+  !  partner may be the same block, so this cannot be a type-bound method taking `gasall` beside
+  !  `self`. Edge ghosts next to such a face stay cascaded from the pre-copy face values, as the
+  !  retired setup pass left them.
+  subroutine fillGhostPartners(gasall, geoall)
+    implicit none
+    type(obj_flowblock), intent(inout) :: gasall(:)
+    type(obj_block),     intent(in)    :: geoall(:)
+    integer :: b, f, m, n, gi, gj, gk
+
+    do b = 1, size(gasall)
+      associate(gas => gasall(b), blk => geoall(b))
+      do f = 1, 6
+        if (f >= 5 .and. gas%Nz == 1) cycle
+        do n = 1, blk%face(f)%Nn; do m = 1, blk%face(f)%Nm
+          associate(cell => blk%face(f)%cell(m,n))
+          if (cell%bcdef == 101 .or. cell%bcdef == 201) then
+            select case (f)
+            case(1); gi = 0;        gj = m; gk = n
+            case(2); gi = gas%Nx+1; gj = m; gk = n
+            case(3); gi = m; gj = 0;        gk = n
+            case(4); gi = m; gj = gas%Ny+1; gk = n
+            case(5); gi = m; gj = n; gk = 0
+            case(6); gi = m; gj = n; gk = gas%Nz+1
+            end select
+            associate(p => gasall(cell%connection(1)), ip => cell%connection(2), &
+                      jp => cell%connection(3),        kp => cell%connection(4))
+            gas%density    (:, gi,gj,gk) = p%density    (:, ip,jp,kp)
+            gas%velocity   (:, gi,gj,gk) = p%velocity   (:, ip,jp,kp)
+            gas%temperature(   gi,gj,gk) = p%temperature(   ip,jp,kp)
+            gas%mil(gi,gj,gk) = p%mil(ip,jp,kp);  gas%kl(gi,gj,gk) = p%kl(ip,jp,kp)
+            gas%gam(gi,gj,gk) = p%gam(ip,jp,kp);  gas%R (gi,gj,gk) = p%R (ip,jp,kp)
+            end associate
+          endif
+          end associate
+        enddo; enddo
+      enddo
+      end associate
+    enddo
+  end subroutine fillGhostPartners
+
+
   !> Linear extrapolation of the gas state to ghost (ig,jg,kg) from (i1,j1,k1) and (i2,j2,k2).
   subroutine extrapEdge(sol, ig,jg,kg, i1,j1,k1, i2,j2,k2)
     implicit none
@@ -1226,47 +1377,6 @@ contains
     sol%R  (ig,jg,kg) = 2.0_R8*sol%R  (i1,j1,k1) - sol%R  (i2,j2,k2)
 
   end subroutine extrapEdge
-
-
-  !> Set the ghost ring of face face_id so that the face value is the ghost/interior average.
-  subroutine imposeBCValues(self, face_id, face_values)
-    implicit none
-    class(obj_flowblock), intent(inout) :: self
-    integer,              intent(in)    :: face_id
-    real(R8),             intent(in)    :: face_values(:,:,:) !> (nsp, Nm, Nn)
-    integer  :: m, n, Ai, Aj, Ak, gi, gj, gk
-    real(R8) :: rhoInt, rhoGhost, ratio
-
-    do n = 1, size(face_values,3)
-      do m = 1, size(face_values,2)
-        call self%fmn2ijk(face_id,m,n,Ai,Aj,Ak)
-        select case (face_id)
-        case(1); gi = 0;         gj = Aj; gk = Ak
-        case(2); gi = self%Nx+1; gj = Aj; gk = Ak
-        case(3); gi = Ai; gj = 0;         gk = Ak
-        case(4); gi = Ai; gj = self%Ny+1; gk = Ak
-        case(5); gi = Ai; gj = Aj; gk = 0
-        case(6); gi = Ai; gj = Aj; gk = self%Nz+1
-        end select
-        !> f_ghost = 2*f_bc - f_interior; density keeps the interior species ratios
-        rhoInt   = sum(self%density(:,Ai,Aj,Ak))
-        rhoGhost = 2.0_R8*face_values(1,m,n) - rhoInt
-        if (rhoInt > 0.0_R8) then
-          ratio = rhoGhost / rhoInt
-          self%density(:,gi,gj,gk) = self%density(:,Ai,Aj,Ak) * ratio
-        else
-          self%density(:,gi,gj,gk) = 0.0_R8
-        endif
-        self%velocity(1:3,gi,gj,gk) = 2.0_R8*face_values(2:4,m,n) - self%velocity(1:3,Ai,Aj,Ak)
-        self%temperature(gi,gj,gk)  = 2.0_R8*face_values(5,m,n)   - self%temperature(Ai,Aj,Ak)
-        self%mil(gi,gj,gk) = 2.0_R8*face_values(6,m,n) - self%mil(Ai,Aj,Ak)
-        self%gam(gi,gj,gk) = 2.0_R8*face_values(7,m,n) - self%gam(Ai,Aj,Ak)
-        self%R(gi,gj,gk)   = 2.0_R8*face_values(8,m,n) - self%R(Ai,Aj,Ak)
-        self%kl(gi,gj,gk)  = 2.0_R8*face_values(9,m,n) - self%kl(Ai,Aj,Ak)
-      enddo
-    enddo
-
-  end subroutine imposeBCValues
 
 
   !> Gas mass flow rate through a boundary cell from a first-order least-squares extrapolation

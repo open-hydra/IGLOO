@@ -2,7 +2,7 @@
 !  setup / reset_state / solve / writeout entry points.
 module IGLOO_module
   use, intrinsic :: iso_fortran_env, only : R8 => real64
-  use IGLOO_data_block, only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock
+  use IGLOO_data_block, only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, fillGhostPartners
   use IGLOO_data_phases, only: obj_material
   implicit none
 
@@ -292,8 +292,9 @@ contains
     call initialize_fields(self%source,self%euler,sourceSwitch,eulerSwitch)
     if (ord2) then
       do m = 1, nb
-        call self%gasblock(m)%fillGhostGradient()
+        call self%gasblock(m)%fillGhostGradient(self%geoblock(m))
       enddo
+      call fillGhostPartners(self%gasblock, self%geoblock)
     endif
 
     !> Domain length scale (bounding-box diagonal) for the scatter weight-quantum estimate.

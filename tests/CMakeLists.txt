@@ -9,7 +9,7 @@
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5}
 #   repeatability/      two-sweep gates (twosweep driver): 8 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
@@ -116,6 +116,13 @@ igloo_unit_test(test_axis_dispatch      infrastructure/axis_dispatch      "unit;
 # radially thin -- so grazeOffset caps it at a fraction of the cell. Pins the invariant across
 # 12 decades of cell thickness.
 igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;infrastructure;bc;t1")
+# O29: the ord2 gas ghost ring was filled by blind linear extrapolation on every face, so the
+# sampled normal velocity at a gas-solid plane was (3v1 - v2)/2 instead of 0 and a parcel in the
+# boundary dual row was dragged through it. The bc-aware fill existed but ran once at setup and
+# was overwritten before any read. Pins the mirror on 300/301 (faces, edges, corners), the
+# positivity guard and the 101/201 partner copy -- the last has no e2e coverage anywhere, since
+# no ord2 fixture in the tree carries those codes.
+igloo_unit_test(test_ghost_bc           infrastructure/ghost_bc           "unit;infrastructure;bc;gas;t1")
 # the ord2 dual must TILE the domain: its boundary cells straddle the boundary face, so an
 # unclipped one dilutes its deposited density by the outside fraction. Pins sum(dual cellVol)
 # == domain volume plus the per-cell 1/2, 1/4, 1/8 factors. The 3D branch had no clip at all
@@ -412,6 +419,11 @@ igloo_e2e_case(wedge-fold infrastructure/wedge-fold "e2e;infrastructure")
 # detector must compare the k-plane span at two radii (a slab's decays as 1/r). Proven RED on
 # the pre-fix binary (refused as an off-centre wedge), GREEN after.
 igloo_e2e_case(planar-slab infrastructure/planar-slab "e2e;infrastructure;axisym")
+# O29: the ord2 gas ghost ring was filled by blind linear extrapolation on every face, so the gas
+# sampled in the boundary dual row kept a normal velocity INTO a solid wall and pushed parcels
+# through it. Three parcels drift onto a 301 wall; RED on the pre-B binary they all hit it, at
+# exactly the predicted x = 0.37/0.42/0.47 m, GREEN they decay away from it at the tracer rate.
+igloo_e2e_case(wall-approach infrastructure/wall-approach "e2e;infrastructure;bc;gas")
 # wedge-axis-row: the converse -- a wedge whose axis row sits at r = 1e-8 with roundoff z (the JPL
 # nozzle layout) must stay a wedge: the classifier's inner node must be clearly off the axis
 # (r > 1e-3 r_max). Proven RED on the first classifier (JPL 3-solver centreline Mach 2.10 -> 2.45).
