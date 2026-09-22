@@ -30,6 +30,7 @@ module IGLOO_data_block
     real(R8), dimension(:,:,:,:), allocatable :: dl      !> (3,1:Nx,1:Ny,1:Nz) edge lengths
     real(R8), dimension(:,:,:),   allocatable :: dlmin
     real(R8), dimension(:,:,:,:), allocatable :: subVol  !> sub-octant volumes; allocated only when ord2=true.
+    real(R8), dimension(:,:,:),   allocatable :: dualW   !> (1:Nx+1,1:Ny+1,1:Nz+1|1) octant volumes assembled per dual cell; ord2 only.
     real(R8), dimension(:,:,:),   allocatable :: cellVol  !> (Nx,Ny,Nz) full cell volume [m^3]
     real(R8) :: bbox(3,2) = reshape([-huge(1._R8),-huge(1._R8),-huge(1._R8), &
                                       huge(1._R8), huge(1._R8), huge(1._R8)],[3,2]) !> (:,1)=min (:,2)=max over node
@@ -39,6 +40,7 @@ module IGLOO_data_block
     procedure, pass(self), public :: compute_geometry
     procedure, pass(self), public :: precomputeMetric
     procedure, pass(self), public :: precomputeDualMetric
+    procedure, pass(self), public :: precomputeDualWeights
     procedure, pass(self), public :: freeBlock
     procedure, pass(self), public :: getVertices
     procedure, pass(self), public :: computeVolume
@@ -101,6 +103,7 @@ contains
     if (allocated(self%dl)) deallocate(self%dl)
     if (allocated(self%dlmin)) deallocate(self%dlmin)
     if (allocated(self%subVol)) deallocate(self%subVol)
+    if (allocated(self%dualW)) deallocate(self%dualW)
     if (allocated(self%cellVol)) deallocate(self%cellVol)
 
   end subroutine freeBlock
@@ -174,8 +177,8 @@ contains
 
   end subroutine allocateEUL
 
-  !> End-of-solve source finalization: under ord2 the gasblock-shape accumulators are reduced
-  !  to geoblock cells by sub-octant volume weighting; then the field is mollified.
+  !> End-of-solve source finalization: under ord2 the dual-shape accumulators are redistributed
+  !  to geoblock cells by the assembled octant weights (conservative); then the field is mollified.
   subroutine finalizeSRC(self, geoblock)
     use IGLOO_variables, only: toll, ord2, mesh2D, nm, mollifyPasses
     implicit none
@@ -183,7 +186,7 @@ contains
     type(obj_block),        intent(in)    :: geoblock
     integer  :: i, j, k, gi, gj, gk, da, db, dc, oct, gNx, gNy, gNz
     integer  :: lo_i, hi_i, lo_j, hi_j, lo_k, hi_k
-    real(R8) :: v, sumVol
+    real(R8) :: w
     real(R8) :: accMass(nm), accMom(3), accEn
     real(R8), allocatable :: sourceMass_geo(:,:,:,:)
     real(R8), allocatable :: sourceMom_geo(:,:,:,:)
@@ -200,7 +203,6 @@ contains
       lo_k = lbound(self%sourceMass, 4); hi_k = ubound(self%sourceMass, 4)
 
       do k = 1, gNz; do j = 1, gNy; do i = 1, gNx
-        sumVol  = 0._R8
         accMass = 0._R8;  accMom = 0._R8;  accEn = 0._R8
         do dc = 0, 1; do db = 0, 1; do da = 0, 1
           oct = 1 + da + 2*db + 4*dc
@@ -210,22 +212,18 @@ contains
           if (gi >= lo_i .and. gi <= hi_i .and. &
               gj >= lo_j .and. gj <= hi_j .and. &
               gk >= lo_k .and. gk <= hi_k) then
-            v = geoblock%subVol(oct, i, j, k)
-            accMass = accMass + v * self%sourceMass(:, gi, gj, gk)
-            accMom  = accMom  + v * self%sourceMom(:,  gi, gj, gk)
-            accEn   = accEn   + v * self%sourceEn(     gi, gj, gk)
-            sumVol  = sumVol  + v
+            !> share of dual cell (gi,gj,gk) owned by this octant: partition of unity over the geo cells touching it
+            if (geoblock%dualW(gi, gj, gk) > toll) then
+              w = geoblock%subVol(oct, i, j, k) / geoblock%dualW(gi, gj, gk)
+              accMass = accMass + w * self%sourceMass(:, gi, gj, gk)
+              accMom  = accMom  + w * self%sourceMom(:,  gi, gj, gk)
+              accEn   = accEn   + w * self%sourceEn(     gi, gj, gk)
+            endif
           endif
         enddo; enddo; enddo
-        if (sumVol > toll) then
-          sourceMass_geo(:, i, j, k) = accMass / sumVol
-          sourceMom_geo (:, i, j, k) = accMom  / sumVol
-          sourceEn_geo     (i, j, k) = accEn   / sumVol
-        else
-          sourceMass_geo(:, i, j, k) = 0._R8
-          sourceMom_geo (:, i, j, k) = 0._R8
-          sourceEn_geo     (i, j, k) = 0._R8
-        endif
+        sourceMass_geo(:, i, j, k) = accMass
+        sourceMom_geo (:, i, j, k) = accMom
+        sourceEn_geo     (i, j, k) = accEn
       enddo; enddo; enddo
 
       call move_alloc(sourceMass_geo, self%sourceMass)
@@ -894,6 +892,28 @@ contains
     endif
 
   end subroutine compute_geometry
+
+
+  !> Assembled dual weight: the sub-octant volumes of every geo cell touching dual cell d
+  !  (2D: both z-octants land on k = 1). Partition of unity for finalizeSRC.
+  pure subroutine precomputeDualWeights(self)
+    use IGLOO_variables, only: ord2, mesh2D
+    implicit none
+    class(obj_block), intent(inout) :: self
+    integer :: i, j, k, da, db, dc, oct, gk, nk
+
+    if (.not. ord2) return
+    nk = merge(1, self%Nz + 1, mesh2D)
+    if (.not. allocated(self%dualW)) allocate(self%dualW(1:self%Nx+1, 1:self%Ny+1, 1:nk))
+    self%dualW = 0._R8
+    do k = 1, self%Nz; do j = 1, self%Ny; do i = 1, self%Nx
+      do dc = 0, 1; do db = 0, 1; do da = 0, 1
+        oct = 1 + da + 2*db + 4*dc
+        gk  = merge(1, k + dc, mesh2D)
+        self%dualW(i+da, j+db, gk) = self%dualW(i+da, j+db, gk) + self%subVol(oct, i, j, k)
+      enddo; enddo; enddo
+    enddo; enddo; enddo
+  end subroutine precomputeDualWeights
 
   !> Cache the full volume of every cell (cellVol) for the mollifier.
   pure subroutine precomputeMetric(self)

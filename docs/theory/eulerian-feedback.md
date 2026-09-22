@@ -65,6 +65,25 @@ the drag reaction only.  The correction form depends on the model:
 gas dual mesh (`igas` indices) and reduced to geoblock shape by
 `obj_sourceblock%finalize` after all particles have been processed.
 
+The reduction is **conservative**, which matters because the source fields are extensive
+rates (kg/s, N, W), not densities. Each geo cell $c$ collects, from every dual cell $d$ its
+octants touch,
+
+$$
+S_\mathrm{geo}(c) \;=\; \sum_\mathrm{oct} \frac{V_\mathrm{oct}(c)}{W(d)}\, S_\mathrm{dual}(d),
+\qquad
+W(d) \;=\; \sum_{\text{(cell, octant) touching } d} V_\mathrm{oct}
+$$
+
+so the weights of each dual cell form a partition of unity over the geo cells that share
+it, and $\sum_c S_\mathrm{geo} = \sum_d S_\mathrm{dual}$ **exactly, on any mesh**. $W$ is
+assembled once per block at setup (`precomputeDualWeights`). Dividing instead by the cell's
+own octant sum would be a volume *average*: correct for an interior dual cell, but it hands
+a boundary dual row on with weight ½ (face), ¼ (edge) or ⅛ (corner) on a Cartesian mesh —
+i.e. it discards most of the deposit exactly where an injected spray puts it. Note the
+assembled weight is used rather than the clipped physical dual volume: a conservation
+identity must not be routed through an approximate geometry.
+
 ---
 
 ## Euler fields

@@ -134,6 +134,7 @@ contains
       endif
       allocate(blk%center(3,1:blk%Nx,1:blk%Ny,1:blk%Nz))
       call blk%compute_geometry
+      call blk%precomputeDualWeights
       !> Cache the FV metric consumed by the diffusion mollifier.
       call blk%precomputeMetric
 

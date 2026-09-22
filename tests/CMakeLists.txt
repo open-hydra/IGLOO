@@ -6,10 +6,10 @@
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ (e2e)
-#   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ datum-abs/ tc-hexadecane/ mhb98-water/ (e2e)
+#   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5}
 #   repeatability/      two-sweep gates (twosweep driver): 8 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
@@ -123,6 +123,14 @@ igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;
 # gas-order 2 with nothing reading the field) -- so this is its only coverage; the 2D cases in
 # it are the regression half.
 igloo_unit_test(test_dual_clip          infrastructure/dual_clip          "unit;infrastructure;euler;t1")
+# O28: the ord2 source reduction volume-AVERAGED extensive rates, so every boundary dual row
+# leaked most of its deposit (1/2 on a face row, 1/4 edge, 1/8 corner on a uniform Cartesian
+# mesh; the octant inequality elsewhere) and nothing printed a conservation total. Asserts
+# sum_geo == sum_dual on uniform 3D/2D, on single-cell deposits at interior/face/edge/corner,
+# and on a CURVILINEAR mesh -- the last is what separates "conserves on a nice mesh" from
+# "conserves by construction". Also pins the partition-of-unity invariant sum(dualW) ==
+# sum(subVol). RED on the pre-fix tree: 0.4000 / 0.2963 / 0.6000 / 0.4444 and 1, 1/2, 1/4, 1/8.
+igloo_unit_test(test_source_reduction  infrastructure/source_reduction   "unit;infrastructure;euler;t1")
 
 # ---------- two-sweep repeatability harness -----------------------------------
 # Drives one pinned population through solve() TWICE. Every other case in the suite is
@@ -305,6 +313,14 @@ igloo_e2e_case(tc-hexadecane evaporation/tc-hexadecane "e2e;evaporation;val;tc")
 # factor: E3 reads 1.0 (ratio is 1/npdot ~ 2e-8 of the truth), u_p = 5.0e8 m/s, T_p = 1.5e10 K.
 # Every oracle quantity is bit-stable at OMP 1/2/5 -- each parcel rides its own (j,k) column.
 igloo_e2e_case(tc-box-euler evaporation/tc-box-euler "e2e;evaporation;euler")
+# O28 end-to-end: the ord2 source reduction must CONSERVE. tc-box's case at gas-order = 2 with
+# mollify = off and four DB parcels placed INSIDE the j = 1 boundary dual row -- the row the
+# pre-fix volume-average handed on at 1/2. Telescoping oracle: sum(wdot) over source.tec vs
+# sum npdot*(m_inject - m_exit) from the trajectory rows, which never reads the field it
+# checks. RED on the pre-O28 binary: resid 5.015e-01. GREEN: 3.779e-06, OMP-invariant.
+# This is also the ONLY gate on the wiring -- test_source_reduction calls
+# precomputeDualWeights itself, so it cannot see a missing call in allocate_blocks.
+igloo_e2e_case(tc-box-ord2-row evaporation/tc-box-ord2-row "e2e;evaporation;gas")
 
 # ---------- combustion (M1: Beckstead d^n burn law) -----------------------------
 igloo_unit_test(test_combustion combustion "unit;combustion;m1;t4")
