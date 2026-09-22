@@ -77,3 +77,7 @@ tests/FINDINGS.md
 # Assistant guidance, not project documentation (was in .git/info/exclude; here so the
 # rule is shared rather than per-clone).
 CLAUDE.md
+
+# Claude Code working files (local only)
+.claude/
+.claude-context/
