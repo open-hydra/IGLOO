@@ -27,9 +27,20 @@ is the single-scalar-Lv limit -- a psat curve DECOUPLED from the sink Lv (Tier 2
 closes it (0-D: plateau 492.7, heat-frac 0.538). See INFO.md / plan-bucket/tc-hexadecane-tier2.
 """
 import math
+import os
+import re
 import sys
 
-TRAJ = "OUTPUT/trajectories-A.dat"
+TRAJ   = "OUTPUT/trajectories-A.dat"
+SRC    = "OUTPUT/source.tec"
+OUTLOC = "OUTPUT/outloc-A.dat"
+LOG    = "run_out.txt"
+NPART  = 25
+#> Mass-balance floor measured at 2.941e-7 and THREAD-INVARIANT (identical at OMP 1/2/5);
+#> it is the E13.6 source print, not the physics. RED -- `consumed` removed from the burnout
+#> branch -- was measured at 2.048e-4. This tolerance sits 34x above the floor and 20x below
+#> that signature. Do not loosen it past ~5e-5 or the gate stops seeing the dropped remnant.
+MASS_TOL = 1.0e-5
 
 # ---- known test inputs (SI); NOT read from production ----
 RU, PATM = 8314.46, 101325.0
@@ -131,6 +142,61 @@ LOSS_MIN  = 0.5       # only gate drops that actually evaporate (>=50% d^2 loss)
 N_GOOD    = 20
 
 
+def _log_count(pat):
+    if not os.path.exists(LOG):
+        return -1
+    return sum(1 for l in open(LOG, errors="replace") if pat in l)
+
+
+def check_exit_paths():
+    """H1/H2 -- how the parcels LEAVE. Before the rhsEvaporation finite scrub all 25 ended
+    on `non-finite state ==> reverting to last good step` at m/m0 = 1.36e-3: the RHS made a
+    NaN out of a negative Newton trial mass (d = (6m/pi/rho)^(1/3)) and the poisoned state
+    only surfaced in solout. With the scrub the bad trial is a 1e30 slope, the step is
+    rejected, and the drop reaches mBurnTol -- a clean burnout through the normal branch.
+    H3 (below) is what pins the mass; these two pin the PATH."""
+    n_nan  = _log_count("non-finite state")
+    n_err  = _log_count("Run_ODESolver err=")
+    n_exit = sum(1 for l in open(OUTLOC).read().splitlines()[2:] if len(l.split()) == 9) \
+             if os.path.exists(OUTLOC) else -1
+    checks = [
+        (f"H1 no parcel ends on a non-finite state (was {NPART})", n_nan == 0),
+        (f"H2a no parcel ends on a solver failure",                n_err == 0),
+        (f"H2b all {NPART} parcels wrote an exit row",             n_exit == NPART),
+    ]
+    fail = 0
+    for name, ok in checks:
+        print(f"[{'PASS' if ok else 'FAIL'}] {name}")
+        fail += (not ok)
+    return fail
+
+
+def check_mass_balance():
+    """H3 -- the consumption contract: a drop that burns out inside the domain hands its
+    whole stream to the gas (computeSource zeroes massOut when `consumed`), so the summed
+    source must equal the injected mass flow. Guards the DECISION, not the scrub: RED is a
+    build with `consumed` removed from the burnout branch (measured resid 3.6e-3)."""
+    if not (os.path.exists(SRC) and os.path.exists(OUTLOC)):
+        print(f"[FAIL] H3 {SRC} or {OUTLOC} missing -- source output off?")
+        return 1
+    lines = open(SRC).read().splitlines()
+    zone = next((l for l in lines if l.strip().startswith("ZONE")), None)
+    if zone is None:
+        print(f"[FAIL] H3 no ZONE header in {SRC}")
+        return 1
+    I, J, K = (int(re.search(rf"{c}=(\d+)", zone).group(1)) for c in "IJK")
+    nnod, ncel = I * J * K, (I - 1) * (J - 1) * (K - 1)
+    vals = " ".join(lines[lines.index(zone) + 1:]).split()
+    src = sum(float(v) for v in vals[3 * nnod:3 * nnod + ncel])
+    inj = sum(float(c[6]) for c in (l.split() for l in open(OUTLOC).read().splitlines()[2:])
+              if len(c) == 9)
+    resid = abs(src - inj) / inj if inj > 0.0 else 1.0
+    ok = inj > 0.0 and resid <= MASS_TOL
+    print(f"[{'PASS' if ok else 'FAIL'}] H3 injected mass reaches the gas: "
+          f"sum(wdot)={src:.6e} vs injected={inj:.6e}, resid={resid:.3e} <= {MASS_TOL:.0e}")
+    return 0 if ok else 1
+
+
 def main():
     try:
         parts = load_trajectories(TRAJ)
@@ -171,11 +237,15 @@ def main():
 
     print(f"\ndrops gated: {n_good} (need >= {N_GOOD}); rate violations: {n_viol}; "
           f"no-swelling: {n_noswell}")
-    if n_good >= N_GOOD and n_viol == 0 and n_noswell == 0:
+    print("\nexit-path and mass-balance gates (O30):")
+    extra = check_exit_paths() + check_mass_balance()
+
+    if n_good >= N_GOOD and n_viol == 0 and n_noswell == 0 and extra == 0:
         print("\n[PASS] IGLOO's variable-density TC evaporation reproduces the mass-rate law "
-              "and the thermal swelling (A20/A21 exercised).")
+              "and the thermal swelling (A20/A21 exercised), and every drop burns out cleanly.")
         return 0
-    print(f"\n[FAIL] {n_viol} rate deviation(s) / {n_noswell} non-swelling drop(s).")
+    print(f"\n[FAIL] {n_viol} rate deviation(s) / {n_noswell} non-swelling drop(s) / "
+          f"{extra} exit-path or mass-balance violation(s).")
     return 1
 
 

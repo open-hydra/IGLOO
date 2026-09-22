@@ -411,6 +411,8 @@ contains
           ' time=',part%time,' => marking gone'
         doLoop    = .false.
         part%gone = .true.
+        !> Consumption models hand the remnant to the gas, as on the non-finite exit below.
+        if (mod_model==2 .or. mod_model==5) consumed = .true.
         return
       endif
       !> Burnout: the droplet was consumed on a still-good state; falls through to the normal finalize.

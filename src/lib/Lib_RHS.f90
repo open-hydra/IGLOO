@@ -459,6 +459,7 @@ contains
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
     use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor
     use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
     real(R8), intent(in)    :: time
@@ -523,6 +524,11 @@ contains
     if (srcBodyForce) then
       if (.not. eulerSwitch) F(neq-1) = m              ! J (skipped when euler reuses F(14))
       F(neq)   = m * dot_product(bodyAccel, Z(4:6))    ! W
+    endif
+
+    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
+    if (any(.not. ieee_is_finite(F))) then
+      where (.not. ieee_is_finite(F)) F = 1.e30_R8
     endif
 
   end subroutine rhsEvaporation

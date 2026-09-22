@@ -9,7 +9,7 @@
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ datum-abs/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5}
 #   repeatability/      two-sweep gates (twosweep driver): 8 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
@@ -468,6 +468,15 @@ igloo_e2e_case(bc-center-2grp infrastructure/bc-center-2grp "e2e;infrastructure;
 # "..." failed!`, `Defaulting to 2nd order`, the E+S default, euler1.tec written; a/b/c1/c2
 # FAIL, d PASS); GREEN at 18fa207 (strip_inline_comment blanks the line before the `=` test).
 igloo_e2e_case(ini-comment-eq infrastructure/ini-comment-eq "e2e;infrastructure;ini")
+# O30 step 4b: a parcel deleted because the ODE solver gave up (`err < 0`, Lib_Integration)
+# must still hand its remaining mass to the gas for consumption models 2/5, as the
+# non-finite exit beside it already does. NO other fixture reaches that branch -- after the
+# rhsEvaporation scrub even tc-hexadecane burns out cleanly -- so this is its only coverage.
+# tc-hexadecane's case with the ODE tolerances at 1e-30, unreachable in double precision:
+# SDIRK4 fails on the first step of every parcel, so all 25 die at injection carrying their
+# FULL mass and the source total is all-or-nothing. RED on a tree without step 4b:
+# sum(wdot) = 0, resid 1.0; GREEN: the whole injected stream, resid 2.9e-7.
+igloo_e2e_case(solver-fail-consumed infrastructure/solver-fail-consumed "e2e;infrastructure;evaporation")
 
 # ---------- mpi (registered only in a USE_MPI build) ----------------------------
 # See mpi/INFO.md. Each dir symlinks its parent case's INPUT/, input.ini and check.py, so the fixture

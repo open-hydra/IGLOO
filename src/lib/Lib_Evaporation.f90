@@ -18,6 +18,8 @@ module IGLOO_Lib_Evaporation
 
     real(R8), parameter :: Ru   = 8314.46_R8  ! universal gas constant [J/(kmol·K)]
     real(R8), parameter :: Patm = 101325._R8  ! atmospheric pressure [Pa]
+    !> Cap on the surface vapour mole fraction: keeps 1 - Ys finite in the boiling clamp (all gas-side models).
+    real(R8), parameter, public :: xsCap = 1.e-12_R8
 
 contains
 
@@ -197,11 +199,11 @@ contains
         !> Saturation pressure (Clausius-Clapeyron)
         psat = psat_CC(Tp, ep(iLvMvOverRu), ep(iinvTboil))
 
-        !> Surface vapor fraction
+        !> Surface vapor fraction, capped below 1 so the boiling clamp keeps BM finite
         if (psat >= p) then
-            Xs = 1._R8  ! boiling regime: clamp
+            Xs = 1._R8 - xsCap  ! boiling regime: clamp
         else
-            Xs = psat / p
+            Xs = min(psat / p, 1._R8 - xsCap)
         endif
         Ys = molar2mass(Xs, ep(iMv), Mg)
 
@@ -440,8 +442,8 @@ contains
             cpv_eff = cpg  ! approximation (as ASM)
         endif
 
-        !> Molar (partial-pressure) frame; cap Xs below 1 so the boiling clamp stays finite
-        Xs   = min(mass2molar(Ys, Mv, Mg), 1._R8 - 1.e-12_R8)
+        !> Molar (partial-pressure) frame; same cap as the shared clamp
+        Xs   = min(mass2molar(Ys, Mv, Mg), 1._R8 - xsCap)
         Xinf = mass2molar(Yinf, Mv, Mg)
         Minf = Xinf*Mv + (1._R8 - Xinf)*Mg
         rhs0 = Mv/Minf * log((1._R8 - Xinf)/(1._R8 - Xs))  ! = -p_cr·ln[(p_cr-p_vs)/(p_cr-Yinf)]

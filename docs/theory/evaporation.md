@@ -38,8 +38,14 @@ B_M = \frac{Y_s - Y_\infty}{1 - Y_s} \quad \text{[Spalding mass transfer number]
 $$
 
 If $Y_s \le Y_\infty$ or $B_M \le 0$, `evaporation` returns immediately with
-$\dot{m} = 0$.  The $\min(\cdot, 1)$ on $X_s$ is the boiling branch (`boiling = clamp`):
-above the boiling point the surface is saturated vapour.  Species properties $M_v, L_v,
+$\dot{m} = 0$.  The cap on $X_s$ is the boiling branch (`boiling = clamp`): above the
+boiling point the surface is saturated vapour, and $X_s$ is held at
+$1 - \varepsilon$ with $\varepsilon = 10^{-12}$ rather than at 1, so that $1 - Y_s$ stays
+non-zero and $B_M$ finite.  At $X_s = 1$ exactly, $Y_s = 1$ and $B_M = +\infty$, which
+propagates to $\dot{m} = -\infty$ (CEM, CEM-B), $\dot{m} = \mathrm{NaN}$ (ASM) or,
+through the Langmuir-Knudsen iteration, to $\dot{m} = 0$.  The same constant caps $X_s$ in
+the Tonini-Cossali model, so every gas-side model shares one clamp.  The cap is a numerical
+floor on the clamp, not a physical model of boiling: `boiling = ZGR` is that.  Species properties $M_v, L_v,
 T_\mathrm{boil}, c_{p,v}, \mathrm{Le}, Y_\infty, \alpha_e$ are read from the array
 `ep(nep)` assembled from `INPUT/properties.dat` and the `[IGLOO-Properties]` overrides
 in `input.ini`.
@@ -194,7 +200,8 @@ $$
 
 which reduces to the conduction limit $\pi\,d\,k_g\,\mathrm{Nu}\,(T_g - T_p)$ as
 $\chi \to 0$.  As for ASM, the latent sink is added by the state assembly and $X_s$ is
-capped just below 1 so the boiling clamp stays finite.
+capped at $1 - 10^{-12}$ -- the same shared constant as the clamp above -- so the boiling
+regime stays finite.
 
 ---
 

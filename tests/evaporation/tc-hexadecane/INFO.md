@@ -90,6 +90,47 @@ concrete demonstrator that justifies that feature; the plan is in
 `plan-bucket/tc-hexadecane-tier2-decoupled-psat.md`. The tight gate stays IGLOO-vs-its-own-TC
 kernel; the paper curves are a non-gating overlay.
 
+## Exit-path and mass-balance gates (O30, added 2026-09-22)
+
+`check.py` gates three more things after the physics rows. They are about **how the drops
+leave**, not about the rate law.
+
+Until the boiling-clamp work all 25 parcels ended on
+
+    [WARNING] Particle   N non-finite state ==> reverting to last good step, marking gone
+              last good m/m0 = 1.357E-03  (burnout fires at m = 1.000E-15 kg)
+
+— `mBurnTol` was never reached. The NaN was manufactured **inside `rhsEvaporation`**, not by
+the boiling clamp: on a Newton trial state with `m < 0` the RHS evaluates
+`d = (6m/(pi rho))^(1/3)`, which is NaN, and that poisons `Re`, `mdot` and `F(7:8)`. Unlike
+the other three RHS, `rhsEvaporation` carried no finite scrub, so the Inf/NaN slope rode
+until `solout` caught the state. This case was the suite's only instance.
+
+With the scrub the bad trial becomes a `1e30` slope, the step is rejected, `deltat` shrinks,
+and the drop reaches `mBurnTol` — a **clean burnout** through the normal branch. (The plan
+predicted the parcels would leave through the solver-failure exit instead; they do not. That
+branch is gated separately in [`infrastructure/solver-fail-consumed`](../../infrastructure/solver-fail-consumed/INFO.md),
+which had to force it with an unreachable ODE tolerance because nothing else reaches it.)
+
+| gate | assertion | RED (pre-O30) | GREEN |
+|---|---|---|---|
+| H1 | no parcel ends on a non-finite state | 25 | 0 |
+| H2a | no parcel ends on a solver failure | 0 | 0 |
+| H2b | all 25 parcels wrote an exit row | 25 | 25 |
+| H3 | `Σ wdot` = `Σ npdot·m_inj` within `1e-5` | 2.941e-7 (passes) | 2.941e-7 |
+
+The exit moved from `x = 0.070520` to `x = 0.070854` — the drops now evaporate a little
+further before they are removed — so the last trajectory row, the `outloc` row and the
+burnout cells of `source.tec` all changed. The physics rows are read well before burnout and
+are unaffected (25 drops gated, 0 rate violations, 0 non-swelling, before and after).
+
+**H3 guards the consumption contract, not the scrub.** Both the old non-finite exit and the
+new burnout set `consumed`, so H3 reads the same on either side of the fix — H1 is the fix's
+witness. H3's own RED was measured on a throwaway build with `consumed` removed from the
+burnout branch: resid **2.048e-4** against a floor of **2.941e-7** that is identical at
+`OMP_NUM_THREADS` 1, 2 and 5. The `1e-5` tolerance therefore sits 34x above the floor and 20x
+below the signature; **do not loosen it past ~5e-5** or it stops seeing the dropped remnant.
+
 ## Tier-2 (spray-level) rejection
 As for the other evaporation/breakup cases: dense-spray SMD / penetration is out of scope
 (steady one-way carrier gas, no entrainment, no atomizing nozzle).

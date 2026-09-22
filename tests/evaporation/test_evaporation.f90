@@ -10,14 +10,20 @@ program test_evaporation
     !        Sh=2, mdot = -2 pi d (kg/cpg) ln(1+BM)/Le
     !   EV2  CEM convective ratio: mdot(Re)/mdot(0) = (2+0.6 sqrt(Re) Sc^(1/3))/2
     !   EV3  CEM-B at Re=0: 1/3-rule film chain (Tf, rho_f, k_f, Dv_f), Sh=2
+    !   EV4  CEM in the BOILING clamp (Tp=420 K > 404 K): mdot finite and equal to the
+    !        closed form at Xs = 1-xsCap.  Pre-clamp the model returned -Inf.
+    !   EV5  CEM-B boiling: EV4 x the 1/3-rule film factor (Tf/Tg)^0.7.  Pre-clamp -Inf.
+    !   EV6  ASM boiling: identical to CEM at Re=0 (Sh*=2), qd finite.  Pre-clamp NaN.
+    !   EV7  CEM+LK boiling: finite and negative.  Pre-clamp exactly 0 (Picard fallback).
     !
     ! Water-like fuel, hot air. ep layout: [Mv,Lv,cpv,Le,Yinf,LvMv/Ru,1/Tboil].
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
-    use IGLOO_Lib_Evaporation, only: evaporation, nep
+    use IGLOO_Lib_Evaporation, only: evaporation, nep, xsCap
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
     use verif_dump,   only: dump_curve
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
 
     real(R8), parameter :: PI = 4.0_R8*atan(1.0_R8)
@@ -33,7 +39,9 @@ program test_evaporation
     !> ep(8:10) = Phase-0 placeholders (alphaE, kLiq, muLiq) — unused by models 1-4
     real(R8), parameter :: ep(nep) = [Mv, Lv, cpv, Le, Yinf, &
                                       Lv*Mv/Ru, 1._R8/Tboil, 1._R8, 0._R8, 0._R8]
-    integer, parameter :: CEM = 2, CEMB = 3
+    integer, parameter :: CEM = 2, CEMB = 3, ASM = 4
+    !> Boiling corner: psat(420 K) = 4.374e5 Pa >= p = rho_g*Rg*Tg = 2.7552e5 Pa (boiling from 404.0 K).
+    real(R8), parameter :: Tp_b = 420._R8
 
     integer :: exit_code
     logical :: ok_all
@@ -44,6 +52,10 @@ program test_evaporation
     call run_EV1(ok_all)
     call run_EV2(ok_all)
     call run_EV3(ok_all)
+    call run_EV4(ok_all)
+    call run_EV5(ok_all)
+    call run_EV6(ok_all)
+    call run_EV7(ok_all)
 
     call dump_EV2()
 
@@ -68,6 +80,20 @@ contains
         Ys   = Xs*Mv/(Xs*Mv + (1._R8-Xs)*Mg)
         BM   = (Ys-Yinf)/(1._R8-Ys)
     end subroutine bm_chain
+
+    !> Same chain at an arbitrary drop temperature, with the production cap on Xs.
+    pure subroutine bm_chain_at(TpV, cpg, p, BM)
+        real(R8), intent(in)  :: TpV
+        real(R8), intent(out) :: cpg, p, BM
+        real(R8) :: psat, Xs, Ys, Mg
+        cpg  = gam*Rg/(gam-1._R8)
+        p    = rho_g*Rg*Tg
+        Mg   = Ru/Rg
+        psat = Patm*exp(-ep(6)*(1._R8/TpV - ep(7)))
+        Xs   = min(psat/p, 1._R8-xsCap)
+        Ys   = Xs*Mv/(Xs*Mv + (1._R8-Xs)*Mg)
+        BM   = (Ys-Yinf)/(1._R8-Ys)
+    end subroutine bm_chain_at
 
     subroutine run_EV1(ok)
         logical, intent(inout) :: ok
@@ -119,6 +145,103 @@ contains
         ok = ok .and. pass
         call append_row('EV3_cemb_re0', 'mdot', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_EV3
+
+    !> EV4: the boiling clamp must stay finite. psat >= p forces Xs to the cap, so
+    !> BM = Ys/(1-Ys) is large but finite; uncapped it was +Inf and CEM returned -Inf.
+    subroutine run_EV4(ok)
+        logical, intent(inout) :: ok
+        real(R8) :: mdot, qd, cpg, p, BM, mref, err, tol
+        logical  :: ovr, pass
+        call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tp_b, dp0, 0._R8, 1._R8, &
+                         CEM, 0, ep, mdot, qd, ovr)
+        call bm_chain_at(Tp_b, cpg, p, BM)
+        mref = -2._R8*PI*dp0*(kg/cpg)*log(1._R8+BM)/Le    ! Sh=2, rho*Dv=kg/(cpg*Le)
+        if (ieee_is_finite(mdot)) then
+            err = abs(mdot-mref)/abs(mref)
+        else
+            err = huge(1._R8)                              ! -Inf/NaN: report a finite failure
+        end if
+        tol  = 1.0e-12_R8
+        pass = ieee_is_finite(mdot) .and. (mdot < 0._R8) .and. &
+               assert_lt('EV4 CEM boiling clamp finite', err, tol)
+        ok = ok .and. pass
+        call append_row('EV4_cem_boiling', 'mdot', err, err, 0._R8, 0._R8, tol, pass)
+    end subroutine run_EV4
+
+    !> EV5: the same clamp through CEM-B's 1/3-rule film. rho_f cancels in rho_f*Dv_f,
+    !> so the whole film correction is the factor (Tf/Tg)^0.7 on EV4's rate.
+    subroutine run_EV5(ok)
+        logical, intent(inout) :: ok
+        real(R8) :: mdot, qd, cpg, p, BM, Tf, rho_f, k_f, Dv_f, mref, err, tol
+        logical  :: ovr, pass
+        call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tp_b, dp0, 0._R8, 1._R8, &
+                         CEMB, 0, ep, mdot, qd, ovr)
+        call bm_chain_at(Tp_b, cpg, p, BM)
+        Tf    = Tp_b + (Tg-Tp_b)/3._R8
+        rho_f = rho_g*Tg/Tf
+        k_f   = kg*(Tf/Tg)**0.7_R8
+        Dv_f  = k_f/(rho_f*cpg*Le)
+        mref  = -2._R8*PI*dp0*rho_f*Dv_f*log(1._R8+BM)    ! Sh_f=2 at Re=0
+        if (ieee_is_finite(mdot)) then
+            err = abs(mdot-mref)/abs(mref)
+        else
+            err = huge(1._R8)
+        end if
+        tol  = 1.0e-12_R8
+        pass = ieee_is_finite(mdot) .and. (mdot < 0._R8) .and. &
+               assert_lt('EV5 CEM-B boiling clamp finite', err, tol)
+        ok = ok .and. pass
+        call append_row('EV5_cemb_boiling', 'mdot', err, err, 0._R8, 0._R8, tol, pass)
+    end subroutine run_EV5
+
+    !> EV6: ASM at Re=0 reduces to CEM exactly -- Sh* = 2 + 0/F_M = 2, same Dv, same
+    !> ln(1+BM), same operation order -- so the two rates must agree BIT for bit.
+    !> Uncapped, ASM's F_correction(Inf) = Inf*Inf/Inf made mdot NaN.
+    subroutine run_EV6(ok)
+        logical, intent(inout) :: ok
+        real(R8) :: m_asm, m_cem, qd_asm, qd_cem, err, tol
+        logical  :: ovr_asm, ovr_cem, pass
+        call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tp_b, dp0, 0._R8, 1._R8, &
+                         ASM, 0, ep, m_asm, qd_asm, ovr_asm)
+        call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tp_b, dp0, 0._R8, 1._R8, &
+                         CEM, 0, ep, m_cem, qd_cem, ovr_cem)
+        if (ieee_is_finite(m_asm) .and. ieee_is_finite(m_cem)) then
+            err = abs(m_asm-m_cem)
+        else
+            err = huge(1._R8)
+        end if
+        tol  = 0._R8                                       ! bit equality; assert_lt needs err < tol
+        pass = ieee_is_finite(m_asm) .and. ieee_is_finite(qd_asm) .and. ovr_asm .and. &
+               (m_asm < 0._R8) .and. (m_asm == m_cem)
+        if (pass) then
+            write(*,'(a,es12.5,a)') '  [PASS] EV6 ASM boiling == CEM bitwise : ', m_asm, ''
+        else
+            write(*,'(a,es12.5,a,es12.5)') '  [FAIL] EV6 ASM boiling : mdot=', m_asm, ' vs CEM ', m_cem
+        end if
+        ok = ok .and. pass
+        call append_row('EV6_asm_boiling', 'mdot', err, err, 0._R8, 0._R8, tol, pass)
+    end subroutine run_EV6
+
+    !> EV7: with the Langmuir-Knudsen interface the uncapped -Inf poisoned the Picard
+    !> iteration and it fell back to exactly 0 -- "no evaporation at boiling". Capped,
+    !> the iteration starts from a finite rate. The converged value is reported, not pinned.
+    subroutine run_EV7(ok)
+        logical, intent(inout) :: ok
+        real(R8) :: mdot, qd, err, tol
+        logical  :: ovr, pass
+        call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tp_b, dp0, 0._R8, 1._R8, &
+                         CEM, 1, ep, mdot, qd, ovr)
+        err  = merge(0._R8, huge(1._R8), ieee_is_finite(mdot) .and. (mdot < 0._R8))
+        tol  = 1._R8
+        pass = ieee_is_finite(mdot) .and. (mdot < 0._R8)
+        if (pass) then
+            write(*,'(a,es12.5)') '  [PASS] EV7 CEM+LK boiling finite and negative : mdot=', mdot
+        else
+            write(*,'(a,es12.5)') '  [FAIL] EV7 CEM+LK boiling : mdot=', mdot
+        end if
+        ok = ok .and. pass
+        call append_row('EV7_cem_lk_boiling', 'mdot', err, err, 0._R8, 0._R8, tol, pass)
+    end subroutine run_EV7
 
     !> EV2: CEM convective enhancement mdot(Re)/mdot(0) vs (2+0.6 Re^{1/2} Sc^{1/3})/2,
     !> Re 1e-1..1e3 xlog (16-arg call replicated exactly, incl. 10th arg 1._R8, intf=0)

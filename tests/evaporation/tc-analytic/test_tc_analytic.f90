@@ -81,7 +81,7 @@ contains
         real(R8) :: p, psat, Xs
         p    = rho*Rg*Tgv
         psat = Patm*exp(-(LvV*MvV/Ru)*(1._R8/Tpv - 1._R8/TbV))
-        Xs   = min(psat/p, 1._R8)
+        Xs   = min(psat/p, 1._R8 - 1.e-12_R8)   ! transcribes the production clamp (xsCap)
         YsO  = Xs*MvV/(Xs*MvV + (1._R8-Xs)*Mg)
         Xs_c = min(YsO*Mg/(YsO*Mg + (1._R8-YsO)*MvV), 1._R8 - 1.e-12_R8)
     end subroutine ora_surface
