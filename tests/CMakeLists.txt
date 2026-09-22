@@ -9,7 +9,7 @@
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ datum-abs/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5}
 #   repeatability/      two-sweep gates (twosweep driver): 8 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
@@ -459,6 +459,15 @@ igloo_e2e_case(periodic-y infrastructure/periodic-y "e2e;infrastructure")
 # neither trigger alone exposes both halves. INPUT/ symlinks standard/drag-stokes'.
 # Verified RED at d857aba^ (group 2: 13 particles, 12 of them ID 0) and GREEN at d857aba.
 igloo_e2e_case(bc-center-2grp infrastructure/bc-center-2grp "e2e;infrastructure;pinning")
+# O32 / O19 (2): an `=` inside an in-section `;` comment line must be inert. FiNeR before
+# 18fa207 parsed such a line as an option and DROPPED every option after it in the same
+# section, at exit 0 -- so the gate is drag-stokes's INI plus one comment line, and the
+# oracle is the three [IGLOO-General] keys that follow it (gas-order, print-dcell, out-file).
+# c1 is a POSITIVE witness (` >> Output field: gas coupling source`): an absence-only check
+# would pass on a run that never read the file. RED at gitlink aab8f72 (stderr `ERROR: parse
+# "..." failed!`, `Defaulting to 2nd order`, the E+S default, euler1.tec written; a/b/c1/c2
+# FAIL, d PASS); GREEN at 18fa207 (strip_inline_comment blanks the line before the `=` test).
+igloo_e2e_case(ini-comment-eq infrastructure/ini-comment-eq "e2e;infrastructure;ini")
 
 # ---------- mpi (registered only in a USE_MPI build) ----------------------------
 # See mpi/INFO.md. Each dir symlinks its parent case's INPUT/, input.ini and check.py, so the fixture

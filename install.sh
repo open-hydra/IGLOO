@@ -193,10 +193,19 @@ case "$COMMAND" in
         fi
 
         task "Cloning submodules"
-        # --recursive is required: FiNeR carries six nested submodules of its own.
+        # --recursive is required: the libraries carry nested submodules of their own.
         # Skipped under --master=hydra, which supplies the dependency tree instead.
         if [[ $MASTER_TYPE == "None" ]]; then
           git submodule update --init --recursive
+          # FiNeR 18fa207 untracks its five deps (src/third_party/.gitignore = *) yet its
+          # CMakeLists still add_subdirectory's them: populate from the v2.0.4 gitlinks,
+          # then return to the pin. HEAD is the single source of truth for that pin.
+          if [[ ! -d lib/third_party/FiNeR/src/third_party/PENF ]]; then
+            ( cd lib/third_party/FiNeR && pin=$(git rev-parse HEAD) \
+              && git checkout -q aab8f72 \
+              && git submodule update --init --recursive \
+              && git checkout -q "$pin" )
+          fi
         fi
 
         task "Configuring and building $project"
