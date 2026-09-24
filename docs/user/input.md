@@ -143,8 +143,8 @@ Selects physical model closures.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `drag` | string | — | Drag law: one of the 13 correlations in [Drag](../theory/drag.md) (`Stokes`, `Schiller-Naumann`, `Morsi-Alexander`, `Henderson`, `Crowe`, ...) |
-| `heat` | string | — | Nusselt correlation: `Ranz-Marshall`, `Kavanau-Drake`, `JAXA1`–`JAXA4` |
+| `drag` | string | — | Drag law: one of the 13 correlations in [Drag](../theory/drag.md) (`Stokes`, `Schiller-Naumann`, `Morsi-Alexander`, `Henderson`, `Crowe`, ...), or `NoDrag` (C_d = 0, no momentum exchange) |
+| `heat` | string | — | Nusselt correlation: `Ranz-Marshall`, `Kavanau-Drake`, `JAXA1`–`JAXA4`, or `NoHeat` (Nu = 0, no convective heat exchange) |
 | `evaporation` | string | absent | Evaporation model (`d2-law`, `CEM`, `CEM-B`, `ASM`, `TC`); when present, enables phase change |
 | `interface` | string | `VLE` | Surface state: `VLE` equilibrium or `LK` Langmuir–Knudsen non-equilibrium |
 | `blowing` | string | `none` | Stefan-blowing reduction of the convective heat: `none` or `LK` |

@@ -41,6 +41,8 @@ contains
       dragSelect = 12
     case ('Hermsen')
       dragSelect = 13
+    case ('NoDrag')
+      dragSelect = 14
     case default
       write(*,*)
       write(*,*)
@@ -59,6 +61,7 @@ contains
       write(*,*) "- Henderson "
       write(*,*) "- Crowe "
       write(*,*) "- Hermsen "
+      write(*,*) "- NoDrag "
       write(*,*)
       error stop 'IGLOO: unknown drag model'
     end select
@@ -100,6 +103,8 @@ contains
       Cd = drag_Crowe(Re,Ma,G,Tr)
     case (13)
       Cd = drag_Hermsen(Re,Ma,G,Tr)
+    case (14) !> NoDrag: no momentum exchange
+      Cd = 0._R8
     end select
 
   end function drag

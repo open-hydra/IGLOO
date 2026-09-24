@@ -176,6 +176,26 @@ dropped and $\mathrm{Nu} = 2$ were used, the predicted $T(x)$ exponent would be
   {% include "vv/images/conv-nu.svg" ignore missing %}
 </figure>
 
+### no-exchange
+
+Verifies the `drag = NoDrag` ($C_d = 0$) and `heat = NoHeat` ($\mathrm{Nu} = 0$) switches.
+The inlet injects with **both** slips — $1\,\mathrm{m/s}$ against the gas's $10\,\mathrm{m/s}$
+and $300\,\mathrm{K}$ against $600\,\mathrm{K}$ — so any drag or Nusselt law would move the
+parcel within the first cells.  With both switched off the parcel equations are
+$\mathrm{d}\mathbf{v}/\mathrm{d}t = 0$, $\mathrm{d}T_p/\mathrm{d}t = 0$, and the state is
+**exactly** the injection state: $0\times$ finite $= 0$, so no integrator stage moves it.
+
+| Witness | Requirement |
+|---------|-------------|
+| Every trajectory row and exit | $(u, v, w, T)$ = $(1, 0, 0, 300)$ to the last F12.6 digit |
+| `source.tec`, every cell | `wdot`, `Fx`, `Fy`, `Fz`, `E` exactly $0.0$ (exchange from the full-precision state) |
+| Non-vacuity | $\ge 20$ parcels, $\ge 60$ rows each, exit at $x = 0.15$ |
+
+**Result:** 25/25 parcels, 1500/1500 cells exactly zero in all five source fields.  A binary
+without the two tokens refuses the case at setup (exit 128); each switch alone fails the
+oracle on the quantity it leaves on (Stokes drag: $u \to 9.999961$; Ranz–Marshall:
+$T \to 600$).
+
 ### d2law-line
 
 The Tier-V companion to `d2law`: instead of integrating the kernel along

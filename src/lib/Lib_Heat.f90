@@ -27,6 +27,8 @@ contains
       heatSelect = 5
     case ('Kavanau-Drake')
       heatSelect = 6
+    case ('NoHeat')
+      heatSelect = 7
     case default
       write(*,*)
       write(*,*)
@@ -38,6 +40,7 @@ contains
       write(*,*) "- JAXA4 "
       write(*,*) "- Ranz-Marshall "
       write(*,*) "- Kavanau-Drake "
+      write(*,*) "- NoHeat "
       write(*,*)
       error stop 'IGLOO: unknown heat model'
     end select
@@ -65,6 +68,8 @@ contains
       Nu = heat_Ranz_Marshall(Re,Pr)
     case (6)
       Nu = heat_Kavanau_Drake(Re,Pr,Ma)
+    case (7) !> NoHeat: no convective heat exchange
+      Nu = 0._R8
     end select
 
   end function heat

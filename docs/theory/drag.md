@@ -9,7 +9,8 @@ $$
 where $d$ is the particle diameter, $\mathrm{Re} = \rho_g\,|\mathbf{v}_g - \mathbf{v}_p|\,d/\mu_g$
 is the particle Reynolds number, and $C_d(\mathrm{Re}, \mathrm{Ma}, \gamma, T_r)$ is selected
 by `assign_drag` in `Lib_Drag.f90`.  The keyword string from `[IGLOO-Models] drag` in
-`input.ini` maps directly to one of the 13 correlations below.  The compressible
+`input.ini` maps directly to one of the 13 correlations below, or to the `NoDrag` switch
+that turns the momentum exchange off.  The compressible
 correlations also receive the slip Mach number $\mathrm{Ma} = |\mathbf{v}_g - \mathbf{v}_p| /
 \sqrt{\gamma R_g T_g}$, the gas $\gamma$, and the temperature ratio $T_r = T_p / T_g$.
 
@@ -262,6 +263,27 @@ Compressible correlation valid across the full Mach range.
 
 ---
 
+## No momentum exchange
+
+### NoDrag
+
+```
+drag = NoDrag
+```
+
+$$
+C_d = 0
+$$
+
+Not a correlation: the switch that removes the drag force, $\mathbf{F}_\mathrm{drag} = 0$.
+Without a body acceleration a parcel keeps its injection velocity, and no momentum is
+exchanged with the gas.  Nothing in the solver divides by $C_d$ (the step-size fallback uses
+the Stokes time $\rho_p d^2/18\mu_g$).  Under `breakup = Reitz-KHRT` the Rayleigh–Taylor
+branch, driven by the drag deceleration $\mathbf{F}_\mathrm{drag}/m$, never fires; the
+Kelvin–Helmholtz branch depends on the slip Weber number only.
+
+---
+
 ## Selection summary
 
 | Keyword | Compressibility | Re range | Notes |
@@ -279,6 +301,7 @@ Compressible correlation valid across the full Mach range.
 | `Crowe` | yes | all | continuum + rarefaction terms on Wen–Yu |
 | `Hermsen` | yes | all | continuum + rarefaction terms on Wen–Yu |
 | `Carlson-Hoglund` | yes | all | Mach correction on Wen–Yu |
+| `NoDrag` | — | any | $C_d = 0$: no momentum exchange |
 
 ---
 
@@ -286,4 +309,5 @@ Compressible correlation valid across the full Mach range.
 
 Routine-level comparison of every correlation against its source expression, and the
 end-to-end Stokes relaxation case: [Literature tests](../vv/literature.md),
-[Stokes drag](../vv/drag-stokes.md).
+[Stokes drag](../vv/drag-stokes.md).  `NoDrag` is gated end to end by
+[`no-exchange`](../vv/e2e.md#no-exchange).

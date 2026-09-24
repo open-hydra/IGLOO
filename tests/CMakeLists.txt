@@ -5,7 +5,7 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ (e2e)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ (e2e)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
@@ -282,6 +282,11 @@ igloo_e2e_case(swirl-wedge-deposit standard/swirl-wedge-deposit "e2e;standard;dr
 # clock) and the eulerian mass per geo cell against the oracle residence projected with the
 # solver's dual-to-geo rule. RED on the pre-fix binary: no witness, first cells +33 % / -37 %.
 igloo_e2e_case(swirl-wedge-spin standard/swirl-wedge-spin "e2e;standard;drag;gas;axisym;euler")
+# no-exchange: drag = NoDrag and heat = NoHeat on the shared box, the inlet carrying both slips
+# (1 against 10 m/s, 300 against 600 K). Every trajectory row and every exit keeps the injection
+# u and T to the last printed digit, and the momentum/energy source is exactly 0.0 in every cell.
+# RED on a binary without the two tokens: refused at setup (exit 128, nothing integrated).
+igloo_e2e_case(no-exchange standard/no-exchange "e2e;standard;drag;heat")
 
 # ---------- evaporation --------------------------------------------------------
 igloo_unit_test(test_evaporation evaporation "unit;evaporation;c;t4")

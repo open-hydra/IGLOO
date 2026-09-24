@@ -51,11 +51,13 @@ contains
 
     ! --- [IGLOO-Models] ---
     call reg%add('IGLOO-Models','drag',d_s(6),'-', &
-      'Drag coefficient law', &
+      'Drag coefficient law; NoDrag = Cd 0, no momentum exchange', &
       'Newton, Stokes, Schlichting, Schiller-Naumann, Chang, Wen-Yu, Putnam, '// &
-      'Clift-Gauvin, Morsi-Alexander, Carlson-Hoglund, Henderson, Crowe, Hermsen',.true.)
+      'Clift-Gauvin, Morsi-Alexander, Carlson-Hoglund, Henderson, Crowe, Hermsen, NoDrag',.true.)
     call reg%add('IGLOO-Models','heat',d_s(7),'-', &
-      'Nusselt number law','JAXA1, JAXA2, JAXA3, JAXA4, Ranz-Marshall, Kavanau-Drake',.true.)
+      'Nusselt number law; NoHeat = Nu 0, no convective heat exchange (while evaporating, ASM and TC '// &
+      'replace it with their own gas-side heat rate)', &
+      'JAXA1, JAXA2, JAXA3, JAXA4, Ranz-Marshall, Kavanau-Drake, NoHeat',.true.)
     call reg%add('IGLOO-Models','evaporation',d_s(8),'NoEvaporation', &
       'Evaporation model; presence enables phase change (LEB reserved, not implemented: hard error)','d2-law, CEM, CEM-B, ASM, TC',.false.)
     call reg%add('IGLOO-Models','liquid-conduction',d_s(11),'ITC', &

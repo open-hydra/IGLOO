@@ -8,7 +8,7 @@ $$
 
 where $\mathrm{Nu}$ is selected by `assign_heat` in `src/lib/Lib_Heat.f90` via the keyword
 `[IGLOO-Models] heat` in `input.ini`.  The pure function `heat(Re, Pr, Ma, heatSelect)`
-dispatches to one of the six correlations below, with
+dispatches to one of the six correlations below (or to the `NoHeat` switch, $\mathrm{Nu} = 0$), with
 $\mathrm{Pr} = \mu_g\,\gamma\,R_g / ((\gamma - 1)\,k_g)$ evaluated from the local gas state.
 
 The thermal relaxation time (Stokes limit, $\mathrm{Nu}=2$) is
@@ -121,6 +121,27 @@ evaluation; the denominator is not iterated.
 
 ---
 
+## No convective heat exchange
+
+### NoHeat
+
+```
+heat = NoHeat
+```
+
+$$
+\mathrm{Nu} = 0
+$$
+
+Not a correlation: the switch that removes the convective heat flux, $\dot{Q} = 0$, so a
+parcel without other heat sources keeps its injection temperature.  It acts on this Nusselt
+term only.  The latent sink of an evaporation model and the heat release of a combustion
+model still apply, and while `evaporation = ASM` or `TC` is evaporating, the model's own
+gas-side heat rate replaces $\dot{Q}$ whatever `heat` is set to.  The evaporation mass rate
+comes from the evaporation model's own transfer law and does not read `heat`.
+
+---
+
 ## Selection summary
 
 | Keyword | Compressibility | Re range | Notes |
@@ -131,6 +152,7 @@ evaluation; the denominator is not iterated.
 | `JAXA4` | yes | any | Kavanau–Drake bridge on a $0.654\,\mathrm{Re}^{0.5}$ base |
 | `Ranz-Marshall` | — | $\mathrm{Re}<2\times10^5$ | common default |
 | `Kavanau-Drake` | yes | any | one-pass explicit |
+| `NoHeat` | — | any | $\mathrm{Nu} = 0$: no convective heat exchange |
 
 ---
 
@@ -138,4 +160,5 @@ evaluation; the denominator is not iterated.
 
 Literature comparison for heat-transfer correlations: [../vv/literature.md](../vv/literature.md).
 The end-to-end conduction-limit and convective cases are
-[Temperature relaxation](../vv/temp-relax.md) and [`conv-nu`](../vv/e2e.md#conv-nu).
+[Temperature relaxation](../vv/temp-relax.md) and [`conv-nu`](../vv/e2e.md#conv-nu);
+`NoHeat` is gated by [`no-exchange`](../vv/e2e.md#no-exchange).
