@@ -71,7 +71,7 @@ tests/
 ├── standard/                     # drag + heat
 │   ├── drag/  temperature/       #   unit families
 │   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/   # e2e cases
-├── evaporation/                  # unit families (root C, interface-neq, tc-analytic) + d2law/d2law-line/lk-neq/tc-box/tc-box-euler/tc-box-ord2-row/tc-hexadecane/mhb98-water e2e
+├── evaporation/                  # unit families (root C, interface-neq, tc-analytic) + d2law/d2law-line/lk-neq/tc-box/tc-box-euler/tc-box-ord2-row/tc-hexadecane/mhb98-water/mhb98-water-psat e2e
 ├── breakup/                      # TAB, Pilch-Erdman, Reitz-Diwakar, ETAB, Reitz-KHRT unit families + tab/etab/pilch-erdman/reitz-diwakar/khrt e2e, khrt-stress
 ├── combustion/                   # Beckstead unit family + burn-box e2e
 ├── solidification/               # solidification unit family + solid-box/solid-box-euler/solid-box-2mat e2e
@@ -87,7 +87,7 @@ tests/
 | Category | Contents |
 |----------|----------|
 | `standard` | Drag and temperature unit families; drag-stokes, temp-relax, body-force, conv-nu, vie-plait, swirl-wedge, swirl-wedge-deposit, swirl-wedge-spin, no-exchange e2e |
-| `evaporation` | Evaporation, LK-interface and TC-analytical unit families (plus the MHB98 decane kernel test); d²-law, d²-law line, lk-neq, tc-box, tc-box-euler, tc-box-ord2-row, tc-hexadecane and mhb98-water e2e |
+| `evaporation` | Evaporation, LK-interface and TC-analytical unit families (plus the MHB98 decane kernel test); d²-law, d²-law line, lk-neq, tc-box, tc-box-euler, tc-box-ord2-row, tc-hexadecane, mhb98-water and mhb98-water-psat e2e |
 | `breakup` | TAB/ETAB, Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT unit families + TAB stochastic moments; five Weber-sweep e2e cases and the khrt-stress load case |
 | `combustion` | Beckstead $d^n$ Al-burn unit family; burn-box e2e |
 | `solidification` | Solidification unit family (supercooling, recalescence, plateau); solid-box, solid-box-euler, solid-box-2mat e2e, the two-sweep solid-box and the eight solidification refusals |

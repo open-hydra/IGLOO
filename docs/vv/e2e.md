@@ -523,6 +523,22 @@ suspended at fixed slip; see
   {% include "vv/images/mhb98-water.svg" ignore missing %}
 </figure>
 
+### mhb98-water-psat
+
+The same droplet with the saturation pressure taken from the `Psat` column that ATLAS GPB writes
+for water (its NASA9 $\mathrm{H_2O(L)}/\mathrm{H_2O}$ pair, within 0.1 % of IAPWS at 280–300 K),
+the table copied byte for byte: a positive control of the tabulated $p_\mathrm{sat}$ on the
+CEM + Langmuir–Knudsen path, and the end-to-end check of the ATLAS-to-IGLOO route.  At 282 K the
+table sits 14 % above the case's Clausius–Clapeyron line, so the wet-bulb drops.  Not a
+validation: MHB98's M7 line is Clausius–Clapeyron-based, so the M7 legs are not carried; the
+gates are the LK kernel with the tabulated $p_\mathrm{sat}$ along the measured $T_p$, the
+$K$–wet-bulb identity, the mass balance, the run's report of the tabulation, and the wet-bulb at
+least 0.6 K below the Clausius–Clapeyron case.
+
+**Result:** wet-bulb 281.31 K against 282.33 K (−1.02 K); the kernel, the identity and the mass
+balance hold as in the parent case.  With the column zeroed the run reproduces the parent's
+282.33 K to the printed digit.
+
 ---
 
 ## Base features & infrastructure paths

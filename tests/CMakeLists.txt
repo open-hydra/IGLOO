@@ -6,7 +6,7 @@
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ (e2e)
-#   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ tc-hexadecane/ mhb98-water/ (e2e)
+#   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
@@ -347,6 +347,10 @@ igloo_e2e_case(no-psat evaporation/no-psat "e2e;evaporation")
 # Miller-Harstad-Bellan 1998 Fig.2 (exp. Ranz-Marshall 1952b). Gate = IGLOO-vs-LK-kernel
 # (tight); the digitized experiment is a NON-gating overlay in verify.py.
 igloo_e2e_case(mhb98-water evaporation/mhb98-water "e2e;evaporation;val;mhb98")
+# mhb98-water-psat: the same droplet with p_sat from the Psat column ATLAS GPB writes for water (its
+# CP-psat-water table, byte for byte) -- the tabulated p_sat on the CEM + LK path. RED with the column
+# zeroed: no tabulation reported, wet-bulb 282.33 K (the Clausius-Clapeyron case's) instead of 281.31 K.
+igloo_e2e_case(mhb98-water-psat evaporation/mhb98-water-psat "e2e;evaporation;mhb98")
 # E-VAL-3 (2026-07-23): Tonini-Cossali n-hexadecane, TC2012 Fig.11 — first VARIABLE-density
 # case (thermal swelling). Found+fixed A20 (variable tabs never allocated) + A21 (lookupTab
 # OOB). Gate = variable-density TC mass rate + swelling; digitized paper curves non-gating.
