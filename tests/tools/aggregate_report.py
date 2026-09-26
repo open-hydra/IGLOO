@@ -19,6 +19,7 @@ import sys
 FAMILY_DIRS = [
     "support",
     "infrastructure/gas_reconstruction", "infrastructure/ini_pipeline",
+    "infrastructure/properties_reader",
     "infrastructure/rng_stream", "infrastructure/axis_dispatch",
     "infrastructure/graze_standoff", "infrastructure/dual_clip",
     "standard/drag", "standard/temperature",

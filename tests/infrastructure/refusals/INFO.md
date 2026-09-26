@@ -25,6 +25,10 @@ output written).
 | `refuse-lk-d2law` | `INPUT/` symlinked; `evaporation = d2-law` + `interface = LK` (F1 guard fires before the `[IGLOO-Properties]` requirements) | `interface=LK needs evaporation in` |
 | `refuse-properties-zones` | own `INPUT/`: drag-stokes's `bc.txt`/`solfile.tec`, two-mat's `phase.txt` (A, B), the ONE-zone `common/properties.dat`; `input.ini` also carries two-mat's `[GPB-Phase2]` | `zone count /= number of materials` |
 | `refuse-properties-range` | as above with zone B cut to 3000 rows | `zones do not share one temperature range` |
+| `refuse-properties-two-enthalpy` | own 10-row `INPUT/properties.dat` whose header names `"Enthalpy"` and `"Enthalpy_abs"` | `the enthalpy datum is ambiguous` |
+| `refuse-properties-bad-row` | own 10-row `properties.dat`, row 3's enthalpy typed `375O.000000` (a letter O) | `unreadable rows: line 7 does not hold 4 numbers` |
+| `refuse-properties-psat` | tc-box (`bc.txt`/`solfile.tec` symlinked), its table on 1..1000 K plus a `"Psat"` column = its Clausius-Clapeyron line (`tools/make_psat_table.py --anchors 500 0.018150089922984093 600 1.0`, the first ratio `exp(-Lv Mv/Ru (1/500 - 1/600))`) with the 549 K and 550 K values swapped | `Psat column: a pressure that decreases with T` |
+| `refuse-properties-varcp-tmin` | own `properties.dat` on 280..380 K, `Cp = 1250 + (T - 280)`, the enthalpy its trapezoid sum | `a varying Cp column needs rows from T = 1 K` |
 | `refuse-drag-token` | `drag = no-such-drag-law` | `IGLOO: unknown drag model` |
 | `refuse-heat-token` | `heat = no-such-nusselt-law` | `IGLOO: unknown heat model` |
 | `refuse-breakup-token` | `breakup = no-such-breakup-model` | `IGLOO: unknown breakup model` |
@@ -43,7 +47,7 @@ output written).
 | `refuse-solid-evap` | the valid line plus `[IGLOO-Models] evaporation = CEM` | `solidification=on is exclusive with evaporation` |
 | `refuse-solid-comb` | the valid line plus `combustion=Beckstead K-burn=4.5e-7` | `solidification=on with combustion is not supported` |
 | `refuse-solid-brk` | the valid line plus `[IGLOO-Models] breakup = TAB` | `solidification=on with breakup is not supported` |
-| `refuse-solid-varcp` | the valid line plus an own 10-row `properties.dat` whose `Cp` column varies | `solidification=on requires a constant-cp material` |
+| `refuse-solid-varcp` | the valid line plus an own 10-row `properties.dat` whose `Cp` column varies (the enthalpy its trapezoid sum, so the table itself is valid) | `solidification=on requires a constant-cp material` |
 | `refuse-solid-varrho` | the valid line plus an own 10-row `properties.dat` whose `Density` column varies | `solidification=on requires a constant-density material` |
 | `refuse-wedge-offcentre` | a generated wedge whose k-planes sit at 0 and +1° (`tools/make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`) | `IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)` — refused at mesh import (`allocation.f90`), not at the properties choke point |
 

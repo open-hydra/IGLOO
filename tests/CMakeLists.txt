@@ -10,7 +10,7 @@
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,varcp-tmin,bad-row},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
 #   repeatability/      two-sweep gates (twosweep driver): 11 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
@@ -106,6 +106,30 @@ set_tests_properties(self_test PROPERTIES
 
 igloo_unit_test(test_gas_reconstruction infrastructure/gas_reconstruction "unit;infrastructure;interp;e;t1")
 igloo_unit_test(test_ini_pipeline       infrastructure/ini_pipeline       "unit;infrastructure;ini;t9")
+# The properties.dat reader (read_cdp_properties) on its own fixtures, one working directory per leg set
+# (the reader loads input.ini from the working directory): hexadecane -- a table from 280 K against the
+# same rows from 1 K, the Psat column found by name in any order, both enthalpy datums; two-material -- a
+# tabulated zone next to an all-zero one; atlas-water -- the bytes ATLAS GPB writes for water with
+# psat-vapour = H2O, so both repositories test the same file.
+add_executable(test_properties_reader infrastructure/properties_reader/test_properties_reader.f90)
+target_link_libraries(test_properties_reader PRIVATE verif_support)
+set_target_properties(test_properties_reader PROPERTIES LINKER_LANGUAGE Fortran)
+if(USE_OPENMP)
+    set_target_properties(test_properties_reader PROPERTIES
+        COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
+        LINK_FLAGS    "${OpenMP_Fortran_FLAGS}")
+endif()
+foreach(_set hexadecane two-material atlas-water)
+    if(_set STREQUAL "hexadecane")
+        set(_name test_properties_reader)
+    else()
+        set(_name test_properties_reader-${_set})
+    endif()
+    add_test(NAME ${_name} COMMAND test_properties_reader ${_set})
+    set_tests_properties(${_name} PROPERTIES
+        LABELS "unit;infrastructure;io;t9"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/infrastructure/properties_reader/${_set}")
+endforeach()
 igloo_unit_test(test_rng_stream         infrastructure/rng_stream         "unit;infrastructure;rng;t1")
 # bcdef-200 dispatch must key off face GEOMETRY, not face index: the wedge is not pinned to
 # faces 5/6 by anything. Covers all six indices for wedges built on i, j and k, and pins the
@@ -471,6 +495,16 @@ igloo_refusal_case(refuse-properties-zones infrastructure/refusals/properties-zo
                    "zone count /= number of materials"                  "e2e;refusal;infrastructure")
 igloo_refusal_case(refuse-properties-range infrastructure/refusals/properties-range
                    "zones do not share one temperature range"           "e2e;refusal;infrastructure")
+# properties.dat contract: one enthalpy column (its datum unambiguous), every data row holding a number for
+# every named column, a Psat column that does not decrease, a varying Cp only on a table from 1 K.
+igloo_refusal_case(refuse-properties-two-enthalpy infrastructure/refusals/properties-two-enthalpy
+                   "the enthalpy datum is ambiguous"                    "e2e;refusal;infrastructure")
+igloo_refusal_case(refuse-properties-bad-row infrastructure/refusals/properties-bad-row
+                   "unreadable rows: line 7 does not hold 4 numbers"    "e2e;refusal;infrastructure")
+igloo_refusal_case(refuse-properties-psat  infrastructure/refusals/properties-psat
+                   "Psat column: a pressure that decreases with T"      "e2e;refusal;evaporation")
+igloo_refusal_case(refuse-properties-varcp-tmin infrastructure/refusals/properties-varcp-tmin
+                   "a varying Cp column needs rows from T = 1 K"        "e2e;refusal;infrastructure")
 # Unknown model tokens (ledger O26): the selectors used to print the menu and execute a plain
 # `stop`, exit 0 -- invisible to any harness or embedding parent. Now error stops.
 igloo_refusal_case(refuse-drag-token        infrastructure/refusals/drag-token
