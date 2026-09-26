@@ -12,21 +12,25 @@ module IGLOO_IO
 contains
 
   !> Read the phase file (one line per material: "<name> <groups> [key=value ...]", the tokens being
-  !  the per-material models ATLAS GPB writes from [GPB-Phase*]) and properties.dat (cp, rho, h tables);
-  !  breakup/evaporation constants come from [IGLOO-Properties].
+  !  the per-material models ATLAS GPB writes from [GPB-Phase*]) and properties.dat (columns named by
+  !  its VARIABLES line: cp, rho, h and an optional Psat); breakup/evaporation constants come from
+  !  [IGLOO-Properties].
   subroutine read_cdp_properties(prefix,material)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_variables,       only: nm, brkupSwitch, phaseChange, breakup_word, evaporation_word, &
                                      liqSelect, intfSelect, boilSelect
     use IGLOO_data_phases,     only: obj_material
-    use IGLOO_Lib_Properties,  only: Tmin, Tmax
+    use IGLOO_Lib_Properties,  only: Tmin, Tmax, ntok_max, tok_len, nzone_max, TAB_OK, PSAT_OK, PSAT_ABSENT, &
+                                     read_variables_line, classify_table_tokens, scan_rows, &
+                                     check_table_nodes, check_table_columns, validate_psat_column, &
+                                     table_reason, psat_reason
     use IGLOO_IO_INI,          only: ini_Mv, ini_Lv, ini_Tboil, ini_cpv, ini_Le, ini_Yinf, &
                                         ini_sigma, ini_mu, ini_psat, &
                                         set_material_defaults, apply_material_key, finalize_material_models
     use Lib_ORION_data
     use Lib_Tecplot
     use IGLOO_Lib_Breakup,     only: assign_breakup
-    use IGLOO_Lib_Evaporation, only: assign_evaporation
+    use IGLOO_Lib_Evaporation, only: assign_evaporation, Patm
     implicit none
     character(len=32),  intent(in)  :: prefix
     type(obj_material), intent(out), allocatable :: material(:)
@@ -35,6 +39,12 @@ contains
     character(len=128) :: tok
     character(len=8)   :: hDatum
     type(orion_data)   :: orion
+    character(len=512)     :: tablefile
+    character(len=tok_len) :: tokens(ntok_max)
+    integer                :: ntok, icp, irho, ih, ips, code, Ni, i0
+    integer                :: nzone, nsize, ndata, ntrail, badline, nannounced(nzone_max), nrows(nzone_max)
+    logical                :: relative, found, exists
+    real(R8)               :: ratio
 
     open(newunit=unit,file='INPUT/'//trim(prefix)//'phase.txt',status='old',iostat=ios)
     if (ios/=0) error stop ( "Error reading phase file" )
@@ -124,7 +134,22 @@ contains
     end do
     close(unit)
 
-    ios = tec_read_points_multivars(orion,3,'INPUT/'//trim(prefix)//'properties.dat')
+    !> properties.dat: the VARIABLES line names the columns; the row scan guards what ORION does not check
+    tablefile = 'INPUT/'//trim(prefix)//'properties.dat'
+    inquire(file=trim(tablefile), exist=exists)
+    if (.not. exists) call refuse_table(tablefile, 'no such file')
+    call read_variables_line(tablefile, tokens, ntok, found)
+    if (.not. found) call refuse_table(tablefile, 'no VARIABLES line')
+    call classify_table_tokens(tokens(1:ntok), icp, irho, ih, ips, relative, code)
+    if (code /= TAB_OK) call refuse_table(tablefile, table_reason(code))
+    !> "Enthalpy" = relative (cp*T, or the SP-database integral), "Enthalpy_abs" = formation enthalpy included
+    hDatum = merge('relative', 'absolute', relative)
+    call scan_rows(tablefile, ntok, nzone, nsize, ndata, nannounced, nrows, ntrail, badline)
+    if (ntrail > 0) call refuse_table(tablefile, 'text after the last data row (remove it)')
+    if (badline > 0) call refuse_table(tablefile, 'unreadable rows: line '//trim(itoa(badline))//' does not hold '// &
+                                       trim(itoa(ntok))//' numbers')
+
+    ios = tec_read_points_multivars(orion,ntok-1,trim(tablefile))
     if (ios/=0) error stop ( "Error reading ideal-gas thermo file" )
     !> One zone per material, in phase order, all spanning the same T range (sets Tmin/Tmax).
     if (size(orion%block) /= nm) then
@@ -132,6 +157,14 @@ contains
                                ' zone(s) for ', nm, ' material(s) in phase.txt (one zone per material, in phase order)'
       error stop 'IGLOO: properties.dat zone count /= number of materials'
     endif
+    if (nsize /= nm .or. ndata /= nm) &
+      call refuse_table(tablefile, trim(itoa(nm))//' zone(s) expected (one per material), found '//trim(itoa(nzone))// &
+                        ' ZONE lines, '//trim(itoa(nsize))//' I= lines and '//trim(itoa(ndata))//' blocks of rows')
+    do i = 1, nm
+      if (nannounced(i) /= nrows(i) .or. orion%block(i)%Ni /= nrows(i)) &
+        call refuse_table(tablefile, trim(zone_label(i, material(i)%matName))//'the zone announces '// &
+                          trim(itoa(orion%block(i)%Ni))//' rows but holds '//trim(itoa(nrows(i))))
+    enddo
     do i = 2, nm
       if (orion%block(i)%Ni /= orion%block(1)%Ni .or. &
           nint(orion%block(i)%mesh(1,1,1,1)) /= nint(orion%block(1)%mesh(1,1,1,1))) then
@@ -144,16 +177,7 @@ contains
     enddo
     Tmin = nint(orion%block(1)%mesh(1,1,1,1))
     Tmax = Tmin + orion%block(1)%Ni - 1
-    !> Datum of the Enthalpy column (line 2, VARIABLES): "Enthalpy" = relative (cp*T, or the SP-database
-    !  integral), "Enthalpy_abs" = formation enthalpy included (thermo tables, or fixed cp with h0).
-    hDatum = 'relative'
-    open(newunit=unit,file='INPUT/'//trim(prefix)//'properties.dat',status='old',action='read',iostat=ios)
-    if (ios == 0) then
-      read(unit,'(A)',iostat=ios) wholestring
-      read(unit,'(A)',iostat=ios) wholestring
-      if (ios == 0 .and. index(wholestring,'Enthalpy_abs') > 0) hDatum = 'absolute'
-      close(unit)
-    endif
+    Ni   = orion%block(1)%Ni
 
     !> [IGLOO-Properties] vectors must carry one entry per material
     if (allocated(ini_Mv))    then; if (size(ini_Mv)    /= nm) error stop '[ERROR] [IGLOO-Properties] Mv: size /= number of materials';    endif
@@ -167,32 +191,35 @@ contains
 
     do i = 1, nm
       associate(blk => orion%block(i), mat => material(i))
-      if (all((blk%vars(1,Tmin+1:Tmax,1,1)-blk%vars(1,Tmin:Tmax-1,1,1))==0._R8)) then
-        mat%cp = blk%vars(1,1,1,1)
+      !> nodes on consecutive kelvins; finite positive cp and rho, h increasing and consistent with cp
+      code = check_table_nodes(blk%mesh(1,1:Ni,1,1))
+      if (code /= TAB_OK) call refuse_table(tablefile, trim(zone_label(i, mat%matName))//table_reason(code))
+      code = check_table_columns(blk%mesh(1,1:Ni,1,1), blk%vars(icp,1:Ni,1,1), blk%vars(irho,1:Ni,1,1), &
+                                 blk%vars(ih,1:Ni,1,1), relative)
+      if (code /= TAB_OK) call refuse_table(tablefile, trim(zone_label(i, mat%matName))//table_reason(code))
+      if (all((blk%vars(icp,2:Ni,1,1)-blk%vars(icp,1:Ni-1,1,1))==0._R8)) then
+        mat%cp = blk%vars(icp,1,1,1)
       else
         mat%cpVariable = .true.
         allocate(mat%cpTab(Tmin:Tmax))
-        mat%cpTab(Tmin:Tmax) = blk%vars(1,:,1,1)
+        mat%cpTab(Tmin:Tmax) = blk%vars(icp,:,1,1)
       endif
-      if (all((blk%vars(2,Tmin+1:Tmax,1,1)-blk%vars(2,Tmin:Tmax-1,1,1))==0._R8)) then
-        mat%rho = blk%vars(2,1,1,1)
+      !> the enthalpy-to-temperature inversion of a varying cp starts at 1 K
+      if (mat%cpVariable .and. Tmin > 1) &
+        call refuse_table(tablefile, trim(zone_label(i, mat%matName))//'a varying Cp column needs rows from T = 1 K')
+      if (all((blk%vars(irho,2:Ni,1,1)-blk%vars(irho,1:Ni-1,1,1))==0._R8)) then
+        mat%rho = blk%vars(irho,1,1,1)
       else
         mat%rhoVariable = .true.
         allocate(mat%rhoTab(Tmin:Tmax))
-        mat%rhoTab(Tmin:Tmax) = blk%vars(2,:,1,1)
+        mat%rhoTab(Tmin:Tmax) = blk%vars(irho,:,1,1)
       endif
       !> h(T) table: the enthalpy state when cp varies; its datum (hOff) for the cp=const source term.
       allocate(mat%hTab(Tmin:Tmax))
-      mat%hTab(Tmin:Tmax) = blk%vars(3,:,1,1)
+      mat%hTab(Tmin:Tmax) = blk%vars(ih,:,1,1)
       mat%hDatum = hDatum
       if (.not. mat%cpVariable) then
         mat%hOff = mat%hTab(Tmin) - mat%cp*real(Tmin,R8)
-        if (hDatum == 'relative' .and. abs(mat%hOff) > 1.e-6_R8*mat%cp*real(Tmin,R8)) then
-          write(*,'(A,I0,A,ES12.4,A)') ' [ERROR] INPUT/'//trim(prefix)//'properties.dat zone ', i, &
-            ': the header names a relative "Enthalpy" column but h(Tmin) - cp*Tmin = ', mat%hOff, &
-            ' J/kg (a constant-cp relative table is cp*T)'
-          error stop 'IGLOO: properties.dat enthalpy column does not match its datum tag'
-        endif
       endif
       write(*,'(A,I0,A,ES12.4,A)') '  >> [material ', i, '] enthalpy datum '//trim(mat%hDatum)// &
                                    ' (hOff = ', mat%hOff, ' J/kg)'
@@ -228,13 +255,6 @@ contains
 
       !> evaporation properties
       if (phaseChange) then
-        ! if (all((blk%vars(6,Tmin+1:Tmax,1,1)-blk%vars(6,Tmin:Tmax-1,1,1))==0._R8)) then
-        !   mat%psat = blk%vars(6,Tmin,1,1)
-        ! else
-        !   mat%psatVariable = .true.
-        !   mat%psatTab(Tmin:Tmax) = blk%vars(6,:,1,1)
-        ! endif
-        
         !> constants from [IGLOO-Properties]
         if (allocated(ini_psat)) material(i)%psat = ini_psat(i)
         if (allocated(ini_Mv)) then;    material(i)%Mv = ini_Mv(i)
@@ -258,6 +278,28 @@ contains
         ! Pre-compute constants
         material(i)%LvMvOverRu = material(i)%Lv * material(i)%Mv / 8314.46_R8
         material(i)%invTboil   = 1._R8 / material(i)%Tboil
+      endif
+
+      !> Psat column: tabulated for an evaporating material, all zero keeps Clausius-Clapeyron
+      if (ips > 0) then
+        if (mat%evapSelect == 0) then
+          write(*,'(A,I0,A)') '  >> [material ', i, '] Psat column not used: this material does not evaporate'
+        else
+          code = validate_psat_column(blk%vars(ips,1:Ni,1,1), Tmin, Tmax, mat%Tboil, Patm)
+          if (code == PSAT_ABSENT) then
+            write(*,'(A,I0,A)') '  >> [material ', i, '] Psat column all zero: Clausius-Clapeyron is used'
+          elseif (code /= PSAT_OK) then
+            call refuse_table(tablefile, trim(zone_label(i, mat%matName))//'Psat column: '//psat_reason(code))
+          else
+            mat%psatVariable = .true.
+            allocate(mat%psatTab(Tmin:Tmax))
+            mat%psatTab(Tmin:Tmax) = blk%vars(ips,:,1,1)
+            i0 = int(mat%Tboil)
+            ratio = (mat%psatTab(i0) + (mat%psatTab(i0+1) - mat%psatTab(i0))*(mat%Tboil - real(i0,R8)))/Patm
+            write(*,'(A,I0,A,I0,A,I0,A,F7.4)') '  >> [material ', i, '] p_sat tabulated from properties.dat (', &
+              Tmin, '..', Tmax, ' K), psat(boiling-temperature)/Patm = ', ratio
+          endif
+        endif
       endif
 
       end associate 
@@ -850,6 +892,36 @@ contains
     tok = str(p:q-1)
     p = q
   end subroutine next_token
+
+
+  !> Refuses INPUT/<prefix>properties.dat: the reason and the expected header, then the stop.
+  subroutine refuse_table(file, reason)
+    use, intrinsic :: iso_fortran_env, only: error_unit
+    use IGLOO_Lib_Properties, only: grammar
+    character(len=*), intent(in) :: file, reason
+    write(*,'(A)') ' [ERROR] '//trim(file)//': '//reason
+    write(*,'(A)') '         '//grammar
+    write(error_unit,'(A)') 'IGLOO: '//trim(file)//': '//reason
+    error stop
+  end subroutine refuse_table
+
+
+  !> Refusals name the zone when there are several materials.
+  function zone_label(i, name) result(txt)
+    use IGLOO_variables, only: nm
+    integer,          intent(in) :: i
+    character(len=*), intent(in) :: name
+    character(len=96) :: txt
+    txt = ''
+    if (nm > 1) txt = 'zone '//trim(itoa(i))//' ('//trim(name)//'): '
+  end function zone_label
+
+
+  pure function itoa(i) result(txt)
+    integer, intent(in) :: i
+    character(len=16) :: txt
+    write(txt, '(I0)') i
+  end function itoa
 
 
 end module IGLOO_IO

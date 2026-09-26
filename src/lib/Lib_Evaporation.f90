@@ -17,7 +17,7 @@ module IGLOO_Lib_Evaporation
     integer(I4), parameter, public :: ialphaE=8, ikLiq=9, imuLiq=10
 
     real(R8), parameter :: Ru   = 8314.46_R8  ! universal gas constant [J/(kmol·K)]
-    real(R8), parameter :: Patm = 101325._R8  ! atmospheric pressure [Pa]
+    real(R8), parameter, public :: Patm = 101325._R8  ! atmospheric pressure [Pa]
     !> Cap on the surface vapour mole fraction: keeps 1 - Ys finite in the boiling clamp (all gas-side models).
     real(R8), parameter, public :: xsCap = 1.e-12_R8
 

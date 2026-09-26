@@ -26,6 +26,30 @@ the working directory, and the three fixtures need different `[IGLOO-Properties]
 | PR9 | `nm-`, two zones | zone A tabulated (`psat(560 K) = 1 atm`, `psat(1 K) = 0` by underflow); zone B all zero → no table |
 | PR10 | `atlas-` | `H2O(L)` on `[280, 380]`, cp 4184, rho 997, absolute datum `hOff = -17112459.6`, psat(300 K) = `3.533623e+03` as written |
 
+The checks behind the reader (`classify_table_tokens`, `scan_rows`, `check_table_nodes`,
+`check_table_columns`, `validate_psat_column`, `tableValue`, in `src/lib/Lib_Thermodynamics.f90`) are
+ICE's reader's, statement for statement, so one table is accepted or refused by both solvers. The
+`hexadecane` entry also pins them on synthetic input:
+
+| id | function | asserts |
+|---|---|---|
+| PR4 | `validate_psat_column` | every code once, in precedence order; `psat(Tboil)` at 1.9 and 0.6 atm accepted (a database curve), 3 and 0.4 atm refused; equal neighbours (low-T underflow to 0) accepted |
+| PR5 | `check_table_nodes` | 1e-7 K off the nodes accepted; a uniform 0.4 K offset and a missing node refused; one row, a NaN, a node below 0 K |
+| PR8 | `classify_table_tokens` | the 4-column header; aliases in another order (`Psat` first, `enthalpy_abs`); both enthalpy names; a name twice; `Temperature` not first; no Cp / Density / enthalpy |
+| PR11 | `check_table_columns` | `h = cp*T` relative; an offset absolute (accepted) and relative (refused); a row off `cp*T`; `h` not increasing; `rho = 0`; `cp < 0`; a NaN; a varying cp with `h` its trapezoid sum (accepted) and its right Riemann sum (refused) |
+| PR12 | `tableValue` | linear between the nodes; the end values outside; `tab(Tmax)` at `Tmax`; NaN for a NaN temperature |
+| PR13 | `scan_rows` | `scan-short.dat` (row 3 short: bad line 7), `scan-trail.dat` (text after the rows), `scan-count.dat` (`I=4` over 3 rows), `nm-properties.dat` (clean) |
+
+**RED first.** Against the reader that read three columns by position (the test compiles against it
+for PR1–PR10): `hexadecane` 10 assertions fail — `legacy-`'s constant cp read as varying (its
+constancy check indexed the rows by temperature, reading past the table's end for `Tmin > 1`), `abs-`
+the same and `hOff = 0`, no psat table from `psat-`, and `perm-` read `Psat` as Cp; `two-material` 1
+(zone A's Psat column never read); `atlas-water` 2 (rho read as varying through the same overrun, no
+psat table). PR4–PR13 test functions that did not exist; each is RED on one mutation of them:
+non-decreasing made strict (PR4 equal neighbours and constant), the node tolerance 0.5 K (PR5 0.4 K
+offset), both enthalpy names accepted (PR8), `tab(hi-1)` as the end value (PR12 outside and at
+`Tmax`), the relative-datum rule off (PR11), the row check off (PR13 short row).
+
 `abs-` keeps a constant cp on purpose: the datum `hOff` and the relative-header check exist only for a
 constant-cp table, so a varying cp would let PR7 pass on any reader.
 

@@ -51,7 +51,11 @@ output written).
 | `refuse-solid-varrho` | the valid line plus an own 10-row `properties.dat` whose `Density` column varies | `solidification=on requires a constant-density material` |
 | `refuse-wedge-offcentre` | a generated wedge whose k-planes sit at 0 and +1° (`tools/make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`) | `IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)` — refused at mesh import (`allocation.f90`), not at the properties choke point |
 
-All twenty-six exit 128 at setup with nothing injected or integrated. **The eight solidification cases were
+All thirty exit 128 at setup with nothing injected or integrated. **The four `properties.dat` cases were
+RED first**: the reader that took three columns by position ran each of them to "All particles out of
+domain" with exit 0 — the two-enthalpy header as an absolute datum with `hOff = 0`, the typed row with
+its enthalpy undefined (ORION keeps only the last row's read status), the decreasing `Psat` column
+unread, and the varying-cp table from 280 K through reads past the table's end. **The eight solidification cases were
 RED first**: the binary before the solidification model stopped each of them with `solidification=on parsed but
 not implemented yet`, not their payload. **The four INI-contract
 cases were RED first** (ledger O20/O21/O26, recorded on the pre-fix binary): `method = 3` ran to
