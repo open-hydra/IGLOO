@@ -1,0 +1,133 @@
+# Solidification
+
+A material carrying `solidification=on` on its line of the phase file (from
+`[GPB-Phase*] solidification = on` in the ATLAS input) is routed to the ODE family
+`model = 6` (`src/lib/Lib_RHS.f90::rhsSolidification`), whose closures live in
+`src/lib/Lib_Solidification.f90`.  It models a molten droplet (alumina leaving a
+solid-rocket chamber is the case in view) that cools through its melting point,
+**supercools** to a nucleation temperature, freezes abruptly with an adiabatic
+**recalescence** back to the melting point, holds a **plateau** there while the rest
+of the latent heat leaves by convection, and then cools as a **solid**.  The mass is
+constant: nothing evaporates.
+
+The state is position/velocity in Z(1:6), the **temperature** at Z(7) and the
+**frozen mass fraction** $f \in [0,1]$ at Z(8); the phase (liquid, undercooled
+liquid, plateau, solid) is a per-particle integer carried beside the ODE state.
+
+---
+
+## Phases and events
+
+With $\dot Q = \pi\, d\, k_g\, \mathrm{Nu}\,(T_g - T_p)$ the convective heat the droplet
+receives (the standard interphase term, see [Heat Transfer](heat.md)), $c_l$ the
+material's `cp` from `properties.dat` (the liquid), $c_s$ = `cp-solid`,
+$h_\mathrm{fus}$ = `h-fus`, $T_m$ = `T-melt` and $T_n$ = `T-nuc`:
+
+| phase | equations | ends when |
+| :--- | :--- | :--- |
+| liquid, undercooled liquid | $m\,c_l\,\dfrac{dT_p}{dt} = \dot Q$, $\dfrac{df}{dt} = 0$ | $T_p = T_n$ (nucleation) |
+| plateau | $\dfrac{dT_p}{dt} = 0$, $m\,h_\mathrm{fus}\,\dfrac{df}{dt} = -\dot Q$ | $f = 1$ (frozen), or $f = 0$ (re-melted in gas hotter than $T_m$) |
+| solid | $m\,c_s\,\dfrac{dT_p}{dt} = \dot Q$, $\dfrac{df}{dt} = 0$ | — |
+
+**Recalescence.** At nucleation the droplet releases latent heat adiabatically.  With
+
+$$
+f_0 = \frac{c_l\,(T_m - T_n)}{h_\mathrm{fus}}
+$$
+
+a partly frozen droplet ($f_0 < 1$) returns to $T_m$ with frozen fraction $f_0$ and
+enters the plateau.  A droplet undercooled by more than $h_\mathrm{fus}/c_l$
+($f_0 \ge 1$) freezes whole during the recalescence and continues as a solid at the
+temperature that conserves its enthalpy,
+
+$$
+T = T_n + \frac{L(T_n)}{c_s}, \qquad L(T) = h_\mathrm{fus} - (c_l - c_s)(T_m - T),
+$$
+
+$L(T)$ being the latent heat at $T$ implied by the two heat capacities; when
+$L(T_n) < 0$ the solid lands below $T_n$.  At the end of the plateau the solid
+starts at $T_m$; a re-melted droplet continues as a liquid at $T_m$.
+
+**Initial phase.** A droplet injected at or below $T_n$ is solid ($f = 1$), one
+between $T_n$ and $T_m$ undercooled, one at or above $T_m$ liquid.
+
+---
+
+## Enthalpy and the energy exchanged with the gas
+
+The specific enthalpy includes the latent heat of fusion,
+
+$$
+h =
+\begin{cases}
+c_l\,T + h_\mathrm{off} & \text{liquid, undercooled} \\
+c_l\,T_m + h_\mathrm{off} - f\,h_\mathrm{fus} & \text{plateau} \\
+c_l\,T_m + h_\mathrm{off} - h_\mathrm{fus} - c_s\,(T_m - T) & \text{solid}
+\end{cases}
+$$
+
+with $h_\mathrm{off}$ the datum of the material's enthalpy table.  It is continuous
+across every event, so the recalescence exchanges nothing with the gas: the latent
+heat reaches the gas only through the plateau's $\dot Q$.  The source term values
+the stream at this enthalpy, so the energy deposited in a plateau cell is the heat
+lost there, $\dot n_p\,\dot Q(T_m)\,\Delta t$, and the total deposited by a droplet
+is $m\,[h(\text{entry}) - h(\text{exit})]$.
+
+---
+
+## Event location
+
+The phase change is found after every accepted solver step: the event function of
+the current phase ($T_p - T_n$ before nucleation, $1 - f$ or $f$ on the plateau)
+changes sign over the step, strictly positive at its start.  The step is then
+aborted, the state is interpolated linearly to the crossing ($T_p = T_n$ there, the
+interpolation error lying in the crossing time), the transition is applied to the
+state by absolute assignment, and the trajectory resumes from the crossing.  A step
+that crosses a threshold and a cell face together is first refined toward the face;
+a threshold found already passed at the start of a segment is applied there, from
+the current state, with the same enthalpy balance.  There is no clamp or penalty on
+$f$; the events own the crossings of 0 and 1.
+
+---
+
+## Inputs
+
+All per material, as `key=value` tokens on the material line of the phase file
+(ATLAS GPB writes them from `[GPB-Phase*]`):
+
+| Key | Meaning | Default |
+| :--- | :--- | :---: |
+| `solidification` | `on` switches the material to model 6 | `off` |
+| `h-fus` | heat of fusion (J/kg) | required > 0 |
+| `cp-solid` | heat capacity of the solid (J/kg/K) | required > 0 |
+| `T-melt` | melting temperature (K) | 2327 |
+| `T-nuc` | nucleation temperature (K), below `T-melt` | 0.8 `T-melt` |
+
+Setup refuses a solidifying material that also evaporates, burns or breaks up, and
+one whose `properties.dat` has a varying `Cp` or `Density` column: the model
+integrates the temperature with constant properties.  A solid parcel heated above
+`T-melt` (gas hotter than the melting point) keeps heating as a solid; there is no
+melting model, and the solver prints one warning per such parcel.
+
+For alumina the NIST-JANAF tables ([JANAF98], Al₂O₃ liquid and α-Al₂O₃) give
+$T_m = 2327$ K, $\Delta H_\mathrm{fus} = 111.1$ kJ/mol ($1.09$ MJ/kg), a liquid heat
+capacity of 192.5 J/(mol K) ($1.89$ kJ/(kg K)) and a solid one of 138.9 J/(mol K)
+($1.36$ kJ/(kg K)) at the melting point.  The default `T-nuc` of 0.8 `T-melt` is a
+nominal supercooling; set it from data for the material.
+
+Euler feedback follows the constant-mass rules of model 1 (see
+[Eulerian Feedback](eulerian-feedback.md)); the frozen fraction is not written to
+the output files.
+
+---
+
+## V&V
+
+Unit family `tests/solidification/` (the jump in both branches, the plateau rate,
+enthalpy continuity at every switch, a three-regime RK4 history against the
+piecewise closed form, corner cases, one production RHS call per phase) and the e2e
+cases `solid-box` (the three regimes against their closed forms, the event
+position, the energy deposit globally and per plateau cell), `solid-box-euler` (the
+Eulerian field), `solid-box-2mat` (a model-6 material followed by a model-1 one) and
+the two-sweep `repeatability/solid-box`, plus eight setup refusals.  See
+`tests/solidification/INFO.md`.

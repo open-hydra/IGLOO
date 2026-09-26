@@ -103,6 +103,7 @@ nav:
     - Heat Transfer: theory/heat.md
     - Evaporation: theory/evaporation.md
     - Metal Combustion: theory/combustion.md
+    - Solidification: theory/solidification.md
     - Breakup: theory/breakup.md
     - Injection & Packing: theory/injection.md
     - Eulerian Feedback: theory/eulerian-feedback.md

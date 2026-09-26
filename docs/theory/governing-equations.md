@@ -15,6 +15,7 @@ depend on the active physics model (see [Model selection](index.md#model-selecti
 | 7 | $T_p$ (or $h_p$) | Temperature (K), or enthalpy when the material carries a $c_p(T)$ table | all |
 | 8 | $m$ | Droplet mass (kg); its rate is $\dot{m}$ | 2, 4, 5 |
 | 8 | $\dot{n}_p$ | Droplet-number rate of the parcel; its rate is the continuous breakup rate | 3 |
+| 8 | $f$ | Frozen mass fraction of a solidifying droplet (the temperature stays at index 7) | 6 |
 | 9 | $\dot{n}_p$ | Droplet-number rate for combined evap+breakup | 4 |
 | +1 | $\ell$ | Arc-length integrand $|\mathbf{v}_p|$ | euler on |
 | +2–4 | $\mathbf{v}_p\,\ell$ | Momentum integrand $\mathbf{v}_p|\mathbf{v}_p|$ (mass-weighted for models 2–5; in the meridian frame on a wedge) | euler on |
@@ -23,8 +24,9 @@ depend on the active physics model (see [Model selection](index.md#model-selecti
 | +7 | $\dot{n}_p$ | Number moment | euler on, model 4 |
 | tail | $J$, $W$ | Body-force reaction accumulators $\int\dot m\,dt$ and $\int\dot m\,\mathbf{g}\cdot\mathbf{v}\,dt$ (models 2, 4, 5 with a body force and source output; $J$ reuses the euler mass moment when both are on) | see [Eulerian feedback](eulerian-feedback.md) |
 
-The state dimension is therefore 7 (model 1), 8 (models 2, 3, 5) or 9 (model 4), plus
-5, 6 or 7 euler slots respectively when `eulerSwitch` is on.
+The state dimension is therefore 7 (model 1), 8 (models 2, 3, 5, 6) or 9 (model 4), plus
+5, 6 or 7 euler slots when `eulerSwitch` is on (5 for models 1 and 6, whose moments are not
+mass-weighted, 6 for models 2, 3 and 5, 7 for model 4).
 
 The type `obj_particle` (defined in `obj_particles.f90`) stores the state in the allocatable
 `stateVar` array together with auxiliary fields: `m`, `d` (diameter), `npdot` (parcel rate),

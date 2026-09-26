@@ -92,7 +92,9 @@ A burning (or evaporating) droplet whose mass falls to $m \le 10^{-15}$ kg on an
 accepted step is declared **consumed**: the parcel ends inside the domain, its
 outgoing flux for the cell is zero, and the mass, momentum and energy it still carried
 at cell entry are deposited on the gas through the source block.  The same hand-off
-applies when a consuming model reverts a non-finite state to its last good step.
+applies when a consuming model reverts a non-finite state to its last good step.  The
+solidification of the residual oxide is a separate material model
+([Solidification](solidification.md)); a burning parcel is not handed over to it.
 
 ### Robustness
 

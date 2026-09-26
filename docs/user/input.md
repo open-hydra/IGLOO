@@ -39,8 +39,8 @@ Parameters not specified take their default values. Unknown sections are silentl
 
 IGLOO reads only the `[IGLOO-*]` sections above. The sections below are the *preprocessor's* input:
 whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase.txt`,
-`properties.dat`, `bc.txt`). The per-material model keys (`evaporation`, `combustion`, `alpha-e`,
-...) are `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after `<name> <groups>`
+`properties.dat`, `bc.txt`). The per-material model keys (`evaporation`, `combustion`, `solidification`,
+`alpha-e`, ...) are `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after `<name> <groups>`
 on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
 
 | Section | Role |

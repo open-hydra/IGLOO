@@ -104,7 +104,14 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
    step moved the particle by less than the containment tolerance.
 5. **Event breakup** — `breakupEvent` (TAB/ETAB/KHRT) detects and applies discrete
    breakup events; `addChild` flag triggers child-parcel spawning.
-6. **State snapshot** — on a clean interior step, updates `oldLocal`, `oldStLocal`,
+6. **Solidification event** (model 6) — the event function of the current phase
+   (`T - T-nuc` before nucleation, `1 - f` or `f` on the plateau) turns non-positive over the
+   step while positive at its start; the step is aborted, and `ODEsystem` interpolates the
+   state linearly to the crossing and applies the phase change there by absolute assignment
+   (never inside `solout`, whose `Y` is a copy under `H-sdirk4`).  A step that also crosses a
+   face is refined first; a threshold already passed at the start of a segment is applied
+   there (see [Solidification](solidification.md)).
+7. **State snapshot** — on a clean interior step, updates `oldLocal`, `oldStLocal`,
    `oldEvLocal`.
 
 `IRTRN = -2724` on any interrupt; the solver returns immediately.
@@ -119,7 +126,8 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
 | `solout::exitLoop` | `any(y /= y)` or `deltat /= deltat` interrupts the solver |
 | `ODEsystem` | a non-finite state after the solver returns is reverted to the last good accepted step and the particle marked `gone` (a consuming droplet hands its remnant to the gas) |
 | `ODEsystem` | a `deltat` update outside `[dtMin, huge)` is a hard error |
-| RHS routines (models 2–5) | any non-finite RHS entry (unphysical Newton trial: $m \le 0$, $\dot n_p \le 0$) is replaced by a `1e30` penalty so SDIRK4 rejects the step |
+| RHS routines (models 2–6) | any non-finite RHS entry (unphysical Newton trial: $m \le 0$, $\dot n_p \le 0$) is replaced by a `1e30` penalty so SDIRK4 rejects the step |
+| model 6 | no clamp or penalty on the frozen fraction $f$: the solidification events own its crossings of 0 and 1 |
 
 !!! note "Stuck-particle detection"
     A particle that stays in the same cell for more than `nMaxCell = 10` outer

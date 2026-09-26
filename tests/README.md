@@ -27,7 +27,7 @@ that is the executable the e2e cases run.
 tests/
 ├── README.md  REFERENCES.md  VERIFICATION_MATRIX.md
 ├── CMakeLists.txt                # single ctest registry (unit + e2e, labeled)
-├── test.sh                       # MOSE-style runner: standard evaporation combustion breakup infrastructure repeatability mpi unit e2e
+├── test.sh                       # MOSE-style runner: standard evaporation combustion solidification breakup infrastructure repeatability mpi unit e2e
 ├── vv_style.py                   # the single plot-style source for every SVG
 ├── common/                       # shared box fixtures + the MOSE nozzle solfile (db-2daxi, axis-200)
 ├── tools/                        # make_box_case.py make_pe_case.py make_vie_case.py make_uniform_gas.py set_kv.py
@@ -43,12 +43,13 @@ tests/
 ├── evaporation/                  # unit families: (root)  interface-neq/  tc-analytic/
 │   └── d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ boiling-temperature-key/ no-psat/ tc-hexadecane/ mhb98-water/     # e2e
 ├── combustion/                   # unit family (root) + burn-box/ (e2e)
+├── solidification/               # unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ (e2e)
 ├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
 │   └── tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/   # e2e
 ├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/
 │   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/   # e2e
-│   └── refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver,wedge-offcentre}/   # setup-refusal gates
-├── repeatability/                # two-sweep gates: drag-stokes/ drag-stokes-dopri5/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/ tab-dopri5/
+│   └── refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre}/   # setup-refusal gates
+├── repeatability/                # two-sweep gates: drag-stokes/ drag-stokes-dopri5/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/ tab-dopri5/ solid-box/
 └── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ bc-center-2grp/ two-mat/ consistency/ consistency-two-mat/
 ```
 
@@ -93,8 +94,8 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 101/101 in a serial build (71 e2e + 30 unit, `self_test` and `registry-docs` among the latter);
-`USE_MPI=ON` registers 7 more `mpi-*` cases, 108/108. (Was 85/85 before the five review-residual
+ctest 114/114 in a serial build (83 e2e + 31 unit, `self_test` and `registry-docs` among the latter);
+`USE_MPI=ON` registers 7 more `mpi-*` cases, 121/121. (Was 85/85 before the five review-residual
 plans of 2026-09-22/23 added `ini-comment-eq`, `solver-fail-consumed`, `tc-box-euler`,
 `test_source_reduction`, `tc-box-ord2-row`, `test_ghost_bc` and `wall-approach`; `no-exchange`
 followed on 2026-09-24, `boiling-temperature-key` and `refuse-boiling-temperature-both` on 2026-09-26.)

@@ -267,6 +267,25 @@ $X_\mathrm{eff}^{1.0}$ exponent is the paper's own.
   {% include "vv/images/burn-box.svg" ignore missing %}
 </figure>
 
+### solid-box
+
+Solidification (model 6): molten droplets injected at 2400 K into the 600 K box gas at
+the gas velocity ($\mathrm{Re}=0$, $\mathrm{Nu}=2$) cool as a liquid, supercool to
+$T_n = 0.8\,T_m$, recalesce to $T_m = 2327$ K with the frozen fraction
+$f_0 = c_l(T_m - T_n)/h_\mathrm{fus}$, hold a plateau at $T_m$ until $f = 1$, and cool as
+solids.  Every regime is a closed form of the inputs in $x = u_g t$; the gates check the
+liquid and solid relaxations, the plateau rows and the first plateau row after the
+nucleation point, the global energy balance of the source field and the heat deposited in
+every plateau cell, $\dot n_p\,\pi d k_g \mathrm{Nu}(T_m - T_g)\,\Delta x/u_g$.  Its
+Eulerian twin `solid-box-euler` checks the equivalent-Eulerian field cell by cell.
+
+**Result:** 25/25 parcels in all three regimes; energy balance and plateau heat within the
+$\dot m$ print floor (3e-7).
+
+<figure>
+  {% include "vv/images/solid-box.svg" ignore missing %}
+</figure>
+
 ---
 
 ## Run-conditioned kernel verification

@@ -27,7 +27,9 @@ system is assembled by `determineModel` in `Lib_RHS.f90`:
 
 A material with `combustion = Beckstead` overrides this matrix and is routed to
 model 5, `rhsAlCombustion` (state dimension 8 + 6 euler, model-2 layout) — see
-[Metal Combustion](combustion.md).
+[Metal Combustion](combustion.md).  A material with `solidification = on` is routed to
+model 6, `rhsSolidification` (state dimension 8 + 5 euler: temperature and frozen fraction,
+constant mass) — see [Solidification](solidification.md).
 
 The euler extra equations (arc length $\ell$, the momentum, energy and mass moments) are
 appended only when eulerian output is requested (`out-file` includes `E`); they do not

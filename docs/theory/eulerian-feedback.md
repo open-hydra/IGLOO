@@ -36,6 +36,11 @@ $$
 S_\mathrm{en}(i,j,k)  \mathrel{+}= E_\mathrm{in} - E_\mathrm{out}
 $$
 
+The energy carried is $\dot m\,(h + |\mathbf{v}_p|^2/2)$ with $h$ the specific enthalpy of the
+material at the parcel's state (`computeSource`); for a solidifying material (model 6) $h$ includes
+the latent heat of fusion (`hSolid`, see [Solidification](solidification.md)), so a freezing
+parcel deposits the heat it loses on the plateau.
+
 Each update is an `!$OMP ATOMIC UPDATE`, making the accumulation race-free across
 particle threads.  Mass source is written only for mass-evolving materials
 (evaporation or combustion); otherwise it is zeroed.  A droplet consumed inside a cell
@@ -52,7 +57,7 @@ $-\theta$ about the axis (`Lib_Equations::toMeridian`) so that every cell carrie
 momentum and energy source terms absorb the body-force reaction so that the deposit is
 the drag reaction only.  The correction form depends on the model:
 
-- Models 1, 3 (constant parcel mass flow): closed-form —
+- Models 1, 3, 6 (constant parcel mass flow): closed-form —
   $\mathbf{P}_\mathrm{in} \mathrel{+}= \dot m\,T_\mathrm{stay}\,\mathbf{g}$ and
   $E_\mathrm{in} \mathrel{+}= \dot m\,\mathbf{g}\cdot(\mathbf{x} - \mathbf{x}_\mathrm{entry})$
   using the residence time and cell-entry position.
@@ -97,7 +102,7 @@ The Euler block type `obj_eulerblock` stores per-material numerators:
 | `velocity(3,Nx,Ny,Nz)` | $\sum \rho_p\,\mathbf{v}_p \cdot \delta L^{-1} \cdot T_\mathrm{stay} / V$ (numerator) |
 | `temperature(Nx,Ny,Nz)` | $\sum \rho_p\,T_p \cdot \delta L^{-1} \cdot T_\mathrm{stay} / V$ (numerator) |
 
-The density row above is the **constant-mass** form (model 1, and model 3 with
+The density row above is the **constant-mass** form (models 1 and 6, and model 3 with
 $\rho_p\,T_\mathrm{stay} = \dot{m}\,T_\mathrm{stay}$). For a material that loses mass the
 droplet mass is inside the integral, and the **number rate multiplies it** — the parcel
 carries $\dot{n}_p$ droplets per second, not one:

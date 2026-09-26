@@ -1,7 +1,7 @@
 # Verification & Validation
 
 IGLOO's V&V suite lives in a single model-first tree under `tests/`, categorized
-by physics: `standard/` (drag + heat), `evaporation/`, `combustion/`, `breakup/` and
+by physics: `standard/` (drag + heat), `evaporation/`, `combustion/`, `solidification/`, `breakup/` and
 `infrastructure/`, plus two harness categories, `repeatability/` (two-sweep gates) and
 `mpi/` (rank-count gates, `USE_MPI` builds only).  Each category holds tests of two kinds, all registered in
 CTest (opt-in via `-DBUILD_VERIFICATION=ON`).
@@ -20,7 +20,7 @@ per-family CSV reports.
 ## Kinds of verification
 
 The tree is organized by *physics* (`standard/`, `evaporation/`, `breakup/`,
-`combustion/`, `infrastructure/`), but the tests are not all the same **kind** of
+`combustion/`, `solidification/`, `infrastructure/`), but the tests are not all the same **kind** of
 verification, and a green gate licenses very different claims depending on which
 kind it is.  The discriminator is a single question: **what is the reference the
 gate compares against?**
@@ -55,7 +55,7 @@ to overlook when counting coverage:
 - **8 — Contract and harness meta-tests** — `test_ini_pipeline` (the
   `input.ini` → module-variable round-trip through the production reader),
   `registry-docs` (the tracked parameter registry page equals DocGen's output),
-  the eighteen `refusals/*` cases (inputs the solver must refuse at setup with exit
+  the twenty-six `refusals/*` cases (inputs the solver must refuse at setup with exit
   128 and nothing integrated), and `self_test` (which exercises the verification
   support library itself).  No physics, no curve, by design.
 
@@ -82,6 +82,7 @@ documentation concern.
 | `unit-evaporation-tc.svg` | `test_tc_analytic` | 1 routine-level | independent bisection root of the `[TC2012]`/`[ATC24]` $G(m)$ residual | different root-finder than production's Newton |
 | `unit-evaporation-mhb98-decane.svg` | `test_mhb98_decane` | 1 routine-level **+ 4 Tier P (pixel-measured)** | DC1/DC2: an independently re-coded `[MHB98]` M7 chain and eq. 19 $f_2$, called against production at 25 sampled states (1e-12).  DC3: the re-code at MHB98's own 0.552 vs $\beta$, $T_d(3.5\,\mathrm{s})$ and $D^2(4.0\,\mathrm{s})$ **measured off Fig. 4 in pixels** | kernels called directly at prescribed fixed slip (kind 1), but the DC3 leg is the paper's own figure (kind 4); a unit test because the Fig. 4 drop is suspended, not free-flying |
 | `unit-combustion-beckstead.svg` | `test_combustion` | 1 routine-level | closed-form $m(t)$ + complex-step $\mathrm{d}m/\mathrm{d}t$ vs `becksteadRate` `[Beck05]` | direct rate-function check |
+| `unit-solidification-recalescence.svg` | `test_solidification` | 1 routine-level | piecewise closed form of liquid cooling, recalescence, plateau and solid cooling vs an RK4 history built on the production closures | the closures and the event rule, isolated from the solver |
 | `unit-breakup-tab.svg` | `test_breakup_tab`, `test_tab_moments` | 1 routine-level | `[ORA87]` damped-oscillator closed form + `rk4_ref` of the raw ODE; Rosin–Rammler moment oracle | `breakupEvent` called directly |
 | `unit-breakup-etab.svg` | `test_breakup_etab` | 1 routine-level | `[Tan97]`/`[Tan98]` $K_{br}$ branches, continuity across $We_\mathrm{trans}$ | product-size ratio, pointwise |
 | `unit-breakup-pe.svg` | `test_breakup_pe` | 1 routine-level | `[PE87]` breakup-time table + Oh-override branch | `breakupOde` rate vs the paper table |
@@ -95,6 +96,7 @@ documentation concern.
 | `tab-e2e.svg` | `tab-e2e` | 2 Tier V | `[ORA87]` eq. 5 oscillator: onset $We_r=6$ + first-breakup time $t_{bu}$ | $t_{bu}$ is a root of the model's own analytic solution |
 | `etab-e2e.svg` | `etab-e2e` | 2 Tier V | ORA87 $t_{bu}$ + the `[Tan97]` cascade ratio $\exp(-(K_{br}/\omega)\arccos(1-1/We_{Cr}))$ | $\omega$ cancels analytically ⇒ closed form in $We$ alone |
 | `burn-box.svg` | `burn-box` | 2 Tier V | closed-form $d^n(x)=d_0^n-K_\mathrm{eff}x/u_g$ `[Beck05]` + independent RK4 energy balance | $d$ is $T_p$-independent above ignition ⇒ analytic |
+| `solid-box.svg` | `solid-box` | 2 Tier V | piecewise closed form of the inputs: liquid relaxation, nucleation point, recalescence to $T_m$, plateau length, solid relaxation | $\mathrm{Re}=0$, $\mathrm{Nu}=2$ ⇒ every regime analytic in $x$ |
 | `d2law.svg` | `d2law` | 3 run-conditioned | Godsave–Spalding `[God53]`/`[Spa53]` kernel integrated along the **measured** $T_p(x)$ | $T$ is coupled ⇒ no closed form; oracle rides the run's $T_p$ |
 | `lk-neq.svg` | `lk-neq` | 3 run-conditioned | `[MHB98]` LK-corrected CEM $d^2$-ODE, RK4 along measured $T_p$; VLE curve as the gated regression | same, plus a gated discrimination margin |
 | `tc-box.svg` | `tc-box` | 3 run-conditioned | `[TC2012]` Stefan–Fuchs $d^2$-ODE along measured $T_p$; CEM as the gated regression | same |
@@ -148,6 +150,7 @@ solver could only emulate with a no-drag production flag.  See
 | [KHRT breakup (validation)](../vv/e2e.md#khrt-e2e) | 25-drop radius-based We sweep ($We_r$ 30–1000); continuous KH-stripping rate + RT/shed shatter vs Reitz-87 | Initial $\mathrm{d}d/\mathrm{d}t$ vs the Reitz-87 KH rate ($We_r\ge340$) + `khrt-e2e-rt` RT-shatter persistence gate | KH stripping within 0.03 %; eight drops shatter and persist |
 | [Reitz–Diwakar breakup (validation)](../vv/e2e.md#reitz-diwakar-e2e) | 25-drop radius-based We sweep ($We_r$ 8–1000) across the bag$\to$stripping handoff vs RD 1987 (SAE 870598) | Initial $\mathrm{d}d/\mathrm{d}t$ per drop vs the RD closed form for its regime (bag/stripping) | 25/25 within 0.1 % |
 | Al combustion (`combustion/burn-box`) | Beckstead $d^n$ burn law (model 5) | Closed-form burn-time kernel + independent RK4 energy balance + mass telescoping | all gates pass |
+| [Solidification](../vv/e2e.md#solid-box) (`solidification/solid-box`) | Supercooling, recalescence, freezing plateau and solid cooling of molten droplets (model 6) | Closed forms of every regime, the event position, the global energy telescoping and the per-cell plateau heat; plus the Eulerian twin, a two-material run and the two-sweep case | 25/25 parcels; plateau heat per cell within the $\dot m$ print floor |
 | DB injection | Assigned-position particle placement, `vInj` hand-off, Stokes velocity relaxation, domain exit | Placement fidelity + analytic Stokes relaxation | 5/5 particles |
 | Coupled outputs (`infrastructure/coupled-body`) | euler + source + body-force accumulators together (model 1) | Body-force $v(x)$ + source totals vs closed forms (drag-reaction-only deposit) | agreement ~4·10⁻⁷ |
 | 2Daxi + DB (`infrastructure/db-2daxi`) | Axisymmetric wedge, real MOSE gas field, DB injection, euler-only output | Behavioral (both particles integrate to the outlet, fields finite) | pass |
@@ -160,7 +163,7 @@ solver could only emulate with a no-drag production flag.  See
 | Axis face tagged `axisymmetric` (`infrastructure/axis-200`) | The wedge AXIS face carrying bcdef 200 (what ATLAS emits): reflection instead of the k-face rotation; a near-axis DB parcel with inward `vp`; the ord2 eulerian deposit on the MOSE nozzle field | Behavioral (no give-up, axis reached, outlet exit) + eulerian conservation with cell volumes recomputed from the tec nodes: E1 $\Sigma\rho_p V/\Sigma\dot m t$, E2 near-axis share, E3 $\rho_p/n_p=\rho_\ell\pi d^3/6$ | E1 $= 1.000787\pm10^{-3}$, E2 $= 0.999005\pm10^{-3}$, E3 to $10^{-12}$ |
 | Wedge fold with swirl (`infrastructure/wedge-fold`) | axis-200 plus an azimuthal injection velocity on the near-axis parcel: the parcel leaves the 1° sector every few segments, so the bcdef-200 fold (position and velocity rotated about the axis) is exercised on the nozzle field | Behavioral: no give-up, both parcels exit, every trajectory row inside the sector (print-aware), swirl injected and $\geq 9$ sector crossings on the swirling parcel, control parcel byte-identical to axis-200 | 18 sector crossings measured |
 | Two materials (`infrastructure/two-mat`) | `drag-stokes` run for two materials that differ only by density ($\rho_p$ = 2950 and 1000), the case with $n_m = 2$: per-material loops, `sourceMass` slots, two euler families, per-material files and the krho fan-out all execute at arity 2 | The drag-stokes Stokes closed form imported and re-parametrised per material; identical injection rows across materials with $m_B/m_A = 1000/2950$; the lighter material relaxes faster; the shared momentum/energy slots balance both materials' parcels; each euler file carries its own material ($\rho_p/n_p = \rho_{mat}\pi d^3/6$); per-parcel $\dot m$ from the krho fan-out; plus `repeat-two-mat` (two-sweep) and, under `USE_MPI`, `mpi-two-mat` and `mpi-consistency-two-mat` | pass; swapping the phase lines (zones bind by order) or supplying a one-zone `properties.dat` is refused |
-| Setup refusals (`infrastructure/refusals/*`) | Eighteen inputs the solver must refuse at setup: `liquid-conduction = P2T` and `boiling = ZGR` (parsed, physics absent), `interface = LK` with `evaporation = d2-law`, a `properties.dat` with the wrong zone count or temperature range, five unknown/unimplemented model tokens (drag, heat, breakup, evaporation, `LEB`), four INI-contract violations (TAB `method = 3`, `gas-order = 3`, an unknown `out-file` token, an unknown `ode-solver`), an unknown or non-numeric per-material token in the phase file (two cases), the boiling temperature given under both its names (`boiling-temperature` and `Tboil`), and a wedge whose sector is not centred on the azimuth origin | `tools/check_refusal.py`: exit exactly 128, the `error stop` payload in stderr, nothing injected or integrated, no output — proven non-vacuous on a healthy case | 18/18 refused |
+| Setup refusals (`infrastructure/refusals/*`) | Twenty-six inputs the solver must refuse at setup: `liquid-conduction = P2T` and `boiling = ZGR` (parsed, physics absent), `interface = LK` with `evaporation = d2-law`, a `properties.dat` with the wrong zone count or temperature range, five unknown/unimplemented model tokens (drag, heat, breakup, evaporation, `LEB`), four INI-contract violations (TAB `method = 3`, `gas-order = 3`, an unknown `out-file` token, an unknown `ode-solver`), an unknown or non-numeric per-material token in the phase file (two cases), the boiling temperature given under both its names (`boiling-temperature` and `Tboil`), eight solidifying materials that break the model's input contract (no `h-fus` or `cp-solid`, `T-nuc` above `T-melt`, evaporation, combustion or breakup on the material, a varying `Cp` or `Density` column), and a wedge whose sector is not centred on the azimuth origin | `tools/check_refusal.py`: exit exactly 128, the `error stop` payload in stderr, nothing injected or integrated, no output — proven non-vacuous on a healthy case | 26/26 refused |
 
 ---
 
@@ -175,6 +178,7 @@ solver could only emulate with a no-drag production flag.  See
 | INI pipeline | INI → module-variable round-trip, IP1–IP5 | `test_ini_pipeline`; `registry-docs` |
 | Breakup (TAB/ETAB/RD/PE/KHRT) | All five models vs the primary papers (PE87, TAB-872089, Tanner 97/98, Reitz-87, RD-860469, Beale-Reitz-99) | 8 unit tests (including `test_tab_moments` and the ETAB child $v_\perp = A\dot{x}$ check ET4); five Weber-sweep e2e cases |
 | Combustion | Beckstead $d^n$ Al burn law | `test_combustion` (CB1–CB4) + `burn-box` e2e |
+| Solidification | Supercooling, recalescence and freezing plateau (model 6) | `test_solidification` (SG0–SG6) + `solid-box`, `solid-box-euler`, `solid-box-2mat` e2e, `repeat-solid-box` |
 
 ---
 
