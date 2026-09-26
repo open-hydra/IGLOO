@@ -3,9 +3,10 @@
 Phase change is active when `phaseChange = true`; the evaporation model is selected by
 `[IGLOO-Models] evaporation` in `input.ini` (per-material override: the `evaporation=` token on
 the material line of the phase file, written by ATLAS GPB from `[GPB-Phase*]`) and dispatched from
-`src/lib/Lib_Evaporation.f90::evaporation`.  The model integrates a mass-rate equation
-$\dot{m}$ as state variable 8 (models 2 and 4; see
-[Governing equations](governing-equations.md)).
+`src/lib/Lib_Evaporation.f90::evaporation`.  The droplet mass is state variable 8 and
+$\dot{m}_\mathrm{evap}$ its rate (model 2; in model 4, evaporation with ODE breakup, breakup adds
+its share at constant stream mass — see [Governing equations](governing-equations.md)).  A
+droplet whose mass falls to `mBurnTol = 1e-15` kg is consumed and its remnant handed to the gas.
 
 Two further selectors act on every gas-side model: the `interface` axis (equilibrium or
 Langmuir–Knudsen non-equilibrium surface state) and the `blowing` axis (Stefan-blowing

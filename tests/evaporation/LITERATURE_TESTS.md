@@ -212,3 +212,35 @@ Wet-bulb sanity: as T_p→T_wb, `Q_L→0` in A–S; verify the code's Qdot→0 t
 Consistency-first (Rank 1) is recommended: it needs no chosen constant, no wet-bulb
 setup, and it is the sharpest detector of the factor-2 error that all three other
 artifacts currently hide.
+
+---
+
+## Evaporation with ODE breakup (ODE model 4)
+
+**Model.** Per droplet of a stream with number rate `n`, `dm/dt = ṁ_evap − m·(dn/dt)_brk/n` and
+`dn/dt = (dn/dt)_brk`, so `d(n m)/dt = n ṁ_evap`: breakup conserves the stream mass (`[RD87]`, "with each
+change in drop size the drop number was changed correspondingly to conserve liquid mass"; `[RD86]` App. A1,
+`n_f r_f³ = n_i r_i³`; `[Reitz87]` eq. 11 with `N a³ = N0 a0³`) and evaporation shrinks each drop at
+constant `n`. In diameter, `dd/dt = (d_s − d)/τ + 2 ṁ_evap/(ρ_l π d²)`.
+
+**No published frozen-gas benchmark.** IGLOO integrates non-interacting parcels through a frozen, one-way gas,
+so a spray reduces to independent single drops and every spray-level observable is out of reach:
+
+| candidate | what it is | why rejected |
+|---|---|---|
+| Hsiang & Faeth, IJMF 18(5):635–652, 1992 | shock-tube secondary breakup, room temperature | no evaporation (usable for TAB/ETAB product size only) |
+| Hiroyasu & Kadota, SAE 740715, 1974 | diesel spray drop-size distribution | measured distribution of a transient spray; no evaporation oracle |
+| Hiroyasu & Arai, SAE 900475, 1990 | diesel spray tip penetration | set by two-way entrainment |
+| Wu, Santavicca, Bracco & Coghe, AIAA J 22:1263–1270, 1984 | LDV in non-vaporizing dense diesel sprays | non-vaporizing, dense, two-way |
+| Sommerfeld & Qiu, IJHFF 19:10–22, 1998 | isopropyl-alcohol hollow-cone spray in a heated pipe expansion | two-way turbulent; no breakup model in play |
+| Chen & Pereira, IJHMT 39:441–454, 1996 | RANS computation of the Sommerfeld case | as above |
+| O'Rourke & Amsden 1987, Tanner 1997 validation sprays | TAB/ETAB spray penetration and SMD | non-evaporating, transient, two-way (the kernels are gated by `tab-e2e`/`etab-e2e`) |
+| Sirignano / Sazhin monodisperse spray | analytic two-way coupled dilute spray | with a frozen gas it reduces to a single drop |
+
+**Chosen:** the composed single-drop oracle of [evap-breakup-box](evap-breakup-box/INFO.md) — the two kernels,
+each source-verified in the suite (Reitz-Diwakar: `reitz-diwakar-e2e`, `test_breakup_rd`; d²-law: `d2law`,
+`test_evap_probes` XE1), composed by the stream-mass rule above and integrated along the run's measured `u(x)`
+and `T_p(x)`. The oracle is independent of the right-hand-side assembly, which is what model 4 adds. Twins
+isolate one half each: [d2law-brk-dormant](d2law-brk-dormant/INFO.md) (breakup rate zero),
+[../breakup/rd-evap-frozen](../breakup/rd-evap-frozen/INFO.md) (evaporation rate zero); the right-hand side at
+one state is pinned by [evap-breakup](evap-breakup/INFO.md).

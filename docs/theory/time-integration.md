@@ -98,8 +98,9 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
 2. **Cell-crossing detection** — `isPointInsideCell(y(1:3), vert, ...)` sets `IamOut`
    (and `sectorOut` when the point left the wedge sector); for `ord2` mode a separate
    gas-dual-cell test sets `newGas`.
-3. **Burnout test** — for mass-consuming models (evaporation, combustion) the droplet is
-   declared consumed once its mass drops to `mBurnTol = 1e-15` kg.
+3. **Burnout test** — for the mass-consuming models (2 evaporation, 4 evaporation with ODE
+   breakup, 5 combustion) the droplet is declared consumed once its mass drops to
+   `mBurnTol = 1e-15` kg.
 4. **NaN / tiny-step guard** — `exitLoop` is set if `any(y/=y)`, `deltat < dtMin`, or the
    step moved the particle by less than the containment tolerance.
 5. **Event breakup** — `breakupEvent` (TAB/ETAB/KHRT) detects and applies discrete
@@ -124,7 +125,7 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
 | :--- | :--- |
 | outer loop | a non-finite `deltat` estimate falls back to `tauFactor · taup` |
 | `solout::exitLoop` | `any(y /= y)` or `deltat /= deltat` interrupts the solver |
-| `ODEsystem` | a non-finite state after the solver returns is reverted to the last good accepted step and the particle marked `gone` (a consuming droplet hands its remnant to the gas) |
+| `ODEsystem` | a non-finite state after the solver returns is reverted to the last good accepted step and the particle marked `gone`; on this exit and on a solver failure (`err < 0`) a consuming droplet (models 2, 4, 5) hands its remnant to the gas |
 | `ODEsystem` | a `deltat` update outside `[dtMin, huge)` is a hard error |
 | RHS routines (models 2–6) | any non-finite RHS entry (unphysical Newton trial: $m \le 0$, $\dot n_p \le 0$) is replaced by a `1e30` penalty so SDIRK4 rejects the step |
 | model 6 | no clamp or penalty on the frozen fraction $f$: the solidification events own its crossings of 0 and 1 |

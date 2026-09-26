@@ -99,7 +99,8 @@ $$
 where $\dot{m}_\mathrm{evap}$ is evaluated by the active evaporation model (see
 [Evaporation](evaporation.md)).  The particle mass and diameter are updated from `stateVar(8)`
 at each accepted step; $\dot{n}_p$ remains constant (evaporation shrinks individual droplets,
-not the parcel count).
+not the parcel count).  A TAB or ETAB event writes its new diameter into `stateVar(8)` as the
+droplet mass and rescales $\dot{n}_p$ with it, at constant stream mass $\dot{n}_p\,m$.
 
 Body-force source accumulators $J$ and $W$ are appended at the tail of the state when a
 body force is active together with source output; they integrate the mass rate and the
@@ -112,10 +113,11 @@ gravity work along the trajectory for the Eulerian source correction (see
 
 Active when `phaseChange = false` and `brkupEqOde = true`; neq = 8 (+ euler).
 
-Equations (1)–(3) identical to model 1.  The eighth equation is the ODE-based breakup rate:
+Equations (1)–(3) identical to model 1.  The eighth equation is the ODE-based breakup rate of
+the number rate $\dot{n}_p$:
 
 $$
-\dot{n}_p = \dot{n}_{p,\mathrm{breakup}}(\mathbf{Z}, \mathbf{g})
+\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t} = \left(\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t}\right)_\mathrm{brk}(\mathbf{Z}, \mathbf{g})
 $$
 
 evaluated by `breakupOde` in `Lib_Breakup.f90` (Pilch-Erdman, Reitz-Diwakar, or Reitz-KHRT
@@ -129,15 +131,19 @@ constraint as $\dot{n}_p$ changes.
 Active when `phaseChange = true` and `brkupEqOde = true`; neq = 9 (+ euler).
 
 $$
-\dot{m}       = \dot{m}_\mathrm{evap}(\mathbf{Z}, \mathbf{g}) \qquad [\text{index 8}]
+\frac{\mathrm{d}m}{\mathrm{d}t} = \dot{m}_\mathrm{evap}(\mathbf{Z}, \mathbf{g})
+  - \frac{m}{\dot{n}_p}\left(\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t}\right)_\mathrm{brk} \qquad [\text{index 8}]
 $$
 
 $$
-\dot{n}_p     = \dot{n}_{p,\mathrm{breakup}}(\mathbf{Z}, \mathbf{g}) \qquad [\text{index 9}]
+\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t} = \left(\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t}\right)_\mathrm{brk}(\mathbf{Z}, \mathbf{g}) \qquad [\text{index 9}]
 $$
 
-Evaporation and breakup compete: evaporation shrinks the diameter of each drop; breakup
-increases $\dot{n}_p$ (more, smaller drops) while adjusting $d$ for mass conservation.
+so that $\mathrm{d}(\dot{n}_p m)/\mathrm{d}t = \dot{n}_p\,\dot{m}_\mathrm{evap}$: breakup shrinks each drop
+and raises $\dot{n}_p$ at constant stream mass, evaporation shrinks each drop at constant
+$\dot{n}_p$.  In diameter, $\mathrm{d}d/\mathrm{d}t = (d_\mathrm{stable} - d)/\tau
++ 2\dot{m}_\mathrm{evap}/(\rho_p \pi d^2)$.  A Reitz-KHRT event (RT breakup, KH shed) writes its
+new diameter and number rate into the two states.
 
 ---
 

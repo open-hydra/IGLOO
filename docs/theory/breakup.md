@@ -10,6 +10,10 @@ into two mechanistic classes:
   event detected in the `solout` callback.  These set `brkupEvent = .true.` and run under
   model 1 or 2; they do **not** set `brkupEqOde`.
 
+With evaporation on, an event model runs as model 2 and Reitz-KHRT as model 4: both keep the
+droplet mass as an ODE state, and an event writes its new diameter into it together with the
+rescaled number rate (and, for model 4, the number-rate state), at constant stream mass.
+
 | Model | Keyword | `brkupEqOde` | `brkupEvent` | Spawns children |
 | :--- | :--- | :---: | :---: | :---: |
 | Pilch-Erdman | `Pilch-Erdman` | yes | no | no |
@@ -130,7 +134,10 @@ Two discrete events ride on top of it in the `solout` callback:
   least the parent count (Reitz 1987 product-parcel rule), a child parcel of diameter
   $d_\mathrm{stable}$ carrying the stripped mass is appended (`brkupHasChild = .true.`,
   `childState = [v_p, d_\mathrm{stable}, n_\mathrm{child}]`, velocity equal to the
-  parent's) and the parent's count is restored.
+  parent's) and the parent's count is restored.  The stripped mass leaves with the child and
+  never enters the gas source: the parent's outgoing flux in the shed segment includes the
+  child's birth flux, which the child deposits along its own path (see
+  [Eulerian feedback](eulerian-feedback.md)).
 
 ---
 

@@ -45,7 +45,10 @@ Each update is an `!$OMP ATOMIC UPDATE`, making the accumulation race-free acros
 particle threads.  Mass source is written only for mass-evolving materials
 (evaporation or combustion); otherwise it is zeroed.  A droplet consumed inside a cell
 (burnout, or full evaporation) has zero outgoing flux, so everything it carried at
-entry is deposited there.
+entry is deposited there.  A Reitz-KHRT shed lowers the parent's number rate and starts a child
+parcel at the shed point: the parent's outgoing flux in that segment includes the child's birth
+flux $\dot m_c\,(1, \mathbf{v}_p, h + |\mathbf{v}_p|^2/2)$, which the child then deposits along its
+own path, so the shed itself hands the gas nothing.
 
 On an axisymmetric wedge the momentum source is deposited in the **meridian frame**:
 the segment's $\dot m\,(\mathbf{v}_\mathrm{in} - \mathbf{v}_\mathrm{out})$ is rotated by

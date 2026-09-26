@@ -380,6 +380,28 @@ replica to the printed digit.
   {% include "vv/images/tc-hexadecane.svg" ignore missing %}
 </figure>
 
+### evap-breakup-box
+
+Evaporation with ODE breakup (model 4).  25 identical 30 µm drops enter a 50 m/s, 600 K gas
+at 40 m/s and 300 K ($We_r=30$, $\mathrm{Re}=20$): Reitz–Diwakar stripping shrinks them to
+~14 µm in the first 36 mm while the d²-law already removes mass, then evaporation alone
+consumes them inside the 0.8 m box.  No published frozen-gas benchmark combines the two
+mechanisms, so the oracle composes the two source-verified kernels by the stream-mass rule
+(breakup conserves $\dot n_p m$, evaporation removes it):
+$\mathrm{d}d/\mathrm{d}t = (d_\mathrm{stable}-d)/	au + 2\dot m_{d^2}/(
+ho_l\pi d^2)$ is
+RK4-integrated along the measured $u(x)$, $T_p(x)$ over the breakup window, and the d²-law
+integral along $T_p(x)$ after it.  The source field must close on the injected flow (every
+drop consumed in the box), no cell may take mass from the gas, and all 25 drops must burn out
+without a solver-failure exit.  Twins isolate one half each: `d2law-brk-dormant` (the d2law
+case under model 4 with a zero breakup rate), `rd-evap-frozen` (the Reitz–Diwakar case under
+model 4 with a zero evaporation rate); `test_evap_breakup` pins the right-hand side at one
+state and `solver-fail-consumed-m4` the solver-failure exit.
+
+**Result:** composed rate within $1.4\cdot10^{-4}$ of the measured diameter over the breakup
+window (tolerance $2\cdot10^{-3}$), the d²-law integral within half its budget after it,
+source closure $5\cdot10^{-16}$, 25 burnouts at $x=0.544$ m.
+
 ---
 
 ## Tier P — published-model reproduction (validation)
@@ -471,8 +493,16 @@ remain unit-tested.  A third entry, `khrt-e2e-threads`, reruns the case at sever
 thread counts and requires identical output (sorted multisets), since the shed lists are
 drained after the parallel region.
 
+`check.py` also closes the gas source on the particle-phase fluxes: $\sum F_x = P_\mathrm{in} -
+\sum_\mathrm{exits}\dot m|u_p|$ and $\sum E = E_\mathrm{in} - \sum_\mathrm{exits}\dot m(c_pT +
+|u_p|^2/2)$, a KH shed handing its child's birth flux to the child rather than to the gas.
+`khrt-shed-noexchange` states the same cell by cell: with `NoDrag` and `NoHeat` a shed is the
+only exchange left, and every source cell must be zero.  `khrt-evap-frozen` runs the case with
+evaporation on and frozen (model 4): KH rate, RT persistence, children and no mass to the gas.
+
 **Result:** KH stripping within $0.03\,\%$ of the Reitz-87 closed form across the
-sweep; RT shatter persists on all eight drops.
+sweep; RT shatter persists on all eight drops; source budget within the print floor of the
+exit flows ($6\cdot10^{-7}$).
 
 <figure>
   {% include "vv/images/khrt-e2e.svg" ignore missing %}

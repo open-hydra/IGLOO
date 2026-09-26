@@ -180,3 +180,20 @@ Confirmed: TAB closed-form is the right #1 (task's expected winner).
 2. **RD `Re`**: which Reynolds is passed into `breakupOde` (gas-based `ρg u d/μg`?)? Determines whether the stripping `dStable` matches [RD86]/OpenFOAM.
 3. **PE87 velocity poly**: do you have the PE87 PDF? Need to confirm the `VdV` coefficients (0.75·Cd·T + 3·B·T²) and the viscous-time override (4.5,1.2,1.64) before T-PE-dStable is trustworthy.
 4. Should these tests live under `tests/breakup/{tab,pilch-erdman,reitz-diwakar}/` (where they now live) with the harness in `test.sh`?
+
+---
+
+## Breakup with evaporation (ODE model 4) and events under a mass-state model
+
+- **ODE breakup with evaporation** (Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT with `evaporation` set) runs as
+  ODE model 4: the droplet mass and the number rate are both ODE states, and the breakup share
+  `−m·(dn/dt)/n` of `dm/dt` keeps `n d³` constant under breakup. Literature judgment and the composed oracle:
+  [../evaporation/LITERATURE_TESTS.md](../evaporation/LITERATURE_TESTS.md), "Evaporation with ODE breakup".
+  Gates: [rd-evap-frozen](rd-evap-frozen/INFO.md) (the `[RD87]` rate oracle under model 4),
+  [khrt-evap-frozen](khrt-evap-frozen/INFO.md) (KH rate, RT persistence, children, source mass).
+- **Events under a mass-state model** (TAB/ETAB with evaporation run as model 2; KH-RT with evaporation as
+  model 4): the event's diameter and number rate become the ODE state together, `N^(n+1) = N^n (r^n/r^(n+1))³`
+  (`[ORA87]`). Gate: [tab-evap-frozen](tab-evap-frozen/INFO.md).
+- **KH shed and the gas source** (`[Reitz87]` product-parcel rule): the stripped mass leaves the parent as a
+  child parcel born at the shed point, so the parent hands the child's birth flux on instead of depositing
+  it. Gates: `khrt-e2e/check.py::check_source_budget`, [khrt-shed-noexchange](khrt-shed-noexchange/INFO.md).
