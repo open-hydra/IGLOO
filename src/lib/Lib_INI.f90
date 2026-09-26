@@ -103,6 +103,13 @@ contains
     !> Output print frequency of the single particle trajectory (time based [s])
     call fini%get(section_name='IGLOO-General', option_name='print-dtime', val=dtprint, error=error)
     if (error/=0) dtprint = -1._R8
+    !> Parcel end time [s]; absent or <= 0 = off (integrate until the parcel leaves the domain)
+    call fini%get(section_name='IGLOO-General', option_name='time-end', val=tEnd, error=error)
+    if (error/=0 .or. .not.(tEnd>0._R8)) tEnd = huge(1._R8)
+    snapOn = tEnd < huge(1._R8)
+    !> out-time: present and not an off-token => the parcel time closes every row (default off)
+    call fini%get(section_name='IGLOO-General', option_name='out-time', val=mollify_word, error=error)
+    timeOn = error==0 .and. .not.is_off_token(mollify_word)
     !> Maximum mass flow rate per particle trajectory (g/s)
     call fini%get(section_name='IGLOO-General', option_name='mdot-max', val=mdotMax, error=error)
     if (error==0) then; mdotMax = mdotMax*1e-3_R8; else; mdotMax = 0._R8; endif  ! g/s -> kg/s; absent = off

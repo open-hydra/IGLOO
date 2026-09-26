@@ -652,7 +652,7 @@ contains
   !> Merge this sweep's per-rank particle-output shards into the serial file layout and delete
   !  them (root only; no-op at one rank).
   subroutine merge_rank_particle_files(material, tag)
-    use IGLOO_variables,   only: IGLOO_phase_prefix, trajOn, scatOn
+    use IGLOO_variables,   only: IGLOO_phase_prefix, trajOn, scatOn, snapOn
     use IGLOO_data_phases, only: obj_material
     use IGLOO_Mod_MPI,     only: mpi_size_
     implicit none
@@ -672,6 +672,7 @@ contains
       if (trajOn) call merge_one_stream(stem//'trajectories-'//trim(material(m)%matName)//sfx)
       call merge_one_stream(stem//'outloc-'//trim(material(m)%matName)//sfx)
       if (scatOn) call merge_one_stream(stem//'scatter-'//trim(material(m)%matName)//sfx)
+      if (snapOn) call merge_one_stream(stem//'snapshot-'//trim(material(m)%matName)//sfx)
     enddo
 
   end subroutine merge_rank_particle_files

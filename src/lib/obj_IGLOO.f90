@@ -250,7 +250,8 @@ contains
                                 eulerSwitch, sourceSwitch, unitTraj, unitScat, &
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
                                 trajOn, scatOn, dNscat, trajSample, threshold, &
-                                probeOn, probeIDs, axisym, nSectorFold, nMultiFold
+                                probeOn, probeIDs, axisym, nSectorFold, nMultiFold, &
+                                unitSnap, snapOn, timeOn, tEnd
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
     use IGLOO_Lib_Properties, only: lookupTab   !> child hand-off (enthalpy slot)
@@ -312,10 +313,23 @@ contains
       !> Per-material output files: <kind>-<material><sweeptag><ranksuffix>.dat (rank suffix empty at one rank).
       if (trajOn) then
         open(newunit=unitTraj,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'trajectories-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
-        write(unitTraj,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'
+        if (timeOn) then
+          write(unitTraj,'(1X,A)') 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'
+        else
+          write(unitTraj,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'
+        endif
       endif
       open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
-      write(unitExit,*) 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID"'
+      if (timeOn) then
+        write(unitExit,'(1X,A)') 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","t"'
+      else
+        write(unitExit,*) 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID"'
+      endif
+      !> Parcels still in the domain at time-end, one record each.
+      if (snapOn) then
+        open(newunit=unitSnap,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'snapshot-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
+        write(unitSnap,'(1X,A)') 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'
+      endif
 
       !> Scatter cloud: one zone per material; auto-size the weight quantum dNscat to ~trajSample points per stream.
       dNscat = 0._R8
@@ -386,6 +400,7 @@ contains
 
         if (trajOn) write(unitTraj,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
         write(unitExit ,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
+        if (snapOn) write(unitSnap,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
 
         if (gr%brkupHasChild) then
           if (allocated(gr%shed)) deallocate(gr%shed)
@@ -558,6 +573,7 @@ contains
       end associate material
       if (trajOn) close(unitTraj)
       if (scatOn) close(unitScat)
+      if (snapOn) close(unitSnap)
       close(unitExit)
     enddo
 
@@ -596,7 +612,13 @@ contains
       if (mpi_is_root .and. sum(foldStat) > 0) write(*,'(A,I0,A,I0,A)') '     - wedge sector folds: ', &
                                                  foldStat(1), ' (multi-sector: ', foldStat(2), ')'
     endif
-    if (mpi_is_root) write(*,*)" Stop condition : All particles out of domain!"
+    if (mpi_is_root) then
+      if (snapOn) then
+        write(*,'(A,ES16.8E2,A)') '  Stop condition : time-end = ', tEnd, ' s reached, or the particle left the domain'
+      else
+        write(*,*)" Stop condition : All particles out of domain!"
+      endif
+    endif
 
   end subroutine solve
 

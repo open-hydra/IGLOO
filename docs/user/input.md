@@ -126,8 +126,10 @@ Controls the gas field source, output modes, and miscellaneous run-time options.
 | `gas-order` | integer | `2` | Gas interpolation order: `1` = cell-center value, `2` = second-order reconstruction |
 | `out-file` | string | `E+S` | Output fields: `E` = Eulerian only, `S` = source only, `E+S` (also `S+E`, `ES`, `SE`, `ALL`, `both`, case-insensitive; or absent) = both; any other token is refused |
 | `fsample-traj` | integer | `100` | Scatter-cloud density: nominal points per injection stream (sets the droplets-per-point quantum); trajectory rows follow `print-dcell`/`print-dtime`, not this key |
-| `print-dcell` | integer | `1` | Console print frequency in cell crossings |
-| `print-dtime` | real | `−1` | Console print frequency in seconds; `−1` disables time-based printing |
+| `print-dcell` | integer | `1` | Trajectory row frequency in cell crossings |
+| `print-dtime` | real | `−1` | Trajectory row interval [s]; `−1` disables time-based rows |
+| `time-end` | real | `−1` | Parcel end time [s]: every parcel still in the domain stops there, gets a last trajectory row at that time, and its state goes to `snapshot-<mat>.dat`; `≤ 0` or absent = off (integrate until the parcel leaves the domain) |
+| `out-time` | string | `off` | `on` appends the parcel time [s] as the last column of every trajectory and exit row |
 | `mdot-max` | real | `0` | Maximum mass flow rate per particle [g/s]; used to auto-size injection spacing |
 | `out-traj` | string | `on` | Enable trajectory output (`off` to disable) |
 | `out-scatter` | string | `on` | Enable scatter-cloud output (`off` to disable) |
@@ -137,7 +139,7 @@ Controls the gas field source, output modes, and miscellaneous run-time options.
 | `body-accel` | real(3) | `0 0 0` | Uniform body acceleration [m/s²]: `gx gy gz`; absent or all-zero = no-op |
 
 !!! warning "on/off switches are strings, not Fortran logicals"
-    FiNeR's `get(logical)` only accepts `T` or `F`. The `out-traj`, `out-scatter`, and `mollify` keys are parsed as strings; accepted off-tokens are `off`, `false`, `no`, `0`, `F`, `f` (any case). Anything else is treated as on.
+    FiNeR's `get(logical)` only accepts `T` or `F`. The `out-traj`, `out-scatter`, `out-time` and `mollify` keys are parsed as strings; accepted off-tokens are `off`, `false`, `no`, `0`, `F`, `f` (any case). Anything else is treated as on.
 
 ### `[IGLOO-Models]`
 

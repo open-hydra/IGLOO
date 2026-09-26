@@ -51,6 +51,7 @@ my_case/
     ├── trajectories-<mat>.dat   ← per-cell-crossing state (X Y Z U V W T d_p m_p ID)
     ├── outloc-<mat>.dat         ← exit location, speed, angle, area per particle
     ├── scatter-<mat>.dat        ← number-density scatter cloud
+    ├── snapshot-<mat>.dat       ← each particle's state at time-end (only when time-end is set)
     ├── source.tec               ← gas-coupling source terms on the mesh
     └── euler<fam>.tec           ← equivalent Eulerian fields on the mesh, one per particle family
 ```
@@ -102,7 +103,7 @@ python3 check.py                          # oracle gate
 "X" "Y" "Z" "U" "V" "W" "T" "d_p" "m_p" "ID"
 ```
 
-Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). Rows are written every `print-dcell` cell crossings (default 1) or, when `print-dtime` is positive, at that time interval instead.
+Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). Rows are written every `print-dcell` cell crossings (default 1) or, when `print-dtime` is positive, at that time interval instead. With `out-time = on` every row carries the particle time [s] as an eleventh column, `"t"`.
 
 !!! warning "Non-deterministic ordering"
     With OpenMP enabled, the row order within a zone is non-deterministic across runs (different thread scheduling). Verification scripts must sort by particle ID and position before comparing, not rely on byte-identical output.
@@ -113,7 +114,11 @@ Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). Rows ar
 
 ### Exit locations
 
-`OUTPUT/outloc-<mat>.dat` records, for every particle that exits the domain, its exit position, temperature, speed, impact angle, mass flow, face area, and particle ID (`X Y Z T |u_p| alpha mdot Af ID`).
+`OUTPUT/outloc-<mat>.dat` records, for every particle that exits the domain, its exit position, temperature, speed, impact angle, mass flow, face area, and particle ID (`X Y Z T |u_p| alpha mdot Af ID`), followed by the exit time `t` with `out-time = on`.
+
+### Snapshot at an end time
+
+By default a particle is integrated until it leaves the domain. `time-end` [s] in `[IGLOO-General]` stops every particle at that time instead: a particle still inside gets a last trajectory row at `time-end` exactly, and its state goes to `OUTPUT/snapshot-<mat>.dat`, one row per particle with the trajectory columns and the time (`X Y Z U V W T d_p m_p ID t`); a particle that leaves earlier writes its exit record as usual. The sources and the Eulerian fields then cover the interval from injection to `time-end`.
 
 ### Field output
 

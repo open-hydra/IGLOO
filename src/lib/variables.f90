@@ -34,6 +34,10 @@ module IGLOO_variables
   integer  :: fsample, nb, nm, nfam, iprint, trajSample
   integer, allocatable :: nspecies(:)
   real(R8) :: ds, mdotMax, dtprint
+  !> [IGLOO-General] time-end [s]: every parcel stops there (huge = off); out-time appends the
+  !  parcel time to every trajectory and exit row.
+  real(R8) :: tEnd = huge(1._R8)
+  logical  :: timeOn = .false.
   real(R8) :: dsDegen=0._R8           !> [IGLOO-BC] ds-degen [m]: no injection in boundary cells thinner than this
   integer  :: rng_seed=42             !> seed for stochastic injection-diameter sampling
 
@@ -66,11 +70,13 @@ module IGLOO_variables
   real(R8), parameter :: threshold = 1.0e29_R8
 
   !> Output files units
-  integer :: unitTraj, unitScat, unitExit
+  integer :: unitTraj, unitScat, unitExit, unitSnap
 
   !> [IGLOO-General] out-traj / out-scatter output switches (default on); dNscat is the
   !  per-material scatter weight quantum (droplets per point), auto-sized.
   logical  :: trajOn=.true., scatOn=.true.
+  !> snapshot-<mat>.dat: each parcel's state at time-end (on when time-end is set).
+  logical  :: snapOn=.false.
   real(R8) :: dNscat=0._R8
 
 end module IGLOO_variables 

@@ -14,7 +14,7 @@ contains
                         hTab,cpTab,rhoTab,mupTab,sigTab,psatTab, shed,noShed)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
-    use IGLOO_variables,  only: unitTraj,unitExit,unitScat,iprint,dtprint, &
+    use IGLOO_variables,  only: unitTraj,unitExit,unitScat,unitSnap,iprint,dtprint,tEnd,timeOn,snapOn, &
                                 nb,toll,ord2,mesh2D,threshold,            &
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
@@ -54,7 +54,7 @@ contains
     !> local variables
     type(obj_shed) :: shedRec   !> staged child record, pushed once complete
     real(R8), allocatable :: gas(:,:), gasVert(:,:), gasState(:)
-    real(R8) :: vert(3,8), t1, t2, tStart, deltat, tlimit, tprint
+    real(R8) :: vert(3,8), t1, t2, tStart, deltat, tprint
     real(R8) :: Ein, Eout, Pin(3), Pout(3), massIn, massOut, vol
     real(R8) :: entryPos(3)   ! cell-entry position, for the closed-form body-force work (models 1,3)
     real(R8) :: pMid(3)       ! segment mid position: azimuth of the meridian-frame source deposit
@@ -102,7 +102,6 @@ contains
     real(R8), parameter :: mBurnTol=1.e-15_R8
 
     nScat = 0            !> before every exit path, so flushScat is always well-defined
-    tlimit = huge(1._R8) !> steady-state by default (temporary)
     neq = part%neq       !> save local copy of neq
     atGasBoundary = .true.   !> conservative default: geo consulted until proven interior
     nsp = 1              !> nsp = nspecies(part%Iinj(1)) !> for multi-species gas
@@ -165,7 +164,7 @@ contains
       if (eulerSwitch)    part%stateVar(part%nOde+1:part%neq) = 0._R8
       if (part%bodyAccum) part%stateVar(part%neq-1 :part%neq) = 0._R8
 
-      if (trajOn) write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID
+      if (trajOn) call writeTrajRow()
     endif
     !> Block index and cell-entry state for every entry (children enter with time /= 0).
     b = part%i(1)
@@ -178,7 +177,7 @@ contains
     nStall = 0; posPrev = part%stateVar(1:3) - 1._R8
     !> Scatter accumulator, seeded with a per-ID golden-ratio phase offset.
     wAcc = dNscat * mod(real(part%ID,R8)*0.6180339887498949_R8, 1._R8)
-    do while (part%time<tlimit.and.iter<maxIter)
+    do while (part%time<tEnd.and.iter<maxIter)
       iter = iter+1
       call part%initializeCell(eulerSwitch)
       if (sourceSwitch) call part%computeSource(massIn,Pin,Ein)
@@ -192,7 +191,7 @@ contains
       if (.not. ieee_is_finite(deltat)) deltat = tauFactor * taup
 
       tStart = part%time
-      t2     = tStart + 20.0_R8 * deltat
+      t2     = min(tStart + 20.0_R8 * deltat, tEnd)
       doLoop = .true.
       consumed = .false.
       shedM = 0._R8; shedV = 0._R8
@@ -354,14 +353,17 @@ contains
         part%gone = .true.
       endif
 
-      if ((dtprint>0._R8.and.part%time>=tprint).or.(mod(nCross,iprint)==0.and.part%Ncell==0.and..not.foldOnly)) then
-        if (trajOn) write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID
+      if ((dtprint>0._R8.and.part%time>=tprint).or.(mod(nCross,iprint)==0.and.part%Ncell==0.and..not.foldOnly) &
+          .or.part%time>=tEnd) then
+        if (trajOn) call writeTrajRow()
         tprint = tprint + dtprint
       endif
+      !> time-end reached inside the domain: the parcel's state at the stop.
+      if (snapOn .and. part%time>=tEnd .and. .not.part%gone) &
+        write(unit=unitSnap,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, part%time
       if (part%gone) then
+        call writeExitRow()
         part%time = 0._R8
-        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8)')                                      &
-              part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), part%angle, part%mdot, part%Af, part%ID
         call flushScat()
         return
       endif
@@ -372,14 +374,36 @@ contains
     if (iter >= maxIter .and. .not. part%gone) then
       write(*,'(A,I4,A,I0,A)') '       ==> Particle ',part%ID,' hit outer maxIter (',maxIter,'); flagging gone'
       part%gone = .true.
+      call writeExitRow()
       part%time = 0._R8
-      write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8)')                                          &
-            part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), part%angle, part%mdot, part%Af, part%ID
     endif
     !> Every exit path flushes the scatter buffer.
     call flushScat()
 
   contains
+
+    !> One trajectory row; out-time appends the parcel time.
+    subroutine writeTrajRow()
+      if (timeOn) then
+        write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, &
+                                                                  part%time
+      else
+        write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID
+      endif
+    end subroutine writeTrajRow
+
+
+    !> One exit record, written before the time reset; out-time appends the parcel time.
+    subroutine writeExitRow()
+      if (timeOn) then
+        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), &
+                                                                  part%angle, part%mdot, part%Af, part%ID, part%time
+      else
+        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8)') part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), &
+                                                         part%angle, part%mdot, part%Af, part%ID
+      endif
+    end subroutine writeExitRow
+
 
     !> Emit the buffered scatter records in one write statement.
     subroutine flushScat()

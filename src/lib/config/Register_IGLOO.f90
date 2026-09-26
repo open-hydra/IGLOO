@@ -34,6 +34,11 @@ contains
       'Trajectory print frequency in cell crossings','',.false.)
     call reg%add('IGLOO-General','print-dtime',d_r(1),'-1', &
       'Trajectory print interval [s]; <0 = cell-based printing','',.false.)
+    call reg%add('IGLOO-General','time-end',d_r(26),'-1', &
+      'Parcel end time [s]: every parcel still in the domain stops there, with a last trajectory row at that time '// &
+      'and its state in snapshot-<mat>.dat; <=0 = off (integrate until the parcel leaves the domain)','',.false.)
+    call reg%add('IGLOO-General','out-time',d_s(23),'off', &
+      'Append the parcel time [s] as the last column of every trajectory and exit row','on, off',.false.)
     call reg%add('IGLOO-General','mdot-max',d_r(2),'0', &
       'Maximum mass flow per trajectory [g/s]; 0 = off (spacing from ds)','',.false.)
     call reg%add('IGLOO-General','out-traj',d_s(3),'on', &

@@ -103,7 +103,10 @@ by CTest under `-DBUILD_VERIFICATION=ON`.  Each case runs the freshly built
 `bin/IGLOO` in its own directory with `OMP_NUM_THREADS=5`, `KMP_STACKSIZE=100M`,
 and `ulimit -s unlimited`, then invokes its oracle.  The pass criterion is
 `check.py` exit 0; the solver's own exit code is not gated (benign compiler stderr
-warnings are ignored).
+warnings are ignored).  Oracles read the per-parcel files by column: trajectory and
+exit rows carry no time unless a case sets `out-time = on`, which appends the particle
+time as the last column, and a case that must stop at a fixed time sets `time-end`,
+which also writes each particle's state at that time to `snapshot-<mat>.dat`.
 
 ---
 
