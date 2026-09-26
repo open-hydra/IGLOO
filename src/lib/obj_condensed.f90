@@ -229,7 +229,7 @@ contains
     endif
 
     mdotSwitch = (self%evapSelect > 0)
-    mdl = determineModel(mdotSwitch, self%brkupEqOde, self%combSelect)
+    mdl = determineModel(mdotSwitch, self%brkupEqOde, self%combSelect, self%solidSelect)
     self%neq  = computeNeq(mdl, eulerSwitch, srcBodyForce)
     !> Build fixed-size propFlags: [varCp, varRho, varSig, varMup, varPsat]
     propFlags = [self%cpVariable, self%rhoVariable, .false., .false., .false.]

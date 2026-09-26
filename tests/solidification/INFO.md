@@ -34,5 +34,16 @@ Unit family `test_solidification.f90`: an alumina-like particle, `ρ = 3970`, `d
 | SG3 | analytic | `hSolid` continuous at nucleation (both branches), plateau end, re-melt, and through `solidTransition` from states past each threshold (`f = 1.001`, `f = −0.001`, `T = T_nuc − 5`); liquid branch `c_l T + h_off` to 1 ULP with `h_off = −1.7e7`; increasing in `T` within a phase | algebra | 4 ULP of `c_l T_m + |h_off|` | measured: the plateau branch without `− f h_fus` opens gaps of 8.79e5 J/kg at nucleation (0.250 of `c_l T_nuc`, as predicted) and 1.09e6 J/kg at the plateau end; a clamp on `f` opens 1.09e3 J/kg past each end; the single-capacity whole-freeze temperature 1.19e5 J/kg |
 | SG4 | independent integration | RK4 (`h = 1 µs`) of the three regimes with each phase end located by bisection on its event function and the transition applied at the crossing, vs the piecewise closed form at 14 liquid, 12 plateau and 14 solid epochs; the 12 plateau epochs at `T_m` exactly | closed form | 1e-10 relative on `T`, 1e-12 on `f` | measured, no nucleation event: `T` off by 0.218 (predicted 0.21 at the plateau midpoint), no epoch at `T_m`, `f` off by 1.0. The test applies its own event rule; the solver's is gated end to end |
 | SG5 | corners | finite outputs on `f ∈ {−1e-3, 0, 1, 1+1e-3}` × `T ∈ {T_g, T_nuc, T_m, T_0}` × `Q̇ ∈ {−1, 0, 1} W`; event functions exactly 0 at `T_nuc`, `f = 1`, `f = 0` and of the right sign on either side; `hSolid` linear in `f` past both ends (no clamp on `f`); injection phases (solid at `T ≤ T_nuc`, undercooled below `T_m`, liquid from `T_m`); whole freeze with `L(T_nuc) < 0` (`h_fus = 1e5`) lands below `T_nuc` with the enthalpy kept | definition | bitwise / 4 ULP | measured, clamp on `f` in the plateau enthalpy: SG5c fails (with SG3) |
+| SG6 | production RHS | one `rhsSolidification` call per phase after `setupRHS(6, …)`: the mass, diameter, metal block and phase slots exist; `F(7) = Q̇/(m c)` (liquid, solid), `F(8) = −Q̇/(m h_fus)` (plateau), the unweighted euler tail; poisoning the nine metal slots the RHS must not read (all but `h-fus`, `cp-solid`) changes no bit of `F` | closed form at zero slip (`Nu = 2`) | 1e-13 relative; bitwise | measured: no metal block for model 6 fails SG6a; the plateau rate taking `cp-solid` fails SG6b by 766× |
 
 `dump_curve('solidification-recalescence', 'SG4', …)` writes the unit figure `unit-solidification-recalescence.svg`.
+
+## End to end
+
+| case | what it gates |
+|---|---|
+| [`solid-box`](solid-box/INFO.md) | the three regimes against their closed forms on the shared box, the event position, the energy deposit (global telescoping and the per-cell plateau heat) |
+| [`solid-box-euler`](solid-box-euler/INFO.md) | the equivalent-Eulerian field of model 6: coverage, `ρ_p/n_p = m`, `u_p`, `T_p` per cell |
+| [`solid-box-2mat`](solid-box-2mat/INFO.md) | a model-6 material followed by a model-1 one in one run |
+| `repeatability/solid-box` | two sweeps reproduce each other: the phase and the frozen fraction are re-derived at injection |
+| `infrastructure/refusals/solid-*` | the eight setup refusals of the input contract (`h-fus`, `cp-solid`, `T-nuc < T-melt`, no evaporation, combustion or breakup, constant `cp` and density) |

@@ -6,6 +6,7 @@ module IGLOO_particles
   use IGLOO_Lib_Drag
   use IGLOO_Lib_Heat
   use IGLOO_Lib_Properties, only: lookupTab, comp_TfromTab
+  use IGLOO_Lib_Solidification, only: hSolid
   use IGLOO_bcBox
   use IGLOO_data_block, only: obj_block, obj_flowblock
   use IGLOO_RayFaceIntersection3D
@@ -77,8 +78,11 @@ module IGLOO_particles
     integer      :: intfSelect  = 0    !> interface:   0 VLE, 1 Langmuir-Knudsen
     integer      :: boilSelect  = 0    !> boiling:     0 clamp, 1 ZGR (not yet implemented)
     integer      :: combSelect  = 0    !> metal combustion: 0 off, 1 Beckstead
-    integer      :: solidSelect = 0    !> solidification:   0 off, 1 supercool (not yet implemented)
-    integer      :: model       = 1    !> RHS model (1-5)
+    integer      :: solidSelect = 0    !> solidification:   0 off, 1 supercool + recalescence
+    integer      :: solidPhase  = 0    !> solidification phase: 0 liquid, 1 undercooled, 2 plateau, 3 solid
+    real(R8)     :: fSolid      = 0._R8 !> frozen mass fraction, copy of stateVar(8) (model 6)
+    logical      :: overMelt    = .false. !> solid parcel warned above T-melt (model 6)
+    integer      :: model       = 1    !> RHS model (1-6)
     integer      :: neq         = 7    !> number of ODE equations
     integer      :: nOde        = 7    !> number of ODE state variables
     logical      :: bodyAccum = .false. !> body-force J/W accumulators present (only models 2,4,5 & srcBodyForce)
@@ -176,6 +180,9 @@ contains
     !  the T state (cp=const) needs cp*T + hOff (hOff = 0 for a relative table)
     enthalpy = self%stateVar(7)
     if (.not.self%varCp) enthalpy = self%cp*enthalpy + self%hOff
+    !> model 6: the latent heat of fusion is part of the enthalpy
+    if (self%model == 6) enthalpy = hSolid(self%stateVar(7), self%stateVar(8), self%solidPhase, self%cp, &
+                                           self%cpSol, self%hFus, self%Tmelt, self%hOff)
     select case (self%model)
     case (2,4,5); mdot_inst = self%npdot * self%m
     case default; mdot_inst = self%mdot
@@ -292,6 +299,7 @@ contains
              self%m     = self%mdot/self%npdot
     case(4); self%m     = self%stateVar(8)
              self%npdot = self%stateVar(9)
+    case(6); self%fSolid = self%stateVar(8)
     end select
     if (self%model/=1) then
       if (self%varCp)  self%Tp  = comp_TfromTab(hTab,self%hp)

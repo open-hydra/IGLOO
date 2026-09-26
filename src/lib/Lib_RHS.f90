@@ -8,10 +8,11 @@ module Lib_RHS
   public  :: packAuxState, unpackAuxState
   public  :: packEventVar, unpackEventVar
   public  :: rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, rhsAlCombustion
+  public  :: rhsSolidification
   public  :: ind_d, ind_rho, ind_sig, ind_mup
   public  :: ind_ps, ind_Mv, ind_Lv, ind_Cv
   public  :: ind_Le, ind_Yi, ind_e1, ind_e2, ind_cp, ind_m
-  public  :: ind_sxi, ind_sb1, ind_sb2
+  public  :: ind_sxi, ind_sb1, ind_sb2, ind_sph
   public  :: ind_evd, ind_evn, ind_evm0, ind_ev1, ind_ev2
   public  :: ind_e3, ind_e4, ind_e5, ind_mb, nmetal
   public  :: mod_model, mod_brkSelect, mod_evapSelect, mod_propFlags
@@ -20,14 +21,14 @@ module Lib_RHS
   public  :: nauxvar, nauxstate, neventvar, nbrkst
 
   !> Per-material config, set once by setupRHS
-  integer :: mod_model      = 1         !> RHS model (1-5)
+  integer :: mod_model      = 1         !> RHS model (1-6)
   integer :: mod_brkSelect  = 0         !> breakup model selector
   integer :: mod_evapSelect = 0         !> evaporation gas-side selector
   integer :: mod_liqSelect  = 0         !> liquid-side: 0 ITC, 1 P2T (not implemented)
   integer :: mod_intfSelect = 0         !> interface:   0 VLE, 1 Langmuir-Knudsen
   integer :: mod_boilSelect = 0         !> boiling:     0 clamp, 1 ZGR (not implemented)
   integer :: mod_combSelect = 0         !> metal combustion: 0 off, 1 Beckstead
-  integer :: mod_solidSelect= 0         !> solidification:   0 off, 1 supercool (not implemented)
+  integer :: mod_solidSelect= 0         !> solidification:   0 off, 1 supercool + recalescence
   logical :: mod_propFlags(5) = .false. !> [varCp, varRho, varSig, varMup, varPsat]
   real(R8), allocatable :: mod_bp(:)    !> breakup params (copy of bp from IGLOO_Lib_Breakup)
   integer  :: mod_bpMethod  = 1         !> TAB sub-method selector
@@ -46,6 +47,7 @@ module Lib_RHS
   !> AuxState indices (set by computeNauxState)
   integer :: ind_sxi = 0                    !> xi0 start in auxState
   integer :: ind_sb1 = 0, ind_sb2 = 0       !> told/tc in auxState (KHRT breakupOde)
+  integer :: ind_sph = 0                    !> solidification phase in auxState (model 6)
   integer :: nauxstate = 0                   !> total auxState size
 
   !> EventVar indices (set by computeNeventVar)
@@ -58,12 +60,13 @@ module Lib_RHS
 
 contains
 
-  !> ODE model selector from the phase-change, breakup-ODE and combustion flags.
-  pure function determineModel(phaseChange, brkupEqOde, combSelect) result(model)
+  !> ODE model selector from the solidification, combustion, breakup-ODE and phase-change flags.
+  pure function determineModel(phaseChange, brkupEqOde, combSelect, solidSelect) result(model)
     logical, intent(in) :: phaseChange, brkupEqOde
-    integer, intent(in) :: combSelect
+    integer, intent(in) :: combSelect, solidSelect
     integer :: model
-    if     (combSelect>0) then; model = 5  !> Al combustion
+    if     (solidSelect>0) then; model = 6 !> solidification
+    elseif (combSelect>0) then; model = 5  !> Al combustion
     elseif (brkupEqOde .and. &
             phaseChange) then; model = 4
     elseif (brkupEqOde ) then; model = 3
@@ -80,6 +83,7 @@ contains
     select case(model)
     case(2,3,5) ; neq = 8; if (eulerSwitch) neq = neq + 6
     case(4)     ; neq = 9; if (eulerSwitch) neq = neq + 7
+    case(6)     ; neq = 8; if (eulerSwitch) neq = neq + 5
     case default; neq = 7; if (eulerSwitch) neq = neq + 5
     end select
     !> body-force accumulators (mass-evolving models): W at neq, J at neq-1 unless euler-on
@@ -104,7 +108,7 @@ contains
     if (.not.propFlags(1)) then
       nBase = nBase + 1; ind_cp = ind; ind = ind + 1       !> cp (constant)
     endif
-    if (model==1) then
+    if (model==1 .or. model==6) then
       nBase = nBase + 1; ind_m = ind; ind = ind + 1        !> mass (truly constant)
       if (.not.propFlags(2)) then
         nBase = nBase + 1; ind_d   = ind; ind = ind + 1    !> diameter (const mass+rho)
@@ -148,8 +152,8 @@ contains
       ind_e5 = ind; ind = ind + 1                         !> mu_liq   → ep(10) (reserved)
     endif
 
-    !> metal combustion: contiguous nmetal-slot block
-    if (combSelect > 0) then
+    !> metal combustion or solidification: contiguous nmetal-slot block
+    if (combSelect > 0 .or. model == 6) then
       nComb = nComb + nmetal
       ind_mb = ind; ind = ind + nmetal
     endif
@@ -157,7 +161,7 @@ contains
 
   end subroutine computeNaux
 
-  !> Number of auxiliary state entries per model (xi0, KHRT told/tc), and their indices.
+  !> Number of auxiliary state entries per model (xi0, KHRT told/tc, solidification phase), and their indices.
   subroutine computeNauxState(model,brkSelect,propFlags, &
                               ord2,mesh2D,nAuxState)
     integer, intent(in)  :: model, brkSelect
@@ -166,7 +170,7 @@ contains
     integer :: ind
 
     nAuxState = 0; ind = 1
-    ind_sxi = 0; ind_sb1 = 0; ind_sb2 = 0
+    ind_sxi = 0; ind_sb1 = 0; ind_sb2 = 0; ind_sph = 0
 
     if (ord2 .and. (.not.mesh2D)) then
       ind_sxi = ind; ind = ind + 3                      !> xi0 (2nd order, 3D only)
@@ -178,6 +182,10 @@ contains
       ind_sb1 = ind; ind_sb2 = ind + 1
       nAuxState = ind + 1
     end select
+
+    if (model == 6) then                                 !> solidification phase, read by the RHS
+      nAuxState = nAuxState + 1; ind_sph = nAuxState
+    endif
 
   end subroutine computeNauxState
 
@@ -288,7 +296,7 @@ contains
        particle%Tnuc,  particle%cpSol, particle%qComb]
   end subroutine packAuxVars
 
-  !> Pack the particle's auxiliary state (xi0, KHRT told/tc) into auxst.
+  !> Pack the particle's auxiliary state (xi0, KHRT told/tc, solidification phase) into auxst.
   pure subroutine packAuxState(particle, ns, auxst)
     use IGLOO_particles, only: obj_particle
     type(obj_particle), intent(in)  :: particle
@@ -301,6 +309,7 @@ contains
       auxst(ind_sb1) = particle%brkupVar(1)   !> told
       auxst(ind_sb2) = particle%brkupVar(2)   !> tc
     endif
+    if (ind_sph > 0) auxst(ind_sph) = real(particle%solidPhase, R8)
   end subroutine packAuxState
 
   !> Unpack auxst back into the particle's auxiliary state.
@@ -315,6 +324,7 @@ contains
       particle%brkupVar(1) = auxst(ind_sb1)   !> told
       particle%brkupVar(2) = auxst(ind_sb2)   !> tc
     endif
+    if (ind_sph > 0) particle%solidPhase = nint(auxst(ind_sph))
   end subroutine unpackAuxState
 
   !> Pack the breakup event variables from the particle.
@@ -448,6 +458,75 @@ contains
       ! error stop '[ERROR] rhsStandard produced NaN'
     endif
   end subroutine rhsStandard
+
+
+  !> Model 6: constant mass, solidification; Z(7) = T, Z(8) = frozen fraction f, phase from auxst.
+  subroutine rhsSolidification(neq, time, Z, F, aux,naux, auxst,nauxst, &
+                                gasNodes,gasVert,gas,nsp,nNodes)
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
+    use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, toll, bodyForce, bodyAccel
+    use IGLOO_Lib_Combustion,     only: imHf, imCps
+    use IGLOO_Lib_Solidification, only: plateauRate, phPlateau, phSolid
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    implicit none
+    integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
+    real(R8), intent(in)    :: time
+    real(R8), intent(in)    :: Z(neq)
+    real(R8), intent(out)   :: F(neq)
+    real(R8), intent(in)    :: aux(naux)
+    real(R8), intent(inout) :: auxst(nauxst)
+    real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
+    real(R8), intent(inout) :: gas(nsp)
+    ! locals
+    real(R8) :: normVel, slip, Vdif(3), Re, d, m, xi0_loc(3)
+    real(R8) :: Fdrag(3), QdotW
+
+    F = 0._R8
+    m = aux(ind_m)
+    d = aux(ind_d)
+    ! 2nd order gas interpolation
+    if (ord2) then
+      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
+      else
+        xi0_loc = auxst(ind_sxi:ind_sxi+2)
+        call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
+        auxst(ind_sxi:ind_sxi+2) = xi0_loc
+      endif
+    endif
+
+    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
+    slip = norm2(Vdif)
+    !> degenerate gas (mu <= 0): no drag, no heat
+    if (gas(6) <= toll) then
+      Re    = 0._R8
+      Fdrag = 0._R8
+      QdotW = 0._R8
+    else
+      Re = gas(1) * slip * d / gas(6)
+      call interphase(gas, nsp, Vdif, slip, Z(7), d, Re, 1._R8, Fdrag, QdotW)
+    endif
+    F(1:3) = Z(4:6)
+    F(4:6) = Fdrag/m
+    if (bodyForce) F(4:6) = F(4:6) + bodyAccel
+    !> heat [W] goes to T (liquid c_l, solid c_s) or, on the plateau, to the frozen fraction
+    select case (nint(auxst(ind_sph)))
+    case (phPlateau); F(8) = plateauRate(QdotW, m, aux(ind_mb+imHf-1))
+    case (phSolid);   F(7) = QdotW/(m*aux(ind_mb+imCps-1))
+    case default;     F(7) = QdotW/(m*aux(ind_cp))
+    end select
+
+    if (eulerSwitch) then
+      normVel  = norm2(Z(4:6))
+      F(9)     = normVel
+      F(10:12) = toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
+      F(13)    = Z(7) * normVel
+    endif
+
+    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
+    if (any(.not. ieee_is_finite(F))) then
+      where (.not. ieee_is_finite(F)) F = 1.e30_R8
+    endif
+  end subroutine rhsSolidification
 
 
   !> Model 2: variable mass via evaporation.

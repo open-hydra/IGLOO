@@ -8,10 +8,10 @@
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ (e2e)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
-#   solidification/     unit family (root)
+#   solidification/     unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both}
-#   repeatability/      two-sweep gates (twosweep driver): 8 cases
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
+#   repeatability/      two-sweep gates (twosweep driver): 11 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
 # Run everything via ../test.sh (builds bin/IGLOO too — e2e cases use it).
@@ -238,6 +238,9 @@ igloo_twosweep_case(repeat-tab          repeatability/tab
 # Sweep 1 must reproduce sweep 0 (trajectories, exits, scatter, source); RED on the racy fork.
 igloo_twosweep_case(repeat-tab-dopri5   repeatability/tab-dopri5
                     "e2e;repeatability;breakup"        "")
+# repeat-solid-box: model 6's phase and frozen fraction are re-derived at injection every sweep.
+igloo_twosweep_case(repeat-solid-box    repeatability/solid-box
+                    "e2e;repeatability;solidification" "")
 # docs/user/registry.md is DocGen OUTPUT that is also TRACKED, so it can silently
 # disagree with the registry it documents (it did twice on 2026-07-30). Regenerate
 # into the build tree and diff. Kind 8 (contract meta-test): no physics, no figure.
@@ -347,6 +350,14 @@ igloo_e2e_case(burn-box combustion/burn-box "e2e;combustion")
 
 # ---------- solidification (ODE model 6: supercooling, recalescence, plateau) --------
 igloo_unit_test(test_solidification solidification "unit;solidification;t4")
+# solid-box: supercooling, recalescence, plateau and solid cooling against the closed forms, and the
+# energy deposit (global telescoping + per-cell plateau heat) on the unsmoothed source field.
+igloo_e2e_case(solid-box solidification/solid-box "e2e;solidification")
+# solid-box-euler: the equivalent-Eulerian field of model 6 (out-file ALL) -- the only gate on the euler
+# tail after the frozen fraction; solid-box writes the source field only.
+igloo_e2e_case(solid-box-euler solidification/solid-box-euler "e2e;solidification;euler")
+# solid-box-2mat: a model-6 material followed by a plain model-1 one, set up and integrated after it.
+igloo_e2e_case(solid-box-2mat solidification/solid-box-2mat "e2e;solidification;infrastructure")
 
 # ---------- breakup: KHRT (unblocked 2026-07-07 by the A2 fix) -----------------
 igloo_unit_test(test_breakup_khrt breakup/reitz-khrt "unit;breakup;khrt;d;t7")
@@ -493,6 +504,24 @@ igloo_refusal_case(refuse-ode-solver       infrastructure/refusals/ode-solver
 # second name was ignored and the run went through (exit 0).
 igloo_refusal_case(refuse-boiling-temperature-both infrastructure/refusals/boiling-temperature-both
                    "give boiling-temperature or its alias Tboil, not both" "e2e;refusal;evaporation")
+# Solidification (ODE model 6): the latent heat and the solid heat capacity have no default, T-nuc must
+# lie below T-melt, no other phase model on the material, a constant-cp and constant-density table.
+igloo_refusal_case(refuse-solid-hfus       infrastructure/refusals/solid-hfus
+                   "solidification=on requires h-fus > 0"               "e2e;refusal;solidification")
+igloo_refusal_case(refuse-solid-cpsolid    infrastructure/refusals/solid-cpsolid
+                   "solidification=on requires cp-solid > 0"            "e2e;refusal;solidification")
+igloo_refusal_case(refuse-solid-tnuc       infrastructure/refusals/solid-tnuc
+                   "solidification=on requires T-nuc < T-melt"          "e2e;refusal;solidification")
+igloo_refusal_case(refuse-solid-evap       infrastructure/refusals/solid-evap
+                   "solidification=on is exclusive with evaporation"    "e2e;refusal;solidification")
+igloo_refusal_case(refuse-solid-comb       infrastructure/refusals/solid-comb
+                   "solidification=on with combustion is not supported" "e2e;refusal;solidification")
+igloo_refusal_case(refuse-solid-brk        infrastructure/refusals/solid-brk
+                   "solidification=on with breakup is not supported"    "e2e;refusal;solidification")
+igloo_refusal_case(refuse-solid-varcp      infrastructure/refusals/solid-varcp
+                   "solidification=on requires a constant-cp material"  "e2e;refusal;solidification")
+igloo_refusal_case(refuse-solid-varrho     infrastructure/refusals/solid-varrho
+                   "solidification=on requires a constant-density material" "e2e;refusal;solidification")
 # Wedge-layout contract: the fold band, the 2.5D gas sample and the meridian-frame deposits take
 # refDir as the sector CENTRE (k-planes at -+delthe/2, what MOSE/ATLAS write); a sector [0, delthe]
 # would run with everything rotated by delthe/2. Tiny generated wedge (make_wedge_case.py --theta0-deg 0.5).

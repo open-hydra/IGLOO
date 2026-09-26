@@ -102,7 +102,16 @@ contains
       !> parsed-but-unimplemented selectors are rejected here
       if (material(i)%liqSelect   > 0) error stop '[ERROR] liquid-conduction=P2T parsed but not implemented yet'
       if (material(i)%boilSelect  > 0) error stop '[ERROR] boiling=ZGR parsed but not implemented yet'
-      if (material(i)%solidSelect > 0) error stop '[ERROR] solidification=on parsed but not implemented yet'
+      !> Solidification validation: latent heat and solid cp given, nucleation below melting, no other phase model
+      if (material(i)%solidSelect > 0) then
+        if (material(i)%hFus  <= 0._R8) error stop '[ERROR] solidification=on requires h-fus > 0 in [GPB-PhaseX]'
+        if (material(i)%cpSol <= 0._R8) error stop '[ERROR] solidification=on requires cp-solid > 0 in [GPB-PhaseX]'
+        if (material(i)%Tnuc >= material(i)%Tmelt) error stop '[ERROR] solidification=on requires T-nuc < T-melt'
+        if (material(i)%evapSelect > 0) &
+          error stop '[ERROR] solidification=on is exclusive with evaporation (alumina does not evaporate)'
+        if (material(i)%combSelect  > 0) error stop '[ERROR] solidification=on with combustion is not supported'
+        if (material(i)%brkupSelect > 0) error stop '[ERROR] solidification=on with breakup is not supported'
+      endif
       !> Combustion validation: no breakup coupling, sane burn-law inputs
       if (material(i)%combSelect > 0) then
         if (material(i)%brkupSelect > 0) error stop '[ERROR] combustion=Beckstead with breakup is not supported (deferred)'
@@ -187,6 +196,11 @@ contains
       endif
       write(*,'(A,I0,A,ES12.4,A)') '  >> [material ', i, '] enthalpy datum '//trim(mat%hDatum)// &
                                    ' (hOff = ', mat%hOff, ' J/kg)'
+      !> solidification integrates T with constant cp and density
+      if (mat%solidSelect > 0 .and. mat%cpVariable) &
+        error stop '[ERROR] solidification=on requires a constant-cp material (temperature state)'
+      if (mat%solidSelect > 0 .and. mat%rhoVariable) &
+        error stop '[ERROR] solidification=on requires a constant-density material'
 
       !> sigma/mu (breakup)
       if (brkupSwitch) then

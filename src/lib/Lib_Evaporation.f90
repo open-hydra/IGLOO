@@ -155,7 +155,7 @@ contains
         end select
     end subroutine assign_combustion
 
-    !> Solidification: 0 off, 1 supercool+recalescence (not implemented); on|off parsed as strings.
+    !> Solidification: 0 off, 1 supercool+recalescence (ODE model 6); on|off parsed as strings.
     subroutine assign_solidification(word, solidSelect)
         implicit none
         character(len=*), intent(in)  :: word

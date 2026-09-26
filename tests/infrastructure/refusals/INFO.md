@@ -37,9 +37,19 @@ output written).
 | `refuse-out-file` | `out-file = nonsense` | `IGLOO: unknown out-file token` (accepted: E, S, E+S, ALL -- `ALL` is what hydra's MI2 cases write; `two-mat` runs it) |
 | `refuse-ode-solver` | `ode-solver = H-radau5` | `IGLOO: unknown ode-solver` |
 | `refuse-boiling-temperature-both` | tc-box (`INPUT/` symlinked) with `boiling-temperature` and `Tboil` both in `[IGLOO-Properties]` | `give boiling-temperature or its alias Tboil, not both` |
+| `refuse-solid-hfus` | own `INPUT/phase.txt` `A 1 solidification=on cp-solid=600` (no `h-fus`), drag-stokes's `bc.txt`/`solfile.tec` | `solidification=on requires h-fus > 0` |
+| `refuse-solid-cpsolid` | `A 1 solidification=on h-fus=1.07e6` (no `cp-solid`) | `solidification=on requires cp-solid > 0` |
+| `refuse-solid-tnuc` | the valid solidification line plus `T-nuc=2400` (above the 2327 K default `T-melt`) | `solidification=on requires T-nuc < T-melt` |
+| `refuse-solid-evap` | the valid line plus `[IGLOO-Models] evaporation = CEM` | `solidification=on is exclusive with evaporation` |
+| `refuse-solid-comb` | the valid line plus `combustion=Beckstead K-burn=4.5e-7` | `solidification=on with combustion is not supported` |
+| `refuse-solid-brk` | the valid line plus `[IGLOO-Models] breakup = TAB` | `solidification=on with breakup is not supported` |
+| `refuse-solid-varcp` | the valid line plus an own 10-row `properties.dat` whose `Cp` column varies | `solidification=on requires a constant-cp material` |
+| `refuse-solid-varrho` | the valid line plus an own 10-row `properties.dat` whose `Density` column varies | `solidification=on requires a constant-density material` |
 | `refuse-wedge-offcentre` | a generated wedge whose k-planes sit at 0 and +1° (`tools/make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`) | `IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)` — refused at mesh import (`allocation.f90`), not at the properties choke point |
 
-All eighteen exit 128 at setup with nothing injected or integrated (2026-09-17). **The four INI-contract
+All twenty-six exit 128 at setup with nothing injected or integrated. **The eight solidification cases were
+RED first**: the binary before the solidification model stopped each of them with `solidification=on parsed but
+not implemented yet`, not their payload. **The four INI-contract
 cases were RED first** (ledger O20/O21/O26, recorded on the pre-fix binary): `method = 3` ran to
 non-finite states with exit 0 and three output files; `gas-order = 3` silently ran as 2 (the warning was
 dead — the value was reassigned before the test); `out-file = nonsense` ran as both with a warning (and
@@ -54,9 +64,7 @@ scratchpad); all twelve `stop`s became `error stop 'IGLOO: unknown …'`.
 solution centres to exactly 0.0 — and on a [0, δ] sector the binary before the tripwire ran the case to
 "All particles out of domain" with exit 0, the gas and every deposit rotated by δ/2.
 
-**Not here.** `solidification = on` (O5) has no global key — only the per-material token
-(`solidification=on` on the material line of the phase file); add it as a phase-file refusal. TAB
-A mixed-Nk mesh (`allocation.f90`, `af307dd`) needs a two-zone `solfile.tec`; exercised in a
+**Not here.** A mixed-Nk mesh (`allocation.f90`, `af307dd`) needs a two-zone `solfile.tec`; exercised in a
 throwaway only. `refuse-dopri5` (the interim `H-dopri5` refusal of ledger O25) was dropped with the
 `Lib_INI.f90` refusal and the `DISABLED` flag on `standard/drag-stokes-dopri5` once the OSlo fork carried
 the SOLOUT fix (`fix/dopri5-solout`); that case is the gate now.

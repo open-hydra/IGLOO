@@ -10,12 +10,15 @@ program test_solidification
     !   SG2  plateauRate: m*hfus*df/dt = -Qdot, sign and magnitude; RK4 lands on f = 1 at
     !        t_plat and the heat received is -m*hfus*(1-f0).
     !   SG3  hSolid: continuous at every phase switch (nucleation, both branches; plateau end;
-    !        re-melt; the solidTransition states past a threshold), bitwise cl*T + hOff on the
+    !        re-melt; the solidTransition states past a threshold), cl*T + hOff to 1 ULP on the
     !        liquid, increasing in T within a phase.
     !   SG4  composite history: RK4 of the three regimes with the event rule applied at the
     !        bisected crossing vs the piecewise closed form at 40 epochs.
     !   SG5  corners: finite outputs, event functions change sign exactly at the thresholds,
     !        no clamp on f, injection phases, the whole-freeze branch below T-nuc.
+    !   SG6  one production rhsSolidification per phase (the model-6 aux layout of setupRHS):
+    !        F(7), F(8) and the unweighted euler tail; poisoning the metal slots it must not read
+    !        (all but h-fus and cp-solid) changes nothing.
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -62,6 +65,7 @@ program test_solidification
     call run_SG3(ok_all)
     call run_SG4(ok_all)
     call run_SG5(ok_all)
+    call run_SG6(ok_all)
 
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then
@@ -374,5 +378,64 @@ contains
         pass = (pa == phSolid) .and. ieee_is_finite(Ta) .and. (Ta < TN) .and. (abs(h2 - h1) <= TOLH)
         call flag('SG5e whole freeze with L(Tn) < 0: solid below T-nuc, enthalpy kept', 'SG5e_hypercooled', pass, ok)
     end subroutine run_SG5
+
+    subroutine run_SG6(ok)
+        !> production RHS per phase at zero slip (Re = 0, Nu = 2), with and without poisoned slots
+        use IGLOO_variables, only: ord2, mesh2D, eulerSwitch, bodyForce, bodyAccel, srcBodyForce, &
+                                   sourceSwitch, phaseChange, dragSelect, heatSelect
+        use IGLOO_particles, only: obj_particle
+        use Lib_RHS, only: setupRHS, packAuxVars, rhsSolidification, nauxvar, nauxstate, &
+                           ind_mb, ind_m, ind_d, ind_sph
+        use IGLOO_Lib_Combustion, only: imKb, imN, imXe, imBeta, imXi, imTig, imQc
+        logical, intent(inout) :: ok
+        integer, parameter :: poisoned(9) = [imKb, imN, imXe, imBeta, imXi, imTig, imTm, imTn, imQc]
+        real(R8), parameter :: UG = 10._R8, Tph(0:3) = [T0, 2000._R8, TM, 1800._R8]
+        type(obj_particle) :: p
+        real(R8), allocatable :: aux(:), auxP(:), auxst(:)
+        real(R8) :: Z(13), F(13), FP(13), ref(13), gas(9), gasNodes(9,8), gasVert(3,8), q, err, errMax
+        integer  :: nAux, nAuxSt, nEvV, ph
+        logical  :: propFlags(5), layout, same
+        ord2 = .false.;  mesh2D = .false.;  eulerSwitch = .true.
+        bodyForce = .false.;  bodyAccel = 0._R8;  srcBodyForce = .false.
+        sourceSwitch = .false.;  phaseChange = .false.
+        dragSelect = 2;  heatSelect = 5              ! Stokes, Ranz-Marshall
+        propFlags = .false.
+        call setupRHS(6, 0, 0, 0, 0, 0, 0, 1, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
+        layout = ind_mb > 0 .and. ind_m > 0 .and. ind_d > 0 .and. ind_sph > 0 .and. nauxstate >= 1
+        call flag('SG6a setupRHS(model 6): mass, diameter, metal block and phase slot present', 'SG6a_layout', layout, ok)
+        if (.not. layout) return
+        p%cp = CL;  p%rho = RHOP;  p%d = D;  p%m = M
+        p%Tmelt = TM;  p%hFus = HFUS;  p%Tnuc = TN;  p%cpSol = CS
+        allocate(aux(nauxvar), auxP(nauxvar), auxst(max(1, nauxstate)))
+        call packAuxVars(p, nauxvar, aux)
+        auxP = aux
+        auxP(ind_mb + poisoned - 1) = -9.e30_R8
+        gas = [1.2_R8, UG, 0._R8, 0._R8, TG, 1.8e-5_R8, 1.4_R8, 287._R8, KG]
+        gasNodes = spread(gas, 2, 8);  gasVert = 0._R8
+        errMax = 0._R8;  same = .true.
+        do ph = phLiquid, phSolid
+            Z = 0._R8;  Z(4) = UG;  Z(7) = Tph(ph);  Z(8) = merge(0.5_R8, merge(1._R8, 0._R8, ph == phSolid), ph == phPlateau)
+            auxst = 0._R8;  auxst(ind_sph) = real(ph, R8)
+            call rhsSolidification(13, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), gasNodes, gasVert, gas, 9, 8)
+            call rhsSolidification(13, 0._R8, Z, FP, auxP, nauxvar, auxst, max(1, nauxstate), gasNodes, gasVert, gas, 9, 8)
+            q   = NU*KG*PI*D*(TG - Tph(ph))
+            ref = 0._R8
+            ref(1) = UG
+            select case (ph)
+            case (phPlateau); ref(8) = -q/(M*HFUS)
+            case (phSolid);   ref(7) = q/(M*CS)
+            case default;     ref(7) = q/(M*CL)
+            end select
+            ref(9) = UG;  ref(10) = UG*UG;  ref(13) = Tph(ph)*UG
+            err = maxval(abs(F - ref)/max(abs(ref), tiny(1._R8)), mask=(ref /= 0._R8))
+            if (any(F /= 0._R8 .and. ref == 0._R8)) err = huge(1._R8)
+            errMax = max(errMax, err)
+            same = same .and. all(F == FP)
+        end do
+        write(*,'(a,es10.3)') '  [INFO] SG6b worst relative error of F over the four phases = ', errMax
+        ok = ok .and. assert_lt('SG6b rhsSolidification per phase: F(7), F(8), euler tail', errMax, 1.0e-13_R8)
+        call append_row('SG6b_rhs', 'F', errMax, errMax, 0._R8, 0._R8, 1.0e-13_R8, errMax < 1.0e-13_R8)
+        call flag('SG6c poisoned non-solidification metal slots and T-melt/T-nuc change no F bit', 'SG6c_poison', same, ok)
+    end subroutine run_SG6
 
 end program test_solidification

@@ -28,15 +28,17 @@ contains
     use Lib_RHS, only: packAuxVars, nauxvar, packAuxState, unpackAuxState,     &
                        packEventVar, unpackEventVar,                           &
                        rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, &
-                       rhsAlCombustion,                                             &
+                       rhsAlCombustion, rhsSolidification,                          &
                        ind_d, ind_rho, ind_sig, ind_mup, ind_m,                     &
-                       ind_sb1, ind_sb2,                                            &
+                       ind_sb1, ind_sb2, ind_sph,                                   &
                        ind_evd, ind_evn,                                            &
                        nauxstate, neventvar, nbrkst,                                &
                        mod_brkSelect, mod_propFlags, mod_model,                     &
                        mod_bp, mod_bpMethod, mod_bpScale
     use oslo,              only: Run_ODESolver
     use IGLOO_Lib_Breakup, only: nchild
+    use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, &
+                                        solidTransition, phSolid
     implicit none
     class(obj_particle),   intent(inout) :: part
     type(obj_block),       intent(in)    :: geoblock(nb)
@@ -83,6 +85,10 @@ contains
     !> ETAB product-velocity kick, carried out of the aborted step as a delta.
     real(R8) :: kickDV(3)
     logical  :: kickPend
+    !> Solidification event of the aborted step: flag, crossing fraction, threshold.
+    logical  :: solidEv
+    real(R8) :: sEv
+    integer  :: whichEv
     real(R8) :: timeLocal, din, dout, deltaS(3), dir(3), taup
     integer  :: err, nDL, innerIter, jSlot
     integer,  parameter :: maxInnerIter=10, nStep=10
@@ -151,6 +157,8 @@ contains
       case(3); part%stateVar(8) = part%npdot; part%nOde = 8
       case(4); part%stateVar(8) = part%m;
                part%stateVar(9) = part%npdot; part%nOde = 9
+      case(6); call solidPhaseAtInjection(part%tp, part%Tmelt, part%Tnuc, part%solidPhase, part%stateVar(8))
+               part%fSolid = part%stateVar(8); part%overMelt = .false.; part%nOde = 8
       end select
       if (eulerSwitch)    part%stateVar(part%nOde+1:part%neq) = 0._R8
       if (part%bodyAccum) part%stateVar(part%neq-1 :part%neq) = 0._R8
@@ -375,14 +383,18 @@ contains
     subroutine ODEsystem()
       implicit none
       real(R8) :: dtNew, dtSafe
+      integer  :: phaseEv
 
       deltat = safety*deltat
       newGas = .false.; IamOut = .false.; exitLoop = .false.; eventFlag = .false.; startedOut = .false.
       burnedOut = .false.; sectorOut = .false.
       kickPend = .false.; kickDV = 0._R8
+      solidEv = .false.; sEv = 0._R8; whichEv = 0
       eventType = part%brkupEvent
       addChildLocal = .false.; childState = 0._R8
       !> childDone is reset at integrate entry only, never per segment.
+      !> Model 6: a threshold the segment-start state has already passed is applied here.
+      if (mod_model == 6) call solidCatchUp()
       y = part%oldState
       timeLocal = part%time
       oldLocal  = y
@@ -404,6 +416,7 @@ contains
       case(3); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs3, err, deltat, solout)
       case(4); nDL = 10; call Run_ODESolver(neq, t1, t2, y, rhs4, err, deltat, solout)
       case(5); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs5, err, deltat, solout)
+      case(6); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs6, err, deltat, solout)
       end select
       if (err < 0) then
         write(*,'(a,i0,a,i0,a,es12.4,a)')                                   &
@@ -454,6 +467,16 @@ contains
       if (startedOut) exitLoop = .true.
       if (exitLoop) then
         doLoop = .false.
+        !> Solidification event alone on the step: interpolate to the crossing, then jump by absolute assignment.
+        if (solidEv .and. .not.(IamOut .or. newGas .or. sectorOut)) then
+          y  = oldLocal + sEv*(y - oldLocal)
+          t1 = timeLocal + sEv*(t1 - timeLocal)
+          phaseEv = nint(stateLocal(ind_sph))
+          call solidTransition(whichEv, part%cp, part%cpSol, part%Tmelt, part%hFus, y(7), y(8), phaseEv)
+          stateLocal(ind_sph) = real(phaseEv, R8)
+          part%stateVar = y
+          part%oldState = y
+        endif
         if (eventType) then
           if (allocated(eventLocal)) then
             part%npold = oldEvLocal(ind_evn)
@@ -537,7 +560,20 @@ contains
 
     end subroutine ODEsystem
 
-    !> ODE right-hand sides for models 1-5, forwarding integrate's host-associated state.
+    !> Model 6: apply the phase change whose threshold the segment-start state has passed.
+    subroutine solidCatchUp()
+      implicit none
+      real(R8) :: g
+      integer  :: which
+
+      call eventFunction(part%solidPhase, part%oldState(7), part%oldState(8), part%Tnuc, g, which)
+      if (which == 0 .or. g > 0._R8) return
+      call solidTransition(which, part%cp, part%cpSol, part%Tmelt, part%hFus, &
+                           part%oldState(7), part%oldState(8), part%solidPhase)
+      part%stateVar(7:8) = part%oldState(7:8)
+    end subroutine solidCatchUp
+
+    !> ODE right-hand sides for models 1-6, forwarding integrate's host-associated state.
     subroutine rhs1(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
       call rhsStandard(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab, gas,gasVert,gasState, ng,ngVert)
@@ -558,6 +594,10 @@ contains
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
       call rhsAlCombustion(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab, gas,gasVert,gasState, ng,ngVert)
     end subroutine rhs5
+    subroutine rhs6(neq, time, Z, F)
+      integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
+      call rhsSolidification(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, gas,gasVert,gasState, ng,ngVert)
+    end subroutine rhs6
 
 
     !> Solver output callback: after each accepted step it tests cell/sector crossings,
@@ -573,6 +613,7 @@ contains
       integer  :: IRTRN
       real(R8) :: Vdif(3), vel, Re, Fdrag(3), Qdot, tp, acc(3), d, rho, sigma, mup, m, np
       real(R8) :: brkupState(max(nbrkst,1))
+      real(R8) :: gOld, gEnd
       real(R8), parameter :: oneThird=0.3333333333333333_R8, sixOverPi=1.90985931710274403_R8
 
       IRTRN = 1
@@ -604,6 +645,22 @@ contains
       !> Burnout test on the droplet mass, consumption models only.
       if (mod_model==2 .or. mod_model==5) then
         if (y(8) <= mBurnTol) burnedOut = .true.   ! y(8) IS the droplet mass [kg]
+      endif
+
+      !> Solidification: the phase's event function turns non-positive over the step (strictly positive at its start).
+      if (mod_model == 6) then
+        call eventFunction(nint(stateLocal(ind_sph)), y(7), y(8), part%Tnuc, gEnd, whichEv)
+        if (whichEv > 0 .and. gEnd <= 0._R8) then
+          gOld = eventValue(whichEv, oldLocal(7), oldLocal(8), part%Tnuc)
+          if (gOld > 0._R8) then
+            solidEv = .true.
+            sEv     = gOld/(gOld - gEnd)
+          endif
+        endif
+        if (nint(stateLocal(ind_sph)) == phSolid .and. y(7) > part%Tmelt .and. .not.part%overMelt) then
+          part%overMelt = .true.
+          write(*,'(A,I0,A)') '[WARNING] Particle ',part%ID,' is solid above T-melt: no melting model, it heats as a solid'
+        endif
       endif
 
       exitLoop = (norm2(y(1:3)-oldLocal(1:3))<eps).or.(deltat<dtMin).or.any(y/=y).or.(deltat /= deltat)
@@ -652,7 +709,7 @@ contains
         if (ind_sb1 > 0) stateLocal(ind_sb1:ind_sb2) = brkupState(1:nbrkst)
       endif
 
-      if (IamOut .or. newGas .or. eventFlag .or. burnedOut .or. sectorOut) then
+      if (IamOut .or. newGas .or. eventFlag .or. burnedOut .or. sectorOut .or. solidEv) then
         IRTRN = -2724
         return
       endif

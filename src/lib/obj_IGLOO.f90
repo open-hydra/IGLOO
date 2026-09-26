@@ -377,6 +377,7 @@ contains
           write(*,'(A,I2,A)') '     >> ODE system (neq=', gr%particle(1)%neq, '):'
           if (gr%evapSelect/=0) write(*,*) '       - evaporation --> ', trim(gr%evapWord)
           if (gr%combSelect/=0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
+          if (gr%solidSelect/=0) write(*,*) '       - solidification --> supercooling + recalescence (model 6)'
           if (gr%brkupEqOde   ) write(*,*) '       - breakup     --> ', trim(gr%brkupWord)
           if (gr%evapSelect==0 .and. gr%combSelect==0 .and. .not.gr%brkupEqOde) &
             write(*,*) '       - constant particle mass and size'
