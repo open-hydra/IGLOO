@@ -358,18 +358,23 @@ tight gate integrates the droplet **mass** with that present-model rate along th
 $T_p$ and reconstructs $d^2 = (6m/\pi\rho_\ell(T_p))^{2/3}$ — coupling evaporation and
 thermal swelling exactly as production does — and requires every drop to swell.
 
-The digitized TC2012 Fig. 11 present-model curves are a non-gating overlay (normalized
-lifetime, since IGLOO's $D_v$ is $Le$-set and differs from TC2012's, making absolute $\tau$
-incomparable).  The fuel properties are sourced from the paper's own data:
-$L_v=2.58\times10^5$ J/kg (the effective latent heat of TC2012's Table-1 saturation curve,
-$\approx$ Watson $L_v$ at the ~490 K wet-bulb) and liquid $c_{p,\ell}=2800$ J/(kg K)
-(NIST/Chemeo value at ~490 K).  A single scalar $L_v$ cannot be both the $p_{sat}$-curve
-slope ($\approx$258 kJ/kg) and the energy sink ($\approx$227), which leaves a residual
-$d^2$ mid-decline in the overlay; the gated kernel comparison is unaffected.
+The saturation pressure is TC2012's own Table-1 curve, carried by the `Psat` column of the
+case's `properties.dat` (piecewise Clausius-Clapeyron through the table's anchors), and the
+energy sink is Table 1's latent heat at the boiling point, $L_v=2.2695\times10^5$ J/kg: the
+curve and the sink are decoupled, which a single scalar $L_v$ cannot do (the curve's effective
+latent heat is $\approx$258 kJ/kg over the operating range).  The gate's oracle reads the same
+column; two further gates assert that the run reported the tabulation and that its plateau
+lies within 1 K of a 0-D replica of the kernel (`zero_d.py`, 492.63 K; with psat by
+Clausius-Clapeyron at the same sink it is 486.0 K).  The rate gate alone cannot tell the table
+from a Clausius-Clapeyron fit to the same anchors ($7\times10^{-3}$ against a floor of
+$1.9\times10^{-3}$, tolerance 2 %); the two plateau gates can.  Liquid
+$c_{p,\ell}=2800$ J/(kg K) is the NIST/Chemeo value at ~490 K.  The digitized TC2012 Fig. 11
+present-model curves are a non-gating overlay (normalized lifetime, since IGLOO's $D_v$ is
+$Le$-set and differs from TC2012's, making absolute $\tau$ incomparable).
 
-**Result:** measured $d^2(x)$ within $0.2\,\%$ of the kernel on all 25 drops, every
-drop swells; heating shape (heat-frac $\approx0.54$) and plateau (490.2 vs ~493.6 K,
-$0.7\,\%$) match Fig. 11.
+**Result:** measured $d^2(x)$ within $0.19\,\%$ of the kernel on all 25 drops, every drop
+swells (peak 1.088); plateau 492.6 K against the digitized ~493.7 K ($0.2\,\%$), on its 0-D
+replica to the printed digit.
 
 <figure>
   {% include "vv/images/tc-hexadecane.svg" ignore missing %}

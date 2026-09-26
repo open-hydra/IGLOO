@@ -28,6 +28,12 @@ $$
 p_\mathrm{sat}(T_p) = p_\mathrm{atm}\,\exp\!\left(-\frac{L_v M_v}{R_u}\left(\frac{1}{T_p} - \frac{1}{T_\mathrm{boil}}\right)\right) \quad \text{[Clausius-Clapeyron]}
 $$
 
+unless the material's `INPUT/properties.dat` carries a `Psat` column
+([property tables](../user/input.md#property-tables-inputpropertiesdat)): then
+$p_\mathrm{sat}(T_p)$ is that column, linear in $T_p$ between its integer-kelvin nodes and
+held at its end values outside the table, and $L_v$ enters only the energy balance as the
+latent sink.  A column of zeros keeps Clausius-Clapeyron.
+
 $$
 X_s = \min\!\left(p_\mathrm{sat}/p,\; 1\right), \qquad
 Y_s = \frac{X_s\,M_v}{X_s\,M_v + (1-X_s)\,M_g}
@@ -320,7 +326,7 @@ when `blowing = LK`.  No sensible-enthalpy term for the departing vapour is carr
 | `Le` | `ep(iLe)` | Lewis number |
 | `Yinf` | `ep(iYinf)` | Far-field vapour mass fraction |
 | `boiling-temperature` (alias `Tboil`) | (→`ep(iinvTboil)`) | Normal boiling point (K) |
-| `psat` | — | Accepted and ignored (legacy): the saturation pressure is Clausius-Clapeyron's, from `ep(iLvMvOverRu)` = `Lv·Mv/Ru` and `ep(iinvTboil)` = `1/T_boil` |
+| `psat` | — | Accepted and ignored (legacy): the saturation pressure is Clausius-Clapeyron's, from `ep(iLvMvOverRu)` = `Lv·Mv/Ru` and `ep(iinvTboil)` = `1/T_boil`, or the material's `Psat` column |
 
 Full registry: [../user/registry.md](../user/registry.md).
 

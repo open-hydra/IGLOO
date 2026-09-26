@@ -360,6 +360,15 @@ parsing) for five representative parameter groups: TAB defaults, model selectors
 body force, ODE tolerances, and RNG seed (IP1–IP5).  No overlay figure — a
 configuration contract has nothing physical to plot.
 
+### Property tables (`tests/infrastructure/properties_reader`)
+
+Drives `read_cdp_properties` on tables no e2e case carries: rows from 280 K against the same
+rows from 1 K, a `Psat` column found by name in any column order, both enthalpy datums, two
+materials of which one has a column of zeros, and the table ATLAS GPB writes for water with
+`psat-vapour = H2O`, copied byte for byte (PR1–PR3, PR6, PR7, PR9, PR10).  The header, row, node,
+column and `Psat` checks behind it are ICE's, statement for statement, and are pinned on
+synthetic input, one code each (PR4, PR5, PR8, PR11–PR13).  No overlay figure.
+
 ### Further infrastructure families
 
 `rng_stream` (the per-parcel RNG stream contract: `rngSeedFor`/`rngNext`, draws

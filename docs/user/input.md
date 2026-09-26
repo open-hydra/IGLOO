@@ -158,7 +158,7 @@ Constant evaporation and breakup properties, one value per material in the order
 
 | Key | Description |
 |-----|-------------|
-| `psat` | Legacy, accepted and ignored — the saturation pressure is computed from Clausius-Clapeyron (`Lv`, `Mv`, `boiling-temperature`) |
+| `psat` | Legacy, accepted and ignored — the saturation pressure is computed from Clausius-Clapeyron (`Lv`, `Mv`, `boiling-temperature`) or read from the `Psat` column of `properties.dat` |
 | `Mv` | Vapor molar mass [kg/kmol] |
 | `Lv` | Latent heat of vaporization [J/kg] |
 | `boiling-temperature` (alias `Tboil`) | Boiling temperature [K]; give one name or the other, not both |
@@ -202,6 +202,52 @@ Selects and tunes the ODE integrator.
 | `max-steps-ode` | integer | `100000` | Maximum internal steps per integrator call (`iopt(1)`) |
 
 `H-sdirk4` is recommended for stiff cases (evaporation, small Stokes number). `H-dopri5` is faster for non-stiff drag-only cases.
+
+---
+
+## Property tables (`INPUT/properties.dat`)
+
+One zone per material, in the order of the material lines of `INPUT/phase.txt`; every zone on
+the same temperatures, one row per integer kelvin (`T = Tmin, Tmin+1, ..., Tmax`). The first line
+holding `VARIABLES` names the columns:
+
+```text
+VARIABLES = "Temperature", "Cp", "Density", "Enthalpy", "Psat"
+```
+
+| column | unit | |
+|---|---|---|
+| `Temperature` | K | first; the nodes |
+| `Cp` | J/(kg K) | required |
+| `Density` | kg/m³ | required |
+| `Enthalpy` or `Enthalpy_abs` | J/kg | required, exactly one: `Enthalpy` is relative (`cp·T`, or the integral of cp), `Enthalpy_abs` includes the formation enthalpy (the datum, see below) |
+| `Psat` | Pa, absolute | optional: the saturation pressure of an evaporating material |
+
+After `Temperature` the columns may come in any order; the lowercase names are accepted too
+(`PSAT` as well). A column whose property is constant in T is read as a constant; one that varies
+becomes a table, linear between the nodes. A varying `Cp` needs a table that starts at 1 K.
+
+**`Psat`.** An evaporating material takes its saturation pressure from the column, linear between
+the nodes and at its end values outside the table; a column of zeros keeps Clausius-Clapeyron
+(`Lv`, `Mv`, `boiling-temperature` of `[IGLOO-Properties]`), and a material that does not evaporate
+ignores it. With the column, `Lv` is the latent-heat sink only. Setup prints
+`p_sat tabulated from properties.dat (Tmin..Tmax K), psat(boiling-temperature)/Patm = ...` per
+material that uses it. ATLAS GPB writes the column from a liquid/vapour pair of its thermo database
+(`[GPB-Phase*] psat-vapour`), zeros for a material without a pair.
+
+A table is refused at setup, with the reason and the expected header, when: there is no
+`VARIABLES` line, the first column is not `Temperature`, `Cp`, `Density` or an enthalpy column is
+missing, a column is named twice, both `Enthalpy` and `Enthalpy_abs` appear, a data row does not
+hold a number for every named column, text follows the last row, a zone's `I=` differs from the
+rows it holds, the rows are not on consecutive integer kelvins (to 1e-6 K), a value is not
+finite, a density or cp is not positive, the enthalpy does not increase with T or disagrees with
+cp (a constant cp: `h = cp·T + hOff` on every row; a varying cp: the trapezoid sum), or a relative
+`Enthalpy` of a constant cp has an offset. The `Psat` column of an evaporating material is refused
+for a value that is not finite, a negative pressure, a pressure that decreases with T (equal
+neighbours, such as low-T values rounded to 0, are accepted), a constant pressure,
+`boiling-temperature` outside `[Tmin, Tmax−1]`, or `psat(boiling-temperature)` more than a factor 2
+away from one atmosphere (a unit slip or a wrong liquid/vapour pair; a database curve sits within
+a few percent).
 
 ---
 
