@@ -319,7 +319,7 @@ when `blowing = LK`.  No sensible-enthalpy term for the departing vapour is carr
 | `cpv` | `ep(icpv)` | Vapour specific heat (J kg⁻¹ K⁻¹); ASM and TC |
 | `Le` | `ep(iLe)` | Lewis number |
 | `Yinf` | `ep(iYinf)` | Far-field vapour mass fraction |
-| `Tboil` | (→`ep(iinvTboil)`) | Normal boiling point (K) |
+| `boiling-temperature` (alias `Tboil`) | (→`ep(iinvTboil)`) | Normal boiling point (K) |
 | `psat` | (→`ep(iLvMvOverRu)`) | Drives Clausius-Clapeyron pre-factor |
 
 Full registry: [../user/registry.md](../user/registry.md).

@@ -6,10 +6,10 @@
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ (e2e)
-#   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ tc-hexadecane/ mhb98-water/ (e2e)
+#   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both}
 #   repeatability/      two-sweep gates (twosweep driver): 8 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
@@ -309,6 +309,9 @@ igloo_e2e_case(tc-box evaporation/tc-box "e2e;evaporation")
 # energy source and nothing else (E_abs - E_rel == hOff*wdot; the gate runs the relative sibling
 # itself into ref-rel/). Proven RED on the pre-hOff binary (residual = 100 % of scale).
 igloo_e2e_case(datum-abs evaporation/datum-abs "e2e;evaporation")
+# boiling-temperature-key: tc-box under the canonical key name; check.py runs tc-box (the alias Tboil)
+# as a sibling and requires identical source.tec and exit records. RED on a Tboil-only reader: setup stops.
+igloo_e2e_case(boiling-temperature-key evaporation/boiling-temperature-key "e2e;evaporation")
 # E-VAL-2 (2026-07-21): VALIDATION vs a paper's own case — single water droplet vs
 # Miller-Harstad-Bellan 1998 Fig.2 (exp. Ranz-Marshall 1952b). Gate = IGLOO-vs-LK-kernel
 # (tight); the digitized experiment is a NON-gating overlay in verify.py.
@@ -479,6 +482,10 @@ igloo_refusal_case(refuse-out-file         infrastructure/refusals/out-file
                    "IGLOO: unknown out-file token"                      "e2e;refusal;infrastructure")
 igloo_refusal_case(refuse-ode-solver       infrastructure/refusals/ode-solver
                    "IGLOO: unknown ode-solver"                          "e2e;refusal;infrastructure")
+# boiling-temperature and its alias Tboil are one key: both given is ambiguous. RED before the alias: the
+# second name was ignored and the run went through (exit 0).
+igloo_refusal_case(refuse-boiling-temperature-both infrastructure/refusals/boiling-temperature-both
+                   "give boiling-temperature or its alias Tboil, not both" "e2e;refusal;evaporation")
 # Wedge-layout contract: the fold band, the 2.5D gas sample and the meridian-frame deposits take
 # refDir as the sector CENTRE (k-planes at -+delthe/2, what MOSE/ATLAS write); a sector [0, delthe]
 # would run with everything rotated by delthe/2. Tiny generated wedge (make_wedge_case.py --theta0-deg 0.5).

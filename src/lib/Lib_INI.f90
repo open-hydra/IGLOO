@@ -409,11 +409,13 @@ contains
   end subroutine finalize_material_models
 
 
-  !> [IGLOO-Properties]: optional per-material property vectors (psat, Mv, Lv, Tboil, cpv, Le, Yinf,
-  !  sigma, mu), all of one length.
+  !> [IGLOO-Properties]: optional per-material property vectors (psat, Mv, Lv, boiling-temperature, cpv, Le,
+  !  Yinf, sigma, mu), all of one length.
   subroutine read_properties()
     implicit none
     integer :: n, nref
+    logical :: hasBT, hasTB
+    character(len=:), allocatable :: keyTB
 
     nref = -1
 
@@ -438,12 +440,17 @@ contains
       allocate(ini_Lv(n))
       call fini%get(section_name='IGLOO-Properties', option_name='Lv', val=ini_Lv, error=error)
     endif
-    if (fini%has_option(option_name='Tboil')) then
-      n = fini%count_values(section_name='IGLOO-Properties', option_name='Tboil')
+    !> boiling-temperature or its alias Tboil (the names ICE reads too); both given is refused
+    hasBT = fini%index(section_name='IGLOO-Properties', option_name='boiling-temperature') > 0
+    hasTB = fini%index(section_name='IGLOO-Properties', option_name='Tboil') > 0
+    if (hasBT .and. hasTB) error stop '[ERROR] [IGLOO-Properties] give boiling-temperature or its alias Tboil, not both'
+    if (hasBT .or. hasTB) then
+      if (hasBT) then; keyTB = 'boiling-temperature'; else; keyTB = 'Tboil'; endif
+      n = fini%count_values(section_name='IGLOO-Properties', option_name=keyTB)
       if (nref < 0) nref = n
-      if (n /= nref) error stop '[ERROR] [IGLOO-Properties] Tboil: size mismatch with other property vectors'
+      if (n /= nref) error stop '[ERROR] [IGLOO-Properties] boiling-temperature (alias Tboil): size mismatch with other property vectors'
       allocate(ini_Tboil(n))
-      call fini%get(section_name='IGLOO-Properties', option_name='Tboil', val=ini_Tboil, error=error)
+      call fini%get(section_name='IGLOO-Properties', option_name=keyTB, val=ini_Tboil, error=error)
     endif
     if (fini%has_option(option_name='cpv')) then
       n = fini%count_values(section_name='IGLOO-Properties', option_name='cpv')

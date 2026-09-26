@@ -149,7 +149,7 @@ contains
     !> [IGLOO-Properties] vectors must carry one entry per material
     if (allocated(ini_Mv))    then; if (size(ini_Mv)    /= nm) error stop '[ERROR] [IGLOO-Properties] Mv: size /= number of materials';    endif
     if (allocated(ini_Lv))    then; if (size(ini_Lv)    /= nm) error stop '[ERROR] [IGLOO-Properties] Lv: size /= number of materials';    endif
-    if (allocated(ini_Tboil)) then; if (size(ini_Tboil) /= nm) error stop '[ERROR] [IGLOO-Properties] Tboil: size /= number of materials'; endif
+    if (allocated(ini_Tboil)) then; if (size(ini_Tboil) /= nm) error stop '[ERROR] [IGLOO-Properties] boiling-temperature (alias Tboil): size /= number of materials'; endif
     if (allocated(ini_cpv))   then; if (size(ini_cpv)   /= nm) error stop '[ERROR] [IGLOO-Properties] cpv: size /= number of materials';   endif
     if (allocated(ini_Le))    then; if (size(ini_Le)    /= nm) error stop '[ERROR] [IGLOO-Properties] Le: size /= number of materials';    endif
     if (allocated(ini_Yinf))  then; if (size(ini_Yinf)  /= nm) error stop '[ERROR] [IGLOO-Properties] Yinf: size /= number of materials';  endif
@@ -241,7 +241,7 @@ contains
         else; error stop '[ERROR] Evaporation requires Lv. Provide in [IGLOO-Properties]'
         endif
         if (allocated(ini_Tboil)) then; material(i)%Tboil = ini_Tboil(i)
-        else; error stop '[ERROR] Evaporation requires Tboil. Provide in [IGLOO-Properties]'
+        else; error stop '[ERROR] Evaporation requires boiling-temperature (alias Tboil) in [IGLOO-Properties]'
         endif
         ! Pre-compute constants
         material(i)%LvMvOverRu = material(i)%Lv * material(i)%Mv / 8314.46_R8

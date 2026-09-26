@@ -41,7 +41,7 @@ tests/
 │   ├── drag/  temperature/       #   unit families
 │   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/   # e2e
 ├── evaporation/                  # unit families: (root)  interface-neq/  tc-analytic/
-│   └── d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ tc-hexadecane/ mhb98-water/     # e2e
+│   └── d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ boiling-temperature-key/ tc-hexadecane/ mhb98-water/     # e2e
 ├── combustion/                   # unit family (root) + burn-box/ (e2e)
 ├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
 │   └── tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/   # e2e
@@ -93,8 +93,8 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 98/98 in a serial build (68 e2e + 30 unit, `self_test` and `registry-docs` among the latter);
-`USE_MPI=ON` registers 7 more `mpi-*` cases, 105/105. (Was 85/85 before the five review-residual
+ctest 100/100 in a serial build (70 e2e + 30 unit, `self_test` and `registry-docs` among the latter);
+`USE_MPI=ON` registers 7 more `mpi-*` cases, 107/107. (Was 85/85 before the five review-residual
 plans of 2026-09-22/23 added `ini-comment-eq`, `solver-fail-consumed`, `tc-box-euler`,
 `test_source_reduction`, `tc-box-ord2-row`, `test_ghost_bc` and `wall-approach`; `no-exchange`
-followed on 2026-09-24.)
+followed on 2026-09-24, `boiling-temperature-key` and `refuse-boiling-temperature-both` on 2026-09-26.)

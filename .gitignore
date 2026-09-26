@@ -20,6 +20,8 @@ OUTPUT
 OUTPUT.sweep*
 # datum-abs runs its relative sibling into ref-rel/ (tests/evaporation/datum-abs/check.py)
 ref-rel
+# boiling-temperature-key runs its Tboil sibling into ref-tboil/ (tests/evaporation/boiling-temperature-key/check.py)
+ref-tboil
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/

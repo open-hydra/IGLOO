@@ -36,9 +36,10 @@ output written).
 | `refuse-gas-order` | `gas-order = 3` | `IGLOO: gas-order must be 1 or 2` |
 | `refuse-out-file` | `out-file = nonsense` | `IGLOO: unknown out-file token` (accepted: E, S, E+S, ALL -- `ALL` is what hydra's MI2 cases write; `two-mat` runs it) |
 | `refuse-ode-solver` | `ode-solver = H-radau5` | `IGLOO: unknown ode-solver` |
+| `refuse-boiling-temperature-both` | tc-box (`INPUT/` symlinked) with `boiling-temperature` and `Tboil` both in `[IGLOO-Properties]` | `give boiling-temperature or its alias Tboil, not both` |
 | `refuse-wedge-offcentre` | a generated wedge whose k-planes sit at 0 and +1° (`tools/make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`) | `IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)` — refused at mesh import (`allocation.f90`), not at the properties choke point |
 
-All fifteen exit 128 at setup with nothing injected or integrated (2026-09-17). **The four INI-contract
+All eighteen exit 128 at setup with nothing injected or integrated (2026-09-17). **The four INI-contract
 cases were RED first** (ledger O20/O21/O26, recorded on the pre-fix binary): `method = 3` ran to
 non-finite states with exit 0 and three output files; `gas-order = 3` silently ran as 2 (the warning was
 dead — the value was reassigned before the test); `out-file = nonsense` ran as both with a warning (and

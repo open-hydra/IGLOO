@@ -161,7 +161,7 @@ Constant evaporation and breakup properties, one value per material in the order
 | `psat` | Saturation pressure [Pa] |
 | `Mv` | Vapor molar mass [kg/kmol] |
 | `Lv` | Latent heat of vaporization [J/kg] |
-| `Tboil` | Boiling temperature [K] |
+| `boiling-temperature` (alias `Tboil`) | Boiling temperature [K]; give one name or the other, not both |
 | `cpv` | Vapor specific heat [J/(kg·K)] |
 | `Le` | Lewis number |
 | `Yinf` | Far-field vapor mass fraction |
