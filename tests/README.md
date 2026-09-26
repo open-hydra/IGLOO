@@ -10,7 +10,7 @@ Registry of record: [`CMakeLists.txt`](CMakeLists.txt) (every gate) and
 
 ```bash
 ./tests/test.sh all              # build (build/verif/ + bin/IGLOO) + full ctest + aggregated report
-./tests/test.sh standard         # one category: standard|evaporation|combustion|breakup|infrastructure|repeatability|mpi
+./tests/test.sh standard         # one category: standard|evaporation|combustion|solidification|breakup|infrastructure|repeatability|mpi
 ./tests/test.sh e2e              # by kind: unit|e2e
 ./tests/test.sh conv-nu          # single test by ctest name
 ./tests/test.sh clean            # wipe e2e OUTPUT/run logs + build/verif/
@@ -30,8 +30,9 @@ tests/
 ├── test.sh                       # MOSE-style runner: standard evaporation combustion solidification breakup infrastructure repeatability mpi unit e2e
 ├── vv_style.py                   # the single plot-style source for every SVG
 ├── common/                       # shared box fixtures + the MOSE nozzle solfile (db-2daxi, axis-200)
-├── tools/                        # make_box_case.py make_pe_case.py make_vie_case.py make_vortex_case.py make_uniform_gas.py set_kv.py
-│                                 # aggregate_report.py check_twosweep.py compare_tec.py check_registry.cmake plot_curves.py mpi_scaling_smoke.sh
+├── tools/                        # make_box_case.py make_pe_case.py make_vie_case.py make_vortex_case.py make_wedge_case.py make_uniform_gas.py
+│                                 # make_psat_table.py proptab.py set_kv.py
+│                                 # aggregate_report.py check_twosweep.py check_refusal.py compare_tec.py check_registry.cmake plot_curves.py mpi_scaling_smoke.sh
 ├── support/                      # shared Fortran library (NOT a test family)
 │   ├── verif_norms.f90  verif_report.f90  verif_oracle.f90  verif_interp.f90  verif_dump.f90
 │   ├── verif_driver.f90          # the only module that touches IGLOO production
@@ -41,14 +42,14 @@ tests/
 │   ├── drag/  temperature/       #   unit families
 │   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ vortex-cloud-st{0p01,0p1,1,10}/   # e2e
 ├── evaporation/                  # unit families: (root)  interface-neq/  tc-analytic/  evap-breakup/
-│   └── d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ boiling-temperature-key/ no-psat/ tc-hexadecane/ mhb98-water/ evap-breakup-box/ d2law-brk-dormant/     # e2e
+│   └── d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/     # e2e
 ├── combustion/                   # unit family (root) + burn-box/ (e2e)
 ├── solidification/               # unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ (e2e)
 ├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
 │   └── tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ khrt-evap-frozen/ khrt-shed-noexchange/   # e2e
-├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/
+├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/
 │   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ two-fam-bc/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/   # e2e
-│   └── refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,bc-copies,bc-copy-order,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre}/   # setup-refusal gates
+│   └── refusals/{p2t,zgr,lk-d2law,properties-*,bc-copies,bc-copy-order,*-token,phase-token-real,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre}/   # setup-refusal gates
 ├── repeatability/                # two-sweep gates: drag-stokes/ drag-stokes-dopri5/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/ tab-dopri5/ solid-box/ evap-breakup/
 └── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ bc-center-2grp/ two-mat/ consistency/ consistency-two-mat/
 ```
@@ -96,9 +97,9 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ctest 140/140 in a serial build (103 e2e + 36 unit, `self_test` and `registry-docs` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); `USE_MPI=ON` registers 7 more `mpi-*` cases, 147/147. (Was 85/85 before the five review-residual
-plans of 2026-09-22/23 added `ini-comment-eq`, `solver-fail-consumed`, `tc-box-euler`,
-`test_source_reduction`, `tc-box-ord2-row`, `test_ghost_bc` and `wall-approach`; `no-exchange`
-followed on 2026-09-24, `boiling-temperature-key` and `refuse-boiling-temperature-both` on 2026-09-26, then
-`test_bc_families`, `two-fam-bc`, `refuse-bc-copies` and `refuse-bc-copy-order`, then the four
-`vortex-cloud-st*` cases and `vortex-cloud-3way`.)
+is absent); `USE_MPI=ON` registers 7 more `mpi-*` cases, 147/147. The e2e entries are 57 solver cases, two further
+oracles on `khrt-e2e`'s run, the twelve two-sweep gates and the thirty-two setup refusals; the unit entries are 31
+compiled unit tests, the property-table reader on three fixtures, `self_test` and `registry-docs`. Evaporation with
+ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,
+`evap-breakup-box`, `d2law-brk-dormant`, `rd-evap-frozen`, `tab-evap-frozen`, `khrt-evap-frozen`, `khrt-shed-noexchange`,
+`solver-fail-consumed-m4` and `repeat-evap-breakup`.

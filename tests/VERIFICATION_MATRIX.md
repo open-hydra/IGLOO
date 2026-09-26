@@ -30,33 +30,39 @@ Columns:
 
 ---
 
-## Shared box fixture (33 of 55 e2e fixtures)
+## Shared box fixture (30 of 57 e2e fixtures)
 
-Every e2e case except `db-2daxi`, `axis-200`, `wedge-fold`, `vie-plait`, `swirl-wedge`, `swirl-wedge-deposit`, `swirl-wedge-spin`, `mhb98-water`,
-`pilch-erdman-e2e`, `tab-e2e`, `etab-e2e`, `khrt-e2e`, `khrt-e2e-rt`, `khrt-stress`,
-`khrt-e2e-threads`, `reitz-diwakar-e2e`, `evap-breakup-box`, `rd-evap-frozen`, `tab-evap-frozen`,
-`khrt-evap-frozen` and `khrt-shed-noexchange` runs on the
-**same** axis-aligned uniform-gas box emitted by
-[`tools/make_box_case.py`](tools/make_box_case.py). The gas field is held *fixed*
+An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
+the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
+writes with its defaults.
+
+Thirty fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The twenty-one exceptions: `db-2daxi`
-(spatially varying, real MOSE nozzle solution), `axis-200` (the same nozzle solution with
-face 3 retagged `axisymmetric`), `wedge-fold` (axis-200 plus swirl on the near-axis parcel) and
-`vie-plait` (spatially varying, analytic `−ε(y−1)`) and `swirl-wedge` / `swirl-wedge-deposit` / `swirl-wedge-spin` (generated annular wedge, analytic solid-body
-swirl `W = Ωy`) are the seven non-uniform-gas cases; `mhb98-water` keeps the box
-*geometry* but swaps in a different **uniform** gas (water in air at T_G=298 K with
-a near-static U=1.9×10⁻⁴ clock) to match the Miller-Harstad-Bellan Fig-2 conditions;
-`pilch-erdman-e2e` likewise keeps the geometry but runs U=200 m/s water drops
-(`tools/make_pe_case.py`) for the PE87 Weber sweep; `tab-e2e`/`etab-e2e` stretch the box to
-0.6 m × 240 cells at U=50 m/s and `khrt-e2e`/`reitz-diwakar-e2e` run the 0.15 m box at U=200 m/s
-(all via `make_pe_case.py`) for the TAB/ETAB onset and the KHRT / Reitz-Diwakar sweeps;
-`khrt-e2e-rt`, `khrt-stress` and `khrt-e2e-threads` reuse `khrt-e2e`'s fixture unchanged (the first
-is a second oracle on that same run; the second via an `INPUT/` symlink, differing only in
-`mShedLim`; the third runs that same case at 1/2/4 threads); `evap-breakup-box` is a 0.8 m × 320-cell
-box at U=50 m/s, T=600 K (`make_pe_case.py --t-gas --kt`), and `rd-evap-frozen`, `tab-evap-frozen`,
-`khrt-evap-frozen` and `khrt-shed-noexchange` reuse their parents' `make_pe_case.py` fixtures through an
-`INPUT/` symlink.
+once here, referenced as **"shared box"** below. The other twenty-seven:
+
+- non-uniform gas (eleven): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
+  wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
+  (`axis-200` plus swirl on the near-axis parcel); `swirl-wedge`, `swirl-wedge-deposit` and
+  `swirl-wedge-spin` (a 200×40-cell annular wedge from `tools/make_wedge_case.py`, analytic solid-body
+  swirl `W = Ωy`); `vie-plait` (120×50×5 cells, analytic `−ε(y−1)`, `tools/make_vie_case.py`); the four
+  `vortex-cloud-st*` cases (a 96×96 planar square carrying a frozen solid-body vortex,
+  `tools/make_vortex_case.py`);
+- uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (eleven):
+  `pilch-erdman-e2e`, `reitz-diwakar-e2e`, `rd-evap-frozen`, `khrt-e2e`, `khrt-stress`,
+  `khrt-evap-frozen` and `khrt-shed-noexchange` on the 0.15 m box at U=200 m/s, T=300 K (the Weber
+  sweeps); `tab-e2e`, `tab-evap-frozen` and `etab-e2e` on a 0.6 m × 240-cell box at U=50 m/s, T=300 K
+  (the TAB/ETAB onset); `evap-breakup-box` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
+  (`--t-gas --kt`);
+- uniform gas on another mesh (five): `mhb98-water` and `mhb98-water-psat` (a `make_box_case.py`
+  variant lengthened to 0.17 m at the same Δx: water in air at T_G=298 K with a near-static
+  U=1.9×10⁻⁴ m/s clock, the Miller-Harstad-Bellan Fig-2 conditions); `planar-slab` (a 20×20
+  single-layer planar slab), `wall-approach` (a 100×20 single layer, the gas drifting toward the wall
+  at V=−0.5 m/s) and `wedge-axis-row` (a 20×8 single-layer wedge whose axis row sits at r=1e-8).
+
+`khrt-e2e-rt` and `khrt-e2e-threads` are further oracles on `khrt-e2e`'s run (the second at 1/2/4
+threads) and add no fixture; `khrt-stress` differs from `khrt-e2e` only in `mShedLim`, and the twins
+of a parent case share its gas through an `INPUT/` symlink.
 
 | Property | Value |
 |---|---|
@@ -91,6 +97,7 @@ oracle possible.
 | **d2law-line** | `[God53]`,`[Spa53]` | *closed form* (Tier V) — input-only line d²(x)=d0²−K0·(x−x_a)/u_g, K0=8k_g·ln(1+B_T0)/(cp_g·ρ_p), B_T0 at T_p0=κ_t·T_g=300 K; tolerance = theory budget (monotone K-drift bound from measured T_p span + E13.6 truncation + floor); measured T_p bounds the budget, never the reference | shared box | inlet-face 401; `evaporation=d2-law`; κ_v=1 (Re=0), κ_t=0.5, d=30 µm; ρ_p=8000 with **cp=125000 (100×)** via local ATLAS-GPB `properties.dat` (freezes T_p: drift 0.76 K, d² loss 39 %); fuel L_v=2e5; outlet + walls |
 | **lk-neq** | `[MHB98]` | *run-conditioned* — LK-corrected CEM d²-ODE RK4-integrated along measured T_p; VLE-equilibrium curve as the regression the case must out-distance | shared box | inlet-face 401; `evaporation=CEM`+`interface=LK`, α_e=1.0; κ_t=0.5, d=20 µm, ρ_p=8000; outlet + walls |
 | **tc-box** | `[TC2012]`,`[ATC24]` | *run-conditioned* — Tonini–Cossali Stefan–Fuchs d²-ODE RK4-integrated along measured T_p; CEM-Spalding as the silent regression | shared box | inlet-face 401; `evaporation=TC`+`interface=VLE`; κ_t=0.5, d=20 µm; fuel L_v=1e6, T_boil=600; outlet + walls |
+| **datum-abs** | infrastructure/evaporation (property-table enthalpy datum) | *behavioral* — tc-box with its constant-cp table shifted by H_OFF = −1.7113460e7 J/kg and tagged `Enthalpy_abs`, against tc-box's own relative table run as a sibling into `ref-rel/`: `wdot`, `Fx`, `Fy`, `Fz` of `source.tec` bit-identical cell by cell, `E_abs − E_rel = H_OFF·wdot` to 1e-9 of the largest `|H_OFF·wdot|`, and the log reporting `enthalpy datum absolute` with `hOff = H_OFF` | as `tc-box` | as `tc-box` |
 | **boiling-temperature-key** | infrastructure/evaporation (INI key names) | *behavioral* — tc-box with `[IGLOO-Properties] boiling-temperature` (the canonical name) against tc-box itself (the alias `Tboil`) run as a sibling: `source.tec` identical value for value and the exit records identical as a sorted multiset. RED on a reader that knows only `Tboil`: setup stops for a missing boiling temperature | as `tc-box` | as `tc-box` |
 | **no-psat** | infrastructure/evaporation (INI contract) | *behavioral* — tc-box without `[IGLOO-Properties] psat` (accepted and ignored: every model takes the saturation pressure from Clausius-Clapeyron) against tc-box itself (`psat` present) run as a sibling: `source.tec` identical value for value, trajectories, exits and scatter identical as sorted multisets, and a non-zero mass source (non-vacuity). RED on a reader that requires `psat`: setup stops, exit 128. A one-kelvin change of the sibling's boiling temperature fails every artefact | as `tc-box` | as `tc-box` |
 | **wall-approach** | infrastructure (ord2 gas ghost ring at a solid wall, e2e) | *behavioral* with a closed-form oracle: in the boundary dual row the mirrored ghost makes the sampled `v_y` linear through zero, `k = 2V/Δy = 200 s⁻¹`, and with `τ_p = 1.31e-4 s` against `1/(4k) = 1.25e-3 s` the parcel is overdamped 9.5× ⇒ `y ∝ exp(−40x)`, never reaching the plane. W0 **non-vacuity** (≥ 10 trajectory rows actually inside the wall row — without it W1/W2/W4 all pass on a run whose parcels never enter it), W1 zero wall hits, W2 three outlet rows, W3 `y` monotone and ≥ 0, W4 decay within 5 % (**measured residual 0.54 of the bound**), W5 the planar-slab path. RED on the frozen `pre-B` binary: **3/3 wall hits at x = 0.370000 / 0.420000 / 0.470000**, the a-priori `0.010 + 10·y₀` to six digits | Own `make_fixture.py` (committed) writes both `solfile.tec` and `bc.txt`: 100×20×1 cells, 0.5 × 0.1 × 0.005 m, **face 3 = 301** — the code ATLAS writes for a dispersed phase at a wall, hence the one a gas-solid wall reaches IGLOO as. Nothing else in the tree writes a `bc.txt` of that shape | uniform gas `u 5, v −0.5` (aimed at the wall at 0.1 of the axial speed), `drag = Stokes`; three 4 µm DB parcels at `x = 10 mm`, `y = 36/41/46 mm`, injected at the gas velocity. `ρ_p = 2950` from `common/properties.dat` col 3 |
@@ -126,6 +133,8 @@ oracle possible.
 | **periodic-y** | infrastructure (translational periodic path) | *closed form* — body-force closed form folded **modulo L_y**; velocity unchanged across each wrap (transport = exact ±L_y translation), residual ~5e-7 m | shared box + `body-accel=(0,−8000,0)` (drives 2–3 y-wraps) | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; **faces 3/4 translational-periodic (bcdef 201)**; face2 outlet; faces 5/6 wall |
 | **axis-200** | — (behavioral + conservation; the 2026-09-03 axis-face cycle and the 2026-09-13 axis dual ghost, both in git) | *behavioral* — the AXIS face tagged `axisymmetric` (bcdef 200, what ATLAS emits): no give-up message, the near-axis parcel reaches r < 1e-5 (coverage witness; `input.ini` gives it `vp = −1` because with v_r = 0 on the axis an equilibrium parcel only approaches asymptotically), both parcels exit at x > 2.0; *conservation* on the ord2 eulerian field with volumes recomputed from the tec NODES (never production's `cellVol`): E1 Σρ_p·V / Σṁ·t = 1.000787 ± 1e-3, E2 near-axis share 0.999005 ± 1e-3, E3 ρ_p/n_p = ρ_ℓ(π/6)d³ to 1e-12; floor exactly zero across runs and thread counts; RED-proven against the pre-fix source (0.931626 / 0.499503) | `db-2daxi`'s MOSE nozzle solution (symlinked) | DB, 2 parcels on one axial station: ID 1 near-axis (y = 1e-4, `vp = −1`), ID 2 off-axis control (y = 0.55); `bc.txt` = db-2daxi's with face 3 retagged 200 |
 | **wedge-fold** | — (behavioral; the O22 fold-sense defect it pins) | *the 200-face FOLD must rotate a swirling parcel back into the sector*: axis-200 plus `wp = 0.5` on the near-axis parcel (r0 = 1e-4), so it leaves the 1° sector in its first ODE segment and the fold (position AND velocity rotated about the axis) is exercised — the only case in the suite with z ≠ 0 on a wedge. G1 no give-up (the O22 signature was "outer maxIter (500000); flagging gone"), G2 both parcels exit at x > 2.0, G3 every trajectory row inside the sector (print-aware: |z| ≤ |y|·tan(δ/2) + 1e-6 and y > −1e-6), G4 vacuity — W₀ = 0.5 injected and ≥ 9 z-sign flips on ID 1 (measured 18, identical at OMP 1/5 × 3), G5 the wp-free control parcel exits at axis-200's x to 1e-6 (its rows are byte-identical to axis-200's). RED on the pre-fix binary: G1, G2, G3 (500000 rows at θ ≈ 179°) | `axis-200`'s (symlinked) | DB, the two axis-200 parcels; ID 1 additionally `wp = 0.5`; `bc.txt` = axis-200's (symlink) |
+| **planar-slab** | — (behavioral; slab/wedge classifier) | *a single-layer box of finite thickness is a planar 2D case*: 20×20×1 cells over 0.1×0.1×0.005 m, uniform gas u = 5 m/s, T = 350 K, two parcels at the gas velocity at different radii from the x axis. The log reports `Planar slab (parallel k-planes)` and no wedge; no give-up; both parcels exit at x ≥ 0.0999 with y and z at their injection values to 1e-9 on every trajectory row | own (`make_fixture.py`) | six symmetry faces (300), face 2 an outlet (400); two parcels in the mid-plane |
+| **wedge-axis-row** | — (behavioral; slab/wedge classifier) | *a wedge whose axis row sits at r = 1e-8 stays a wedge*: 1-degree wedge, 20×8 cells, the j = 0 row at r = 1e-8 with z = 0, uniform gas u = 5 m/s, two parcels in the meridian plane at the gas velocity. The log reports `Axisymmetric wedge: delthe = 0.01745329` and no `Planar slab`; no give-up; both parcels leave through the outlet (x ≥ 0.0999) with y and z at their injection values to 1e-9 | own (`make_fixture.py`) | x-min 300, x-max 400, axis 200, outer 300, wedge planes 200; two parcels |
 | **two-mat** | — (drag-stokes's `[Stokes]` closed form, per material) | *arity 2*: the first case anywhere with TWO materials (nm = 2) — same box, gas, inlet and parcels as `drag-stokes`, materials A (ρ = 2950) and B (ρ = 1000) from a two-zone `properties.dat`. M1 the drag-stokes oracle (imported, not copied) on `trajectories-A.dat` at 2950 and on `-B.dat` at 1000; M2 both materials inject the same parcel set (identical injection rows, m_B/m_A = 1000/2950); M3 the lighter material relaxes faster at every parcel's first interior row; M4 `source.tec` carries `wdot(A)` and `wdot(B)`, finite and zero, Fx finite/non-zero; M5 `euler1.tec`/`euler2.tec` same shape, finite, different; M6 25 exits per material. Falsified 2026-09-16: phase lines swapped → M1 RED (zones bind by ORDER); one zone for two materials → error stop (was a SIGSEGV) | `drag-stokes`'s (symlinked) | FB `krho` streams, `drag-stokes`'s `bc.txt` (symlinked): one property line per inlet cell feeds both families |
 | **two-fam-bc** | — (drag-stokes's `[Stokes]` closed form, per family) | *per-family boundary file*: two-mat's case with a `bc.txt` carrying one copy of the inlet table per family in ATLAS's order (block, material, population; copy c = family c) — A = drag-stokes's line (krho 0.34, rp 5.945e-6), B half the loading and twice the radius (krho 0.17, rp 1.189e-5). T1 B's parcels on the Stokes closed form at d = 23.78 µm, τ = 1.745e-3 s (the imported oracle checks every row's diameter); T2 ṁ = krho/(1 − 0.51) · 1.2e-3 on every exit: 8.326531e-4 (A), 4.163265e-4 (B); T3 m_B/m_A = 2.711864 at injection; T4 ρ_p/n_p = 7.0410e-12 in `euler2.tec` (A's 2.596e-12 in `euler1.tec`); controls C1 A's closed form and identical injection stations, C2 25 exits each, C3 zero `wdot` slots and the Fx/E balance with each parcel's own ṁ. RED on a reader feeding copy 1 to both families: T1 `dp=1.1890e-05` on 25/25 parcels, T2 1.275000e-03 on every exit of both materials, T3 0.338983, T4 8.8012e-13 in 1500/1500 cells; C1–C3 green in both states | `drag-stokes`'s (symlinked) | FB `krho` streams; own `bc.txt` from the committed `make_fixture.py`: 2 × 1250 records, ATLAS headers `b i j k f code`, face 1 = 401, every other face 100 |
 | **refuse-p2t** | — (kind 8, refusal) | *setup refusal* (`tools/check_refusal.py` via `igloo_refusal_case`): `liquid-conduction = P2T` must exit ≠ 0 with `liquid-conduction=P2T parsed but not implemented`, nothing integrated, no `OUTPUT/*.dat` (ledger O3). The harness is non-vacuous: on drag-stokes's own output it fails on all five counts | as `drag-stokes` | as `drag-stokes` |
@@ -143,6 +152,8 @@ oracle possible.
 | **refuse-heat-token** | — (kind 8, refusal) | *setup refusal*: `heat = no-such-nusselt-law` → `IGLOO: unknown heat model` (O26) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-breakup-token** | — (kind 8, refusal) | *setup refusal*: `breakup = no-such-breakup-model` → `IGLOO: unknown breakup model` (O26) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-evaporation-token** | — (kind 8, refusal) | *setup refusal*: `evaporation = no-such-evaporation-model` → `IGLOO: unknown evaporation model` (O26) | as `drag-stokes` | as `drag-stokes` |
+| **refuse-phase-token** | — (kind 8, refusal) | *setup refusal*: an unknown key on the phase file's material line (`A 1 no-such-key=1`) → `IGLOO: unknown per-material key in the phase file` | as `drag-stokes` | as `drag-stokes` |
+| **refuse-phase-token-real** | — (kind 8, refusal) | *setup refusal*: a non-numeric value for a numeric per-material key (`A 1 alpha-e=one`) → `IGLOO: non-numeric per-material value in the phase file` | as `drag-stokes` | as `drag-stokes` |
 | **refuse-evaporation-leb** | — (kind 8, refusal) | *setup refusal*: `evaporation = LEB` → `IGLOO: evaporation=LEB is not implemented` (parsed, declared not implemented; O26) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-tab-method** | — (kind 8, refusal) | *setup refusal*: TAB `method = 3` → `IGLOO: TAB method must be 1 or 2` (ledger O20: it used to reach a comment-only stub, dp = 0, non-finite states, exit 0 — RED on the pre-fix binary) | as `tab-e2e` | as `tab-e2e` |
 | **refuse-gas-order** | — (kind 8, refusal) | *setup refusal*: `gas-order = 3` → `IGLOO: gas-order must be 1 or 2` (ledger O21: silently became 2, dead warning) | as `drag-stokes` | as `drag-stokes` |
@@ -244,15 +255,13 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 ## Reconciliation
 
 103 `e2e`-labelled + 36 `unit`-labelled + the optional `vortex-cloud-3way` = **140 CTest entries** in a
-serial build (+7 `mpi-*` under `USE_MPI`, 147), all green (counted from `tests/CMakeLists.txt`; `refuse-dopri5` and the DISABLED flag on
-`drag-stokes-dopri5` went with the O25 fix). The `e2e` count
-includes `khrt-e2e-rt`, the KHRT RT-shatter persistence gate, the two A23/S4 additions
-`khrt-stress` and `khrt-e2e-threads`, the A24 pinning case `bc-center-2grp`, the seven
-`repeat-*` two-sweep gates (ten, `repeat-two-mat`, `repeat-drag-stokes-dopri5` and `repeat-tab-dopri5` included), `axis-200`, `wedge-fold`, `swirl-wedge`, `swirl-wedge-deposit`, `swirl-wedge-spin`, `two-mat`, `two-fam-bc`, the thirty-two `refuse-*` setup-refusal gates and `drag-stokes-dopri5`; the `unit` count includes `self_test`, `registry-docs`,
-`test_rng_stream`, `test_axis_dispatch`, `test_graze_standoff`, `test_dual_clip`, `test_source_reduction`, `test_ghost_bc`, `test_bc_families` and `test_mhb98_decane`
-and `registry-docs`, and the two O7 additions `test_kh_rayleigh_limit` and
-`test_khrt_interaction`. Unit families that emit
-a production-vs-reference overlay (`verif_dump` → `tools/plot_curves.py` →
-`docs/vv/images/unit-*.svg`): drag, heat, evaporation-CEM, LK, TC, combustion,
-the five breakup models, and interp — 12 figures. `ini_pipeline` (config
+serial build (+7 `mpi-*` under `USE_MPI`, 147), all green (counted from `tests/CMakeLists.txt`). The 103
+`e2e` entries are the 57 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+(`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
+threads), the twelve `repeat-*` two-sweep gates and the thirty-two `refuse-*` setup-refusal gates. The
+36 `unit` entries are 31 compiled unit tests, the property-table reader on its three fixtures
+(`test_properties_reader`, `-two-material`, `-atlas-water`), `self_test` and `registry-docs`. Unit
+families that emit a production-vs-reference overlay (`verif_dump` → `tools/plot_curves.py` →
+`docs/vv/images/unit-*.svg`): drag, heat, evaporation-CEM, LK, TC, the MHB98 decane kernel,
+combustion, solidification, the five breakup models, and interp — 14 figures. `ini_pipeline` (config
 contract) and the three `*_probes` (scalar bug pins) emit no curve by design.
