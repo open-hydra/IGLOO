@@ -777,8 +777,8 @@ contains
     if (blowSelect == 1 .and. .not.override) &
         Qdot = Qdot * blowingFactor(gas(7), gas(8), gas(6), gas(9), rho, d, m, mdot_evap)
 
-    ! Mass: breakup contribution + evaporation
-    mdot = Z(9)*mdot_evap
+    !> per-droplet mass: evaporation plus the breakup share that keeps the stream mass
+    mdot = mdot_evap - m*F(9)/Z(9)
 
     F(1:3) = Z(4:6)
     F(4:6) = acc

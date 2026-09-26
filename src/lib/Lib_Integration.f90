@@ -19,7 +19,7 @@ contains
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
                                 nSectorFold, nMultiFold,                   &
-                                trajOn, scatOn, dNscat, sixOverPi
+                                trajOn, scatOn, dNscat, sixOverPi, pi
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock
@@ -70,6 +70,8 @@ contains
     logical  :: foldOnly   !> sector fold with no cell crossing
     integer  :: nSect
     logical  :: consumed   !> droplet ended INSIDE the domain with mass still on it
+    real(R8) :: shedM, shedV(3)   !> KH shed of this segment: the child's birth mass flow and velocity
+    real(R8) :: hShed, vShed
     logical  :: atGasBoundary, wasBoundary   ! ord2: geo consulted only at gas-boundary cells
     real(R8) :: geoHexNorms(3,2,6), geoHexCentroids(3,2,6)
     real(R8) :: gasHexNorms(3,2,6), gasHexCentroids(3,2,6)
@@ -193,6 +195,7 @@ contains
       t2     = tStart + 20.0_R8 * deltat
       doLoop = .true.
       consumed = .false.
+      shedM = 0._R8; shedV = 0._R8
       innerIter = 0
       do while (doLoop)
         innerIter = innerIter + 1
@@ -215,6 +218,14 @@ contains
           massOut = 0._R8
           Pout    = 0._R8
           Eout    = 0._R8
+        endif
+        !> A KH shed hands the child's birth flux to the child, not to the gas.
+        if (shedM > 0._R8) then
+          hShed   = part%stateVar(7); if (.not.part%varCp) hShed = part%cp*hShed + part%hOff
+          vShed   = norm2(shedV)
+          massOut = massOut + shedM
+          Pout    = Pout    + shedM*shedV
+          Eout    = Eout    + shedM*(hShed + 0.5_R8*vShed*vShed)
         endif
         !> Body-force source-reaction correction.
         if (srcBodyForce) then
@@ -425,7 +436,7 @@ contains
         doLoop    = .false.
         part%gone = .true.
         !> Consumption models hand the remnant to the gas, as on the non-finite exit below.
-        if (mod_model==2 .or. mod_model==5) consumed = .true.
+        if (mod_model==2 .or. mod_model==4 .or. mod_model==5) consumed = .true.
         return
       endif
       !> Burnout: the droplet was consumed on a still-good state; falls through to the normal finalize.
@@ -448,7 +459,7 @@ contains
         part%gone     = .true.
         doLoop        = .false.
         !> Consumption models hand the remnant to the gas as on a clean burnout.
-        if (mod_model==2 .or. mod_model==5) consumed = .true.
+        if (mod_model==2 .or. mod_model==4 .or. mod_model==5) consumed = .true.
         !> Sync d/m/tp from the reverted state.
         call part%updatePart(rhoTab,hTab,eulerSwitch)
         return
@@ -494,6 +505,16 @@ contains
               part%mdot        = part%npdot * part%rho * part%d**3 / sixOverPi
               auxLocal(ind_m)  = part%mdot
             endif
+            !> Models 2 and 4: the event's droplet mass (and model-4 npdot) become the ODE state.
+            if (eventFlag .and. (mod_model == 2 .or. mod_model == 4) .and. part%d > 0._R8) then
+              part%m           = part%rho * part%d**3 / sixOverPi
+              part%stateVar(8) = part%m
+              part%oldState(8) = part%m
+              if (mod_model == 4) then
+                part%stateVar(9) = part%npdot
+                part%oldState(9) = part%npdot
+              endif
+            endif
           endif
         endif
         if (allocated(stateLocal)) call unpackAuxState(stateLocal, part, nauxstate)
@@ -519,6 +540,9 @@ contains
             shedRec%temp  = part%tp
             shedRec%time  = t1
             call shed%push(shedRec)
+            !> the child's birth mass flow, in its computeMass/computeSource operation order
+            shedM = shedRec%npdot * (pi/6._R8*part%rho*shedRec%diam**3._R8)
+            shedV = shedRec%vel
             !> Shed cap: suppress further sheds, the parent keeps the mass.
             if (shed%n >= maxShed) then
               childDone = .true.
@@ -643,7 +667,7 @@ contains
       endif
 
       !> Burnout test on the droplet mass, consumption models only.
-      if (mod_model==2 .or. mod_model==5) then
+      if (mod_model==2 .or. mod_model==4 .or. mod_model==5) then
         if (y(8) <= mBurnTol) burnedOut = .true.   ! y(8) IS the droplet mass [kg]
       endif
 
