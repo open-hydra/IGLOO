@@ -24,14 +24,15 @@ on the never-exercised T-dependent-property path:
 ## Case construction
 Same box + injection as `tc-box` (kv=1 ⇒ Re=0, Sh=2, coast at u_g ⇒ t=x/u_g; kt=0.5 ⇒
 T_{d,0}=300 K; d0=20 µm), gas air at 600 K. `evaporation=TC`, `interface=VLE`. Fuel
-properties (Tier-1 reconstruction, 2026-07-28, all traceable to sources):
+properties, all traceable to sources (`reference/PROVENANCE.md`):
 - `Mv=226.45`, `Tboil=560` — TC2012 Table 1.
-- `Lv=2.58e5` — the effective latent heat of TC2012's **own Table-1 psat curve** (a CC slope
-  through its `(T,Pvs/PN)` anchors ≈ Watson `L_v` at the ~490 K wet-bulb). The earlier `2.9e5`
-  made IGLOO's CC-psat run **20–24 % low** vs Table 1, over-heating the drop.
+- `p_sat(T)` — TC2012's **own Table-1 curve**, the `Psat` column of `INPUT/properties.dat`:
+  piecewise Clausius-Clapeyron through its six `(T, p/p_atm)` anchors
+  (`tests/tools/make_psat_table.py`), read by the solver and by the oracle as the same column.
+- `Lv=2.2695e5` — Table 1's latent heat at the boiling point, the **energy sink only**
+  (`m c_p dT/dt = Q + ṁ Lv`); with the `Psat` column it no longer sets the saturation curve.
 - `cp_l=2800` (`properties.dat`, constant) — NIST/Chemeo n-hexadecane liquid `Cp` at the
-  ~490 K operating point. The earlier `2200` was the **298 K** value (right property, wrong
-  reference T) — confirmed: NIST `Cp(298 K)=499–500 J/mol·K = 2205 J/kg·K`.
+  ~490 K operating point.
 - `Le=2.5`, `cpv=2300` — n-hexadecane vapour (not the air-default `Le=1`); kept physical.
 - `ρ_l(T)` variable from `properties.dat` (Table-1 boiling anchor 569.9 @ 560 K).
 
@@ -39,11 +40,15 @@ properties (Tier-1 reconstruction, 2026-07-28, all traceable to sources):
 
 ## What `check.py` gates (Tier V, tight)
 Along the MEASURED Tp(x): (1) the **variable-density mass rate** — the oracle integrates the
-droplet MASS with the TC2012 eq. 9 Stefan-Fuchs rate (bisection, independent of production's
-Newton), then reconstructs `d² = (6m/(π ρ_l(Tp)))^{2/3}`, coupling evaporative mass loss AND
-thermal swelling exactly as production does, and matches the measured d²(x) (25/25 within
-0.2 %, tol 2 %); (2) **swelling** — measured max d²/d0² > 1.03 (a constant-density case can
-only shrink, so this proves ρ_l(Tp) is live). Exercises A20 + A21.
+droplet MASS with the TC2012 present-model rate (the eq. 16 transcendental, bisection,
+independent of production's Newton), its `X_s` from the `Psat` column of `INPUT/properties.dat`
+(`tests/tools/proptab.py`, linear between the nodes as the solver reads it), then reconstructs
+`d² = (6m/(π ρ_l(Tp)))^{2/3}`, coupling evaporative mass loss AND thermal swelling exactly as
+production does, and matches the measured d²(x) (25/25 within 0.19 %, tol 2 %); (2)
+**swelling** — measured max d²/d0² > 1.03 (a constant-density case can only shrink, so this
+proves ρ_l(Tp) is live); (3) **PC0** — the run reported `p_sat tabulated from properties.dat`;
+(4) **PC1** — the plateau (max T_p over the gated drops) within 1 K of the 0-D replica of the
+kernel, `zero_d.py` on this fixture: 492.63 K. Exercises A20 + A21.
 
 ## IGLOO's kernel IS TC2012's present model (eq. 16), not Stefan-Fuchs
 Proven from the paper: IGLOO's TC transcendental `m̂ + (T̃s−1)·Le_v·(f(m̂/Le_v)−1) = rhs0`
@@ -53,42 +58,55 @@ Proven from the paper: IGLOO's TC transcendental `m̂ + (T̃s−1)·Le_v·(f(m̂
 film term). So both production **and** `check.py`'s oracle are the *present model*, and the
 overlay compares IGLOO to the correct one of Fig. 11's three curves.
 
+## Saturation curve and latent heat, decoupled
+
+`Lv` has two roles in a Clausius-Clapeyron closure: the slope of `ln p_sat(1/T)` and the energy
+sink. For n-hexadecane one scalar cannot serve both: TC2012's Table-1 curve has an effective
+latent heat of 258 kJ/kg over the operating range (219–269 kJ/kg segment by segment, falling
+with T), while its latent heat at the boiling point is 226.95 kJ/kg. With the `Psat` column the
+curve comes from the table and `Lv` is the sink alone.
+
+`zero_d.py` integrates the kernel's equations for one drop (RK4, statement for statement) and
+prints the plateau, the lifetime and `heat-frac = t_heat/t_life` (`t_heat` the first time T_p
+reaches the plateau − 1 K, `t_life` the time d²/d0² reaches 0.02); `--figure` applies the same
+definitions to the digitized Fig. 11 curves:
+
+| `p_sat` | sink `Lv` | `cp_l` | plateau [K] | heat-frac |
+|---|---|---|---|---|
+| **`Psat` column** | **2.2695e5** | **2800** | **492.63** | **0.618** |
+| `Psat` column | 2.2695e5 | 2900 | 492.63 | 0.629 |
+| Clausius-Clapeyron, `Lv` 2.2695e5 | 2.2695e5 | 2800 | 486.00 | 0.644 |
+| Clausius-Clapeyron, `Lv` 2.58e5 | 2.58e5 | 2800 | 490.17 | 0.591 |
+| `Psat` column | 2.58e5 | 2800 | 490.19 | 0.583 |
+| Clausius-Clapeyron, `Lv` 2.58e5 | 2.2695e5 | 2800 | 492.70 | 0.626 |
+| TC2012 Fig. 11 (digitized) | | | 493.72 | 0.637 |
+
+The run lands on its replica: plateau 492.63 K for all 25 drops (0.2 % below the figure),
+swelling peak 1.088. What moves the plateau is the sink, not the curve's shape: the table and a
+Clausius-Clapeyron line with `Lv = 2.58e5` agree to 0.07 % near 490 K (rows 4–6). `cp_l` moves the
+heat-frac, not the plateau; 2800 is the sourced value (see `reference/PROVENANCE.md`) and stays.
+
+**RED first** (each perturbation on the committed case, then restored):
+
+| | perturbation | PC0 | PC1 | rate (1) |
+|---|---|---|---|---|
+| R1 | the `Psat` column removed (sink stays 2.2695e5): psat by Clausius-Clapeyron with the sink's `Lv` | RED, 0 reports | RED, 486.00 K | RED, no column for the oracle |
+| R2 | column kept, oracle's psat back to Clausius-Clapeyron with `Lv` 2.2695e5 | GREEN | GREEN | RED, 2.51e-1 |
+| R3 | column kept, oracle's psat Clausius-Clapeyron with `Lv` 2.58e5 | GREEN | GREEN | **GREEN, 7.3e-3** |
+| R4 | the column zeroed (Clausius-Clapeyron kept, reported as such) | RED, 0 reports | RED, 486.00 K | RED, 1.08 |
+| R5 | the reader of the table without the kernel connection (psat read, not used) | GREEN | RED, 486.00 K | RED, 2.64e-1 |
+
+R3 is the blind spot of the rate gate: the table and the Clausius-Clapeyron fit to the same
+anchors differ by at most a few percent along the heating path (7.3e-3 against the floor
+of 1.9e-3, under the 2 % tolerance), so the rate gate cannot tell which one the run used. PC0
+and PC1 can: PC0 sees the column read, PC1 sees it used (R5).
+
 ## Comparison plot (`verify.py` → `OUTPUT/tc-hexadecane.svg`, NON-gating)
 IGLOO vs the digitized TC2012 Fig. 11 **present-model** curves, on a **normalized lifetime**
 axis (IGLOO's `D_v` is `Le`-set and differs from TC2012's n-hexadecane `D_v`, so absolute
-`τ=tD_v/R²` is incomparable; the normalized **shape** is the valid comparison). With the
-Tier-1 property reconstruction IGLOO reproduces the **heating shape** (heat-frac ≈ 0.54,
-matching Fig. 11) and the swell peak (1.09), with the plateau at 490.2 K (**0.7 % below**
-the digitized ~493.6 K).
-
-**Root cause of the shape mismatch — mis-set properties, corrected from TC2012's own data.**
-The earlier attribution ("only the Lewis number") was incomplete: `Le` (2f881d0) tuned the
-*plateau*, but the *heating shape / d²-decline* was wrong because two properties were mis-set
-against TC2012's own Table 1: (1) **psat** — IGLOO's CC anchored with `Lv=2.9e5` ran 20–24 %
-below Table 1's `(T,Pvs/PN)` curve, so the drop under-evaporated and over-heated (peak too
-early, heat-frac 0.39 vs 0.54); (2) **cp_l** — `2200` is the 298 K value, but the drop
-operates at ~490 K where `cp_l≈2800`. Correcting both (`Lv=2.58e5` → Table-1-consistent psat;
-`cp_l=2800` → NIST operating-T value) moves heat-frac 0.39 → **0.536** — the shape now tracks
-Fig. 11. TC2012 uses *constant* gas-film properties (only `ρ_l` T-dependent), so a **constant**
-`cp_l` is the faithful choice — no variable-cp law (which would also trip an untested code
-path). `Le=2.5` is kept (physical, `D_v`-justified).
-
-**Deliberate trade — plateau vs shape (read alongside commit 2f881d0).** The prior state
-(2f881d0) had a near-exact plateau (493.8 vs ~493.6 K) but the wrong shape (heat-frac 0.39).
-That plateau was a **compensating-error coincidence**: a psat 20–24 % too low **and** `Le=2.5`
-tuned against it happened to land the wet-bulb. With the psat corrected, the same physical
-`Le=2.5` gives 490.2 K. Tier-1 therefore trades a hair of plateau accuracy (now **3.4 K / 0.7 %
-low**) for the *shape* — which was the actual complaint. Tier-2 (decoupled psat) recovers the
-plateau too (0-D: 492.7 K) without re-introducing the compensation.
-
-**Residual (documented) → Tier 2, deferred.** The `d²` mid-decline still sits slightly below
-TC2012's, and the plateau is 3.4 K low, because a **single scalar `Lv`** cannot be BOTH the
-psat-curve slope (~258 kJ/kg) AND the optimal energy sink (~227 kJ/kg from Table-1 ΔHv). The
-full match (0-D verified: plateau 492.7, heat-frac 0.538) needs the psat curve **decoupled**
-from the sink `Lv` — i.e. the tabulated/variable-psat capability. This makes tc-hexadecane the
-concrete demonstrator that justifies that feature; the plan is in
-`plan-bucket/tc-hexadecane-tier2-decoupled-psat.md`. The tight gate stays IGLOO-vs-its-own-TC
-kernel; the paper curves are a non-gating overlay.
+`τ=tD_v/R²` is incomparable; the normalized **shape** is the valid comparison): plateau
+492.6 K against the digitized ~493.7 K, swell peak 1.09. TC2012 uses *constant* gas-film
+properties (only `ρ_l` T-dependent), so a **constant** `cp_l` is the faithful choice.
 
 ## Exit-path and mass-balance gates (O30, added 2026-09-22)
 
