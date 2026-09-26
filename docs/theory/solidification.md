@@ -45,8 +45,11 @@ T = T_n + \frac{L(T_n)}{c_s}, \qquad L(T) = h_\mathrm{fus} - (c_l - c_s)(T_m - T
 $$
 
 $L(T)$ being the latent heat at $T$ implied by the two heat capacities; when
-$L(T_n) < 0$ the solid lands below $T_n$.  At the end of the plateau the solid
-starts at $T_m$; a re-melted droplet continues as a liquid at $T_m$.
+$L(T_n) < 0$ the solid lands below $T_n$.  The two branches meet at $f_0 = 1$: there
+$c_l\,(T_m - T_n) = h_\mathrm{fus}$, so $L(T_n) = c_s\,(T_m - T_n)$ and both give
+$T = T_m$ — the temperature after recalescence is continuous in the undercooling.  At the
+end of the plateau the solid starts at $T_m$; a re-melted droplet continues as a liquid at
+$T_m$.
 
 **Initial phase.** A droplet injected at or below $T_n$ is solid ($f = 1$), one
 between $T_n$ and $T_m$ undercooled, one at or above $T_m$ liquid.
