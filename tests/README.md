@@ -30,7 +30,7 @@ tests/
 ├── test.sh                       # MOSE-style runner: standard evaporation combustion solidification breakup infrastructure repeatability mpi unit e2e
 ├── vv_style.py                   # the single plot-style source for every SVG
 ├── common/                       # shared box fixtures + the MOSE nozzle solfile (db-2daxi, axis-200)
-├── tools/                        # make_box_case.py make_pe_case.py make_vie_case.py make_uniform_gas.py set_kv.py
+├── tools/                        # make_box_case.py make_pe_case.py make_vie_case.py make_vortex_case.py make_uniform_gas.py set_kv.py
 │                                 # aggregate_report.py check_twosweep.py compare_tec.py check_registry.cmake plot_curves.py mpi_scaling_smoke.sh
 ├── support/                      # shared Fortran library (NOT a test family)
 │   ├── verif_norms.f90  verif_report.f90  verif_oracle.f90  verif_interp.f90  verif_dump.f90
@@ -39,7 +39,7 @@ tests/
 │   └── twosweep.f90              # the two-sweep repeatability driver
 ├── standard/                     # drag + heat
 │   ├── drag/  temperature/       #   unit families
-│   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/   # e2e
+│   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ vortex-cloud-st{0p01,0p1,1,10}/   # e2e
 ├── evaporation/                  # unit families: (root)  interface-neq/  tc-analytic/  evap-breakup/
 │   └── d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ boiling-temperature-key/ no-psat/ tc-hexadecane/ mhb98-water/ evap-breakup-box/ d2law-brk-dormant/     # e2e
 ├── combustion/                   # unit family (root) + burn-box/ (e2e)
@@ -94,9 +94,11 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 135/135 in a serial build (99 e2e + 36 unit, `self_test` and `registry-docs` among the latter);
-`USE_MPI=ON` registers 7 more `mpi-*` cases, 142/142. (Was 85/85 before the five review-residual
+ctest 140/140 in a serial build (103 e2e + 36 unit, `self_test` and `registry-docs` among the latter, and the
+optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
+is absent); `USE_MPI=ON` registers 7 more `mpi-*` cases, 147/147. (Was 85/85 before the five review-residual
 plans of 2026-09-22/23 added `ini-comment-eq`, `solver-fail-consumed`, `tc-box-euler`,
 `test_source_reduction`, `tc-box-ord2-row`, `test_ghost_bc` and `wall-approach`; `no-exchange`
 followed on 2026-09-24, `boiling-temperature-key` and `refuse-boiling-temperature-both` on 2026-09-26, then
-`test_bc_families`, `two-fam-bc`, `refuse-bc-copies` and `refuse-bc-copy-order`.)
+`test_bc_families`, `two-fam-bc`, `refuse-bc-copies` and `refuse-bc-copy-order`, then the four
+`vortex-cloud-st*` cases and `vortex-cloud-3way`.)

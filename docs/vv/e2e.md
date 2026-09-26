@@ -25,10 +25,11 @@ The gas file is read by IGLOO's allocation module (`src/lib/allocation.f90`) usi
 header-name matching over a 21-variable standard gas state.  Variable names must
 match exactly; ordering is flexible.
 
-Three cases use other geometries: `vie-plait` a box carrying a non-uniform gas
+Four case families use other geometries: `vie-plait` a box carrying a non-uniform gas
 (`tests/tools/make_vie_case.py`), the `swirl-wedge` family a one-cell annular wedge
-(`tests/tools/make_wedge_case.py`), and `db-2daxi`/`axis-200`/`wedge-fold` a real MOSE
-nozzle solution on an axisymmetric wedge (`tests/common/`).
+(`tests/tools/make_wedge_case.py`), the `vortex-cloud` family a one-cell planar square in
+solid-body rotation (`tests/tools/make_vortex_case.py`), and `db-2daxi`/`axis-200`/`wedge-fold`
+a real MOSE nozzle solution on an axisymmetric wedge (`tests/common/`).
 
 ### `make_box_case.py` knobs
 
@@ -198,6 +199,35 @@ $\mathrm{d}\mathbf{v}/\mathrm{d}t = 0$, $\mathrm{d}T_p/\mathrm{d}t = 0$, and the
 without the two tokens refuses the case at setup (exit 128); each switch alone fails the
 oracle on the quantity it leaves on (Stokes drag: $u \to 9.999961$; Ranz–Marshall:
 $T \to 600$).
+
+### vortex-cloud
+
+ICE's verification case I run by IGLOO, number for number: a cloud released at the local gas
+velocity into a frozen solid-body vortex $u_g = i\Omega z$ ($z = x + iy$, $\Omega = 1$), the
+only case where the gas rotates in the plane of the motion — every cross term of the drag
+equation between $x$ and $y$ is exercised — and the only one that sweeps the Stokes number
+(`vortex-cloud-st0p01`, `-st0p1`, `-st1`, `-st10`).  With Stokes drag and a uniform diameter,
+$\tau z'' + z' = i\Omega z$, and a parcel seeded at the gas velocity moves as $z(t) = C(t)\,z_0$
+with $C = A e^{\lambda_+ t} + B e^{\lambda_- t}$, $\lambda_\pm = (-1 \pm \sqrt{1 + 4i\Omega\tau})/(2\tau)$:
+one complex factor for the whole cloud, whose argument lags $\Omega t$ and whose modulus grows.
+The 1672 parcels (an $h/2$ lattice within $4\sigma$ of ICE's Gaussian) stop at a quarter turn,
+$t = \pi/2$ (`time-end`), and every row carries its time (`out-time`), so the oracle compares
+each row with $C(t)\,z_0$ at the row's own time.
+
+| Witness | Requirement |
+|---------|-------------|
+| Every time-stamped row and `snapshot-A.dat` record | $\lvert z - C(t) z_0\rvert \le 3\cdot10^{-6}$ m, $\lvert v - C'(t) z_0\rvert \le 3\cdot10^{-6}$ m/s |
+| Premise | 1672 parcels from their seed states; all in the snapshot at $t = \pi/2$; no exit; planar single-layer path |
+| Oracle self-check | $C(0) = 1$, $C'(0) = i\Omega$, rotation and dilation monotone, RK4 agreement to $10^{-12}$ |
+
+**Result:** at every St the worst residual is the F12.6 print floor, $7.0\cdot10^{-7}$ m and
+$7.1\cdot10^{-7}$ m/s, and the cloud's $\lvert C\rvert$ and lag at the quarter turn equal the closed
+form to all printed digits (1.015723 / 0.000310 at St 0.01 … 1.828830 / 0.538470 at St 10).
+Deliberately wrong inputs miss by $1.4\cdot10^{-3}$ to $1.6$ m: no drag, $\tau$ doubled, seeded at
+rest, first-order gas sampling.  The same case solved by ICE and by IGLOO side by side, against
+the exact solution at each solver's own time, is the three-way comparison in hydra's
+`test/vortex-cloud/` ([open-hydra/hydra](https://github.com/open-hydra/hydra)), which the optional
+ctest entry `vortex-cloud-3way` runs where hydra and an ICE binary are present.
 
 ### d2law-line
 

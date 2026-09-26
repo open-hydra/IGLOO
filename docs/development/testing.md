@@ -70,7 +70,7 @@ tests/
 │   └── twosweep.f90              # the two-sweep repeatability driver
 ├── standard/                     # drag + heat
 │   ├── drag/  temperature/       #   unit families
-│   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/   # e2e cases
+│   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ vortex-cloud-st{0p01,0p1,1,10}/   # e2e cases
 ├── evaporation/                  # unit families (root C, interface-neq, tc-analytic, evap-breakup) + d2law/d2law-line/lk-neq/tc-box/tc-box-euler/tc-box-ord2-row/tc-hexadecane/mhb98-water/mhb98-water-psat/evap-breakup-box/d2law-brk-dormant e2e
 ├── breakup/                      # TAB, Pilch-Erdman, Reitz-Diwakar, ETAB, Reitz-KHRT unit families + tab/etab/pilch-erdman/reitz-diwakar/khrt e2e, khrt-stress, rd/tab/khrt-evap-frozen, khrt-shed-noexchange
 ├── combustion/                   # Beckstead unit family + burn-box e2e
@@ -86,7 +86,7 @@ tests/
 
 | Category | Contents |
 |----------|----------|
-| `standard` | Drag and temperature unit families; drag-stokes, temp-relax, body-force, conv-nu, vie-plait, swirl-wedge, swirl-wedge-deposit, swirl-wedge-spin, no-exchange e2e |
+| `standard` | Drag and temperature unit families; drag-stokes, temp-relax, body-force, conv-nu, vie-plait, swirl-wedge, swirl-wedge-deposit, swirl-wedge-spin, no-exchange and the four vortex-cloud e2e cases |
 | `evaporation` | Evaporation, LK-interface and TC-analytical unit families (plus the MHB98 decane kernel test); d²-law, d²-law line, lk-neq, tc-box, tc-box-euler, tc-box-ord2-row, tc-hexadecane, mhb98-water and mhb98-water-psat e2e |
 | `breakup` | TAB/ETAB, Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT unit families + TAB stochastic moments; five Weber-sweep e2e cases and the khrt-stress load case |
 | `combustion` | Beckstead $d^n$ Al-burn unit family; burn-box e2e |
@@ -102,8 +102,9 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **135 tests** in a serial build (99 e2e + 36 unit, `self_test` and
-`registry-docs` among the latter); `USE_MPI=ON` registers 7 more `mpi-*` cases.
+Current gate: **140 tests** in a serial build (103 e2e + 36 unit, `self_test` and
+`registry-docs` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 7 more
+`mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.
 
 ### Adding a test

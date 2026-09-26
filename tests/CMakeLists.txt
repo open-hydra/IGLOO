@@ -5,7 +5,7 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ (e2e)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ vortex-cloud-st{0p01,0p1,1,10}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ (e2e)
@@ -322,6 +322,24 @@ igloo_e2e_case(swirl-wedge-spin standard/swirl-wedge-spin "e2e;standard;drag;gas
 # u and T to the last printed digit, and the momentum/energy source is exactly 0.0 in every cell.
 # RED on a binary without the two tokens: refused at setup (exit 128, nothing integrated).
 igloo_e2e_case(no-exchange standard/no-exchange "e2e;standard;drag;heat")
+# vortex-cloud: ICE's verification case I -- a cloud of 1672 parcels released at the gas velocity into a
+# frozen solid-body vortex, stopped at a quarter turn (time-end, out-time). Exact per parcel, z = C(t) z0:
+# every time-stamped row within 3e-6 of the closed form (floor 7e-7). One dir per Stokes number, INPUT and
+# check.py shared. RED: no drag, tau doubled, seeded at rest, gas-order 1 (1.4e-3 to 1.6 m).
+igloo_e2e_case(vortex-cloud-st0p01 standard/vortex-cloud-st0p01 "e2e;standard;drag;gas")
+igloo_e2e_case(vortex-cloud-st0p1  standard/vortex-cloud-st0p1  "e2e;standard;drag;gas")
+igloo_e2e_case(vortex-cloud-st1    standard/vortex-cloud-st1    "e2e;standard;drag;gas")
+igloo_e2e_case(vortex-cloud-st10   standard/vortex-cloud-st10   "e2e;standard;drag;gas")
+# vortex-cloud-3way: the same case solved by ICE and by this tree's IGLOO against the exact solution, through
+# hydra's test/vortex-cloud/compare.py --check. Optional: skipped (exit 77) without HYDRADIR, the driver, ICE's
+# verification scripts or an ICE binary, so neither suite depends on the other's binary.
+add_test(NAME vortex-cloud-3way
+    COMMAND bash -c "d=\"$HYDRADIR/test/vortex-cloud/compare.py\"; if [ -z \"$HYDRADIR\" ] || [ ! -f \"$d\" ]; then echo \"[SKIP] HYDRADIR unset or no $d\"; exit 77; fi; IGLOO_DIR=${CMAKE_SOURCE_DIR} IGLOO_BIN=${CMAKE_SOURCE_DIR}/bin/IGLOO python3 -B \"$d\" --check --work ${CMAKE_CURRENT_BINARY_DIR}/vortex-cloud-3way"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vortex-cloud-3way PROPERTIES
+    LABELS "3way;external"
+    SKIP_RETURN_CODE 77
+    TIMEOUT 3600)
 
 # ---------- evaporation --------------------------------------------------------
 igloo_unit_test(test_evaporation evaporation "unit;evaporation;c;t4")
