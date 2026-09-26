@@ -115,7 +115,7 @@ contains
 
     ! --- [IGLOO-Properties] --- one value per material; overrides properties.dat
     call reg%add('IGLOO-Properties','psat',d_a(2,:),'0', &
-      'Saturation pressure [Pa]; one value per material, overrides properties.dat','',.false.)
+      'Legacy, accepted and ignored: p_sat comes from Clausius-Clapeyron (Lv, Mv, boiling-temperature)','',.false.)
     call reg%add('IGLOO-Properties','Mv',d_a(3,:),'0', &
       'Vapour molar mass; one value per material, overrides properties.dat','',.false.)
     call reg%add('IGLOO-Properties','Lv',d_a(4,:),'0', &

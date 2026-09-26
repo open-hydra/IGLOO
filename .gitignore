@@ -22,6 +22,8 @@ OUTPUT.sweep*
 ref-rel
 # boiling-temperature-key runs its Tboil sibling into ref-tboil/ (tests/evaporation/boiling-temperature-key/check.py)
 ref-tboil
+# no-psat runs its psat sibling into ref-psat/ (tests/evaporation/no-psat/check.py)
+ref-psat
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/

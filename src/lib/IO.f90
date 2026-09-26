@@ -222,9 +222,7 @@ contains
         ! endif
         
         !> constants from [IGLOO-Properties]
-        if (allocated(ini_psat)) then;  material(i)%psat = ini_psat(i)
-        else; error stop '[ERROR] Evaporation requires psat. Provide in [IGLOO-Properties]'
-        endif
+        if (allocated(ini_psat)) material(i)%psat = ini_psat(i)
         if (allocated(ini_Mv)) then;    material(i)%Mv = ini_Mv(i)
         else; error stop '[ERROR] Evaporation requires Mv. Provide in [IGLOO-Properties]'
         endif

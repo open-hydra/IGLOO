@@ -158,7 +158,7 @@ Constant evaporation and breakup properties, one value per material in the order
 
 | Key | Description |
 |-----|-------------|
-| `psat` | Saturation pressure [Pa] |
+| `psat` | Legacy, accepted and ignored — the saturation pressure is computed from Clausius-Clapeyron (`Lv`, `Mv`, `boiling-temperature`) |
 | `Mv` | Vapor molar mass [kg/kmol] |
 | `Lv` | Latent heat of vaporization [J/kg] |
 | `boiling-temperature` (alias `Tboil`) | Boiling temperature [K]; give one name or the other, not both |

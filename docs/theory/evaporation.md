@@ -320,7 +320,7 @@ when `blowing = LK`.  No sensible-enthalpy term for the departing vapour is carr
 | `Le` | `ep(iLe)` | Lewis number |
 | `Yinf` | `ep(iYinf)` | Far-field vapour mass fraction |
 | `boiling-temperature` (alias `Tboil`) | (→`ep(iinvTboil)`) | Normal boiling point (K) |
-| `psat` | (→`ep(iLvMvOverRu)`) | Drives Clausius-Clapeyron pre-factor |
+| `psat` | — | Accepted and ignored (legacy): the saturation pressure is Clausius-Clapeyron's, from `ep(iLvMvOverRu)` = `Lv·Mv/Ru` and `ep(iinvTboil)` = `1/T_boil` |
 
 Full registry: [../user/registry.md](../user/registry.md).
 
