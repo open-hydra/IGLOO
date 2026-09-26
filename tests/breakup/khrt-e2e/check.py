@@ -35,6 +35,7 @@ unit-side on 2026-08-03 by:
     agree on the RT predicate and the tc/told accumulator.
 """
 import math
+import re
 import sys
 
 TRAJ = "OUTPUT/trajectories-A.dat"
@@ -63,6 +64,14 @@ N_INJECTED = 25      # inlet cells; IDs 1..25 are injected, higher IDs are KH-sh
 MIN_TRAJ   = 4       # trajectory records a genuinely-integrated parcel must leave
 MIN_TRAVEL = 1.0e-3  # x-distance it must cover between birth and exit (domain is 0.15 long)
 FRAC_FLEW  = 0.90    # fraction of children that must clear both bars (observed 240/241)
+
+# ---- source budget: the gas receives the particle phase's net flux, a shed's included ----
+SRC        = "OUTPUT/source.tec"
+CP_P       = 4182.0  # INPUT/properties.dat Cp (constant, relative enthalpy: no datum)
+TOL_SRC_P  = 5.0e-6  # |sum Fx - (P_in - P_out)| / P_in: the E13.6 bound on outloc mdot (measured 6.1e-7)
+TOL_SRC_E  = 5.0e-6  # |sum E - (E_in - E_out)| / E_in: the same bound (measured 6.4e-7)
+TOL_SRC_M  = 1.0e-12 # |sum wdot| / mdot_in (model 3 exchanges no mass)
+TOL_SRC_T  = 1.0e-12 # |sum Fy|, |sum Fz| / P_in (the flow is along x)
 
 
 def kh_rate(d, slip):
@@ -284,12 +293,8 @@ def windowed_rates(rows, max_loss=0.03, nmax=6):
     return lsq(dm), lsq(ref)
 
 
-def main():
-    try:
-        parts = load_trajectories(TRAJ)
-    except FileNotFoundError:
-        print(f"[FAIL] {TRAJ} not found -- did the solver run?")
-        return 1
+def gate_kh_rate(parts):
+    """Initial KH-stripping rate of the RT-free parents; returns (drops gated, violations)."""
     print(f"KHRT KH-stripping gate (initial rate vs Reitz-87, We_r >= {WE_MIN:.0f}):")
     print(f"{'ID':>3} {'We_r':>6} {'rate_IG':>11} {'rate_R87':>11} {'ratio':>6}  verdict")
 
@@ -323,11 +328,109 @@ def main():
           f"violations (rel > {TOL_REL:.0%}): {n_viol}; worst rel {worst:.2e}")
     print("[note] RT shatter is gated separately by check_rt.py (A19 fixed 2026-07-23); "
           "window measured RT-free.")
+    return n_good, n_viol
+
+
+def read_source(path=SRC):
+    """The five cell-centred fields of source.tec (BLOCK packing, three nodal coordinates first)."""
+    lines = open(path).read().splitlines()
+    zone = next(l for l in lines if l.strip().startswith("ZONE"))
+    ni, nj, nk = (int(re.search(r"%s=(\d+)" % c, zone).group(1)) for c in "IJK")
+    nnod, ncel = ni * nj * nk, (ni - 1) * (nj - 1) * (nk - 1)
+    vals = " ".join(lines[lines.index(zone) + 1:]).split()
+    return [[float(v) for v in vals[3 * nnod + f * ncel:3 * nnod + (f + 1) * ncel]]
+            for f in range(5)]
+
+
+def check_source_budget(parts=("mass", "momentum", "energy"), tol_mass=TOL_SRC_M):
+    """The gas receives the particle phase's net flux: sum over cells = injected - exiting.
+
+    Each segment deposits (in - out) of mass, momentum and energy flow, so a parcel's deposits
+    telescope to (first in - last out). A KH shed moves part of the parent's flux into a child
+    born at the shed point: the parent hands the child's birth flux on, it does not deposit it,
+    so over the whole field sum(Fx) = P_in - P_out and sum(E) = E_in - E_out with E = mdot(cp T
+    + u^2/2). Injected state: the parents' injection rows and MDOT_INJECTED; exit state: the
+    outloc records (mdot column 7, |u_p| column 5, T column 4). `parts` selects the budgets a
+    case can close ("momentum" and "energy" need the exit flow in outloc column 7); `tol_mass`
+    bounds |sum wdot| / mdot_in when the case exchanges no mass.
+    """
+    try:
+        wdot, fx, fy, fz, en = read_source()
+    except (FileNotFoundError, StopIteration):
+        print(f"\n[FAIL] {SRC} not found or unreadable -- source output off?")
+        return 1
+    inj = {}
+    for line in open(TRAJ):
+        c = line.split()
+        if len(c) == 10 and c[0][0] in "0123456789-":
+            try:
+                pid, x = int(c[9]), float(c[0])
+                u, v, w, t = (float(c[k]) for k in (3, 4, 5, 6))
+            except ValueError:
+                continue
+            if pid <= N_INJECTED and (pid not in inj or x < inj[pid][0]):
+                inj[pid] = (x, u, v, w, t)
+    mp = MDOT_INJECTED / N_INJECTED
+    p_in = sum(mp * r[1] for r in inj.values())
+    e_in = sum(mp * (CP_P * r[4] + 0.5 * (r[1]**2 + r[2]**2 + r[3]**2)) for r in inj.values())
+    p_out = e_out = 0.0
+    for line in open(OUTLOC):
+        c = line.split()
+        if len(c) == 9 and c[0][0] in "0123456789-":
+            try:
+                t, vm, md = float(c[3]), float(c[4]), float(c[6])
+            except ValueError:
+                continue
+            p_out += md * vm
+            e_out += md * (CP_P * t + 0.5 * vm * vm)
+    fails = 0
+    print(f"\nsource budget ({len(inj)} injection rows, P_in {p_in:.6f} N, E_in {e_in:.6e} W):")
+    if len(inj) != N_INJECTED:
+        print(f"  [FAIL] {len(inj)} injection rows, need {N_INJECTED}")
+        fails += 1
+    ts = max(abs(sum(fy)), abs(sum(fz))) / p_in
+    ok = ts <= TOL_SRC_T
+    fails += not ok
+    print(f"  transverse |sum Fy|, |sum Fz| = {ts:.1e} of P_in (tol {TOL_SRC_T:.0e}) "
+          f"{'PASS' if ok else 'FAIL'}")
+    if "mass" in parts:
+        rm = abs(sum(wdot)) / MDOT_INJECTED
+        ok = rm <= tol_mass
+        fails += not ok
+        print(f"  mass       sum wdot = {sum(wdot):.6e} kg/s, {rm:.1e} of mdot_in "
+              f"(tol {tol_mass:.0e}) {'PASS' if ok else 'FAIL'}")
+    if "momentum" in parts:
+        rp = abs(sum(fx) - (p_in - p_out)) / p_in
+        ok = rp <= TOL_SRC_P
+        fails += not ok
+        print(f"  momentum   sum Fx = {sum(fx):.6f} N vs P_in - P_out = {p_in - p_out:.6f} N, "
+              f"resid {rp:.1e} of P_in (tol {TOL_SRC_P:.0e}) {'PASS' if ok else 'FAIL'}")
+    if "energy" in parts:
+        re_ = abs(sum(en) - (e_in - e_out)) / e_in
+        ok = re_ <= TOL_SRC_E
+        fails += not ok
+        print(f"  energy     sum E = {sum(en):.6e} W vs E_in - E_out = {e_in - e_out:.6e} W, "
+              f"resid {re_:.1e} of E_in (tol {TOL_SRC_E:.0e}) {'PASS' if ok else 'FAIL'}")
+    if fails:
+        print("[FAIL] the source field does not close the particle-phase budget "
+              "(a shed's birth flux deposited in the gas and carried on by the child).")
+    return 1 if fails else 0
+
+
+def main():
+    try:
+        parts = load_trajectories(TRAJ)
+    except FileNotFoundError:
+        print(f"[FAIL] {TRAJ} not found -- did the solver run?")
+        return 1
+    n_good, n_viol = gate_kh_rate(parts)
     rc_mass = check_mass_conservation()
     rc_kids = check_children_integrate()
     rc_shed = check_multiple_sheds()
+    rc_src = check_source_budget()
 
-    if n_good >= N_GOOD and n_viol == 0 and rc_mass == 0 and rc_kids == 0 and rc_shed == 0:
+    if n_good >= N_GOOD and n_viol == 0 and rc_mass == 0 and rc_kids == 0 and rc_shed == 0 \
+            and rc_src == 0:
         print("\n[PASS] IGLOO reproduces the Reitz-87 KH-stripping rate at every gated We_r, "
               "conserves parcel mass-flow, and sheds children that integrate.")
         return 0

@@ -77,6 +77,27 @@ Three gates cover the KH-shed path, none of which the older ones could see:
 
 Heavy shedding is stressed separately by [breakup/khrt-stress](../khrt-stress/INFO.md).
 
+## Source budget (`check.py::check_source_budget`)
+The case writes `source.tec`. A segment deposits `in − out` of the parcel's mass, momentum and energy flow,
+so a parcel's deposits telescope to (first in − last out). At a KH shed the parent's outgoing flow drops by
+the child's birth flow and the child starts from it: the parent hands that flow on to the child, it does not
+deposit it. Over the whole field, with the flow along x,
+
+    Σ Fx = P_in − Σ_exits ṁ |u_p|,    Σ E = E_in − Σ_exits ṁ (c_p T + |u_p|²/2),    Σ wdot = Σ Fy = Σ Fz = 0
+
+injected state from the parents' injection rows and `MDOT_INJECTED`, exit state from outloc (columns 7, 5, 4).
+Tolerances: `5e-6` of `P_in`/`E_in`, the E13.6 bound on the printed exit flows (measured **6.1e-7** and
+**6.4e-7**); transverse and mass `1e-12` (exactly 0 measured). The cell-local form of the same statement,
+with the exchange switched off, is [breakup/khrt-shed-noexchange](../khrt-shed-noexchange/INFO.md).
+
+| solver | Σ Fx vs P_in − P_out | Σ E vs E_in − E_out |
+|---|---|---|
+| shed flow deposited in the gas | −5.265758 vs −13.017249 N: **+7.751 N** (0.25 of P_in) | +9.52172e4 vs −1.88588e3 W: **+9.710e4 W** (0.25 of E_in) |
+| shed flow handed to the child | −13.017230 vs −13.017249 N (6.1e-7) | −1885.627 vs −1885.876 W (6.4e-7) |
+
+The excess is the children's birth flux exactly: divided by their exit flow (0.0770868 kg/s) it is
+100.555 m/s and c_p·300 + ½·100.555² J/kg.
+
 ## What `check.py` gates (KH stripping, GREEN)
 IGLOO's initial `dd/dt` (leading-window LSQ, matched against the same-window RK4 of the
 Reitz-87 KH rate — the decelerating rate's finite-window bias cancels on both sides) vs

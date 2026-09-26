@@ -24,6 +24,7 @@ FAMILY_DIRS = [
     "infrastructure/graze_standoff", "infrastructure/dual_clip",
     "standard/drag", "standard/temperature",
     "evaporation", "evaporation/interface-neq", "evaporation/tc-analytic",
+    "evaporation/evap-breakup",
     "combustion",
     "solidification",
     "breakup/tab", "breakup/etab", "breakup/pilch-erdman",

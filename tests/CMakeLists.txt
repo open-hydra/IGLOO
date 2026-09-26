@@ -6,12 +6,12 @@
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ (e2e)
-#   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ (e2e)
+#   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ (e2e)
-#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/ two-fam-bc/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,varcp-tmin,bad-row},bc-copies,bc-copy-order,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
-#   repeatability/      two-sweep gates (twosweep driver): 11 cases
+#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ khrt-evap-frozen/ khrt-shed-noexchange/
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,varcp-tmin,bad-row},bc-copies,bc-copy-order,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
+#   repeatability/      two-sweep gates (twosweep driver): 12 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
 # Run everything via ../test.sh (builds bin/IGLOO too — e2e cases use it).
@@ -269,6 +269,9 @@ igloo_twosweep_case(repeat-tab-dopri5   repeatability/tab-dopri5
 # repeat-solid-box: model 6's phase and frozen fraction are re-derived at injection every sweep.
 igloo_twosweep_case(repeat-solid-box    repeatability/solid-box
                     "e2e;repeatability;solidification" "")
+# repeat-evap-breakup: ODE model 4's droplet mass and number rate are re-seeded at injection every sweep.
+igloo_twosweep_case(repeat-evap-breakup repeatability/evap-breakup
+                    "e2e;repeatability;evaporation;breakup" "")
 # docs/user/registry.md is DocGen OUTPUT that is also TRACKED, so it can silently
 # disagree with the registry it documents (it did twice on 2026-07-30). Regenerate
 # into the build tree and diff. Kind 8 (contract meta-test): no physics, no figure.
@@ -375,6 +378,19 @@ igloo_e2e_case(tc-box-euler evaporation/tc-box-euler "e2e;evaporation;euler")
 # This is also the ONLY gate on the wiring -- test_source_reduction calls
 # precomputeDualWeights itself, so it cannot see a missing call in allocate_blocks.
 igloo_e2e_case(tc-box-ord2-row evaporation/tc-box-ord2-row "e2e;evaporation;gas")
+# ODE model 4 (evaporation + ODE breakup). test_evap_breakup: one production rhsEvapBreakup call per
+# state against the d2-law and Reitz-Diwakar rates typed from the papers (breakup dormant, evaporation
+# frozen, both: n F(8) + m F(9) = n mdot_evap). RED while F(8) carries the number rate or lacks the
+# breakup share.
+igloo_unit_test(test_evap_breakup evaporation/evap-breakup "unit;evaporation;breakup;m4")
+# evap-breakup-box: Reitz-Diwakar stripping then d2-law evaporation to burnout in a closed box. The
+# composed rate (d_s - d)/tau + 2 mdot_d2/(rho pi d^2) along the measured u, T_p in the breakup window,
+# the d2-law integral after it, the source closure (every drop consumed in the box), no cell taking mass
+# from the gas, and 25 burnouts with no solver-failure exit. RED: every drop lost at injection.
+igloo_e2e_case(evap-breakup-box evaporation/evap-breakup-box "e2e;evaporation;breakup;val;m4")
+# d2law-brk-dormant: the d2law case under model 4 with the breakup rate exactly zero (zero slip); the
+# d2law oracle must hold unchanged. RED while F(8) carries the number rate.
+igloo_e2e_case(d2law-brk-dormant evaporation/d2law-brk-dormant "e2e;evaporation;breakup;m4")
 
 # ---------- combustion (M1: Beckstead d^n burn law) -----------------------------
 igloo_unit_test(test_combustion combustion "unit;combustion;m1;t4")
@@ -444,6 +460,18 @@ set_tests_properties(khrt-e2e-rt PROPERTIES
 # per-parent shed lists go through ~7 doublings. Gates mass exactness under heavy shedding
 # plus "the runaway guard did not fire". INPUT/ is a symlink to ../khrt-e2e/INPUT.
 igloo_e2e_case(khrt-stress breakup/khrt-stress "e2e;breakup;khrt;stress")
+# rd-evap-frozen: the reitz-diwakar-e2e case under model 4 with the evaporation rate frozen at zero; the
+# RD87 rate oracle must hold unchanged. RED while breakup gives the droplet mass no share (d stays d0).
+igloo_e2e_case(rd-evap-frozen breakup/rd-evap-frozen "e2e;breakup;evaporation;m4")
+# tab-evap-frozen: the tab-e2e case under model 2 (TAB events, evaporation frozen at zero): the tab-e2e
+# oracle plus a mass-free source field. RED while the event's size is not written to the model-2 state.
+igloo_e2e_case(tab-evap-frozen breakup/tab-evap-frozen "e2e;breakup;evaporation;tab")
+# khrt-evap-frozen: the khrt-e2e case under model 4 (evaporation frozen at zero): the KH rate, the RT
+# persistence, the children, and no mass to the gas. RED while events do not reach the model-4 state.
+igloo_e2e_case(khrt-evap-frozen breakup/khrt-evap-frozen "e2e;breakup;evaporation;khrt;m4")
+# khrt-shed-noexchange: the khrt-e2e case with NoDrag and NoHeat, so a KH shed is the only exchange left:
+# every cell of the source field must be zero. RED while the shed cell receives the child's birth flux.
+igloo_e2e_case(khrt-shed-noexchange breakup/khrt-shed-noexchange "e2e;breakup;khrt;source")
 
 # Thread-invariance of the KH-shed path (A23/S4-D1): the drain runs after an OMP region and
 # unitTraj/unitExit are written from inside it. Established green while the one-shed cap was
@@ -614,6 +642,9 @@ igloo_e2e_case(ini-comment-eq infrastructure/ini-comment-eq "e2e;infrastructure;
 # FULL mass and the source total is all-or-nothing. RED on a tree without step 4b:
 # sum(wdot) = 0, resid 1.0; GREEN: the whole injected stream, resid 2.9e-7.
 igloo_e2e_case(solver-fail-consumed infrastructure/solver-fail-consumed "e2e;infrastructure;evaporation")
+# solver-fail-consumed-m4: the same failure exit under model 4 (breakup on, rate zero): the remnant must
+# reach the gas as for model 2. RED while model 4 is not a consumption model on that exit.
+igloo_e2e_case(solver-fail-consumed-m4 infrastructure/solver-fail-consumed-m4 "e2e;infrastructure;m4")
 
 # ---------- mpi (registered only in a USE_MPI build) ----------------------------
 # See mpi/INFO.md. Each dir symlinks its parent case's INPUT/, input.ini and check.py, so the fixture

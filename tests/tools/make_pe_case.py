@@ -23,14 +23,14 @@ NY, NZ = 5, 5                             # 5x5 = 25 inlet cells
 PE_SWEEP = [20, 30, 40, 50, 60, 75, 90, 110, 130, 150, 175, 200, 230, 260,
             290, 320, 351, 380, 420, 470, 530, 600, 700, 850, 1000]
 RHOG = 1.2
-KRHO, KT = 0.34, 1.0                      # number-density factor; Tp0 = Tg
+KRHO = 0.34                               # number-density factor
 BCDEF_INLET, BCDEF_WALL = 401, 100
 
 
-def gas_vars(u_gas):
+def gas_vars(u_gas, t_gas):
     return [
         ("Roi( 1 )", RHOG), ("U", u_gas), ("V", 0.0), ("W", 0.0),
-        ("P", 101325.0), ("T", 300.0), ("MIL", 1.8e-5), ("KL", 0.026),
+        ("P", 101325.0), ("T", t_gas), ("MIL", 1.8e-5), ("KL", 0.026),
         ("GAM", 1.4), ("R", 287.0), ("MIT", 1.8e-5),
         ("r_p", 0.0), ("u_p", 0.0), ("v_p", 0.0), ("T_p", 0.0),
         ("n_p", 0.0), ("R_p", 0.0), ("odot", 0.0),
@@ -45,8 +45,8 @@ def we_to_rp(we, sigma, slip, convention):
     return 0.5 * rp if convention == "dia" else rp
 
 
-def write_solfile(path, lx, nx, u_gas, title):
-    gv = gas_vars(u_gas)
+def write_solfile(path, lx, nx, u_gas, t_gas, title):
+    gv = gas_vars(u_gas, t_gas)
     varline = ' VARIABLES = "X", "Y", "Z",' + ",".join(f'"{n}"' for n, _ in gv) + "\n"
     I, J, K = nx + 1, NY + 1, NZ + 1
     dx, dy, dz = lx / nx, LY / NY, LZ / NZ
@@ -65,7 +65,7 @@ def write_solfile(path, lx, nx, u_gas, title):
     return I, J, K, ncell
 
 
-def write_bc(path, sweep, sigma, kv, u_gas, nx, convention):
+def write_bc(path, sweep, sigma, kv, kt, u_gas, nx, convention):
     slip = (1.0 - kv) * u_gas
     # face-1 inlet cells iterate m=1..NY, n=1..NZ -> 25 cells, one We each
     ranges = {1: (NY, NZ), 2: (NY, NZ), 3: (nx, NZ), 4: (nx, NZ), 5: (nx, NY), 6: (nx, NY)}
@@ -80,7 +80,7 @@ def write_bc(path, sweep, sigma, kv, u_gas, nx, convention):
                     if face == 1:
                         rp = we_to_rp(sweep[n_inlet], sigma, slip, convention)
                         f.write(f"   {KRHO:.5E}   {kv:.5E}   normal,   normal,"
-                                f"   {KT:.5E}   {rp:.5E}   {0.0:.5E}   Dirac   {0.0:.5E}\n")
+                                f"   {kt:.5E}   {rp:.5E}   {0.0:.5E}   Dirac   {0.0:.5E}\n")
                         n_inlet += 1
     return n_inlet, slip
 
@@ -95,6 +95,8 @@ def main():
     p.add_argument("--u-gas", type=float, default=200.0)
     p.add_argument("--kv", type=float, default=0.5)
     p.add_argument("--sigma", type=float, default=0.072)
+    p.add_argument("--t-gas", type=float, default=300.0, help="gas temperature [K]")
+    p.add_argument("--kt", type=float, default=1.0, help="inlet temperature factor: Tp0 = kt*Tg")
     p.add_argument("--lx", type=float, default=0.15)
     p.add_argument("--nx", type=int, default=60)
     p.add_argument("--title", default="IGLOO PE87 breakup sweep box")
@@ -104,9 +106,9 @@ def main():
         raise SystemExit(f"need exactly {NY*NZ} Weber numbers, got {len(sweep)}")
     os.makedirs(a.out_dir, exist_ok=True)
     I, J, K, ncell = write_solfile(os.path.join(a.out_dir, "solfile.tec"),
-                                   a.lx, a.nx, a.u_gas, a.title)
+                                   a.lx, a.nx, a.u_gas, a.t_gas, a.title)
     n, slip = write_bc(os.path.join(a.out_dir, "bc.txt"), sweep, a.sigma,
-                       a.kv, a.u_gas, a.nx, a.we_convention)
+                       a.kv, a.kt, a.u_gas, a.nx, a.we_convention)
     d = [2.0 * we_to_rp(w, a.sigma, slip, a.we_convention) for w in (sweep[0], sweep[-1])]
     print(f"[ok] solfile I={I} J={J} K={K} ncell={ncell}; bc.txt {n} inlet drops")
     print(f"[ok] We sweep ({a.we_convention}) {sweep[0]:g}..{sweep[-1]:g} ({len(sweep)} pts), "

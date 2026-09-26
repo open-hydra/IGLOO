@@ -27,6 +27,7 @@ over the same `OUTPUT/`.
 | `etab` | `breakup/etab-e2e` | a second event-breakup model on the shed/resize path |
 | `tab` | `breakup/tab-e2e` | TAB event breakup — the one RNG-consuming model |
 | `solid-box` | `solidification/solid-box` | the solidification phase and frozen fraction (ODE model 6), re-derived at injection every sweep. RED with the derivation skipped when a phase survives the previous sweep: sweep 1 starts solid, 25/25 exits and 1475/1500 trajectory rows differ, `T` at the plateau midpoint 1276 K instead of 2327 K |
+| `evap-breakup` | `evaporation/evap-breakup-box` | ODE model 4's droplet mass and number rate, re-seeded at injection every sweep. RED with the number rate seeded on the first sweep only: sweep 1 starts at the previous burnout's number rate (8.17× the injected) with the injected droplet mass — outloc 25/25 and trajectories 5378/5450 records differ, scatter 149280 vs 18273 records, `source.tec` max\|rel\| 603 |
 
 ## Nothing is excluded any more
 
@@ -54,7 +55,7 @@ would pass every gate in this directory.
 
 ## Two modes
 
-- **steady** (all eleven) — gas held fixed; sweep 1 must reproduce sweep 0. `repeat-drag-stokes-dopri5` and
+- **steady** (all twelve) — gas held fixed; sweep 1 must reproduce sweep 0. `repeat-drag-stokes-dopri5` and
   `repeat-tab-dopri5` (2026-09-17) are the odd ones out: they gate not a state leak but determinism on the
   DOPRI5 path (ledger O27 — `dopri5.f` kept the previous grid point in a COMMON block shared by every
   OpenMP thread, and `solout` reads `x − xold` for the scatter cloud AND for the TAB/ETAB oscillator advance).

@@ -44,3 +44,11 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
   `rhsEvaporation` evaluation (production call site, gas packed per contract)
   → F(8)=mdot≡0 (A4). Suite flips RED when both are fixed → promote + unblock
   C1-C4 and tests/evaporation/d2law.
+
+## Evaporation with ODE breakup (ODE model 4)
+
+- `evap-breakup/test_evap_breakup.f90` (unit): one production `rhsEvapBreakup` call per state against the
+  d²-law and Reitz-Diwakar rates typed from the papers — see [evap-breakup/INFO.md](evap-breakup/INFO.md).
+- `evap-breakup-box` (e2e): breakup then evaporation to burnout, the composed-rate oracle and the source
+  closure — see [evap-breakup-box/INFO.md](evap-breakup-box/INFO.md).
+- `d2law-brk-dormant` (e2e): the d2law case under model 4 with the breakup rate exactly zero.
