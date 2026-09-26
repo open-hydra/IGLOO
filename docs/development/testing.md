@@ -75,9 +75,9 @@ tests/
 ├── breakup/                      # TAB, Pilch-Erdman, Reitz-Diwakar, ETAB, Reitz-KHRT unit families + tab/etab/pilch-erdman/reitz-diwakar/khrt e2e, khrt-stress
 ├── combustion/                   # Beckstead unit family + burn-box e2e
 ├── solidification/               # solidification unit family + solid-box/solid-box-euler/solid-box-2mat e2e
-├── infrastructure/               # gas_reconstruction, ini_pipeline, properties_reader, rng_stream, axis_dispatch, graze_standoff, dual_clip, source_reduction, ghost_bc;
-│                                 # db-injection/coupled-body/db-2daxi/axis-200/wedge-fold/planar-slab/wedge-axis-row/two-mat/periodic-y/bc-center-2grp/ini-comment-eq/solver-fail-consumed/wall-approach (e2e)
-│                                 # refusals/{p2t,zgr,lk-d2law,properties-*,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre} (setup-refusal gates)
+├── infrastructure/               # gas_reconstruction, ini_pipeline, properties_reader, rng_stream, axis_dispatch, graze_standoff, dual_clip, source_reduction, ghost_bc, bc_families;
+│                                 # db-injection/coupled-body/db-2daxi/axis-200/wedge-fold/planar-slab/wedge-axis-row/two-mat/two-fam-bc/periodic-y/bc-center-2grp/ini-comment-eq/solver-fail-consumed/wall-approach (e2e)
+│                                 # refusals/{p2t,zgr,lk-d2law,properties-*,bc-copies,bc-copy-order,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre} (setup-refusal gates)
 ├── repeatability/                # two-sweep state-leak gates: drag-stokes/drag-stokes-dopri5/db-injection/two-mat/d2law/khrt/vie-plait/etab/tab/tab-dopri5/solid-box
 └── mpi/                          # USE_MPI build only: drag-stokes/conv-nu/khrt/bc-center-2grp/two-mat/consistency/consistency-two-mat
 ```
@@ -91,7 +91,7 @@ tests/
 | `breakup` | TAB/ETAB, Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT unit families + TAB stochastic moments; five Weber-sweep e2e cases and the khrt-stress load case |
 | `combustion` | Beckstead $d^n$ Al-burn unit family; burn-box e2e |
 | `solidification` | Solidification unit family (supercooling, recalescence, plateau); solid-box, solid-box-euler, solid-box-2mat e2e, the two-sweep solid-box and the eight solidification refusals |
-| `infrastructure` | Gas reconstruction, INI pipeline, property-table reader, RNG stream, axis dispatch, grazing stand-off and dual-clip unit families; injection, coupling, wedge, periodic and two-material e2e cases; thirty setup-refusal gates |
+| `infrastructure` | Gas reconstruction, INI pipeline, property-table reader, RNG stream, axis dispatch, grazing stand-off and dual-clip unit families; injection, coupling, wedge, periodic, two-material and per-family boundary-file e2e cases; thirty-two setup-refusal gates |
 | `repeatability` | Every e2e physics path run twice through `setup_static` → `reset_state` → `solve` with the second sweep compared to the first (see `tests/repeatability/INFO.md`) |
 | `mpi` | The serial gates re-run under `mpiexec` with a rank-count witness, plus cross-rank-count consistency (see `tests/mpi/INFO.md`) |
 

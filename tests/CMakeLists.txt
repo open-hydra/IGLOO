@@ -10,7 +10,7 @@
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,varcp-tmin,bad-row},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/ two-fam-bc/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,varcp-tmin,bad-row},bc-copies,bc-copy-order,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
 #   repeatability/      two-sweep gates (twosweep driver): 11 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
@@ -148,6 +148,10 @@ igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;
 # positivity guard and the 101/201 partner copy -- the last has no e2e coverage anywhere, since
 # no ord2 fixture in the tree carries those codes.
 igloo_unit_test(test_ghost_bc           infrastructure/ghost_bc           "unit;infrastructure;bc;gas;t1")
+# a bc.txt with one copy of every block's table per family (what ATLAS writes for a phase with several
+# populations, block-outermost): copy c is family c. A reader that feeds copy 1 to every family fails
+# F2-F5 (per-family krho/rp/gp/ds, one and two blocks) while the one-copy control F1 passes either way.
+igloo_unit_test(test_bc_families        infrastructure/bc_families        "unit;infrastructure;bc;io;t1")
 # the ord2 dual must TILE the domain: its boundary cells straddle the boundary face, so an
 # unclipped one dilutes its deposited density by the outside fraction. Pins sum(dual cellVol)
 # == domain volume plus the per-cell 1/2, 1/4, 1/8 factors. The 3D branch had no clip at all
@@ -485,6 +489,10 @@ igloo_e2e_case(wedge-axis-row infrastructure/wedge-axis-row "e2e;infrastructure;
 # two-mat: the first nm = 2 case anywhere -- every per-material loop (solve, sourceMass slots, nfam,
 # per-material files, krho fan-out) executes at arity 2 here for the first time.
 igloo_e2e_case(two-mat infrastructure/two-mat "e2e;infrastructure")
+# two-fam-bc: two-mat's box with a bc.txt carrying one copy of the inlet table per family (ATLAS's
+# order, copy c = family c), the families differing in krho and radius. Fed copy 1 for both, B
+# injects A's diameter and both carry 0.34/(1 - 0.68) of the gas flow instead of their own share.
+igloo_e2e_case(two-fam-bc infrastructure/two-fam-bc "e2e;infrastructure;bc;io")
 
 # ---------- refusals (setup-time error stops, ledger O3/O4/O24; coverage G20) ----------------
 # Each is drag-stokes (or two-mat's phase.txt) plus ONE offending key/file. The expected text is
@@ -509,6 +517,13 @@ igloo_refusal_case(refuse-properties-psat  infrastructure/refusals/properties-ps
                    "Psat column: a pressure that decreases with T"      "e2e;refusal;evaporation")
 igloo_refusal_case(refuse-properties-varcp-tmin infrastructure/refusals/properties-varcp-tmin
                    "a varying Cp column needs rows from T = 1 K"        "e2e;refusal;infrastructure")
+# bc.txt layouts: one copy of every block's table, or one copy per family in ATLAS's order; any
+# other record count (two copies for A 3) and a copy that does not repeat copy 1's faces (two
+# swapped headers) stop at setup. A reader that consumes copy 1 only runs both to completion.
+igloo_refusal_case(refuse-bc-copies        infrastructure/refusals/bc-copies
+                   "IGLOO: bc.txt record count is neither one copy nor one copy per family" "e2e;refusal;infrastructure;bc")
+igloo_refusal_case(refuse-bc-copy-order    infrastructure/refusals/bc-copy-order
+                   "IGLOO: bc.txt family copies do not repeat the faces of copy 1" "e2e;refusal;infrastructure;bc")
 # Unknown model tokens (ledger O26): the selectors used to print the menu and execute a plain
 # `stop`, exit 0 -- invisible to any harness or embedding parent. Now error stops.
 igloo_refusal_case(refuse-drag-token        infrastructure/refusals/drag-token

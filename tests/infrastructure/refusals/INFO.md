@@ -29,6 +29,8 @@ output written).
 | `refuse-properties-bad-row` | own 10-row `properties.dat`, row 3's enthalpy typed `375O.000000` (a letter O) | `unreadable rows: line 7 does not hold 4 numbers` |
 | `refuse-properties-psat` | tc-box (`bc.txt`/`solfile.tec` symlinked), its table on 1..1000 K plus a `"Psat"` column = its Clausius-Clapeyron line (`tools/make_psat_table.py --anchors 500 0.018150089922984093 600 1.0`, the first ratio `exp(-Lv Mv/Ru (1/500 - 1/600))`) with the 549 K and 550 K values swapped | `Psat column: a pressure that decreases with T` |
 | `refuse-properties-varcp-tmin` | own `properties.dat` on 280..380 K, `Cp = 1250 + (T - 280)`, the enthalpy its trapezoid sum | `a varying Cp column needs rows from T = 1 K` |
+| `refuse-bc-copies` | own `INPUT/`: `phase.txt` `A 3` (three families), `two-fam-bc`'s two-copy `bc.txt`, `common/properties.dat` — 2500 records where one copy (1250) or one per family (3750) is readable | `IGLOO: bc.txt record count is neither one copy nor one copy per family` — refused in `read_cdp_bc_file`, which prints the three counts |
+| `refuse-bc-copy-order` | own `INPUT/`: `two-fam-bc`'s file with two face-3 headers of copy 2 exchanged (`python3 ../../two-fam-bc/make_fixture.py --swap`, run from the case directory), `two-mat`'s `phase.txt`/`properties.dat` | `IGLOO: bc.txt family copies do not repeat the faces of copy 1` — the codes still line up, only the header integers differ (`family 2 of block 1 ... at record 51`) |
 | `refuse-drag-token` | `drag = no-such-drag-law` | `IGLOO: unknown drag model` |
 | `refuse-heat-token` | `heat = no-such-nusselt-law` | `IGLOO: unknown heat model` |
 | `refuse-breakup-token` | `breakup = no-such-breakup-model` | `IGLOO: unknown breakup model` |
@@ -51,7 +53,7 @@ output written).
 | `refuse-solid-varrho` | the valid line plus an own 10-row `properties.dat` whose `Density` column varies | `solidification=on requires a constant-density material` |
 | `refuse-wedge-offcentre` | a generated wedge whose k-planes sit at 0 and +1° (`tools/make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`) | `IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)` — refused at mesh import (`allocation.f90`), not at the properties choke point |
 
-All thirty exit 128 at setup with nothing injected or integrated. **The four `properties.dat` cases were
+All thirty-two exit 128 at setup with nothing injected or integrated. **The four `properties.dat` cases were
 RED first**: the reader that took three columns by position ran each of them to "All particles out of
 domain" with exit 0 — the two-enthalpy header as an absolute datum with `hOff = 0`, the typed row with
 its enthalpy undefined (ORION keeps only the last row's read status), the decreasing `Psat` column
@@ -71,6 +73,10 @@ scratchpad); all twelve `stop`s became `error stop 'IGLOO: unknown …'`.
 `refDir` as the sector *centre* — the MOSE/ATLAS layout, k-planes at ∓δ/2, which the production nozzle
 solution centres to exactly 0.0 — and on a [0, δ] sector the binary before the tripwire ran the case to
 "All particles out of domain" with exit 0, the gas and every deposit rotated by δ/2.
+**The two `bc.txt` cases were RED first** too, on a reader that consumed copy 1 only: `bc-copies` ran
+its three families of A on copy 1's `krho` 0.34, i.e. `krhoTot` = 1.02 and ṁ = 0.34/(1 − 1.02) · 1.2e-3 =
+−2.04e-2 kg/s per parcel — a negative mass flow, 75 exits, exit 0 — and `bc-copy-order` ran like
+`two-fam-bc` fed copy 1 for both families (exit 0, six output files).
 
 **Not here.** A mixed-Nk mesh (`allocation.f90`, `af307dd`) needs a two-zone `solfile.tec`; exercised in a
 throwaway only. `refuse-dopri5` (the interim `H-dopri5` refusal of ledger O25) was dropped with the

@@ -42,6 +42,8 @@ whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase
 `properties.dat`, `bc.txt`). The per-material model keys (`evaporation`, `combustion`, `solidification`,
 `alpha-e`, ...) are `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after `<name> <groups>`
 on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
+The `<groups>` summed over the material lines is the family count, and therefore the number of table
+copies `bc.txt` may carry (one copy feeds every family; see [Several families](boundary-conditions.md#several-families)).
 
 | Section | Role |
 |---------|------|

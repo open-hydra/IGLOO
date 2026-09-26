@@ -46,9 +46,9 @@ tests/
 ├── solidification/               # unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ (e2e)
 ├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
 │   └── tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/   # e2e
-├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/
-│   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/   # e2e
-│   └── refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre}/   # setup-refusal gates
+├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/
+│   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ two-fam-bc/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/   # e2e
+│   └── refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,bc-copies,bc-copy-order,*-token,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre}/   # setup-refusal gates
 ├── repeatability/                # two-sweep gates: drag-stokes/ drag-stokes-dopri5/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/ tab-dopri5/ solid-box/
 └── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ bc-center-2grp/ two-mat/ consistency/ consistency-two-mat/
 ```
@@ -94,8 +94,9 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 122/122 in a serial build (88 e2e + 34 unit, `self_test` and `registry-docs` among the latter);
-`USE_MPI=ON` registers 7 more `mpi-*` cases, 129/129. (Was 85/85 before the five review-residual
+ctest 126/126 in a serial build (91 e2e + 35 unit, `self_test` and `registry-docs` among the latter);
+`USE_MPI=ON` registers 7 more `mpi-*` cases, 133/133. (Was 85/85 before the five review-residual
 plans of 2026-09-22/23 added `ini-comment-eq`, `solver-fail-consumed`, `tc-box-euler`,
 `test_source_reduction`, `tc-box-ord2-row`, `test_ghost_bc` and `wall-approach`; `no-exchange`
-followed on 2026-09-24, `boiling-temperature-key` and `refuse-boiling-temperature-both` on 2026-09-26.)
+followed on 2026-09-24, `boiling-temperature-key` and `refuse-boiling-temperature-both` on 2026-09-26, then
+`test_bc_families`, `two-fam-bc`, `refuse-bc-copies` and `refuse-bc-copy-order`.)

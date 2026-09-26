@@ -309,9 +309,11 @@ contains
   end subroutine read_cdp_properties
 
 
-  !> Read bc.txt: pass 1 tags every face cell and seeds the inflow cells (area, mdotGas);
-  !  pass 2 fills properties/connections. The ord2 gas ghost ring is IGLOO's, filled per sweep
-  !  by fillGhostGradient/fillGhostPartners -- never here.
+  !> Read bc.txt: pass 0 picks the layout -- one record per boundary face, fed to every family, or
+  !  one copy of every block's table per family in ATLAS order (block, material, population);
+  !  pass 1 tags every face cell from copy 1 and seeds the inflow cells (area, mdotGas); pass 2
+  !  fills properties/connections, copy c into family c. The ord2 gas ghost ring is IGLOO's,
+  !  filled per sweep by fillGhostGradient/fillGhostPartners -- never here.
   subroutine read_cdp_bc_file(name,material,geoblock,gasblock,sourceblock,eulerblock,srcSwitch,eulSwitch)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_variables,             only: nb, nm, mesh2D, dsSwitch
@@ -330,6 +332,8 @@ contains
     integer, parameter :: nPropDP = 9
     integer            :: b, mat, p, f, m, n, i, mend(6), nend(6)
     integer            :: u, dumi, totFam, ci_n, s, ios, nTok, readLine(9)
+    integer            :: c, nCopies, nrec, nFaceTot, nfb, ic, code, hdr(5)
+    integer, allocatable :: hdr1(:,:)   !> copy-1 headers of the current block, one column per face
     integer            :: i_g, j_g, k_g
     real(R8)           :: propBuffer(nPropDP)
     real(R8)           :: vertices(3, 8)
@@ -345,65 +349,105 @@ contains
 
     open(newunit=u,FILE='INPUT/'//trim(name)//'bc.txt',action='read')
 
-    !> PASS 1: scan the file, allocate cell%properties for inflow cells.
+    !> PASS 0: one record per boundary face (fanned out) or one copy per family (ATLAS order); else refuse.
+    nFaceTot = 0
+    do b = 1, size(geoblock)
+      nFaceTot = nFaceTot + 2*(geoblock(b)%Ny*geoblock(b)%Nz + geoblock(b)%Nx*geoblock(b)%Nz + &
+                               geoblock(b)%Nx*geoblock(b)%Ny)
+    enddo
+    nrec = 0
+    do
+      read(u,*,iostat=ios) dumi, dumi, dumi, dumi, dumi, code
+      if (ios < 0) exit
+      !> reject codes outside {0, 100..999} (legacy single-digit bc.txt or a misaligned line)
+      if (ios /= 0 .or. (code /= 0 .and. (code < 100 .or. code > 999))) then
+        write(*,'(A,I0,A,I0)') ' [IGLOO::read_cdp_bc_file] bad BC cell line: record ', nrec + 1, ', bcdef = ', code
+        write(*,*) '  expected 6 integer columns with a 3-digit code (or 0) in column 6.'
+        write(*,*) '  Legacy-schema bc.txt? Regenerate it (ATLAS BCB) before running IGLOO.'
+        error stop 1
+      endif
+      nrec = nrec + 1
+      call skipPayload(u, code)
+    enddo
+    if (nrec == nFaceTot) then
+      nCopies = 1
+    elseif (totFam > 1 .and. nrec == totFam*nFaceTot) then
+      nCopies = totFam
+    else
+      write(*,'(A,I0,A,I0,A,I0,A)') ' [IGLOO::read_cdp_bc_file] INPUT/'//trim(name)//'bc.txt holds ', nrec, &
+        ' records: expected ', nFaceTot, ' (one per boundary face) or ', totFam*nFaceTot, ' (one copy per family)'
+      error stop 'IGLOO: bc.txt record count is neither one copy nor one copy per family'
+    endif
+    rewind(u)
+
+    !> PASS 1: tag every face cell from copy 1, allocate cell%properties for inflow cells.
     do b = 1, size(geoblock)
       blkAlloc: associate(blk => geoblock(b), gas => gasblock(b))
       mend(1:2) = blk%Ny; nend(1:2) = blk%Nz
       mend(3:4) = blk%Nx; nend(3:4) = blk%Nz
       mend(5:6) = blk%Nx; nend(5:6) = blk%Ny
 
-      do f = 1, 6; do n = 1, nend(f); do m = 1, mend(f)
-        associate(cell => blk%face(f)%cell(m,n))
-        if (mesh2D) then; read(u,*,iostat=ios) dumi, dumi, dumi, dumi, dumi, cell%bcdef
-        else;             read(u,*,iostat=ios) dumi, dumi, dumi, dumi, dumi, cell%bcdef
-        endif
-        !> reject codes outside {0, 100..999} (legacy single-digit bc.txt or a misaligned line)
-        if (ios /= 0 .or. (cell%bcdef /= 0 .and. (cell%bcdef < 100 .or. cell%bcdef > 999))) then
-          write(*,'(A,I0,A,I0,A,I0)') ' [IGLOO::read_cdp_bc_file] bad BC cell line: block ', &
-                                      b, ', face ', f, ', bcdef = ', cell%bcdef
-          write(*,*) '  expected 6 integer columns with a 3-digit code (or 0) in column 6.'
-          write(*,*) '  Legacy-schema bc.txt? Regenerate it (ATLAS BCB) before running IGLOO.'
-          error stop 1
-        endif
+      if (nCopies > 1) then
+        nfb = 2*(blk%Ny*blk%Nz + blk%Nx*blk%Nz + blk%Nx*blk%Ny)
+        if (allocated(hdr1)) deallocate(hdr1)
+        allocate(hdr1(5, nfb))
+      endif
+      do c = 1, nCopies
+        ic = 0
+        do f = 1, 6; do n = 1, nend(f); do m = 1, mend(f)
+          ic = ic + 1
+          associate(cell => blk%face(f)%cell(m,n))
+          read(u,*) hdr, code                       ! pass 0 validated every header
+          if (c == 1) then
+            if (nCopies > 1) hdr1(:, ic) = hdr
+            cell%bcdef = code
+            select case (cell%bcdef)
+              case (101,201)
+                read(u,*)
+              case (401:403)
+                read(u,*)
+                if (allocated(cell%properties)) deallocate(cell%properties)
+                allocate(cell%properties(1:totFam, 1:nPropDP))
 
-        select case (cell%bcdef)
-          case (101,201)
-            read(u,*)
-          case (401:403)
-            read(u,*)
-            if (allocated(cell%properties)) deallocate(cell%properties)
-            allocate(cell%properties(1:totFam, 1:nPropDP))
-
-            ! Reset the per-cell accumulators, compute the face area, seed mdotGas from the gas.
-            cell%mdotPart = 0._R8
-            cell%krhoTot  = 0._R8
-            call blk%fmn2ijk(f, m, n, i_g, j_g, k_g)
-            call blk%getVertices([i_g, j_g, k_g], vertices)
-            cell%area = 0.5_R8 * (computeArea(f, vertices) + &
-                                  computeArea(f + (2*mod(f,2) - 1), vertices))
-            call gas%initMdotGas(cell, blk%center, i_g, j_g, k_g)
-        end select
-        end associate
-      enddo; enddo; enddo
+                ! Reset the per-cell accumulators, compute the face area, seed mdotGas from the gas.
+                cell%mdotPart = 0._R8
+                cell%krhoTot  = 0._R8
+                call blk%fmn2ijk(f, m, n, i_g, j_g, k_g)
+                call blk%getVertices([i_g, j_g, k_g], vertices)
+                cell%area = 0.5_R8 * (computeArea(f, vertices) + &
+                                      computeArea(f + (2*mod(f,2) - 1), vertices))
+                call gas%initMdotGas(cell, blk%center, i_g, j_g, k_g)
+            end select
+          else
+            !> copy c must repeat copy 1's header integers and code
+            if (any(hdr /= hdr1(:, ic)) .or. code /= cell%bcdef) then
+              write(*,'(A,I0,A,I0,A,I0)') ' [IGLOO::read_cdp_bc_file] family ', c, ' of block ', b, &
+                ' does not repeat the faces of family 1, at record ', ic
+              error stop 'IGLOO: bc.txt family copies do not repeat the faces of copy 1'
+            endif
+            call skipPayload(u, code)
+          endif
+          end associate
+        enddo; enddo; enddo
+      enddo
 
       end associate blkAlloc
     enddo
+    if (allocated(hdr1)) deallocate(hdr1)
 
     rewind(u)
 
-    !> PASS 2: re-scan the file, populate cell%properties and connections.
+    !> PASS 2: re-scan the file, populate cell%properties and connections; copy c fills family c.
     do b = 1, size(geoblock)
       blkDef: associate(blk => geoblock(b), gas => gasblock(b))
       mend(1:2) = blk%Ny; nend(1:2) = blk%Nz
       mend(3:4) = blk%Nx; nend(3:4) = blk%Nz
       mend(5:6) = blk%Nx; nend(5:6) = blk%Ny
 
-      do f = 1, 6; do n = 1, nend(f); do m = 1, mend(f)
+      do c = 1, nCopies; do f = 1, 6; do n = 1, nend(f); do m = 1, mend(f)
         associate(cell => blk%face(f)%cell(m,n))
 
-        if (mesh2D) then; read(u,*) dumi, dumi, dumi, dumi, dumi, cell%bcdef
-        else;             read(u,*) dumi, dumi, dumi, dumi, dumi, cell%bcdef
-        endif
+        read(u,*) dumi, dumi, dumi, dumi, dumi, cell%bcdef
 
         select case (cell%bcdef)
 
@@ -454,26 +498,38 @@ contains
               propBuffer(9) = 0._R8
             endif
             if (propBuffer(9) > 0._R8) dsSwitch = .true.
-            do i = 1, totFam
-              cell%properties(i,:) = propBuffer(:)
-            enddo
+            if (nCopies == 1) then
+              !> one record per face: the payload is every family's
+              do i = 1, totFam
+                cell%properties(i,:) = propBuffer(:)
+              enddo
 
-            ! Per-family totals: krho (401) into krhoTot, gp*area (402/403) into mdotPart.
-            do i = 1, totFam
+              ! Per-family totals: krho (401) into krhoTot, gp*area (402/403) into mdotPart.
+              do i = 1, totFam
+                select case (cell%bcdef)
+                case (401)
+                  cell%krhoTot  = cell%krhoTot  + cell%properties(i, 1)
+                case (402, 403)
+                  cell%mdotPart = cell%mdotPart + cell%properties(i, 1) * cell%area
+                end select
+              enddo
+            else
+              !> one copy per family, in ATLAS order: copy c is family c (material-major, group-minor)
+              cell%properties(c,:) = propBuffer(:)
               select case (cell%bcdef)
               case (401)
-                cell%krhoTot  = cell%krhoTot  + cell%properties(i, 1)
+                cell%krhoTot  = cell%krhoTot  + propBuffer(1)
               case (402, 403)
-                cell%mdotPart = cell%mdotPart + cell%properties(i, 1) * cell%area
+                cell%mdotPart = cell%mdotPart + propBuffer(1) * cell%area
               end select
-            enddo
+            endif
 
           case default
 
         end select
 
         end associate
-      enddo; enddo; enddo
+      enddo; enddo; enddo; enddo
       end associate blkDef
     enddo
     close(u)
@@ -827,6 +883,16 @@ contains
     write(buf,'(A,I0)') '.rank', r
     fn = base//trim(buf)//'.dat'
   end function shard_name
+
+
+  !> Skip the payload line of a bc.txt record whose header carries `code` (101/201 connection, 401-403 inlet).
+  subroutine skipPayload(u, code)
+    implicit none
+    integer, intent(in) :: u, code
+    select case (code)
+    case (101, 201, 401:403); read(u,*)
+    end select
+  end subroutine skipPayload
 
 
   !> Convert an input token to a real; a token containing 'normal' returns the face-normal sentinel.

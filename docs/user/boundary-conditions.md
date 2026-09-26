@@ -3,7 +3,7 @@
 IGLOO's boundary conditions operate at two levels:
 
 1. **`input.ini` `[BCB-Block*]` and patch sections** — consumed by ATLAS to produce `INPUT/bc.txt`. These define the BC layout in human-readable form.
-2. **`INPUT/bc.txt`** — the numeric file that IGLOO reads at run time. One row per boundary face cell, per block; the sixth column is the integer `bcdef` code that selects the BC behavior.
+2. **`INPUT/bc.txt`** — the numeric file that IGLOO reads at run time. One row per boundary face cell, per block — or, for a phase whose materials declare several populations in `phase.txt`, one copy of every block's table per family, in ATLAS's order (mesh block, then material, then population); a file with a single copy feeds every family, any other count is refused at setup. The sixth column is the integer `bcdef` code that selects the BC behavior.
 
 This page documents both levels: the `input.ini` authoring convention and the `bcdef` codes that drive IGLOO's particle integration.
 
@@ -54,7 +54,7 @@ ATLAS translates these to numeric `bcdef` codes in `bc.txt`. IGLOO does not pars
 
 ## `bcdef` Codes in `INPUT/bc.txt`
 
-The `bc.txt` file has one data row per boundary face cell. Column 6 is the integer `bcdef` code; `IO.f90::read_cdp_bc_file` reads it and `obj_bc.f90::bcDef` dispatches on it (code 201 is handled by `obj_particles.f90::updateCell` → `periodicTransport`).
+The `bc.txt` file has one data row per boundary face cell (one copy of the table per family when the phase has several — see [Several families](#several-families)). Column 6 is the integer `bcdef` code; `IO.f90::read_cdp_bc_file` reads it and `obj_bc.f90::bcDef` dispatches on it (code 201 is handled by `obj_particles.f90::updateCell` → `periodicTransport`).
 
 The last column is what the code does to the **gas** ghost ring under `gas-order = 2`, a separate question from what it does to a particle: the dual mesh's boundary row straddles the domain face, so the gas sampled there averages an interior node with a ghost node outside the domain. `obj_block.f90::fillGhostGradient` fills that ring once per sweep — a linear extrapolation `2q₁ − q₂` on every face, then the bc-aware corrections below, then the axis override and the edge/corner cascade; `fillGhostPartners` follows for 101/201.
 
@@ -96,6 +96,18 @@ Per-cell injection properties stored in `bc.txt` columns (after the `bcdef` colu
 | 7 | Diameter distribution standard deviation $\sigma_p$ [m] |
 | 8 | Distribution law code (Dirac=0, Normal=1, LogNormal=2, Rosin–Rammler=3) |
 | 9 | Per-cell injection spacing override `ds` [m] (0 → use global `[IGLOO-BC] ds`) |
+
+### Several families
+
+A family is one population of one material: the `<groups>` of every material line of `phase.txt`, summed, numbered material by material (`famID` = 1, 2, … in phase-file order, populations inside each material). ATLAS writes `<name>-bc.txt` in the same order — for every mesh block, one copy of the block's complete face table per (material, population) — so IGLOO accepts two layouts and tells them apart by the record count:
+
+| Records in the file | Read as |
+|---|---|
+| one per boundary face cell of every block | one copy: its inlet line feeds **every** family (what ATLAS writes for a single-population phase) |
+| the family count × that | one copy per family: copy `c` of each block is family `c` |
+| anything else | refused at setup: `IGLOO: bc.txt record count is neither one copy nor one copy per family` (the three counts are printed first) |
+
+With one copy per family, copy 1 tags the face cells, and every later copy must repeat copy 1's header integers and codes record by record — otherwise the run stops with `IGLOO: bc.txt family copies do not repeat the faces of copy 1`. The inlet columns (loading, velocity, direction, temperature, radius, width, law, `ds`) are then per family, and the 401 normalisation uses the sum of the families' own `krho`: $\dot m_p = \frac{k_{\rho,\mathrm{fam}}}{1-\sum_\mathrm{fam} k_\rho}(\dot m_\mathrm{gas} + \dot m_\mathrm{part})$, with $\dot m_\mathrm{part} = \sum_\mathrm{fam} g_{p,\mathrm{fam}} A_\mathrm{cell}$ for 402/403. For 101/201 cells the connection line is read from every copy and the last one is kept (ATLAS writes the same line in each). Verified by `test_bc_families` (one and two blocks) and the `two-fam-bc`, `refuse-bc-copies` and `refuse-bc-copy-order` cases (see the [V&V overview](../vv/index.md)).
 
 ---
 

@@ -56,9 +56,9 @@ scatter rows; A's rows differ from `drag-stokes`'s in U on 94 rows — 92 by 1 U
 2 ULP (euler on → neq = 12 vs 7 changes the step sequence) — inside the oracle's theoretical
 tolerance. Byte-inert on the 62 pre-existing entries (A/B capture, floor-only).
 
-**What it does not pin.** Both materials share one injection line, so a per-material
-injection contract (different d or krho per material) cannot be expressed in `bc.txt` today —
-hydra's MI2 memo records the single ATLAS DP slot as structural. The `[IGLOO-Properties]`
+**What it does not pin.** Both materials share one injection line (the file has one copy, which
+feeds every family); a per-family injection (different d or krho per family) is `two-fam-bc`'s
+case — one copy of the inlet table per family, in ATLAS's order. The `[IGLOO-Properties]`
 vector-size checks (`size == nm`) are exercised only for the vectors present, i.e. none here
 (no evaporation/breakup). The famID-keyed RNG streams are *seeded* for both materials but never
 *consumed* here: no breakup and a Dirac diameter (bc.txt col 7 = 0) mean zero draws, so
