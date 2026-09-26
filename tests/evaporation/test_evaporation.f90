@@ -15,6 +15,9 @@ program test_evaporation
     !   EV5  CEM-B boiling: EV4 x the 1/3-rule film factor (Tf/Tg)^0.7.  Pre-clamp -Inf.
     !   EV6  ASM boiling: identical to CEM at Re=0 (Sh*=2), qd finite.  Pre-clamp NaN.
     !   EV7  CEM+LK boiling: finite and negative.  Pre-clamp exactly 0 (Picard fallback).
+    !   EV8  psatExt = the Clausius-Clapeyron value re-typed: mdot, Qdot, override as without it
+    !        (CEM and TC) -- the table branch adds nothing but the pressure it is given.
+    !   EV9  psatExt = 1.2 x Clausius-Clapeyron: mdot follows the CEM chain at the raised Xs.
     !
     ! Water-like fuel, hot air. ep layout: [Mv,Lv,cpv,Le,Yinf,LvMv/Ru,1/Tboil].
     !
@@ -39,7 +42,7 @@ program test_evaporation
     !> ep(8:10) = Phase-0 placeholders (alphaE, kLiq, muLiq) — unused by models 1-4
     real(R8), parameter :: ep(nep) = [Mv, Lv, cpv, Le, Yinf, &
                                       Lv*Mv/Ru, 1._R8/Tboil, 1._R8, 0._R8, 0._R8]
-    integer, parameter :: CEM = 2, CEMB = 3, ASM = 4
+    integer, parameter :: CEM = 2, CEMB = 3, ASM = 4, TC = 5
     !> Boiling corner: psat(420 K) = 4.374e5 Pa >= p = rho_g*Rg*Tg = 2.7552e5 Pa (boiling from 404.0 K).
     real(R8), parameter :: Tp_b = 420._R8
 
@@ -56,6 +59,8 @@ program test_evaporation
     call run_EV5(ok_all)
     call run_EV6(ok_all)
     call run_EV7(ok_all)
+    call run_EV8(ok_all)
+    call run_EV9(ok_all)
 
     call dump_EV2()
 
@@ -242,6 +247,53 @@ contains
         ok = ok .and. pass
         call append_row('EV7_cem_lk_boiling', 'mdot', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_EV7
+
+    subroutine run_EV8(ok)
+        logical, intent(inout) :: ok
+        integer  :: k, model(2)
+        real(R8) :: m1, q1, m2, q2, psx, err, tol
+        logical  :: o1, o2, pass
+        character(len=3) :: name(2)
+        model = [CEM, TC]; name = ['CEM', 'TC ']
+        psx = Patm*exp(-ep(6)*(1._R8/Tp - ep(7)))
+        do k = 1, 2
+            call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tp, dp0, 0._R8, 1._R8, model(k), 0, ep, m1, q1, o1)
+            call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tp, dp0, 0._R8, 1._R8, model(k), 0, ep, m2, q2, o2, &
+                             psatExt=psx)
+            err  = max(abs(m2-m1)/spacing(abs(m1)), abs(q2-q1)/max(spacing(abs(q1)), tiny(1._R8)))
+            tol  = 2._R8
+            pass = (err <= tol) .and. (o1 .eqv. o2) .and. (m1 < 0._R8)
+            if (pass) then
+                write(*,'(a,a,a,f4.1,a)') '  [PASS] EV8 ', name(k), ' psatExt = CC re-typed: within ', err, ' ULP'
+            else
+                write(*,'(a,a,a,es10.3,a,l1,l1)') '  [FAIL] EV8 ', name(k), ' psatExt = CC re-typed: ', err, &
+                                                   ' ULP, override ', o1, o2
+            end if
+            ok = ok .and. pass
+            call append_row('EV8_psat_ext_inert_'//trim(name(k)), 'mdot', err, err, 0._R8, 0._R8, tol, pass)
+        end do
+    end subroutine run_EV8
+
+    subroutine run_EV9(ok)
+        logical, intent(inout) :: ok
+        real(R8) :: m0, m1, qd, cpg, p, Mg, psx, Xs, Ys, BM, mref, err, tol
+        logical  :: ovr, pass
+        psx = 1.2_R8*Patm*exp(-ep(6)*(1._R8/Tp - ep(7)))
+        call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tp, dp0, 0._R8, 1._R8, CEM, 0, ep, m0, qd, ovr)
+        call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tp, dp0, 0._R8, 1._R8, CEM, 0, ep, m1, qd, ovr, psatExt=psx)
+        cpg  = gam*Rg/(gam-1._R8)
+        p    = rho_g*Rg*Tg
+        Mg   = Ru/Rg
+        Xs   = min(psx/p, 1._R8-xsCap)
+        Ys   = Xs*Mv/(Xs*Mv + (1._R8-Xs)*Mg)
+        BM   = (Ys-Yinf)/(1._R8-Ys)
+        mref = -2._R8*PI*dp0*(kg/cpg)*log(1._R8+BM)/Le
+        err  = abs(m1-mref)/abs(mref)
+        tol  = 1.0e-12_R8
+        pass = assert_lt('EV9 CEM psatExt = 1.2 x CC vs Spalding chain', err, tol) .and. (m1 < m0)
+        ok = ok .and. pass
+        call append_row('EV9_psat_ext_live', 'mdot', err, err, 0._R8, 0._R8, tol, pass)
+    end subroutine run_EV9
 
     !> EV2: CEM convective enhancement mdot(Re)/mdot(0) vs (2+0.6 Re^{1/2} Sc^{1/3})/2,
     !> Re 1e-1..1e3 xlog (16-arg call replicated exactly, incl. 10th arg 1._R8, intf=0)

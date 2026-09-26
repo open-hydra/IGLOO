@@ -537,7 +537,7 @@ contains
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
     use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor
-    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab
+    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
@@ -558,7 +558,6 @@ contains
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
     else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
     if (mod_propFlags(2)) then; rho   = lookupTab(rhoTabM, tp); else; rho   = aux(ind_rho); endif
-    if (mod_propFlags(5)) then; psat  = lookupTab(psatTabM,tp); else; psat  = aux(ind_ps);  endif
     m = Z(8)
     d = (sixOverPi*m/rho)**oneThird
 
@@ -578,9 +577,16 @@ contains
 
     call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot)
     !> gas packs (5)=T,(6)=mu,(7)=gamma,(8)=R,(9)=k; signature is (rhog,Tg,gamma,Rg,mug,kg)
-    call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
-                     tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
-                     mdot, Qdot_evap, override)
+    if (mod_propFlags(5)) then
+      psat = tableValue(psatTabM, Tmin, Tmax, tp)
+      call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
+                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
+                       mdot, Qdot_evap, override, psatExt=psat)
+    else
+      call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
+                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
+                       mdot, Qdot_evap, override)
+    endif
     if (override) Qdot = Qdot_evap
     !> Stefan-blowing reduction of the convective heat (MHB98 eq.19); skipped when the model returned its own Qdot
     if (blowSelect == 1 .and. .not.override) &
@@ -702,7 +708,7 @@ contains
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
     use IGLOO_Lib_Breakup,     only: breakupOde
     use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor
-    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab
+    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp,nNodes
@@ -727,7 +733,6 @@ contains
     if (mod_propFlags(2)) then; rho   = lookupTab(rhoTabM, tp); else; rho   = aux(ind_rho); endif
     if (mod_propFlags(3)) then; sigma = lookupTab(sigTabM, tp); else; sigma = aux(ind_sig); endif
     if (mod_propFlags(4)) then; mup   = lookupTab(mupTabM, tp); else; mup   = aux(ind_mup); endif
-    if (mod_propFlags(5)) then; psat  = lookupTab(psatTabM,tp); else; psat  = aux(ind_ps);  endif
     m = Z(8)
     d = (sixOverPi*m/rho)**oneThird
 
@@ -757,9 +762,16 @@ contains
 
     ! Evaporation
     !> gas packs (5)=T,(6)=mu,(7)=gamma,(8)=R,(9)=k; signature is (rhog,Tg,gamma,Rg,mug,kg)
-    call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
-                     tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
-                     mdot_evap, Qdot_evap, override)
+    if (mod_propFlags(5)) then
+      psat = tableValue(psatTabM, Tmin, Tmax, tp)
+      call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
+                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
+                       mdot_evap, Qdot_evap, override, psatExt=psat)
+    else
+      call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
+                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
+                       mdot_evap, Qdot_evap, override)
+    endif
     if (override) Qdot = Qdot_evap
     !> Stefan-blowing reduction of the convective heat (MHB98 eq.19); skipped when the model returned its own Qdot
     if (blowSelect == 1 .and. .not.override) &

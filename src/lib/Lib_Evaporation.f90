@@ -172,10 +172,11 @@ contains
 
 
     !> Evaporation rate mdot (< 0) and, for the models that provide it, the gas-side heat Qdot_evap:
-    !  Clausius-Clapeyron psat, surface fraction, Spalding BM, gas-side model, optional LK interface.
+    !  psat (the material's table, else Clausius-Clapeyron), surface fraction, Spalding BM, gas-side
+    !  model, optional LK interface.
     pure subroutine evaporation(rhog, Tg, gamma, Rg, mug, kg, &
                                  Tp, dp, Re, cpFactor, evapSelect, intfSelect, ep, &
-                                 mdot, Qdot_evap, override_Qdot)
+                                 mdot, Qdot_evap, override_Qdot, psatExt)
         implicit none
         real(R8), intent(in)  :: rhog, Tg, gamma, Rg, mug, kg
         real(R8), intent(in)  :: Tp, dp, Re
@@ -184,6 +185,7 @@ contains
         real(R8), intent(in)  :: ep(nep)
         real(R8), intent(out) :: mdot, Qdot_evap
         logical,  intent(out) :: override_Qdot
+        real(R8), intent(in), optional :: psatExt   !> psat(Tp) from the properties table
         real(R8) :: cpg, p, Mg, Pr, Sc, Re05, psat, Xs, Ys, BM
 
         mdot = 0._R8
@@ -196,8 +198,12 @@ contains
         p    = rhog * Rg * Tg
         Mg   = Ru / Rg
 
-        !> Saturation pressure (Clausius-Clapeyron)
-        psat = psat_CC(Tp, ep(iLvMvOverRu), ep(iinvTboil))
+        !> Saturation pressure: tabulated, else Clausius-Clapeyron
+        if (present(psatExt)) then
+            psat = psatExt
+        else
+            psat = psat_CC(Tp, ep(iLvMvOverRu), ep(iinvTboil))
+        endif
 
         !> Surface vapor fraction, capped below 1 so the boiling clamp keeps BM finite
         if (psat >= p) then
