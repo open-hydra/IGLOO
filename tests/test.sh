@@ -5,14 +5,14 @@
 #  DESCRIPTION: MOSE-style runner for the IGLOO test suite. Configures + builds
 #               build/verif/ (also refreshing bin/IGLOO, which the e2e cases
 #               run), then dispatches to ctest by label or name.
-#               Categories: standard evaporation combustion breakup infrastructure unit e2e
+#               Categories: standard evaporation combustion solidification breakup infrastructure unit e2e
 #===============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IGLOO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILD_DIR="${IGLOO_ROOT}/build/verif"
-CATEGORIES="standard evaporation combustion breakup infrastructure repeatability mpi unit e2e"
+CATEGORIES="standard evaporation combustion solidification breakup infrastructure repeatability mpi unit e2e"
 
 usage() {
     echo "Usage: ./test.sh [all|<category>|<test-name>|clean] [-- <extra cmake args>]"

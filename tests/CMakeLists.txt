@@ -8,6 +8,7 @@
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ (e2e)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ tc-hexadecane/ mhb98-water/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
+#   solidification/     unit family (root)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ wall-approach/ refusals/{p2t,zgr,lk-d2law,properties-zones,properties-range,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both}
 #   repeatability/      two-sweep gates (twosweep driver): 8 cases
@@ -343,6 +344,9 @@ igloo_e2e_case(tc-box-ord2-row evaporation/tc-box-ord2-row "e2e;evaporation;gas"
 # ---------- combustion (M1: Beckstead d^n burn law) -----------------------------
 igloo_unit_test(test_combustion combustion "unit;combustion;m1;t4")
 igloo_e2e_case(burn-box combustion/burn-box "e2e;combustion")
+
+# ---------- solidification (ODE model 6: supercooling, recalescence, plateau) --------
+igloo_unit_test(test_solidification solidification "unit;solidification;t4")
 
 # ---------- breakup: KHRT (unblocked 2026-07-07 by the A2 fix) -----------------
 igloo_unit_test(test_breakup_khrt breakup/reitz-khrt "unit;breakup;khrt;d;t7")

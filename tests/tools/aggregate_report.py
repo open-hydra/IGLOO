@@ -24,6 +24,7 @@ FAMILY_DIRS = [
     "standard/drag", "standard/temperature",
     "evaporation", "evaporation/interface-neq", "evaporation/tc-analytic",
     "combustion",
+    "solidification",
     "breakup/tab", "breakup/etab", "breakup/pilch-erdman",
     "breakup/reitz-diwakar", "breakup/reitz-khrt",
 ]
