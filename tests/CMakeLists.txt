@@ -10,7 +10,7 @@
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ varcp-tmin/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},bc-copies,bc-copy-order,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ two-fam-bc-2blk/ varcp-tmin/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},bc-copies,bc-copy-order,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
 #   repeatability/      two-sweep gates (twosweep driver): 12 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
@@ -577,6 +577,11 @@ igloo_e2e_case(two-mat infrastructure/two-mat "e2e;infrastructure")
 # order, copy c = family c), the families differing in krho and radius. Fed copy 1 for both, B
 # injects A's diameter and both carry 0.34/(1 - 0.68) of the gas flow instead of their own share.
 igloo_e2e_case(two-fam-bc infrastructure/two-fam-bc "e2e;infrastructure;bc;io")
+# two-fam-bc-2blk: two-fam-bc on the same box split into two blocks joined by a 101 connection, the
+# bc.txt holding each block's table once per family in ATLAS's order; check.py holds the run to the
+# one-block sibling. Read as one copy per block, block 2 takes block 1's second copy -- an inlet at
+# the interface and a connection on the outlet face -- and the run does not end.
+igloo_e2e_case(two-fam-bc-2blk infrastructure/two-fam-bc-2blk "e2e;infrastructure;bc;io")
 # varcp-tmin: a varying-cp table from 280 K, the parcels at 600 K on its extended last segment.
 igloo_e2e_case(varcp-tmin infrastructure/varcp-tmin "e2e;infrastructure;heat")
 

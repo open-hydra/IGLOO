@@ -666,8 +666,9 @@ bytes drift by 1 ULP across compiler and configure generations.
 Several members of this category have **no figure** and so no section below:
 `bc-center-2grp` (multi-group `bc_center` pinning), `axis-200` and `wedge-fold` (the
 axis face and the sector fold on the MOSE nozzle field), `two-mat` (two materials),
-`two-fam-bc` (one inlet table per family in `bc.txt`), `varcp-tmin` (a varying-$c_p$ table that ends below
-the parcels' temperature) and the `refusals/*` gates —
+`two-fam-bc` (one inlet table per family in `bc.txt`), `two-fam-bc-2blk` (the same on two blocks joined by
+a 101 connection), `varcp-tmin` (a varying-$c_p$ table that ends below the parcels' temperature) and the
+`refusals/*` gates —
 behavioral cases with no reference curve, summarised in the table on the
 [Overview](index.md).  This page is organized around comparison figures;
 a case that pins particle *placement* or a *refusal* rather than a trajectory has
