@@ -4,19 +4,18 @@ Registered **only** when the build has MPI. `USE_MPI` defaults OFF, so a plain `
 not see these tests at all and is unchanged by their existence.
 
 ```bash
-# From the repository root, in a tree of its own: test.sh always uses build/verif, and
-# `USE_MPI=ON ./test.sh mpi` would reconfigure that serial tree as an MPI build. TecIO OFF:
+# From tests/. USE_MPI=ON builds and tests build/mpi; build/verif is left alone. TecIO OFF:
 # ORION builds teciompi but links `tecio::tecio`, so USE_MPI=ON + USE_TECIO=ON cannot configure.
-cmake -B build/mpi -S . -DMASTER=None -DUSE_OPENMP=ON -DUSE_MPI=ON -DUSE_SUNDIALS=OFF \
-      -DBUILD_VERIFICATION=ON -DCMAKE_BUILD_TYPE=RELEASE -DUSE_TECIO=OFF
-cmake --build build/mpi -j 8 && ctest --test-dir build/mpi -L '^mpi$'
+USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF
 ```
 
 `bin/IGLOO` and `bin/DocGen` are each **one link target shared by every build tree**, so whichever tree
-you built last wins. Switching back is not just a rebuild:
+built last wins. `test.sh` removes both before its build, so each of its runs relinks them from the tree
+it tests: `./test.sh all` after an MPI run is serial again. After a build by hand, switching back is not
+just a rebuild:
 
 ```bash
-rm -f bin/IGLOO bin/DocGen && cmake --build build/verif -j 8   # force the relinks
+rm -f bin/IGLOO bin/DocGen && cmake --build build/verif -j 8   # from the repository root: force the relinks
 ldd bin/IGLOO bin/DocGen | grep -c libmpi                     # 0 = both serial
 ```
 

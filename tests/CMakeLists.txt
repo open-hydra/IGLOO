@@ -75,7 +75,7 @@ endfunction()
 # MPI variant of igloo_e2e_case: same case, launched under mpiexec on <nranks> ranks, oracle
 # unmodified. Registered ONLY when this build actually has MPI -- USE_MPI defaults OFF, so a plain
 # ./test.sh run is unchanged and these tests simply do not exist. Run them with
-#   USE_MPI=ON ./test.sh mpi          (MPI builds also need -DUSE_TECIO=OFF; see INFO.md)
+#   USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF   (built in build/mpi; see mpi/INFO.md)
 #
 # Three deliberate departures from igloo_e2e_case:
 #  * rc gate is `!= 0`, not `>= 128`. Measured on this host (Intel MPI 2021.9.0): mpiexec returns

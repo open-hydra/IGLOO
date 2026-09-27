@@ -9,17 +9,19 @@ Registry of record: [`CMakeLists.txt`](CMakeLists.txt) (every gate) and
 ## Run
 
 ```bash
-./tests/test.sh all              # build (build/verif/ + bin/IGLOO) + full ctest + aggregated report
+./tests/test.sh all              # build (build/verif/, relinking bin/IGLOO and bin/DocGen) + full ctest + aggregated report
 ./tests/test.sh standard         # one category: standard|evaporation|combustion|solidification|breakup|infrastructure|repeatability|mpi
 ./tests/test.sh e2e              # by kind: unit|e2e
+USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # the rank-count gates, built in build/mpi/
 ./tests/test.sh conv-nu          # single test by ctest name
 ./tests/test.sh clean            # wipe e2e OUTPUT/run logs + build/verif/
 ```
 
 Opt-in via `-DBUILD_VERIFICATION=ON` (default OFF, so the production build is
-byte-for-byte untouched). `test.sh` configures a **separate `build/verif/`**;
-note it also refreshes `bin/IGLOO` (same source, RELEASE, `MASTER=None`) —
-that is the executable the e2e cases run.
+byte-for-byte untouched). `test.sh` configures a **separate `build/verif/`**
+(`build/mpi/` with `USE_MPI=ON`) and relinks `bin/IGLOO` and `bin/DocGen` from it
+before every run (same source, RELEASE, `MASTER=None`) — the executables the e2e
+cases and `registry-docs` run, shared by every build tree.
 
 ## Layout
 
@@ -97,7 +99,7 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ctest 144/144 in a serial build (107 e2e + 36 unit, `self_test` and `registry-docs` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`tests/mpi/INFO.md`) registers 7 more `mpi-*` cases, 151/151. The e2e entries are 62 solver cases, two further
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 7 more `mpi-*` cases, 151/151. The e2e entries are 62 solver cases, two further
 oracles on `khrt-e2e`'s run, the twelve two-sweep gates and the thirty-one setup refusals; the unit entries are 31
 compiled unit tests, the property-table reader on three fixtures, `self_test` and `registry-docs`. Evaporation with
 ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,

@@ -16,7 +16,7 @@ reference source and oracle: `tests/VERIFICATION_MATRIX.md`.
 ```bash
 cd /path/to/IGLOO/
 
-# Build + run full suite (configures build/verif/ and refreshes bin/IGLOO)
+# Build + run full suite (configures build/verif/, relinks bin/IGLOO and bin/DocGen)
 ./tests/test.sh all
 
 # One category
@@ -27,7 +27,7 @@ cd /path/to/IGLOO/
 ./tests/test.sh breakup
 ./tests/test.sh infrastructure
 ./tests/test.sh repeatability # two-sweep state-leak gates
-# Rank-count gates: an MPI build of its own in build/mpi, configured by hand (tests/mpi/INFO.md)
+USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # rank-count gates, built in build/mpi/ (see tests/mpi/INFO.md)
 
 # By kind
 ./tests/test.sh unit           # literature-grounded unit tests only
@@ -40,16 +40,17 @@ cd /path/to/IGLOO/
 ./tests/test.sh clean
 ```
 
-`test.sh` configures a **separate `build/verif/`** with `-DBUILD_VERIFICATION=ON`
-(default OFF, so the production build is unchanged). It also refreshes `bin/IGLOO`
-(same source, RELEASE, `--master=None`) — the executable the e2e cases run.
+`test.sh` configures a **separate `build/verif/`** (`build/mpi/` when `USE_MPI=ON`) with
+`-DBUILD_VERIFICATION=ON` (default OFF, so the production build is unchanged), and relinks
+`bin/IGLOO` and `bin/DocGen` from it (same source, RELEASE, `--master=None`) — the executables
+the e2e cases and `registry-docs` run.
 
 !!! warning "`bin/IGLOO` and `bin/DocGen` are link targets shared by every build tree"
-    `cmake --build <tree>` is a no-op when that tree has nothing to recompile, so it can
-    leave another tree's binary in place and the gates run that instead. After any
-    cross-tree build (e.g. serial ↔ MPI): `rm -f bin/IGLOO bin/DocGen && cmake --build build/verif -j 8`,
-    then confirm with `ldd bin/IGLOO bin/DocGen | grep -c libmpi` (0 = serial). `USE_MPI=ON ./tests/test.sh`
-    reconfigures `build/verif` itself as an MPI build: build MPI in `build/mpi` (tests/mpi/INFO.md).
+    `test.sh` removes both before it builds, so each run tests the binaries of the tree it built.
+    `cmake --build <tree>` by hand is a no-op when that tree has nothing to recompile, so it can
+    leave another tree's binaries in place and the gates run those instead. After a build by hand:
+    `rm -f bin/IGLOO bin/DocGen && cmake --build build/verif -j 8`, then confirm with
+    `ldd bin/IGLOO bin/DocGen | grep -c libmpi` (0 = serial).
 
 ### Layout
 
