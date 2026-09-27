@@ -8,7 +8,7 @@
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ temp-relax-varcp/ temp-relax-varrho/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ scatter-weight/ vortex-cloud-st{0p01,0p1,1,10}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
-#   solidification/     unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
+#   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ two-fam-bc-2blk/ varcp-tmin/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},bc-copies,bc-copy-order,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
 #   repeatability/      two-sweep gates (twosweep driver): 12 cases
@@ -427,11 +427,14 @@ igloo_e2e_case(d2law-brk-dormant evaporation/d2law-brk-dormant "e2e;evaporation;
 igloo_unit_test(test_combustion combustion "unit;combustion;m1;t4")
 igloo_e2e_case(burn-box combustion/burn-box "e2e;combustion")
 
-# ---------- solidification (ODE model 6: supercooling, recalescence, plateau) --------
+# ---------- solidification (ODE model 6: supercooling, recalescence, plateau, melting) --------
 igloo_unit_test(test_solidification solidification "unit;solidification;t4")
 # solid-box: supercooling, recalescence, plateau and solid cooling against the closed forms, and the
 # energy deposit (global telescoping + per-cell plateau heat) on the unsmoothed source field.
 igloo_e2e_case(solid-box solidification/solid-box "e2e;solidification")
+# solid-melt: solid particles in a gas hotter than T-melt heat to T-melt, melt on the plateau at the
+# latent-heat rate and heat as liquids, against the closed forms; no parcel lost at the phase boundaries.
+igloo_e2e_case(solid-melt solidification/solid-melt "e2e;solidification")
 # solid-box-euler: the equivalent-Eulerian field of model 6 (out-file ALL) -- the only gate on the euler
 # tail after the frozen fraction; solid-box writes the source field only.
 igloo_e2e_case(solid-box-euler solidification/solid-box-euler "e2e;solidification;euler")

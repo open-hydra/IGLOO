@@ -24,7 +24,7 @@ gas import (allocation.f90 import_gas) maps identically. Vars 4-21 are cell-cent
 gas vars are set to SI constants, particle vars to 0.
 
 Usage:
-    make_box_case.py <out_dir> [--kv KV] [--kt KT] [--rp RP] [--alpha A] [--blocks 2]
+    make_box_case.py <out_dir> [--kv KV] [--kt KT] [--rp RP] [--alpha A] [--blocks 2] [--tg TG]
         writes <out_dir>/solfile.tec and <out_dir>/bc.txt
         --kv : inlet velocity scaling  (v0 = kv*|u_g|; 1.0 => no drag slip, Re=0)
         --kt : inlet temperature scaling (Tp0 = kt*T_g; 1.0 => no thermal slip)
@@ -33,6 +33,7 @@ Usage:
                   betap=0). dir=[cos a, sin a, 0], v0 = kv*|u_g|*dir
                   (obj_particles initializePart). Default: 'normal' sentinel.
         --blocks : 2 writes the box as two blocks joined at x = Lx/2 (default 1)
+        --tg : gas temperature [K] (default the module's 600 K)
         Defaults reproduce the drag-stokes case (kv=0.1, kt=1.0, rp=5.945e-6).
 """
 import argparse
@@ -93,7 +94,7 @@ BCDEF_PER   = 201                        # translational periodic: cell line + c
 BCDEF_CONN  = 101                        # block interface: cell line + partner line
 
 
-def write_solfile(path, blocks=1):
+def write_solfile(path, blocks=1, tg=None):
     nxb = NX // blocks
     I, J, K = nxb + 1, NY + 1, NZ + 1
     dx, dy, dz = LX / NX, LY / NY, LZ / NZ
@@ -115,7 +116,9 @@ def write_solfile(path, blocks=1):
                             buf.append(f"  {val:.15E}\n")
                 f.writelines(buf)
             # cell-centered gas/particle vars: ncell identical constants each
-            for _, val in GAS_VARS:
+            for name, val in GAS_VARS:
+                if name == "T" and tg is not None:
+                    val = tg
                 f.writelines([f"  {val:.15E}\n"] * ncell)
     return I, J, K, nnode, ncell
 
@@ -173,9 +176,10 @@ def main():
                    help="faces 3/4 (y-min/y-max) become a translational periodic pair (201)")
     p.add_argument("--blocks", type=int, choices=(1, 2), default=1,
                    help="2: two zones split at x = Lx/2, joined by a 101 connection")
+    p.add_argument("--tg", type=float, default=None, help="gas temperature [K] (default 600)")
     a = p.parse_args()
     os.makedirs(a.out_dir, exist_ok=True)
-    I, J, K, nnode, ncell = write_solfile(os.path.join(a.out_dir, "solfile.tec"), a.blocks)
+    I, J, K, nnode, ncell = write_solfile(os.path.join(a.out_dir, "solfile.tec"), a.blocks, a.tg)
     n_inlet = write_bc(os.path.join(a.out_dir, "bc.txt"), a.kv, a.kt, a.rp, a.alpha,
                        periodic_y=a.periodic_y, blocks=a.blocks)
     print(f"[ok] box solfile: I={I} J={J} K={K} nnode={nnode} ncell={ncell} (3D, mesh2D=False)"
