@@ -30,7 +30,8 @@ def source_total():
 
 
 def injected_total():
-    """Sum of outloc column 7 = npdot*m_inj, the parcel's injected mass flow [kg/s]."""
+    """Sum of outloc column 7 = npdot*m_inj, the parcel's injected mass flow [kg/s] (model 4 prints the
+    flow at exit, the same here: every parcel fails on its first step)."""
     tot = 0.0
     for line in open(OUTLOC).read().splitlines()[2:]:
         c = line.split()

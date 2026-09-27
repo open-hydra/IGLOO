@@ -3,7 +3,7 @@ module Lib_RHS
   implicit none
   private
 
-  public  :: determineModel, computeNeq, setupRHS
+  public  :: determineModel, computeNeq, computeNode, setupRHS
   public  :: packAuxVars
   public  :: packAuxState, unpackAuxState
   public  :: packEventVar, unpackEventVar
@@ -93,6 +93,13 @@ contains
       endif
     endif
   end function computeNeq
+
+  !> Number of ODE state variables per model: computeNeq without the euler moments and accumulators.
+  pure function computeNode(model) result(nOde)
+    integer, intent(in) :: model
+    integer :: nOde
+    nOde = computeNeq(model, .false., .false.)
+  end function computeNode
 
   !> Number of auxiliary variables (read-only in the RHS) per model, and their indices.
   subroutine computeNaux(model,brkSelect,evapSelect,combSelect, &

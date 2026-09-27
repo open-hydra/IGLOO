@@ -72,6 +72,7 @@ contains
     integer  :: nSect
     logical  :: consumed   !> droplet ended INSIDE the domain with mass still on it
     real(R8) :: shedM, shedV(3)   !> KH shed of this segment: the child's birth mass flow and velocity
+    real(R8) :: mdotSeg           !> model 3: the stream flow over this segment, before a shed at its end
     real(R8) :: hShed, vShed
     logical  :: atGasBoundary, wasBoundary   ! ord2: geo consulted only at gas-boundary cells
     real(R8) :: geoHexNorms(3,2,6), geoHexCentroids(3,2,6)
@@ -155,12 +156,12 @@ contains
       call part%computeMass(rhoTab); part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot
 
       select case(part%model)
-      case(2,5); part%stateVar(8) = part%m;   part%nOde = 8
-      case(3); part%stateVar(8) = part%npdot; part%nOde = 8
-      case(4); part%stateVar(8) = part%m;
-               part%stateVar(9) = part%npdot; part%nOde = 9
+      case(2,5); part%stateVar(8) = part%m
+      case(3); part%stateVar(8) = part%npdot
+      case(4); part%stateVar(8) = part%m
+               part%stateVar(9) = part%npdot
       case(6); call solidPhaseAtInjection(part%tp, part%Tmelt, part%Tnuc, part%solidPhase, part%stateVar(8))
-               part%fSolid = part%stateVar(8); part%overMelt = .false.; part%nOde = 8
+               part%fSolid = part%stateVar(8); part%overMelt = .false.
       end select
       if (eulerSwitch)    part%stateVar(part%nOde+1:part%neq) = 0._R8
       if (part%bodyAccum) part%stateVar(part%neq-1 :part%neq) = 0._R8
@@ -196,6 +197,7 @@ contains
       doLoop = .true.
       consumed = .false.
       shedM = 0._R8; shedV = 0._R8
+      mdotSeg = part%mdot
       innerIter = 0
       do while (doLoop)
         innerIter = innerIter + 1
@@ -396,12 +398,16 @@ contains
 
     !> One exit record, written before the time reset; out-time appends the parcel time.
     subroutine writeExitRow()
+      real(R8) :: mdotOut
+      !> Model 4: the stream's mass flow at exit; the other models: the injected or birth flow.
+      mdotOut = part%mdot
+      if (part%model == 4) mdotOut = part%npdot*part%m
       if (timeOn) then
         write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), &
-                                                                  part%angle, part%mdot, part%Af, part%ID, part%time
+                                                                  part%angle, mdotOut, part%Af, part%ID, part%time
       else
         write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8)') part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), &
-                                                         part%angle, part%mdot, part%Af, part%ID
+                                                         part%angle, mdotOut, part%Af, part%ID
       endif
     end subroutine writeExitRow
 
@@ -885,7 +891,7 @@ contains
         factor = factor*particle%Tstay/particle%deltaL
       case(3)
         np  = particle%intE(5)            *factor
-        rho = particle%mdot*particle%Tstay*factor
+        rho = mdotSeg*particle%Tstay*factor
         factor = rho/particle%deltaL
       case(2,5)
         np  = particle%npdot*particle%Tstay*factor

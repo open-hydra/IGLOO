@@ -9,7 +9,7 @@
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
-#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ khrt-evap-frozen/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
+#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ varcp-tmin/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},bc-copies,bc-copy-order,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
 #   repeatability/      two-sweep gates (twosweep driver): 12 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
@@ -495,15 +495,31 @@ set_tests_properties(khrt-e2e-rt PROPERTIES
 # per-parent shed lists go through ~7 doublings. Gates mass exactness under heavy shedding
 # plus "the runaway guard did not fire". INPUT/ is a symlink to ../khrt-e2e/INPUT.
 igloo_e2e_case(khrt-stress breakup/khrt-stress "e2e;breakup;khrt;stress")
+# khrt-e2e-euler: the khrt-e2e case (model 3) with the Eulerian output on (out-file ALL, mollify off, out-time):
+# its oracles, no parcel lost to a solver failure or a non-finite state, and the Eulerian mass = sum over
+# exits of flow x time. RED while a breakup child enters without its state count (241 children lost at
+# their first step, none flies) and while a shed segment deposits the parent's lowered flow (2.4e-3 short).
+igloo_e2e_case(khrt-e2e-euler breakup/khrt-e2e-euler "e2e;breakup;khrt;euler")
 # rd-evap-frozen: the reitz-diwakar-e2e case under model 4 with the evaporation rate frozen at zero; the
 # RD87 rate oracle must hold unchanged. RED while breakup gives the droplet mass no share (d stays d0).
 igloo_e2e_case(rd-evap-frozen breakup/rd-evap-frozen "e2e;breakup;evaporation;m4")
 # tab-evap-frozen: the tab-e2e case under model 2 (TAB events, evaporation frozen at zero): the tab-e2e
 # oracle plus a mass-free source field. RED while the event's size is not written to the model-2 state.
 igloo_e2e_case(tab-evap-frozen breakup/tab-evap-frozen "e2e;breakup;evaporation;tab")
+# etab-evap-frozen: the etab-e2e case under model 2 (ETAB events, evaporation frozen at zero): the etab-e2e
+# oracle, the product velocity kick included, plus a mass-free source field. RED while the event's size is
+# not written to the model-2 state: no drop seen broken, kicked drops seen unbroken, the gas 1e4x the flow.
+igloo_e2e_case(etab-evap-frozen breakup/etab-evap-frozen "e2e;breakup;evaporation;etab")
 # khrt-evap-frozen: the khrt-e2e case under model 4 (evaporation frozen at zero): the KH rate, the RT
-# persistence, the children, and no mass to the gas. RED while events do not reach the model-4 state.
+# persistence, the children, no mass to the gas, the momentum/energy budgets, and the exit flows of parents
+# and children adding up to the injected flow. RED while events do not reach the model-4 state, and while
+# the exit record prints the injected or birth flow (exit flows 1.25x the injected).
 igloo_e2e_case(khrt-evap-frozen breakup/khrt-evap-frozen "e2e;breakup;evaporation;khrt;m4")
+# khrt-evap-frozen-euler: khrt-evap-frozen with the Eulerian output on (out-file ALL, mollify off, out-time):
+# its oracles plus the Eulerian mass, sum rho_p V = sum over exits of flow x time. RED while a breakup child
+# enters without its model's ODE state count: every child burns out at birth, the Eulerian mass 13 % off
+# the exit-record sum.
+igloo_e2e_case(khrt-evap-frozen-euler breakup/khrt-evap-frozen-euler "e2e;breakup;evaporation;khrt;m4;euler")
 # khrt-shed-noexchange: the khrt-e2e case with NoDrag and NoHeat, so a KH shed is the only exchange left:
 # every cell of the source field must be zero. RED while the shed cell receives the child's birth flux.
 igloo_e2e_case(khrt-shed-noexchange breakup/khrt-shed-noexchange "e2e;breakup;khrt;source")

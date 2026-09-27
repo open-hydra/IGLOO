@@ -43,7 +43,7 @@ frozen-gas box (drops that break at realistic σ are too large to evaporate with
 
 | gate | assertion |
 |---|---|
-| G0 | witnesses: parents 1..25, injection rows at d0 ± 1 %, u0 ± 1e-3, T0 ± 0.3; Σ outloc column 7 = 25·ṁ_parcel from the case inputs (`krho/(1−krho)·ρ_g U A`) to 1e-6 |
+| G0 | witnesses: parents 1..25, injection rows at d0 ± 1 %, u0 ± 1e-3, T0 ± 0.3; Σ outloc column 7 (model 4: the stream's flow at exit) ≤ 1e-3 of the injected flow `25·krho/(1−krho)·ρ_g U A`: every drop leaves at burnout (measured 1.9e-4) |
 | B1 | closure: Σ `wdot` over `source.tec` = the injected flow to 1e-12 (every drop is consumed in the box) |
 | B2 | sign: no cell below −1e-6 of the largest (evaporation is the only mass exchange; breakup moves mass between drops) |
 | B3 | end of life: 25 parents end at 0.45 < x < 0.65 m, no `Run_ODESolver err=` line, no `non-finite state` line |
@@ -55,8 +55,8 @@ The 5.5–6.5 gap keeps the rate discontinuity at We_r = 6 out of both rate gate
 
 **Why the mass closure alone cannot be the RED gate:** `computeSource` gives both ends of every segment
 from the same state, so Σ `wdot` telescopes to (first in − last out) plus the consumed remnant whatever
-the RHS integrated in between; and outloc column 7 of a model-4 parcel is its injected flow, not its
-exit flow. The rate gates C1/C2 and the witnesses B3/W1 are the ones that see a wrong mass equation.
+the RHS integrated in between; and a drop consumed in the box leaves with its remnant flow alone in outloc
+column 7. The rate gates C1/C2 and the witnesses B3/W1 are the ones that see a wrong mass equation.
 
 ## Tolerances
 - C1 `2e-3`: ≈ 3× the Richardson term of the T_p/u sampling (6.3e-4 at the window end, derived on the

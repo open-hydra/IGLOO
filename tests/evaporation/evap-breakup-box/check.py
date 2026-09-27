@@ -12,7 +12,8 @@ so breakup shrinks each drop at constant stream mass and only evaporation remove
 
 Gates, all read from the outputs against the case inputs (no production value is reused):
 
-  G0  witnesses: 25 parents, injection row at d0/u0/T0, sum of outloc column 7 = the injected flow
+  G0  witnesses: 25 parents, injection row at d0/u0/T0, sum of outloc column 7 (model 4: the stream's
+      flow at exit) at most 1e-3 of the injected flow: every drop leaves at burnout
   B1  closure: sum(wdot) over source.tec = injected mass flow (every drop consumed in the box)
   B2  sign: no cell takes mass from the gas (evaporation is the only mass exchange)
   B3  end of life: every parent burns out inside the box, with no solver-failure or non-finite exit
@@ -44,7 +45,7 @@ MDOT_TOTAL = NPAR * MDOT_PARCEL
 # ---- tolerances ----
 EPS_R = 0.5e-6          # E13.6 relative half-ULP on d
 EPS_T = 0.5e-6          # F12.6 absolute half-ULP on T_p, x
-TOL_MDOT_IN = 1.0e-6    # G0: printed injected flow vs case inputs
+TOL_MDOT_OUT = 1.0e-3   # G0: exit flows at burnout / injected flow (measured 1.9e-4)
 TOL_B1 = 1.0e-12        # B1: closure against the case-input flow (measured 5.4e-16)
 TOL_B2 = 1.0e-6         # B2: most negative cell / largest cell
 X_BURN = (0.45, 0.65)   # B3: burnout band
@@ -257,12 +258,12 @@ def main():
     anchors_ok = all(pid in parts and abs(parts[pid][0][7] - D0) <= 0.01 * D0
                      and abs(parts[pid][0][3] - U0) <= 1.0e-3 and abs(parts[pid][0][6] - T0) <= 0.3
                      for pid in range(1, NPAR + 1))
-    mdot_in = sum(exits[p][6] for p in ids)
-    g0 = (ids == list(range(1, NPAR + 1)) and anchors_ok
-          and abs(mdot_in - MDOT_TOTAL) <= TOL_MDOT_IN * MDOT_TOTAL)
+    mdot_out = sum(exits[p][6] for p in ids)
+    g0 = (ids == list(range(1, NPAR + 1)) and anchors_ok and mdot_out <= TOL_MDOT_OUT * MDOT_TOTAL)
     print(f"G0 witnesses: {len(ids)} parents (need {NPAR}, IDs 1..{NPAR}), injection rows at "
-          f"d0/u0/T0 {'yes' if anchors_ok else 'NO'}, sum outloc mdot {mdot_in:.6e} vs "
-          f"{MDOT_TOTAL:.6e} kg/s  [{'PASS' if g0 else 'FAIL'}]")
+          f"d0/u0/T0 {'yes' if anchors_ok else 'NO'}, sum outloc mdot (the flow at exit) {mdot_out:.6e} = "
+          f"{mdot_out / MDOT_TOTAL:.1e} of the injected {MDOT_TOTAL:.6e} kg/s (max {TOL_MDOT_OUT:.0e})  "
+          f"[{'PASS' if g0 else 'FAIL'}]")
     results.append(g0)
 
     # B1 closure

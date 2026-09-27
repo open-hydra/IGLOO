@@ -190,10 +190,14 @@ Confirmed: TAB closed-form is the right #1 (task's expected winner).
   `−m·(dn/dt)/n` of `dm/dt` keeps `n d³` constant under breakup. Literature judgment and the composed oracle:
   [../evaporation/LITERATURE_TESTS.md](../evaporation/LITERATURE_TESTS.md), "Evaporation with ODE breakup".
   Gates: [rd-evap-frozen](rd-evap-frozen/INFO.md) (the `[RD87]` rate oracle under model 4),
-  [khrt-evap-frozen](khrt-evap-frozen/INFO.md) (KH rate, RT persistence, children, source mass).
+  [khrt-evap-frozen](khrt-evap-frozen/INFO.md) (KH rate, RT persistence, children, source budgets, the exit
+  flows of parents and children adding up to the injected flow) and its Eulerian twin
+  [khrt-evap-frozen-euler](khrt-evap-frozen-euler/INFO.md) (children keep their model-4 state; the Eulerian mass);
+  model 3's Eulerian twin: [khrt-e2e-euler](khrt-e2e-euler/INFO.md).
 - **Events under a mass-state model** (TAB/ETAB with evaporation run as model 2; KH-RT with evaporation as
   model 4): the event's diameter and number rate become the ODE state together, `N^(n+1) = N^n (r^n/r^(n+1))³`
-  (`[ORA87]`). Gate: [tab-evap-frozen](tab-evap-frozen/INFO.md).
+  (`[ORA87]`). Gates: [tab-evap-frozen](tab-evap-frozen/INFO.md), [etab-evap-frozen](etab-evap-frozen/INFO.md)
+  (ETAB's product velocity kick included).
 - **KH shed and the gas source** (`[Reitz87]` product-parcel rule): the stripped mass leaves the parent as a
   child parcel born at the shed point, so the parent hands the child's birth flux on instead of depositing
   it. Gates: `khrt-e2e/check.py::check_source_budget`, [khrt-shed-noexchange](khrt-shed-noexchange/INFO.md).

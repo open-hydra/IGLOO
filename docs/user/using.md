@@ -114,7 +114,7 @@ Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). Rows ar
 
 ### Exit locations
 
-`OUTPUT/outloc-<mat>.dat` records, for every particle that exits the domain, its exit position, temperature, speed, impact angle, mass flow, face area, and particle ID (`X Y Z T |u_p| alpha mdot Af ID`), followed by the exit time `t` with `out-time = on`.
+`OUTPUT/outloc-<mat>.dat` records, for every particle that exits the domain, its exit position, temperature, speed, impact angle, mass flow, face area, and particle ID (`X Y Z T |u_p| alpha mdot Af ID`), followed by the exit time `t` with `out-time = on`. The mass flow `mdot` depends on the ODE model: for models 1, 3 and 6, whose stream mass changes only at a breakup event, it is the flow the parcel carries at exit; for model 4 (evaporation with ODE breakup) it is the flow at exit `ṅ_p·m`, after evaporation and stripping (a drop consumed in the domain leaves with its remnant); for models 2 and 5, whose drops lose mass to evaporation or combustion, it is the injected flow (a breakup child's birth flow).
 
 ### Snapshot at an end time
 

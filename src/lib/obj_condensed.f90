@@ -211,7 +211,7 @@ contains
   !  (over rangeStart:rangeEnd when given).
   subroutine setup_particleODE(self,rangeStart,rangeEnd)
     use IGLOO_variables,  only: eulerSwitch, srcBodyForce
-    use Lib_RHS,          only: determineModel, computeNeq, setupRHS
+    use Lib_RHS,          only: determineModel, computeNeq, computeNode, setupRHS
     use IGLOO_Lib_Breakup, only: bp, bpMethod, bpScale
     implicit none
     class(obj_group),  intent(inout) :: self
@@ -264,6 +264,7 @@ contains
       endif
       part%model = mdl
       part%neq   = self%neq
+      part%nOde  = computeNode(mdl)
       part%bodyAccum   = srcBodyForce .and. (mdl==2 .or. mdl==4 .or. mdl==5)
       part%evapSelect  = self%evapSelect
       part%brkupSelect = self%brkupSelect

@@ -106,7 +106,8 @@ The Euler block type `obj_eulerblock` stores per-material numerators:
 | `temperature(Nx,Ny,Nz)` | $\sum \rho_p\,T_p \cdot \delta L^{-1} \cdot T_\mathrm{stay} / V$ (numerator) |
 
 The density row above is the **constant-mass** form (models 1 and 6, and model 3 with
-$\rho_p\,T_\mathrm{stay} = \dot{m}\,T_\mathrm{stay}$). For a material that loses mass the
+$\rho_p\,T_\mathrm{stay} = \dot{m}\,T_\mathrm{stay}$, $\dot m$ the stream flow over the segment: a KH shed that ends
+the segment lowers the parent's flow only after it). For a material that loses mass the
 droplet mass is inside the integral, and the **number rate multiplies it** — the parcel
 carries $\dot{n}_p$ droplets per second, not one:
 
@@ -159,7 +160,8 @@ The output files written by `src/lib/IO.f90` are `source.tec` for the source fie
 ## State-vector extent
 
 The extra ODE slots appended when `eulerSwitch = .true.` are, with $n_\mathrm{ode}$ the
-base dimension of the model (7, 8 or 9):
+base dimension of the model (7, 8 or 9, set for every parcel of the group, breakup children included, when
+its ODE system is sized):
 
 | Slot offset | Symbol | Meaning |
 | :---: | :--- | :--- |
