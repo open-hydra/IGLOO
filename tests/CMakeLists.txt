@@ -5,12 +5,12 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ scatter-weight/ vortex-cloud-st{0p01,0p1,1,10}/ (e2e; + vortex-cloud-3way, optional)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ temp-relax-varcp/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ scatter-weight/ vortex-cloud-st{0p01,0p1,1,10}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ khrt-evap-frozen/ khrt-shed-noexchange/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,varcp-tmin,bad-row},bc-copies,bc-copy-order,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ varcp-tmin/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},bc-copies,bc-copy-order,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
 #   repeatability/      two-sweep gates (twosweep driver): 12 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
@@ -295,6 +295,8 @@ igloo_unit_test(test_heat_nu     standard/temperature "unit;standard;heat;b;t5")
 
 igloo_e2e_case(drag-stokes standard/drag-stokes "e2e;standard;drag")
 igloo_e2e_case(temp-relax  standard/temp-relax  "e2e;standard;heat")
+# temp-relax-varcp: the enthalpy state on a varying-cp table from 250 K; heating and cooling below, inside and above it.
+igloo_e2e_case(temp-relax-varcp standard/temp-relax-varcp "e2e;standard;heat")
 igloo_e2e_case(body-force  standard/body-force  "e2e;standard;drag")
 igloo_e2e_case(conv-nu     standard/conv-nu     "e2e;standard;heat")
 igloo_e2e_case(vie-plait   standard/vie-plait   "e2e;standard;drag;gas")
@@ -552,6 +554,8 @@ igloo_e2e_case(two-mat infrastructure/two-mat "e2e;infrastructure")
 # order, copy c = family c), the families differing in krho and radius. Fed copy 1 for both, B
 # injects A's diameter and both carry 0.34/(1 - 0.68) of the gas flow instead of their own share.
 igloo_e2e_case(two-fam-bc infrastructure/two-fam-bc "e2e;infrastructure;bc;io")
+# varcp-tmin: a varying-cp table from 280 K, the parcels at 600 K on its extended last segment.
+igloo_e2e_case(varcp-tmin infrastructure/varcp-tmin "e2e;infrastructure;heat")
 
 # ---------- refusals (setup-time error stops, ledger O3/O4/O24; coverage G20) ----------------
 # Each is drag-stokes (or two-mat's phase.txt) plus ONE offending key/file. The expected text is
@@ -567,15 +571,13 @@ igloo_refusal_case(refuse-properties-zones infrastructure/refusals/properties-zo
 igloo_refusal_case(refuse-properties-range infrastructure/refusals/properties-range
                    "zones do not share one temperature range"           "e2e;refusal;infrastructure")
 # properties.dat contract: one enthalpy column (its datum unambiguous), every data row holding a number for
-# every named column, a Psat column that does not decrease, a varying Cp only on a table from 1 K.
+# every named column, a Psat column that does not decrease.
 igloo_refusal_case(refuse-properties-two-enthalpy infrastructure/refusals/properties-two-enthalpy
                    "the enthalpy datum is ambiguous"                    "e2e;refusal;infrastructure")
 igloo_refusal_case(refuse-properties-bad-row infrastructure/refusals/properties-bad-row
                    "unreadable rows: line 7 does not hold 4 numbers"    "e2e;refusal;infrastructure")
 igloo_refusal_case(refuse-properties-psat  infrastructure/refusals/properties-psat
                    "Psat column: a pressure that decreases with T"      "e2e;refusal;evaporation")
-igloo_refusal_case(refuse-properties-varcp-tmin infrastructure/refusals/properties-varcp-tmin
-                   "a varying Cp column needs rows from T = 1 K"        "e2e;refusal;infrastructure")
 # bc.txt layouts: one copy of every block's table, or one copy per family in ATLAS's order; any
 # other record count (two copies for A 3) and a copy that does not repeat copy 1's faces (two
 # swapped headers) stop at setup. A reader that consumes copy 1 only runs both to completion.

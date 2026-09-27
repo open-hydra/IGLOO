@@ -28,7 +28,6 @@ output written).
 | `refuse-properties-two-enthalpy` | own 10-row `INPUT/properties.dat` whose header names `"Enthalpy"` and `"Enthalpy_abs"` | `the enthalpy datum is ambiguous` |
 | `refuse-properties-bad-row` | own 10-row `properties.dat`, row 3's enthalpy typed `375O.000000` (a letter O) | `unreadable rows: line 7 does not hold 4 numbers` |
 | `refuse-properties-psat` | tc-box (`bc.txt`/`solfile.tec` symlinked), its table on 1..1000 K plus a `"Psat"` column = its Clausius-Clapeyron line (`tools/make_psat_table.py --anchors 500 0.018150089922984093 600 1.0`, the first ratio `exp(-Lv Mv/Ru (1/500 - 1/600))`) with the 549 K and 550 K values swapped | `Psat column: a pressure that decreases with T` |
-| `refuse-properties-varcp-tmin` | own `properties.dat` on 280..380 K, `Cp = 1250 + (T - 280)`, the enthalpy its trapezoid sum | `a varying Cp column needs rows from T = 1 K` |
 | `refuse-bc-copies` | own `INPUT/`: `phase.txt` `A 3` (three families), `two-fam-bc`'s two-copy `bc.txt`, `common/properties.dat` — 2500 records where one copy (1250) or one per family (3750) is readable | `IGLOO: bc.txt record count is neither one copy nor one copy per family` — refused in `read_cdp_bc_file`, which prints the three counts |
 | `refuse-bc-copy-order` | own `INPUT/`: `two-fam-bc`'s file with two face-3 headers of copy 2 exchanged (`python3 ../../two-fam-bc/make_fixture.py --swap`, run from the case directory), `two-mat`'s `phase.txt`/`properties.dat` | `IGLOO: bc.txt family copies do not repeat the faces of copy 1` — the codes still line up, only the header integers differ (`family 2 of block 1 ... at record 51`) |
 | `refuse-drag-token` | `drag = no-such-drag-law` | `IGLOO: unknown drag model` |
@@ -53,11 +52,11 @@ output written).
 | `refuse-solid-varrho` | the valid line plus an own 10-row `properties.dat` whose `Density` column varies | `solidification=on requires a constant-density material` |
 | `refuse-wedge-offcentre` | a generated wedge whose k-planes sit at 0 and +1° (`tools/make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`) | `IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)` — refused at mesh import (`allocation.f90`), not at the properties choke point |
 
-All thirty-two exit 128 at setup with nothing injected or integrated. **The four `properties.dat` cases were
+All thirty-one exit 128 at setup with nothing injected or integrated. **The three `properties.dat` cases were
 RED first**: the reader that took three columns by position ran each of them to "All particles out of
 domain" with exit 0 — the two-enthalpy header as an absolute datum with `hOff = 0`, the typed row with
-its enthalpy undefined (ORION keeps only the last row's read status), the decreasing `Psat` column
-unread, and the varying-cp table from 280 K through reads past the table's end. **The eight solidification cases were
+its enthalpy undefined (ORION keeps only the last row's read status), and the decreasing `Psat` column
+unread. **The eight solidification cases were
 RED first**: the binary before the solidification model stopped each of them with `solidification=on parsed but
 not implemented yet`, not their payload. **The four INI-contract
 cases were RED first** (ledger O20/O21/O26, recorded on the pre-fix binary): `method = 3` ran to

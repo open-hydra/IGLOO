@@ -10,6 +10,7 @@ program test_properties_reader
     !                 PR7 abs-: "Enthalpy_abs" is the enthalpy column, with its datum
     !                 PR4 validate_psat_column, PR5 check_table_nodes, PR8 classify_table_tokens,
     !                 PR11 check_table_columns, PR12 tableValue, PR13 scan_rows (scan-*.dat)
+    !                 PR14 comp_TfromTab: the inverse of lookupTab on tables from 250 K, 300 K and 1 K
     !   two-material  PR9 nm-: zone A tabulated, zone B all zero (Clausius-Clapeyron)
     !   atlas-water   PR10 atlas-: the table ATLAS GPB writes for water with psat-vapour = H2O
     !
@@ -17,7 +18,8 @@ program test_properties_reader
     use IGLOO_IO_INI,         only: read_IGLOO_input
     use IGLOO_IO,             only: read_cdp_properties
     use IGLOO_data_phases,    only: obj_material
-    use IGLOO_Lib_Properties, only: Tmin, Tmax, tableValue, validate_psat_column, check_table_nodes, &
+    use IGLOO_Lib_Properties, only: Tmin, Tmax, tableValue, lookupTab, comp_TfromTab, &
+                                    validate_psat_column, check_table_nodes, &
                                     classify_table_tokens, check_table_columns, scan_rows, nzone_max, &
                                     TAB_OK, TAB_NO_TEMPERATURE, TAB_NO_CP, TAB_NO_DENSITY, TAB_NO_ENTHALPY, &
                                     TAB_TWO_ENTHALPY, TAB_DUPLICATE, TAB_FEW_ROWS, TAB_OFF_NODE, TAB_NONFINITE, &
@@ -45,6 +47,7 @@ program test_properties_reader
     case ('hexadecane')
         call hexadecane_legs(nbad)
         call function_legs(nbad)
+        call inversion_legs(nbad)
     case ('two-material')
         call two_material_legs(nbad)
     case ('atlas-water')
@@ -320,6 +323,95 @@ contains
         call check(nzone == 2 .and. nsize == 2 .and. ndata == 2 .and. all(nannounced(1:2) == 620) .and. &
                    all(nrows(1:2) == 620) .and. ntrail == 0 .and. badline == 0, 'PR13 two zones of 620 rows: clean', nbad)
     end subroutine function_legs
+
+
+    !> comp_TfromTab against lookupTab on tables that start above 1 K, and ICE's energy rule on the same table.
+    subroutine inversion_legs(nbad)
+        integer, intent(inout) :: nbad
+        real(R8) :: hA(250:260), hB(300:301), hC(1:5), Ts(2), nan, hOff, eLo, eHi, e, Tice, h, T
+        integer  :: k, lo0, hi0
+        logical  :: ok
+
+        lo0 = Tmin; hi0 = Tmax
+        nan = ieee_value(1._R8, ieee_quiet_nan)
+
+        ! 250..260 K: cp = 1000 + 10 (T - 250), h its trapezoid sum from h(250) = 2.5e5
+        hA(250) = 2.5e5_R8
+        do k = 251, 260
+            hA(k) = hA(k-1) + 0.5_R8*((1000._R8 + 10._R8*real(k-251, R8)) + (1000._R8 + 10._R8*real(k-250, R8)))
+        enddo
+        Tmin = 250; Tmax = 260
+        ok = .true.
+        do k = 250, 260
+            ok = ok .and. comp_TfromTab(hA, hA(k)) == real(k, R8)
+        enddo
+        call check(ok,                                                  'PR14 250..260 K: every node, exactly', nbad)
+        call check(roundtrip(hA, [250.25_R8, 254.5_R8, 259.999_R8]),    'PR14 250..260 K: between the nodes', nbad)
+        call check(roundtrip(hA, [245.5_R8, 200._R8]),                  'PR14 250..260 K: below Tmin, the first segment extended', nbad)
+        call check(roundtrip(hA, [263.25_R8, 300._R8]),                 'PR14 250..260 K: above Tmax, the last segment extended', nbad)
+        call check(ieee_is_nan(comp_TfromTab(hA, nan)),                 'PR14 a NaN enthalpy: NaN', nbad)
+
+        ! ICE's e = h - hOff, hOff = h(Tmin) - Tmin (h(Tmin+1) - h(Tmin)): the line from e(0) = 0 below Tmin,
+        ! the last segment above Tmax, forward and inverse
+        hOff = hA(250) - 250._R8*(hA(251) - hA(250))
+        eLo = hA(250) - hOff
+        eHi = hA(260) - hOff
+        ok = .true.
+        Ts = [245.5_R8, 200._R8]
+        do k = 1, 2
+            e    = eLo*(Ts(k)/250._R8)
+            h    = lookupTab(hA, Ts(k))
+            Tice = 250._R8*((h - hOff)/eLo)
+            T    = comp_TfromTab(hA, h)
+            ok = ok .and. abs(e + hOff - h) <= 4._R8*epsilon(1._R8)*abs(h) .and. &
+                 abs(T - Tice) <= 4._R8*epsilon(1._R8)*(abs(h)/(hA(251) - hA(250)) + abs(T))
+        enddo
+        Ts = [263.25_R8, 300._R8]
+        do k = 1, 2
+            e    = eHi + (eHi - (hA(259) - hOff))*(Ts(k) - 260._R8)
+            h    = lookupTab(hA, Ts(k))
+            Tice = 260._R8 + ((h - hOff) - eHi)/(eHi - (hA(259) - hOff))
+            T    = comp_TfromTab(hA, h)
+            ok = ok .and. abs(e + hOff - h) <= 4._R8*epsilon(1._R8)*abs(h) .and. &
+                 abs(T - Tice) <= 4._R8*epsilon(1._R8)*(abs(h)/(hA(260) - hA(259)) + abs(T))
+        enddo
+        call check(ok,                                                  'PR14 250..260 K: ICE''s energy rule outside the table', nbad)
+
+        ! two rows, 300..301 K
+        hB = [3.0e5_R8, 3.0e5_R8 + 1005._R8]
+        Tmin = 300; Tmax = 301
+        call check(comp_TfromTab(hB, hB(300)) == 300._R8 .and. comp_TfromTab(hB, hB(301)) == 301._R8, &
+                   'PR14 300..301 K: both nodes, exactly', nbad)
+        call check(roundtrip(hB, [300.5_R8, 299._R8, 290._R8, 305._R8]), 'PR14 300..301 K: between, below and above', nbad)
+
+        ! 1..5 K, an enthalpy below h(1 K)
+        hC(1) = 1000._R8
+        do k = 2, 5
+            hC(k) = hC(k-1) + 0.5_R8*((1000._R8 + 10._R8*real(k-2, R8)) + (1000._R8 + 10._R8*real(k-1, R8)))
+        enddo
+        Tmin = 1; Tmax = 5
+        call check(roundtrip(hC, [0.5_R8, 2.75_R8]),                    'PR14 1..5 K: below 1 K and between the nodes', nbad)
+
+        Tmin = lo0; Tmax = hi0
+    end subroutine inversion_legs
+
+
+    !> lookupTab then comp_TfromTab returns every T within 4 eps (|h|/s + |T|), s the table's smallest slope.
+    logical function roundtrip(tab, Ts)
+        real(R8), intent(in) :: tab(Tmin:Tmax), Ts(:)
+        real(R8) :: h, s, T
+        integer  :: k
+        s = minval(tab(Tmin+1:Tmax) - tab(Tmin:Tmax-1))
+        roundtrip = .true.
+        do k = 1, size(Ts)
+            h = lookupTab(tab, Ts(k))
+            T = comp_TfromTab(tab, h)
+            if (.not. abs(T - Ts(k)) <= 4._R8*epsilon(1._R8)*(abs(h)/s + abs(Ts(k)))) then
+                write(*,'(a,es24.16,a,es24.16)') '         T = ', Ts(k), ' returned ', T
+                roundtrip = .false.
+            endif
+        enddo
+    end function roundtrip
 
 
     subroutine check(cond, name, nbad)

@@ -204,9 +204,6 @@ contains
         allocate(mat%cpTab(Tmin:Tmax))
         mat%cpTab(Tmin:Tmax) = blk%vars(icp,:,1,1)
       endif
-      !> the enthalpy-to-temperature inversion of a varying cp starts at 1 K
-      if (mat%cpVariable .and. Tmin > 1) &
-        call refuse_table(tablefile, trim(zone_label(i, mat%matName))//'a varying Cp column needs rows from T = 1 K')
       if (all((blk%vars(irho,2:Ni,1,1)-blk%vars(irho,1:Ni-1,1,1))==0._R8)) then
         mat%rho = blk%vars(irho,1,1,1)
       else

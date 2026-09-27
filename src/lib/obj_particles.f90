@@ -280,7 +280,7 @@ contains
 
   end subroutine initializeCell
 
-  !> Refreshes the derived particle state (T or h, mass, npdot, d, euler integrals) from stateVar.
+  !> Refreshes the derived particle state (T, h when cp varies, mass, npdot, d, euler integrals) from stateVar.
   pure subroutine updatePart(self,rhoTab,hTab,eulerSwitch)
     use IGLOO_variables, only: sixOverPi, oneThird
     implicit none
@@ -290,7 +290,7 @@ contains
     integer :: nE
     
     ! Temperature or enthalpy
-    if (self%varCp) then; self%hp = self%stateVar(7) 
+    if (self%varCp) then; self%hp = self%stateVar(7); self%Tp = comp_TfromTab(hTab,self%hp)
     else;                 self%tp = self%stateVar(7); endif
     ! Model-dependent physics state
     select case(self%model)
@@ -302,7 +302,6 @@ contains
     case(6); self%fSolid = self%stateVar(8)
     end select
     if (self%model/=1) then
-      if (self%varCp)  self%Tp  = comp_TfromTab(hTab,self%hp)
       if (self%varRho) self%rho = lookupTab(rhoTab,self%Tp)
       self%d = (sixOverPi*self%m/self%rho)**oneThird
     endif

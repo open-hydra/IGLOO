@@ -45,21 +45,32 @@ contains
 
   end function lookupTab
 
-  !> Inverts a monotonic property table: T such that tab(T) = prop.
+  !> Inverse of lookupTab on an increasing table: the end segments extended, the bracketing node by bisection.
   pure function comp_TfromTab(tab,prop) result(T)
     implicit none
     real(8), intent(in) :: prop, tab(Tmin:Tmax)
     real(8) :: T
-    integer :: i
+    integer :: i, j, k
 
-    T = 1.0
-    i = 1
-    do while (T<Tmax)
-      if (tab(i)>prop) exit 
-      T = T + 1.0     
-      i = i + 1
-    enddo
-    T = T + (prop-tab(i))/(tab(i)-tab(i-1))
+    if (prop /= prop) then
+      T = prop
+    elseif (prop < tab(Tmin)) then
+      T = real(Tmin,8) + (prop-tab(Tmin))/(tab(Tmin+1)-tab(Tmin))
+    elseif (prop >= tab(Tmax)) then
+      T = real(Tmax,8) + (prop-tab(Tmax))/(tab(Tmax)-tab(Tmax-1))
+    else
+      i = Tmin
+      j = Tmax
+      do while (j-i > 1)
+        k = (i+j)/2
+        if (tab(k) <= prop) then
+          i = k
+        else
+          j = k
+        endif
+      enddo
+      T = real(i,8) + (prop-tab(i))/(tab(i+1)-tab(i))
+    endif
 
   end function comp_TfromTab
 
