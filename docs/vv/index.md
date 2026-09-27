@@ -159,6 +159,7 @@ solver could only emulate with a no-drag production flag.  See
 | [Reitz–Diwakar breakup (validation)](../vv/e2e.md#reitz-diwakar-e2e) | 25-drop radius-based We sweep ($We_r$ 8–1000) across the bag$\to$stripping handoff vs RD 1987 (SAE 870598) | Initial $\mathrm{d}d/\mathrm{d}t$ per drop vs the RD closed form for its regime (bag/stripping) | 25/25 within 0.1 % |
 | Al combustion (`combustion/burn-box`) | Beckstead $d^n$ burn law (model 5) | Closed-form burn-time kernel + independent RK4 energy balance + mass telescoping | all gates pass |
 | [Solidification](../vv/e2e.md#solid-box) (`solidification/solid-box`) | Supercooling, recalescence, freezing plateau and solid cooling of molten droplets (model 6) | Closed forms of every regime, the event position, the global energy telescoping and the per-cell plateau heat; plus the Eulerian twin, a two-material run and the two-sweep case | 25/25 parcels; plateau heat per cell within the $\dot m$ print floor |
+| [Melting](../vv/e2e.md#solid-melt) (`solidification/solid-melt`) | Solid particles in a gas hotter than $T_m$: solid heating, melting plateau, liquid heating (model 6) | Closed forms of every regime, the melt and liquid points, the exit temperature, the global energy telescoping and the per-cell heat taken from the gas | 25/25 parcels, none lost; exit within 1.2e-4 K; plateau heat per cell within the $\dot m$ print floor |
 | DB injection | Assigned-position particle placement, `vInj` hand-off, Stokes velocity relaxation, domain exit | Placement fidelity + analytic Stokes relaxation | 5/5 particles |
 | Coupled outputs (`infrastructure/coupled-body`) | euler + source + body-force accumulators together (model 1) | Body-force $v(x)$ + source totals vs closed forms (drag-reaction-only deposit) | agreement ~4·10⁻⁷ |
 | 2Daxi + DB (`infrastructure/db-2daxi`) | Axisymmetric wedge, real MOSE gas field, DB injection, euler-only output | Behavioral (both particles integrate to the outlet, fields finite) | pass |
@@ -191,7 +192,7 @@ solver could only emulate with a no-drag production flag.  See
 | Property tables | `properties.dat` read by column name (PR1–PR3, PR6, PR7, PR9, PR10), its header, row, node, column and `Psat` checks (PR4, PR5, PR8, PR11–PR13), and the enthalpy-to-temperature inversion of a varying $c_p$ (PR14) | `test_properties_reader` (three working directories); five `refuse-properties-*` cases; `temp-relax-varcp` and `varcp-tmin` e2e |
 | Breakup (TAB/ETAB/RD/PE/KHRT) | All five models vs the primary papers (PE87, TAB-872089, Tanner 97/98, Reitz-87, RD-860469, Beale-Reitz-99) | 8 unit tests (including `test_tab_moments` and the ETAB child $v_\perp = A\dot{x}$ check ET4); five Weber-sweep e2e cases |
 | Combustion | Beckstead $d^n$ Al burn law | `test_combustion` (CB1–CB4) + `burn-box` e2e |
-| Solidification | Supercooling, recalescence and freezing plateau (model 6) | `test_solidification` (SG0–SG6) + `solid-box`, `solid-box-euler`, `solid-box-2mat`, `scatter-weight-solid` e2e, `repeat-solid-box` |
+| Solidification | Supercooling, recalescence, freezing plateau and melting (model 6) | `test_solidification` (SG0–SG9) + `solid-box`, `solid-melt`, `solid-box-euler`, `solid-box-2mat`, `scatter-weight-solid` e2e, `repeat-solid-box` |
 
 ---
 

@@ -358,6 +358,22 @@ $\dot m$ print floor (3e-7).
   {% include "vv/images/solid-box.svg" ignore missing %}
 </figure>
 
+### solid-melt
+
+Melting (model 6): solid particles injected at 1500 K, below $T_n$, into the box gas at
+3000 K at the gas velocity ($\mathrm{Re}=0$, $\mathrm{Nu}=2$) heat as solids to $T_m$,
+melt there on the plateau at the latent-heat rate
+$m\,h_\mathrm{fus}\,df/dt = -\pi d k_g \mathrm{Nu}(T_g - T_m)$ until $f = 0$, and heat as
+liquids.  Every regime is a closed form of the inputs in $x = u_g t$; the gates check the
+solid and liquid relaxations, the plateau rows between the melt and liquid points, the
+exit temperature against the closed form within the chord bound of the interpolated melt
+event, the global energy balance of the source field, the heat taken from the gas in every
+plateau cell, and that no parcel is lost or stalled at a phase boundary.
+
+**Result:** 25/25 parcels in all three regimes; exit temperature within 1.2e-4 K of the
+closed form (2611.7044 K); energy balance and plateau heat within the $\dot m$ print
+floor (3e-7).
+
 ---
 
 ## Run-conditioned kernel verification

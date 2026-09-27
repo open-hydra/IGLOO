@@ -46,7 +46,7 @@ tests/
 ├── evaporation/                  # unit families: (root)  interface-neq/  tc-analytic/  evap-breakup/
 │   └── d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/     # e2e
 ├── combustion/                   # unit family (root) + burn-box/ (e2e)
-├── solidification/               # unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
+├── solidification/               # unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 ├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
 │   └── tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/   # e2e
 ├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/
@@ -97,9 +97,9 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 152/152 in a serial build (115 e2e + 36 unit, `self_test` and `registry-docs` among the latter, and the
+ctest 153/153 in a serial build (116 e2e + 36 unit, `self_test` and `registry-docs` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 7 more `mpi-*` cases, 159/159. The e2e entries are 70 solver cases, two further
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 7 more `mpi-*` cases, 160/160. The e2e entries are 71 solver cases, two further
 oracles on `khrt-e2e`'s run, the twelve two-sweep gates and the thirty-one setup refusals; the unit entries are 31
 compiled unit tests, the property-table reader on three fixtures, `self_test` and `registry-docs`. Evaporation with
 ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,
