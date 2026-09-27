@@ -5,11 +5,11 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ temp-relax-varcp/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ scatter-weight/ vortex-cloud-st{0p01,0p1,1,10}/ (e2e; + vortex-cloud-3way, optional)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ temp-relax-varcp/ temp-relax-varrho/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ scatter-weight/ vortex-cloud-st{0p01,0p1,1,10}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
-#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ khrt-evap-frozen/ khrt-shed-noexchange/
+#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ khrt-evap-frozen/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ varcp-tmin/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},bc-copies,bc-copy-order,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
 #   repeatability/      two-sweep gates (twosweep driver): 12 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
@@ -297,6 +297,8 @@ igloo_e2e_case(drag-stokes standard/drag-stokes "e2e;standard;drag")
 igloo_e2e_case(temp-relax  standard/temp-relax  "e2e;standard;heat")
 # temp-relax-varcp: the enthalpy state on a varying-cp table from 250 K; heating and cooling below, inside and above it.
 igloo_e2e_case(temp-relax-varcp standard/temp-relax-varcp "e2e;standard;heat")
+# temp-relax-varrho: the same with a varying density; the diameter follows d(T) at constant mass.
+igloo_e2e_case(temp-relax-varrho standard/temp-relax-varrho "e2e;standard;heat")
 igloo_e2e_case(body-force  standard/body-force  "e2e;standard;drag")
 igloo_e2e_case(conv-nu     standard/conv-nu     "e2e;standard;heat")
 igloo_e2e_case(vie-plait   standard/vie-plait   "e2e;standard;drag;gas")
@@ -505,6 +507,11 @@ igloo_e2e_case(khrt-evap-frozen breakup/khrt-evap-frozen "e2e;breakup;evaporatio
 # khrt-shed-noexchange: the khrt-e2e case with NoDrag and NoHeat, so a KH shed is the only exchange left:
 # every cell of the source field must be zero. RED while the shed cell receives the child's birth flux.
 igloo_e2e_case(khrt-shed-noexchange breakup/khrt-shed-noexchange "e2e;breakup;khrt;source")
+# tab-varrho, tab-evap-frozen-varrho, khrt-varrho: tab-e2e, tab-evap-frozen and khrt-e2e with a density that
+# varies with temperature and heating drops: the mass is kept between events and conserved across them.
+igloo_e2e_case(tab-varrho breakup/tab-varrho "e2e;breakup;tab")
+igloo_e2e_case(tab-evap-frozen-varrho breakup/tab-evap-frozen-varrho "e2e;breakup;evaporation;tab")
+igloo_e2e_case(khrt-varrho breakup/khrt-varrho "e2e;breakup;khrt")
 
 # Thread-invariance of the KH-shed path (A23/S4-D1): the drain runs after an OMP region and
 # unitTraj/unitExit are written from inside it. Established green while the one-shed cap was

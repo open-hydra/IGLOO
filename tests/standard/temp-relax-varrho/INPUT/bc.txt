@@ -1,0 +1,1 @@
+../../temp-relax-varcp/INPUT/bc.txt

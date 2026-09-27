@@ -92,7 +92,7 @@ contains
     logical  :: solidEv
     real(R8) :: sEv
     integer  :: whichEv
-    real(R8) :: timeLocal, din, dout, deltaS(3), dir(3), taup
+    real(R8) :: timeLocal, din, dout, deltaS(3), dir(3), taup, tEvt, rhoEvt
     integer  :: err, nDL, innerIter, jSlot
     integer,  parameter :: maxInnerIter=10, nStep=10
     !> Hard cap on child parcels one parent may shed in one call.
@@ -519,22 +519,28 @@ contains
           if (allocated(eventLocal)) then
             part%npold = oldEvLocal(ind_evn)
             call unpackEventVar(eventLocal, part, neventvar)
+            !> The density at the segment-end state, the one the event block derived d with.
+            rhoEvt = part%rho
+            if (mod_propFlags(2)) then
+              if (mod_propFlags(1)) then; tEvt = comp_TfromTab(hTab,y(7)); else; tEvt = y(7); endif
+              rhoEvt = lookupTab(rhoTab, tEvt)
+            endif
             !> Resync the frozen per-droplet d and m in auxLocal after an event.
             if (ind_d > 0) auxLocal(ind_d) = part%d
             if (ind_m > 0 .and. mod_model /= 3) then
-              part%m          = part%rho * part%d**3 / sixOverPi
+              part%m          = rhoEvt * part%d**3 / sixOverPi
               auxLocal(ind_m) = part%m
             endif
             !> Model 3: push the event's npdot into y(8) and re-derive mdot from (d, npdot).
             if (eventFlag .and. mod_model == 3 .and. part%d > 0._R8 .and. ind_m > 0) then
               part%stateVar(8) = part%npdot
               part%oldState(8) = part%npdot
-              part%mdot        = part%npdot * part%rho * part%d**3 / sixOverPi
+              part%mdot        = part%npdot * rhoEvt * part%d**3 / sixOverPi
               auxLocal(ind_m)  = part%mdot
             endif
             !> Models 2 and 4: the event's droplet mass (and model-4 npdot) become the ODE state.
             if (eventFlag .and. (mod_model == 2 .or. mod_model == 4) .and. part%d > 0._R8) then
-              part%m           = part%rho * part%d**3 / sixOverPi
+              part%m           = rhoEvt * part%d**3 / sixOverPi
               part%stateVar(8) = part%m
               part%oldState(8) = part%m
               if (mod_model == 4) then

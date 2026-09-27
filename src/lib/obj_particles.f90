@@ -301,7 +301,7 @@ contains
              self%npdot = self%stateVar(9)
     case(6); self%fSolid = self%stateVar(8)
     end select
-    if (self%model/=1) then
+    if (self%model/=1 .or. self%varRho) then
       if (self%varRho) self%rho = lookupTab(rhoTab,self%Tp)
       self%d = (sixOverPi*self%m/self%rho)**oneThird
     endif
