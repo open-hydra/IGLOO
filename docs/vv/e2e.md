@@ -172,6 +172,24 @@ the gross.  A temperature left at its injection value while the enthalpy evolves
 (worst 237 K off); an inversion that reads before the table's first row puts the 210 K group up to
 1.87 K off.
 
+### temp-relax-varrho
+
+Verifies that a parcel whose density varies with temperature keeps its mass and that its diameter follows
+the density: `temp-relax-varcp`'s case with $\rho = 2950 - 0.5\,(T - 250)$ kg/m³.  With no mass exchange
+$d(T) = (6m/(\pi\rho(T)))^{1/3}$, and the heat flux $\mathrm{Nu}\,k_g\,\pi\,d(T)\,(T_g - T)$ follows it; the
+reference $T(x)$ inverts $t(T) = \int s\,m/(\mathrm{Nu}\,k_g\,\pi\,d(T)\,(T_g - T))\,\mathrm{d}T$ by Gauss-Legendre
+quadrature on each table segment.  The printed diameter is compared with $d(T)$ on every row, to print
+precision.  The breakup counterparts `tab-varrho`, `tab-evap-frozen-varrho` and `khrt-varrho` (the
+`tab-e2e`, `tab-evap-frozen` and `khrt-e2e` cases with $\rho = 1000 - 0.8\,(T - 270)$ and drops injected at
+270 K) require the mass to stay constant between breakup events and the stream mass to be conserved across
+them: no mass to the gas, and the exit mass-flow total.
+
+**Result:** 25/25 parcels, the printed diameter within print precision of $d(T)$; the TAB masses constant
+between events, $\lvert\dot w\rvert$ 2.2e-18 of the injected flow, the KHRT exit mass flow within 6e-7.  A model-1
+parcel printing its injection diameter fails every heated row; a mass resynced at a stale density drifts by
+12.75 % (TAB, model 1) or moves the stream mass at every event ($\lvert\dot w\rvert$ 1.2e-9 of the flow; exit
+mass flow +3.68e-4).
+
 ### body-force
 
 Verifies the transverse body-force acceleration with exact linear Stokes drag

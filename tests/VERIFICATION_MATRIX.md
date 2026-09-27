@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (144 in a serial build: 107 e2e + 36 unit incl. `self_test` and
+One row per registered CTest entry (148 in a serial build: 111 e2e + 36 unit incl. `self_test` and
 `registry-docs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 7 `mpi-*` rows in their own
-section, 151).
+section, 155).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,16 +30,16 @@ Columns:
 
 ---
 
-## Shared box fixture (35 of 62 e2e fixtures)
+## Shared box fixture (36 of 66 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
 writes with its defaults.
 
-Thirty-five fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
+Thirty-six fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other twenty-seven:
+once here, referenced as **"shared box"** below. The other thirty:
 
 - non-uniform gas (eleven): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
@@ -48,11 +48,11 @@ once here, referenced as **"shared box"** below. The other twenty-seven:
   swirl `W = Ωy`); `vie-plait` (120×50×5 cells, analytic `−ε(y−1)`, `tools/make_vie_case.py`); the four
   `vortex-cloud-st*` cases (a 96×96 planar square carrying a frozen solid-body vortex,
   `tools/make_vortex_case.py`);
-- uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (eleven):
+- uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (fourteen):
   `pilch-erdman-e2e`, `reitz-diwakar-e2e`, `rd-evap-frozen`, `khrt-e2e`, `khrt-stress`,
-  `khrt-evap-frozen` and `khrt-shed-noexchange` on the 0.15 m box at U=200 m/s, T=300 K (the Weber
-  sweeps); `tab-e2e`, `tab-evap-frozen` and `etab-e2e` on a 0.6 m × 240-cell box at U=50 m/s, T=300 K
-  (the TAB/ETAB onset); `evap-breakup-box` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
+  `khrt-evap-frozen`, `khrt-shed-noexchange` and `khrt-varrho` on the 0.15 m box at U=200 m/s, T=300 K (the
+  Weber sweeps); `tab-e2e`, `tab-evap-frozen`, `tab-varrho`, `tab-evap-frozen-varrho` and `etab-e2e` on a
+  0.6 m × 240-cell box at U=50 m/s, T=300 K (the TAB/ETAB onset); `evap-breakup-box` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
   (`--t-gas --kt`);
 - uniform gas on another mesh (five): `mhb98-water` and `mhb98-water-psat` (a `make_box_case.py`
   variant lengthened to 0.17 m at the same Δx: water in air at T_G=298 K with a near-static
@@ -85,6 +85,7 @@ oracle possible.
 | **drag-stokes** | `[CGW78]`,`[SN33]` (Stokes limit) | *closed form* — exact Stokes velocity relaxation x(u)=x_a−u_g·τ·ln[(u−u_g)/(u_a−u_g)]−τ(u−u_a), τ=ρ_p d²/18μ; precomputed to `reference/stokes.txt`, recomputed in `check.py` | shared box | inlet-face 401; κ_v=0.1 (90% axial slip), κ_t=1.0 (no thermal slip), d=11.89 µm, ρ_p=2950; outlet + walls |
 | **temp-relax** | `[RM52]` | *closed form* — lumped-capacitance Nu=2 relaxation T(x)=T_g+(T_p0−T_g)e^{−x/L}, L=u_g·ρ_p·c_p·d²/(12k_g); `reference/nu2.txt` | shared box | inlet-face 401; κ_v=1.0 (Re=0, drag off), κ_t=0.5 (T_p0=300 K, ΔT=300), d=11.89 µm; outlet + walls |
 | **temp-relax-varcp** | `[RM52]` (Nu = 2); the table's piecewise-linear h(T) | *closed form* — the enthalpy state dh/dt = K(T_g − T), K = 6·Nu·k_g/(ρ_p d²), on a varying-cp table from 250 K: on a segment of slope s the temperature relaxes exponentially over u_g·s/K, and the segments (the end ones extended) are marched from each parcel's first row. V1 every row with \|T − T_g\| > 1 K within the F12.6 truncation carried through the march (worst 0.013 of the tolerance), V2 every exit (0.014), V3 ΣE = Σṁ[h(T₀) − h(T_exit)] to 1e-6 of the gross (6.4e-9), V4 the guards and every parcel of the four groups. RED: refused at setup (exit 128); with the table extended down to 1 K the printed temperature stayed at T₀ on every row (1475 rows and 25 exits off, worst 237 K); the inversion that searched from index 1 put the 210 K group up to 1.87 K off | shared box (`solfile.tec` symlinked from `temp-relax`) | inlet-face 401; κ_v=1.0 (Re=0), κ_t by inlet row 0.35/0.5/1.25/1.25/1.4 (T_p0 = 210/300/750/750/840 K), d=16 µm; own `properties.dat` on 250..800 K, cp = 1000 + (T − 250), ρ_p = 2950 |
+| **temp-relax-varrho** | `[RM52]` (Nu = 2); the table's h(T) and ρ(T) | *reference by quadrature* — `temp-relax-varcp` with ρ = 2950 − 0.5(T − 250): a model-1 parcel keeps its mass, so d(T) = (6m/(πρ(T)))^(1/3) and the heat flux follows it; `T(x)` inverts t(T) = ∫ s m / (Nu k_g π d(T)(T_g − T)) dT (Gauss-Legendre per table segment). V1 T rows (worst 0.033 of the tolerance), D1/D2 the printed d against d(T_ref) and d(T) (0.991/0.999, print precision), M the mass constant. RED while model 1 printed its injection diameter: 2950 violations, 16.0000 µm printed at 597 K where d(T) = 16.3633 µm; the temperature right | shared box (`solfile.tec` symlinked from `temp-relax`) | as `temp-relax-varcp` (`bc.txt` symlinked); own `properties.dat` |
 | **body-force** | analytic (body-accel model) | *closed form* — transverse terminal drift v(x)=v_∞(1−e^{−x/L}), v_∞=g_y·τ, L=u_g·τ (linear Stokes, `toll=1e-20`); `reference/drift.txt` | shared box + `body-accel=(0,−200,0)` m/s² | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; outlet + walls |
 | **conv-nu** | `[RM52]` | *closed form* — Ranz–Marshall Nu=2+0.6 Re^{1/2}Pr^{1/3} at **constant** slip (parcel injected at body-force terminal velocity ⇒ Re, Nu fixed), T(x)=T_g+(T_a−T_g)e^{−(x−x_a)/L}, L=u_g·τ_T; `reference/nu_re.txt` | shared box + `body-accel=(0,−200,0)` | inlet-face 401 at terminal velocity: κ_v=1.00033, α=−0.02574 rad, κ_t=0.5, d=11.89 µm; outlet + walls |
 | **vie-plait** | `[Vie15]` | *closed form* (derived from ODE + IC, not the paper's typeset Eq. 5.4 which has a sin sign typo; scipy-validated to 1e-13) — anchored damped oscillator y(x)=1+e^{−t/2τ}[Y_a cos ωt+((V_a+Y_a/2τ)/ω)sin ωt], t=(x−x_a)/u_g0, ω=√(ε/τ−1/4τ²); recomputed in `check.py` | **NON-UNIFORM** box (first such e2e): x∈[0,6], y∈[0,2], z thin; 120×50×5; U=u_g0=0.2 uniform, **V=−ε(y−1)** (ε=1, compressive, linear in y), W=0. **`gas-order=2` required** (2nd-order rebuild; order 1 = staircase) | **assigned-position (DB)** injection: 6 parcels at x=0.125, z=0.025, y∈{0.5,0.7,0.9,1.1,1.3,1.5} (cell centres), up=0.2/vp=0 (U_p0=u_g0, V_p0=0); τ=5 s via ρ_p=1620 (local `properties.dat`), d=1 mm ⇒ St=5; outlet + walls (never hit) |
@@ -127,6 +128,9 @@ oracle possible.
 | **tab-evap-frozen** | `[ORA87]` | as `tab-e2e` (its `check.py`) under model 2 (TAB events, evaporation zero), plus max\|`wdot`\| ≤ 1e-12 of the injected flow (1.8e-18). RED unfixed (0 broken drops, `wdot` 4e16 of the injected flow) | as `tab-e2e` | as `tab-e2e` + `evaporation=d2-law`, water vapour properties, `Yinf = 1` |
 | **khrt-evap-frozen** | `[Reitz87]` | the `khrt-e2e` oracles under model 4 (evaporation zero): KH rate (2.18e-4), RT persistence (134 shatters), children (241), and \|Σ`wdot`\| ≤ 1e-9 of the injected flow (1.2e-10); the exit-flow totals are not run (outloc column 7 of model 4 is the injected or birth flow). RED unfixed (KH rate 0, no RT persisting, no child), events not written back (RT 0, Σ`wdot` −0.072 kg/s), shed flux deposited (Σ`wdot` +0.077 kg/s) | as `khrt-e2e` | as `khrt-e2e` + `evaporation=d2-law`, water vapour properties, `Yinf = 1` |
 | **khrt-shed-noexchange** | `[CSS77]`,`[Reitz87]` | *cell-local zero* — `khrt-e2e` with `NoDrag`/`NoHeat`: a KH shed is the only exchange left, and every cell of the five `source.tec` fields must be ≤ 1e-12 of the flux scale (measured 1.1e-16); witnesses 553 children, every row at u = 100, T = 300, no RT shatter. RED when the parent deposits the child's birth flux (472/1500 cells, 2.3e-3 of the flux scale; Σ`Fx` = 100 m/s × the children's birth flow) | as `khrt-e2e` | as `khrt-e2e` with `drag=NoDrag`, `heat=NoHeat`, `mollify = off` |
+| **tab-varrho** | `[ORA87]` (the event's constant stream mass) | *invariant* — `tab-e2e` (model 1) with ρ = 1000 − 0.8(T − 270) on 1..1000 K and injection at 270 K: between breakup events the printed mass is constant to print precision (it changes only by ≥ 10 % at a breakup; the smallest measured is 89 %), and the printed d is (6m/(πρ(T)))^(1/3) on every row (worst 0.987 of the tolerance); 18 of 25 parcels break. RED while the segment-end resync took the injection density: 10664 violations, parcel 1's mass +12.75 % over 270 → 271.16 K | as `tab-e2e` | `tab-e2e`'s `bc.txt` with κ_t 0.9; own `properties.dat` |
+| **tab-evap-frozen-varrho** | `[ORA87]` | *invariant* — `tab-evap-frozen` (model 2, evaporation zero) with `tab-varrho`'s inputs: `tab-varrho`'s mass and diameter gates plus the source gate, every cell's `wdot` ≤ 1e-12 of the injected flow (measured 2.2e-18). RED while the event's mass took the previous segment end's density: max \|wdot\| 1.2e-9 of the flow | as `tab-e2e` | `tab-varrho`'s (INPUT symlinked) |
+| **khrt-varrho** | `[Reitz87]` | *conservation* — `khrt-e2e` (model 3) with `tab-varrho`'s density table and injection at 270 K: the exit mass-flow total at 1e-5 (measured 5.98e-7, the E13.6 floor), the source budgets (no mass; momentum and energy of the in/out flows) and `tab-varrho`'s diameter gate. RED while the event's stream mass flow took the previous segment end's density: +3.68e-4 | as `khrt-e2e` | `khrt-e2e`'s `bc.txt` with κ_t 0.9; `tab-varrho`'s `properties.dat` |
 | **db-injection** | infrastructure (no paper; bug-B1 regression) | *behavioral* — no reference curve; asserts placement fidelity, `vInj` hand-off (u starts at u_p=1), Stokes relaxation, and domain exits | shared box | **assigned-position (DB)** injection: 5 parcels at explicit x=0.01, y=0.005…0.045, z=0.025, u_p=1.0 m/s, d=11.89 µm, ṁ=1e-4, T=300 K; outlet + walls |
 | **coupled-body** | analytic (euler+source+body) | *mixed* — body-force v(x) closed form (as body-force) **plus** source-deposit totals vs closed forms: the deposit must be the drag reaction only (body-gained momentum/energy stripped) | shared box + `body-accel=(0,−200,0)`; euler+source accumulators ON (default `out-file`) | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; outlet + walls |
 | **db-2daxi** | infrastructure (no paper; promoted legacy `assigned-pos`) | *behavioral*, md5-free — both parcels integrate, exit the nozzle outlet, all fields finite; no analytic oracle (real flow field). Since 2026-09-16 (O16) the ord2 eulerian deposit is audited as in `axis-200`: E1 mass retention total and per parcel 1.001438 / 1.000821 / 1.001482 ± 1e-4 (floor zero; the unclipped-dual defect reads 1.001230 / 1.000453 / 1.001285, a factor-2 field 2.0), E3 per-drop mass identity with two admissible masses (d = 1e-4 / 2e-5: 4691 / 5013 cells, 232 mixed, 0 outside to 1e-12), E4 outlet-band share 2.514026e-3 ± 1e-3 rel (unclipped dual −7.3 %); no E2 (both parcels off-axis) | **NON-UNIFORM real MOSE nozzle**: `common/solfile_mose.tec`, single block I=201×J=181×K=2 (2-D axisymmetric wedge, one cell thick), ~6×10⁵ distinct field values; spatially varying ρ/U/T (~300–3600 K). Drag=Morsi-Alexander, heat=Kavanau-Drake | **assigned-position (DB)** injection: 2 parcels x=[−0.49,0.064], y=[0.55,0.66], d=[1e-4,2e-5], ṁ=[0.1,1.0]; face1 inlet, face2 outlet, **face3 symmetry** (axisymmetric fold), face4 wall; euler-only output |
@@ -258,9 +262,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-107 `e2e`-labelled + 36 `unit`-labelled + the optional `vortex-cloud-3way` = **144 CTest entries** in a
-serial build (+7 `mpi-*` under `USE_MPI`, 151), all green (counted from `tests/CMakeLists.txt`). The 107
-`e2e` entries are the 62 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+111 `e2e`-labelled + 36 `unit`-labelled + the optional `vortex-cloud-3way` = **148 CTest entries** in a
+serial build (+7 `mpi-*` under `USE_MPI`, 155), all green (counted from `tests/CMakeLists.txt`). The 111
+`e2e` entries are the 66 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the twelve `repeat-*` two-sweep gates and the thirty-one `refuse-*` setup-refusal gates. The
 36 `unit` entries are 31 compiled unit tests, the property-table reader on its three fixtures
