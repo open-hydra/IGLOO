@@ -45,5 +45,6 @@ Unit family `test_solidification.f90`: an alumina-like particle, `ρ = 3970`, `d
 | [`solid-box`](solid-box/INFO.md) | the three regimes against their closed forms on the shared box, the event position, the energy deposit (global telescoping and the per-cell plateau heat) |
 | [`solid-box-euler`](solid-box-euler/INFO.md) | the equivalent-Eulerian field of model 6: coverage, `ρ_p/n_p = m`, `u_p`, `T_p` per cell |
 | [`solid-box-2mat`](solid-box-2mat/INFO.md) | a model-6 material followed by a model-1 one in one run |
+| [`scatter-weight-solid`](scatter-weight-solid/INFO.md) | the scatter cloud's marker count per parcel across the phase events: an event keeps the scatter weight of the part of the step it keeps |
 | `repeatability/solid-box` | two sweeps reproduce each other: the phase and the frozen fraction are re-derived at injection |
 | `infrastructure/refusals/solid-*` | the eight setup refusals of the input contract (`h-fus`, `cp-solid`, `T-nuc < T-melt`, no evaporation, combustion or breakup, constant `cp` and density) |

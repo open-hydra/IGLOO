@@ -1,0 +1,1 @@
+../../standard/scatter-weight/check.py

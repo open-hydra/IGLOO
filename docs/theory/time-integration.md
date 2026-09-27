@@ -93,8 +93,11 @@ Each outer iteration covers one cell transit:
 
 The OSlo solver calls `solout` at every accepted step.  It performs:
 
-1. **Scatter cloud** — accumulates the npdot-weight of the accepted interval; emits a
-   scatter marker whenever the running total exceeds `dNscat`.
+1. **Scatter cloud** — accumulates the npdot-weight of the accepted interval; a step that
+   stays in its cell emits one scatter marker when the running total reaches `dNscat`,
+   carrying the remainder. The total is latched with the state, so a step that `ODEsystem`
+   cuts at a face and integrates again adds its weight once, and a model-6 phase event keeps
+   the fraction of the step it keeps.
 2. **Cell-crossing detection** — `isPointInsideCell(y(1:3), vert, ...)` sets `IamOut`
    (and `sectorOut` when the point left the wedge sector); for `ord2` mode a separate
    gas-dual-cell test sets `newGas`.

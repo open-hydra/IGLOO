@@ -5,10 +5,10 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ vortex-cloud-st{0p01,0p1,1,10}/ (e2e; + vortex-cloud-3way, optional)
-#   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ scatter-weight/ vortex-cloud-st{0p01,0p1,1,10}/ (e2e; + vortex-cloud-3way, optional)
+#   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
-#   solidification/     unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ (e2e)
+#   solidification/     unit family (root) + solid-box/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ khrt-evap-frozen/ khrt-shed-noexchange/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,varcp-tmin,bad-row},bc-copies,bc-copy-order,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
 #   repeatability/      two-sweep gates (twosweep driver): 12 cases
@@ -322,6 +322,11 @@ igloo_e2e_case(swirl-wedge-spin standard/swirl-wedge-spin "e2e;standard;drag;gas
 # u and T to the last printed digit, and the momentum/energy source is exactly 0.0 in every cell.
 # RED on a binary without the two tokens: refused at setup (exit 128, nothing integrated).
 igloo_e2e_case(no-exchange standard/no-exchange "e2e;standard;drag;heat")
+# scatter-weight: drag-stokes's case (INPUT symlinked) with out-time. Each parcel's scatter markers N against
+# its residence time: floor(X) - 1 <= N <= floor(X), X = frac(ID*phi) + npdot*t_exit/dNscat, every printed
+# input taken with its half-ULP. RED when a step cut at a cell face adds its weight twice: every parcel
+# 2 to 3 markers above the bound (X about 10, about sixty cut steps per parcel).
+igloo_e2e_case(scatter-weight standard/scatter-weight "e2e;standard;scatter")
 # vortex-cloud: ICE's verification case I -- a cloud of 1672 parcels released at the gas velocity into a
 # frozen solid-body vortex, stopped at a quarter turn (time-end, out-time). Exact per parcel, z = C(t) z0:
 # every time-stamped row within 3e-6 of the closed form (floor 7e-7). One dir per Stokes number, INPUT and
@@ -368,6 +373,10 @@ igloo_e2e_case(boiling-temperature-key evaporation/boiling-temperature-key "e2e;
 # no-psat: tc-box without [IGLOO-Properties] psat, which is accepted and ignored; check.py runs tc-box
 # (psat present) as a sibling and requires identical outputs. RED on a reader requiring psat: setup stops.
 igloo_e2e_case(no-psat evaporation/no-psat "e2e;evaporation")
+# scatter-weight-evap: scatter-weight's oracle on tc-box's evaporating drops (ODE model 2, the mass an ODE
+# state, the number rate constant). RED when a cut step adds its weight twice: 22 to 23 markers above the
+# bound on every parcel (X about 91).
+igloo_e2e_case(scatter-weight-evap evaporation/scatter-weight-evap "e2e;evaporation;scatter")
 # E-VAL-2 (2026-07-21): VALIDATION vs a paper's own case — single water droplet vs
 # Miller-Harstad-Bellan 1998 Fig.2 (exp. Ranz-Marshall 1952b). Gate = IGLOO-vs-LK-kernel
 # (tight); the digitized experiment is a NON-gating overlay in verify.py.
@@ -424,6 +433,10 @@ igloo_e2e_case(solid-box solidification/solid-box "e2e;solidification")
 igloo_e2e_case(solid-box-euler solidification/solid-box-euler "e2e;solidification;euler")
 # solid-box-2mat: a model-6 material followed by a plain model-1 one, set up and integrated after it.
 igloo_e2e_case(solid-box-2mat solidification/solid-box-2mat "e2e;solidification;infrastructure")
+# scatter-weight-solid: scatter-weight's oracle on solid-box's drops (ODE model 6). A phase event keeps the part
+# of the step before the event, and the parcel keeps that part of the step's scatter weight. RED when the event
+# keeps the whole step's weight: 6 parcels one marker above the bound (2268 markers against 2262).
+igloo_e2e_case(scatter-weight-solid solidification/scatter-weight-solid "e2e;solidification;scatter")
 
 # ---------- breakup: KHRT (unblocked 2026-07-07 by the A2 fix) -----------------
 igloo_unit_test(test_breakup_khrt breakup/reitz-khrt "unit;breakup;khrt;d;t7")

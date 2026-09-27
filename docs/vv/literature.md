@@ -329,7 +329,7 @@ capacities quoted on the [Solidification](../theory/solidification.md) page; eve
 closed form of its own inputs.
 
 **Gates.** `test_solidification` (SG0–SG6); e2e companions `solid-box`, `solid-box-euler`,
-`solid-box-2mat` — see [End-to-End Cases](e2e.md).
+`solid-box-2mat`, `scatter-weight-solid` — see [End-to-End Cases](e2e.md).
 
 <figure>
   {% include "vv/images/unit-solidification-recalescence.svg" ignore missing %}

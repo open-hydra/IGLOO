@@ -51,7 +51,7 @@ fixture: `two-mat` (serial), `repeat-two-mat` (sweep 1 ≡ sweep 0 on six `.dat`
 `.tec`), `mpi-two-mat` (n = 4 × 2 threads, rank witness) and `mpi-consistency-two-mat`
 (n = 1 vs 4: six `.dat` multisets and three `.tec` fields identical).
 
-**Measured.** Serial: 25 parcels per material, 1500 trajectory rows each, 296 (A) / 386 (B)
+**Measured.** Serial: 25 parcels per material, 1500 trajectory rows each, 244 (A) / 232 (B)
 scatter rows; A's rows differ from `drag-stokes`'s in U on 94 rows — 92 by 1 ULP of F12.6 and 2 by
 2 ULP (euler on → neq = 12 vs 7 changes the step sequence) — inside the oracle's theoretical
 tolerance. Byte-inert on the 62 pre-existing entries (A/B capture, floor-only).

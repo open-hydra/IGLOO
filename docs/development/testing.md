@@ -71,11 +71,11 @@ tests/
 │   └── twosweep.f90              # the two-sweep repeatability driver
 ├── standard/                     # drag + heat
 │   ├── drag/  temperature/       #   unit families
-│   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ vortex-cloud-st{0p01,0p1,1,10}/   # e2e cases
-├── evaporation/                  # unit families (root C, interface-neq, tc-analytic, evap-breakup) + d2law/d2law-line/lk-neq/tc-box/tc-box-euler/tc-box-ord2-row/datum-abs/boiling-temperature-key/no-psat/tc-hexadecane/mhb98-water/mhb98-water-psat/evap-breakup-box/d2law-brk-dormant e2e
+│   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ scatter-weight/ vortex-cloud-st{0p01,0p1,1,10}/   # e2e cases
+├── evaporation/                  # unit families (root C, interface-neq, tc-analytic, evap-breakup) + d2law/d2law-line/lk-neq/tc-box/tc-box-euler/tc-box-ord2-row/datum-abs/boiling-temperature-key/no-psat/scatter-weight-evap/tc-hexadecane/mhb98-water/mhb98-water-psat/evap-breakup-box/d2law-brk-dormant e2e
 ├── breakup/                      # TAB, Pilch-Erdman, Reitz-Diwakar, ETAB, Reitz-KHRT unit families + tab/etab/pilch-erdman/reitz-diwakar/khrt e2e, khrt-stress, rd/tab/khrt-evap-frozen, khrt-shed-noexchange
 ├── combustion/                   # Beckstead unit family + burn-box e2e
-├── solidification/               # solidification unit family + solid-box/solid-box-euler/solid-box-2mat e2e
+├── solidification/               # solidification unit family + solid-box/solid-box-euler/solid-box-2mat/scatter-weight-solid e2e
 ├── infrastructure/               # gas_reconstruction, ini_pipeline, properties_reader, rng_stream, axis_dispatch, graze_standoff, dual_clip, source_reduction, ghost_bc, bc_families;
 │                                 # db-injection/coupled-body/db-2daxi/axis-200/wedge-fold/planar-slab/wedge-axis-row/two-mat/two-fam-bc/periodic-y/bc-center-2grp/ini-comment-eq/solver-fail-consumed/solver-fail-consumed-m4/wall-approach (e2e)
 │                                 # refusals/{p2t,zgr,lk-d2law,properties-*,bc-copies,bc-copy-order,*-token,phase-token-real,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre} (setup-refusal gates)
@@ -87,11 +87,11 @@ tests/
 
 | Category | Contents |
 |----------|----------|
-| `standard` | Drag and temperature unit families and their two value pins; drag-stokes, drag-stokes-dopri5, temp-relax, body-force, conv-nu, vie-plait, swirl-wedge, swirl-wedge-deposit, swirl-wedge-spin, no-exchange and the four vortex-cloud e2e cases; the two-sweep drag-stokes, drag-stokes-dopri5 and vie-plait; the drag, heat and phase-file token refusals |
-| `evaporation` | Evaporation, LK-interface, TC-analytical and evaporation-with-breakup unit families, the MHB98 decane kernel test and the evaporation value pin; d²-law, d²-law line, lk-neq, tc-box, tc-box-euler, tc-box-ord2-row, datum-abs, boiling-temperature-key, no-psat, tc-hexadecane, mhb98-water, mhb98-water-psat and solver-fail-consumed e2e; evaporation with breakup: evap-breakup-box, d2law-brk-dormant, rd-evap-frozen, tab-evap-frozen and khrt-evap-frozen; the two-sweep d2law and evap-breakup; five evaporation refusals |
+| `standard` | Drag and temperature unit families and their two value pins; drag-stokes, drag-stokes-dopri5, temp-relax, body-force, conv-nu, vie-plait, swirl-wedge, swirl-wedge-deposit, swirl-wedge-spin, no-exchange, scatter-weight and the four vortex-cloud e2e cases; the two-sweep drag-stokes, drag-stokes-dopri5 and vie-plait; the drag, heat and phase-file token refusals |
+| `evaporation` | Evaporation, LK-interface, TC-analytical and evaporation-with-breakup unit families, the MHB98 decane kernel test and the evaporation value pin; d²-law, d²-law line, lk-neq, tc-box, tc-box-euler, tc-box-ord2-row, datum-abs, boiling-temperature-key, no-psat, scatter-weight-evap, tc-hexadecane, mhb98-water, mhb98-water-psat and solver-fail-consumed e2e; evaporation with breakup: evap-breakup-box, d2law-brk-dormant, rd-evap-frozen, tab-evap-frozen and khrt-evap-frozen; the two-sweep d2law and evap-breakup; five evaporation refusals |
 | `breakup` | TAB/ETAB, Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT unit families + TAB stochastic moments, and the evaporation-with-breakup unit family; five Weber-sweep e2e cases, two further oracles on khrt-e2e's run and the khrt-stress load case; evaporation with breakup and the KH-shed source: evap-breakup-box, d2law-brk-dormant, rd-evap-frozen, tab-evap-frozen, khrt-evap-frozen and khrt-shed-noexchange; the two-sweep khrt, etab, tab, tab-dopri5 and evap-breakup; the breakup-token and TAB-method refusals |
 | `combustion` | Beckstead $d^n$ Al-burn unit family; burn-box e2e |
-| `solidification` | Solidification unit family (supercooling, recalescence, plateau); solid-box, solid-box-euler, solid-box-2mat e2e, the two-sweep solid-box and the eight solidification refusals |
+| `solidification` | Solidification unit family (supercooling, recalescence, plateau); solid-box, solid-box-euler, solid-box-2mat, scatter-weight-solid e2e, the two-sweep solid-box and the eight solidification refusals |
 | `infrastructure` | Gas reconstruction, INI pipeline, property-table reader (three fixtures), RNG stream, axis dispatch, grazing stand-off, gas ghost ring, boundary-file families, dual-clip and source-reduction unit families, `self_test` and `registry-docs`; injection, coupling, nozzle, wedge and slab, periodic, two-material, per-family boundary-file, INI-comment, wall-approach and solver-failure e2e cases; the two-sweep db-injection and two-mat; thirteen setup-refusal gates (the other nineteen sit in their model's category) |
 | `repeatability` | Twelve e2e cases run twice through `setup_static` → `reset_state` → `solve` with the second sweep compared to the first (see `tests/repeatability/INFO.md`) |
 | `mpi` | The serial gates re-run under `mpiexec` with a rank-count witness, plus cross-rank-count consistency (see `tests/mpi/INFO.md`) |
@@ -103,7 +103,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **140 tests** in a serial build (103 e2e + 36 unit, `self_test` and
+Current gate: **143 tests** in a serial build (106 e2e + 36 unit, `self_test` and
 `registry-docs` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 7 more
 `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.

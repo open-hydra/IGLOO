@@ -15,4 +15,4 @@ harness fails the case before the comparison.
 **Non-vacuity.** The comparison sees a one-kelvin change of the boiling temperature: with the sibling's
 `Tboil = 601` instead of 600 it fails on every artefact, with all 7500 cell values of `source.tec` different
 (`wdot` by up to 1.2e-2 of its field scale, `E` by 4.6e-3), 1475 of 1500 trajectory rows, all 25 exit rows
-and 2779 of 2831 scatter rows.
+and all 2262 scatter rows.

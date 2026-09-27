@@ -59,6 +59,7 @@ contains
     real(R8) :: entryPos(3)   ! cell-entry position, for the closed-form body-force work (models 1,3)
     real(R8) :: pMid(3)       ! segment mid position: azimuth of the meridian-frame source deposit
     real(R8) :: wAcc          ! scatter-cloud npdot-weight accumulator (host-associated into solout)
+    real(R8) :: wAccOld       ! wAcc at the last latched state, restored when a cut step is integrated again
     !> Scatter-cloud output buffer, flushed by flushScat in one write. No initializer: it would imply SAVE.
     integer, parameter :: SCATLEN = 128, SCATCAP = 4096
     character(len=SCATLEN) :: scatBuf(SCATCAP)
@@ -433,6 +434,7 @@ contains
       y = part%oldState
       timeLocal = part%time
       oldLocal  = y
+      wAccOld   = wAcc
       if (allocated(stateLocal)) then
         call packAuxState(part, nauxstate, stateLocal)
         !> Segment-start snapshot of the aux state.
@@ -506,6 +508,7 @@ contains
         if (solidEv .and. .not.(IamOut .or. newGas .or. sectorOut)) then
           y  = oldLocal + sEv*(y - oldLocal)
           t1 = timeLocal + sEv*(t1 - timeLocal)
+          wAcc = wAccOld + sEv*(wAcc - wAccOld)
           phaseEv = nint(stateLocal(ind_sph))
           call solidTransition(whichEv, part%cp, part%cpSol, part%Tmelt, part%hFus, y(7), y(8), phaseEv)
           stateLocal(ind_sph) = real(phaseEv, R8)
@@ -578,6 +581,8 @@ contains
       else
         if (allocated(eventLocal)) call unpackEventVar(oldEvLocal, part, neventvar)
         if (allocated(stateLocal)) call unpackAuxState(oldStLocal, part, nauxstate)
+        !> The cut step is integrated again: its scatter weight counts once.
+        wAcc = wAccOld
         deltaS = part%stateVar(1:3) - part%oldState(1:3)
         dout = norm2(deltaS)
         if (dout>eps) then
@@ -785,6 +790,8 @@ contains
         if (nScat == SCATCAP) call flushScat()
         wAcc = wAcc - dNscat
       endif
+      !> Latched with the state, after the emission: a refinement never writes a marker twice.
+      wAccOld = wAcc
 
     end subroutine solout
 
