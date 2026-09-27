@@ -81,7 +81,6 @@ module IGLOO_particles
     integer      :: solidSelect = 0    !> solidification:   0 off, 1 supercool + recalescence
     integer      :: solidPhase  = 0    !> solidification phase: 0 liquid, 1 undercooled, 2 plateau, 3 solid
     real(R8)     :: fSolid      = 0._R8 !> frozen mass fraction, copy of stateVar(8) (model 6)
-    logical      :: overMelt    = .false. !> solid parcel warned above T-melt (model 6)
     integer      :: model       = 1    !> RHS model (1-6)
     integer      :: neq         = 7    !> number of ODE equations
     integer      :: nOde        = 7    !> number of ODE state variables

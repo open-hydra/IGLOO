@@ -38,7 +38,7 @@ contains
     use oslo,              only: Run_ODESolver
     use IGLOO_Lib_Breakup, only: nchild
     use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, eventCrossed, &
-                                        eventPassed, solidTransition, phSolid
+                                        eventPassed, solidTransition
     implicit none
     class(obj_particle),   intent(inout) :: part
     type(obj_block),       intent(in)    :: geoblock(nb)
@@ -161,7 +161,7 @@ contains
       case(4); part%stateVar(8) = part%m
                part%stateVar(9) = part%npdot
       case(6); call solidPhaseAtInjection(part%tp, part%Tmelt, part%Tnuc, part%solidPhase, part%stateVar(8))
-               part%fSolid = part%stateVar(8); part%overMelt = .false.
+               part%fSolid = part%stateVar(8)
       end select
       if (eulerSwitch)    part%stateVar(part%nOde+1:part%neq) = 0._R8
       if (part%bodyAccum) part%stateVar(part%neq-1 :part%neq) = 0._R8
@@ -435,7 +435,7 @@ contains
       eventType = part%brkupEvent
       addChildLocal = .false.; childState = 0._R8
       !> childDone is reset at integrate entry only, never per segment.
-      !> Model 6: a threshold the segment-start state has already passed is applied here.
+      !> Model 6: a threshold the segment-start state has strictly passed is applied here.
       if (mod_model == 6) call solidCatchUp()
       y = part%oldState
       timeLocal = part%time
@@ -625,7 +625,7 @@ contains
 
     end subroutine ODEsystem
 
-    !> Model 6: apply the phase change whose threshold the segment-start state has passed.
+    !> Model 6: apply the phase change whose threshold the segment-start state has strictly passed.
     subroutine solidCatchUp()
       implicit none
       real(R8) :: g
@@ -712,7 +712,7 @@ contains
         if (y(8) <= mBurnTol) burnedOut = .true.   ! y(8) IS the droplet mass [kg]
       endif
 
-      !> Solidification: the phase's event function turns non-positive over the step (strictly positive at its start).
+      !> Solidification: the step ends strictly past the phase's threshold from a start at or before it.
       if (mod_model == 6) then
         call eventFunction(nint(stateLocal(ind_sph)), y(7), y(8), part%Tnuc, part%Tmelt, gEnd, whichEv)
         if (whichEv > 0) then
@@ -721,10 +721,6 @@ contains
             solidEv = .true.
             sEv     = gOld/(gOld - gEnd)
           endif
-        endif
-        if (nint(stateLocal(ind_sph)) == phSolid .and. y(7) > part%Tmelt .and. .not.part%overMelt) then
-          part%overMelt = .true.
-          write(*,'(A,I0,A)') '[WARNING] Particle ',part%ID,' is solid above T-melt: no melting model, it heats as a solid'
         endif
       endif
 

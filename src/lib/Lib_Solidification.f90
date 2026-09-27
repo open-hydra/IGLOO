@@ -1,4 +1,4 @@
-!> Solidification of a molten droplet with supercooling and recalescence (ODE model 6).
+!> Solidification and melting of a droplet with supercooling and recalescence (ODE model 6).
 module IGLOO_Lib_Solidification
     use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
     implicit none
@@ -71,7 +71,7 @@ contains
 
     end function hSolid
 
-    !> Event function of threshold `which` (1 nucleation, 2 fully frozen, 3 re-melted); positive before it.
+    !> Event function of threshold `which` (1 nucleation, 2 fully frozen, 3 re-melted, 4 melting); positive before it.
     pure function eventValue(which, T, f, Tnuc, Tmelt) result(g)
         implicit none
         integer,  intent(in) :: which
@@ -82,12 +82,13 @@ contains
         case (1);     g = T - Tnuc
         case (2);     g = 1._R8 - f
         case (3);     g = f
+        case (4);     g = Tmelt - T
         case default; g = 1._R8
         end select
 
     end function eventValue
 
-    !> Threshold that ends the current phase (0: none) and its event function at (T, f).
+    !> Threshold that ends the current phase and its event function at (T, f).
     pure subroutine eventFunction(phase, T, f, Tnuc, Tmelt, g, which)
         implicit none
         integer,  intent(in)  :: phase
@@ -99,31 +100,32 @@ contains
         case (phLiquid, phUndercooled); which = 1
         case (phPlateau)
             if (1._R8 - f <= f) then; which = 2; else; which = 3; endif
+        case (phSolid);                 which = 4
         case default;                   which = 0
         end select
         g = eventValue(which, T, f, Tnuc, Tmelt)
 
     end subroutine eventFunction
 
-    !> A step from event value gOld to gEnd crosses its threshold.
+    !> A step from event value gOld to gEnd ends strictly past its threshold from a start at or before it.
     pure logical function eventCrossed(gOld, gEnd)
         implicit none
         real(R8), intent(in) :: gOld, gEnd
 
-        eventCrossed = gEnd <= 0._R8 .and. gOld > 0._R8
+        eventCrossed = gEnd < 0._R8 .and. gOld >= 0._R8
 
     end function eventCrossed
 
-    !> A state with event value g at a segment start has passed its threshold.
+    !> A state with event value g at a segment start is strictly past its threshold.
     pure logical function eventPassed(g)
         implicit none
         real(R8), intent(in) :: g
 
-        eventPassed = g <= 0._R8
+        eventPassed = g < 0._R8
 
     end function eventPassed
 
-    !> Phase change `which` applied to (T, f, phase), conserving hSolid.
+    !> Phase change `which` applied to (T, f, phase), conserving hSolid; the landing is clamped inside the new phase.
     pure subroutine solidTransition(which, cpl, cpSol, Tmelt, hFus, T, f, phase)
         implicit none
         integer,  intent(in)    :: which
@@ -137,9 +139,11 @@ contains
             Tev = T
             call nucleationJump(Tev, cpl, cpSol, Tmelt, hFus, T, f, phase)
         case (2)
-            T = Tmelt - (f - 1._R8)*hFus/cpSol; f = 1._R8; phase = phSolid
+            T = min(Tmelt, Tmelt - (f - 1._R8)*hFus/cpSol); f = 1._R8; phase = phSolid
         case (3)
             T = Tmelt - f*hFus/cpl;             f = 0._R8; phase = phLiquid
+        case (4)
+            f = min(1._R8, 1._R8 - cpSol*(T - Tmelt)/hFus); T = Tmelt; phase = phPlateau
         end select
 
     end subroutine solidTransition
