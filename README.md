@@ -38,8 +38,8 @@ IGLOO is an open-source Lagrangian particle solver written in modern Fortran. It
 ### Build
 
 ```bash
-git clone --recurse-submodules https://github.com/open-hydra/IGLOO.git
-cd IGLOO
+git clone https://github.com/open-hydra/IGLOO.git
+cd IGLOO                         # install.sh build fetches the lib/ submodules it needs
 
 # Standalone build with GNU compilers and OpenMP
 ./install.sh build --master=None --compilers=gnu --use-openmp

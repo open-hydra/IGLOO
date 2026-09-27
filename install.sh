@@ -193,10 +193,10 @@ case "$COMMAND" in
         fi
 
         task "Cloning submodules"
-        # --recursive is required: the libraries carry nested submodules of their own.
-        # Skipped under --master=hydra, which supplies the dependency tree instead.
+        # ORION, OSLO and FiNeR only: OSLO's one nested submodule (SUNDIALS, an ssh URL) serves
+        # USE_SUNDIALS, which OSLO's CMake fetches itself. Skipped under --master=hydra.
         if [[ $MASTER_TYPE == "None" ]]; then
-          git submodule update --init --recursive
+          git submodule update --init
           # FiNeR 18fa207 untracks its five deps (src/third_party/.gitignore = *) yet its
           # CMakeLists still add_subdirectory's them: populate from the v2.0.4 gitlinks,
           # then return to the pin. HEAD is the single source of truth for that pin.

@@ -22,6 +22,8 @@ This page describes how to build IGLOO. Two build modes exist: **standalone** (I
 
 IGLOO is built against the in-tree copies of ORION, OSlo, and FiNeR under `lib/`. This is the standard mode for users who do not have the hydra suite installed.
 
+A plain `git clone https://github.com/open-hydra/IGLOO.git` is enough: `install.sh build --master=None` initialises the `lib/ORION`, `lib/OSLO` and `lib/third_party/FiNeR` submodules and FiNeR's own dependencies, all over https. OSLO's nested SUNDIALS submodule is not fetched, since IGLOO builds OSLO without SUNDIALS.
+
 ```bash
 # Intel compilers with OpenMP (recommended for production)
 ./install.sh build --master=None --compilers=intel --use-openmp
