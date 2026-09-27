@@ -4,17 +4,20 @@ Registered **only** when the build has MPI. `USE_MPI` defaults OFF, so a plain `
 not see these tests at all and is unchanged by their existence.
 
 ```bash
-# MPI builds need TecIO OFF: ORION builds teciompi but links `tecio::tecio`, so
-# USE_MPI=ON + USE_TECIO=ON cannot configure. Tracked in the MPI plan.
-USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF
+# From the repository root, in a tree of its own: test.sh always uses build/verif, and
+# `USE_MPI=ON ./test.sh mpi` would reconfigure that serial tree as an MPI build. TecIO OFF:
+# ORION builds teciompi but links `tecio::tecio`, so USE_MPI=ON + USE_TECIO=ON cannot configure.
+cmake -B build/mpi -S . -DMASTER=None -DUSE_OPENMP=ON -DUSE_MPI=ON -DUSE_SUNDIALS=OFF \
+      -DBUILD_VERIFICATION=ON -DCMAKE_BUILD_TYPE=RELEASE -DUSE_TECIO=OFF
+cmake --build build/mpi -j 8 && ctest --test-dir build/mpi -L '^mpi$'
 ```
 
-`bin/IGLOO` is **one link target shared by every build tree**, so whichever tree you built last wins.
-Switching back is not just a rebuild:
+`bin/IGLOO` and `bin/DocGen` are each **one link target shared by every build tree**, so whichever tree
+you built last wins. Switching back is not just a rebuild:
 
 ```bash
-rm -f ../../bin/IGLOO && cmake --build ../../build/verif -j 8   # force the relink
-ldd ../../bin/IGLOO | grep -c libmpi                           # 0 = serial, 2 = MPI
+rm -f bin/IGLOO bin/DocGen && cmake --build build/verif -j 8   # force the relinks
+ldd bin/IGLOO bin/DocGen | grep -c libmpi                     # 0 = both serial
 ```
 
 ⚠ `cmake --build build/verif` **on its own is a no-op** when no source changed since that tree's last

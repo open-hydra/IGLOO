@@ -367,7 +367,9 @@ rows from 1 K, a `Psat` column found by name in any column order, both enthalpy 
 materials of which one has a column of zeros, and the table ATLAS GPB writes for water with
 `psat-vapour = H2O`, copied byte for byte (PR1–PR3, PR6, PR7, PR9, PR10).  The header, row, node,
 column and `Psat` checks behind it are ICE's, statement for statement, and are pinned on
-synthetic input, one code each (PR4, PR5, PR8, PR11–PR13).  No overlay figure.
+synthetic input, one code each (PR4, PR5, PR8, PR11–PR13); so is the enthalpy-to-temperature
+inversion of a varying $c_p$ on tables that start above 1 K, against ICE's rule for its energy
+(PR14).  No overlay figure.
 
 ### Further infrastructure families
 

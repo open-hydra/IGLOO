@@ -151,6 +151,27 @@ Verifies the velocity-relaxation ODE under pure Stokes drag.  See
 Verifies the heat-relaxation ODE in the conduction limit ($\mathrm{Nu}=2$,
 $\mathrm{Re}=0$).  See [Temperature relaxation](temp-relax.md).
 
+### temp-relax-varcp
+
+Verifies the enthalpy state of a material whose $c_p$ varies, on a table that starts above 1 K:
+`temp-relax`'s box and gas with $c_p = 1000 + (T - 250)$ J/(kg K) tabulated on 250–800 K.  The
+state is $h$, $\mathrm{d}h/\mathrm{d}t = K\,(T_g - T)$ with $K = 6\,\mathrm{Nu}\,k_g/(\rho_p d^2)$,
+and the temperature is recovered through the table (linear between the nodes, the first and last
+segments extended).  On a segment of slope $s$ the temperature relaxes exponentially over the length
+$u_g s/K$, and the closed form marches the segments from each parcel's first row.  Four groups of
+inlet cells enter at 210 K (below the table), 300 K, 750 K and 840 K (above it).
+
+| Witness | Requirement |
+|---------|-------------|
+| Every row with $\lvert T - T_g\rvert > 1$ K, every exit | the closed form, within the F12.6 truncation carried through the march |
+| `source.tec` | $\sum E = \sum \dot m\,[h(T_0) - h(T_\mathrm{exit})]$ to $10^{-6}$ of the gross exchange |
+| Non-vacuity | every parcel of every group verified |
+
+**Result:** 25/25 parcels, the worst row at 0.013 of its tolerance, the energy to $6\cdot10^{-9}$ of
+the gross.  A temperature left at its injection value while the enthalpy evolves fails every row
+(worst 237 K off); an inversion that reads before the table's first row puts the 210 K group up to
+1.87 K off.
+
 ### body-force
 
 Verifies the transverse body-force acceleration with exact linear Stokes drag
@@ -627,7 +648,8 @@ bytes drift by 1 ULP across compiler and configure generations.
 Several members of this category have **no figure** and so no section below:
 `bc-center-2grp` (multi-group `bc_center` pinning), `axis-200` and `wedge-fold` (the
 axis face and the sector fold on the MOSE nozzle field), `two-mat` (two materials),
-`two-fam-bc` (one inlet table per family in `bc.txt`) and the `refusals/*` gates —
+`two-fam-bc` (one inlet table per family in `bc.txt`), `varcp-tmin` (a varying-$c_p$ table that ends below
+the parcels' temperature) and the `refusals/*` gates —
 behavioral cases with no reference curve, summarised in the table on the
 [Overview](index.md).  This page is organized around comparison figures;
 a case that pins particle *placement* or a *refusal* rather than a trajectory has

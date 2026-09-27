@@ -63,6 +63,21 @@ $$
 particle carries a variable-$c_p$ table (the state variable is then the enthalpy $h_p$); it
 converts the Nusselt-based heat flux into the rate that appears in $F(7) = \dot Q / m$.
 
+With a variable-$c_p$ table the temperature is recovered from $h_p$ through the tabulated enthalpy,
+linear between the integer nodes $T_i$ and continued beyond the table by its first and last segments:
+
+$$
+h(T) = h_i + s_i\,(T - T_i), \qquad s_i = h_{i+1} - h_i, \qquad
+i = \min\bigl(\max(\lfloor T \rfloor, T_\mathrm{min}),\, T_\mathrm{max} - 1\bigr)
+$$
+
+$T(h)$ inverts the same pieces, the bracketing node found by bisection, so a table may start at any
+temperature.  ICE writes the energy of its condensed phase as $e = h - h_\mathrm{off}$ with
+$h_\mathrm{off} = h(T_\mathrm{min}) - T_\mathrm{min}\,s_{T_\mathrm{min}}$, and continues it below
+the table by the line through $e(0) = 0$.  Since $e(T_\mathrm{min}) = T_\mathrm{min}\,s_{T_\mathrm{min}}$,
+that line has the slope $s_{T_\mathrm{min}}$: it is the first segment continued.  Above the table both
+solvers continue the last segment, so the two assign one temperature to one enthalpy.
+
 ---
 
 ## Model 1 — `rhsStandard`
