@@ -37,8 +37,8 @@ contains
                        mod_bp, mod_bpMethod, mod_bpScale
     use oslo,              only: Run_ODESolver
     use IGLOO_Lib_Breakup, only: nchild
-    use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, &
-                                        solidTransition, phSolid
+    use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, eventCrossed, &
+                                        eventPassed, solidTransition, phSolid
     implicit none
     class(obj_particle),   intent(inout) :: part
     type(obj_block),       intent(in)    :: geoblock(nb)
@@ -631,8 +631,8 @@ contains
       real(R8) :: g
       integer  :: which
 
-      call eventFunction(part%solidPhase, part%oldState(7), part%oldState(8), part%Tnuc, g, which)
-      if (which == 0 .or. g > 0._R8) return
+      call eventFunction(part%solidPhase, part%oldState(7), part%oldState(8), part%Tnuc, part%Tmelt, g, which)
+      if (which == 0 .or. .not.eventPassed(g)) return
       call solidTransition(which, part%cp, part%cpSol, part%Tmelt, part%hFus, &
                            part%oldState(7), part%oldState(8), part%solidPhase)
       part%stateVar(7:8) = part%oldState(7:8)
@@ -714,10 +714,10 @@ contains
 
       !> Solidification: the phase's event function turns non-positive over the step (strictly positive at its start).
       if (mod_model == 6) then
-        call eventFunction(nint(stateLocal(ind_sph)), y(7), y(8), part%Tnuc, gEnd, whichEv)
-        if (whichEv > 0 .and. gEnd <= 0._R8) then
-          gOld = eventValue(whichEv, oldLocal(7), oldLocal(8), part%Tnuc)
-          if (gOld > 0._R8) then
+        call eventFunction(nint(stateLocal(ind_sph)), y(7), y(8), part%Tnuc, part%Tmelt, gEnd, whichEv)
+        if (whichEv > 0) then
+          gOld = eventValue(whichEv, oldLocal(7), oldLocal(8), part%Tnuc, part%Tmelt)
+          if (eventCrossed(gOld, gEnd)) then
             solidEv = .true.
             sEv     = gOld/(gOld - gEnd)
           endif

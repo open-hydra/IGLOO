@@ -253,13 +253,13 @@ contains
             do while (time < tt(i))
                 dt = min(h, tt(i) - time)
                 call rk4step(ph, temp, f, dt, Tn1, fn1)
-                call eventFunction(ph, Tn1, fn1, TN, g1, w1)
+                call eventFunction(ph, Tn1, fn1, TN, TM, g1, w1)
                 if (w1 > 0 .and. g1 <= 0._R8) then
                     lo = 0._R8; hi = 1._R8
                     do it = 1, 200
                         mid = 0.5_R8*(lo + hi)
                         call rk4step(ph, temp, f, mid*dt, Tm1, fm1)
-                        if (eventValue(w1, Tm1, fm1, TN) > 0._R8) then; lo = mid; else; hi = mid; end if
+                        if (eventValue(w1, Tm1, fm1, TN, TM) > 0._R8) then; lo = mid; else; hi = mid; end if
                         if (hi - lo <= epsilon(1._R8)) exit
                     end do
                     call rk4step(ph, temp, f, hi*dt, Tn1, fn1)
@@ -340,7 +340,7 @@ contains
         do i = 1, 4
             do j = 1, 4
                 do ph = phLiquid, phSolid
-                    call eventFunction(ph, Ts(i), fs(j), TN, g, w)
+                    call eventFunction(ph, Ts(i), fs(j), TN, TM, g, w)
                     pass = pass .and. ieee_is_finite(g) .and. &
                            ieee_is_finite(hSolid(Ts(i), fs(j), ph, CL, CS, HFUS, TM, HOFF))
                 end do
@@ -351,13 +351,13 @@ contains
         end do
         call flag('SG5a finite outputs on the T, f and Qdot corners', 'SG5a_finite', pass, ok)
         ! event functions: zero exactly at the thresholds, positive before, negative past
-        pass = (eventValue(1, TN, 0._R8, TN) == 0._R8) .and. (eventValue(1, TN + spacing(TN), 0._R8, TN) > 0._R8) &
-               .and. (eventValue(1, TN - spacing(TN), 0._R8, TN) < 0._R8)
-        call eventFunction(phPlateau, TM, 1._R8, TN, g, w);         pass = pass .and. (w == 2) .and. (g == 0._R8)
-        call eventFunction(phPlateau, TM, 1._R8 + 1.e-3_R8, TN, g, w); pass = pass .and. (w == 2) .and. (g < 0._R8)
-        call eventFunction(phPlateau, TM, 0._R8, TN, g, w);         pass = pass .and. (w == 3) .and. (g == 0._R8)
-        call eventFunction(phPlateau, TM, -1.e-3_R8, TN, g, w);     pass = pass .and. (w == 3) .and. (g < 0._R8)
-        call eventFunction(phSolid, TG, 1._R8, TN, g, w);           pass = pass .and. (w == 0) .and. (g > 0._R8)
+        pass = (eventValue(1, TN, 0._R8, TN, TM) == 0._R8) .and. (eventValue(1, TN + spacing(TN), 0._R8, TN, TM) > 0._R8) &
+               .and. (eventValue(1, TN - spacing(TN), 0._R8, TN, TM) < 0._R8)
+        call eventFunction(phPlateau, TM, 1._R8, TN, TM, g, w);         pass = pass .and. (w == 2) .and. (g == 0._R8)
+        call eventFunction(phPlateau, TM, 1._R8 + 1.e-3_R8, TN, TM, g, w); pass = pass .and. (w == 2) .and. (g < 0._R8)
+        call eventFunction(phPlateau, TM, 0._R8, TN, TM, g, w);         pass = pass .and. (w == 3) .and. (g == 0._R8)
+        call eventFunction(phPlateau, TM, -1.e-3_R8, TN, TM, g, w);     pass = pass .and. (w == 3) .and. (g < 0._R8)
+        call eventFunction(phSolid, TG, 1._R8, TN, TM, g, w);           pass = pass .and. (w == 0) .and. (g > 0._R8)
         call flag('SG5b event functions change sign exactly at T-nuc, f = 1 and f = 0', 'SG5b_sign', pass, ok)
         ! no clamp on f: hSolid is linear in f on the plateau, through both overshoots
         h1 = hSolid(TM, fs(1), phPlateau, CL, CS, HFUS, TM, HOFF)
