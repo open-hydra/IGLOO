@@ -529,7 +529,7 @@ contains
             rhoEvt = part%rho
             if (mod_propFlags(2)) then
               if (mod_propFlags(1)) then; tEvt = comp_TfromTab(hTab,y(7)); else; tEvt = y(7); endif
-              rhoEvt = lookupTab(rhoTab, tEvt)
+              rhoEvt = tableValue(rhoTab, Tmin, Tmax, tEvt)
             endif
             !> Resync the frozen per-droplet d and m in auxLocal after an event.
             if (ind_d > 0) auxLocal(ind_d) = part%d
@@ -671,7 +671,7 @@ contains
       use IGLOO_RayFaceIntersection3D, only: isPointInsideCell
       use IGLOO_Lib_Breakup,           only: breakupEvent
       use Lib_Equations,               only: interphase
-      use IGLOO_Lib_Properties,        only: comp_TfromTab, lookupTab
+      use IGLOO_Lib_Properties,        only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
       implicit none
       integer  :: NR, N
       real(R8) :: X, XOLD, Y(N)
@@ -728,7 +728,7 @@ contains
 
       if (eventType) then
         if (mod_propFlags(1)) then; tp = comp_TfromTab(hTab,y(7)); else; tp = y(7);                 endif
-        if (mod_propFlags(2)) then; rho   = lookupTab(rhoTab, tp); else; rho   = auxLocal(ind_rho); endif
+        if (mod_propFlags(2)) then; rho   = tableValue(rhoTab, Tmin, Tmax, tp); else; rho   = auxLocal(ind_rho); endif
         if (mod_propFlags(3)) then; sigma = lookupTab(sigTab, tp); else; sigma = auxLocal(ind_sig); endif
         if (mod_propFlags(4)) then; mup   = lookupTab(mupTab, tp); else; mup   = auxLocal(ind_mup); endif
         select case(mod_model)
@@ -786,7 +786,7 @@ contains
       !> Scatter cloud: emit one marker per weight quantum dNscat, carrying the remainder.
       if (scatOn .and. dNscat>0._R8 .and. wAcc >= dNscat) then
         if (mod_propFlags(1)) then; tp  = comp_TfromTab(hTab,y(7)); else; tp  = y(7);              endif
-        if (mod_propFlags(2)) then; rho = lookupTab(rhoTab, tp);    else; rho = auxLocal(ind_rho); endif
+        if (mod_propFlags(2)) then; rho = tableValue(rhoTab, Tmin, Tmax, tp); else; rho = auxLocal(ind_rho); endif
         select case(mod_model)
         case(3);      m = auxLocal(ind_m)/y(8)
         case(2,4,5);  m = y(8)

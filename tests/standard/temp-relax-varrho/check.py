@@ -2,8 +2,9 @@
 """Oracle for a parcel whose DENSITY varies with temperature: its diameter follows the density.
 
 temp-relax-varcp's case (box, gas, the four inlet groups at 210/300/750/840 K, the varying cp; its check.py is
-imported for the table recipe and the readers) with rho = 2950 - 0.5 (T - 250) kg/m^3 on 250..800 K. The
-parcels exchange no mass, so each keeps the mass it was injected with, m = rho(T0) pi d0^3/6, and its diameter is
+imported for the table recipe and the readers) with rho = 2950 - 0.5 (T - 250) kg/m^3 on 250..800 K and the end
+values outside, so the 210 K and 840 K groups start on a constant density. The parcels exchange no mass, so each
+keeps the mass it was injected with, m = rho(T0) pi d0^3/6, and its diameter is
 
     d(T) = (6 m / (pi rho(T)))^(1/3)
 
@@ -49,8 +50,14 @@ MIN_PTS, N_PER_GROUP = 3, {210: 5, 300: 5, 750: 10, 840: 5}
 
 
 def rho(T):
-    """The table's density: the line 2950 - 0.5 (T - 250), which lookupTab continues outside the table."""
-    return 2950.0 - 0.5 * (T - 250.0)
+    """The table's density: the line 2950 - 0.5 (T - 250) on the table, its end values outside."""
+    Tc = min(max(T, float(TMIN)), float(TMAX))
+    return 2950.0 - 0.5 * (Tc - 250.0)
+
+
+def drho(T):
+    """|d rho/dT|: 0.5 on the table (the larger one-sided slope at its ends), 0 outside."""
+    return 0.5 if TMIN <= T <= TMAX else 0.0
 
 
 def d_of(m, T):
@@ -184,7 +191,7 @@ def main():
                 fails.append(f"G ID={pid} x={x:.6f}: velocity ({u}, {v}, {w}) is not (u_g, 0, 0)")
                 break
             track("M", abs(mp - m), half_ulp_e(m) + 1e-12 * m, f"ID={pid} x={x:.6f}: m={mp:.6e} vs {m:.6e}")
-            ddT = d_of(m, T) * 0.5 / (3.0 * rho(T))
+            ddT = d_of(m, T) * drho(T) / (3.0 * rho(T))
             track("D2", abs(d - d_of(m, T)), half_ulp_e(d) + ddT * HALF_ULP + 1e-12 * d,
                   f"ID={pid} x={x:.6f}: d={d:.6e} vs d(T)={d_of(m, T):.6e} at T={T:.6f}")
             if x <= 0.0 or abs(T - T_G) <= T_BAND:
@@ -195,7 +202,7 @@ def main():
             tolT = HALF_ULP * (1.0 + abs(ref.dTdx(T))) + INT_FLOOR
             n_win += 1
             track("V1", abs(T - Tr), tolT, f"ID={pid} x={x:.6f}: T={T:.6f} vs reference {Tr:.6f}")
-            ddTr = d_of(m, Tr) * 0.5 / (3.0 * rho(Tr))
+            ddTr = d_of(m, Tr) * drho(Tr) / (3.0 * rho(Tr))
             track("D1", abs(d - d_of(m, Tr)), half_ulp_e(d) + ddTr * tolT + 1e-12 * d,
                   f"ID={pid} x={x:.6f}: d={d:.6e} vs d(T_ref)={d_of(m, Tr):.6e}")
         if n_win >= MIN_PTS:

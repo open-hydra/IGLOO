@@ -389,7 +389,7 @@ contains
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, toll, &
                                bodyForce, bodyAccel, srcBodyForce
-    use IGLOO_Lib_Properties, only: comp_TfromTab, lookupTab
+    use IGLOO_Lib_Properties, only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
     real(R8), intent(in)    :: time
@@ -407,7 +407,7 @@ contains
     F = 0._R8
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
     else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    if (mod_propFlags(2)) then; rho = lookupTab(rhoTabM, tp); else; rho = aux(ind_rho);        endif
+    if (mod_propFlags(2)) then; rho = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho = aux(ind_rho); endif
     m = aux(ind_m) 
     if (ind_d > 0) then; d = aux(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
     ! 2nd order gas interpolation
@@ -564,7 +564,7 @@ contains
     F = 0._R8
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
     else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    if (mod_propFlags(2)) then; rho   = lookupTab(rhoTabM, tp); else; rho   = aux(ind_rho); endif
+    if (mod_propFlags(2)) then; rho   = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho   = aux(ind_rho); endif
     m = Z(8)
     d = (sixOverPi*m/rho)**oneThird
 
@@ -635,7 +635,7 @@ contains
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
     use IGLOO_Lib_Breakup, only: breakupOde
-    use IGLOO_Lib_Properties, only: comp_TfromTab, lookupTab
+    use IGLOO_Lib_Properties, only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
@@ -654,7 +654,7 @@ contains
     F = 0._R8
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
     else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    if (mod_propFlags(2)) then; rho   = lookupTab(rhoTabM, tp); else; rho   = aux(ind_rho); endif
+    if (mod_propFlags(2)) then; rho   = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho   = aux(ind_rho); endif
     if (mod_propFlags(3)) then; sigma = lookupTab(sigTabM, tp); else; sigma = aux(ind_sig); endif
     if (mod_propFlags(4)) then; mup   = lookupTab(mupTabM, tp); else; mup   = aux(ind_mup); endif
     m = aux(ind_m)/Z(8)
@@ -737,7 +737,7 @@ contains
     F = 0._R8
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
     else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    if (mod_propFlags(2)) then; rho   = lookupTab(rhoTabM, tp); else; rho   = aux(ind_rho); endif
+    if (mod_propFlags(2)) then; rho   = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho   = aux(ind_rho); endif
     if (mod_propFlags(3)) then; sigma = lookupTab(sigTabM, tp); else; sigma = aux(ind_sig); endif
     if (mod_propFlags(4)) then; mup   = lookupTab(mupTabM, tp); else; mup   = aux(ind_mup); endif
     m = Z(8)
@@ -825,7 +825,7 @@ contains
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
     use IGLOO_Lib_Combustion,  only: becksteadRate, nmp
-    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab
+    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
@@ -844,7 +844,7 @@ contains
     F = 0._R8
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
     else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    if (mod_propFlags(2)) then; rho = lookupTab(rhoTabM, tp); else; rho = aux(ind_rho); endif
+    if (mod_propFlags(2)) then; rho = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho = aux(ind_rho); endif
     m = Z(8)
     d = (sixOverPi*m/rho)**oneThird
 

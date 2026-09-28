@@ -5,7 +5,7 @@ module IGLOO_particles
   use IGLOO_variables
   use IGLOO_Lib_Drag
   use IGLOO_Lib_Heat
-  use IGLOO_Lib_Properties, only: lookupTab, comp_TfromTab
+  use IGLOO_Lib_Properties, only: tableValue, comp_TfromTab, Tmin, Tmax
   use IGLOO_Lib_Solidification, only: hSolid
   use IGLOO_bcBox
   use IGLOO_data_block, only: obj_block, obj_flowblock
@@ -142,7 +142,7 @@ contains
     class(obj_particle), intent(inout) :: self
     real(R8),            intent(in)    :: rhoTab(:)
 
-    if (self%varRho) self%rho = lookupTab(rhoTab,self%Tp)
+    if (self%varRho) self%rho = tableValue(rhoTab, Tmin, Tmax, self%Tp)
     self%m = pi/6._R8*self%rho*self%d**3._R8
 
   end subroutine computeMass
@@ -301,7 +301,7 @@ contains
     case(6); self%fSolid = self%stateVar(8)
     end select
     if (self%model/=1 .or. self%varRho) then
-      if (self%varRho) self%rho = lookupTab(rhoTab,self%Tp)
+      if (self%varRho) self%rho = tableValue(rhoTab, Tmin, Tmax, self%Tp)
       self%d = (sixOverPi*self%m/self%rho)**oneThird
     endif
 

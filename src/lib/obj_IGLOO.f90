@@ -626,7 +626,7 @@ contains
   !> Drag force and heat rate exerted on the gas by np particles of material mID at the given state.
   pure function getSourceTerms(self,gas,vel,Tp,rhop,np,mID) result(FdragQdot)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
-    use IGLOO_Lib_Properties, only: lookupTab
+    use IGLOO_Lib_Properties, only: tableValue, Tmin, Tmax
     use IGLOO_variables,      only: pi, dragSelect, heatSelect
     use IGLOO_Lib_Drag
     use IGLOO_Lib_Heat
@@ -642,7 +642,7 @@ contains
                            piOver8  =0.39269908169872415_R8
     
     if (self%material(mID)%rhoVariable) then
-      rhom = lookupTab(self%material(mID)%rhoTab,Tp)
+      rhom = tableValue(self%material(mID)%rhoTab, Tmin, Tmax, Tp)
     else
       rhom = self%material(mID)%rho
     endif
