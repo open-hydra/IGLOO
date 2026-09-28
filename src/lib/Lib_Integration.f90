@@ -35,7 +35,7 @@ contains
                        nauxstate, neventvar, nbrkst,                                &
                        mod_brkSelect, mod_propFlags, mod_model,                     &
                        mod_bp, mod_bpMethod, mod_bpScale
-    use oslo,              only: Run_ODESolver
+    use oslo,              only: Run_ODESolver, no_jacobian
     use IGLOO_Lib_Breakup, only: nchild
     use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, eventCrossed, &
                                         eventPassed, solidTransition
@@ -454,12 +454,12 @@ contains
       if (.not.ord2) gasState = gas(:,1)
       err = 0
       select case(part%model)
-      case(1); nDL = 8;  call Run_ODESolver(neq, t1, t2, y, rhs1, err, deltat, solout)
-      case(2); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs2, err, deltat, solout)
-      case(3); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs3, err, deltat, solout)
-      case(4); nDL = 10; call Run_ODESolver(neq, t1, t2, y, rhs4, err, deltat, solout)
-      case(5); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs5, err, deltat, solout)
-      case(6); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs6, err, deltat, solout)
+      case(1); nDL = 8;  call Run_ODESolver(neq, t1, t2, y, rhs1, no_jacobian, 0, err, deltat, solout)
+      case(2); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs2, no_jacobian, 0, err, deltat, solout)
+      case(3); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs3, no_jacobian, 0, err, deltat, solout)
+      case(4); nDL = 10; call Run_ODESolver(neq, t1, t2, y, rhs4, no_jacobian, 0, err, deltat, solout)
+      case(5); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs5, no_jacobian, 0, err, deltat, solout)
+      case(6); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs6, no_jacobian, 0, err, deltat, solout)
       end select
       if (err < 0) then
         write(*,'(a,i0,a,i0,a,es12.4,a)')                                   &
