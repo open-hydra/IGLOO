@@ -68,7 +68,7 @@ extension not yet built.
   DL2 Chang≡Clift-Gauvin identity (24·0.0175=0.42, 4.25e4=42500; forms differ
   only in toll placement, measured 2.7e-16); DL3 Schiller-Naumann≡Wen-Yu low
   branch (identical expression, machine-zero).
-- `test_drag_probes.f90` (ctest `test_drag_probes`, WILL_FAIL xfail): XD1/XD2
+- `test_drag_probes.f90` (ctest `test_drag_probes`, ordinary gate — the bugs it transcribes are fixed, so it is a regression pin): XD1/XD2
   Crowe/Hermsen Cd=3.2e20/3.6e20 at Re=1e3,Ma=2 (exp-in-denominator, bug A1);
   XD3 Putnam 3.6% jump @Re=1000 (A5); XD4 Henderson blend-slope jump @Ma=1.75
   (A6, 0.97% rel at Re=100); XD5 Wen-Yu 1.9% jump @Re=1000 (minor). Flips the

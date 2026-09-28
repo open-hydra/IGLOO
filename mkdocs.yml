@@ -103,6 +103,7 @@ nav:
     - Heat Transfer: theory/heat.md
     - Evaporation: theory/evaporation.md
     - Metal Combustion: theory/combustion.md
+    - Solidification: theory/solidification.md
     - Breakup: theory/breakup.md
     - Injection & Packing: theory/injection.md
     - Eulerian Feedback: theory/eulerian-feedback.md
@@ -124,6 +125,7 @@ nav:
     - development/index.md
     - Code Structure: development/structure.md
     - Testing: development/testing.md
+    - Parallelization: development/parallelization.md
     - Contributing: development/contributing.md
     - Performance Notes: development/performance_notes.md
 

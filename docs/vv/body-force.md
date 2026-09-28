@@ -93,17 +93,15 @@ F12.6 floor cannot discriminate the exponential tail.
 
 ```bash
 cd tests/standard/body-force/
-python3 -B check.py          # verify committed OUTPUT/
-# or regenerate first:
+# run the case, then verify OUTPUT/
 ../../../bin/IGLOO && python3 -B check.py
 ```
 
 ---
 
-## Status
+## Result
 
-**GREEN** — confirmed by `check.py` exit 0.
-25/25 particles match the linear body-force drift closed form within theoretical
+`check.py` exit 0: 25/25 particles match the linear body-force drift closed form within theoretical
 tolerance.
 
 ---

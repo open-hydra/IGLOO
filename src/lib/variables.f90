@@ -1,12 +1,12 @@
+!> Shared runtime state, populated once by read_IGLOO_input.
 module IGLOO_variables
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   implicit none
 
   character(len=32)  :: IGLOO_phase_prefix=''
   character(len=128) :: drag_word, heat_word, breakup_word, evaporation_word
-  !> [IGLOO-Models] composable phase-change axes — global defaults, per-material override in
-  !> [GPB-PhaseN]. Defaults = today's hard-wired behavior (ITC liquid, VLE interface, Xs=1
-  !> boiling clamp). Combustion/solidification are per-material only (no global key).
+  !> [IGLOO-Models] composable phase-change axes: global defaults, per-material override by the
+  !  key=value tokens on the material line of the phase file; combustion/solidification are per-material only.
   character(len=128) :: liquid_word='ITC', interface_word='VLE', boiling_word='clamp'
   character(len=128) :: blowing_word='none'
   integer  :: dragSelect=0
@@ -22,21 +22,27 @@ module IGLOO_variables
   logical  :: dsSwitch=.false.        !> any inflow cell carries a per-cell ds>0 (from bc.txt col 9)
   logical  :: ord2=.false.
   logical  :: mesh2D=.false.
-  logical  :: axisym=.false.          !> axisymmetric wedge mesh (k-planes span an angle about x)
-  real(R8) :: delthe=0._R8            !> wedge angle [rad]; particles crossing faces 5/6 fold by -+delthe
+  logical  :: axisym=.false.          !> axisymmetric wedge mesh (k-planes span an angle about axisDir)
+  real(R8) :: delthe=0._R8            !> wedge angle [rad]; particles crossing a wedge face fold by -+delthe
+  !> Symmetry-axis frame for axisymmetric wedges: axisDir is the axis, refDir the azimuth origin
+  !  (unit, orthogonal to axisDir, both in the x-y plane); not user-settable.
+  real(R8) :: axisDir(3) = [1._R8, 0._R8, 0._R8]   !> symmetry axis (unit)
+  real(R8) :: refDir(3)  = [0._R8, 1._R8, 0._R8]   !> azimuth origin, theta=0 (unit, ⟂ axisDir)
+  real(R8) :: sectorNorm(3,2) = 0._R8  !> outward unit normals of the wedge k-planes at -delthe/2 (1) and +delthe/2 (2)
+  real(R8), parameter :: sectorTol = 1.e-12_R8  !> distance past a k-plane that counts as outside [m]
+  integer  :: nSectorFold = 0, nMultiFold = 0  !> per-sweep witnesses: sector folds done, folds that rotated by > 1 sector
   integer  :: fsample, nb, nm, nfam, iprint, trajSample
   integer, allocatable :: nspecies(:)
   real(R8) :: ds, mdotMax, dtprint
-  real(R8) :: dsDegen=0._R8           !> [IGLOO-BC] ds-degen [m]: skip single/coverage injection in
-                                      !> cells with tangential size < dsDegen (degenerate/collapsing
-                                      !> boundary cells). 0 => only the geometric locate-guard applies.
+  !> [IGLOO-General] time-end [s]: every parcel stops there (huge = off); out-time appends the
+  !  parcel time to every trajectory and exit row.
+  real(R8) :: tEnd = huge(1._R8)
+  logical  :: timeOn = .false.
+  real(R8) :: dsDegen=0._R8           !> [IGLOO-BC] ds-degen [m]: no injection in boundary cells thinner than this
   integer  :: rng_seed=42             !> seed for stochastic injection-diameter sampling
 
-  !> [IGLOO-General] mollification of the geoblock eulerian/source feedback fields.
-  !> `mollifyOn` is the on|off switch (default ON);
-  !> `mollifyPasses` is the effective width in cells (~sqrt(passes)); 
-  !> when ON and not given in input.ini it defaults to DEFAULT_MOLLIFY_PASSES (IGLOO_Lib_Mollify).
-  !> mollifyPasses=0 => no-op. No physical width parameter: smoothing is mesh-local.
+  !> [IGLOO-General] mollification of the feedback fields: mollify on|off (default on),
+  !  mollify-passes (default DEFAULT_MOLLIFY_PASSES; 0 = no-op).
   logical  :: mollifyOn=.true.
   integer  :: mollifyPasses=0
 
@@ -45,9 +51,8 @@ module IGLOO_variables
   logical  :: bodyForce    = .false.
   logical  :: srcBodyForce = .false.
 
-  !> [IGLOO-General] probe-ids: DEBUG subset — integrate only these particle IDs, skip the rest.
-  !> Accepts IDs and a-b intervals, space-separated: `probe-ids = 1 2 6 496-497 1990`.
-  !> Absent/empty => probeOn=.false. => integrate all particles (normal run).
+  !> [IGLOO-General] probe-ids: debug subset of particle IDs to integrate (IDs and a-b ranges);
+  !  absent => all particles.
   integer, allocatable :: probeIDs(:)
   logical  :: probeOn = .false.
 
@@ -65,13 +70,13 @@ module IGLOO_variables
   real(R8), parameter :: threshold = 1.0e29_R8
 
   !> Output files units
-  integer :: unitTraj, unitScat, unitExit
+  integer :: unitTraj, unitScat, unitExit, unitSnap
 
-  !> [IGLOO-General] particle-output switches (both opt-out, default ON):
-  !>   out-traj    => trajectories-<mat>.dat (state per cell crossing)
-  !>   out-scatter => scatter-<mat>.dat (number-density point cloud, npdot-weighted)
-  !> dNscat is the per-material weight quantum (real droplets per scatter point), auto-sized.
+  !> [IGLOO-General] out-traj / out-scatter output switches (default on); dNscat is the
+  !  per-material scatter weight quantum (droplets per point), auto-sized.
   logical  :: trajOn=.true., scatOn=.true.
+  !> snapshot-<mat>.dat: each parcel's state at time-end (on when time-end is set).
+  logical  :: snapOn=.false.
   real(R8) :: dNscat=0._R8
 
 end module IGLOO_variables 

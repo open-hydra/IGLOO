@@ -1,3 +1,4 @@
+!> Conservative binomial smoothing of cell-centered feedback fields.
 module IGLOO_Lib_Mollify
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   implicit none
@@ -6,37 +7,20 @@ module IGLOO_Lib_Mollify
   public :: binomial_smooth
   public :: DEFAULT_MOLLIFY_PASSES
 
-  !> Per-sweep Laplacian coefficient. 1/4 makes one 1-D sweep the binomial
-  !  [1/4, 1/2, 1/4] filter, which annihilates the Nyquist mode; <= 1/2 keeps the
-  !  update a convex combination, hence monotone.
+  !> Per-sweep Laplacian coefficient: 1/4 gives the [1/4, 1/2, 1/4] binomial filter.
   real(R8), parameter :: theta = 0.25_R8
 
-  !> Passes used when mollification is on and `mollify-passes` is absent.
-  !  8 passes = Gaussian-equivalent width of 2 cells.
+  !> Passes used when mollification is on and `mollify-passes` is absent (~2-cell width).
   integer, parameter :: DEFAULT_MOLLIFY_PASSES = 8
 
-  !> Below this cell count the OpenMP fork/join costs more than the sweep, so the
-  !  parallel region runs serially (OMP `IF` clause).
+  !> Cell count below which the OpenMP region runs serially.
   integer, parameter :: MOLLIFY_OMP_MIN = 4096
 
 contains
 
-  !> Conservative dimension-split binomial smoother for a cell-centered field q:
-  !  removes cell-crossing / deposition noise. Each pass sweeps one axis in turn.
-  !
-  !  Written in GATHER form with ping-pong buffers: every cell writes only itself in
-  !  `dst` and reads only `src`, so the loop is race-free without atomics and needs no
-  !  snapshot copy. The interior-face flux
-  !     phi_f = theta * min(V_c, V_n) * (src_n - src_c)
-  !  is evaluated identically from both sides, so Sum(q*V) is conserved to machine
-  !  precision. Boundary faces are dropped => zero-flux block boundaries, no ghosts.
-  !  Face area and distance cancel, leaving a volume-only stencil that cannot go stiff
-  !  on near-wall meshes; the per-cell diffusion number stays <= theta <= 1/2.
-  !
-  !  CONTRACT: `q` is a DENSITY. For an extensive per-cell quantity the caller passes
-  !  q/V in and multiplies by V out. `npass` sets the width (npass<=0 is a no-op),
-  !  `ndim` (2 or 3) selects the z-sweep, and the optional `work` buffer is the
-  !  ping-pong partner that avoids an allocate per call on the hot path.
+  !> Conservative dimension-split binomial smoother for a cell-centered density q (extensive
+  !  quantities are passed as q/V): npass sweeps over x, y and, for ndim = 3, z, in gather form
+  !  on ping-pong buffers with zero-flux block boundaries; `work` is an optional scratch buffer.
   subroutine binomial_smooth(q, V, npass, ndim, work)
     implicit none
     real(R8), intent(inout),         target   :: q(:,:,:)
@@ -55,7 +39,7 @@ contains
     if (any(V <= tiny(1._R8))) &
       error stop 'IGLOO_Lib_Mollify::binomial_smooth: non-positive cell volume'
 
-    !> Ping-pong partner: reuse caller's pre-allocated scratch when given, else allocate.
+    !> Ping-pong buffer: the caller's scratch when given, else a local one.
     if (present(work)) then
       if (size(work,1) /= Nx .or. size(work,2) /= Ny .or. size(work,3) /= Nz) &
         error stop 'IGLOO_Lib_Mollify::binomial_smooth: work scratch shape mismatch'
@@ -70,7 +54,7 @@ contains
     s0 = sum(q*V)
 
     do p = 1, npass
-      !> x-sweep: dst <- gather over i-interior faces of src. (read src, write dst)
+      !> x-sweep
       !$OMP PARALLEL DO COLLAPSE(2) DEFAULT(SHARED) PRIVATE(i,phiL,phiR) IF(useOMP)
       do k = 1, Nz
         do j = 1, Ny
@@ -84,7 +68,7 @@ contains
       enddo
       !$OMP END PARALLEL DO
       swp => src; src => dst; dst => swp
-      !> y-sweep: j-interior faces; reads the x-smoothed field (sequential split)
+      !> y-sweep
       !$OMP PARALLEL DO COLLAPSE(2) DEFAULT(SHARED) PRIVATE(i,phiL,phiR) IF(useOMP)
       do k = 1, Nz
         do j = 1, Ny
@@ -98,7 +82,7 @@ contains
       enddo
       !$OMP END PARALLEL DO
       swp => src; src => dst; dst => swp
-      !> z-sweep: k-interior faces (3D only)
+      !> z-sweep (3D only)
       if (ndim >= 3) then
         !$OMP PARALLEL DO COLLAPSE(2) DEFAULT(SHARED) PRIVATE(i,phiL,phiR) IF(useOMP)
         do k = 1, Nz
@@ -116,14 +100,12 @@ contains
       endif
     enddo
 
-    !> After the last swap the result lives in `src`; ensure q holds it (>=0 or 1 copy).
+    !> The result lives in src after the last swap; copy it back into q if needed.
     if (.not. associated(src, q)) q = src
     if (allocated(buf)) deallocate(buf)
     src => null(); dst => null()
 
-    !> Conservation guard. Denominator is the L1 mass Sum(|q|*V), NOT the signed net
-    !  Sum(q*V): a signed field (momentum) whose net nearly cancels must not collapse
-    !  the denominator and false-trip on accumulated round-off.
+    !> Conservation guard, relative to the L1 mass Sum(|q|*V) (not the signed net).
     s1    = sum(q*V)
     denom = max(sum(abs(q)*V), tiny(1._R8))
     if (abs(s1 - s0)/denom > 1.e-10_R8) then

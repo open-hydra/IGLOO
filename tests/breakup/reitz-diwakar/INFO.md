@@ -13,7 +13,7 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
 
 | id | mode | source | doi | locus | compared | settings_provenance | status |
 |---|---|---|---|---|---|---|---|
-| D2 | hybrid | `[RD86]` Reitz & Diwakar 1986 | DOI:10.4271/860469 | bag regime: `τ ∝ d^1.5`, threshold `We_bag = WeBag`; strip regime: `τ ∝ d`, threshold from `Cs/√Re`; `npdot` evolution gives reduced ODE `ḋ = (d_stab − d)/τ(d)`; `bp = [WeBag, Cb, Cstrip, Cs]` | (a) regime selection vs (We, Re) sweep matches [RD86] regime map; (b) `d(t)` vs Tier-2 oracle of production `npdot` rate (re-implemented independently in `verif_oracle.f90`): `relL2 < tol`; (c) `τ` and `d_stab` values match closed-form expressions from [RD86] eq. set | constant gas state at (We, Re) points spanning bag-only / strip-only / threshold; single parcel; INI `bp` read in test driver | not started |
+| D2 | hybrid | `[RD86]` Reitz & Diwakar 1986 | DOI:10.4271/860469 | bag regime: `τ ∝ d^1.5`, threshold `We_bag = WeBag`; strip regime: `τ ∝ d`, threshold from `Cs/√Re`; `npdot` evolution gives reduced ODE `ḋ = (d_stab − d)/τ(d)`; `bp = [WeBag, Cb, Cstrip, Cs]` | (a) regime selection vs (We, Re) sweep matches [RD86] regime map; (b) `d(t)` vs Tier-2 oracle of production `npdot` rate (re-implemented independently in `verif_oracle.f90`): `relL2 < tol`; (c) `τ` and `d_stab` values match closed-form expressions from [RD86] eq. set | constant gas state at (We, Re) points spanning bag-only / strip-only / threshold; single parcel; INI `bp` read in test driver | implemented: `test_breakup_rd` (`CMakeLists.txt:265`) |
 
 ## Notes
 

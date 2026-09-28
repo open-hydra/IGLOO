@@ -46,7 +46,14 @@ def main():
         ref.append((we, check.kh_rate(d, slip)))
     ref = [(w, r) for w, r in ref if r < 0.0]
 
-    gated, ungated = [], []
+    # Three series, not two. Since A23/S4 lifted the one-shed cap this case emits ~241 KH-shed
+    # children alongside the 25 injected parcels, and they are small => low We_r => they all land
+    # left of the gate cut. Lumping them into `ungated` put 248 open circles on a panel whose
+    # subject is 14 points: the children have to be drawn separately or not at all. They are a
+    # different population — born mid-domain at dStable, not injected — so they are shown
+    # subdued, as context for the gated comparison rather than part of it. The GATE is unaffected
+    # either way: no child clears We_r >= WE_MIN.
+    gated, ungated, kids = [], [], []
     for pid in sorted(parts):
         raw = sorted(parts[pid])          # record order is OMP-nondeterministic
         rows = [raw[0]]
@@ -60,7 +67,10 @@ def main():
         r_ig, _ = check.windowed_rates(rows)
         if r_ig is None:
             continue
-        (gated if wer >= check.WE_MIN else ungated).append((wer, r_ig))
+        if pid > check.N_INJECTED:
+            kids.append((wer, r_ig))
+        else:
+            (gated if wer >= check.WE_MIN else ungated).append((wer, r_ig))
 
     fig, ax = plt.subplots(figsize=(6.2, 4.0))
     if ref:
@@ -70,6 +80,9 @@ def main():
     if ungated:
         ax.plot(*zip(*ungated), "o", color="C1", ms=4.5, mfc="none",
                 label="IGLOO (RT would fire in-window; not gated)")
+    if kids:
+        ax.plot(*zip(*kids), ".", color="0.62", ms=2.6, ls="none", zorder=1,
+                label=f"KH-shed children ({len(kids)}, not gated)")
     ax.axvline(check.WE_MIN, ls=":", color="gray", lw=1)
     ax.set_xscale("log")
     ax.set_xlabel("$We_r = \\rho_g u^2 r/\\sigma$")

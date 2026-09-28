@@ -35,15 +35,16 @@ IGLOO can also run standalone — without MOSE — when the gas field is provide
 
 | Feature | Details |
 |---------|---------|
-| **Drag** | Stokes, Morsi–Alexander, Crowe, Hermsen, Henderson, Putnam models |
-| **Heat transfer** | Kavanau–Drake, Ranz–Marshall Nusselt correlations |
-| **Evaporation** | Vapor-pressure driven mass transfer; coupled diameter and temperature evolution |
-| **Secondary breakup** | Five models (Pilch–Erdman, Reitz, KHRT, TAB, Beale–Reitz); optional child-particle generation with dynamic array compaction/growth |
+| **Drag** | 13 correlations: Stokes, Schlichting, Schiller–Naumann, Morsi–Alexander, Wen–Yu, Newton, Chang, Clift–Gauvin, Putnam (incompressible); Henderson, Crowe, Hermsen, Carlson–Hoglund (compressible) |
+| **Heat transfer** | Six Nusselt correlations: Ranz–Marshall, Kavanau–Drake, JAXA1–JAXA4 |
+| **Evaporation** | d²-law, CEM, CEM-B, Abramzon–Sirignano and Tonini–Cossali mass transfer; equilibrium or Langmuir–Knudsen interface; optional Stefan-blowing heat reduction |
+| **Metal combustion** | Beckstead $d^n$ aluminium burn law with ignition gate, heat release and burnout |
+| **Secondary breakup** | Five models (Pilch–Erdman, Reitz–Diwakar, Reitz-KHRT, TAB, ETAB); KHRT child-particle generation with dynamic array compaction/growth |
 | **Injection** | Boundary-patch injection (2D sweep or 3D advancing-front hexagonal packing); assigned position injection; stochastic diameter distributions (Dirac, Normal, LogNormal, Rosin–Rammler) |
 | **Eulerian feedback** | Particle statistics deposited onto the gas mesh as Eulerian and source fields, smoothed by a volume-weighted binomial mollifier |
 | **ODE integration** | Explicit (DOPRI5) or stiff implicit (H-SDIRK4) stepping via the OSlo library; geometric cell tracking by ray/face intersection |
-| **Parallelism** | OpenMP-parallel hot loop over particles |
-| **I/O** | Tecplot ASCII/binary via ORION; trajectory, Eulerian-field, scatter-cloud, and exit-location output |
+| **Parallelism** | OpenMP-parallel hot loop over particles; optional MPI decomposition over particles with rank-count-invariant output |
+| **I/O** | Tecplot ASCII/binary via ORION; trajectory, Eulerian-field, source-field, scatter-cloud, and exit-location output |
 
 ---
 
@@ -57,4 +58,4 @@ IGLOO is built on three companion libraries, included as Git submodules in a sta
 | [OSlo](https://github.com/MarcoGrossi92/OSlo) | ODE solver library (DOPRI5, H-SDIRK4) |
 | [FiNeR](https://github.com/szaghi/FiNeR) | INI configuration file parser |
 
-Optional: **OpenMP** (parallelism), **TecIO** (Tecplot binary output, pulled in transitively by ORION).
+Optional: **OpenMP** (threads over particles), **MPI** (ranks over particles, hybrid with OpenMP), **TecIO** (Tecplot binary output, pulled in transitively by ORION; not combinable with MPI).

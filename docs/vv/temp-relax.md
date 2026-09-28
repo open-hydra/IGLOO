@@ -90,17 +90,15 @@ tail — not a code defect, so correctly excluded.
 
 ```bash
 cd tests/standard/temp-relax/
-python3 -B check.py          # verify committed OUTPUT/
-# or regenerate first:
+# run the case, then verify OUTPUT/
 ../../../bin/IGLOO && python3 -B check.py
 ```
 
 ---
 
-## Status
+## Result
 
-**GREEN** — confirmed by `check.py` exit 0.
-25/25 particles match the lumped-capacitance ($\mathrm{Nu} = 2$) closed form within
+`check.py` exit 0: 25/25 particles match the lumped-capacitance ($\mathrm{Nu} = 2$) closed form within
 theoretical tolerance.
 
 ---

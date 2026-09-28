@@ -37,6 +37,14 @@ Parameters not specified take their default values. Unknown sections are silentl
 
 ## ATLAS-Generated Sections (not parsed by IGLOO)
 
+IGLOO reads only the `[IGLOO-*]` sections above. The sections below are the *preprocessor's* input:
+whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase.txt`,
+`properties.dat`, `bc.txt`). The per-material model keys (`evaporation`, `combustion`, `solidification`,
+`alpha-e`, ...) are `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after `<name> <groups>`
+on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
+The `<groups>` summed over the material lines is the family count, and therefore the number of table
+copies `bc.txt` may carry (one copy feeds every family; see [Several families](boundary-conditions.md#several-families)).
+
 | Section | Role |
 |---------|------|
 | `[GPB-Phase*]` | Per-material condensed-phase properties (type, density, heat capacity) for ATLAS BC building |
@@ -114,21 +122,24 @@ Controls the gas field source, output modes, and miscellaneous run-time options.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `gas-file` | string | — | Path to the Tecplot gas field (ignored when `external_gas` is provided by hydra) |
+| `phase` | string | `''` | ATLAS name of the condensed phase to read (`[GPB-Phase*] name`): the files become `INPUT/<phase>-{phase.txt,properties.dat,bc.txt}` and every output gets the `<phase>-` prefix. Absent keeps the prefix in force (unnamed `INPUT/phase.txt` standalone; the parent app's assignment under hydra-MI2). Must not contain `-` |
 | `gas-order` | integer | `2` | Gas interpolation order: `1` = cell-center value, `2` = second-order reconstruction |
-| `out-file` | string | both | Output fields: `E` = Eulerian only, `S` = source only; any other value = both |
-| `fsample-traj` | integer | `100` | Trajectory sampling: record every nth particle-state (scatter and trajectory output) |
-| `print-dcell` | integer | `1` | Console print frequency in cell crossings |
-| `print-dtime` | real | `−1` | Console print frequency in seconds; `−1` disables time-based printing |
+| `out-file` | string | `E+S` | Output fields: `E` = Eulerian only, `S` = source only, `E+S` (also `S+E`, `ES`, `SE`, `ALL`, `both`, case-insensitive; or absent) = both; any other token is refused |
+| `fsample-traj` | integer | `100` | Scatter-cloud density: nominal points per injection stream (sets the droplets-per-point quantum); trajectory rows follow `print-dcell`/`print-dtime`, not this key |
+| `print-dcell` | integer | `1` | Trajectory row frequency in cell crossings |
+| `print-dtime` | real | `−1` | Trajectory row interval [s]; `−1` disables time-based rows |
+| `time-end` | real | `−1` | Parcel end time [s]: every parcel still in the domain stops there, gets a last trajectory row at that time, and its state goes to `snapshot-<mat>.dat`; `≤ 0` or absent = off (integrate until the parcel leaves the domain) |
+| `out-time` | string | `off` | `on` appends the parcel time [s] as the last column of every trajectory and exit row |
 | `mdot-max` | real | `0` | Maximum mass flow rate per particle [g/s]; used to auto-size injection spacing |
 | `out-traj` | string | `on` | Enable trajectory output (`off` to disable) |
 | `out-scatter` | string | `on` | Enable scatter-cloud output (`off` to disable) |
 | `seed` | integer | `42` | RNG seed for stochastic diameter sampling |
 | `mollify` | string | `on` | Enable field mollification smoother (`off` to disable) |
-| `mollify-passes` | integer | auto | Binomial smoother passes; default suppresses ≤4-cell deposition noise |
+| `mollify-passes` | integer | `8` | Binomial smoother passes; `0` = off |
 | `body-accel` | real(3) | `0 0 0` | Uniform body acceleration [m/s²]: `gx gy gz`; absent or all-zero = no-op |
 
 !!! warning "on/off switches are strings, not Fortran logicals"
-    FiNeR's `get(logical)` only accepts `T` or `F`. The `out-traj`, `out-scatter`, and `mollify` keys are parsed as strings; accepted off-tokens are `off`, `false`, `no`, `0`, `F`, `f` (any case). Anything else is treated as on.
+    FiNeR's `get(logical)` only accepts `T` or `F`. The `out-traj`, `out-scatter`, `out-time` and `mollify` keys are parsed as strings; accepted off-tokens are `off`, `false`, `no`, `0`, `F`, `f` (any case). Anything else is treated as on.
 
 ### `[IGLOO-Models]`
 
@@ -136,12 +147,14 @@ Selects physical model closures.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `drag` | string | — | Drag law: `Stokes`, `Morsi-Alexander`, `Crowe`, `Hermsen`, `Henderson`, `Putnam` |
-| `heat` | string | — | Nusselt correlation: `Ranz-Marshall`, `Kavanau-Drake` |
-| `evaporation` | string | absent | Evaporation model; when present, enables phase change |
-| `breakup` | string | absent | Breakup model; when present, enables secondary breakup |
+| `drag` | string | — | Drag law: one of the 13 correlations in [Drag](../theory/drag.md) (`Stokes`, `Schiller-Naumann`, `Morsi-Alexander`, `Henderson`, `Crowe`, ...), or `NoDrag` (C_d = 0, no momentum exchange) |
+| `heat` | string | — | Nusselt correlation: `Ranz-Marshall`, `Kavanau-Drake`, `JAXA1`–`JAXA4`, or `NoHeat` (Nu = 0, no convective heat exchange) |
+| `evaporation` | string | absent | Evaporation model (`d2-law`, `CEM`, `CEM-B`, `ASM`, `TC`); when present, enables phase change |
+| `interface` | string | `VLE` | Surface state: `VLE` equilibrium or `LK` Langmuir–Knudsen non-equilibrium |
+| `blowing` | string | `none` | Stefan-blowing reduction of the convective heat: `none` or `LK` |
+| `breakup` | string | absent | Breakup model (`Pilch-Erdman`, `Reitz-Diawakar`, `Reitz-KHRT`, `TAB`, `ETAB`); when present, enables secondary breakup |
 
-Breakup model–specific tuning constants (`B0`, `B1`, `Cs`, etc.) are also read from `[IGLOO-Models]` when a breakup model is active; see the [Parameter Registry](registry.md) for per-model keys.
+Breakup model–specific tuning constants (`B0`, `B1`, `Cs`, etc.) are also read from `[IGLOO-Models]` when a breakup model is active; see the [Parameter Registry](registry.md) for per-model keys. Unknown model tokens, and the reserved `evaporation = LEB`, are refused at setup.
 
 ### `[IGLOO-Properties]`
 
@@ -149,10 +162,10 @@ Constant evaporation and breakup properties, one value per material in the order
 
 | Key | Description |
 |-----|-------------|
-| `psat` | Saturation pressure [Pa] |
-| `Mv` | Vapor molecular weight [kg/mol] |
+| `psat` | Legacy, accepted and ignored — the saturation pressure is computed from Clausius-Clapeyron (`Lv`, `Mv`, `boiling-temperature`) or read from the `Psat` column of `properties.dat` |
+| `Mv` | Vapor molar mass [kg/kmol] |
 | `Lv` | Latent heat of vaporization [J/kg] |
-| `Tboil` | Boiling temperature [K] |
+| `boiling-temperature` (alias `Tboil`) | Boiling temperature [K]; give one name or the other, not both |
 | `cpv` | Vapor specific heat [J/(kg·K)] |
 | `Le` | Lewis number |
 | `Yinf` | Far-field vapor mass fraction |
@@ -163,7 +176,7 @@ Constant evaporation and breakup properties, one value per material in the order
 
 Controls injection particle placement.
 
-**Boundary-patch injection** (default, `method = FB`): particles are placed on all faces tagged as inlet in `INPUT/bc.txt`. Controlled by:
+**Boundary-patch injection** (method `FB`, selected when no `x`/`y`/`z` is given): particles are placed on all faces tagged as inlet in `INPUT/bc.txt`. Controlled by:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -171,12 +184,12 @@ Controls injection particle placement.
 | `ds-degen` | real | `0` | Degeneracy floor [cm]: skip injection in boundary cells whose tangential size is below this threshold. |
 | `fsample` | integer | `1` | Injection cell subsampling factor. |
 
-**Assigned-position injection** (`method = DB`): provide explicit coordinates instead of boundary-face scanning. Requires `x`, `y`, `z` (or any combination), plus `mdot` and `diam`.
+**Assigned-position injection** (method `DB`, selected by the presence of `x`/`y`/`z`): provide explicit coordinates instead of boundary-face scanning. Requires `x`, `y`, `z` (or any combination), plus `mdot` and `diam`.
 
 | Key | Description |
 |-----|-------------|
 | `x`, `y`, `z` | Injection point coordinates (scalar or array) [m] |
-| `mdot` | Mass flow rate per particle [g/s] (scalar or array) |
+| `mdot` | Mass flow rate per particle [kg/s] (scalar or array) |
 | `diam` | Particle diameter [m] (scalar or array) |
 | `temp0` | Initial temperature [K] (optional, defaults to gas temperature) |
 | `up`, `vp`, `wp` | Initial velocity components [m/s] (optional) |
@@ -187,12 +200,61 @@ Selects and tunes the ODE integrator.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `ode-solver` | string | `H-sdirk4` | Integrator: `H-dopri5` (explicit DOPRI5) or `H-sdirk4` (implicit H-SDIRK4) |
+| `ode-solver` | string | `H-sdirk4` | Integrator: `H-sdirk4` (implicit SDIRK4) or `H-dopri5` (explicit Dormand–Prince 5(4)); any other token is refused |
 | `relative-tol` | real | `1e-10` | Relative ODE tolerance |
 | `absolute-tol` | real | `1e-10` | Absolute ODE tolerance |
-| `max-steps-ode` | integer | `100000` | Maximum ODE steps per cell crossing |
+| `max-steps-ode` | integer | `100000` | Maximum internal steps per integrator call (`iopt(1)`) |
 
 `H-sdirk4` is recommended for stiff cases (evaporation, small Stokes number). `H-dopri5` is faster for non-stiff drag-only cases.
+
+---
+
+## Property tables (`INPUT/properties.dat`)
+
+One zone per material, in the order of the material lines of `INPUT/phase.txt`; every zone on
+the same temperatures, one row per integer kelvin (`T = Tmin, Tmin+1, ..., Tmax`). The first line
+holding `VARIABLES` names the columns:
+
+```text
+VARIABLES = "Temperature", "Cp", "Density", "Enthalpy", "Psat"
+```
+
+| column | unit | |
+|---|---|---|
+| `Temperature` | K | first; the nodes |
+| `Cp` | J/(kg K) | required |
+| `Density` | kg/m³ | required |
+| `Enthalpy` or `Enthalpy_abs` | J/kg | required, exactly one: `Enthalpy` is relative (`cp·T`, or the integral of cp), `Enthalpy_abs` includes the formation enthalpy (the datum, see below) |
+| `Psat` | Pa, absolute | optional: the saturation pressure of an evaporating material |
+
+After `Temperature` the columns may come in any order; the lowercase names are accepted too
+(`PSAT` as well). A column whose property is constant in T is read as a constant; one that varies
+becomes a table, linear between the nodes. Outside the table the density holds its end values and
+the enthalpy continues its first and last segments, both as in ICE. With a varying `Cp` the particle
+state is the enthalpy, and its temperature is read back through the same table, so the table may
+start at any temperature (see [Governing equations](../theory/governing-equations.md)).
+
+**`Psat`.** An evaporating material takes its saturation pressure from the column, linear between
+the nodes and at its end values outside the table; a column of zeros keeps Clausius-Clapeyron
+(`Lv`, `Mv`, `boiling-temperature` of `[IGLOO-Properties]`), and a material that does not evaporate
+ignores it. With the column, `Lv` is the latent-heat sink only. Setup prints
+`p_sat tabulated from properties.dat (Tmin..Tmax K), psat(boiling-temperature)/Patm = ...` per
+material that uses it. ATLAS GPB writes the column from a liquid/vapour pair of its thermo database
+(`[GPB-Phase*] psat-vapour`), zeros for a material without a pair.
+
+A table is refused at setup, with the reason and the expected header, when: there is no
+`VARIABLES` line, the first column is not `Temperature`, `Cp`, `Density` or an enthalpy column is
+missing, a column is named twice, both `Enthalpy` and `Enthalpy_abs` appear, a data row does not
+hold a number for every named column, text follows the last row, a zone's `I=` differs from the
+rows it holds, the rows are not on consecutive integer kelvins (to 1e-6 K), a value is not
+finite, a density or cp is not positive, the enthalpy does not increase with T or disagrees with
+cp (a constant cp: `h = cp·T + hOff` on every row; a varying cp: the trapezoid sum), or a relative
+`Enthalpy` of a constant cp has an offset. The `Psat` column of an evaporating material is refused
+for a value that is not finite, a negative pressure, a pressure that decreases with T (equal
+neighbours, such as low-T values rounded to 0, are accepted), a constant pressure,
+`boiling-temperature` outside `[Tmin, Tmax−1]`, or `psat(boiling-temperature)` more than a factor 2
+away from one atmosphere (a unit slip or a wrong liquid/vapour pair; a database curve sits within
+a few percent).
 
 ---
 
@@ -203,3 +265,9 @@ Selects and tunes the ODE integrator.
 
 !!! warning "`[GPB-Phase1] rho` is ignored at run time"
     Particle density at run time comes from `INPUT/properties.dat`, not from the `rho` key in `[GPB-Phase1]`. The `[GPB-Phase*]` sections are ATLAS input; IGLOO uses the property tables that ATLAS writes to `INPUT/properties.dat`.
+
+!!! warning "`properties.dat` zones bind to materials by ORDER"
+    Zone *i* of `INPUT/properties.dat` is the material on line *i* of `INPUT/phase.txt`; the zone title (`ZONE T="..."`) is not read. ATLAS writes both files in material order, so a generated case is always consistent — the trap is a hand-edited or regenerated `phase.txt` paired with a stale `properties.dat`, which is a silent density/cp swap. IGLOO refuses a file whose zone count differs from the material count or whose zones do not share one temperature table.
+
+!!! note "The enthalpy column carries a datum"
+    Column 4 of `properties.dat` is named `Enthalpy` (relative: `cp·T`, or the SP-database integral from `Tmin`) or `Enthalpy_abs` (absolute: formation enthalpy included — thermo tables, or a fixed `cp` with `[GPB-Phase*] h0`). For a constant-`cp` material IGLOO integrates the temperature and takes the table's level once, `hOff = h(Tmin) − cp·Tmin` (0 for a relative table), and the gas coupling source credits the transferred mass at `cp·T + hOff`; a variable-`cp` material integrates the enthalpy state read from the table, which carries its datum by itself. The datum only matters when mass is transferred to a gas solver whose energy is absolute (hydra-MI2): a relative table then leaves the coupler to correct the level. A relative-tagged constant-`cp` column that is not `cp·T` is refused at setup. The datum is printed per material at setup (`enthalpy datum absolute|relative (hOff = ...)`).

@@ -1,18 +1,18 @@
 module Lib_RHS
-  use, intrinsic :: iso_fortran_env, only: I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only: R8 => real64
   implicit none
   private
 
-  public  :: determineModel, computeNeq, setupRHS
+  public  :: determineModel, computeNeq, computeNode, setupRHS
   public  :: packAuxVars
   public  :: packAuxState, unpackAuxState
   public  :: packEventVar, unpackEventVar
   public  :: rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, rhsAlCombustion
-  ! public  :: ind_xi
+  public  :: rhsSolidification
   public  :: ind_d, ind_rho, ind_sig, ind_mup
-  public  :: ind_m0, ind_n0, ind_ps, ind_Mv, ind_Lv, ind_Cv
+  public  :: ind_ps, ind_Mv, ind_Lv, ind_Cv
   public  :: ind_Le, ind_Yi, ind_e1, ind_e2, ind_cp, ind_m
-  public  :: ind_sxi, ind_sb1, ind_sb2
+  public  :: ind_sxi, ind_sb1, ind_sb2, ind_sph
   public  :: ind_evd, ind_evn, ind_evm0, ind_ev1, ind_ev2
   public  :: ind_e3, ind_e4, ind_e5, ind_mb, nmetal
   public  :: mod_model, mod_brkSelect, mod_evapSelect, mod_propFlags
@@ -20,37 +20,37 @@ module Lib_RHS
   public  :: mod_bp, mod_bpMethod, mod_bpScale
   public  :: nauxvar, nauxstate, neventvar, nbrkst
 
-  !--- Per-material config (set once via setupRHS, read-only during integration) ---
-  integer :: mod_model      = 1         !> RHS model (1-5)
+  !> Per-material config, set once by setupRHS
+  integer :: mod_model      = 1         !> RHS model (1-6)
   integer :: mod_brkSelect  = 0         !> breakup model selector
   integer :: mod_evapSelect = 0         !> evaporation gas-side selector
   integer :: mod_liqSelect  = 0         !> liquid-side: 0 ITC, 1 P2T (not implemented)
   integer :: mod_intfSelect = 0         !> interface:   0 VLE, 1 Langmuir-Knudsen
   integer :: mod_boilSelect = 0         !> boiling:     0 clamp, 1 ZGR (not implemented)
   integer :: mod_combSelect = 0         !> metal combustion: 0 off, 1 Beckstead
-  integer :: mod_solidSelect= 0         !> solidification:   0 off, 1 supercool (not implemented)
+  integer :: mod_solidSelect= 0         !> solidification:   0 off, 1 supercool + recalescence
   logical :: mod_propFlags(5) = .false. !> [varCp, varRho, varSig, varMup, varPsat]
   real(R8), allocatable :: mod_bp(:)    !> breakup params (copy of bp from IGLOO_Lib_Breakup)
   integer  :: mod_bpMethod  = 1         !> TAB sub-method selector
   real(R8) :: mod_bpScale   = 1._R8     !> TAB precomputed scale factor
 
-  !--- AuxVars dynamic indices (set by computeNaux, 0 = not allocated) ---
+  !> AuxVars indices (set by computeNaux, 0 = absent)
   integer :: ind_cp  = 0, ind_m  = 0, ind_d   = 0, ind_rho = 0
   integer :: ind_sig = 0, ind_mup = 0
-  integer :: ind_n0  = 0, ind_m0  = 0
   integer :: ind_ps  = 0, ind_Mv  = 0, ind_Lv = 0, ind_Cv = 0
   integer :: ind_Le  = 0, ind_Yi  = 0, ind_e1 = 0, ind_e2  = 0
   integer :: ind_e3  = 0, ind_e4  = 0, ind_e5 = 0  !> alpha_e (LK interface); k_liq / mu_liq reserved for P2T
   integer :: ind_mb  = 0                            !> metal-block start (combustion), 0 = absent
-  integer, parameter :: nmetal = 11                 !> [Kburn,nBurn,Xeff,betaPart,xiCap,Tign,Tmelt,hFus,Tnuc,cpSol,qComb] = IGLOO_Lib_Combustion imKb..imQc
+  integer, parameter :: nmetal = 11                 !> metal parameter block, order = IGLOO_Lib_Combustion imKb..imQc
   integer :: nauxvar = 0
 
-  !--- AuxState indices (set by computeNauxState) ---
+  !> AuxState indices (set by computeNauxState)
   integer :: ind_sxi = 0                    !> xi0 start in auxState
   integer :: ind_sb1 = 0, ind_sb2 = 0       !> told/tc in auxState (KHRT breakupOde)
+  integer :: ind_sph = 0                    !> solidification phase in auxState (model 6)
   integer :: nauxstate = 0                   !> total auxState size
 
-  !--- EventVar indices (set by computeNeventVar) ---
+  !> EventVar indices (set by computeNeventVar)
   integer :: ind_evd  = 0                   !> dp in eventVar
   integer :: ind_evn  = 0                   !> npdot in eventVar
   integer :: ind_evm0 = 0                   !> m0 in eventVar
@@ -60,14 +60,13 @@ module Lib_RHS
 
 contains
 
-  !===================================================================!
-  !  Model selection                                                  !
-  !===================================================================!
-  pure function determineModel(phaseChange, brkupEqOde, combSelect) result(model)
+  !> ODE model selector from the solidification, combustion, breakup-ODE and phase-change flags.
+  pure function determineModel(phaseChange, brkupEqOde, combSelect, solidSelect) result(model)
     logical, intent(in) :: phaseChange, brkupEqOde
-    integer, intent(in) :: combSelect
+    integer, intent(in) :: combSelect, solidSelect
     integer :: model
-    if     (combSelect>0) then; model = 5  !> Al combustion; combustion x breakup rejected at IO
+    if     (solidSelect>0) then; model = 6 !> solidification
+    elseif (combSelect>0) then; model = 5  !> Al combustion
     elseif (brkupEqOde .and. &
             phaseChange) then; model = 4
     elseif (brkupEqOde ) then; model = 3
@@ -76,9 +75,7 @@ contains
     endif
   end function determineModel
 
-  !===================================================================!
-  !  Number of equations per model                                    !
-  !===================================================================!
+  !> Number of ODE equations per model, plus the euler moments and body-force accumulators.
   pure function computeNeq(model, eulerSwitch, srcBodyForce) result(neq)
     integer, intent(in) :: model
     logical, intent(in) :: eulerSwitch, srcBodyForce
@@ -86,11 +83,10 @@ contains
     select case(model)
     case(2,3,5) ; neq = 8; if (eulerSwitch) neq = neq + 6
     case(4)     ; neq = 9; if (eulerSwitch) neq = neq + 7
+    case(6)     ; neq = 8; if (eulerSwitch) neq = neq + 5
     case default; neq = 7; if (eulerSwitch) neq = neq + 5
     end select
-    !> Body-force source-reaction accumulators (mass-evolving models 2,4,5): W=int(mdot*g.v)dt at
-    !  tail slot neq, and J=int(mdot)dt at neq-1 — except when eulerSwitch is on, where J reuses the
-    !  euler mass moment so only W is appended. Models 1,3 use a closed form at deposition (no state).
+    !> body-force accumulators (mass-evolving models): W at neq, J at neq-1 unless euler-on
     if (srcBodyForce .and. (model==2 .or. model==4 .or. model==5)) then
       if (eulerSwitch) then; neq = neq + 1   ! W only; J reuses the euler mass moment
       else;                  neq = neq + 2    ! J and W both appended
@@ -98,9 +94,14 @@ contains
     endif
   end function computeNeq
 
-  !===================================================================!
-  !  Number of auxiliar variables (read only in RHS) per model        !
-  !===================================================================!
+  !> Number of ODE state variables per model: computeNeq without the euler moments and accumulators.
+  pure function computeNode(model) result(nOde)
+    integer, intent(in) :: model
+    integer :: nOde
+    nOde = computeNeq(model, .false., .false.)
+  end function computeNode
+
+  !> Number of auxiliary variables (read-only in the RHS) per model, and their indices.
   subroutine computeNaux(model,brkSelect,evapSelect,combSelect, &
                          propFlags,ord2,mesh2D,nAux)
     integer, intent(in)  :: model, brkSelect, evapSelect, combSelect
@@ -110,11 +111,11 @@ contains
 
     nBase = 0; nBrk = 0; nEvap = 0; nComb = 0; ind = 1
 
-    !--- BASE ---
+    !> base
     if (.not.propFlags(1)) then
       nBase = nBase + 1; ind_cp = ind; ind = ind + 1       !> cp (constant)
     endif
-    if (model==1) then
+    if (model==1 .or. model==6) then
       nBase = nBase + 1; ind_m = ind; ind = ind + 1        !> mass (truly constant)
       if (.not.propFlags(2)) then
         nBase = nBase + 1; ind_d   = ind; ind = ind + 1    !> diameter (const mass+rho)
@@ -130,7 +131,7 @@ contains
       nBase = nBase + 1; ind_rho = ind; ind = ind + 1      !> density (const)
     endif
 
-    !--- BREAKUP ---
+    !> breakup
     if (brkSelect > 0) then
       if (.not.propFlags(3)) then
         nBrk = nBrk + 1; ind_sig = ind; ind = ind + 1     !> surface tension (const)
@@ -138,14 +139,9 @@ contains
       if (.not.propFlags(4)) then
         nBrk = nBrk + 1; ind_mup = ind; ind = ind + 1     !> liquid viscosity (const)
       endif
-      ! ind_n0 = ind; ind = ind + 1                         !> npdot0
-      ! ind_m0 = ind; ind = ind + 1                         !> m0
-      ! nBrk = nBrk + 2
     endif
 
-    !--- EVAPORATION ---
-    !> INVARIANT: ind_Mv..ind_e5 must be contiguous and ordered as
-    !> iMv=1..imuLiq=10 (see IGLOO_Lib_Evaporation::nep)
+    !> evaporation: ind_Mv..ind_e5 contiguous, ordered as IGLOO_Lib_Evaporation ep(1:10)
     if (evapSelect > 0) then
       if (.not.propFlags(5)) then
         nEvap = nEvap + 1; ind_ps = ind; ind = ind + 1    !> psat (const)
@@ -163,9 +159,8 @@ contains
       ind_e5 = ind; ind = ind + 1                         !> mu_liq   → ep(10) (reserved)
     endif
 
-    !--- METAL COMBUSTION / SOLIDIFICATION ---
-    !> Contiguous nmetal-slot block, allocated only when metal combustion is active.
-    if (combSelect > 0) then
+    !> metal combustion or solidification: contiguous nmetal-slot block
+    if (combSelect > 0 .or. model == 6) then
       nComb = nComb + nmetal
       ind_mb = ind; ind = ind + nmetal
     endif
@@ -173,9 +168,7 @@ contains
 
   end subroutine computeNaux
 
-  !===================================================================!
-  !  Number of axiliar state per model                                !
-  !===================================================================!
+  !> Number of auxiliary state entries per model (xi0, KHRT told/tc, solidification phase), and their indices.
   subroutine computeNauxState(model,brkSelect,propFlags, &
                               ord2,mesh2D,nAuxState)
     integer, intent(in)  :: model, brkSelect
@@ -184,7 +177,7 @@ contains
     integer :: ind
 
     nAuxState = 0; ind = 1
-    ind_sxi = 0; ind_sb1 = 0; ind_sb2 = 0
+    ind_sxi = 0; ind_sb1 = 0; ind_sb2 = 0; ind_sph = 0
 
     if (ord2 .and. (.not.mesh2D)) then
       ind_sxi = ind; ind = ind + 3                      !> xi0 (2nd order, 3D only)
@@ -197,11 +190,13 @@ contains
       nAuxState = ind + 1
     end select
 
+    if (model == 6) then                                 !> solidification phase, read by the RHS
+      nAuxState = nAuxState + 1; ind_sph = nAuxState
+    endif
+
   end subroutine computeNauxState
 
-  !===================================================================!
-  !  Number of axiliar state per model                                !
-  !===================================================================!
+  !> Number of breakup event variables per breakup model, and their indices.
   subroutine computeNeventVar(model,brkSelect,nev)
     integer, intent(in)  :: model, brkSelect
     integer, intent(out) :: nev
@@ -221,9 +216,8 @@ contains
 
   end subroutine computeNeventVar
 
-  !===================================================================!
-  !  Setup module config (call once per material/group)               !
-  !===================================================================!
+  !> Set the module-level per-material config and compute the aux/auxState/eventVar layouts;
+  !  called once per material/group, outside any parallel region.
   subroutine setupRHS(model, brkSelect, evapSelect, liqSelect, intfSelect, boilSelect, &
                       combSelect, solidSelect, propFlags, bp_in, &
                       bpMethod_in, bpScale_in, nAux, nAuxSt, nEvV)
@@ -236,11 +230,8 @@ contains
     integer,  intent(in) :: bpMethod_in
     real(R8), intent(in) :: bpScale_in
     integer, intent(out) :: nAux, nAuxSt, nEvV
-    !> setupRHS writes module-level per-material state (mod_*): materials MUST be set up and
-    !  integrated SEQUENTIALLY — OMP parallelism is over particles WITHIN a group. A per-material
-    !  derived-type config would be the alternative if this constraint ever breaks.
+    !> module-level state: materials are set up and integrated sequentially
     !$ if (omp_in_parallel()) error stop '[BUG] setupRHS called inside an OMP parallel region'
-    !> Set module-level config
     mod_model = model
     mod_brkSelect  = brkSelect
     mod_evapSelect = evapSelect
@@ -259,7 +250,7 @@ contains
     endif
     !> Reset all ind_* to 0 (sentinel: 0 = not in aux)
     ind_cp=0;  ind_m=0;   ind_d=0;  ind_rho=0
-    ind_sig=0; ind_mup=0; ind_n0=0; ind_m0=0
+    ind_sig=0; ind_mup=0
     ind_ps=0;  ind_Mv=0;  ind_Lv=0; ind_Cv=0; ind_Le=0; ind_Yi=0
     ind_e1=0;  ind_e2=0;  ind_e3=0; ind_e4=0; ind_e5=0
     ind_mb=0
@@ -272,9 +263,7 @@ contains
     neventvar = nEvV
   end subroutine setupRHS
 
-  !===================================================================!
-  !  Pack auxiliary variables from particle                           !
-  !===================================================================!
+  !> Pack the particle's constant properties into aux (layout from computeNaux).
   pure subroutine packAuxVars(particle, naux, aux)
     use IGLOO_particles, only: obj_particle
     type(obj_particle), intent(in)  :: particle
@@ -282,7 +271,7 @@ contains
     real(R8),           intent(out) :: aux(naux)
 
     aux = 0._R8
-    !--- BASE ---
+    !> base
     if (ind_cp  > 0) aux(ind_cp)  = particle%cp
     if (ind_m   > 0) then
       if (mod_model==3) then; aux(ind_m) = particle%mdot
@@ -290,10 +279,10 @@ contains
     endif
     if (ind_d   > 0) aux(ind_d)   = particle%d
     if (ind_rho > 0) aux(ind_rho) = particle%rho
-    !--- BREAKUP ---
+    !> breakup
     if (ind_sig > 0) aux(ind_sig) = particle%sigma
     if (ind_mup > 0) aux(ind_mup) = particle%mup
-    !--- EVAPORATION (contiguous ep(10) slice: Mv,Lv,cpv,Le,Yinf,LvMvOverRu,invTboil,alphaE,kLiq,muLiq) ---
+    !> evaporation (contiguous ep(10) slice: Mv,Lv,cpv,Le,Yinf,LvMvOverRu,invTboil,alphaE,kLiq,muLiq)
     if (ind_ps > 0) aux(ind_ps) = particle%psat
     if (ind_Mv > 0) then
       aux(ind_Mv) = particle%Mv
@@ -307,16 +296,14 @@ contains
       aux(ind_e4) = particle%kLiq
       aux(ind_e5) = particle%muLiq
     endif
-    !--- METAL (contiguous nmetal slice) ---
+    !> metal (contiguous nmetal slice)
     if (ind_mb > 0) aux(ind_mb:ind_mb+nmetal-1) =                        &
       [particle%Kburn, particle%nBurn, particle%Xeff, particle%betaPart, &
        particle%xiCap, particle%Tign,  particle%Tmelt, particle%hFus,    &
        particle%Tnuc,  particle%cpSol, particle%qComb]
   end subroutine packAuxVars
 
-  !===================================================================!
-  !  Pack auxState from particle fields                               !
-  !===================================================================!
+  !> Pack the particle's auxiliary state (xi0, KHRT told/tc, solidification phase) into auxst.
   pure subroutine packAuxState(particle, ns, auxst)
     use IGLOO_particles, only: obj_particle
     type(obj_particle), intent(in)  :: particle
@@ -329,11 +316,10 @@ contains
       auxst(ind_sb1) = particle%brkupVar(1)   !> told
       auxst(ind_sb2) = particle%brkupVar(2)   !> tc
     endif
+    if (ind_sph > 0) auxst(ind_sph) = real(particle%solidPhase, R8)
   end subroutine packAuxState
 
-  !===================================================================!
-  !  Unpack auxState back to particle fields                          !
-  !===================================================================!
+  !> Unpack auxst back into the particle's auxiliary state.
   pure subroutine unpackAuxState(auxst, particle, ns)
     use IGLOO_particles, only: obj_particle
     real(R8),           intent(in)    :: auxst(ns)
@@ -345,11 +331,10 @@ contains
       particle%brkupVar(1) = auxst(ind_sb1)   !> told
       particle%brkupVar(2) = auxst(ind_sb2)   !> tc
     endif
+    if (ind_sph > 0) particle%solidPhase = nint(auxst(ind_sph))
   end subroutine unpackAuxState
 
-  !===================================================================!
-  !  Pack eventVar from particle fields                               !
-  !===================================================================!
+  !> Pack the breakup event variables from the particle.
   pure subroutine packEventVar(particle, nev, ev)
     use IGLOO_particles, only: obj_particle
     type(obj_particle), intent(in)  :: particle
@@ -371,9 +356,7 @@ contains
     end select
   end subroutine packEventVar
 
-  !===================================================================!
-  !  Unpack eventVar back to particle fields                          !
-  !===================================================================!
+  !> Unpack the breakup event variables back into the particle.
   pure subroutine unpackEventVar(ev, particle, nev)
     use IGLOO_particles, only: obj_particle
     real(R8),           intent(in)    :: ev(nev)
@@ -395,34 +378,18 @@ contains
   end subroutine unpackEventVar
 
 
-  !===================================================================!
-  !===================================================================!
-  !                                                                   !
-  !                   MODULE-LEVEL RHS ROUTINES                       !
-  !                                                                   !
-  !  Decoupled from obj_particle. Access data through:                !
-  !    aux(naux)       — workspace, intent(inout)                     !
-  !    flags(nflags)   — computation path, intent(in)                 !
-  !    gas             — gas state, intent(inout)                     !
-  !                                                                   !
-  !  NOTE on npdot in breakup: current code passes particle%npdot     !
-  !  (lagged from last accepted step) to breakup(). New code passes   !
-  !  Z(8) or Z(9) (current stage value) — more consistent but         !
-  !  changes numerical behavior at machine precision level.           !
-  !===================================================================!
-  !===================================================================!
+  !> Module-level RHS routines, decoupled from obj_particle: aux holds the packed constants,
+  !  auxst the auxiliary state, gas the interpolated gas state.
 
 
-  !===================================================================!
-  !  Model 1: rhsStandard — constant mass, no breakup ODE             !
-  !===================================================================!
+  !> Model 1: constant mass, no breakup ODE.
   subroutine rhsStandard(neq, time, Z, F, aux,naux, auxst,nauxst, &
                           hTabM, rhoTabM,                  &
                           gasNodes,gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, interp2ndOrder2D
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, toll, &
                                bodyForce, bodyAccel, srcBodyForce
-    use IGLOO_Lib_Properties, only: comp_TfromTab, lookupTab
+    use IGLOO_Lib_Properties, only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
     real(R8), intent(in)    :: time
@@ -440,12 +407,12 @@ contains
     F = 0._R8
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
     else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    if (mod_propFlags(2)) then; rho = lookupTab(rhoTabM, tp); else; rho = aux(ind_rho);        endif
+    if (mod_propFlags(2)) then; rho = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho = aux(ind_rho); endif
     m = aux(ind_m) 
     if (ind_d > 0) then; d = aux(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
     ! 2nd order gas interpolation
     if (ord2) then
-      if (mesh2D) then; call interp2ndOrder2D(gasVert, gasNodes, Z(1:3), nsp, gas)
+      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
       else
         xi0_loc = auxst(ind_sxi:ind_sxi+2)
         call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
@@ -453,10 +420,9 @@ contains
       endif
     endif
 
-    Vdif = gas(2:4) - Z(4:6)
+    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
     slip = norm2(Vdif)
-    !> Fase C safety net: gas degenerato (μ<=0) -> no drag, no heat.
-    !  Particella propaga per inerzia; outer loop la sposta in cella interna.
+    !> degenerate gas (mu <= 0): no drag, no heat
     if (gas(6) <= toll) then
       Re    = 0._R8
       Fdrag = 0._R8
@@ -473,10 +439,11 @@ contains
     if (eulerSwitch) then
       normVel = norm2(Z(4:6))
       F(8)    = normVel
-      F(9:12) = Z(4:7) * normVel
+      F(9:11) = toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
+      F(12)   = Z(7) * normVel
     endif
 
-    !> Diagnostic: trap NaN in F output of rhsStandard — dump intermediates
+    !> diagnostic: dump the intermediates on NaN
     if (any(F /= F)) then
       print*,'[rhsStandard] NaN in F: time=',time
       print*,'  Z(1:3) pos =',Z(1:3)
@@ -500,17 +467,85 @@ contains
   end subroutine rhsStandard
 
 
-  !===================================================================!
-  !  Model 2: rhsEvaporation — variable mass via evaporation          !
-  !===================================================================!
+  !> Model 6: constant mass, solidification; Z(7) = T, Z(8) = frozen fraction f, phase from auxst.
+  subroutine rhsSolidification(neq, time, Z, F, aux,naux, auxst,nauxst, &
+                                gasNodes,gasVert,gas,nsp,nNodes)
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
+    use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, toll, bodyForce, bodyAccel
+    use IGLOO_Lib_Combustion,     only: imHf, imCps
+    use IGLOO_Lib_Solidification, only: plateauRate, phPlateau, phSolid
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    implicit none
+    integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
+    real(R8), intent(in)    :: time
+    real(R8), intent(in)    :: Z(neq)
+    real(R8), intent(out)   :: F(neq)
+    real(R8), intent(in)    :: aux(naux)
+    real(R8), intent(inout) :: auxst(nauxst)
+    real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
+    real(R8), intent(inout) :: gas(nsp)
+    ! locals
+    real(R8) :: normVel, slip, Vdif(3), Re, d, m, xi0_loc(3)
+    real(R8) :: Fdrag(3), QdotW
+
+    F = 0._R8
+    m = aux(ind_m)
+    d = aux(ind_d)
+    ! 2nd order gas interpolation
+    if (ord2) then
+      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
+      else
+        xi0_loc = auxst(ind_sxi:ind_sxi+2)
+        call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
+        auxst(ind_sxi:ind_sxi+2) = xi0_loc
+      endif
+    endif
+
+    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
+    slip = norm2(Vdif)
+    !> degenerate gas (mu <= 0): no drag, no heat
+    if (gas(6) <= toll) then
+      Re    = 0._R8
+      Fdrag = 0._R8
+      QdotW = 0._R8
+    else
+      Re = gas(1) * slip * d / gas(6)
+      call interphase(gas, nsp, Vdif, slip, Z(7), d, Re, 1._R8, Fdrag, QdotW)
+    endif
+    F(1:3) = Z(4:6)
+    F(4:6) = Fdrag/m
+    if (bodyForce) F(4:6) = F(4:6) + bodyAccel
+    !> heat [W] goes to T (liquid c_l, solid c_s) or, on the plateau, to the frozen fraction
+    select case (nint(auxst(ind_sph)))
+    case (phPlateau); F(8) = plateauRate(QdotW, m, aux(ind_mb+imHf-1))
+    case (phSolid);   F(7) = QdotW/(m*aux(ind_mb+imCps-1))
+    case default;     F(7) = QdotW/(m*aux(ind_cp))
+    end select
+
+    if (eulerSwitch) then
+      normVel  = norm2(Z(4:6))
+      F(9)     = normVel
+      F(10:12) = toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
+      F(13)    = Z(7) * normVel
+    endif
+
+    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
+    if (any(.not. ieee_is_finite(F))) then
+      where (.not. ieee_is_finite(F)) F = 1.e30_R8
+    endif
+  end subroutine rhsSolidification
+
+
+  !> Model 2: variable mass via evaporation.
   subroutine rhsEvaporation(neq, time, Z, F, aux,naux, auxst,nauxst, &
                              hTabM, rhoTabM, psatTabM,         &
                              gasNodes, gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, interp2ndOrder2D
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
     use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor
-    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab
+    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
     real(R8), intent(in)    :: time
@@ -529,14 +564,13 @@ contains
     F = 0._R8
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
     else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    if (mod_propFlags(2)) then; rho   = lookupTab(rhoTabM, tp); else; rho   = aux(ind_rho); endif
-    if (mod_propFlags(5)) then; psat  = lookupTab(psatTabM,tp); else; psat  = aux(ind_ps);  endif
+    if (mod_propFlags(2)) then; rho   = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho   = aux(ind_rho); endif
     m = Z(8)
     d = (sixOverPi*m/rho)**oneThird
 
     ! 2nd order gas interpolation
     if (ord2) then
-      if (mesh2D) then; call interp2ndOrder2D(gasVert, gasNodes, Z(1:3), nsp, gas)
+      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
       else
         xi0_loc = auxst(ind_sxi:ind_sxi+2)
         call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
@@ -544,31 +578,38 @@ contains
       endif
     endif
 
-    Vdif = gas(2:4) - Z(4:6)
+    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
 
     call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot)
     !> gas packs (5)=T,(6)=mu,(7)=gamma,(8)=R,(9)=k; signature is (rhog,Tg,gamma,Rg,mug,kg)
-    call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
-                     tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
-                     mdot, Qdot_evap, override)
+    if (mod_propFlags(5)) then
+      psat = tableValue(psatTabM, Tmin, Tmax, tp)
+      call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
+                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
+                       mdot, Qdot_evap, override, psatExt=psat)
+    else
+      call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
+                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
+                       mdot, Qdot_evap, override)
+    endif
     if (override) Qdot = Qdot_evap
-    !> Opt-in Stefan-blowing reduction of the convective heat (MHB98 eq.19); f2=1 when off.
-    !  Skipped when override: ASM/TC already return a blowing-reduced Qdot (1/BT, 1/(e^chi-1)).
+    !> Stefan-blowing reduction of the convective heat (MHB98 eq.19); skipped when the model returned its own Qdot
     if (blowSelect == 1 .and. .not.override) &
         Qdot = Qdot * blowingFactor(gas(7), gas(8), gas(6), gas(9), rho, d, m, mdot)
     F(1:3) = Z(4:6)
     F(4:6) = Fdrag / m
     if (bodyForce) F(4:6) = F(4:6) + bodyAccel
-    !> m*cp*dT/dt = Q + mdot*Lv (MHB98 eq.3, A-S): no -mdot*Z(7) carry — that flux belongs to d(mh)/dt, not m*dh/dt
+    !> m*cp*dT/dt = Q + mdot*Lv (MHB98 eq.3): latent term only, no sensible-carry term
     F(7)   = (Qdot + mdot*aux(ind_Lv)*cpFactor) / m
     F(8)   = mdot
 
     if (eulerSwitch) then
       normVel  = norm2(Z(4:6))
       F(9)     = normVel
-      F(10:13) = m * Z(4:7) * normVel
+      F(10:12) = m * toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
+      F(13)    = m * Z(7) * normVel
       F(14)    = m
     endif
     !> Body-force accumulators: W at slot neq; J at neq-1 unless euler reuses its mass moment F(14).
@@ -577,21 +618,24 @@ contains
       F(neq)   = m * dot_product(bodyAccel, Z(4:6))    ! W
     endif
 
+    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
+    if (any(.not. ieee_is_finite(F))) then
+      where (.not. ieee_is_finite(F)) F = 1.e30_R8
+    endif
+
   end subroutine rhsEvaporation
 
 
-  !===================================================================!
-  !  Model 3: rhsBreakupOnly — breakup ODE, algebraic mass            !
-  !  State: Z(1:3)=pos, Z(4:6)=vel, Z(7)=T/h, Z(8)=npdot              !
-  !===================================================================!
+  !> Model 3: breakup ODE with algebraic mass.
+  !  State: Z(1:3)=pos, Z(4:6)=vel, Z(7)=T/h, Z(8)=npdot.
   subroutine rhsBreakupOnly(neq, time, Z, F, aux,naux, auxst,nauxst, &
                              hTabM, rhoTabM, mupTabM, sigTabM, &
                              gasNodes, gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, interp2ndOrder2D
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
     use IGLOO_Lib_Breakup, only: breakupOde
-    use IGLOO_Lib_Properties, only: comp_TfromTab, lookupTab
+    use IGLOO_Lib_Properties, only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
@@ -610,7 +654,7 @@ contains
     F = 0._R8
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
     else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    if (mod_propFlags(2)) then; rho   = lookupTab(rhoTabM, tp); else; rho   = aux(ind_rho); endif
+    if (mod_propFlags(2)) then; rho   = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho   = aux(ind_rho); endif
     if (mod_propFlags(3)) then; sigma = lookupTab(sigTabM, tp); else; sigma = aux(ind_sig); endif
     if (mod_propFlags(4)) then; mup   = lookupTab(mupTabM, tp); else; mup   = aux(ind_mup); endif
     m = aux(ind_m)/Z(8)
@@ -618,7 +662,7 @@ contains
 
     ! 2nd order gas interpolation
     if (ord2) then
-      if (mesh2D) then; call interp2ndOrder2D(gasVert, gasNodes, Z(1:3), nsp, gas)
+      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
       else
         xi0_loc = auxst(ind_sxi:ind_sxi+2)
         call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
@@ -626,7 +670,7 @@ contains
       endif
     endif
 
-    Vdif = gas(2:4) - Z(4:6)
+    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
 
@@ -648,11 +692,12 @@ contains
     if (eulerSwitch) then
       normVel = norm2(Z(4:6))
       F(9)     = normVel
-      F(10:13) = Z(4:7) * normVel
+      F(10:12) = toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
+      F(13)    = Z(7) * normVel
       F(14)    = Z(8)
     endif
 
-    !> Unphysical Newton trial (npdot<=0 -> d=(neg)**1/3=NaN): scrub to finite penalty so SDIRK4 rejects the step
+    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
     if (any(.not. ieee_is_finite(F))) then
       where (.not. ieee_is_finite(F)) F = 1.e30_R8
     endif
@@ -660,19 +705,17 @@ contains
   end subroutine rhsBreakupOnly
 
 
-  !===================================================================!
-  !  Model 4: rhsEvapBreakup — breakup + evaporation                  !
-  !  State: Z(1:3)=pos, Z(4:6)=vel, Z(7)=T/h, Z(8)=mass, Z(9)=npdot   !
-  !===================================================================!
+  !> Model 4: breakup ODE + evaporation.
+  !  State: Z(1:3)=pos, Z(4:6)=vel, Z(7)=T/h, Z(8)=mass, Z(9)=npdot.
   subroutine rhsEvapBreakup(neq, time, Z, F, aux,naux, auxst,nauxst,     &
                              hTabM, rhoTabM, mupTabM, sigTabM, psatTabM, &
                              gasNodes, gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, interp2ndOrder2D
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
     use IGLOO_Lib_Breakup,     only: breakupOde
     use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor
-    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab
+    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp,nNodes
@@ -694,16 +737,15 @@ contains
     F = 0._R8
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
     else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    if (mod_propFlags(2)) then; rho   = lookupTab(rhoTabM, tp); else; rho   = aux(ind_rho); endif
+    if (mod_propFlags(2)) then; rho   = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho   = aux(ind_rho); endif
     if (mod_propFlags(3)) then; sigma = lookupTab(sigTabM, tp); else; sigma = aux(ind_sig); endif
     if (mod_propFlags(4)) then; mup   = lookupTab(mupTabM, tp); else; mup   = aux(ind_mup); endif
-    if (mod_propFlags(5)) then; psat  = lookupTab(psatTabM,tp); else; psat  = aux(ind_ps);  endif
     m = Z(8)
     d = (sixOverPi*m/rho)**oneThird
 
     ! 2nd order gas interpolation
     if (ord2) then
-      if (mesh2D) then; call interp2ndOrder2D(gasVert, gasNodes, Z(1:3), nsp, gas)
+      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
       else
         xi0_loc = auxst(ind_sxi:ind_sxi+2)
         call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
@@ -711,7 +753,7 @@ contains
       endif
     endif
 
-    Vdif = gas(2:4) - Z(4:6)
+    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
 
@@ -727,17 +769,23 @@ contains
 
     ! Evaporation
     !> gas packs (5)=T,(6)=mu,(7)=gamma,(8)=R,(9)=k; signature is (rhog,Tg,gamma,Rg,mug,kg)
-    call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
-                     tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
-                     mdot_evap, Qdot_evap, override)
+    if (mod_propFlags(5)) then
+      psat = tableValue(psatTabM, Tmin, Tmax, tp)
+      call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
+                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
+                       mdot_evap, Qdot_evap, override, psatExt=psat)
+    else
+      call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
+                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
+                       mdot_evap, Qdot_evap, override)
+    endif
     if (override) Qdot = Qdot_evap
-    !> Opt-in Stefan-blowing reduction of the convective heat (MHB98 eq.19); f2=1 when off.
-    !  Skipped when override: ASM/TC already return a blowing-reduced Qdot (1/BT, 1/(e^chi-1)).
+    !> Stefan-blowing reduction of the convective heat (MHB98 eq.19); skipped when the model returned its own Qdot
     if (blowSelect == 1 .and. .not.override) &
         Qdot = Qdot * blowingFactor(gas(7), gas(8), gas(6), gas(9), rho, d, m, mdot_evap)
 
-    ! Mass: breakup contribution + evaporation
-    mdot = Z(9)*mdot_evap
+    !> per-droplet mass: evaporation plus the breakup share that keeps the stream mass
+    mdot = mdot_evap - m*F(9)/Z(9)
 
     F(1:3) = Z(4:6)
     F(4:6) = acc
@@ -750,7 +798,8 @@ contains
       normVel  = norm2(Z(4:6))
       mTraj    = m * Z(9)
       F(10)    = normVel
-      F(11:14) = mTraj * Z(4:7) * normVel
+      F(11:13) = mTraj * toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
+      F(14)    = mTraj * Z(7) * normVel
       F(15)    = mTraj
       F(16)    = Z(9)
     endif
@@ -761,25 +810,22 @@ contains
       F(neq)   = mTraj * dot_product(bodyAccel, Z(4:6)) ! W
     endif
 
-    !> Unphysical Newton trial (mass/npdot<=0 -> d=(neg)**1/3=NaN): scrub to finite penalty so SDIRK4 rejects the step
+    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
     if (any(.not. ieee_is_finite(F))) then
       where (.not. ieee_is_finite(F)) F = 1.e30_R8
     endif
   end subroutine rhsEvapBreakup
 
 
-  !===================================================================!
-  !  Model 5: rhsAlCombustion — Beckstead d^n burn law                !
-  !  State layout identical to model 2: Z(7)=T/h, Z(8)=mass           !
-  !===================================================================!
+  !> Model 5: Beckstead d^n burn law; state layout as model 2 (Z(7)=T/h, Z(8)=mass).
   subroutine rhsAlCombustion(neq, time, Z, F, aux,naux, auxst,nauxst, &
                               hTabM, rhoTabM,                   &
                               gasNodes, gasVert,gas,nsp,nNodes)
-    use Lib_Equations,   only: interphase, interp2ndOrder, interp2ndOrder2D
+    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
     use IGLOO_Lib_Combustion,  only: becksteadRate, nmp
-    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab
+    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
@@ -798,13 +844,13 @@ contains
     F = 0._R8
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
     else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    if (mod_propFlags(2)) then; rho = lookupTab(rhoTabM, tp); else; rho = aux(ind_rho); endif
+    if (mod_propFlags(2)) then; rho = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho = aux(ind_rho); endif
     m = Z(8)
     d = (sixOverPi*m/rho)**oneThird
 
     ! 2nd order gas interpolation
     if (ord2) then
-      if (mesh2D) then; call interp2ndOrder2D(gasVert, gasNodes, Z(1:3), nsp, gas)
+      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
       else
         xi0_loc = auxst(ind_sxi:ind_sxi+2)
         call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
@@ -812,7 +858,7 @@ contains
       endif
     endif
 
-    Vdif = gas(2:4) - Z(4:6)
+    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
 
@@ -828,7 +874,8 @@ contains
     if (eulerSwitch) then
       normVel  = norm2(Z(4:6))
       F(9)     = normVel
-      F(10:13) = m * Z(4:7) * normVel
+      F(10:12) = m * toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
+      F(13)    = m * Z(7) * normVel
       F(14)    = m
     endif
     !> Body-force accumulators: W at slot neq; J at neq-1 unless euler reuses its mass moment F(14).
@@ -837,7 +884,7 @@ contains
       F(neq)   = m * dot_product(bodyAccel, Z(4:6))    ! W
     endif
 
-    !> Unphysical Newton trial (mass<=0 -> d=(neg)**1/3=NaN): scrub to finite penalty so SDIRK4 rejects the step
+    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
     if (any(.not. ieee_is_finite(F))) then
       where (.not. ieee_is_finite(F)) F = 1.e30_R8
     endif

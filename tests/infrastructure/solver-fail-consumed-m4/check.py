@@ -1,0 +1,1 @@
+../solver-fail-consumed/check.py

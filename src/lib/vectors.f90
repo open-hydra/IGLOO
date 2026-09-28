@@ -1,10 +1,10 @@
 module IGLOO_VectorModule
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
 
 contains
 
-    !> CROSS PRODUCT BETWEEN VECTORS
+    !> In-plane normal of a 2D vector (rotation by +90 degrees).
     pure function normal2D(a) result(c)
         real(R8), intent(in) :: a(3)
         real(R8) :: c(3)
@@ -14,7 +14,7 @@ contains
     end function normal2D
 
 
-    !> CROSS PRODUCT BETWEEN VECTORS
+    !> Cross product a x b.
     pure function cross(a, b) result(c)
         real(R8), intent(in) :: a(3), b(3)
         real(R8) :: c(3)
@@ -24,7 +24,7 @@ contains
     end function cross
 
 
-    !> FUNCTION TO ROTATE A VECTOR GIVEN AXIS & ANGLE
+    !> Rotates a vector about a unit axis by angle theta (Rodrigues rotation matrix).
     pure function rotateVector(vect,axis,theta) result(rotatedVect)
         implicit none
         real(R8), intent(in) :: vect(3)
@@ -36,17 +36,18 @@ contains
 
         cost = cos(theta)
         sint = sin(theta)
+        !> The literal is row-major; order=[2,1] fills it as written.
         rotation = reshape([ &
             axis(1)**2   *(1-cost)+        cost, axis(1)*axis(2)*(1-cost)-axis(3)*sint, axis(1)*axis(3)*(1-cost)+axis(2)*sint, &
             axis(2)*axis(1)*(1-cost)+axis(3)*sint, axis(2)**2   *(1-cost)+        cost, axis(2)*axis(3)*(1-cost)-axis(1)*sint, &
             axis(3)*axis(1)*(1-cost)-axis(2)*sint, axis(3)*axis(2)*(1-cost)+axis(1)*sint, axis(3)**2   *(1-cost)+        cost  &
-            ], shape=[3, 3])
+            ], shape=[3, 3], order=[2, 1])
         rotatedVect = matmul(rotation, vect)
 
     end function rotateVector
 
 
-    !> FUNCTION TO CHOOSE THE POINT WITH MINIMUM x, THEN MINIMUM y, THEN MINIMUM z
+    !> Index of the lexicographically smallest point (min x, then y, then z).
     pure integer function chooseVector(vectors)
         implicit none
         real(R8), intent(in) :: vectors(3,4)
@@ -62,6 +63,7 @@ contains
 
     contains
 
+        !> Lexicographic less-than on (x, y, z).
         pure logical function compare_vectors(v1, v2)
         implicit none
         real(R8), intent(in) :: v1(3), v2(3)

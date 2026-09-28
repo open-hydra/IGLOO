@@ -1,15 +1,16 @@
 # Evaporation
 
 Phase change is active when `phaseChange = true`; the evaporation model is selected by
-`[IGLOO-Models] evaporation-model` in `input.ini` and dispatched from
-`src/lib/Lib_Evaporation.f90::evaporation`.  The model integrates a mass-rate equation
-$\dot{m}$ as state variable 8 (models 2 and 4; see
-[Governing equations](governing-equations.md)).
+`[IGLOO-Models] evaporation` in `input.ini` (per-material override: the `evaporation=` token on
+the material line of the phase file, written by ATLAS GPB from `[GPB-Phase*]`) and dispatched from
+`src/lib/Lib_Evaporation.f90::evaporation`.  The droplet mass is state variable 8 and
+$\dot{m}_\mathrm{evap}$ its rate (model 2; in model 4, evaporation with ODE breakup, breakup adds
+its share at constant stream mass — see [Governing equations](governing-equations.md)).  A
+droplet whose mass falls to `mBurnTol = 1e-15` kg is consumed and its remnant handed to the gas.
 
-!!! success "Fixed (A4, 2026-07-07)"
-    Gas argument order corrected at both `evaporation()` call sites in `Lib_RHS.f90`
-    (both `rhsEvaporation` and `rhsEvapBreakup`); a `cpg > 0` assertion added.
-    Evaporation is now functional.  Gated by probe XE2 (`test_evap_probes`).
+Two further selectors act on every gas-side model: the `interface` axis (equilibrium or
+Langmuir–Knudsen non-equilibrium surface state) and the `blowing` axis (Stefan-blowing
+reduction of the convective heat).  Both are described below.
 
 ---
 
@@ -28,6 +29,12 @@ $$
 p_\mathrm{sat}(T_p) = p_\mathrm{atm}\,\exp\!\left(-\frac{L_v M_v}{R_u}\left(\frac{1}{T_p} - \frac{1}{T_\mathrm{boil}}\right)\right) \quad \text{[Clausius-Clapeyron]}
 $$
 
+unless the material's `INPUT/properties.dat` carries a `Psat` column
+([property tables](../user/input.md#property-tables-inputpropertiesdat)): then
+$p_\mathrm{sat}(T_p)$ is that column, linear in $T_p$ between its integer-kelvin nodes and
+held at its end values outside the table, and $L_v$ enters only the energy balance as the
+latent sink.  A column of zeros keeps Clausius-Clapeyron.
+
 $$
 X_s = \min\!\left(p_\mathrm{sat}/p,\; 1\right), \qquad
 Y_s = \frac{X_s\,M_v}{X_s\,M_v + (1-X_s)\,M_g}
@@ -38,9 +45,17 @@ B_M = \frac{Y_s - Y_\infty}{1 - Y_s} \quad \text{[Spalding mass transfer number]
 $$
 
 If $Y_s \le Y_\infty$ or $B_M \le 0$, `evaporation` returns immediately with
-$\dot{m} = 0$.  Species properties $M_v, L_v, T_\mathrm{boil}, c_{p,v}, \mathrm{Le},
-Y_\infty, \alpha_e$ are read from the array `ep(nep)` assembled from `[IGLOO-Properties]`
-overrides in `input.ini`.
+$\dot{m} = 0$.  The cap on $X_s$ is the boiling branch (`boiling = clamp`): above the
+boiling point the surface is saturated vapour, and $X_s$ is held at
+$1 - \varepsilon$ with $\varepsilon = 10^{-12}$ rather than at 1, so that $1 - Y_s$ stays
+non-zero and $B_M$ finite.  At $X_s = 1$ exactly, $Y_s = 1$ and $B_M = +\infty$, which
+propagates to $\dot{m} = -\infty$ (CEM, CEM-B), $\dot{m} = \mathrm{NaN}$ (ASM) or,
+through the Langmuir-Knudsen iteration, to $\dot{m} = 0$.  The same constant caps $X_s$ in
+the Tonini-Cossali model, so every gas-side model shares one clamp.  The cap is a numerical
+floor on the clamp, not a physical model of boiling: `boiling = ZGR` is that.  Species properties $M_v, L_v,
+T_\mathrm{boil}, c_{p,v}, \mathrm{Le}, Y_\infty, \alpha_e$ are read from the array
+`ep(nep)` assembled from `INPUT/properties.dat` and the `[IGLOO-Properties]` overrides
+in `input.ini`.
 
 The $X_s$ above is the **equilibrium** (VLE) surface mole fraction; the
 `interface` selector can depress it before the gas-side rate is evaluated
@@ -53,7 +68,7 @@ The $X_s$ above is the **equilibrium** (VLE) surface mole fraction; the
 ### d²-law (`d2-law`)
 
 ```
-evaporation-model = d2-law
+evaporation = d2-law
 ```
 
 Stagnant-film (Sh = 2, Nu = 2) quasi-steady evaporation (Godsave 1953; Spalding 1954).
@@ -66,18 +81,17 @@ $$
 \dot{m} = -2\pi\,d\,\frac{k_g}{c_{p,g}}\,\ln(1 + B_T) \qquad \text{[if } B_T > 0\text{]}
 $$
 
-!!! success "Fixed (A3, 2026-07-07)"
-    Factor-of-2 error corrected: the code now uses $\dot{m} = -2\pi d\,(k_g/c_{p,g})\,\ln(1+B_T)$
-    ($\mathrm{Nu}=2$ stagnant film), matching Godsave/Spalding and the canonical $K=8$.
-    Gated by probe XE1 (`test_evap_probes`) and the d²-law e2e case (25/25 particles
-    verified against the Godsave kernel).
+This is the $\mathrm{Nu}=2$ stagnant-film rate, equivalent to the canonical
+$d^2$-law constant $K = 8\,k_g \ln(1+B_T)/(\rho_p\,c_{p,g})$.  The model is
+$B_T$-driven and never consumes the surface fraction $X_s$, so the `interface`
+selector has no effect on it (see below).
 
 ---
 
 ### CEM — Classical Evaporation Model
 
 ```
-evaporation-model = CEM
+evaporation = CEM
 ```
 
 Spalding (1954) with Ranz-Marshall Sherwood convective correction.
@@ -100,7 +114,7 @@ $$
 ### CEM-B — CEM with 1/3-rule film correction
 
 ```
-evaporation-model = CEM-B
+evaporation = CEM-B
 ```
 
 Hubbard-Denny-Mills (1975); evaluates gas properties at the film temperature
@@ -119,7 +133,7 @@ where all subscript-$f$ quantities are evaluated at $T_f$.
 ### ASM — Abramzon-Sirignano Model
 
 ```
-evaporation-model = ASM
+evaporation = ASM
 ```
 
 Abramzon & Sirignano (1989) extended-film model with Stefan-flow correction.
@@ -149,37 +163,65 @@ $$
 \dot{Q}_\mathrm{evap} = -\dot{m}\,\frac{c_{p,v,\mathrm{eff}}\,(T_g - T_p)}{B_T}\,f_\mathrm{cp}
 $$
 
-where $f_\mathrm{cp}$ converts to the units expected by the state-assembly in `interphase`
+where $f_\mathrm{cp}$ converts to the units expected by the state assembly in `interphase`
 (scales by $c_{p,p}^{-1}$) and $c_{p,v,\mathrm{eff}}$ is the vapour specific heat at film
 conditions.  The latent-heat sink is contributed separately by the ODE state assembly;
 $L_v$ does **not** appear here.
 
-!!! success "Fixed (A9, 2026-07-07)"
-    The previous formula `mdot·(Lv + cpv·ΔT/BT)` had three errors: (a) $L_v$
-    double-counted (the F(7) assembly already adds the latent sink); (b) gas-heat term
-    sign-flipped (fed $-\dot{Q}_G$); (c) units mismatch ($\dot{Q}$ in W where the
-    assembly expects W/cp_p).  Corrected to the form above.  Gated by probe XE3
-    (`test_evap_probes`, $\dot{Q}_G > 0$ for hot gas).
+---
+
+### TC — Tonini–Cossali analytical model
+
+```
+evaporation = TC
+```
+
+Tonini & Cossali (2012) analytical variable-density Stefan–Fuchs model, in the
+one-equation form of Antonov et al. (2024, eq. 9).  Working in the molar
+(partial-pressure) frame with $X_\infty$ the far-field vapour mole fraction and
+$M_\infty = X_\infty M_v + (1 - X_\infty) M_g$, the non-dimensional rate
+$\hat m$ solves the monotone transcendental equation
+
+$$
+\hat m + (\tilde T_s - 1)\,\mathrm{Le}_v\,\bigl[f(\hat m/\mathrm{Le}_v) - 1\bigr] = \frac{M_v}{M_\infty}\ln\frac{1 - X_\infty}{1 - X_s},
+\qquad f(x) = \frac{x}{1 - e^{-x}}
+$$
+
+with $\tilde T_s = T_p/T_g$ and $\mathrm{Le}_v = k_g/(c_{p,v}\,D_v\,\rho_g)$ the
+vapour-$c_p$ Lewis number ($c_{p,v}$ falls back to $c_{p,g}$ when not supplied).  The
+equation is solved by a safeguarded Newton iteration (bisection bracket, tolerance
+$10^{-13}$, at most 30 steps) seeded with the isothermal exact solution.  The mass rate
+is then
+
+$$
+\dot{m} = -\pi\,d\,\rho_g\,D_v\,\mathrm{Sh}\,\hat m, \qquad \mathrm{Sh} = 2 + 0.6\,\mathrm{Re}^{1/2}\,\mathrm{Sc}^{1/3}
+$$
+
+where the Ranz–Marshall factor is an engineering extension of the quiescent
+($\mathrm{Sh} = \mathrm{Nu} = 2$) model.  TC overrides the convective heat with its own
+blowing-corrected form: with $\chi = -\dot m\,c_{p,v}/(\pi\,d\,k_g\,\mathrm{Nu})$,
+
+$$
+\dot{Q}_\mathrm{evap} = -\dot{m}\,\frac{c_{p,v}\,(T_g - T_p)}{e^{\chi} - 1}\,f_\mathrm{cp}
+$$
+
+which reduces to the conduction limit $\pi\,d\,k_g\,\mathrm{Nu}\,(T_g - T_p)$ as
+$\chi \to 0$.  As for ASM, the latent sink is added by the state assembly and $X_s$ is
+capped at $1 - 10^{-12}$ -- the same shared constant as the clamp above -- so the boiling
+regime stays finite.
 
 ---
 
 ### LEB — Liquid Evaporation Boil
 
 ```
-evaporation-model = LEB
+evaporation = LEB
 ```
 
-Not yet implemented.  Fixed (A8, 2026-07-07): the token is now **rejected with a hard
-error** at parse time rather than silently accepted and returning `mdot = 0`.  Use one
-of the four functional models above.
-
-The reserved name corresponds to the Zuo–Gomes–Rutland superheat/boiling model
-(Zuo, Gomes & Rutland, *Int. J. Engine Research* 1(4):321, 2000 — the basis of
-OpenFOAM's `liquidEvaporationBoil`).  A survey of this and other candidate models
-(finite-conductivity two-temperature, multicomponent distillation-curve, …) with
-implementability verdicts is kept in `plan-bucket/evaporation-models-litreview.md`;
-the non-equilibrium Langmuir–Knudsen candidate from that survey is now implemented
-as the `interface = LK` axis (see [Interface models](#interface-models)).
+Reserved keyword for the Zuo–Gomes–Rutland superheat/boiling model (Zuo, Gomes &
+Rutland, *Int. J. Engine Research* 1(4):321, 2000 — the basis of OpenFOAM's
+`liquidEvaporationBoil`).  **Not implemented**: the token is rejected with a hard error
+at parse time.  Use one of the five functional models above.
 
 ---
 
@@ -187,7 +229,7 @@ as the `interface = LK` axis (see [Interface models](#interface-models)).
 
 The gas-side models above take the surface vapour fraction as input; the
 `interface` axis selects how it is closed.  Global default in `[IGLOO-Models]`,
-per-material override in `[GPB-PhaseX]`:
+per-material override by the `interface=` token on the material line of the phase file:
 
 ```
 interface = VLE   ; equilibrium (default)
@@ -197,8 +239,7 @@ interface = LK    ; Langmuir-Knudsen non-equilibrium
 ### VLE (default)
 
 Vapour–liquid equilibrium: $X_s = \min(p_\mathrm{sat}/p, 1)$ from
-Clausius-Clapeyron as in the shared pre-computation.  This is the historical
-behaviour; all `interface = VLE` results are bit-identical to pre-F1 builds.
+Clausius-Clapeyron as in the shared pre-computation.
 
 ### LK — Langmuir-Knudsen non-equilibrium
 
@@ -226,13 +267,53 @@ $10^{-12}$, at most 30 passes, unconverged exit returns the last full — always
 finite — evaluation).  The correction vanishes as $p\,d \to \infty$ or
 $\alpha_e \to \infty$ and recovers VLE exactly.
 
-The accommodation coefficient $\alpha_e$ is `[GPB-PhaseX] alpha-e`
-(default 1.0).  Note that `evaporation = d2-law` is $B_T$-driven and never
-consumes $X_s$, so `interface = LK` has **no effect** on it — the setup prints
-a warning for that combination.  Verified by the
-`tests/evaporation/interface-neq/` unit family (chain oracle, VLE limit, exact
-$1/(p\,d)$ scaling invariant, convergence envelope) and the
-`tests/evaporation/lk-neq/` e2e box case.
+The accommodation coefficient $\alpha_e$ is the material-line token `alpha-e=`
+(default 1.0).  Because `evaporation = d2-law` is $B_T$-driven and never
+consumes $X_s$, `interface = LK` has **no effect** on it — that combination is
+refused at setup.  Verified by the `tests/evaporation/interface-neq/` unit
+family (chain oracle, VLE limit, exact $1/(p\,d)$ scaling invariant, convergence
+envelope) and the `tests/evaporation/lk-neq/` e2e box case.
+
+---
+
+## Stefan-blowing heat reduction
+
+```
+[IGLOO-Models]
+blowing = none   ; default
+blowing = LK     ; Miller-Harstad-Bellan 1998, eq. 19
+```
+
+The outward Stefan flow of vapour thins the thermal boundary layer and reduces the
+convective heat reaching the droplet.  With `blowing = LK` the convective $\dot Q$ is
+multiplied by
+
+$$
+f_2 = \frac{\beta}{e^{\beta} - 1}, \qquad
+\beta = -\tfrac{3}{2}\,\mathrm{Pr}\,\tau_d\,\frac{\dot m}{m}, \qquad
+\tau_d = \frac{\rho_p d^2}{18\mu_g}
+$$
+
+(MHB98 eqs. 17–19).  The factor applies to the convective term only — never to the
+latent sink $\dot m L_v$ — and is **skipped** when the evaporation model already
+returns a blowing-corrected heat of its own (ASM's $1/B_T$, TC's $1/(e^{\chi}-1)$),
+so the two reductions cannot compound.  It is off by default because it changes every
+evaporating case; $f_2$ can reach $0.4$ for a hot-gas decane droplet.
+
+---
+
+## Droplet energy equation
+
+With evaporation active, the temperature (or enthalpy) equation carries the latent sink
+only:
+
+$$
+m\,c_{p,p}\,\frac{dT_p}{dt} = \dot Q + \dot m\,L_v
+$$
+
+(MHB98 eq. 3; $\dot m < 0$), where $\dot Q$ is the convective heat from `interphase`,
+replaced by the model's own $\dot Q_\mathrm{evap}$ for ASM and TC and scaled by $f_2$
+when `blowing = LK`.  No sensible-enthalpy term for the departing vapour is carried.
 
 ---
 
@@ -242,11 +323,11 @@ $1/(p\,d)$ scaling invariant, convergence envelope) and the
 | :--- | :---: | :--- |
 | `Mv` | `ep(iMv)` | Vapour molar mass (kg kmol⁻¹) |
 | `Lv` | `ep(iLv)` | Latent heat (J kg⁻¹) |
-| `cpv` | `ep(icpv)` | Vapour specific heat (J kg⁻¹ K⁻¹); ASM only |
+| `cpv` | `ep(icpv)` | Vapour specific heat (J kg⁻¹ K⁻¹); ASM and TC |
 | `Le` | `ep(iLe)` | Lewis number |
 | `Yinf` | `ep(iYinf)` | Far-field vapour mass fraction |
-| `Tboil` | (→`ep(iinvTboil)`) | Normal boiling point (K) |
-| `psat` | (→`ep(iLvMvOverRu)`) | Drives Clausius-Clapeyron pre-factor |
+| `boiling-temperature` (alias `Tboil`) | (→`ep(iinvTboil)`) | Normal boiling point (K) |
+| `psat` | — | Accepted and ignored (legacy): the saturation pressure is Clausius-Clapeyron's, from `ep(iLvMvOverRu)` = `Lv·Mv/Ru` and `ep(iinvTboil)` = `1/T_boil`, or the material's `Psat` column |
 
 Full registry: [../user/registry.md](../user/registry.md).
 
@@ -254,6 +335,6 @@ Full registry: [../user/registry.md](../user/registry.md).
 
 ## V&V
 
-d²-law evaporation rate against Godsave/Spalding analytical solution:
-[../vv/e2e.md](../vv/e2e.md).  Literature comparisons for ASM:
-[../vv/literature.md](../vv/literature.md).
+d²-law, LK and TC evaporation rates against independent kernels, and the
+paper-reproduction cases: [../vv/e2e.md](../vv/e2e.md).  Function-level comparisons
+for all models: [../vv/literature.md](../vv/literature.md).

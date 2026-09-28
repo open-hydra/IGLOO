@@ -1,11 +1,11 @@
 !> Runtime INI reader — keep in sync with the doc registry config/Register_IGLOO.f90.
 module IGLOO_IO_INI
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   use finer, only: file_ini
   implicit none
   private
   public :: read_IGLOO_input
-  public :: read_phase_models
+  public :: set_material_defaults, apply_material_key, finalize_material_models
 
   type(file_ini) :: fini
   integer        :: error
@@ -19,6 +19,7 @@ module IGLOO_IO_INI
 contains
 
 
+  !> Reads input.ini: [IGLOO-General], [IGLOO-Models], [IGLOO-Properties], [IGLOO-BC], [IGLOO-ODE].
   subroutine read_IGLOO_input(method,srcSwitch,eulSwitch,gasfile,pos0,vel0,temp0,mdot,diam)
     use IGLOO_variables, only: llen, threshold
     implicit none
@@ -36,6 +37,8 @@ contains
   end subroutine read_IGLOO_input
 
 
+  !> [IGLOO-General]: phase name, gas file and order, output switches, print cadences, mdot-max,
+  !  seed, mollification, body acceleration, probe IDs.
   subroutine read_general(srcSwitch,eulSwitch,gasfile)
     use IGLOO_variables
     use IGLOO_Lib_Mollify, only: DEFAULT_MOLLIFY_PASSES
@@ -44,35 +47,50 @@ contains
     character(len=llen), intent(out) :: gasfile
     character(len=100) :: requiredOut
     character(len=100) :: mollify_word
+    character(len=100) :: phaseName
     character(len=1)   :: outfile
     integer            :: gasOrder, n
 
+    !> phase: ATLAS phase name => INPUT/<phase>-{phase.txt,properties.dat,bc.txt}; absent keeps the prefix in force.
+    call fini%get(section_name='IGLOO-General', option_name='phase', val=phaseName, error=error)
+    if (error==0 .and. len_trim(adjustl(phaseName))>0) then
+      phaseName = adjustl(phaseName)
+      if (index(trim(phaseName),'-')>0) error stop '[ERROR] [IGLOO-General] phase must not contain "-"'
+      if (len_trim(phaseName)+1 > len(IGLOO_phase_prefix)) error stop '[ERROR] [IGLOO-General] phase name too long'
+      IGLOO_phase_prefix = trim(phaseName)//'-'
+    endif
     !> TEC gas solution file
     call fini%get(section_name='IGLOO-General', option_name='gas-file', val=gasfile, error=error)
     !> Gas background (recontruction) approximation order
     call fini%get(section_name='IGLOO-General', option_name='gas-order', val=gasOrder, error=error)
-    if (error/=0 .or. gasOrder<=0 .or. gasOrder>=2) then
+    if (error/=0) then
       gasOrder=2
       ord2=.true.
-      if (gasOrder<=0 .or. gasOrder>2) write(*,*) ' [WARNING] Gas rebuilding approximation order not valid'
       write(*,*) ' >> Defaulting to 2nd order rebuilding of the gas phase'
+    else if (gasOrder==2) then
+      ord2=.true.
+    else if (gasOrder/=1) then
+      write(*,'(A,I0,A)') ' [ERROR] [IGLOO-General] gas-order = ', gasOrder, ' is not valid (1 or 2)'
+      error stop 'IGLOO: gas-order must be 1 or 2'
     endif
-    !> IGLOO output file [source terms or eulerian field]
-    outfile = 'A'
+    !> out-file: E (equivalent eulerian), S (coupling source), E+S / ALL (both; default). Whole-token match.
+    requiredOut = 'E+S'
     call fini%get(section_name='IGLOO-General', option_name='out-file', val=requiredOut, error=error)
-    if (error==0) outfile = requiredOut(1:1)
-    select case (outfile)
+    if (error/=0 .or. len_trim(requiredOut)==0) requiredOut = 'E+S'   ! absent or blank = both
+    select case (trim(adjustl(requiredOut)))
     case ('E','e')
       eulerSwitch = .true.
       write(*,*) ' >> Output field: equivalent eulerian'
     case ('S','s')
       sourceSwitch = .true.
       write(*,*) ' >> Output field: gas coupling source'
-    case default
+    case ('E+S','e+s','S+E','s+e','ES','es','SE','se','ALL','all','All','both','BOTH','Both')   ! hydra's MI2 cases write ALL
       eulerSwitch  = .true.
       sourceSwitch = .true.
-      write(*,*) ' [WARNING] Output file not recognized or not given'
       write(*,*) ' >> Output fields: gas coupling source & equivalent eulerian'
+    case default
+      write(*,'(A)') ' [ERROR] [IGLOO-General] out-file = '//trim(requiredOut)//' is not valid: E, S, E+S or ALL'
+      error stop 'IGLOO: unknown out-file token'
     end select
     srcSwitch = sourceSwitch
     eulSwitch = eulerSwitch
@@ -85,11 +103,17 @@ contains
     !> Output print frequency of the single particle trajectory (time based [s])
     call fini%get(section_name='IGLOO-General', option_name='print-dtime', val=dtprint, error=error)
     if (error/=0) dtprint = -1._R8
+    !> Parcel end time [s]; absent or <= 0 = off (integrate until the parcel leaves the domain)
+    call fini%get(section_name='IGLOO-General', option_name='time-end', val=tEnd, error=error)
+    if (error/=0 .or. .not.(tEnd>0._R8)) tEnd = huge(1._R8)
+    snapOn = tEnd < huge(1._R8)
+    !> out-time: present and not an off-token => the parcel time closes every row (default off)
+    call fini%get(section_name='IGLOO-General', option_name='out-time', val=mollify_word, error=error)
+    timeOn = error==0 .and. .not.is_off_token(mollify_word)
     !> Maximum mass flow rate per particle trajectory (g/s)
     call fini%get(section_name='IGLOO-General', option_name='mdot-max', val=mdotMax, error=error)
     if (error==0) then; mdotMax = mdotMax*1e-3_R8; else; mdotMax = 0._R8; endif  ! g/s -> kg/s; absent = off
-    !> Particle-output switches (both default ON). String off-token parse (FiNeR get(logical)
-    !> only accepts T/F) — mirror the mollify idiom: any off-token => OFF, anything else => ON.
+    !> out-traj / out-scatter: parsed as strings, any off-token => off, anything else => on.
     call fini%get(section_name='IGLOO-General', option_name='out-traj', val=mollify_word, error=error)
     trajOn = .not.( error==0 .and. is_off_token(mollify_word) )
     call fini%get(section_name='IGLOO-General', option_name='out-scatter', val=mollify_word, error=error)
@@ -97,14 +121,7 @@ contains
     !> RNG seed for stochastic injection-diameter sampling (optional; default 42)
     call fini%get(section_name='IGLOO-General', option_name='seed', val=rng_seed, error=error)
     if (error/=0) rng_seed = 42
-    !> Mollification of the geoblock eulerian/source feedback fields.
-    !>   mollify       = on|off switch (optional; default ON). Off-tokens (any case):
-    !>                   off / false / no / 0 / F ; anything else => ON.
-    !>   mollify-passes= number of local binomial passes (optional override). When absent
-    !>                   and ON, defaults to DEFAULT_MOLLIFY_PASSES, the analysis-derived
-    !>                   count that crushes <=4-cell deposition (Nyquist) noise while
-    !>                   preserving >=16-cell physical structure. 0 => off.
-    !> The smoother is mesh-local (width ~ sqrt(passes) cells); no physical width param.
+    !> mollify (on|off, default on) and mollify-passes (default DEFAULT_MOLLIFY_PASSES; 0 => off).
     call fini%get(section_name='IGLOO-General', option_name='mollify', val=mollify_word, error=error)
     if (error/=0) then
       mollifyOn = .true.
@@ -124,8 +141,7 @@ contains
     else
       write(*,*) ' >> Field mollification OFF'
     endif
-    !> [IGLOO-General] body-accel = gx gy gz [m/s^2]: optional uniform body acceleration
-    !> (generalized gravity) added to every particle's dv/dt. Absent/all-zero => no-op.
+    !> body-accel = gx gy gz [m/s^2]: optional uniform body acceleration.
     if (fini%has_option(option_name='body-accel')) then
       n = fini%count_values(section_name='IGLOO-General', option_name='body-accel')
       if (n /= 3) error stop '[ERROR] [IGLOO-General] body-accel: expected 3 values (gx gy gz) [m/s^2]'
@@ -133,12 +149,9 @@ contains
       bodyForce = any(bodyAccel /= 0._R8)
     endif
     if (bodyForce) write(*,'(a,3es12.4,a)') '  >> Body acceleration ON: g_body =', bodyAccel, ' [m/s^2]'
-    !> Gate for the EXACT two-way source-reaction correction (J/W accumulators): only needed
-    !> when the gas-coupling source is actually output AND a body force is present.
     srcBodyForce = sourceSwitch .and. bodyForce
 
-    !> [IGLOO-General] probe-ids: DEBUG subset — integrate ONLY the listed IDs (and a-b intervals),
-    !> skip the rest. Absent/empty => integrate all. e.g. `probe-ids = 1 2 6 496-497 1990`.
+    !> probe-ids: debug subset of particle IDs (IDs and a-b intervals); absent => all.
     if (fini%has_option(option_name='probe-ids')) then
       n = fini%count_values(section_name='IGLOO-General', option_name='probe-ids')
       if (n > 0) then
@@ -188,6 +201,7 @@ contains
   end subroutine read_general
 
 
+  !> [IGLOO-Models]: drag, heat, evaporation, phase-change axes, blowing, breakup and its constants.
   subroutine read_models()
     use IGLOO_variables
     use IGLOO_Lib_Drag,        only: assign_drag
@@ -207,8 +221,8 @@ contains
     !> Evaporation model definition
     call fini%get(section_name='IGLOO-Models', option_name='evaporation', val=evaporation_word, error=error)
     if (error==0) phaseChange = .true.
-    !> Composable phase-change axes: global defaults (per-material override in [GPB-PhaseN]).
-    !  Unimplemented nonzero selects are rejected at material setup.
+    !> Composable phase-change axes: global defaults (per-material override: key=value on the material
+    !  line of the phase file, written by ATLAS GPB from [GPB-Phase*]).
     call fini%get(section_name='IGLOO-Models', option_name='liquid-conduction', val=liquid_word, error=error)
     if (error/=0) liquid_word = 'ITC'
     call assign_liquid(liquid_word, liqSelect)
@@ -276,6 +290,10 @@ contains
         if (error/=0) bp(3) = 6._R8; bp(3) = 2_R8*bp(3)
         call fini%get(section_name='IGLOO-Models', option_name='method', val=bpMethod, error=error)
         if (error==0) then
+          if (bpMethod/=1 .and. bpMethod/=2) then
+            write(*,'(A,I0,A)') ' [ERROR] [IGLOO-Models] method = ', bpMethod, ' is not a TAB product-size method (1 or 2)'
+            error stop 'IGLOO: TAB method must be 1 or 2'
+          endif
           if (bpMethod==2) then
             call fini%get(section_name='IGLOO-Models', option_name='n', val=bp(4), error=error)
             if (error/=0) bp(4) = 3.5_R8
@@ -287,7 +305,7 @@ contains
         call assign_scaleFactor()
       case (5)
         allocate(bp(6))
-        !> defaults per Tanner 1998 table: k1=k2=0.2222, WeTrans=80 (100 = Liu-Reitz alternative)
+        !> defaults per Tanner (1998)
         call fini%get(section_name='IGLOO-Models', option_name='k1'     , val=bp(1), error=error)
         if (error/=0) bp(1) = 0.2222_R8
         call fini%get(section_name='IGLOO-Models', option_name='k2'     , val=bp(2), error=error)
@@ -305,81 +323,106 @@ contains
   end subroutine read_models
 
 
-  !> Per-material model overrides + phase-change properties from [GPB-Phase<imat>].
-  !  Called from IO.f90 after the global-defaults assignment; every key optional (absent =>
-  !  the global default already in `mat` stands). `combustion` present => this material burns
-  !  instead of evaporating (loud warning if both were configured).
-  subroutine read_phase_models(imat, mat)
+  !> Per-material defaults for the phase-change properties, set before the material-line tokens are
+  !  applied (T-nuc stays 0 here: finalize_material_models resolves it to 0.8*T-melt).
+  subroutine set_material_defaults(mat)
+    use IGLOO_data_phases, only: obj_material
+    implicit none
+    type(obj_material), intent(inout) :: mat
+
+    mat%alphaE   = 1._R8
+    mat%kLiq     = 0._R8
+    mat%muLiq    = 0._R8
+    mat%Kburn    = 0._R8
+    mat%nBurn    = 1.8_R8            ! Beckstead nominal exponent
+    mat%Xeff     = 1._R8             ! pure effective oxidizer => Keff = K-burn
+    mat%betaPart = 0._R8
+    mat%xiCap    = 0._R8
+    mat%Tign     = 2350._R8          ! Al2O3-shell melting anchor
+    mat%qComb    = 0._R8
+    mat%Tmelt    = 2327._R8          ! alumina default
+    mat%hFus     = 0._R8
+    mat%Tnuc     = 0._R8
+    mat%cpSol    = 0._R8
+  end subroutine set_material_defaults
+
+
+  !> One key=value token from the material line of the phase file (written by ATLAS GPB from
+  !  [GPB-Phase*]): the six model words call the assign_* selectors, the fourteen reals are read;
+  !  an unknown key or a non-numeric real stops the run.
+  subroutine apply_material_key(imat, mat, key, value)
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Evaporation, only: assign_evaporation, assign_liquid, assign_interface, &
                                      assign_boiling, assign_combustion, assign_solidification
     implicit none
     integer,            intent(in)    :: imat
     type(obj_material), intent(inout) :: mat
-    character(len=128) :: w
-    character(len=16)  :: sec
+    character(len=*),   intent(in)    :: key, value
+    integer :: ios
 
-    write(sec,'(a,i0)') 'GPB-Phase', imat
+    ios = 0
+    select case (trim(key))
+    case ('evaporation');       mat%evapWord = value; call assign_evaporation(value, mat%evapSelect)
+    case ('liquid-conduction'); call assign_liquid(value, mat%liqSelect)
+    case ('interface');         call assign_interface(value, mat%intfSelect)
+    case ('boiling');           call assign_boiling(value, mat%boilSelect)
+    case ('combustion');        call assign_combustion(value, mat%combSelect)
+    case ('solidification');    call assign_solidification(value, mat%solidSelect)
+    case ('alpha-e');   read(value,*,iostat=ios) mat%alphaE
+    case ('k-liq');     read(value,*,iostat=ios) mat%kLiq
+    case ('mu-liq');    read(value,*,iostat=ios) mat%muLiq
+    case ('K-burn');    read(value,*,iostat=ios) mat%Kburn
+    case ('n-burn');    read(value,*,iostat=ios) mat%nBurn
+    case ('X-eff');     read(value,*,iostat=ios) mat%Xeff
+    case ('beta-part'); read(value,*,iostat=ios) mat%betaPart
+    case ('xi-cap');    read(value,*,iostat=ios) mat%xiCap
+    case ('T-ign');     read(value,*,iostat=ios) mat%Tign
+    case ('q-comb');    read(value,*,iostat=ios) mat%qComb
+    case ('T-melt');    read(value,*,iostat=ios) mat%Tmelt
+    case ('h-fus');     read(value,*,iostat=ios) mat%hFus
+    case ('T-nuc');     read(value,*,iostat=ios) mat%Tnuc
+    case ('cp-solid');  read(value,*,iostat=ios) mat%cpSol
+    case default
+      write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': unknown key "'//trim(key)// &
+                          '" (value "'//trim(value)//'") on the material line'
+      error stop 'IGLOO: unknown per-material key in the phase file'
+    end select
+    if (ios /= 0) then
+      write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': '//trim(key)//'='//trim(value)// &
+                          ' is not a real number'
+      error stop 'IGLOO: non-numeric per-material value in the phase file'
+    endif
+  end subroutine apply_material_key
 
-    !> Model-axis overrides (words, same tokens as [IGLOO-Models])
-    call fini%get(section_name=trim(sec), option_name='evaporation', val=w, error=error)
-    if (error==0) then; mat%evapWord = w; call assign_evaporation(w, mat%evapSelect); endif
-    call fini%get(section_name=trim(sec), option_name='liquid-conduction', val=w, error=error)
-    if (error==0) call assign_liquid(w, mat%liqSelect)
-    call fini%get(section_name=trim(sec), option_name='interface', val=w, error=error)
-    if (error==0) call assign_interface(w, mat%intfSelect)
-    call fini%get(section_name=trim(sec), option_name='boiling', val=w, error=error)
-    if (error==0) call assign_boiling(w, mat%boilSelect)
-    call fini%get(section_name=trim(sec), option_name='combustion', val=w, error=error)
-    if (error==0) call assign_combustion(w, mat%combSelect)
-    !> String-parsed on|off (FiNeR get(logical) does a bare read(*) — rejects on/off)
-    call fini%get(section_name=trim(sec), option_name='solidification', val=w, error=error)
-    if (error==0) call assign_solidification(w, mat%solidSelect)
 
+  !> After the material-line tokens: T-nuc default, combustion/evaporation exclusivity, resolved-model log.
+  subroutine finalize_material_models(imat, mat)
+    use IGLOO_data_phases, only: obj_material
+    implicit none
+    integer,            intent(in)    :: imat
+    type(obj_material), intent(inout) :: mat
+
+    if (mat%Tnuc <= 0._R8) mat%Tnuc = 0.8_R8*mat%Tmelt   ! supercooling default
     !> Combustion and evaporation are mutually exclusive per material
     if (mat%combSelect > 0 .and. mat%evapSelect > 0) then
-      write(*,'(a,i0,a)') '[WARNING] ['//trim(sec)//'] combustion set with evaporation also ' // &
-        'configured for material ', imat, ': a particle either burns or evaporates — ' // &
-        'DISABLING evaporation for this material.'
+      write(*,'(a,i0,a)') '[WARNING] phase file: combustion set with evaporation also configured for material ', &
+        imat, ': a particle either burns or evaporates -- DISABLING evaporation for this material.'
       mat%evapSelect = 0
     endif
-
-    !> Phase-change properties; each is read only by the model that needs it.
-    call fini%get(section_name=trim(sec), option_name='alpha-e',  val=mat%alphaE,   error=error)
-    if (error/=0) mat%alphaE = 1._R8
-    call fini%get(section_name=trim(sec), option_name='k-liq',    val=mat%kLiq,     error=error)
-    if (error/=0) mat%kLiq = 0._R8
-    call fini%get(section_name=trim(sec), option_name='mu-liq',   val=mat%muLiq,    error=error)
-    if (error/=0) mat%muLiq = 0._R8
-    call fini%get(section_name=trim(sec), option_name='K-burn',   val=mat%Kburn,    error=error)
-    if (error/=0) mat%Kburn = 0._R8
-    call fini%get(section_name=trim(sec), option_name='n-burn',   val=mat%nBurn,    error=error)
-    if (error/=0) mat%nBurn = 1.8_R8            ! Beckstead nominal exponent
-    call fini%get(section_name=trim(sec), option_name='X-eff',    val=mat%Xeff,     error=error)
-    if (error/=0) mat%Xeff = 1._R8              ! pure effective oxidizer => Keff = K-burn
-    call fini%get(section_name=trim(sec), option_name='beta-part',val=mat%betaPart, error=error)
-    if (error/=0) mat%betaPart = 0._R8
-    call fini%get(section_name=trim(sec), option_name='xi-cap',   val=mat%xiCap,    error=error)
-    if (error/=0) mat%xiCap = 0._R8
-    call fini%get(section_name=trim(sec), option_name='T-ign',    val=mat%Tign,     error=error)
-    if (error/=0) mat%Tign = 2350._R8           ! Al2O3-shell melting anchor
-    call fini%get(section_name=trim(sec), option_name='q-comb',   val=mat%qComb,    error=error)
-    if (error/=0) mat%qComb = 0._R8
-    call fini%get(section_name=trim(sec), option_name='T-melt',   val=mat%Tmelt,    error=error)
-    if (error/=0) mat%Tmelt = 2327._R8          ! alumina default
-    call fini%get(section_name=trim(sec), option_name='h-fus',    val=mat%hFus,     error=error)
-    if (error/=0) mat%hFus = 0._R8
-    call fini%get(section_name=trim(sec), option_name='T-nuc',    val=mat%Tnuc,     error=error)
-    if (error/=0) mat%Tnuc = 0.8_R8*mat%Tmelt   ! supercooling default
-    call fini%get(section_name=trim(sec), option_name='cp-solid', val=mat%cpSol,    error=error)
-    if (error/=0) mat%cpSol = 0._R8
-
-  end subroutine read_phase_models
+    !> Log the resolved per-material selection.
+    write(*,'(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,es10.3)') '  >> [material ', imat, '] evap=', mat%evapSelect, &
+      ' liq=', mat%liqSelect, ' intf=', mat%intfSelect, ' boil=', mat%boilSelect, ' comb=', mat%combSelect, &
+      ' solid=', mat%solidSelect, ' alpha-e=', mat%alphaE
+  end subroutine finalize_material_models
 
 
+  !> [IGLOO-Properties]: optional per-material property vectors (psat, Mv, Lv, boiling-temperature, cpv, Le,
+  !  Yinf, sigma, mu), all of one length.
   subroutine read_properties()
     implicit none
     integer :: n, nref
+    logical :: hasBT, hasTB
+    character(len=:), allocatable :: keyTB
 
     nref = -1
 
@@ -404,12 +447,17 @@ contains
       allocate(ini_Lv(n))
       call fini%get(section_name='IGLOO-Properties', option_name='Lv', val=ini_Lv, error=error)
     endif
-    if (fini%has_option(option_name='Tboil')) then
-      n = fini%count_values(section_name='IGLOO-Properties', option_name='Tboil')
+    !> boiling-temperature or its alias Tboil (the names ICE reads too); both given is refused
+    hasBT = fini%index(section_name='IGLOO-Properties', option_name='boiling-temperature') > 0
+    hasTB = fini%index(section_name='IGLOO-Properties', option_name='Tboil') > 0
+    if (hasBT .and. hasTB) error stop '[ERROR] [IGLOO-Properties] give boiling-temperature or its alias Tboil, not both'
+    if (hasBT .or. hasTB) then
+      if (hasBT) then; keyTB = 'boiling-temperature'; else; keyTB = 'Tboil'; endif
+      n = fini%count_values(section_name='IGLOO-Properties', option_name=keyTB)
       if (nref < 0) nref = n
-      if (n /= nref) error stop '[ERROR] [IGLOO-Properties] Tboil: size mismatch with other property vectors'
+      if (n /= nref) error stop '[ERROR] [IGLOO-Properties] boiling-temperature (alias Tboil): size mismatch with other property vectors'
       allocate(ini_Tboil(n))
-      call fini%get(section_name='IGLOO-Properties', option_name='Tboil', val=ini_Tboil, error=error)
+      call fini%get(section_name='IGLOO-Properties', option_name=keyTB, val=ini_Tboil, error=error)
     endif
     if (fini%has_option(option_name='cpv')) then
       n = fini%count_values(section_name='IGLOO-Properties', option_name='cpv')
@@ -449,6 +497,8 @@ contains
   end subroutine read_properties
 
 
+  !> [IGLOO-BC]: injection spacing and degeneracy floor, then either explicit DB positions (x, y, z
+  !  with mdot, diam, temp0, up/vp/wp) or the FB boundary method with its sampling frequency.
   subroutine read_bc(method,pos0,vel0,temp0,mdot,diam)
     use IGLOO_variables
     implicit none
@@ -464,8 +514,7 @@ contains
     ds = ds*1e-2_R8      ! cm -> m
     if (error/=0) ds = 0.0
 
-    !> Degeneracy floor (cm): skip single/coverage injection in cells whose
-    !> tangential size is below dsDegen (collapsing/degenerate boundary cells).
+    !> ds-degen (cm): no injection in boundary cells thinner than this.
     call fini%get(section_name='IGLOO-BC', option_name='ds-degen', val=dsDegen, error=error)
     dsDegen = dsDegen*1e-2_R8
     if (error/=0) dsDegen = 0.0
@@ -584,7 +633,14 @@ contains
               vel0(i,:) = [x(i), y(i), z(i)]
             enddo
           else
-            error stop ( '[ERROR] up, vp, wp velocity components have diffent sizes' )
+            write(*,'(a)')    ' [ERROR] up, vp, wp velocity components have different sizes.'
+            write(*,'(a,i0,a,i0,a,i0,a,i0)')                                              &
+                 '         up = ', xSize, ',  vp = ', ySize, ',  wp = ', zSize,           &
+                 '   against particle count ', maxSize
+            write(*,'(a)')    '         Each must have that many values, or exactly 1, or be absent.'
+            write(*,'(a)')    '         CHECK THE SPACING FIRST: separate values by a SINGLE space.'
+            write(*,'(a)')    '         Two or more spaces are counted as extra values.'
+            error stop 'IGLOO: up/vp/wp size mismatch in [IGLOO-BC]'
           endif
         endif
       endif
@@ -597,20 +653,19 @@ contains
   end subroutine read_bc
 
 
+  !> [IGLOO-ODE]: solver name, maximum steps, tolerances.
   subroutine read_ode()
-    ! use oslo
     use IGLOO_variables, only: ode_word, iopt, rtol, atol
     implicit none
 
-    !> ODE solver parameters.
     iopt = 0
 
     call fini%get(section_name='IGLOO-ODE', option_name='ode-solver', val=ode_word, error=error)
     if (error/=0) ode_word='H-sdirk4'
     select case (trim(ode_word))
       ! case ('dvodef90')
-      case ('H-dopri5','H-sdirk4')
-        ! valid
+      case ('H-sdirk4', 'H-dopri5')
+        ! valid (H-dopri5 requires the patched OSlo dopri5)
       case default
         write(*,*)
         write(*,*) "Wrong ode-solver input ---> "//trim(ode_word)
@@ -619,7 +674,7 @@ contains
         write(*,*) "- H-dopri5 "
         write(*,*) "- H-sdirk4 "
         write(*,*)
-        stop
+        error stop 'IGLOO: unknown ode-solver'
     end select
 
     call fini%get(section_name='IGLOO-ODE', option_name='max-steps-ode', val=iopt(1), error=error)
@@ -631,12 +686,10 @@ contains
     call fini%get(section_name='IGLOO-ODE', option_name='absolute-tol', val=atol, error=error)
     if (error/=0) atol=1d-10
 
-    ! call setup_odesolver(N=neq,solver=ode_word,RT=rtol,AT=atol,iopt=iopt)
   end subroutine read_ode
 
 
-  !> True if `word` is any recognized off-token (case-insensitive). Used for on|off
-  !> switches FiNeR's get(logical) cannot parse (it accepts only T/F).
+  !> True if `word` is an off-token (off / false / no / 0 / F, any case).
   logical function is_off_token(word)
     character(len=*), intent(in) :: word
     select case (trim(adjustl(word)))

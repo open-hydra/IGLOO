@@ -1,30 +1,79 @@
+!> Gas sampling at a particle position (trilinear, bilinear, 2.5D wedge) and interphase drag/heat.
 module Lib_Equations
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
-    use IGLOO_particles, only: obj_particle
-    ! use IGLOO_data_gas, only: obj_gas_state
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     private
 
     public :: interphase
     public :: interp2ndOrder
     public :: interp2ndOrder2D
-    ! public :: interp2ndOrderDirect
+    public :: sampleGas2D
+    public :: meridianToAzimuth
+    public :: toMeridian
 
 contains
 
-  !***********************************************************************************************************!
-  !*************************************** DRAG FORCE & HEAT EXCHANGE  ***************************************!
-  !***********************************************************************************************************!
+  !> 2.5D gas sample on an axisymmetric wedge: evaluates the meridian-plane field at the parcel's
+  !  (axial, radial) position and rotates the velocity to its azimuth; plain bilinear otherwise.
+  subroutine sampleGas2D(vertices, gasNodes, p, nsp, gas)
+    use IGLOO_variables,    only: axisym, axisDir, refDir
+    use IGLOO_VectorModule, only: cross, rotateVector
+    implicit none
+    integer,  intent(in)  :: nsp
+    real(R8), intent(in)  :: vertices(3,4), gasNodes(nsp,4), p(3)
+    real(R8), intent(out) :: gas(nsp)
+    real(R8) :: ax, c, s, p0(3)
 
+    if (axisym) then
+      s = dot_product(p, cross(axisDir, refDir))
+      if (s /= 0._R8) then
+        ax = dot_product(p, axisDir)
+        c  = dot_product(p, refDir)
+        p0 = ax*axisDir + hypot(c, s)*refDir
+        call interp2ndOrder2D(vertices, gasNodes, p0, nsp, gas)
+        gas(2:4) = rotateVector(gas(2:4), axisDir, atan2(s, c))   ! gas(2:4): velocity (nsp = 1)
+        return
+      endif
+    endif
+    call interp2ndOrder2D(vertices, gasNodes, p, nsp, gas)
+  end subroutine sampleGas2D
+
+  !> ord1 counterpart of sampleGas2D: rotates a meridian-frame cell velocity to p's azimuth (no-op under ord2).
+  pure function meridianToAzimuth(vg, p) result(v)
+    use IGLOO_variables,    only: axisym, axisDir, refDir, ord2
+    use IGLOO_VectorModule, only: cross, rotateVector
+    implicit none
+    real(R8), intent(in) :: vg(3), p(3)
+    real(R8) :: v(3), s
+    v = vg
+    if (ord2 .or. .not.axisym) return
+    s = dot_product(p, cross(axisDir, refDir))
+    if (s /= 0._R8) v = rotateVector(vg, axisDir, atan2(s, dot_product(p, refDir)))
+  end function meridianToAzimuth
+
+  !> Deposit counterpart: rotates a Cartesian vector carried at p's azimuth back to the meridian frame.
+  pure function toMeridian(v, p) result(vm)
+    use IGLOO_variables,    only: axisym, axisDir, refDir
+    use IGLOO_VectorModule, only: cross, rotateVector
+    implicit none
+    real(R8), intent(in) :: v(3), p(3)
+    real(R8) :: vm(3), s
+    vm = v
+    if (.not.axisym) return
+    s = dot_product(p, cross(axisDir, refDir))
+    if (s /= 0._R8) vm = rotateVector(v, axisDir, -atan2(s, dot_product(p, refDir)))
+  end function toMeridian
+
+
+  !> Trilinear interpolation of the gas at p0 in a hexahedron: Newton solve for the local
+  !  coordinates xi, then shape-function weighting.
   pure subroutine interp2ndOrder(vertices,gasNodes,p0,nsp,xi,gas)
-    ! use IGLOO_data_gas, only: obj_gas_state
     implicit none
     integer,  intent(in)    :: nsp
     real(R8), intent(in)    :: vertices(3,8), gasNodes(nsp,8)
     real(R8), intent(in)    :: p0(3)
     real(R8), intent(inout) :: xi(3)
     real(R8), intent(out)   :: gas(nsp)
-    !> Local variables
     real(R8) :: F(3), dFdxi(3,3), deltaXi(3)
     real(R8) :: N(8), dN(3,8), detJ
     integer  :: iter, i
@@ -65,6 +114,7 @@ contains
 
   contains
 
+    !> Trilinear shape functions and their derivatives at local coordinates.
     pure subroutine getShapeFunctions(coords,N,dN)
         implicit none
         real(R8), intent(in)  :: coords(3)
@@ -96,14 +146,14 @@ contains
 
   end subroutine interp2ndOrder
 
+  !> Bilinear interpolation of the gas at p0 in a quadrilateral: analytic inverse map, then
+  !  shape-function weighting.
   subroutine interp2ndOrder2D(vertices,gasNodes,p0,nsp,gas)
-    ! use IGLOO_data_gas, only: obj_gas_state
     implicit none
     integer,  intent(in)  :: nsp
     real(R8), intent(in)  :: vertices(3,4), gasNodes(nsp,4)
     real(R8), intent(in)  :: p0(3)
     real(R8), intent(out) :: gas(nsp)
-    !> Local variables
     real(R8) :: N(4), x1, y1, x2, y2, x3, y3, x4, y4, x, y
     real(R8) :: A, B, C, D, E, F, u, v, denom
     real(R8) :: aQuad, bQuad, cQuad, deltaQuad
@@ -116,12 +166,12 @@ contains
     A = x2 - x1; B = x4 - x1; C = x1 - x2 + x3 - x4
     D = y2 - y1; E = y4 - y1; F = y1 - y2 + y3 - y4
 
-    ! 3. Risoluzione Analitica Inversa
+    !> Analytic inverse map: quadratic in v.
     aQuad = C * E - B * F
     bQuad = C * (y1 - y) - F * (x1 - x) + A * E - B * D
     cQuad = A * (y1 - y) - D * (x1 - x)
 
-    ! Check se il termine quadratico è nullo (Parallelogramma/Rettangolo)
+    !> Parallelogram: linear in v.
     if (abs(aQuad) < 1.0e-14_R8) then
       if (abs(bQuad) > 1.0e-14_R8) then
         v = -cQuad / bQuad
@@ -156,57 +206,13 @@ contains
     N(3)  = u * v
     N(4)  = (1._R8 - u) * v
 
-    ! 5. Interpolazione delle proprietà del gas
     gas = N(1)*gasNodes(:,1) + N(2)*gasNodes(:,2) + N(3)*gasNodes(:,3) + N(4)*gasNodes(:,4)
 
   end subroutine interp2ndOrder2D
 
-  ! pure subroutine interp2ndOrderDirect(centers, gasNodes, p0, nsp , gas, is2D)
-  !   use IGLOO_data_gas, only: obj_gas_state
-  !   implicit none
-  !   real(R8),            intent(in)  :: centers(:,:)  !> (3,N)
-  !   type(obj_gas_state), intent(in)  :: gasNodes(:)
-  !   real(R8),            intent(in)  :: p0(3)
-  !   logical,             intent(in)  :: is2D
-  !   type(obj_gas_state), intent(out) :: gas
-  !   real(R8) :: u, v, w, N(8), dx, dy, dz, A, B, C, D
-  !   integer  :: i, j
-
-  !   if (is2D) then; j = 2; else; j = 5; endif
-  !   dx = centers(1,j) - centers(1,1); if (abs(dx) < 1e-20_R8) dx = 1._R8
-  !   dy = centers(2,4) - centers(2,1); if (abs(dy) < 1e-20_R8) dy = 1._R8
-  !   u = max(0._R8, min(1._R8, (p0(1) - centers(1,1)) / dx))
-  !   v = max(0._R8, min(1._R8, (p0(2) - centers(2,1)) / dy))
-  !   A = (1._R8-u)*(1._R8-v); B = u*(1._R8-v)
-  !   C = u*v;                 D = (1._R8-u)*v
-  !   if (is2D) then
-  !     N(1) = A;  N(2) = B;  N(3) = C;  N(4) = D
-  !   else
-  !     j  = 8
-  !     dz = centers(3,2) - centers(3,1); if (abs(dz) < 1e-20_R8) dz = 1._R8
-  !     w  = max(0._R8, min(1._R8, (p0(3) - centers(3,1)) / dz))
-  !     N(1) = A*(1._R8-w);  N(2) = A*w;  N(3) = D*w;  N(4) = D*(1._R8-w)
-  !     N(5) = B*(1._R8-w);  N(6) = B*w;  N(7) = C*w;  N(8) = C*(1._R8-w)
-  !   endif
-
-  !   gas%rho = 0._R8; gas%tg  = 0._R8; gas%mu  = 0._R8
-  !   gas%v   = 0._R8
-  !   gas%kl  = 0._R8; gas%gam = 0._R8; gas%R   = 0._R8
-  !   do i = 1, j
-  !     gas%rho = gas%rho + N(i) * gasNodes(i)%rho
-  !     gas%v   = gas%v   + N(i) * gasNodes(i)%v
-  !     gas%tg  = gas%tg  + N(i) * gasNodes(i)%tg
-  !     gas%mu  = gas%mu  + N(i) * gasNodes(i)%mu
-  !     gas%kl  = gas%kl  + N(i) * gasNodes(i)%kl
-  !     gas%gam = gas%gam + N(i) * gasNodes(i)%gam
-  !     gas%R   = gas%R   + N(i) * gasNodes(i)%R
-  !   enddo
-
-  ! end subroutine interp2ndOrderDirect
-
-
+  !> Drag force and, when Qdot is present, convective heat rate on a particle from the sampled gas.
   pure subroutine interphase(gas,nsp,vdiff,slip,temp,diam,Re,cpFactor, Fdrag,Qdot)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_variables, only: pi, dragSelect, heatSelect
     use IGLOO_Lib_Drag
     use IGLOO_Lib_Heat

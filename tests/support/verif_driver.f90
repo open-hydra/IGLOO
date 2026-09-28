@@ -126,7 +126,7 @@ contains
     ! Adaptive H-sdirk4 through OSlo (production path), t: 0 -> tend.     !
     !-------------------------------------------------------------------!
     subroutine run_adaptive(neq, dt0, tend, y, ierr)
-        use oslo, only: setup_odesolver, Run_ODESolver
+        use oslo, only: setup_odesolver, Run_ODESolver, no_jacobian
         integer(I4), intent(in)    :: neq
         real(R8),    intent(in)    :: dt0, tend
         real(R8),    intent(inout) :: y(neq)
@@ -137,7 +137,7 @@ contains
         iopt = [100000, 0, 0]
         call setup_odesolver(neq, 'H-sdirk4', rt, at, iopt)
         t1 = 0._R8;  t2 = tend;  h0 = dt0
-        call Run_ODESolver(neq, t1, t2, y, rhs_drag, ierr, h0)
+        call Run_ODESolver(neq, t1, t2, y, rhs_drag, no_jacobian, 0, ierr, h0)
     end subroutine run_adaptive
 
     !-------------------------------------------------------------------!

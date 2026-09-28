@@ -1,5 +1,6 @@
+!> Nusselt-number correlations Nu(Re, Pr, Ma) selected by keyword.
 module IGLOO_Lib_Heat
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   implicit none
   private
   public :: assign_heat
@@ -7,6 +8,7 @@ module IGLOO_Lib_Heat
 
 contains
 
+  !> Maps the [IGLOO-Models] heat-model keyword to heatSelect.
   subroutine assign_heat(heat_word,heatSelect)
     implicit none
     character(len=*), intent(in)  :: heat_word
@@ -25,6 +27,8 @@ contains
       heatSelect = 5
     case ('Kavanau-Drake')
       heatSelect = 6
+    case ('NoHeat')
+      heatSelect = 7
     case default
       write(*,*)
       write(*,*)
@@ -36,12 +40,14 @@ contains
       write(*,*) "- JAXA4 "
       write(*,*) "- Ranz-Marshall "
       write(*,*) "- Kavanau-Drake "
+      write(*,*) "- NoHeat "
       write(*,*)
-      stop
+      error stop 'IGLOO: unknown heat model'
     end select
 
   end subroutine assign_heat
 
+  !> Dispatches to the selected Nusselt correlation.
   pure function heat(Re,Pr,Ma,heatSelect) result(Nu)
     use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
     implicit none
@@ -62,13 +68,15 @@ contains
       Nu = heat_Ranz_Marshall(Re,Pr)
     case (6)
       Nu = heat_Kavanau_Drake(Re,Pr,Ma)
+    case (7) !> NoHeat: no convective heat exchange
+      Nu = 0._R8
     end select
 
   end function heat
 
   !> Jaxa Report 1 Heat Model
   pure function heat_JAXA_1(Re) result(Nu)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re
     real(kind=R8) :: Nu
@@ -79,7 +87,7 @@ contains
 
   !> Jaxa Report 2 Heat Model
   pure function heat_JAXA_2(Re,Pr) result(Nu)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re, Pr
     real(kind=R8) :: Nu
@@ -90,7 +98,7 @@ contains
 
   !> Jaxa Report 3 Heat Model
   pure function heat_JAXA_3(Re,Pr) result(Nu)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re, Pr
     real(kind=R8) :: Nu
@@ -114,7 +122,7 @@ contains
 
   !> Ranz Marshall Heat Model
   pure function heat_Ranz_Marshall(Re,Pr) result(Nu)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re, Pr
     real(kind=R8) :: Nu
@@ -125,7 +133,7 @@ contains
 
   !> Kavanau Drake Heat Model
   pure function heat_Kavanau_Drake(Re,Pr,Ma) result(Nu)
-    use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: iso_fortran_env, only : R8 => real64
     implicit none
     real(kind=R8), intent(in) :: Re, Pr, Ma
     real(kind=R8) :: Nu

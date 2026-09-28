@@ -1,22 +1,36 @@
+!> Material, group and shed-list types, and the material -> group -> particle property hand-off.
 module IGLOO_data_phases
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
-  use IGLOO_variables, only: llen
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_particles
   implicit none
   private
 
-  type, public:: obj_child
-    integer  :: ipos(4), igas(3)
-    real(R8) :: pos(3), vel(3), temp, diam, npdot, time
+  !> One shed child parcel, held in a per-parent growable list (shedList).
+  type, public:: obj_shed
+    integer  :: ipos(4) = 0,      igas(3) = 0
+    real(R8) :: pos(3)  = 0._R8,  vel(3)  = 0._R8
+    real(R8) :: temp    = 0._R8,  diam    = 0._R8, npdot = 0._R8, time = 0._R8
+  end type
+
+  !> Growable shed list, one per parent index (reserve + double via move_alloc). Dummies take it
+  !  intent(inout), never intent(out), which would deallocate the reserved capacity on entry.
+  type, public:: shedList
+    integer :: n = 0, capacity = 0
+    type(obj_shed), allocatable :: item(:)
+  contains
+    procedure, pass(this), public :: reserve => shed_reserve
+    procedure, pass(this), public :: push    => shed_push
   end type
 
   type, public:: obj_group
+    !> nInjected: pin-time census; nparticles: live count (children included).
+    integer  :: nInjected = 0
     integer  :: mID, gID, famID, nparticles, childCounter=0
     integer  :: neq
-    ! integer  :: distribution
     logical  :: cpVariable
     logical  :: rhoVariable
     real(R8) :: cp    !> specific heat (defined if cp=const)
+    real(R8) :: hOff = 0._R8   !> enthalpy datum of the table for cp=const: h(T) = cp*T + hOff
     real(R8) :: rho   !> material density (defined if rho=const)
     !> Breakup properties (per-material, constant)
     character(len=50) :: brkupWord
@@ -31,7 +45,7 @@ module IGLOO_data_phases
     !> Evaporation properties (per-material, constant)
     character(len=50) :: evapWord
     integer  :: evapSelect=0
-    !> Composable phase-change axes (defaults = hard-wired behavior)
+    !> Composable phase-change axes
     integer  :: liqSelect=0, intfSelect=0, boilSelect=0, combSelect=0, solidSelect=0
     logical  :: psatVariable=.false.
     real(R8) :: pSat       = 0._R8
@@ -50,7 +64,7 @@ module IGLOO_data_phases
     real(R8) :: qComb = 0._R8
     integer  :: nactive = 0
     type(obj_particle), allocatable :: particle(:)
-    type(obj_child),    allocatable :: child(:)
+    type(shedList),     allocatable :: shed(:)   !> one growable shed list per parent index
   contains
     procedure, pass(self), public :: setup_particleODE
     procedure, pass(self), public :: assign_group2particle
@@ -62,6 +76,8 @@ module IGLOO_data_phases
     logical           :: cpVariable=.false.
     logical           :: rhoVariable=.false.
     real(R8)          :: cp    !> specific heat                   (defined if cp=const)
+    real(R8)          :: hOff = 0._R8       !> enthalpy datum of the table for cp=const: h(T) = cp*T + hOff
+    character(len=8)  :: hDatum = 'relative' !> 'relative' (Enthalpy = cp*T) | 'absolute' (Enthalpy_abs)
     real(R8)          :: rho   !> material density                (defined if rho=const)
     !> Breakup properties (per-material, constant)
     character(len=50) :: brkupWord
@@ -76,7 +92,7 @@ module IGLOO_data_phases
     !> Evaporation properties (per-material, constant)
     character(len=50) :: evapWord
     integer  :: evapSelect=0
-    !> Composable phase-change axes (defaults = hard-wired behavior)
+    !> Composable phase-change axes
     integer  :: liqSelect=0, intfSelect=0, boilSelect=0, combSelect=0, solidSelect=0
     logical  :: psatVariable=.false.
     real(R8) :: pSat       = 0._R8
@@ -103,6 +119,38 @@ module IGLOO_data_phases
 
 contains
 
+  !> Grow the backing store to at least `newcap`, preserving the live entries. Never shrinks.
+  subroutine shed_reserve(this,newcap)
+    implicit none
+    class(shedList), intent(inout) :: this
+    integer,         intent(in)    :: newcap
+    type(obj_shed), allocatable :: tmp(:)
+
+    if (newcap <= this%capacity) return
+    allocate(tmp(newcap))
+    if (this%n > 0) tmp(1:this%n) = this%item(1:this%n)
+    call move_alloc(tmp,this%item)
+    this%capacity = newcap
+
+  end subroutine shed_reserve
+
+  !> Append one shed record, doubling the capacity when full.
+  subroutine shed_push(this,rec)
+    implicit none
+    class(shedList), intent(inout) :: this
+    type(obj_shed),  intent(in)    :: rec
+
+    if (this%n == this%capacity) then
+      if (this%capacity == 0) then; call this%reserve(4)
+      else;                         call this%reserve(2*this%capacity); endif
+    endif
+    this%n = this%n + 1
+    this%item(this%n) = rec
+
+  end subroutine shed_push
+
+
+  !> Copies the material-level properties and model selections into each group.
   pure subroutine assign_material2group(self)
     implicit none
     class(obj_material), intent(inout) :: self
@@ -114,6 +162,7 @@ contains
       gr%cpVariable  = self%cpVariable
       gr%rhoVariable = self%rhoVariable
       if (.not.self%cpVariable ) gr%cp    = self%cp
+      gr%hOff = self%hOff
       if (.not.self%rhoVariable) gr%rho   = self%rho
       !> Breakup properties
       if (self%brkupSelect > 0) then
@@ -143,7 +192,7 @@ contains
         if (.not.self%psatVariable) gr%psat = self%psat
         gr%alphaE = self%alphaE; gr%kLiq = self%kLiq; gr%muLiq = self%muLiq
       endif
-      !> Composable axes (config, copied unconditionally) + metal properties
+      !> Composable axes + metal properties
       gr%liqSelect  = self%liqSelect;  gr%intfSelect  = self%intfSelect
       gr%boilSelect = self%boilSelect; gr%combSelect  = self%combSelect
       gr%solidSelect= self%solidSelect
@@ -158,9 +207,11 @@ contains
 
   end subroutine assign_material2group
 
+  !> Sets the group's ODE model and system size and sizes each particle's state arrays
+  !  (over rangeStart:rangeEnd when given).
   subroutine setup_particleODE(self,rangeStart,rangeEnd)
     use IGLOO_variables,  only: eulerSwitch, srcBodyForce
-    use Lib_RHS,          only: determineModel, computeNeq, setupRHS
+    use Lib_RHS,          only: determineModel, computeNeq, computeNode, setupRHS
     use IGLOO_Lib_Breakup, only: bp, bpMethod, bpScale
     implicit none
     class(obj_group),  intent(inout) :: self
@@ -178,7 +229,7 @@ contains
     endif
 
     mdotSwitch = (self%evapSelect > 0)
-    mdl = determineModel(mdotSwitch, self%brkupEqOde, self%combSelect)
+    mdl = determineModel(mdotSwitch, self%brkupEqOde, self%combSelect, self%solidSelect)
     self%neq  = computeNeq(mdl, eulerSwitch, srcBodyForce)
     !> Build fixed-size propFlags: [varCp, varRho, varSig, varMup, varPsat]
     propFlags = [self%cpVariable, self%rhoVariable, .false., .false., .false.]
@@ -199,29 +250,47 @@ contains
 
     do i = start, end
       associate(part => self%particle(i))
-      !> ODE system configuration (allocations idempotent: setup may run twice — once for the
-      !  scatter inject-only pre-pass, once for the real sweep).
-      if (.not.allocated(part%stateVar)) allocate(part%stateVar(self%neq))
-      if (.not.allocated(part%oldState)) allocate(part%oldState(self%neq))
-      if (nAuxSt > 0 .and. .not.allocated(part%auxState)) allocate(part%auxState(nAuxSt))
-      if (nEvV   > 0 .and. .not.allocated(part%eventVar)) allocate(part%eventVar(nEvV))
-      if (eulerSwitch .and. .not.allocated(part%intE)) then
+      !> State arrays are re-sized whenever neq changes between calls.
+      call sizeTo(part%stateVar, self%neq)
+      call sizeTo(part%oldState, self%neq)
+      if (nAuxSt > 0) call sizeTo(part%auxState, nAuxSt)
+      if (nEvV   > 0) call sizeTo(part%eventVar, nEvV)
+      if (eulerSwitch) then
         select case(mdl)
-        case(2,5);    allocate(part%intE(1:5))
-        case(3,4);    allocate(part%intE(1:6))
-        case default; allocate(part%intE(1:4))
+        case(2,5);    call sizeTo(part%intE, 5)
+        case(3,4);    call sizeTo(part%intE, 6)
+        case default; call sizeTo(part%intE, 4)
         end select
       endif
       part%model = mdl
       part%neq   = self%neq
+      part%nOde  = computeNode(mdl)
       part%bodyAccum   = srcBodyForce .and. (mdl==2 .or. mdl==4 .or. mdl==5)
       part%evapSelect  = self%evapSelect
       part%brkupSelect = self%brkupSelect
       end associate
     enddo
 
+  contains
+
+    !> Allocates `arr` with exactly `n` elements, reallocating on a size change (contents not kept).
+    pure subroutine sizeTo(arr, n)
+      implicit none
+      real(R8), allocatable, intent(inout) :: arr(:)
+      integer,               intent(in)    :: n
+
+      if (allocated(arr)) then
+        if (size(arr) == n) return
+        deallocate(arr)
+      endif
+      allocate(arr(n))
+
+    end subroutine sizeTo
+
   end subroutine setup_particleODE
 
+  !> Copies the group-level properties and model selections into each particle
+  !  (over rangeStart:rangeEnd when given).
   pure subroutine assign_group2particle(self,rangeStart,rangeEnd)
     implicit none
     class(obj_group),  intent(inout) :: self
@@ -246,6 +315,7 @@ contains
         part%cp    = self%cp
         part%varCp = .false.
       endif
+      part%hOff = self%hOff
       part%varRho = .true.
       if (.not.self%rhoVariable) then
         part%rho    = self%rho
@@ -253,7 +323,7 @@ contains
       endif
       !> Breakup properties
       part%brkupSelect = self%brkupSelect
-      part%brkupEvent  = self%brkupEvent   !> A18: event models (TAB/ETAB/KHRT) were never flagged per-particle
+      part%brkupEvent  = self%brkupEvent
       if (self%brkupSelect > 0) then
         part%varSig = .true.
         if (.not.self%sigVariable) then
@@ -282,7 +352,7 @@ contains
         part%invTboil     = self%invTboil
         part%alphaE = self%alphaE; part%kLiq = self%kLiq; part%muLiq = self%muLiq
       endif
-      !> Composable axes (config) + metal properties
+      !> Composable axes + metal properties
       part%liqSelect  = self%liqSelect;  part%intfSelect = self%intfSelect
       part%boilSelect = self%boilSelect; part%combSelect = self%combSelect
       part%solidSelect= self%solidSelect

@@ -67,6 +67,7 @@ TRAJ   = "OUTPUT/trajectories-A.dat"
 OUTLOC = "OUTPUT/outloc-A.dat"
 SRC    = "OUTPUT/source.tec"
 TELESCOPE_TOL = 0.01   # measured residual ~2e-4 (final-cell truncation of the last traj row)
+TELESCOPE_TOL_M4 = 1.0e-6  # model 4 (d2law-brk-dormant): the exit flow closes it (measured 5.0e-8)
 
 # ---- known test inputs (SI). NOT read from production output. ----------------
 KG    = 0.026      # gas conductivity        [W/m/K]  (make_box_case GAS 'KL')
@@ -81,6 +82,10 @@ CP_P  = 1250.0     # particle heat capacity  [J/kg/K] (input.ini [GPB-Phase1] cp
 LV    = 2.0e5      # latent heat of vaporiz. [J/kg]   (input.ini [IGLOO-Properties] Lv)
 KT    = 0.5        # inlet temperature scaling        (bc.txt col 5) => Tp0 = KT*T_G
 D0    = 3.0e-5     # injection diameter      [m]      (bc.txt rp=1.5e-5 => d=2*rp)
+RHO_G = 1.2        # gas density             [kg/m^3] (make_box_case GAS 'RHO')
+KRHO  = 0.34       # inlet loading                    (input.ini [in] krho)
+A_IN  = 1.0e-4     # inlet cell face         [m^2]    (make_box_case: 0.05 m / 5 cells squared)
+MDOT_PARCEL = KRHO / (1.0 - KRHO) * RHO_G * U_G * A_IN   # 401 inlet: krho/(1-krho) rho u A per stream
 
 CP_G  = GAM * R_G / (GAM - 1.0)               # gas cp [J/kg/K]
 APRE  = 8.0 * KG / (CP_G * RHO_P)             # d(d^2)/dt = -APRE*ln(1+BT); K=8 LITERATURE
@@ -137,10 +142,20 @@ def load_trajectories(path):
     return parts
 
 
+def model4():
+    """True when input.ini sets a breakup model: d2law-brk-dormant runs this oracle under ODE model 4."""
+    for line in open("input.ini"):
+        if "=" in line and not line.lstrip().startswith(";") and line.split("=")[0].strip() == "breakup":
+            return True
+    return False
+
+
 def check_mass_telescoping(parts):
     """Telescoping audit of the evaporation MASS SOURCE (plan Phase 0, pre-phase audit 1):
     sum over cells of the deposited wdot [kg/s] must equal the total evaporated stream flow
-    sum_p npdot*(m_inj - m_last). Guards the computeSource mdot-deposit bug class (the
+    sum_p npdot*(m_inj - m_last), with npdot = outloc column 7 / m_inj (model 2 prints the injected
+    flow). Under model 4 the column is the stream's flow at exit, so the evaporated flow is
+    sum_p (MDOT_PARCEL - column 7), exact to the print. Guards the computeSource mdot-deposit bug class (the
     constant stored self%mdot made the evaporation mass source identically zero).
     Uses RAW trajectory rows: the B4 phantom row carries the exit-time state, so its mass
     makes m_last MORE accurate here. Returns 0 on pass, 1 on violation."""
@@ -161,24 +176,29 @@ def check_mass_telescoping(parts):
     wdot = [float(v) for v in vals[3*nnod:3*nnod+ncel]]   # var 4 = wdot(A), first CC var
     src_total = sum(wdot)
 
-    mdot_inj = {}
+    mdot_col7 = {}
     for line in open(OUTLOC).read().splitlines()[2:]:
         c = line.split()
         if len(c) == 9:
-            mdot_inj[int(c[8])] = float(c[6])
-    evap_total = 0.0
-    for pid, rows in parts.items():
-        m_first, m_last = rows[0][8], rows[-1][8]
-        if m_first > 0.0 and pid in mdot_inj:
-            evap_total += mdot_inj[pid]/m_first * (m_first - m_last)
+            mdot_col7[int(c[8])] = float(c[6])
+    tol, label = TELESCOPE_TOL, "traj evap flow"
+    if model4():
+        tol, label = TELESCOPE_TOL_M4, "injected - exit flow"
+        evap_total = sum(MDOT_PARCEL - f for f in mdot_col7.values())
+    else:
+        evap_total = 0.0
+        for pid, rows in parts.items():
+            m_first, m_last = rows[0][8], rows[-1][8]
+            if m_first > 0.0 and pid in mdot_col7:
+                evap_total += mdot_col7[pid]/m_first * (m_first - m_last)
 
     if evap_total <= 0.0:
-        print("[FAIL] telescoping: trajectory-based evaporated flow is zero -- no evaporation?")
+        print("[FAIL] telescoping: the evaporated flow is zero -- no evaporation?")
         return 1
     resid = abs(src_total - evap_total)/evap_total
-    ok = resid <= TELESCOPE_TOL and src_total > 0.0
-    print(f"mass telescoping: sum(wdot)={src_total:.6e} kg/s vs traj evap flow={evap_total:.6e} "
-          f"kg/s  resid={resid:.2e} (tol {TELESCOPE_TOL})  [{'PASS' if ok else 'FAIL'}]")
+    ok = resid <= tol and src_total > 0.0
+    print(f"mass telescoping: sum(wdot)={src_total:.6e} kg/s vs {label}={evap_total:.6e} "
+          f"kg/s  resid={resid:.2e} (tol {tol})  [{'PASS' if ok else 'FAIL'}]")
     return 0 if ok else 1
 
 

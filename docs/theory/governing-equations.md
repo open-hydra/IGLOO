@@ -12,11 +12,21 @@ depend on the active physics model (see [Model selection](index.md#model-selecti
 | :---: | :---: | :--- | :---: |
 | 1–3 | $\mathbf{x}$ | Position (m) | all |
 | 4–6 | $\mathbf{v}_p$ | Velocity (m s⁻¹) | all |
-| 7 | $T_p$ | Temperature (K) | all |
-| 8 | $\dot{m}$ integrand | Mass rate; carries $\dot{m}$ for models 2 and 4, $\dot{n}_p$ rate for model 3 | 2, 3, 4 |
-| 9 | $\dot{n}_p$ rate | Droplet-number rate for combined evap+breakup | 4 only |
+| 7 | $T_p$ (or $h_p$) | Temperature (K), or enthalpy when the material carries a $c_p(T)$ table | all |
+| 8 | $m$ | Droplet mass (kg); its rate is $\dot{m}$ | 2, 4, 5 |
+| 8 | $\dot{n}_p$ | Droplet-number rate of the parcel; its rate is the continuous breakup rate | 3 |
+| 8 | $f$ | Frozen mass fraction of a solidifying droplet (the temperature stays at index 7) | 6 |
+| 9 | $\dot{n}_p$ | Droplet-number rate for combined evap+breakup | 4 |
 | +1 | $\ell$ | Arc-length integrand $|\mathbf{v}_p|$ | euler on |
-| +2–4 | $\mathbf{v}_p\,\ell$ | Momentum integrand $\mathbf{v}_p|\mathbf{v}_p|$ | euler on |
+| +2–4 | $\mathbf{v}_p\,\ell$ | Momentum integrand $\mathbf{v}_p|\mathbf{v}_p|$ (mass-weighted for models 2–5; in the meridian frame on a wedge) | euler on |
+| +5 | $T_p\,\ell$ | Energy integrand (mass-weighted for models 2–5) | euler on |
+| +6 | $m$ or $\dot{n}_p$ | Mass moment (models 2, 4, 5) or number moment (model 3) | euler on, models 2–5 |
+| +7 | $\dot{n}_p$ | Number moment | euler on, model 4 |
+| tail | $J$, $W$ | Body-force reaction accumulators $\int\dot m\,dt$ and $\int\dot m\,\mathbf{g}\cdot\mathbf{v}\,dt$ (models 2, 4, 5 with a body force and source output; $J$ reuses the euler mass moment when both are on) | see [Eulerian feedback](eulerian-feedback.md) |
+
+The state dimension is therefore 7 (model 1), 8 (models 2, 3, 5, 6) or 9 (model 4), plus
+5, 6 or 7 euler slots when `eulerSwitch` is on (5 for models 1 and 6, whose moments are not
+mass-weighted, 6 for models 2, 3 and 5, 7 for model 4).
 
 The type `obj_particle` (defined in `obj_particles.f90`) stores the state in the allocatable
 `stateVar` array together with auxiliary fields: `m`, `d` (diameter), `npdot` (parcel rate),
@@ -28,7 +38,7 @@ cell location in the geometry and gas dual-mesh respectively.
 ## Interphase force and heat kernel
 
 The shared kernel `interphase` (in `Lib_Equations.f90`) computes the drag force and heat flux
-for all four models:
+for all models:
 
 $$
 \mathrm{Ma} = \frac{|\mathbf{v}_g - \mathbf{v}_p|}{\sqrt{\gamma R_g T_g}}, \qquad
@@ -49,9 +59,24 @@ $$
 \dot{Q} = \mathrm{Nu}\,k_g\,\pi\,d\,(T_g - T_p)\,c_{p,\mathrm{factor}}
 $$
 
-`cpFactor` equals $1/c_{p,p}$ when the particle uses a variable $c_p$ table, or $1/(c_{p,p}
-\cdot m)$ when the Runge-Kutta advances enthalpy directly; it converts the Nusselt-based
-heat flux into the temperature (or enthalpy) rate that appears in $F(7)$.
+`cpFactor` is $1/c_{p,p}$ when the state variable is the temperature $T_p$ and $1$ when the
+particle carries a variable-$c_p$ table (the state variable is then the enthalpy $h_p$); it
+converts the Nusselt-based heat flux into the rate that appears in $F(7) = \dot Q / m$.
+
+With a variable-$c_p$ table the temperature is recovered from $h_p$ through the tabulated enthalpy,
+linear between the integer nodes $T_i$ and continued beyond the table by its first and last segments:
+
+$$
+h(T) = h_i + s_i\,(T - T_i), \qquad s_i = h_{i+1} - h_i, \qquad
+i = \min\bigl(\max(\lfloor T \rfloor, T_\mathrm{min}),\, T_\mathrm{max} - 1\bigr)
+$$
+
+$T(h)$ inverts the same pieces, the bracketing node found by bisection, so a table may start at any
+temperature.  ICE writes the energy of its condensed phase as $e = h - h_\mathrm{off}$ with
+$h_\mathrm{off} = h(T_\mathrm{min}) - T_\mathrm{min}\,s_{T_\mathrm{min}}$, and continues it below
+the table by the line through $e(0) = 0$.  Since $e(T_\mathrm{min}) = T_\mathrm{min}\,s_{T_\mathrm{min}}$,
+that line has the slope $s_{T_\mathrm{min}}$: it is the first segment continued.  Above the table both
+solvers continue the last segment, so the two assign one temperature to one enthalpy.
 
 ---
 
@@ -89,11 +114,13 @@ $$
 where $\dot{m}_\mathrm{evap}$ is evaluated by the active evaporation model (see
 [Evaporation](evaporation.md)).  The particle mass and diameter are updated from `stateVar(8)`
 at each accepted step; $\dot{n}_p$ remains constant (evaporation shrinks individual droplets,
-not the parcel count).
+not the parcel count).  A TAB or ETAB event writes its new diameter into `stateVar(8)` as the
+droplet mass and rescales $\dot{n}_p$ with it, at constant stream mass $\dot{n}_p\,m$.
 
-Body-force source accumulators $J$ and $W$ are appended at indices `neq-1` and `neq` when
-`bodyForce = true`; they integrate gravity work along the trajectory for the Eulerian source
-correction (see [Eulerian feedback](eulerian-feedback.md)).
+Body-force source accumulators $J$ and $W$ are appended at the tail of the state when a
+body force is active together with source output; they integrate the mass rate and the
+gravity work along the trajectory for the Eulerian source correction (see
+[Eulerian feedback](eulerian-feedback.md)).
 
 ---
 
@@ -101,13 +128,14 @@ correction (see [Eulerian feedback](eulerian-feedback.md)).
 
 Active when `phaseChange = false` and `brkupEqOde = true`; neq = 8 (+ euler).
 
-Equations (1)–(3) identical to model 1.  The eighth equation is the ODE-based breakup rate:
+Equations (1)–(3) identical to model 1.  The eighth equation is the ODE-based breakup rate of
+the number rate $\dot{n}_p$:
 
 $$
-\dot{n}_p = \dot{n}_{p,\mathrm{breakup}}(\mathbf{Z}, \mathbf{g})
+\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t} = \left(\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t}\right)_\mathrm{brk}(\mathbf{Z}, \mathbf{g})
 $$
 
-evaluated by `breakupOde` in `Lib_Breakup.f90` (Pilch-Erdman, Reitz-Diawakar, or Reitz-KHRT
+evaluated by `breakupOde` in `Lib_Breakup.f90` (Pilch-Erdman, Reitz-Diwakar, or Reitz-KHRT
 continuous rate).  The diameter evolves implicitly through the parcel-mass conservation
 constraint as $\dot{n}_p$ changes.
 
@@ -118,21 +146,25 @@ constraint as $\dot{n}_p$ changes.
 Active when `phaseChange = true` and `brkupEqOde = true`; neq = 9 (+ euler).
 
 $$
-\dot{m}       = \dot{m}_\mathrm{evap}(\mathbf{Z}, \mathbf{g}) \qquad [\text{index 8}]
+\frac{\mathrm{d}m}{\mathrm{d}t} = \dot{m}_\mathrm{evap}(\mathbf{Z}, \mathbf{g})
+  - \frac{m}{\dot{n}_p}\left(\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t}\right)_\mathrm{brk} \qquad [\text{index 8}]
 $$
 
 $$
-\dot{n}_p     = \dot{n}_{p,\mathrm{breakup}}(\mathbf{Z}, \mathbf{g}) \qquad [\text{index 9}]
+\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t} = \left(\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t}\right)_\mathrm{brk}(\mathbf{Z}, \mathbf{g}) \qquad [\text{index 9}]
 $$
 
-Evaporation and breakup compete: evaporation shrinks the diameter of each drop; breakup
-increases $\dot{n}_p$ (more, smaller drops) while adjusting $d$ for mass conservation.
+so that $\mathrm{d}(\dot{n}_p m)/\mathrm{d}t = \dot{n}_p\,\dot{m}_\mathrm{evap}$: breakup shrinks each drop
+and raises $\dot{n}_p$ at constant stream mass, evaporation shrinks each drop at constant
+$\dot{n}_p$.  In diameter, $\mathrm{d}d/\mathrm{d}t = (d_\mathrm{stable} - d)/\tau
++ 2\dot{m}_\mathrm{evap}/(\rho_p \pi d^2)$.  A Reitz-KHRT event (RT breakup, KH shed) writes its
+new diameter and number rate into the two states.
 
 ---
 
 ## Body-acceleration term
 
-All four models include the body-force (gravity) acceleration:
+All models include the body-force (gravity) acceleration:
 
 $$
 \dot{\mathbf{v}}_p \mathrel{+}= \mathbf{g}_\mathrm{body}
@@ -157,7 +189,9 @@ The gas state vector at a particle position is assembled as:
 | 8 | $R_g$ (J kg⁻¹ K⁻¹) |
 | 9 | $k_g$ (W m⁻¹ K⁻¹) |
 
-When `ord2 = true`, `interp2ndOrder` (3D) or `interp2ndOrder2D` (2D) in `Lib_Equations.f90`
-evaluates the gas state via trilinear (or bilinear) inverse mapping with Newton-Raphson
-iteration (max 10 steps, $\boldsymbol{\xi}$ clamped to $[0,1]^3$).  When `ord2 = false`,
-nearest-cell (NGP) values are used directly.
+When `gas-order = 2`, `interp2ndOrder` (3D) or `sampleGas2D` (2D / axisymmetric) in
+`Lib_Equations.f90` evaluates the gas state via trilinear (or bilinear) inverse mapping
+with Newton-Raphson iteration (max 10 steps, $\boldsymbol{\xi}$ clamped to $[0,1]^3$).
+On an axisymmetric wedge the meridian field is sampled at the particle's $(x, r)$ and its
+velocity rotated to the particle's azimuth before it enters the ODE.  When
+`gas-order = 1`, the cell-centre values are used directly.

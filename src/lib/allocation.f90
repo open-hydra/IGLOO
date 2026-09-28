@@ -1,12 +1,17 @@
+!> Block allocation from the ORION gas data, gas import, accumulator allocation and the ord2
+!  dual node cloud.
 module IGLOO_allocation
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   implicit none
 
 contains
 
 
+  !> Allocates the geometry, gas, source and euler blocks from the ORION data: node extraction,
+  !  wedge detection, dual node cloud (ord2), metrics and bounding boxes.
   subroutine allocate_blocks(orion,material,geoblock,solblock,srcblock,eulblock,srcSwitch,eulSwitch)
-    use IGLOO_variables,   only: nb, ord2, mesh2D, axisym, delthe
+    use IGLOO_variables,   only: nb, ord2, mesh2D, axisym, delthe, axisDir, refDir, sectorNorm
+    use IGLOO_VectorModule, only: cross
     use IGLOO_data_block,  only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock
     use IGLOO_data_phases, only: obj_material
     use Lib_ORION_data
@@ -18,21 +23,31 @@ contains
     type(obj_flowblock)  , intent(inout), allocatable :: solblock(:)
     type(obj_sourceblock), intent(inout), allocatable :: srcblock(:)
     type(obj_eulerblock) , intent(inout), allocatable :: eulblock(:,:)
-    integer      :: ib, i, j, k, v, nsc, ntot, kmin, kmax, im, jm
-    real(R8)     :: rmax, r2
+    integer      :: ib, i, j, k, v, nsc, ntot, kmin, kmax, im, jm, in, jn
+    real(R8)     :: rmax, rmin, r2, rvec(3), binormal(3), th0, th1, th0n, th1n
     
 
     !> Look for gas densities
     nsc = 0
     do v = 1, size(orion%varnames)
-      !> Must match import_gas's fill pattern exactly ('rho(' not 'rho'): a looser match
-      !  (e.g. a particle var 'rho_p') allocates a species row that is never imported.
+      !> Same species pattern as import_gas ('rho(' with the bracket).
       if (index(orion%varnames(v),'Roi(')>0 .or. index(orion%varnames(v),'rho(')>0) then
         nsc = nsc+1
       endif
     enddo
     !> Count number of blocks and particle groups
     nb = size(orion%block)
+    !> Dimensionality is a property of the whole mesh.
+    if (any(orion%block(:)%Nk == 1) .and. .not.all(orion%block(:)%Nk == 1)) then
+      write(*,'(A)') ' [ERROR] mixed block dimensionality: some blocks have Nk = 1, others Nk > 1.'
+      write(*,'(A)') '         IGLOO holds ONE mesh2D flag for the mesh; extrude the 2D blocks or split the case.'
+      write(*,'(A,*(I0,1X))') '         Nk per block: ', orion%block(:)%Nk
+      error stop 'IGLOO: mixed 2D/3D blocks are not supported'
+    endif
+    mesh2D = any(orion%block(:)%Nk == 1)
+    !> Tripwire: an Nk = 1 block must take the 2D path.
+    if (any(orion%block(:)%Nk == 1) .and. .not.mesh2D) &
+      error stop 'IGLOO: a block with Nk = 1 requires the 2D path (mesh2D)'
     ntot = 0
     do i = 1, size(material)
       ntot = ntot + material(i)%ngroups
@@ -45,7 +60,6 @@ contains
     do ib = 1, nb
       associate(oBlk => orion%block(ib), blk => geoblock(ib), sol => solblock(ib))
       write(*,'(A,I3,A,3I8)') '     - Block ', ib, ' size = ', oBlk%Ni, oBlk%Nj, oBlk%Nk
-      if (oBlk%Nk==1 .and. .not.mesh2D) mesh2D = .true.
       blk%Nx = oBlk%Ni; blk%Ny = oBlk%Nj; blk%Nz = oBlk%Nk
       sol%Nx = oBlk%Ni; sol%Ny = oBlk%Nj; sol%Nz = oBlk%Nk
 
@@ -55,22 +69,72 @@ contains
         blk%node(:,i,j,k) = oBlk%mesh(1:3,i,j,k)
       enddo; enddo; enddo
 
-      !> Axisymmetric wedge: full angular span of the two k-planes about the x-axis (radial
-      !  plane y-z). geoblock keeps real z (only the gas dual is flattened); pick the max-radius
-      !  node to minimise atan2 roundoff. Computed once.
+      !> Axisymmetric wedge detection: angular span of the two k-planes about axisDir, measured
+      !  at the max-radius node in the (refDir, binormal) frame.
       if (mesh2D .and. .not.axisym) then
+        binormal = cross(axisDir, refDir)
         rmax = -1._R8; im = 0; jm = 0
         do j = 0, blk%Ny; do i = 0, blk%Nx
-          r2 = blk%node(2,i,j,1)**2 + blk%node(3,i,j,1)**2
+          rvec = blk%node(:,i,j,1) - dot_product(blk%node(:,i,j,1), axisDir)*axisDir
+          r2   = sum(rvec**2)
           if (r2 > rmax) then; rmax = r2; im = i; jm = j; endif
         enddo; enddo
-        delthe = atan2(blk%node(3,im,jm,1), blk%node(2,im,jm,1)) &
-               - atan2(blk%node(3,im,jm,0), blk%node(2,im,jm,0))
+        th0 = atan2(dot_product(blk%node(:,im,jm,0), binormal), dot_product(blk%node(:,im,jm,0), refDir))
+        th1 = atan2(dot_product(blk%node(:,im,jm,1), binormal), dot_product(blk%node(:,im,jm,1), refDir))
+        delthe = th1 - th0
         axisym = abs(delthe) > 1.e-9_R8
-        if (axisym) write(*,'(A,F12.8,A)') '     - Axisymmetric wedge: delthe = ', delthe, ' rad'
+        !> A planar slab (two parallel k-planes) also spans a non-zero angle at the outermost node,
+        !  atan(thickness/r). A wedge spans the SAME angle at every radius; a slab's span decays as 1/r.
+        !  Compare with the innermost node that is clearly off the axis (r > 1e-3 r_max: an axis row
+        !  sitting at r ~ 1e-8 with roundoff z carries no azimuth) before committing to the wedge path.
+        rmin = huge(1._R8); in = -1; jn = -1
+        do j = 0, blk%Ny; do i = 0, blk%Nx
+          rvec = blk%node(:,i,j,1) - dot_product(blk%node(:,i,j,1), axisDir)*axisDir
+          r2   = sum(rvec**2)
+          if (r2 < rmin .and. r2 > 1.e-6_R8*rmax) then; rmin = r2; in = i; jn = j; endif
+        enddo; enddo
+        if (axisym .and. in >= 0 .and. .not.(in == im .and. jn == jm)) then
+          th0n = atan2(dot_product(blk%node(:,in,jn,0), binormal), dot_product(blk%node(:,in,jn,0), refDir))
+          th1n = atan2(dot_product(blk%node(:,in,jn,1), binormal), dot_product(blk%node(:,in,jn,1), refDir))
+          if (abs((th1n - th0n) - delthe) > 1.e-6_R8*abs(delthe)) then
+            write(*,'(A,F12.8,A,F12.8,A)') '     - Planar slab (parallel k-planes): span ', delthe, &
+              ' rad at the outermost node, ', th1n - th0n, ' rad at the innermost -- 2D path, no wedge fold'
+            axisym = .false.
+            delthe = 0._R8
+          endif
+        endif
+        if (axisym) then
+          write(*,'(A,F12.8,A)') '     - Axisymmetric wedge: delthe = ', delthe, ' rad'
+          !> Refuse a sector not centred on refDir (k-planes must sit at -+delthe/2).
+          if (abs(th0 + th1) > 1.e-3_R8*abs(delthe)) then
+            write(*,'(A,2F12.8)') '  [ERROR] axisym: the wedge k-planes sit at azimuths ', th0, th1
+            write(*,'(A)')        '          (rad, about the azimuth origin refDir). The fold, the gas sample'
+            write(*,'(A)')        '          and the source/euler deposits assume the sector is CENTRED on'
+            write(*,'(A)')        '          refDir (k-planes at -+delthe/2, the MOSE/ATLAS layout).'
+            error stop 'IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)'
+          endif
+          !> Refuse an axis with a z-component: the 2D gas dual is planar in x-y.
+          if (abs(axisDir(3)) > 1.e-12_R8 .or. abs(refDir(3)) > 1.e-12_R8) then
+            write(*,'(A)') '  [ERROR] axisym: the symmetry axis must lie in the x-y plane.'
+            write(*,'(A)') '          Any direction within that plane is supported (x, y, or any'
+            write(*,'(A)') '          line between); one with a z-component is not. The BC layer'
+            write(*,'(A)') '          is axis-agnostic, but the 2D gas dual is not: allocation.f90'
+            write(*,'(A)') '          zeroes node component 3 and interp2ndOrder2D reads only'
+            write(*,'(A)') '          components 1-2. Generalise those first.'
+            error stop 'IGLOO: axisymmetric axis must lie in the x-y plane'
+          endif
+          write(*,'(A)') '     - 2D path: axisymmetric wedge, 2.5D (W and wp carried; fold rotates position AND velocity)'
+          write(*,'(A)') '     - gas sampled at the parcel (x, r), velocity rotated to its azimuth (exact 2.5D sampling)'
+          write(*,'(A)') '     - source/euler deposits rotated to the meridian frame (axial, radial, azimuthal)'
+          !> Outward normals of the two k-planes for the containment test (p.n > 0 = outside the band).
+          sectorNorm(:,1) = -sin(0.5_R8*abs(delthe))*refDir - cos(0.5_R8*abs(delthe))*binormal
+          sectorNorm(:,2) = -sin(0.5_R8*abs(delthe))*refDir + cos(0.5_R8*abs(delthe))*binormal
+          write(*,'(A)') '     - segments end at the sector edge (azimuth band carried by the containment test)'
+        endif
       endif
       allocate(blk%center(3,1:blk%Nx,1:blk%Ny,1:blk%Nz))
       call blk%compute_geometry
+      call blk%precomputeDualWeights
       !> Cache the FV metric consumed by the diffusion mollifier.
       call blk%precomputeMetric
 
@@ -79,59 +143,11 @@ contains
                           kmin = 1; kmax = 1
         else;             allocate(sol%node(3,0:oBlk%Ni+1,0:oBlk%Nj+1,0:oBlk%Nk+1))
                           kmin = 0; kmax = oBlk%Nk+1; endif
-        !--- Interior nodes: cell centers (bijection sol%node <-> gas data) ---
-        do k = 1, sol%Nz; do j = 1, sol%Ny; do i = 1, sol%Nx
-          sol%node(:,i,j,k) = blk%center(:,i,j,k)
-        enddo; enddo; enddo
-        !--- Face ghosts: reflection through boundary face center ---
-        !    ghost = 2 * face_center - interior_center
-        do k = 1, sol%Nz; do j = 1, sol%Ny
-          sol%node(:,0,j,k)        = 2.0_R8*blk%face(1)%cell(j,k)%center - blk%center(:,1,j,k)
-          sol%node(:,sol%Nx+1,j,k) = 2.0_R8*blk%face(2)%cell(j,k)%center - blk%center(:,sol%Nx,j,k)
-        enddo; enddo
-        do k = 1, sol%Nz; do i = 1, sol%Nx
-          sol%node(:,i,0,k)        = 2.0_R8*blk%face(3)%cell(i,k)%center - blk%center(:,i,1,k)
-          sol%node(:,i,sol%Ny+1,k) = 2.0_R8*blk%face(4)%cell(i,k)%center - blk%center(:,i,sol%Ny,k)
-        enddo; enddo
-        if (.not.mesh2D) then
-          do j = 1, sol%Ny; do i = 1, sol%Nx
-            sol%node(:,i,j,0)        = 2.0_R8*blk%face(5)%cell(i,j)%center - blk%center(:,i,j,1)
-            sol%node(:,i,j,sol%Nz+1) = 2.0_R8*blk%face(6)%cell(i,j)%center - blk%center(:,i,j,sol%Nz)
-          enddo; enddo
-        endif
-        !--- Edge ghosts: cascading constant-gradient extrapolation ---
-        do k = 1, sol%Nz
-          sol%node(:,0,       0,       k) = 2.0_R8*sol%node(:,0,       1,     k) - sol%node(:,0,       2,       k)
-          sol%node(:,sol%Nx+1,0,       k) = 2.0_R8*sol%node(:,sol%Nx+1,1,     k) - sol%node(:,sol%Nx+1,2,       k)
-          sol%node(:,0,       sol%Ny+1,k) = 2.0_R8*sol%node(:,0,       sol%Ny,k) - sol%node(:,0,       sol%Ny-1,k)
-          sol%node(:,sol%Nx+1,sol%Ny+1,k) = 2.0_R8*sol%node(:,sol%Nx+1,sol%Ny,k) - sol%node(:,sol%Nx+1,sol%Ny-1,k)
-        enddo
-        if (.not.mesh2D) then
-          do j = 1, sol%Ny
-            sol%node(:,0,       j,0       ) = 2.0_R8*sol%node(:,0,       j,1     ) - sol%node(:,0,       j,2       )
-            sol%node(:,sol%Nx+1,j,0       ) = 2.0_R8*sol%node(:,sol%Nx+1,j,1     ) - sol%node(:,sol%Nx+1,j,2       )
-            sol%node(:,0,       j,sol%Nz+1) = 2.0_R8*sol%node(:,0,       j,sol%Nz) - sol%node(:,0,       j,sol%Nz-1)
-            sol%node(:,sol%Nx+1,j,sol%Nz+1) = 2.0_R8*sol%node(:,sol%Nx+1,j,sol%Nz) - sol%node(:,sol%Nx+1,j,sol%Nz-1)
-          enddo
-          do i = 1, sol%Nx
-            sol%node(:,i,0,       0       ) = 2.0_R8*sol%node(:,i,0,       1     ) - sol%node(:,i,0,       2       )
-            sol%node(:,i,sol%Ny+1,0       ) = 2.0_R8*sol%node(:,i,sol%Ny+1,1     ) - sol%node(:,i,sol%Ny+1,2       )
-            sol%node(:,i,0,       sol%Nz+1) = 2.0_R8*sol%node(:,i,0,       sol%Nz) - sol%node(:,i,0,       sol%Nz-1)
-            sol%node(:,i,sol%Ny+1,sol%Nz+1) = 2.0_R8*sol%node(:,i,sol%Ny+1,sol%Nz) - sol%node(:,i,sol%Ny+1,sol%Nz-1)
-          enddo
-          !--- Corner ghosts: cascading from edge ghosts ---
-          sol%node(:,0,       0,       0       ) = 2.0_R8*sol%node(:,0,       0,       1     ) - sol%node(:,0,       0,       2       )
-          sol%node(:,sol%Nx+1,0,       0       ) = 2.0_R8*sol%node(:,sol%Nx+1,0,       1     ) - sol%node(:,sol%Nx+1,0,       2       )
-          sol%node(:,0,       sol%Ny+1,0       ) = 2.0_R8*sol%node(:,0,       sol%Ny+1,1     ) - sol%node(:,0,       sol%Ny+1,2       )
-          sol%node(:,sol%Nx+1,sol%Ny+1,0       ) = 2.0_R8*sol%node(:,sol%Nx+1,sol%Ny+1,1     ) - sol%node(:,sol%Nx+1,sol%Ny+1,2       )
-          sol%node(:,0,       0,       sol%Nz+1) = 2.0_R8*sol%node(:,0,       0,       sol%Nz) - sol%node(:,0,       0,       sol%Nz-1)
-          sol%node(:,sol%Nx+1,0,       sol%Nz+1) = 2.0_R8*sol%node(:,sol%Nx+1,0,       sol%Nz) - sol%node(:,sol%Nx+1,0,       sol%Nz-1)
-          sol%node(:,0,       sol%Ny+1,sol%Nz+1) = 2.0_R8*sol%node(:,0,       sol%Ny+1,sol%Nz) - sol%node(:,0,       sol%Ny+1,sol%Nz-1)
-          sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz+1) = 2.0_R8*sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz) - sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz-1)
-        endif
-        !--- Compute isDeformed flag per cell ---
+        !> Dual node cloud: interior = geo cell centres, ghosts by reflection
+        call fill_dual_nodes(sol, blk, mesh2D)
+        !> isDeformed flag per cell
         call computeSkewFlag(sol, mesh2D)
-        !--- Dual-cell volumes for eulerian density normalization (computeEulField) ---
+        !> Dual-cell volumes for the eulerian density normalization
         call sol%precomputeDualMetric(mesh2D, blk)
       else
         if (mesh2D) then; allocate(sol%node(3,0:oBlk%Ni,0:oBlk%Nj,1:1))
@@ -145,8 +161,7 @@ contains
       endif
 
       call sol%allocate(nsc,sol%Nx,sol%Ny,sol%Nz,ord2)
-      !> Dims set unconditionally: allocateAccumulators sizes the euler blocks from
-      !  srcblock dims even when srcSwitch is off (euler-only runs read them).
+      !> Dims set unconditionally: euler-only runs size their blocks from the srcblock dims.
       srcblock(ib)%Nx = oBlk%Ni
       srcblock(ib)%Ny = oBlk%Nj
       srcblock(ib)%Nz = oBlk%Nk
@@ -162,21 +177,21 @@ contains
         enddo
       endif
 
-      !> Cache each block's node bounding box for the searchInBlock early-out (static mesh).
+      !> Node bounding boxes for the searchInBlock early-out.
       call blk%computeBBox
       call sol%computeBBox
 
       end associate
     enddo
+    !> Planar 2D notice, once for the mesh.
+    if (mesh2D .and. .not.axisym) &
+      write(*,'(A)') '     - 2D path: planar single layer (W, wp integrated; nothing to fold into)'
 
   end subroutine allocate_blocks
 
 
-  !> Per-block allocation of source/eulerian accumulators, called at the start
-  !  of obj_IGLOO%solve. When ord2=true the accumulators live on the gasblock
-  !  (staggered) cells (range 1..Nx+1 in each direction, per findDualCell);
-  !  the reduction back to geoblock cells happens at end of solve in finalize.
-  !  When ord2=false, geoblock shape (1..Nx,1..Ny,1..Nz) is used directly.
+  !> Allocates the source/euler accumulators per block at the start of solve: gasblock shape
+  !  (1..Nx+1) under ord2, geoblock shape otherwise. Existing allocations are kept.
   subroutine allocateAccumulators(srcblock, eulblock, srcSwitch, eulSwitch)
     use IGLOO_variables,  only: nb, nm, ord2, mesh2D
     use IGLOO_data_block, only: obj_sourceblock, obj_eulerblock
@@ -187,10 +202,8 @@ contains
     integer :: b, fam, ni, nj, nk
 
     do b = 1, nb
-      !> Guard: dims must have been set in allocate_blocks (0 = default init missed).
       if (srcblock(b)%Nx <= 0) error stop 'allocateAccumulators: srcblock dims unset'
-      !> Active-mesh shape: gasblock-cell range [1, Nx+1] when ord2; otherwise
-      !  geoblock [1, Nx]. In mesh2D the z dimension stays a single cell layer.
+      !> Active-mesh shape: gasblock range 1..Nx+1 under ord2, geoblock 1..Nx otherwise.
       if (ord2) then
         ni = srcblock(b)%Nx + 1
         nj = srcblock(b)%Ny + 1
@@ -217,11 +230,10 @@ contains
   end subroutine allocateAccumulators
 
 
-  !> Exact-name variable binding: substring matches ('rho', 'R', 'g'...) silently mis-bind
-  !  on headers carrying particle vars (rho_p, R_p, u_p...). Species rows keep the indexed
-  !  patterns 'Roi('/'rho(' and must equal allocate_blocks' count.
+  !> Binds the ORION gas variables to the flow blocks by exact name (no substring matching);
+  !  species rows match the indexed 'Roi(' / 'rho(' patterns counted by allocate_blocks.
   subroutine import_gas(orion,solblock)
-    use IGLOO_variables,  only: nb, nspecies
+    use IGLOO_variables,  only: nb, nspecies, mesh2D
     use IGLOO_data_block, only: obj_flowblock
     use Lib_ORION_data
     implicit none
@@ -231,8 +243,10 @@ contains
     logical             :: bound(8)   !> U,V,W,T,MIL,MIT,KL,GAM + R tracked separately
     logical             :: gasConstantRead
     character(len=64)   :: vname
+    real(R8)            :: maxUV, maxW, wTol
 
-    allocate(nspecies(1:nb))
+    !> Re-runnable: reset_state calls import_gas again per sweep.
+    if (.not.allocated(nspecies)) allocate(nspecies(1:nb))
 
     nspecies = 0
     do ib = 1, nb
@@ -284,11 +298,121 @@ contains
         if (.not.bound(7)) write(*,*) '   - KL';  if (.not.bound(8)) write(*,*) '   - GAM'
         if (.not.gasConstantRead) write(*,*) '   - R'
       endif
+      !> 2.5D witness: report the measured max|W| per block.
+      if (mesh2D) then
+        if (bound(3)) then
+          associate(sol => solblock(ib))
+          maxUV = max(maxval(abs(sol%velocity(1,1:sol%Nx,1:sol%Ny,1:sol%Nz))), &
+                      maxval(abs(sol%velocity(2,1:sol%Nx,1:sol%Ny,1:sol%Nz))))
+          maxW  =     maxval(abs(sol%velocity(3,1:sol%Nx,1:sol%Ny,1:sol%Nz)))
+          end associate
+          wTol = max(1.e-10_R8, 1.e-10_R8*maxUV)
+          write(*,'(A,I0,A,ES10.3,A,ES10.3,A)') '     - block ', ib, ': max|W| = ', maxW, &
+               '  (max|U|,|V| = ', maxUV, ')  -- '//trim(merge('SWIRL   ','no swirl', maxW > wTol))
+        else
+          write(*,'(A,I0,A)') '     - block ', ib, ': W unbound -- no swirl (no azimuthal gas velocity in the file)'
+        endif
+      endif
     enddo
 
   end subroutine import_gas
 
 
+
+  !> Places the ord2 dual node cloud: interior nodes are the geo cell centres, the surrounding
+  !  ring is ghosts by reflection and constant-gradient extrapolation. Parts:
+  !    faces (i, j; k in 3D), i/j corners (both modes), k edges and true corners (3D only),
+  !    axis repair for wedges.
+  subroutine fill_dual_nodes(sol, blk, is2D)
+    use IGLOO_data_block, only: obj_block, obj_flowblock
+    use IGLOO_variables,  only: axisym, refDir
+    implicit none
+    type(obj_flowblock), intent(inout) :: sol  !> dual (gas) block -- node ring to fill
+    type(obj_block),     intent(in)    :: blk  !> geo block -- centres and face centres
+    logical,             intent(in)    :: is2D
+    integer  :: i, j, k
+    real(R8) :: s, sref
+    !> Interior nodes: cell centres
+    do k = 1, sol%Nz; do j = 1, sol%Ny; do i = 1, sol%Nx
+      sol%node(:,i,j,k) = blk%center(:,i,j,k)
+    enddo; enddo; enddo
+    !> Face ghosts: reflection through the boundary face centre
+    do k = 1, sol%Nz; do j = 1, sol%Ny
+      sol%node(:,0,j,k)        = 2.0_R8*blk%face(1)%cell(j,k)%center - blk%center(:,1,j,k)
+      sol%node(:,sol%Nx+1,j,k) = 2.0_R8*blk%face(2)%cell(j,k)%center - blk%center(:,sol%Nx,j,k)
+    enddo; enddo
+    do k = 1, sol%Nz; do i = 1, sol%Nx
+      sol%node(:,i,0,k)        = 2.0_R8*blk%face(3)%cell(i,k)%center - blk%center(:,i,1,k)
+      sol%node(:,i,sol%Ny+1,k) = 2.0_R8*blk%face(4)%cell(i,k)%center - blk%center(:,i,sol%Ny,k)
+    enddo; enddo
+    if (.not.is2D) then
+      do j = 1, sol%Ny; do i = 1, sol%Nx
+        sol%node(:,i,j,0)        = 2.0_R8*blk%face(5)%cell(i,j)%center - blk%center(:,i,j,1)
+        sol%node(:,i,j,sol%Nz+1) = 2.0_R8*blk%face(6)%cell(i,j)%center - blk%center(:,i,j,sol%Nz)
+      enddo; enddo
+    endif
+    !> i/j corner ghosts by constant-gradient extrapolation: both modes (mesh2D has Nz = 1)
+    do k = 1, sol%Nz
+      sol%node(:,0,       0,       k) = 2.0_R8*sol%node(:,0,       1,     k) - sol%node(:,0,       2,       k)
+      sol%node(:,sol%Nx+1,0,       k) = 2.0_R8*sol%node(:,sol%Nx+1,1,     k) - sol%node(:,sol%Nx+1,2,       k)
+      sol%node(:,0,       sol%Ny+1,k) = 2.0_R8*sol%node(:,0,       sol%Ny,k) - sol%node(:,0,       sol%Ny-1,k)
+      sol%node(:,sol%Nx+1,sol%Ny+1,k) = 2.0_R8*sol%node(:,sol%Nx+1,sol%Ny,k) - sol%node(:,sol%Nx+1,sol%Ny-1,k)
+    enddo
+    !> k edges and the eight true corners: 3D only
+    if (.not.is2D) then
+      do j = 1, sol%Ny
+        sol%node(:,0,       j,0       ) = 2.0_R8*sol%node(:,0,       j,1     ) - sol%node(:,0,       j,2       )
+        sol%node(:,sol%Nx+1,j,0       ) = 2.0_R8*sol%node(:,sol%Nx+1,j,1     ) - sol%node(:,sol%Nx+1,j,2       )
+        sol%node(:,0,       j,sol%Nz+1) = 2.0_R8*sol%node(:,0,       j,sol%Nz) - sol%node(:,0,       j,sol%Nz-1)
+        sol%node(:,sol%Nx+1,j,sol%Nz+1) = 2.0_R8*sol%node(:,sol%Nx+1,j,sol%Nz) - sol%node(:,sol%Nx+1,j,sol%Nz-1)
+      enddo
+      do i = 1, sol%Nx
+        sol%node(:,i,0,       0       ) = 2.0_R8*sol%node(:,i,0,       1     ) - sol%node(:,i,0,       2       )
+        sol%node(:,i,sol%Ny+1,0       ) = 2.0_R8*sol%node(:,i,sol%Ny+1,1     ) - sol%node(:,i,sol%Ny+1,2       )
+        sol%node(:,i,0,       sol%Nz+1) = 2.0_R8*sol%node(:,i,0,       sol%Nz) - sol%node(:,i,0,       sol%Nz-1)
+        sol%node(:,i,sol%Ny+1,sol%Nz+1) = 2.0_R8*sol%node(:,i,sol%Ny+1,sol%Nz) - sol%node(:,i,sol%Ny+1,sol%Nz-1)
+      enddo
+      !> corner ghosts, cascading from the edge ghosts
+      sol%node(:,0,       0,       0       ) = 2.0_R8*sol%node(:,0,       0,       1     ) - sol%node(:,0,       0,       2       )
+      sol%node(:,sol%Nx+1,0,       0       ) = 2.0_R8*sol%node(:,sol%Nx+1,0,       1     ) - sol%node(:,sol%Nx+1,0,       2       )
+      sol%node(:,0,       sol%Ny+1,0       ) = 2.0_R8*sol%node(:,0,       sol%Ny+1,1     ) - sol%node(:,0,       sol%Ny+1,2       )
+      sol%node(:,sol%Nx+1,sol%Ny+1,0       ) = 2.0_R8*sol%node(:,sol%Nx+1,sol%Ny+1,1     ) - sol%node(:,sol%Nx+1,sol%Ny+1,2       )
+      sol%node(:,0,       0,       sol%Nz+1) = 2.0_R8*sol%node(:,0,       0,       sol%Nz) - sol%node(:,0,       0,       sol%Nz-1)
+      sol%node(:,sol%Nx+1,0,       sol%Nz+1) = 2.0_R8*sol%node(:,sol%Nx+1,0,       sol%Nz) - sol%node(:,sol%Nx+1,0,       sol%Nz-1)
+      sol%node(:,0,       sol%Ny+1,sol%Nz+1) = 2.0_R8*sol%node(:,0,       sol%Ny+1,sol%Nz) - sol%node(:,0,       sol%Ny+1,sol%Nz-1)
+      sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz+1) = 2.0_R8*sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz) - sol%node(:,sol%Nx+1,sol%Ny+1,sol%Nz-1)
+    endif
+    !> Axis repair: a ghost reflected across the symmetry axis is projected back onto the axis,
+    !  so the first dual cell spans [axis, first centre].
+    if (axisym) then
+      if (.not.allocated(sol%nodeOnAxis)) then
+        allocate(sol%nodeOnAxis(lbound(sol%node,2):ubound(sol%node,2),   &
+                                lbound(sol%node,3):ubound(sol%node,3),   &
+                                lbound(sol%node,4):ubound(sol%node,4)))
+      endif
+      sol%nodeOnAxis = .false.
+      sref = dot_product(sol%node(:,1,1,1), refDir)
+      sref = sign(1._R8, sref)
+      do k = lbound(sol%node,4), ubound(sol%node,4)
+        do j = lbound(sol%node,3), ubound(sol%node,3)
+          do i = lbound(sol%node,2), ubound(sol%node,2)
+            !> interior nodes are never touched
+            if (i >= 1 .and. i <= sol%Nx .and. j >= 1 .and. j <= sol%Ny .and. &
+                (is2D .or. (k >= 1 .and. k <= sol%Nz))) cycle
+            s = dot_product(sol%node(:,i,j,k), refDir)
+            if (s*sref < 0._R8) then
+              sol%node(:,i,j,k) = sol%node(:,i,j,k) - s*refDir
+              !> Flag the node as on-axis: fillGhostGradient imposes the symmetry value there.
+              sol%nodeOnAxis(i,j,k) = .true.
+            endif
+          enddo
+        enddo
+      enddo
+    endif
+
+  end subroutine fill_dual_nodes
+
+  !> Flags the dual cells whose edge directions deviate from orthogonality beyond skew_threshold.
   subroutine computeSkewFlag(sol, is2D)
     use IGLOO_data_block, only: obj_flowblock, obj_block
     implicit none

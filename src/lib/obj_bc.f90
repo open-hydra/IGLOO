@@ -1,25 +1,70 @@
 module IGLOO_bcBox
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+  use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_VectorModule, only: cross, rotateVector
   use IGLOO_RayFaceIntersection3D
   use IGLOO_data_block, only: obj_block, obj_bc_cell
-  ! use IGLOO_data_gas,   only: obj_gas_state
   implicit none
   real(R8), parameter :: minDist=1.e-12_R8
   real(R8), parameter :: grazeFrac=2.e-2_R8      !> below this v_n/|v| a 300-impact is grazing: project, don't reflect
   real(R8), parameter :: grazeStandoff=1.e-6_R8  !> interior offset after a graze; >> roundoff, << cell size
+  real(R8), parameter :: wedgeAzimTol=0.5_R8     !> |faceAzimuth| above this ⇒ wedge face (rotate), else reflect
+  real(R8), parameter :: grazeCellFrac=1.e-2_R8  !> graze standoff also capped at this fraction of the cell
   type(Ray_t)         :: myRay
   !$omp threadprivate(myRay)   !> per-thread: checkBoundary writes it, bcDef reuses it within a thread
   private
   public :: checkBoundary
   public :: bcDef
   public :: axisymFold
+  public :: sectorDs
   public :: periodicTransport
+  public :: faceAzimuth, wedgeAzimTol
+  public :: grazeOffset, grazeStandoff, grazeCellFrac
 
 contains
 
+  !> Interior offset applied after a grazing reflection along the face normal `nn`: the smaller
+  !  of grazeStandoff and grazeCellFrac times the cell's extent along the normal.
+  pure function grazeOffset(vertices, nn) result(offset)
+    use IGLOO_variables, only: toll
+    implicit none
+    real(R8), intent(in) :: vertices(3,8), nn(3)
+    real(R8) :: offset, proj(8), thickness
+
+    proj      = matmul(nn, vertices)          !> signed position of each vertex along the normal
+    thickness = maxval(proj) - minval(proj)
+    if (thickness <= toll) then
+      offset = grazeStandoff
+    else
+      offset = min(grazeStandoff, grazeCellFrac*thickness)
+    endif
+
+  end function grazeOffset
+
+  !> Azimuthal projection of a boundary face's outward normal about axisDir, in [-1,1]:
+  !  |azim| ~ 1 for a wedge face (fold), ~ 0 for the axis face or a face normal to the axis
+  !  (reflect); the sign gives the wedge side. Returns 0 for a face centred on the axis.
+  pure function faceAzimuth(vertices, f, normal) result(azim)
+    use IGLOO_variables, only: toll, axisDir
+    implicit none
+    real(R8), intent(in) :: vertices(3,8), normal(3)
+    integer,  intent(in) :: f
+    real(R8) :: azim, fc(3), rvec(3), that(3), rr
+
+    azim = 0._R8
+    fc = 0.25_R8*( vertices(:,guide(f,1)) + vertices(:,guide(f,2))   &
+                 + vertices(:,guide(f,3)) + vertices(:,guide(f,4)) )
+    !> radial part of the face centre = component perpendicular to the symmetry axis
+    rvec = fc - dot_product(fc, axisDir)*axisDir
+    rr   = norm2(rvec)
+    if (rr <= toll) return
+    that = cross(axisDir, rvec/rr)            !> axisDir x rHat: already a unit vector
+    azim = dot_product(normal, that)
+
+  end function faceAzimuth
+
+  !> Ray/cell-face intersection of the step pold -> p: exit face f, hit point and face-local (m,n);
+  !  when the exit face is interior (m+n==0) the cell index steps to the neighbour and noBound is set.
   subroutine checkBoundary(block,vertices,p,pold,vold,i,j,k,intersect,f,m,n,noBound,found,planar)
-    use IGLOO_variables, only: pi
     implicit none
     class(obj_block), intent(in)    :: block
     real(R8),         intent(in)    :: vertices(3,8), p(3), pold(3), vold(3)
@@ -28,21 +73,16 @@ contains
     integer,          intent(out)   :: m, n
     logical,          intent(out)   :: noBound, found
     logical, optional, intent(in)   :: planar   !> 2D dual mesh: 4-vertex quad cells
-    !> local variables
     integer                         :: f
     logical                         :: is2D, dum
 
     is2D = .false.; if (present(planar)) is2D = planar
     noBound = .false.
-    !> Set ray parameters
     myRay%origin = pold
     if (norm2(p-pold)>minDist) then
       myRay%direction = (p-pold)/norm2(p-pold)
     else
-      !> last and previous positions coincide! -> use velocity direction. Back the origin
-      !  off along it: an origin exactly ON the exit plane yields a rejected t~0 hit ->
-      !  inverted-ray far-face pick -> backward cell walk to the wrong boundary.
-      !  Sliding the origin along the ray leaves every intersection POINT unchanged.
+      !> coincident positions: use the velocity direction, origin backed off the exit plane
       myRay%direction = vold/norm2(vold)
       myRay%origin    = pold - 1.0e-6_R8*norm2(vertices(:,7)-vertices(:,1))*myRay%direction
     endif
@@ -64,8 +104,7 @@ contains
 
     call block%ijk2fmn(i,j,k,f,m,n)
 
-    !> If m and n are not assigned the particle may have gone through
-    !  the domain boundary crossing two cells -> new BC evaluation
+    !> exit through an interior face: step to the neighbour cell and re-evaluate
     if (m+n==0) then
       select case(f)
         case(1); i = i-1
@@ -80,8 +119,10 @@ contains
 
   end subroutine checkBoundary
 
+  !> Apply the exit cell's boundary condition to the particle state: reflection (300 and non-wedge
+  !  200), wedge fold (200), connected interface (101/103: retry in the partner cell), or exit (gone).
   subroutine bcDef(cell,vertices,pold,vold,intersect,f,p,v,time,iold,angle,Af,found,gone,retry)
-    use IGLOO_variables, only: pi, toll, delthe
+    use IGLOO_variables, only: pi, toll, delthe, axisDir
     implicit none
     class(obj_bc_cell), intent(in)    :: cell
     real(R8),           intent(in)    :: vertices(3,8), pold(3), vold(3)
@@ -93,15 +134,19 @@ contains
     integer,            intent(out)   :: iold(4)
     real(R8),           intent(out)   :: angle, Af
     logical,            intent(out)   :: gone, retry
-    !> local variables
     real(R8) :: nn(3), nn1(3), nn2(3), pstop(3), rot
+    real(R8) :: azim
     integer      :: try
 
     gone  = .false.
     retry = .false.
 
-    !> Reflection boundary (symmetry)
-    if (cell%bcdef==300) then
+    !> classify a 200 face by its geometry: |azim| > wedgeAzimTol is a wedge face, else it reflects
+    azim = 0._R8
+    if (cell%bcdef==200) azim = faceAzimuth(vertices, f, cell%normal)
+
+    !> Reflection: 300 and the non-wedge 200 faces (axis face included).
+    if (cell%bcdef==300 .or. (cell%bcdef==200 .and. abs(azim) <= wedgeAzimTol)) then
       nn = cell%normal
       try = 0
       do while ((norm2(nn)<toll) .and. (try<2))
@@ -120,23 +165,21 @@ contains
       endif
       time = time - norm2(p-pstop)/norm2(0.5_R8*(v+vold))
       if (abs(dot_product(v,nn)) < grazeFrac*norm2(v)) then
-        !> grazing: slide along the plane (kills micro-bounce skating); standoff keeps the ray off the face
+        !> grazing: slide along the plane; the standoff keeps the ray off the face
         v = v - dot_product(v,nn) * nn
-        p = intersect - sign(grazeStandoff, dot_product(myRay%direction,nn)) * nn
+        p = intersect - sign(grazeOffset(vertices,nn), dot_product(myRay%direction,nn)) * nn
       else
         v = v - 2.0 * dot_product(v,nn) * nn
         p = pstop - 2.0 * dot_product(pstop-intersect,nn) * nn
       endif
 
-    !> Axisymmetric wedge (3D mesh): fold position+velocity by -+delthe about x; face6 (+z)
-    !  -> -delthe, face5 -> +delthe. gone/retry stay .false. (x-y cell invariant under the fold).
+    !> Wedge 200 face: fold position and velocity by -+delthe about axisDir.
     elseif (cell%bcdef==200) then
-      rot = merge(-delthe, delthe, f==6)
-      p = rotateVector(p, [1._R8,0._R8,0._R8], rot)
-      v = rotateVector(v, [1._R8,0._R8,0._R8], rot)
+      rot = -sign(abs(delthe), azim)
+      p = rotateVector(p, axisDir, rot)
+      v = rotateVector(v, axisDir, rot)
 
-    !> Connected boundary (coincident conformal interface: index jump, no remap). Periodic
-    !  (201) is NOT here — its faces are separated, so updateCell transports the particle.
+    !> Connected interface (101/103): index jump into the partner cell, no remap.
     elseif (cell%bcdef==101 .or. cell%bcdef==103) then
       retry = .true.
       iold = cell%connection(1:4)
@@ -153,30 +196,51 @@ contains
 
   end subroutine bcDef
 
-  !> AXISYMMETRIC (200) per-step fold: rotate state position+velocity back into the wedge sector
-  !  by -+delthe about x when the azimuth exceeds +-delthe/2 (face6 -> -delthe, face5 -> +delthe).
-  subroutine axisymFold(stateVar)
-    use IGLOO_variables, only: axisym, delthe
+  !> Axisymmetric per-step fold: rotate position and velocity back into the wedge sector about
+  !  axisDir by -nint(theta/delthe)*delthe, then assert the state is inside the sector.
+  subroutine axisymFold(stateVar, nSect)
+    use IGLOO_variables, only: axisym, delthe, axisDir, refDir
     implicit none
     real(R8), intent(inout) :: stateVar(:)
-    real(R8), parameter :: xaxis(3) = [1._R8, 0._R8, 0._R8]
-    real(R8) :: theta, rot
-    integer  :: guard
+    integer, optional, intent(out) :: nSect   !> sectors rotated (0 = no fold)
+    real(R8) :: theta, rot, binormal(3), d
+    integer  :: n
 
+    if (present(nSect)) nSect = 0
     if (.not.axisym) return
-    do guard = 1, 1000
-      theta = atan2(stateVar(3), stateVar(2))
-      if      (theta >  0.5_R8*delthe) then; rot = -delthe
-      else if (theta < -0.5_R8*delthe) then; rot =  delthe
-      else; return; endif
-      stateVar(1:3) = rotateVector(stateVar(1:3), xaxis, rot)
-      stateVar(4:6) = rotateVector(stateVar(4:6), xaxis, rot)
-    enddo
+    binormal = cross(axisDir, refDir)
+    d     = abs(delthe)             !> symmetric band about theta = 0
+    theta = atan2(dot_product(stateVar(1:3), binormal), dot_product(stateVar(1:3), refDir))
+    n     = nint(theta/d)
+    if (present(nSect)) nSect = abs(n)
+    if (n == 0) return
+    rot = -real(n,R8)*d
+    stateVar(1:3) = rotateVector(stateVar(1:3), axisDir, rot)
+    stateVar(4:6) = rotateVector(stateVar(4:6), axisDir, rot)
+    theta = atan2(dot_product(stateVar(1:3), binormal), dot_product(stateVar(1:3), refDir))
+    !> post-condition: the state is inside the sector
+    if (abs(theta) > 0.5_R8*d*(1._R8 + 1.e-9_R8)) &
+      error stop 'IGLOO: axisymFold left the wedge sector (rotation sense, or refDir not normal to axisDir?)'
   end subroutine axisymFold
 
-  !> PERIODIC (201) TRANSPORT: shift the particle from the exit face to the partner face by
-  !  T = partner_face_center - exit_face_center (velocity unchanged). `partner` returns the ATLAS
-  !  partner cell [block,i,j,k]; the caller relocates the shifted position within that block.
+  !> Distance along `dir` from `p0` (inside the band) to the k-plane the ray leaves through, 0 if none.
+  pure function sectorDs(p0, dir) result(s)
+    use IGLOO_variables, only: sectorNorm, sectorTol
+    implicit none
+    real(R8), intent(in) :: p0(3), dir(3)
+    real(R8) :: s, den, si
+    integer  :: f
+    s = 0._R8
+    do f = 1, 2
+      den = dot_product(dir, sectorNorm(:,f))
+      if (den <= 0._R8) cycle
+      si = (sectorTol - dot_product(p0, sectorNorm(:,f)))/den   ! to the containment boundary, not the plane
+      if (si >= 0._R8 .and. (s == 0._R8 .or. si < s)) s = si
+    enddo
+  end function sectorDs
+
+  !> Periodic (201) transport: shift the particle from the exit face to the partner face by the
+  !  face-centre difference (velocity unchanged); `partner` is the partner cell [block,i,j,k].
   subroutine periodicTransport(block, exitCell, p, partner)
     implicit none
     class(obj_block),  intent(in)    :: block(:)

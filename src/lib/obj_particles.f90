@@ -1,10 +1,12 @@
+!> Particle type: ODE state, per-material properties, and the cell-search, injection and
+!  state-update procedures.
 module IGLOO_particles
-  use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
-  use oslo, only: Run_ODESolver
+  use, intrinsic :: iso_fortran_env, only : I8 => int64, R8 => real64
   use IGLOO_variables
   use IGLOO_Lib_Drag
   use IGLOO_Lib_Heat
-  use IGLOO_Lib_Properties, only: lookupTab, comp_TfromTab
+  use IGLOO_Lib_Properties, only: tableValue, comp_TfromTab, Tmin, Tmax
+  use IGLOO_Lib_Solidification, only: hSolid
   use IGLOO_bcBox
   use IGLOO_data_block, only: obj_block, obj_flowblock
   use IGLOO_RayFaceIntersection3D
@@ -17,7 +19,6 @@ module IGLOO_particles
     real(R8), allocatable :: stateVar(:) !> ODE state vector (IC for solver), size neq
     real(R8), allocatable :: oldstate(:) !> checkpoint at each accepted step, size neq
     real(R8), allocatable :: auxState(:) !> variables updated at RHS runtime, size nAuxState
-    real(R8), allocatable :: auxStOld(:) !> checkpoint for auxState variable, size nAuxState
     real(R8), allocatable :: eventVar(:) !> vars modified if an event occurs, size nEventVar
     real(R8), allocatable :: intE(:)     !> self velocity&temperature integral
     real(R8)     :: m         !> mass of the single self
@@ -32,8 +33,8 @@ module IGLOO_particles
     real(R8)     :: Tstay     !> time spent within the cell
     real(R8)     :: deltaL    !> path length within the cell
     real(R8)     :: brkupVar(3) !> variables (breakup model dependent)
-    real(R8)     :: angle = 0._R8 !> exit angle (bcDef out; init so a non-bcDef exit is deterministic)
-    real(R8)     :: Af    = 0._R8 !> exit face area (bcDef out; init: gfortran printed uninit garbage that overflowed E13.6E2 and merged outloc columns)
+    real(R8)     :: angle = 0._R8 !> exit angle (bcDef out)
+    real(R8)     :: Af    = 0._R8 !> exit face area (bcDef out)
     real(R8)     :: xi0(3)      !> cartesian coordinates xi-eta-zeta
     integer      :: i(4)        !> index-based position (b,i,j,k)
     integer      :: iold(4)     !> old index-based position (b,i,j,k)
@@ -41,11 +42,17 @@ module IGLOO_particles
     integer      :: igasOld(3)  !> old index-based position in gas block (i,j,k)
     integer      :: exitFace = 0    !> geo cell exit face from solout; 0 if inside. Seeds findParticle tier-0
     integer      :: gasExitFace = 0 !> gas dual cell exit face from solout; 0 if inside. Seeds advanceGasCell tier-0
-    logical      :: lost = .false.  !> locator lost (updateCell cycle-breaker fired: no cell owns p); cleared on findParticle success
+    logical      :: lost = .false.  !> locator lost (no cell owns p); cleared on findParticle success
 
     integer      :: iInj(4)   !> injection index-based position (b,i,j,k)
     real(R8)     :: pInj(3)   !> injection position
-    real(R8)     :: vInj(3) = 1.0e30_R8 !> DB velocity request (pin time predates stateVar allocation); >= threshold => gas velocity
+    real(R8)     :: vInj(3) = 1.0e30_R8 !> DB velocity request; >= threshold => gas velocity
+    !> Pin-time capture restored by reset_state (tpInj/mdotInj stay 0 for BC streams).
+    real(R8)     :: dInj    = 0._R8
+    real(R8)     :: tpInj   = 0._R8
+    real(R8)     :: mdotInj = 0._R8
+    !> Own RNG stream state (seeded from rng_seed, famID, ID); samplers inside the OMP region draw from it.
+    integer(I8)  :: rngState = 0_I8
     integer      :: fInj      !> injection face
     integer      :: Ninj      !> number of particle from the same cell
     integer      :: Ncell     !> number of integration loops in the same cell
@@ -66,20 +73,21 @@ module IGLOO_particles
     logical      :: flags(5) = .false. !> [varCp, varRho, ord2, mesh2D, eulerSwitch]
     integer      :: evapSelect  = 0    !> evaporation gas-side selector
     integer      :: brkupSelect = 0    !> breakup model selector
-    !> Composable phase-change axes (defaults = hard-wired behavior)
+    !> Composable phase-change axes
     integer      :: liqSelect   = 0    !> liquid-side: 0 ITC, 1 P2T (not yet implemented)
     integer      :: intfSelect  = 0    !> interface:   0 VLE, 1 Langmuir-Knudsen
     integer      :: boilSelect  = 0    !> boiling:     0 clamp, 1 ZGR (not yet implemented)
     integer      :: combSelect  = 0    !> metal combustion: 0 off, 1 Beckstead
-    integer      :: solidSelect = 0    !> solidification:   0 off, 1 supercool (not yet implemented)
-    integer      :: model       = 1    !> RHS model (1-5)
+    integer      :: solidSelect = 0    !> solidification:   0 off, 1 supercool + recalescence
+    integer      :: solidPhase  = 0    !> solidification phase: 0 liquid, 1 undercooled, 2 plateau, 3 solid
+    real(R8)     :: fSolid      = 0._R8 !> frozen mass fraction, copy of stateVar(8) (model 6)
+    integer      :: model       = 1    !> RHS model (1-6)
     integer      :: neq         = 7    !> number of ODE equations
     integer      :: nOde        = 7    !> number of ODE state variables
     logical      :: bodyAccum = .false. !> body-force J/W accumulators present (only models 2,4,5 & srcBodyForce)
-    integer      :: indBrk =0
-    integer      :: indEvap=0
     !> Basic properties       (per-material, constant)
     real(R8)     :: cp        !> specific heat
+    real(R8)     :: hOff = 0._R8 !> enthalpy datum of the table for cp=const: h(T) = cp*T + hOff
     real(R8)     :: rho       !> material density
     !> Breakup properties     (per-material, constant)
     real(R8)     :: sigma     !> particle surface tension (N/m)
@@ -128,23 +136,20 @@ module IGLOO_particles
 
 contains
 
-  !> FUNCTION TO COMPUTE MASS
+  !> Particle mass from density and diameter.
   subroutine computeMass(self,rhoTab)
     implicit none
     class(obj_particle), intent(inout) :: self
     real(R8),            intent(in)    :: rhoTab(:)
 
-    if (self%varRho) self%rho = lookupTab(rhoTab,self%Tp)
+    if (self%varRho) self%rho = tableValue(rhoTab, Tmin, Tmax, self%Tp)
     self%m = pi/6._R8*self%rho*self%d**3._R8
 
   end subroutine computeMass
 
 
-  !> Resolve this stream's number rate npdot = mdot/m WITHOUT the geometric cell search (the
-  !  search writes the threadprivate myRay; running it in a serial pre-pass would pollute the
-  !  master thread and perturb the real sweep). For boundary injection (iInj/=0) mdot is taken
-  !  from the BC cell via initializePart using iInj/fInj directly; for assigned injection mdot
-  !  and d are already set at pin time. The caller runs this on a throwaway copy.
+  !> Number rate npdot = mdot/m of this stream without the geometric cell search (run on a
+  !  throwaway copy); BC streams take mdot from their BC cell via initializePart.
   subroutine resolveInjectionRate(self, block, gasblock)
     implicit none
     class(obj_particle), intent(inout) :: self
@@ -162,7 +167,7 @@ contains
     endif
   end subroutine resolveInjectionRate
 
-  !> FUNCTION TO COMPUTE MASS, MOMENTUM & ENERGY AT THE CELL BOUNDARY
+  !> Mass, momentum and energy flow rates of the stream at the current state.
   pure subroutine computeSource(self, M, P, E)
     implicit none
     class(obj_particle), intent(in)  :: self
@@ -170,8 +175,13 @@ contains
     real(R8) :: v(3), normVel, enthalpy, mdot_inst
 
     v = self%stateVar(4:6); normVel = norm2(v)
+    !> the mass handed to the gas is valued at the TABLE's enthalpy datum: the h state carries it,
+    !  the T state (cp=const) needs cp*T + hOff (hOff = 0 for a relative table)
     enthalpy = self%stateVar(7)
-    if (.not.self%varCp) enthalpy = self%cp*enthalpy
+    if (.not.self%varCp) enthalpy = self%cp*enthalpy + self%hOff
+    !> model 6: the latent heat of fusion is part of the enthalpy
+    if (self%model == 6) enthalpy = hSolid(self%stateVar(7), self%stateVar(8), self%solidPhase, self%cp, &
+                                           self%cpSol, self%hFus, self%Tmelt, self%hOff)
     select case (self%model)
     case (2,4,5); mdot_inst = self%npdot * self%m
     case default; mdot_inst = self%mdot
@@ -182,7 +192,7 @@ contains
 
   end subroutine computeSource
 
-  !> FUNCTION TO COMPUTE PARTICLE INITIAL CONDITIONS
+  !> Injection velocity, temperature and mdot of a boundary-injected particle from its BC cell.
   subroutine initializePart(self,block,gasblock)
     use IGLOO_data_block, only: obj_flowblock
     implicit none
@@ -199,14 +209,8 @@ contains
 
     associate(cell => block(b)%face(f)%cell(m,n), &
               prop => block(b)%face(f)%cell(m,n)%properties(self%famID,1:7))
-    !> ATLAS BC contract (utils/ATLAS/src/BCB/builder_400dp.f90:24-56).
-    !  Col 1 = krho (401, dimensionless density ratio) OR gp (402/403, mass flux kg/(s·m²))
-    !  Col 2 = kV   (401/403, velocity scaling)        OR velocity_magnitude (402, m/s)
-    !  Col 3 = alphap (all)
-    !  Col 4 = betap  (all; "normal" sentinel > threshold)
-    !  Col 5 = kT   (401, temperature scaling)         OR Tp (402/403, absolute K)
-    !  Col 6 = rp     (all; particle radius)
-    !  Col 7 = sigmap (all)
+    !> BC property columns: 1 krho (401) | gp (402/403); 2 kV (401/403) | |v| (402); 3 alphap;
+    !  4 betap ("normal" sentinel > threshold); 5 kT (401) | Tp (402/403); 6 rp; 7 sigmap.
     krho   = prop(1)
     kV     = prop(2)
     alphap = prop(3)
@@ -215,8 +219,7 @@ contains
 
     normVgas = norm2(gasblock(b)%velocity(:,i,j,k))
 
-    !> Direction: "normal" sentinel from parse_dir_tok => follow local gas flow;
-    !  else explicit angles; else inward face normal.
+    !> Direction: local gas flow for the "normal" sentinel, else explicit angles, else inward normal.
     dirIsNormal = (alphap > threshold) .or. (betap > threshold)
     if (dirIsNormal) then
       if (normVgas > toll) then
@@ -235,8 +238,7 @@ contains
       case (401)
         self%stateVar(4:6) = kV * normVgas * dir
         self%tp            = kT * gasblock(b)%temperature(i,j,k)
-        ! mdot_p = krho/(1-krhoTot)/Ninj · (mdotGas + mdotPart). mdotGas is seeded in PASS 1
-        ! (either externally by parent solver or via LSQ extrapolation in standalone).
+        ! mdot_p = krho/(1-krhoTot)/Ninj * (mdotGas + mdotPart)
         self%mdot = krho / (1._R8 - cell%krhoTot) / self%Ninj * &
                     (abs(cell%mdotGas) + cell%mdotPart)
       case (402)
@@ -258,7 +260,7 @@ contains
 
   end subroutine initializePart
 
-  !> FUNCTION TO INITIALIZE STATE VECTOR AT CELL ENTRY
+  !> Resets the per-cell state (euler / body-force accumulators, checkpoint) at cell entry.
   pure subroutine initializeCell(self,eulerSwitch)
     implicit none
     class(obj_particle), intent(inout) :: self
@@ -277,6 +279,7 @@ contains
 
   end subroutine initializeCell
 
+  !> Refreshes the derived particle state (T, h when cp varies, mass, npdot, d, euler integrals) from stateVar.
   pure subroutine updatePart(self,rhoTab,hTab,eulerSwitch)
     use IGLOO_variables, only: sixOverPi, oneThird
     implicit none
@@ -286,7 +289,7 @@ contains
     integer :: nE
     
     ! Temperature or enthalpy
-    if (self%varCp) then; self%hp = self%stateVar(7) 
+    if (self%varCp) then; self%hp = self%stateVar(7); self%Tp = comp_TfromTab(hTab,self%hp)
     else;                 self%tp = self%stateVar(7); endif
     ! Model-dependent physics state
     select case(self%model)
@@ -295,10 +298,10 @@ contains
              self%m     = self%mdot/self%npdot
     case(4); self%m     = self%stateVar(8)
              self%npdot = self%stateVar(9)
+    case(6); self%fSolid = self%stateVar(8)
     end select
-    if (self%model/=1) then
-      if (self%varCp)  self%Tp  = comp_TfromTab(hTab,self%hp)
-      if (self%varRho) self%rho = lookupTab(rhoTab,self%Tp)
+    if (self%model/=1 .or. self%varRho) then
+      if (self%varRho) self%rho = tableValue(rhoTab, Tmin, Tmax, self%Tp)
       self%d = (sixOverPi*self%m/self%rho)**oneThird
     endif
 
@@ -311,7 +314,7 @@ contains
   end subroutine updatePart
 
 
-  !> FUNCTION TO FIND THE CELL WHICH CONTAINS THE PARTICLE (geo mesh, multi-block).
+  !> Locates the geometry cell containing the particle: seed block first, then every other block.
   logical function findParticle (self,block)
     use IGLOO_data_block, only: obj_block
     implicit none
@@ -324,7 +327,7 @@ contains
     p = self%stateVar(1:3)
     bseed = 0
 
-    !> Seed block: full search (tier-0 face hint, tier-1 +-1 box, then sweep).
+    !> Seed block
     if (.not.all(self%i==[0,0,0,0])) then
       bseed = self%i(1)
       if (searchInBlock(block(bseed), p, self%i(2:4), self%exitFace, .false., &
@@ -333,7 +336,7 @@ contains
       endif
     endif
 
-    !> Global fallback: sweep every other block (seed block already searched above).
+    !> Fallback: every other block
     do b = 1, nb
       if (b == bseed) cycle
       if (searchInBlock(block(b), p, [0,0,0], 0, .false., &
@@ -345,7 +348,7 @@ contains
   end function findParticle
 
   
-  !> Advance self%igas to the gas dual cell containing the particle after a gas-cell crossing (newGas).
+  !> Advances self%igas to the gas dual cell containing the particle after a gas-cell crossing.
   subroutine advanceGasCell(self, gasblock)
     use IGLOO_data_block, only: obj_flowblock
     implicit none
@@ -363,11 +366,8 @@ contains
   end subroutine advanceGasCell
 
 
-  !> Shared layered cell search on ONE block (geo via findParticle, gas via advanceGasCell).
-  !  tier 0: neighbour across `face` (skip if face<=0); 
-  !  tier 1: +-1 box around `seed` (skip
-  !  if seed==0); tier 2: full sweep (always, as fallback). `gasMesh` selects the dual-cell
-  !  +1 bound and 2D 4-vertex gather. Returns .true.+`found` on a hit, else .false.
+  !> Layered cell search on one block (geometry or gas dual): tier 0 the neighbour across `face`,
+  !  tier 1 a +-1 box around `seed` plus a guided ray walk pold -> p, tier 2 a full sweep.
   logical function searchInBlock(blk, p, seed, face, gasMesh, pold, vold, found)
     use IGLOO_variables,  only: mesh2D
     use IGLOO_data_block, only: obj_block
@@ -380,7 +380,6 @@ contains
     logical,          intent(in)  :: gasMesh
     real(R8),         intent(in)  :: pold(3), vold(3)   !> ray endpoints for the guided walk
     integer,          intent(out) :: found(3)
-    !> local variables
     real(R8) :: verts(3,8)
     real(R8) :: org(3), dir(3), ipoint(3)
     integer  :: hi(3), nv, ci, ii, cj, jj, ck, kk, imin, imax, jmin, jmax, kmin, kmax
@@ -388,10 +387,7 @@ contains
     logical  :: planar, interior, lhit
 
     searchInBlock = .false.
-    !> Block bbox early-out: p outside this block's node bbox => no cell can contain it (accept()'s
-    !  per-cell bbox test would reject every cell) => skip all tiers. Mirrors accept()'s mesh2D
-    !  z-handling exactly (z ignored when mesh2D), so the returned cell is unchanged. Gate-inert;
-    !  prunes the unconditional full-block sweeps of the cross-block fallback in findParticle.
+    !> Block bbox early-out (z ignored when mesh2D).
     if (p(1) < blk%bbox(1,1) .or. p(1) > blk%bbox(1,2) .or. &
         p(2) < blk%bbox(2,1) .or. p(2) > blk%bbox(2,2)) return
     if (.not.mesh2D) then
@@ -432,15 +428,12 @@ contains
         enddo
       enddo
 
-      !> Guided walk: ray-march pold->p cell by cell to the block boundary
-      !  `org` advances to each cell-exit point so checkBoundary always sees an interior
-      !  origin (else its outside-branch returns the entry face and the walk back-steps).
+      !> Guided walk: ray-march pold -> p cell by cell, advancing the origin to each exit point.
         org = pold
         ci = seed(1); cj = seed(2); ck = seed(3); if (mesh2D) ck = 1
         maxStep = hi(1) + hi(2) + hi(3) + 2
         do step = 1, maxStep
-          !> Bounds guard: ijk2fmn keys boundary faces off the block Nx/Ny/Nz, but the gas dual
-          !  spans Nx+1; a step past `hi` must stop the walk (else accept() reads out of bounds).
+          !> Stop the walk past the block bounds (the gas dual spans Nx+1).
           if (ci<1 .or. ci>hi(1) .or. cj<1 .or. cj>hi(2) .or. &
               (.not.mesh2D .and. (ck<1 .or. ck>hi(3)))) exit
           if (accept()) return
@@ -464,6 +457,7 @@ contains
 
   contains
 
+    !> Point-in-cell test for (ci,cj,ck) with a bbox pre-check; records `found` on a hit.
     logical function accept()
       implicit none
       accept = .false.
@@ -483,19 +477,19 @@ contains
   end function searchInBlock
 
 
-  !> FUNCTION TO UPDATE THE GAS PROPERTIES WHEN A CELL BOUNDARY IS CROSSED
+  !> Relocates the particle after a cell crossing: cell search, then boundary handling (periodic
+  !  transport, BC definitions) with a flip-flop cycle breaker.
   subroutine updateCell(self,block,lookGas)
     implicit none
     class(obj_particle), intent(inout) :: self
     class(obj_block),    intent(in)    :: block(nb)
     logical, optional,   intent(in)    :: lookGas
-    !> local variables
     real(R8), dimension(3) :: psave, p, v, pold, vold, intersectionPoint
     real(R8)     :: vertices(3,8)
     integer      :: b, f, m, n, prevTry(4,2), ind(4), iold(4), loc(3)
     logical      :: found, retry, noBC, gasGeo
 
-    gasGeo = .false.   !> runtime init: a decl initializer makes gasGeo implicit-SAVE -> shared (raced) in OMP
+    gasGeo = .false.   !> no declaration initializer: it would imply SAVE
     if (present(lookGas)) gasGeo = lookGas
 
     if (self%findParticle(block)) return
@@ -518,7 +512,7 @@ contains
                         intersectionPoint,f,m,n,noBC,found)
       if (.not.(gasGeo.or.noBC)) then
         if (blk%face(f)%cell(m,n)%bcdef == 201) then
-          !> Periodic: transport to the partner face (velocity unchanged), relocate, then done.
+          !> Periodic: transport to the partner face and relocate.
           call periodicTransport(block, blk%face(f)%cell(m,n), p, iold)
           if (searchInBlock(block(iold(1)), p, iold(2:4), 0, .false., pold, vold, loc)) iold = [iold(1), loc]
           ind = iold; retry = .false.
@@ -530,8 +524,7 @@ contains
       endif
       if (retry) then
         if (all(iold==prevTry(:,1))) then
-          !> Flip-flop cycle: no cell owns p (containment sliver) -> flag lost; integrate's
-          !  startedOut escape hops take over from here.
+          !> Flip-flop cycle: no cell owns p; flag the particle lost.
           self%lost = .true.
           iold = prevTry(:,2)
           ind  = iold
@@ -562,6 +555,7 @@ contains
   end subroutine updateCell
 
 
+  !> Locates the gas dual cell containing the particle in the one-cell neighbourhood of its geometry indices.
   subroutine findDualCell(self, gasblock)
     use IGLOO_variables,  only: mesh2D
     use IGLOO_data_block, only: obj_block, obj_flowblock
@@ -604,7 +598,7 @@ contains
   end subroutine findDualCell
 
 
-  !> FUNCTION TO ESTIMATE THE RESIDENCE TIME OF A PARTICLE IN A CELL
+  !> Estimated residence time in the cell: distance to the exit face over the speed.
     function computeDeltat (self, vertices, endPoint) result(dt)
     implicit none
     class(obj_particle), intent(in) :: self
@@ -625,6 +619,7 @@ contains
 
   end function computeDeltat
 
+  !> Distance along `dir` from the checkpoint position to the cell's exit face (exit edge in 2D).
   function computeDs (self, vertices, dir) result(ds)
     implicit none
     class(obj_particle), intent(in) :: self

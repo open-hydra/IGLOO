@@ -12,21 +12,14 @@ Two panels vs a NORMALIZED lifetime t/t_life (each series scaled by its own fina
   (a) d^2/d0^2 : IGLOO and the digitized TC2012 Fig. 11 present-model curve;
   (b) T/T_d0   : IGLOO wet-bulb history and the digitized TC2012 Fig. 11 curve.
 
-Tier-1 property reconstruction (2026-07-28) -- see INFO.md/PROVENANCE.md:
-  * Lv=2.58e5 = the effective latent heat of TC2012's OWN Table-1 psat curve (CC slope
-    through its (T,Pvs/PN) anchors ~ Watson Lv at the ~490K wet-bulb); the earlier 2.9e5
-    made CC-psat run 20-24% LOW vs Table 1, over-heating the drop (peak too early).
-  * cp_l=2800 (properties.dat) = NIST/Chemeo n-hexadecane liquid Cp at the ~490K operating
-    point; the earlier 2200 was the 298K value -- right property, wrong reference T.
-With these, IGLOO reproduces the heating shape well (heat-frac ~0.54, matching Fig. 11) and
-the plateau to ~0.7% (490.2 vs ~493.6 K).
+Case properties -- see INFO.md/PROVENANCE.md: p_sat(T) is TC2012's own Table-1 curve (the Psat
+column of INPUT/properties.dat), the energy sink is Table 1's latent heat at the boiling point
+(Lv=2.2695e5), cp_l=2800 is the NIST/Chemeo value at the ~490K operating point. The plateau sits
+at 492.6 K against the digitized ~493.7 K.
 
 The x-axis is NORMALIZED by each curve's lifetime because IGLOO's D_v (set by Le and the
 case gas props) differs from TC2012's n-hexadecane D_v, so absolute tau=t*Dv/R^2 is not
-comparable; the normalized SHAPE is the valid comparison. A residual remains in the d^2
-mid-decline: a single scalar Lv cannot be BOTH the psat-curve slope (~258 kJ/kg) and the
-optimal energy sink (~227), so IGLOO evaporates a touch fast. Closing it needs a psat curve
-DECOUPLED from the sink Lv (Tier 2, deferred -- see plan-bucket/tc-hexadecane-tier2-*.md).
+comparable; the normalized SHAPE is the valid comparison.
 Both digitized curves are NON-gating; the tight gate (check.py) is IGLOO-vs-the-TC-kernel.
 """
 import argparse

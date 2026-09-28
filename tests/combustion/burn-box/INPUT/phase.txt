@@ -1,1 +1,2 @@
-../../../common/phase.txt
+condensed-dispersed
+A 1 combustion=Beckstead K-burn=4.5e-07 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000

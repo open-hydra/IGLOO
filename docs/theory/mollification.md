@@ -1,9 +1,9 @@
 # Field Mollification
 
 After all particles are integrated, the deposited source and Euler fields can be smoothed
-by a dimension-split binomial smoother controlled by `mollify-passes` in
-`[IGLOO-General]`.  Setting `mollify-passes = 0` (or omitting `src-switch`/`eul-switch`)
-disables smoothing entirely.
+by a dimension-split binomial smoother controlled by `mollify` and `mollify-passes` in
+`[IGLOO-General]`.  Setting `mollify = off` (or `mollify-passes = 0`) disables smoothing
+entirely.
 
 The smoother is implemented in `src/lib/Lib_Mollify.f90::binomial_smooth`, called by
 `mollifyEuler` and `mollifySource` in `src/lib/obj_block.f90`.
@@ -71,14 +71,14 @@ With 8 passes:
 - Modes of wavelength $\ge 16$ cells are preserved at $\ge 73\%$.
 
 This provides effective deposition-noise suppression while leaving resolved physical
-structure intact.  10 passes would give the same noise kill with more diffusion of the
-$\lambda \approx 8$-cell band; 8 was preferred.
+structure intact; more passes give the same noise kill with more diffusion of the
+$\lambda \approx 8$-cell band.
 
 ---
 
 ## Applied fields
 
-`mollifyEuler` (`obj_eulerblock::finalize`, Phase 4) smooths the conserved density
+`mollifyEuler` (`obj_eulerblock::finalize`) smooths the conserved density
 numerators before Favre averaging:
 
 - `density` ($\rho_p\,T_\mathrm{stay}/V$)
@@ -86,7 +86,7 @@ numerators before Favre averaging:
 - `temperature` (energy numerator)
 - `np` (parcel-number density)
 
-`mollifySource` (`obj_sourceblock::finalize`, Phase 4) smooths the source extensive
+`mollifySource` (`obj_sourceblock::finalize`) smooths the source extensive
 per-cell totals:
 
 - `sourceMass(1:nm)` (per material)
@@ -106,8 +106,8 @@ loop.
 
 ```ini
 [IGLOO-General]
+mollify        = on  ; off disables the smoother
 mollify-passes = 8   ; override default (0 = off)
 ```
 
-`mollifyPasses = 0` when `mollify-on = F` (or `eul-switch = F` / `src-switch = F`).
 Full parameter registry: [../user/registry.md](../user/registry.md).

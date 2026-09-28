@@ -40,7 +40,7 @@ def load(path):
     parts = {}
     for line in open(path):
         c = line.split()
-        if len(c) == 10 and c[0][0] in "0123456789-":
+        if len(c) in (10, 11) and c[0][0] in "0123456789-":
             try:
                 parts.setdefault(int(c[9]), []).append(
                     (float(c[0]), float(c[7]), float(c[8])))   # x, d, m

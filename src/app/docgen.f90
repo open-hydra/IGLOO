@@ -1,6 +1,5 @@
-!> Emits docs/user/registry.md from the doc-only registry (run from the repo root).
-!> Optional argv(1) overrides the output path — used by the `registry-docs` ctest gate
-!> to regenerate into the build tree and diff against the tracked file.
+!> Emits docs/user/registry.md from the doc-only registry (run from the repo root);
+!  optional argv(1) overrides the output path.
 program IGLOO_docgen
   use IGLOO_Register,       only: Register_IGLOO_Params
   use IGLOO_Input_Registry, only: reg

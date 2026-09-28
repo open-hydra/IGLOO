@@ -13,6 +13,19 @@ bin
 # Test output files
 error*
 OUTPUT
+# Parked sweep OUTPUT dirs. The shipped harness no longer parks (it relies on the production
+# -sweep<N> filename suffix, inside OUTPUT/, already covered above) -- but a hand-run of an older
+# twosweep, or any manual A/B, drops these. Glob, not `.sweep1`: an exact rule let 6.7 MB of
+# generated source.tec into the P6 commit (since stripped) -- the gas-cycle mode writes .sweep2.
+OUTPUT.sweep*
+# datum-abs runs its relative sibling into ref-rel/ (tests/evaporation/datum-abs/check.py)
+ref-rel
+# boiling-temperature-key runs its Tboil sibling into ref-tboil/ (tests/evaporation/boiling-temperature-key/check.py)
+ref-tboil
+# no-psat runs its psat sibling into ref-psat/ (tests/evaporation/no-psat/check.py)
+ref-psat
+# two-fam-bc-2blk runs its one-block sibling into ref-1blk/ (tests/infrastructure/two-fam-bc-2blk/check.py)
+ref-1blk
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/
@@ -37,6 +50,14 @@ test/*_results.txt
 
 # e2e case run logs
 tests/*/*/run_*.txt
+tests/*/*/err_*.txt
+# refusal cases sit one level deeper and also record the exit code
+tests/*/*/*/run_*.txt
+tests/*/*/*/rc.txt
+# Failure-only diagnostics written by check_threads.py (BUGS.md O13). Absent on a passing run.
+tests/*/*/diag_*.txt
+# Per-rank-count .tec snapshots kept by the mpi-consistency gate for its cross-rank compare
+tests/mpi/*/tec_n*/
 
 # mkdocs build output
 site/
@@ -62,3 +83,7 @@ tests/FINDINGS.md
 # Assistant guidance, not project documentation (was in .git/info/exclude; here so the
 # rule is shared rather than per-clone).
 CLAUDE.md
+
+# Claude Code working files (local only)
+.claude/
+.claude-context/

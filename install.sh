@@ -27,6 +27,7 @@ Commands:
     --compilers=<name>      Set compilers (intel, gnu)
     --use-openmp            Use OpenMP
     --use-tecio             Use TecIO
+    --use-mpi               Use MPI (hybrid with OpenMP)
 
   compile                   Compile the program using the CMakePresets file
 
@@ -79,6 +80,7 @@ function write_presets() {
         "CMAKE_CXX_COMPILER": "${CXX}",
         "USE_TECIO": "${USE_TECIO}",
         "USE_SUNDIALS": "${USE_SUNDIALS}",
+        "USE_MPI": "${USE_MPI}",
         "USE_OPENMP": "${USE_OPENMP}"
       }
     }
@@ -94,13 +96,14 @@ COMPILERS=""
 MASTER_TYPE=""
 USE_OPENMP="false"
 USE_TECIO="false"
+USE_MPI="false"
 USE_SUNDIALS="false"
 REMOTE="false"
 BUILD_TYPE="RELEASE"
 
 # Define allowed options for each command using regular arrays
 CMD=("build" "compile" "update")
-CMD_OPTIONS_build=("--master --compilers --use-openmp --use-tecio")
+CMD_OPTIONS_build=("--master --compilers --use-openmp --use-tecio --use-mpi")
 CMD_OPTIONS_update=("--remote")
 
 # Parse global options
@@ -161,6 +164,10 @@ while [[ $# -gt 0 ]]; do
             [[ "$COMMAND" == "build" ]] || { error " --use-tecio is only valid for 'build' command"; exit 1; }
             USE_TECIO="true"
             ;;
+        --use-mpi)
+            [[ "$COMMAND" == "build" ]] || { error " --use-mpi is only valid for 'build' command"; exit 1; }
+            USE_MPI="true"
+            ;;
         --remote)
             [[ "$COMMAND" == "update" ]] || { error " --remote is only valid for 'update' command"; exit 1; }
             REMOTE="true"
@@ -186,10 +193,19 @@ case "$COMMAND" in
         fi
 
         task "Cloning submodules"
-        # --recursive is required: FiNeR carries six nested submodules of its own.
-        # Skipped under --master=hydra, which supplies the dependency tree instead.
+        # ORION, OSLO and FiNeR only: OSLO's one nested submodule (SUNDIALS, an ssh URL) serves
+        # USE_SUNDIALS, which OSLO's CMake fetches itself. Skipped under --master=hydra.
         if [[ $MASTER_TYPE == "None" ]]; then
-          git submodule update --init --recursive
+          git submodule update --init
+          # FiNeR 18fa207 untracks its five deps (src/third_party/.gitignore = *) yet its
+          # CMakeLists still add_subdirectory's them: populate from the v2.0.4 gitlinks,
+          # then return to the pin. HEAD is the single source of truth for that pin.
+          if [[ ! -d lib/third_party/FiNeR/src/third_party/PENF ]]; then
+            ( cd lib/third_party/FiNeR && pin=$(git rev-parse HEAD) \
+              && git checkout -q aab8f72 \
+              && git submodule update --init --recursive \
+              && git checkout -q "$pin" )
+          fi
         fi
 
         task "Configuring and building $project"
@@ -205,6 +221,7 @@ case "$COMMAND" in
         log "Build type: $BUILD_TYPE"
         log "Use OpenMP: $USE_OPENMP"
         log "Use TecIO: $USE_TECIO"
+        log "Use MPI: $USE_MPI"
         log "Use SUNDIALS: $USE_SUNDIALS"
         if [[ -z "${FC+x}" || -z "${CXX+x}" ]]; then
           log "Compilers not set. CMake will decide."
@@ -212,7 +229,7 @@ case "$COMMAND" in
           log "Compilers: FC=$FC, CXX=$CXX"
         fi
         rm -rf $BUILD_DIR
-        cmake -B $BUILD_DIR -DMASTER=$MASTER_TYPE -DUSE_TECIO=$USE_TECIO -DUSE_OPENMP=$USE_OPENMP -DUSE_SUNDIALS=$USE_SUNDIALS -DCMAKE_BUILD_TYPE=$BUILD_TYPE || exit 1
+        cmake -B $BUILD_DIR -DMASTER=$MASTER_TYPE -DUSE_TECIO=$USE_TECIO -DUSE_OPENMP=$USE_OPENMP -DUSE_MPI=$USE_MPI -DUSE_SUNDIALS=$USE_SUNDIALS -DCMAKE_BUILD_TYPE=$BUILD_TYPE || exit 1
         cmake --build $BUILD_DIR || exit 1
         log "[OK] Compilation successful"
 

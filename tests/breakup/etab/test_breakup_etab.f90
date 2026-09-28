@@ -17,12 +17,18 @@ program test_breakup_etab
     !        WeTrans, so ln(rNew/r) ratio across WeTrans = 1 exactly (pre-A15 the
     !        coded k1 branch produced the k1/k2 jump this probe used to pin)
     !
-    use, intrinsic :: iso_fortran_env, only: R8 => real64
+    use, intrinsic :: iso_fortran_env, only: R8 => real64, int64
     use IGLOO_Lib_Breakup, only: breakupEvent
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
     use verif_dump,   only: dump_curve
     implicit none
+
+    !> One RNG stream for this test program. breakupEvent now takes the parcel's own stream
+    !  instead of drawing from the intrinsic random_number (which is thread-scheduled and so
+    !  irreproducible inside the solver's OMP region). Host-scope, not per-call: an ensemble of
+    !  events must see DISTINCT draws, so the state has to advance across calls.
+    integer(int64) :: tRng = 20260808_int64
 
     real(R8), parameter :: PI = 4.0_R8*atan(1.0_R8)
     real(R8), parameter :: rho_l = 1000.0_R8, sigma = 0.072_R8, rho_g = 1.2_R8
@@ -77,7 +83,7 @@ contains
         vloc = 0._R8;   if (present(vp))    vloc = vp     ! |v|=0 => kick suppressed (guard)
         call breakupEvent(ev, 4, brkst, 0, sigma, mu_l, rho_l, rho_g, &
                           vel_of_We(We_r), Re_loc, 0._R8, zero3, vloc, dt, &
-                          5, bp_loc, 1, 1._R8, event, child, addChild, .true.)
+                          5, bp_loc, 1, 1._R8, event, child, addChild, .true., tRng)
         dp_new = ev(1)
         if (present(vp)) vp = vloc
     end subroutine etab_event
@@ -138,6 +144,7 @@ contains
         real(R8), parameter :: We_hi = 100._R8, We_lo = 6.5_R8, Re4 = 500._R8
         real(R8) :: vp(3), vp0(3), dv(3), dpn, err, tol
         real(R8) :: rdt, omg, omega0, WeCr, Kbr, rNew, Cd, Asq, vexp
+        real(R8) :: eSurf, eDrag, vEner
         logical  :: ev, pass
 
         ! --- oracle (paper-side re-derivation, stripping branch We_hi > WeTrans) ---
@@ -165,6 +172,27 @@ contains
         pass = assert_lt('ET4b vperp orthogonal to parent path', err, tol)
         ok = ok .and. pass
         call append_row('ET4b_vperp_orth', 'cos', err, err, 0._R8, 0._R8, tol, pass)
+
+        ! --- ET4d: magnitude by an INDEPENDENT derivation (anti-lockstep) ---------------
+        ! ET4a above re-types Tanner's A^2 from the same lines ETABmodel was written from,
+        ! so a shared misreading of the paper passes BOTH sides -- exactly how bug A13 got
+        ! through. Re-derive the same quantity from energy per unit mass instead: the
+        ! products' radial kinetic energy equals the surface energy released plus the drag
+        ! deformation input,
+        !     v_perp^2/2 = 3*sigma/(rho_l*a) - 3*sigma/(rho_l*r') + (5/24)*Cd*We*sigma/(rho_l*a)
+        ! the first pair being the surface term (NEGATIVE for r'<a: new surface costs energy,
+        ! which is what makes the A^2<=0 no-kick regime of ET4c exist at low We).
+        ! This is independent of how A^2 is assembled: it catches a sign error on (1 - a/r'),
+        ! an a<->r' swap, a wrong Comega inside omega0, the factor 3, and the 1/2 in
+        ! xdot = a*ydot/2. It is NOT independent of Tanner's 5/72 drag coefficient or of the
+        ! Cd correlation -- those are necessarily shared with production.
+        eSurf = 3._R8*sigma/(rho_l*radius) - 3._R8*sigma/(rho_l*rNew)
+        eDrag = (5._R8/24._R8)*Cd*We_hi*sigma/(rho_l*radius)
+        vEner = sqrt(2._R8*(eSurf + eDrag))
+        err  = abs(norm2(dv) - vEner)/vEner
+        pass = assert_lt('ET4d vperp = energy balance (independent derivation)', err, tol)
+        ok = ok .and. pass
+        call append_row('ET4d_vperp_energy', 'dv', err, err, 0._R8, 0._R8, tol, pass)
 
         vp  = vp0
         call etab_event(We_lo, bp_def, ev, dpn, Re_in=Re4, vp=vp)

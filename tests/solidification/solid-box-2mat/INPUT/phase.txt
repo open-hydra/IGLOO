@@ -1,0 +1,3 @@
+condensed-dispersed
+A 1 solidification=on h-fus=1.07e6 cp-solid=600
+B 1

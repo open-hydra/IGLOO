@@ -1,13 +1,14 @@
 # Injection & Packing
 
 Particle initialisation is handled by `pin_particles` in `src/lib/initialization.f90`,
-called once per material group during `obj_IGLOO%setup`.  Two methods are supported,
-selected by `method`:
+called once per material group during `obj_IGLOO%setup`.  Two methods are supported;
+the presence of `x`/`y`/`z` coordinates in `[IGLOO-BC]` selects the second:
 
 - **`FB` (face-based)** — particles are seeded on inflow-tagged boundary faces of the
-  geometry mesh.
-- **`AP` (assigned position)** — particle positions, velocities, and temperatures are
-  supplied explicitly via the `pos0`, `vel`, `temp` arrays.
+  geometry mesh (the default).
+- **`DB` (assigned position)** — particle positions, velocities, and temperatures are
+  supplied explicitly through the `[IGLOO-BC]` keys `x`, `y`, `z`, `up`, `vp`, `wp`,
+  `temp0`, `mdot`, `diam`.
 
 Injection cells are those whose `bcdef` code satisfies `isInj`: ATLAS codes 401–420
 (inlet/outlet) and 501–502 (SRM grain).
@@ -16,8 +17,9 @@ Injection cells are those whose `bcdef` code satisfies `isInj`: ATLAS codes 401�
 
 ## Face-based injection (FB)
 
-Within the `FB` path, the algorithm chosen depends on `ds`, `mdotMax`, and `dsSwitch`
-(all read from `[IGLOO-General]`):
+Within the `FB` path, the algorithm chosen depends on `ds` (`[IGLOO-BC]`), `mdot-max`
+(`[IGLOO-General]`), and whether any injection cell carries its own spacing in `bc.txt`
+(`dsSwitch`):
 
 | Condition | Algorithm |
 | :--- | :--- |
@@ -67,7 +69,7 @@ Used when `block(1)%Nz > 1`.  An advancing-front BFS over the injection face:
 3. **Pass 2**: back-fill as in 2D.
 
 The BFS queue is the flat `Inj(:,:)` / `ind(:,:)` arrays; `head` walks the populated
-tail.  Maximum particle count is hard-capped at `alloc = 1e7`.
+tail.  Maximum particle count is hard-capped at `alloc = 10⁷`.
 
 ---
 
@@ -82,15 +84,18 @@ from `src/lib/Lib_Statistics.f90` using three face-cell properties:
 | `(fam, 7)` | Spread parameter $\sigma_p$ |
 | `(fam, 8)` | Distribution law code (integer) |
 
-A fixed random seed ensures reproducibility across OpenMP runs.
+Every parcel draws from its own RNG stream seeded from `(seed, family, ID)` — with
+`seed` from `[IGLOO-General]` — so the sampled diameters are reproducible and independent
+of thread scheduling and MPI rank count.
 
 ---
 
-## Assigned-position injection (AP)
+## Assigned-position injection (DB)
 
-The `pos0(np, 3)`, `vel(np, 3)`, `temp(np)`, `mdot(np)`, `diam(np)` arrays are
-transcribed directly into `group%particle(1:npart)`.  Cell indices are initialised to
-`[0,0,0,0]`; `updateCell` locates each particle at the start of `integrate`.
+The `pos0(np, 3)`, `vel(np, 3)`, `temp(np)`, `mdot(np)`, `diam(np)` arrays read from
+`[IGLOO-BC]` are transcribed directly into `group%particle(1:npart)`.  Cell indices are
+initialised to `[0,0,0,0]`; `updateCell` locates each particle at the start of
+`integrate`.
 
 ---
 
@@ -98,9 +103,10 @@ transcribed directly into `group%particle(1:npart)`.  Cell indices are initialis
 
 | INI key | Section | Meaning |
 | :--- | :--- | :--- |
-| `ds` | `[IGLOO-General]` | Global inter-particle spacing (cm → m); 0 = auto |
-| `mdotMax` | `[IGLOO-General]` | Per-parcel mass flow cap (g/s → kg/s); 0 = off |
-| `dsDegen` | `[IGLOO-General]` | Minimum cell size to attempt injection (m); 0 = off |
-| `fsample` | `[IGLOO-General]` | Center-mode stride (one particle per `fsample` cells) |
+| `ds` | `[IGLOO-BC]` | Global inter-particle spacing (cm → m); 0 = one particle per cell centre |
+| `mdot-max` | `[IGLOO-General]` | Per-parcel mass flow cap (g/s → kg/s); 0 = off |
+| `ds-degen` | `[IGLOO-BC]` | Minimum cell size to attempt injection (cm); 0 = off |
+| `fsample` | `[IGLOO-BC]` | Center-mode stride (one particle per `fsample` cells) |
+| `x`, `y`, `z`, … | `[IGLOO-BC]` | Assigned-position injection (see [Input file](../user/input.md)) |
 
 Full registry: [../user/registry.md](../user/registry.md).
