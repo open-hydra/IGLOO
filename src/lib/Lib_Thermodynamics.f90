@@ -1,4 +1,4 @@
-!> Integer-temperature property tables (cp, h, rho, sigma, mu, psat), their lookup, and the header,
+!> Integer-temperature property tables (cp, h, rho, sigma, mu, psat), their lookups, and the header,
 !> row, node and column checks of INPUT/<prefix>properties.dat (the same checks as ICE's reader).
 module IGLOO_Lib_Properties
   use, intrinsic :: iso_fortran_env, only: R8 => real64
@@ -28,7 +28,7 @@ module IGLOO_Lib_Properties
 
 contains
 
-  !> Linear interpolation in a 1D table indexed by integer temperature.
+  !> Linear between the nodes, the end segments continued outside (enthalpy, sigma, mu).
   pure function lookupTab(tab, T) result(val)
     implicit none
     real(8), intent(in) :: tab(Tmin:Tmax), T
@@ -36,7 +36,7 @@ contains
     real(8) :: Vij, Viij, Tdiff
     integer :: T_i
 
-    !> Index clamped to the tabulated range.
+    !> Index clamped to the end segments.
     T_i   = min(max(idint(T), Tmin), Tmax-1)
     Tdiff = T - T_i
     Vij   = tab(T_i)       ! int(T)
@@ -86,7 +86,7 @@ contains
 
   end function comp_derivativeTab
 
-  !> Linear between the nodes, the end value outside; a NaN temperature returns NaN.
+  !> Linear between the nodes, the end value outside (density, psat); a NaN temperature returns NaN.
   pure function tableValue(tab, lo, hi, T) result(v)
     integer,  intent(in) :: lo, hi
     real(R8), intent(in) :: tab(lo:hi), T

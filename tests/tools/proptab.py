@@ -3,8 +3,8 @@
 
     from proptab import load_properties, lookup, table_value
     Tmin, Tmax, cols = load_properties("INPUT/properties.dat")   # zone 1
-    rho = lookup(cols["rho"], Tmin, Tmax, Tp)                    # lookupTab: rho, cp, h
-    psat = table_value(cols["psat"], Tmin, Tmax, Tp)             # tableValue: psat
+    h = lookup(cols["h"], Tmin, Tmax, Tp)                        # lookupTab: h, sigma, mu
+    rho = table_value(cols["rho"], Tmin, Tmax, Tp)               # tableValue: rho, psat
 
 The header is the first line holding VARIABLES; its double-quoted names name the columns, the
 first being the temperature. Known names map to the slots IGLOO reads (T, cp, rho, h, psat) with
@@ -64,7 +64,7 @@ def load_properties(path, zone=1):
 
 
 def lookup(tab, Tmin, Tmax, T):
-    """lookupTab: the node index clamped to [Tmin, Tmax-1], linear in T from it."""
+    """lookupTab (enthalpy, sigma, mu): the node index clamped to [Tmin, Tmax-1], linear in T from it."""
     Ti = min(max(int(T), Tmin), Tmax - 1)
     v0 = tab[Ti - Tmin]
     v1 = tab[Ti + 1 - Tmin]
@@ -72,7 +72,7 @@ def lookup(tab, Tmin, Tmax, T):
 
 
 def table_value(tab, Tmin, Tmax, T):
-    """tableValue: linear between the nodes, the end value outside, NaN for a NaN temperature."""
+    """tableValue (density, psat): linear between the nodes, the end value outside, NaN for a NaN temperature."""
     if math.isnan(T):
         return T
     Tc = min(max(T, float(Tmin)), float(Tmax))
