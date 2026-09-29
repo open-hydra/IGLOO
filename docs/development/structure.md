@@ -117,7 +117,7 @@ vector, mollification flags, and more. Populated once at startup by
 
 | Target | Links | Notes |
 |--------|-------|-------|
-| `IGLOOL` (static lib) | `FiNeR::FiNeR OSlo ORION` | `src/lib/*.f90` + `src/lib/config/*.f90` |
+| `IGLOOL` (static lib) | `FiNeR::FiNeR OSLO ORION` | `src/lib/*.f90` + `src/lib/config/*.f90` |
 | `IGLOO` (exe) | `IGLOOL FiNeR::FiNeR` (+ `-pthread` when `USE_TECIO=ON`) | `src/app/IGLOO.f90` |
 | `DocGen` (exe) | `IGLOOL` | `src/app/docgen.f90`; standalone builds only (see below) |
 
@@ -127,8 +127,8 @@ vector, mollification flags, and more. Populated once at startup by
 
 | Mode | Dependency source | Switch |
 |------|-------------------|--------|
-| `--master=None` | In-tree `lib/{ORION,OSlo,third_party/FiNeR}` | Standalone |
-| `--master=hydra` | `$HYDRADIR/lib/{ORION,OSlo,third_party/FiNeR}` | Submodule of hydra |
+| `--master=None` | In-tree `lib/{ORION,OSLO,third_party/FiNeR}` | Standalone |
+| `--master=hydra` | `$HYDRADIR/lib/{ORION,OSLO,third_party/FiNeR}` | Submodule of hydra |
 
 When IGLOO is configured *by* hydra, only `src/lib/CMakeLists.txt` runs — the
 top-level `if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)` block is

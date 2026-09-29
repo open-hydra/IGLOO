@@ -676,7 +676,7 @@ igloo_refusal_case(refuse-wedge-offcentre  infrastructure/refusals/wedge-offcent
 # explicit solver. RED at OSlo fb8255d (ledger O25: dopri5.f:512 called the eleven-argument SOLOUT,
 # IGLOO's interrupt never reached DOPRI5, every parcel lost at injection with exit 0); green since the
 # fork's fix/dopri5-solout (six-argument call, silent label 79). Needs BOTH OSlo checkouts (IGLOO's
-# lib/OSLO, hydra's lib/OSlo) on that commit.
+# lib/OSLO, hydra's lib/OSLO) on that commit.
 igloo_e2e_case(drag-stokes-dopri5 standard/drag-stokes-dopri5 "e2e;standard")
 # translational periodic pair (bcdef 201): closed-form v(x) across wraps + modular-y
 igloo_e2e_case(periodic-y infrastructure/periodic-y "e2e;infrastructure")

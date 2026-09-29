@@ -43,11 +43,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   endif()
   add_subdirectory(${orionD})
 
-  # OSLO -- note the hydra branch keeps hydra's own spelling of the directory
+  # OSLO -- the in-tree submodule, or hydra's lib/OSLO under --master=hydra
   if(MASTER STREQUAL None)
     set ( osloD ${CMAKE_CURRENT_SOURCE_DIR}/lib/OSLO/ )
   elseif(MASTER STREQUAL hydra)
-    set ( osloD $ENV{HYDRADIR}/lib/OSlo/ "${CMAKE_CURRENT_SOURCE_DIR}/build/lib/OSLO/")
+    set ( osloD $ENV{HYDRADIR}/lib/OSLO/ "${CMAKE_CURRENT_SOURCE_DIR}/build/lib/OSLO/")
   endif()
   add_subdirectory(${osloD})
 
