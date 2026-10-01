@@ -72,7 +72,7 @@ existence or an exact integer count.
 ## Note on the checkout this gate depends on
 `18fa207` **untracks** its own five dependencies (`src/third_party/.gitignore` is `*`)
 while `FiNeR/CMakeLists.txt` still `add_subdirectory`s them, so a bare checkout at that
-commit cannot configure. `install.sh` populates them from the `aab8f72` gitlinks and then
-returns to the pin. The deps are therefore at the v2.0.4 pins; hydra's own FiNeR tree
-carries later ones. Parity between the two build modes is **parser-level**
-(`finer_section_t.f90` is identical), which is what this gate asserts.
+commit cannot configure. `install.sh` populates them from the `cfc9194` gitlinks (v2.0.6)
+and then returns to the pin; hydra's build fills the same set for its own FiNeR at `18fa207`.
+Parity between the two build modes is **parser-level** (`finer_section_t.f90` is identical),
+which is what this gate asserts.
