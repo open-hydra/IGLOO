@@ -37,7 +37,7 @@ A plain `git clone https://github.com/open-hydra/IGLOO.git` is enough: `install.
 
 ### Hydra-submodule (`--master=hydra`)
 
-When IGLOO is a submodule of hydra, the build reuses `$HYDRADIR/lib/{ORION,OSlo,third_party/FiNeR}` instead of the in-tree copies. The `HYDRADIR` environment variable must be set (see the hydra `bootstrap.sh`).
+When IGLOO is a submodule of hydra, the build reuses `$HYDRADIR/lib/{ORION,OSLO,third_party/FiNeR}` instead of the in-tree copies. The `HYDRADIR` environment variable must be set (see the hydra `bootstrap.sh`).
 
 ```bash
 ./install.sh build --master=hydra --compilers=intel --use-openmp

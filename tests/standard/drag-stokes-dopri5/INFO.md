@@ -22,7 +22,7 @@ against a fixed `t2` until (t2 − t)/hmax exceeded 10⁵.
 calls `SOLOUT(NACCPT+1,XOLD,X,Y,N,IRTRN)`, and label 79 — reached only by a `SOLOUT`-requested stop
 (`IRTRN < 0`, a success, `IDID = 2` per Hairer's header) — no longer prints `EXIT OF DOPRI5 AT X=`
 (7850 lines per 1500 trajectory rows before; the SDIRK4 fork had already made the same change).
-Both OSlo checkouts (IGLOO's `lib/OSLO`, hydra's `lib/OSlo`) must sit on that commit; IGLOO's
+Both OSlo checkouts (IGLOO's `lib/OSLO`, hydra's `lib/OSLO`) must sit on that commit; IGLOO's
 gitlink moved with it. With the fix: 0 NMAX exits, 1500 rows, 25/25 parcels match the Stokes
 closed form (worst resid/tol 0.014), and the interim parse-time refusal (`refuse-dopri5`) and the
 `DISABLED` flag this case carried went with it — this case is the gate now.
