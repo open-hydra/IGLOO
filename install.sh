@@ -198,11 +198,11 @@ case "$COMMAND" in
         if [[ $MASTER_TYPE == "None" ]]; then
           git submodule update --init
           # FiNeR 18fa207 untracks its five deps (src/third_party/.gitignore = *) yet its
-          # CMakeLists still add_subdirectory's them: populate from the v2.0.4 gitlinks,
-          # then return to the pin. HEAD is the single source of truth for that pin.
-          if [[ ! -d lib/third_party/FiNeR/src/third_party/PENF ]]; then
+          # CMakeLists still add_subdirectory's them: populate from the v2.0.6 gitlinks (the set
+          # hydra builds with), then return to the pin. HEAD is the single source of truth for that pin.
+          if [[ ! -f lib/third_party/FiNeR/src/third_party/PENF/CMakeLists.txt ]]; then
             ( cd lib/third_party/FiNeR && pin=$(git rev-parse HEAD) \
-              && git checkout -q aab8f72 \
+              && git checkout -q cfc9194 \
               && git submodule update --init --recursive \
               && git checkout -q "$pin" )
           fi
