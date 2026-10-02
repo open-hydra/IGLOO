@@ -35,29 +35,88 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   include(GNUInstallDirs)
   set (CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules")
 
-  # ORION
-  if(MASTER STREQUAL None)
-    set ( orionD ${CMAKE_CURRENT_SOURCE_DIR}/lib/ORION/ )
-  elseif(MASTER STREQUAL hydra)
-    set ( orionD $ENV{HYDRADIR}/lib/ORION/ "${CMAKE_CURRENT_SOURCE_DIR}/build/lib/ORION/")
+  # -------- Path fallbacks (standalone builds) --------
+  if (NOT DEFINED OSLO_PATH)
+    set(OSLO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/OSLO/")
   endif()
-  add_subdirectory(${orionD})
+  if (NOT DEFINED ORION_PATH)
+    set(ORION_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/ORION/")
+  endif()
+  if (NOT DEFINED FINER_PATH)
+    set(FINER_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/third_party/FiNeR/")
+  endif()
+  # A relative path (e.g. --include-oslo=lib/OSLO/) is taken from the source dir: the helpers
+  # below need an absolute one, file(RELATIVE_PATH) refuses anything else.
+  foreach(_path_var OSLO_PATH ORION_PATH FINER_PATH)
+    get_filename_component(${_path_var} "${${_path_var}}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+  endforeach()
 
-  # OSLO -- the in-tree submodule, or hydra's lib/OSLO under --master=hydra
-  if(MASTER STREQUAL None)
-    set ( osloD ${CMAKE_CURRENT_SOURCE_DIR}/lib/OSLO/ )
-  elseif(MASTER STREQUAL hydra)
-    set ( osloD $ENV{HYDRADIR}/lib/OSLO/ "${CMAKE_CURRENT_SOURCE_DIR}/build/lib/OSLO/")
+  # -------- Helper: initialize a git submodule from the correct git root --------
+  macro(ensure_submodule_initialized SUBMOD_PATH)
+    if (NOT EXISTS "${SUBMOD_PATH}/CMakeLists.txt")
+      message(STATUS "Submodule at ${SUBMOD_PATH} not initialized. Attempting git submodule update --init...")
+      get_filename_component(_sm_parent "${SUBMOD_PATH}" DIRECTORY)
+      execute_process(
+        COMMAND git rev-parse --show-toplevel
+        WORKING_DIRECTORY "${_sm_parent}"
+        OUTPUT_VARIABLE _sm_git_root
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE _sm_git_result)
+      if(_sm_git_result EQUAL 0)
+        file(RELATIVE_PATH _sm_rel "${_sm_git_root}" "${SUBMOD_PATH}")
+        execute_process(
+          COMMAND git submodule update --init "${_sm_rel}"
+          WORKING_DIRECTORY "${_sm_git_root}"
+          RESULT_VARIABLE _sm_init_result)
+        if(NOT _sm_init_result EQUAL 0)
+          message(FATAL_ERROR "Failed to initialize submodule: ${SUBMOD_PATH}")
+        endif()
+      else()
+        message(FATAL_ERROR "Could not find git root for submodule: ${SUBMOD_PATH}")
+      endif()
+    endif()
+  endmacro()
+
+  # -------- Helper: fetch FiNeR's own dependencies --------
+  # FiNeR no longer tracks them as gitlinks (its src/third_party/.gitignore is `*`), yet its
+  # CMakeLists still add_subdirectory's all five; its own CI fetches them with `FoBiS.py fetch` at
+  # each repository's HEAD. Clone the same set, so a bare `cmake -B build` configures.
+  macro(ensure_finer_dependencies FINER_ROOT)
+    foreach(_dep BeFoR64 FACE FLAP PENF StringiFor)
+      set(_dep_dir "${FINER_ROOT}/src/third_party/${_dep}")
+      if (NOT EXISTS "${_dep_dir}/CMakeLists.txt")
+        message(STATUS "FiNeR dependency ${_dep} missing. Cloning https://github.com/szaghi/${_dep}...")
+        execute_process(
+          COMMAND git clone https://github.com/szaghi/${_dep} "${_dep_dir}"
+          RESULT_VARIABLE _dep_result)
+        if(NOT _dep_result EQUAL 0)
+          message(FATAL_ERROR "Failed to clone FiNeR dependency ${_dep} into ${_dep_dir}")
+        endif()
+      endif()
+    endforeach()
+  endmacro()
+
+  # OSLO
+  if (NOT TARGET OSLO)
+    ensure_submodule_initialized("${OSLO_PATH}")
+    set(osloD "${OSLO_PATH}" "${CMAKE_BINARY_DIR}/lib/OSLO")
+    add_subdirectory(${osloD})
   endif()
-  add_subdirectory(${osloD})
+
+  # ORION
+  if (NOT TARGET ORION)
+    ensure_submodule_initialized("${ORION_PATH}")
+    set(orionD "${ORION_PATH}" "${CMAKE_BINARY_DIR}/lib/ORION")
+    add_subdirectory(${orionD})
+  endif()
 
   # FiNeR
-  if(MASTER STREQUAL None)
-    set ( finerD ${CMAKE_CURRENT_SOURCE_DIR}/lib/third_party/FiNeR/ )
-  elseif(MASTER STREQUAL hydra)
-    set ( finerD $ENV{HYDRADIR}/lib/third_party/FiNeR/ "${CMAKE_CURRENT_SOURCE_DIR}/build/lib/third_party/FiNeR/")
+  if (NOT TARGET FiNeR)
+    ensure_submodule_initialized("${FINER_PATH}")
+    ensure_finer_dependencies("${FINER_PATH}")
+    set(finerD "${FINER_PATH}" "${CMAKE_BINARY_DIR}/lib/third_party/FiNeR")
+    add_subdirectory(${finerD})
   endif()
-  add_subdirectory(${finerD})
 
 endif()
 

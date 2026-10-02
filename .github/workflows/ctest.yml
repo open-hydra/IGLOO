@@ -1,0 +1,47 @@
+name: CTest
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Not recursive: OSLO's one nested submodule is SUNDIALS, which only
+          # USE_SUNDIALS needs.
+          submodules: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=RELEASE \
+            -DCMAKE_Fortran_COMPILER=gfortran \
+            -DCMAKE_CXX_COMPILER=g++ \
+            -DUSE_OPENMP=ON \
+            -DUSE_MPI=OFF \
+            -DUSE_TECIO=OFF \
+            -DUSE_SUNDIALS=OFF \
+            -DBUILD_VERIFICATION=ON
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Run standard tests
+        # The standard category only (tests/test.sh standard). Its checkers
+        # need nothing beyond the Python standard library.
+        run: >
+          ctest --test-dir build
+          --output-on-failure
+          --timeout 600
+          -L '^standard$'

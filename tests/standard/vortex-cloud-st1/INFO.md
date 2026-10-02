@@ -1,11 +1,6 @@
 # vortex-cloud — a particle cloud in a frozen solid-body vortex, exact per parcel
 
-**Purpose.** ICE's verification case I (`test/verification/I-vortex-cloud/run.py`) run by IGLOO,
-number for number, as the Lagrangian half of a three-way comparison. It is the suite's only case
-where the gas rotates in the plane of the motion, so the full two-dimensional coupling of the drag
-equation — every cross term between x and y — is gated, and the only one that sweeps the Stokes
-number: four directories, `vortex-cloud-st0p01`, `-st0p1`, `-st1` (this one, which holds `INPUT/`
-and `check.py`) and `-st10`, differing only in the particle diameter.
+**Purpose.** It is the suite's only case where the gas rotates in the plane of the motion, so the full two-dimensional coupling of the drag equation — every cross term between x and y — is gated, and the only one that sweeps the Stokes number: four directories, `vortex-cloud-st0p01`, `-st0p1`, `-st1` (this one, which holds `INPUT/` and `check.py`) and `-st10`, differing only in the particle diameter.
 
 **Physics.** In the complex plane `z = x + i y` the gas is `u_g = i Ω z` (Ω = 1 rad/s). Stokes
 drag with a uniform diameter gives, along a trajectory,
@@ -24,21 +19,9 @@ turn of the gas, `t = QUARTER = π/2`:
 | 1 | 5.692e-4 | 1.617416 | 0.345426 |
 | 10 | 1.800e-3 | 1.828830 | 0.538470 |
 
-(ICE's own table, 1.015725 … 0.538606, is the same closed form at its final time 1.571 s, its first
-step past `QUARTER`.)
-
-**Fixture** (`tests/tools/make_vortex_case.py`, ICE's constants; regenerate with
-`python3 tests/tools/make_vortex_case.py tests/standard/vortex-cloud-st1 1 --input` and the other
-three without `--input`). Gas: the square `[−2, 2]²`, 96 × 96 cells (h = 1/24), one cell of
-thickness h across z (the planar single-layer path), cell-centred `u = −Ω y`, `v = Ω x`, ρ 1.2,
-T 300, μ 1.8e-5 (`mil` and `mit`), γ 1.4, R 287.05 — linear, so the second-order rebuild samples it
-exactly (`gas-order = 2`). Every face is 400. Material: `INPUT/properties.dat` at ρ_p 1000,
-cp 900 (ICE's), so `d = sqrt(18 μ St / (Ω ρ_p))` is ICE's `dp` to the digit. Cloud: a lattice of
-spacing h/2 centred on (0.6, 0) with half-spacing offsets (its weighted centroid is 0.6 to
-4.4e-16), cut at 4σ of ICE's Gaussian (σ = 0.12): 1672 DB parcels, every seed at least 0.15 h from
-a node or dual line, seeded at `(−Ω y0, Ω x0)`, T 300, `mdot = ρ_p0(z0) (h/2)² h`. Stokes drag,
-`heat = NoHeat`, SDIRK4 at 1e-11, `time-end = QUARTER`, `out-time = on`, `out-file = S`. Each list of
-1672 values is one 37.6 kB INI line; FiNeR's `count_values` reads 1672 on each.
+**Fixture** (`tests/tools/make_vortex_case.py` regenerate with
+`python3 tests/tools/make_vortex_case.py tests/standard/vortex-cloud-st1 1 --input` and the other three without `--input`). Gas: the square `[−2, 2]²`, 96 × 96 cells (h = 1/24), one cell of thickness h across z (the planar single-layer path), cell-centred `u = −Ω y`, `v = Ω x`, ρ 1.2, T 300, μ 1.8e-5 (`mil` and `mit`), γ 1.4, R 287.05 — linear, so the second-order rebuild samples it exactly (`gas-order = 2`). Every face is 400. Material: `INPUT/properties.dat` at ρ_p 1000, cp 900. Cloud: a lattice of spacing h/2 centred on (0.6, 0) with half-spacing offsets (its weighted centroid is 0.6 to
+4.4e-16): 1672 DB parcels, every seed at least 0.15 h from a node or dual line, seeded at `(−Ω y0, Ω x0)`, T 300, `mdot = ρ_p0(z0) (h/2)² h`. Stokes drag, `heat = NoHeat`, SDIRK4 at 1e-11, `time-end = QUARTER`, `out-time = on`, `out-file = S`. Each list of 1672 values is one 37.6 kB INI line; FiNeR's `count_values` reads 1672 on each.
 
 **Gates** (`check.py`; the oracle is the closed form above, cross-checked by RK4):
 
@@ -78,8 +61,3 @@ off`: 10-column rows, G0' refuses ("no time column"). Faces 1–4 retagged 300 i
 QUARTER no parcel of any St comes within h/2 of the boundary (max |x| 1.44, |y| 1.82 m at St 10),
 so the mirrored ghosts are never sampled; that mirror is gated by `test_ghost_bc` and
 `wall-approach`.
-
-**Three-way comparison.** The same case solved by ICE (Eulerian moments) and by IGLOO, both against
-the exact solution, is hydra's `test/vortex-cloud/compare.py`; the optional ctest entry
-`vortex-cloud-3way` runs it against this tree's binary and skips (exit 77) without `HYDRADIR`, the
-driver or an ICE binary.

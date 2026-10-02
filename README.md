@@ -42,16 +42,19 @@ git clone https://github.com/open-hydra/IGLOO.git
 cd IGLOO                         # install.sh build fetches the lib/ submodules it needs
 
 # Standalone build with GNU compilers and OpenMP
-./install.sh build --master=None --compilers=gnu --use-openmp
+./install.sh build --compilers=gnu --use-openmp
 
 # — or with Intel compilers and Tecplot binary I/O —
-./install.sh build --master=None --compilers=intel --use-openmp --use-tecio
+./install.sh build --compilers=intel --use-openmp --use-tecio
 
 # As a hydra submodule (reuses $HYDRADIR's dependency tree)
-./install.sh build --master=hydra --compilers=intel --use-openmp
+./install.sh build --compilers=intel --use-openmp \
+  --include-orion=$HYDRADIR/lib/ORION \
+  --include-oslo=$HYDRADIR/lib/OSLO \
+  --include-finer=$HYDRADIR/lib/third_party/FiNeR
 
 # Hybrid MPI + OpenMP (not combinable with --use-tecio)
-./install.sh build --master=None --compilers=intel --use-openmp --use-mpi
+./install.sh build --compilers=intel --use-openmp --use-mpi
 ```
 
 The executable is placed in `bin/IGLOO`. `./install.sh compile` performs an incremental rebuild from the existing CMake preset.
@@ -68,7 +71,7 @@ See the [Installation Guide](https://open-hydra.github.io/IGLOO/getting-started/
 
 ## Dependencies
 
-IGLOO is built on top of companion libraries, included as Git submodules (standalone build) or shared with the hydra suite (`--master=hydra`):
+IGLOO is built on top of companion libraries, included as Git submodules (standalone build) or shared with the hydra suite (the `--include-*` options):
 
 | Library | Role |
 |---|---|

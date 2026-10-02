@@ -196,16 +196,34 @@ endif()
 # by signal is.
 # A case the solver must REFUSE at setup. The e2e helper cannot host one: ifx `error stop 'msg'`
 # exits 128, which its rc >= 128 test reads as "died on signal". tools/check_refusal.py needs
-# exit == 128 AND the expected text in stderr (the error-stop payload that ended the run) AND
-# nothing set up past the choke point (no "Placing particles"/"Compute particles dynamics", no
-# OUTPUT/*.dat) -- a green solver fails it on every count (proven on drag-stokes, refusals/INFO.md).
+# exit == IGLOO_ERROR_STOP_RC (below) AND the expected text in stderr (the error-stop payload that
+# ended the run) AND nothing set up past the choke point (no "Placing particles"/"Compute particles
+# dynamics", no OUTPUT/*.dat) -- a green solver fails it on every count (proven on drag-stokes,
+# refusals/INFO.md).
+#
+# That exit code belongs to the compiler's runtime, not to IGLOO: measured 128 under ifx 2023.1,
+# ifx 2026.1 and ifort, 1 under gfortran 12.2 -- so a gfortran build failed every refusal on the
+# code alone, with the right payload in stderr. Probe it instead of tabulating it by compiler ID.
+# A code outside 1..128 could not be told apart from a clean run (0) or a signal death (128+N).
+try_run(IGLOO_ERROR_STOP_RC _stop_code_probe_built
+    "${CMAKE_CURRENT_BINARY_DIR}/stop_code_probe"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/stop_code_probe.f90"
+    COMPILE_OUTPUT_VARIABLE _stop_code_probe_log)
+if(NOT _stop_code_probe_built OR NOT IGLOO_ERROR_STOP_RC MATCHES "^[0-9]+$"
+   OR IGLOO_ERROR_STOP_RC LESS 1 OR IGLOO_ERROR_STOP_RC GREATER 128)
+    message(FATAL_ERROR "tools/stop_code_probe.f90 gave '${IGLOO_ERROR_STOP_RC}', not an exit code "
+        "in 1..128: the refusal gate cannot separate this compiler's `error stop` from a clean run "
+        "or a signal death.\n${_stop_code_probe_log}")
+endif()
+message(STATUS "error stop exit code (${CMAKE_Fortran_COMPILER_ID}): ${IGLOO_ERROR_STOP_RC}")
+
 function(igloo_refusal_case name casedir expected labels)
     add_test(NAME ${name}
         COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${CMAKE_SOURCE_DIR}/bin/IGLOO 1>run_out.txt 2>run_err.txt; echo $? > rc.txt; python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_refusal.py \"${expected}\""
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
     set_tests_properties(${name} PROPERTIES
         LABELS "${labels}"
-        ENVIRONMENT "OMP_NUM_THREADS=1;KMP_STACKSIZE=100M"
+        ENVIRONMENT "OMP_NUM_THREADS=1;KMP_STACKSIZE=100M;IGLOO_ERROR_STOP_RC=${IGLOO_ERROR_STOP_RC}"
         TIMEOUT 120)
 endfunction()
 function(igloo_twosweep_case name casedir labels gasfile)

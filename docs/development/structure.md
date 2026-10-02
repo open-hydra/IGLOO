@@ -127,18 +127,18 @@ vector, mollification flags, and more. Populated once at startup by
 
 | Mode | Dependency source | Switch |
 |------|-------------------|--------|
-| `--master=None` | In-tree `lib/{ORION,OSLO,third_party/FiNeR}` | Standalone |
-| `--master=hydra` | `$HYDRADIR/lib/{ORION,OSLO,third_party/FiNeR}` | Submodule of hydra |
+| Standalone | In-tree `lib/{ORION,OSLO,third_party/FiNeR}` | default |
+| Submodule of hydra | `$HYDRADIR/lib/{ORION,OSLO,third_party/FiNeR}` | `--include-orion=`, `--include-oslo=`, `--include-finer=` |
 
 When IGLOO is configured *by* hydra, only `src/lib/CMakeLists.txt` runs — the
 top-level `if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)` block is
 skipped and `src/app/CMakeLists.txt` (which adds the `DocGen` target) is not
 included. DocGen is therefore a **standalone-only** tool.
 
-!!! warning "Stale lib/ after mode switch"
-    Switching between `--master=None` and `--master=hydra` without a full
-    `./install.sh build` leaves a stale `lib/` checkout that the build silently
-    ignores. Always run `build`, not `compile`, when changing the master setting.
+!!! warning "`compile` keeps the dependency paths of the last `build`"
+    `./install.sh build` records the three paths in `CMakePresets.json`, and
+    `compile` reuses them. Always run `build`, not `compile`, when changing a
+    dependency path.
 
 ---
 

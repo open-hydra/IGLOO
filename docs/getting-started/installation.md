@@ -18,33 +18,38 @@ This page describes how to build IGLOO. Two build modes exist: **standalone** (I
 
 ## Build modes
 
-### Standalone (`--master=None`)
+### Standalone (default)
 
 IGLOO is built against the in-tree copies of ORION, OSlo, and FiNeR under `lib/`. This is the standard mode for users who do not have the hydra suite installed.
 
-A plain `git clone https://github.com/open-hydra/IGLOO.git` is enough: `install.sh build --master=None` initialises the `lib/ORION`, `lib/OSLO` and `lib/third_party/FiNeR` submodules and FiNeR's own dependencies, all over https. OSLO's nested SUNDIALS submodule is not fetched, since IGLOO builds OSLO without SUNDIALS.
+A plain `git clone https://github.com/open-hydra/IGLOO.git` is enough: `install.sh build` initialises the `lib/ORION`, `lib/OSLO` and `lib/third_party/FiNeR` submodules, and the CMake configure clones FiNeR's own dependencies, all over https (a bare `cmake -B build` does the same). OSLO's nested SUNDIALS submodule is not fetched, since IGLOO builds OSLO without SUNDIALS.
 
 ```bash
 # Intel compilers with OpenMP (recommended for production)
-./install.sh build --master=None --compilers=intel --use-openmp
+./install.sh build --compilers=intel --use-openmp
 
 # GNU compilers with OpenMP
-./install.sh build --master=None --compilers=gnu --use-openmp
+./install.sh build --compilers=gnu --use-openmp
 
 # With optional Tecplot binary I/O (requires a C++ compiler)
-./install.sh build --master=None --compilers=intel --use-openmp --use-tecio
+./install.sh build --compilers=intel --use-openmp --use-tecio
 ```
 
-### Hydra-submodule (`--master=hydra`)
+### Hydra-submodule (`--include-*`)
 
-When IGLOO is a submodule of hydra, the build reuses `$HYDRADIR/lib/{ORION,OSLO,third_party/FiNeR}` instead of the in-tree copies. The `HYDRADIR` environment variable must be set (see the hydra `bootstrap.sh`).
+When IGLOO is a submodule of hydra, point the build at `$HYDRADIR/lib/{ORION,OSLO,third_party/FiNeR}` instead of the in-tree copies:
 
 ```bash
-./install.sh build --master=hydra --compilers=intel --use-openmp
+./install.sh build --compilers=intel --use-openmp \
+  --include-orion=$HYDRADIR/lib/ORION \
+  --include-oslo=$HYDRADIR/lib/OSLO \
+  --include-finer=$HYDRADIR/lib/third_party/FiNeR
 ```
 
-!!! warning "Do not mix build modes"
-    Switching between `--master=None` and `--master=hydra` without running a full `build` leaves a stale `lib/` checkout that the build silently ignores. Always run `./install.sh build` (not `compile`) when changing the master setting.
+The three options are independent: any dependency left out comes from the in-tree copy. A relative path is taken from the repository root.
+
+!!! warning "`compile` keeps the dependency paths of the last `build`"
+    `./install.sh build` records the three paths in `CMakePresets.json`, and `compile` reuses them. Always run `./install.sh build` (not `compile`) when changing a dependency path.
 
 ---
 
@@ -52,7 +57,9 @@ When IGLOO is a submodule of hydra, the build reuses `$HYDRADIR/lib/{ORION,OSLO,
 
 | Flag | Description |
 |------|-------------|
-| `--master=None` or `--master=hydra` | Required. Selects the dependency source. |
+| `--include-orion=<path>` | ORION checkout to build against. Default: the in-tree `lib/ORION`. |
+| `--include-oslo=<path>` | OSLO checkout to build against. Default: the in-tree `lib/OSLO`. |
+| `--include-finer=<path>` | FiNeR checkout to build against. Default: the in-tree `lib/third_party/FiNeR`. |
 | `--compilers=intel` or `--compilers=gnu` | Selects the compiler family. When omitted, CMake decides. |
 | `--use-openmp` | Enables OpenMP parallelization. |
 | `--use-tecio` | Enables Tecplot binary I/O (requires C++ compiler). |

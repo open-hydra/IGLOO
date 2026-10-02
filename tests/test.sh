@@ -50,7 +50,6 @@ if [[ "${TARGET}" == clean ]]; then
 fi
 
 cmake -B "${BUILD_DIR}" -S "${IGLOO_ROOT}" \
-    -DMASTER=None \
     -DUSE_OPENMP=ON \
     -DUSE_MPI=${MPI} \
     -DUSE_SUNDIALS=OFF \

@@ -8,10 +8,13 @@
 
    ```bash
    # Standalone
-   ./install.sh build --master=None --compilers=intel --use-openmp
+   ./install.sh build --compilers=intel --use-openmp
 
    # Hydra-submodule (requires $HYDRADIR set)
-   ./install.sh build --master=hydra --compilers=intel --use-openmp
+   ./install.sh build --compilers=intel --use-openmp \
+     --include-orion=$HYDRADIR/lib/ORION \
+     --include-oslo=$HYDRADIR/lib/OSLO \
+     --include-finer=$HYDRADIR/lib/third_party/FiNeR
    ```
 
 2. Run the full test suite and confirm the gate is green:
@@ -46,7 +49,7 @@ Any change to a key — name, default, type, semantics — requires **two edits*
 After editing both, rebuild DocGen and regenerate the registry page:
 
 ```bash
-./install.sh build --master=None --compilers=intel --use-openmp
+./install.sh build --compilers=intel --use-openmp
 bin/DocGen       # writes docs/user/registry.md
 ```
 
