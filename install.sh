@@ -23,16 +23,15 @@ Global Options:
 
 Commands:
   build                     Perform a full build
-    --master=<name>         Set master (None, hydra)
+    --include-orion=<path>  Set external ORION path
+    --include-finer=<path>  Set external FiNeR path
+    --include-oslo=<path>   Set external OSLO path
     --compilers=<name>      Set compilers (intel, gnu)
     --use-openmp            Use OpenMP
     --use-tecio             Use TecIO
     --use-mpi               Use MPI (hybrid with OpenMP)
 
   compile                   Compile the program using the CMakePresets file
-
-  update                    Download git submodules
-    --remote                Use the latest remote commit
 
 EOF
     exit 1
@@ -74,7 +73,9 @@ function write_presets() {
       "description": "Default preset",
       "binaryDir": "\${sourceDir}/build",
       "cacheVariables": {
-        "MASTER": "${MASTER_TYPE}",
+        "ORION_PATH": "${ORION_PATH}",
+        "FINER_PATH": "${FINER_PATH}",
+        "OSLO_PATH": "${OSLO_PATH}",
         "CMAKE_BUILD_TYPE": "${BUILD_TYPE}",
         "CMAKE_Fortran_COMPILER": "${FC}",
         "CMAKE_CXX_COMPILER": "${CXX}",
@@ -93,7 +94,9 @@ EOF
 # Default global values
 COMMAND=""
 COMPILERS=""
-MASTER_TYPE=""
+ORION_PATH=$(pwd)'/lib/ORION/'
+FINER_PATH=$(pwd)'/lib/third_party/FiNeR/'
+OSLO_PATH=$(pwd)'/lib/OSLO/'
 USE_OPENMP="false"
 USE_TECIO="false"
 USE_MPI="false"
@@ -102,9 +105,8 @@ REMOTE="false"
 BUILD_TYPE="RELEASE"
 
 # Define allowed options for each command using regular arrays
-CMD=("build" "compile" "update")
-CMD_OPTIONS_build=("--master --compilers --use-openmp --use-tecio --use-mpi")
-CMD_OPTIONS_update=("--remote")
+CMD=("build" "compile")
+CMD_OPTIONS_build=("--include-orion --include-finer --include-oslo --compilers --use-openmp --use-tecio --use-mpi")
 
 # Parse global options
 while getopts "hv-:" opt; do
@@ -140,13 +142,17 @@ shift
 # Parse command-specific options
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --master=*)
-            [[ "$COMMAND" == "build" ]] || { error " --master is only valid for 'build' command"; exit 1; }
-            if [[ ! "$1" =~ ^--master=(None|hydra)$ ]]; then
-                error "Invalid value for --master. Valid values are 'None' or 'hydra'."
-                exit 1
-            fi
-            MASTER_TYPE="${1#*=}"
+        --include-orion=*)
+            [[ "$COMMAND" == "build" ]] || { error " --include-orion is only valid for 'build' command"; exit 1; }
+            ORION_PATH="${1#*=}"
+            ;;
+        --include-finer=*)
+            [[ "$COMMAND" == "build" ]] || { error " --include-finer is only valid for 'build' command"; exit 1; }
+            FINER_PATH="${1#*=}"
+            ;;
+        --include-oslo=*)
+            [[ "$COMMAND" == "build" ]] || { error " --include-oslo is only valid for 'build' command"; exit 1; }
+            OSLO_PATH="${1#*=}"
             ;;
         --compilers=*)
             [[ "$COMMAND" == "build" ]] || { error " --compilers is only valid for 'build' command"; exit 1; }
@@ -168,10 +174,6 @@ while [[ $# -gt 0 ]]; do
             [[ "$COMMAND" == "build" ]] || { error " --use-mpi is only valid for 'build' command"; exit 1; }
             USE_MPI="true"
             ;;
-        --remote)
-            [[ "$COMMAND" == "update" ]] || { error " --remote is only valid for 'update' command"; exit 1; }
-            REMOTE="true"
-            ;;
         *)
             eval "opts=(\"\${CMD_OPTIONS_${COMMAND}[@]}\")"
             error "Unknown option '$1' for command '$COMMAND'. Valid options: ${opts[@]}"
@@ -187,25 +189,16 @@ done
 case "$COMMAND" in
     build)
         task "Building $project"
-        if [[ -z "$MASTER_TYPE" ]]; then
-            error " --master is required for the 'build' command!"
-            exit 1
-        fi
 
         task "Cloning submodules"
-        # ORION, OSLO and FiNeR only: OSLO's one nested submodule (SUNDIALS, an ssh URL) serves
-        # USE_SUNDIALS, which OSLO's CMake fetches itself. Skipped under --master=hydra.
-        if [[ $MASTER_TYPE == "None" ]]; then
-          git submodule update --init
-          # FiNeR 18fa207 untracks its five deps (src/third_party/.gitignore = *) yet its
-          # CMakeLists still add_subdirectory's them: populate from the v2.0.6 gitlinks (the set
-          # hydra builds with), then return to the pin. HEAD is the single source of truth for that pin.
-          if [[ ! -f lib/third_party/FiNeR/src/third_party/PENF/CMakeLists.txt ]]; then
-            ( cd lib/third_party/FiNeR && pin=$(git rev-parse HEAD) \
-              && git checkout -q cfc9194 \
-              && git submodule update --init --recursive \
-              && git checkout -q "$pin" )
-          fi
+        [[ $ORION_PATH == $(pwd)'/lib/ORION/' ]] && git submodule update --init lib/ORION
+        [[ $OSLO_PATH == $(pwd)'/lib/OSLO/' ]] && git submodule update --init lib/OSLO
+        if [[ $FINER_PATH == $(pwd)'/lib/third_party/FiNeR/' ]]; then
+          git submodule update --init lib/third_party/FiNeR
+          for dep in BeFoR64 FACE FLAP PENF StringiFor; do
+            module=lib/third_party/FiNeR/src/third_party/$dep
+            [[ ! -d $module ]] && git clone https://github.com/szaghi/$dep $module
+          done
         fi
 
         task "Configuring and building $project"
@@ -216,9 +209,11 @@ case "$COMMAND" in
           export FC="gfortran"
           export CXX="g++"
         fi
-        log "Master: $MASTER_TYPE"
         log "Build dir: $BUILD_DIR"
         log "Build type: $BUILD_TYPE"
+        log "ORION path: $ORION_PATH"
+        log "OSLO path: $OSLO_PATH"
+        log "FINER path: $FINER_PATH"
         log "Use OpenMP: $USE_OPENMP"
         log "Use TecIO: $USE_TECIO"
         log "Use MPI: $USE_MPI"
@@ -229,7 +224,7 @@ case "$COMMAND" in
           log "Compilers: FC=$FC, CXX=$CXX"
         fi
         rm -rf $BUILD_DIR
-        cmake -B $BUILD_DIR -DMASTER=$MASTER_TYPE -DUSE_TECIO=$USE_TECIO -DUSE_OPENMP=$USE_OPENMP -DUSE_MPI=$USE_MPI -DUSE_SUNDIALS=$USE_SUNDIALS -DCMAKE_BUILD_TYPE=$BUILD_TYPE || exit 1
+        cmake -B $BUILD_DIR -DORION_PATH=$ORION_PATH -DFINER_PATH=$FINER_PATH -DOSLO_PATH=$OSLO_PATH -DUSE_TECIO=$USE_TECIO -DUSE_OPENMP=$USE_OPENMP -DUSE_MPI=$USE_MPI -DUSE_SUNDIALS=$USE_SUNDIALS -DCMAKE_BUILD_TYPE=$BUILD_TYPE || exit 1
         cmake --build $BUILD_DIR || exit 1
         log "[OK] Compilation successful"
 
@@ -242,17 +237,6 @@ case "$COMMAND" in
         cmake --preset default || exit 1
         cmake --build $BUILD_DIR || exit 1
         log "[OK] Compilation successful"
-        ;;
-    update)
-        task "Updating git submodules"
-        if [[ "$REMOTE" == "true" ]]; then
-          log "Updating submodules to latest remote commit"
-          # git submodule update --init --remote
-        else
-          log "Updating submodules to current commit"
-          # git submodule update --init
-        fi
-        log "[OK] Submodules updated"
         ;;
     *)
         error "Unknown command '$COMMAND'"
