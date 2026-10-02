@@ -27,7 +27,7 @@ cd /path/to/IGLOO/
 
 No prior build is needed. The script:
 
-1. configures `build/verif/` (`-DBUILD_VERIFICATION=ON`, `MASTER=None`, RELEASE,
+1. configures `build/verif/` (`-DBUILD_VERIFICATION=ON`, in-tree `lib/` dependencies, RELEASE,
    OpenMP) — the production `build/` is untouched;
 2. compiles the IGLOO library, the test executables, **and `bin/IGLOO`** — the
    end-to-end cases run this freshly built solver;
@@ -177,7 +177,7 @@ oracle.
 - Most e2e cases hold `INPUT/phase.txt` / `properties.dat` as **relative symlinks**
   into `tests/common/` — if you copy or move a case, re-point them (`ln -sfn`).
   They are invisible to `find -type f`.
-- `test.sh` refreshes `bin/IGLOO` (RELEASE, `MASTER=None`, OpenMP). If your last
+- `test.sh` refreshes `bin/IGLOO` (RELEASE, in-tree `lib/` dependencies, OpenMP). If your last
   production build used different flags (e.g. TecIO or MPI), rebuild it after testing;
   `bin/IGLOO` is a single link target shared by every build tree (see
   [Testing](../development/testing.md)).

@@ -42,7 +42,7 @@ USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # rank-count gates, built in
 
 `test.sh` configures a **separate `build/verif/`** (`build/mpi/` when `USE_MPI=ON`) with
 `-DBUILD_VERIFICATION=ON` (default OFF, so the production build is unchanged), and relinks
-`bin/IGLOO` and `bin/DocGen` from it (same source, RELEASE, `--master=None`) — the executables
+`bin/IGLOO` and `bin/DocGen` from it (same source, RELEASE, in-tree `lib/` dependencies) — the executables
 the e2e cases and `registry-docs` run.
 
 !!! warning "`bin/IGLOO` and `bin/DocGen` are link targets shared by every build tree"

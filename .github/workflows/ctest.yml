@@ -17,16 +17,6 @@ jobs:
           # USE_SUNDIALS needs.
           submodules: true
 
-      - name: Fetch FiNeR dependencies
-        # FiNeR no longer tracks its five dependencies as gitlinks
-        # (src/third_party/.gitignore = *); its own CI fetches them with
-        # `FoBiS.py fetch` at each repository's HEAD. Clone the same set.
-        run: |
-          for dep in BeFoR64 FACE FLAP PENF StringiFor; do
-            git clone --depth 1 https://github.com/szaghi/$dep \
-              lib/third_party/FiNeR/src/third_party/$dep
-          done
-
       - name: Install system dependencies
         run: |
           sudo apt-get update

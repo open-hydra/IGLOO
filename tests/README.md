@@ -20,7 +20,7 @@ USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # the rank-count gates, buil
 Opt-in via `-DBUILD_VERIFICATION=ON` (default OFF, so the production build is
 byte-for-byte untouched). `test.sh` configures a **separate `build/verif/`**
 (`build/mpi/` with `USE_MPI=ON`) and relinks `bin/IGLOO` and `bin/DocGen` from it
-before every run (same source, RELEASE, `MASTER=None`) — the executables the e2e
+before every run (same source, RELEASE, in-tree `lib/` dependencies) — the executables the e2e
 cases and `registry-docs` run, shared by every build tree.
 
 ## Layout

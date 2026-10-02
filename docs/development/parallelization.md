@@ -241,7 +241,7 @@ index instead of the global band turns `mpi-khrt` red at n ≥ 2.
 
 ```bash
 # hybrid MPI + OpenMP
-./install.sh build --master=None --compilers=intel --use-openmp --use-mpi
+./install.sh build --compilers=intel --use-openmp --use-mpi
 mpirun -n 4 ./bin/IGLOO
 ```
 

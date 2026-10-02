@@ -13,7 +13,7 @@ ENDIF(USE_OPENMP)
 
 # MPI (hybrid MPI + OpenMP; see plan-bucket/mpi-parallelization-plan.md).
 #
-# find_package is called HERE, not only at the top level, on purpose. Under --master=hydra the
+# find_package is called HERE, not only at the top level, on purpose. When hydra configures IGLOO the
 # root CMakeLists' `if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)` guard is FALSE, so
 # neither OPTION(USE_MPI) nor SetParallelizationLibrary.cmake runs -- but add_subdirectory(src/lib)
 # is outside that guard and still does. Referencing MPI::MPI_Fortran without this would then be a

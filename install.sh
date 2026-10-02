@@ -193,13 +193,8 @@ case "$COMMAND" in
         task "Cloning submodules"
         [[ $ORION_PATH == $(pwd)'/lib/ORION/' ]] && git submodule update --init lib/ORION
         [[ $OSLO_PATH == $(pwd)'/lib/OSLO/' ]] && git submodule update --init lib/OSLO
-        if [[ $FINER_PATH == $(pwd)'/lib/third_party/FiNeR/' ]]; then
-          git submodule update --init lib/third_party/FiNeR
-          for dep in BeFoR64 FACE FLAP PENF StringiFor; do
-            module=lib/third_party/FiNeR/src/third_party/$dep
-            [[ ! -d $module ]] && git clone https://github.com/szaghi/$dep $module
-          done
-        fi
+        [[ $FINER_PATH == $(pwd)'/lib/third_party/FiNeR/' ]] && git submodule update --init lib/third_party/FiNeR
+        # FiNeR's own dependencies are cloned by CMake at configure time (ensure_finer_dependencies).
 
         task "Configuring and building $project"
         if [[ $COMPILERS == "intel" ]]; then
@@ -223,9 +218,9 @@ case "$COMMAND" in
         else
           log "Compilers: FC=$FC, CXX=$CXX"
         fi
-        rm -rf $BUILD_DIR
-        cmake -B $BUILD_DIR -DORION_PATH=$ORION_PATH -DFINER_PATH=$FINER_PATH -DOSLO_PATH=$OSLO_PATH -DUSE_TECIO=$USE_TECIO -DUSE_OPENMP=$USE_OPENMP -DUSE_MPI=$USE_MPI -DUSE_SUNDIALS=$USE_SUNDIALS -DCMAKE_BUILD_TYPE=$BUILD_TYPE || exit 1
-        cmake --build $BUILD_DIR || exit 1
+        rm -rf "$BUILD_DIR"
+        cmake -B "$BUILD_DIR" -DORION_PATH="$ORION_PATH" -DFINER_PATH="$FINER_PATH" -DOSLO_PATH="$OSLO_PATH" -DUSE_TECIO=$USE_TECIO -DUSE_OPENMP=$USE_OPENMP -DUSE_MPI=$USE_MPI -DUSE_SUNDIALS=$USE_SUNDIALS -DCMAKE_BUILD_TYPE=$BUILD_TYPE || exit 1
+        cmake --build "$BUILD_DIR" || exit 1
         log "[OK] Compilation successful"
 
         task "Write CMakePresets.json"
@@ -235,7 +230,7 @@ case "$COMMAND" in
     compile)
         task "Compiling $project using CMakePresets"
         cmake --preset default || exit 1
-        cmake --build $BUILD_DIR || exit 1
+        cmake --build "$BUILD_DIR" || exit 1
         log "[OK] Compilation successful"
         ;;
     *)
