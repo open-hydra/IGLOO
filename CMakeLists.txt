@@ -80,17 +80,45 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   # -------- Helper: fetch FiNeR's own dependencies --------
   # FiNeR no longer tracks them as gitlinks (its src/third_party/.gitignore is `*`), yet its
   # CMakeLists still add_subdirectory's all five; its own CI fetches them with `FoBiS.py fetch` at
-  # each repository's HEAD. Clone the same set, so a bare `cmake -B build` configures.
+  # each repository's HEAD. Clone the same set at the commits below (the set FiNeR v2.2.0 was
+  # verified with), so a bare `cmake -B build` configures and every build compiles the same sources.
+  set(_FINER_DEP_PIN_BeFoR64    40d19c5f6127088126606b90448e99e02d8b641c)
+  set(_FINER_DEP_PIN_FACE       95226cd6135b9daeb8ff2c748d2065deee230358)
+  set(_FINER_DEP_PIN_FLAP       7f5ec8e1f26be5e2a263fdd2118501b340c0d461)
+  set(_FINER_DEP_PIN_PENF       34e10af852f81822bac0df7c5f73936e0655f54f)
+  set(_FINER_DEP_PIN_StringiFor 77b75b1d7f7012d2984135b231008f751ab32dda)
   macro(ensure_finer_dependencies FINER_ROOT)
     foreach(_dep BeFoR64 FACE FLAP PENF StringiFor)
       set(_dep_dir "${FINER_ROOT}/src/third_party/${_dep}")
-      if (NOT EXISTS "${_dep_dir}/CMakeLists.txt")
-        message(STATUS "FiNeR dependency ${_dep} missing. Cloning https://github.com/szaghi/${_dep}...")
+      set(_dep_url "https://github.com/szaghi/${_dep}")
+      set(_dep_pin "${_FINER_DEP_PIN_${_dep}}")
+      if (NOT EXISTS "${_dep_dir}")
+        message(STATUS "FiNeR dependency ${_dep} missing. Cloning ${_dep_url}...")
         execute_process(
-          COMMAND git clone https://github.com/szaghi/${_dep} "${_dep_dir}"
+          COMMAND git clone ${_dep_url} "${_dep_dir}"
           RESULT_VARIABLE _dep_result)
         if(NOT _dep_result EQUAL 0)
           message(FATAL_ERROR "Failed to clone FiNeR dependency ${_dep} into ${_dep_dir}")
+        endif()
+      elseif (NOT EXISTS "${_dep_dir}/.git")
+        message(FATAL_ERROR "FiNeR dependency ${_dep_dir} exists but is not a git checkout: "
+                            "cannot pin it to ${_dep_pin}; remove it and configure again")
+      endif()
+      execute_process(
+        COMMAND git -C "${_dep_dir}" rev-parse HEAD
+        OUTPUT_VARIABLE _dep_head OUTPUT_STRIP_TRAILING_WHITESPACE)
+      if (NOT _dep_head STREQUAL _dep_pin)
+        message(STATUS "FiNeR dependency ${_dep} at '${_dep_head}'. Checking out ${_dep_pin}...")
+        execute_process(
+          COMMAND git -C "${_dep_dir}" fetch ${_dep_url} ${_dep_pin}
+          RESULT_VARIABLE _dep_result)
+        if(_dep_result EQUAL 0)
+          execute_process(
+            COMMAND git -C "${_dep_dir}" -c advice.detachedHead=false checkout ${_dep_pin}
+            RESULT_VARIABLE _dep_result)
+        endif()
+        if(NOT _dep_result EQUAL 0)
+          message(FATAL_ERROR "Failed to check out FiNeR dependency ${_dep} at ${_dep_pin}")
         endif()
       endif()
     endforeach()
