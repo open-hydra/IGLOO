@@ -274,7 +274,7 @@ contains
     use IGLOO_Lib_Statistics, only: rngSeedFor
     use IGLOO_Mod_MPI,        only: mpi_size_, mpi_abort_all, owns_particle,           &
                                     mpi_allreduce_sum_i4_array, mpi_is_root, rank_suffix, &
-                                    reduce_accumulators
+                                    reduce_accumulators, region_fail_check
     use IGLOO_Mod_Timing,     only: tm_phase, tm_nest, tm_unnest, tm_parcel_begin, tm_parcel_end, &
                                     TM_IDLE, TM_ACCUM, TM_GHOST, TM_SOLVE, TM_LOOP, TM_CENSUS, &
                                     TM_REDUCE, TM_FINALIZE, TM_SMOOTH
@@ -461,6 +461,7 @@ contains
               call tm_parcel_end()
             enddo
             !$OMP END PARALLEL DO
+            call region_fail_check()
             call tm_phase(TM_CENSUS)
 
             !> Shed census of the current generation, indexed by position in its global ID band.
@@ -599,6 +600,7 @@ contains
             call tm_parcel_end()
           enddo
           !$OMP END PARALLEL DO
+          call region_fail_check()
           call tm_phase(TM_SOLVE)
         endif
         end associate group

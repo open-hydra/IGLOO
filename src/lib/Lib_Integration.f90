@@ -39,6 +39,7 @@ contains
     use IGLOO_Lib_Breakup, only: nchild
     use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, eventCrossed, &
                                         eventPassed, solidTransition
+    use IGLOO_Mod_MPI,     only: mpi_size_, region_fail, region_failed
     implicit none
     class(obj_particle),   intent(inout) :: part
     type(obj_block),       intent(in)    :: geoblock(nb)
@@ -104,6 +105,7 @@ contains
     real(R8), parameter :: mBurnTol=1.e-15_R8
 
     nScat = 0            !> before every exit path, so flushScat is always well-defined
+    if (region_failed()) return   !> MPI: a parcel of this loop failed; its rank aborts after the join
     neq = part%neq       !> save local copy of neq
     atGasBoundary = .true.   !> conservative default: geo consulted until proven interior
     nsp = 1              !> nsp = nspecies(part%Iinj(1)) !> for multi-species gas
@@ -364,6 +366,7 @@ contains
       !> time-end reached inside the domain: the parcel's state at the stop.
       if (snapOn .and. part%time>=tEnd .and. .not.part%gone) &
         write(unit=unitSnap,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, part%time
+      if (region_failed()) part%gone = .true.   !> MPI: end every parcel in flight after a failure
       if (part%gone) then
         call writeExitRow()
         part%time = 0._R8
@@ -619,6 +622,12 @@ contains
           print*,'DBG[ODEsystem] bad deltat after update: part=',part%ID, &
                  ' time=',part%time,' deltat=',deltat,' dout=',dout,' din=',din,' dtNew=',dtNew
           print*,'  stateVar(1:nDL)=',part%stateVar(1:nDL)
+          !> MPI: no stop inside the parallel loop; flag it, drop the parcel, abort after the join.
+          if (mpi_size_ > 1) then
+            call region_fail('[ERROR] deltat update produced bad value')
+            doLoop = .false.; part%gone = .true.
+            return
+          endif
           error stop '[ERROR] deltat update produced bad value'
         endif
       endif

@@ -169,6 +169,21 @@ loop body, so MPI and OpenMP are genuinely orthogonal axes.
 integrated sequentially** — the parallelism is over particles *within* a group. There is a
 runtime tripwire: `error stop` if `setupRHS` is ever called inside a parallel region.
 
+### Fatal errors inside the parcel loop
+
+MPI is initialised at `MPI_THREAD_FUNNELED`: every MPI call is made by the master thread
+outside the parallel regions, so a worker thread may neither call `MPI_Abort` nor stop its rank
+while the others wait in the next collective. Under MPI the fatal sites reachable inside the
+parcel loop — a non-finite step size after the update (`integrate`), an unknown BC code at
+injection (`initializePart`), a wedge fold that leaves the sector (`axisymFold`) — record the
+first message (`region_fail`) and drop their parcel; `integrate` returns at entry once a failure
+is recorded and ends the parcels in flight at their next segment; when the loop has joined, the
+master thread calls `region_fail_check`, which prints `[IGLOO rank r] ABORT: <message>` and
+aborts every rank. A serial run stops at the site as before, with the same message and exit
+code. Two guards stay `error stop` under MPI: the gas `cp <= 0` check of the evaporation models
+(a `pure` procedure) and the parameter checks of the breakup size samplers (inside a rejection
+loop); Intel MPI's launcher then ends the whole job on the rank's non-zero exit.
+
 ## Embedding contract
 
 For a parent solver driving IGLOO:

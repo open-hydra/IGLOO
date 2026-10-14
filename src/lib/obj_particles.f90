@@ -195,6 +195,7 @@ contains
   !> Injection velocity, temperature and mdot of a boundary-injected particle from its BC cell.
   subroutine initializePart(self,block,gasblock)
     use IGLOO_data_block, only: obj_flowblock
+    use IGLOO_Mod_MPI,    only: mpi_size_, region_fail
     implicit none
     class(obj_particle), intent(inout) :: self
     type(obj_block),     intent(in)    :: block(nb)
@@ -253,6 +254,12 @@ contains
         self%mdot          = krho * cell%area / self%Ninj
       case default
         write(*,'(A)') ' [initializePart] Particle Initialization Failed'
+        !> MPI: no stop inside the parallel loop; flag it and drop the parcel.
+        if (mpi_size_ > 1) then
+          call region_fail('[initializePart] Particle Initialization Failed')
+          self%gone = .true.
+          return
+        endif
         error stop 1
       end select
     endif

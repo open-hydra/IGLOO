@@ -22,6 +22,12 @@ module IGLOO_Mod_MPI
   public :: mpi_ordered_sum_r8_array, mpi_bcast_r8_array, mpi_bcast_orion
   public :: mpi_allreduce_sum_i4_array
   public :: reduce_accumulators
+  public :: region_fail, region_failed, region_fail_check
+
+  !> First fatal error raised inside a parcel loop under MPI, reported after the loop joins.
+  logical            :: regionFailed = .false.
+  logical            :: regionMsgSet = .false.
+  character(len=256) :: regionMsg = ''
 
   !> Chunk size of array reductions (MPI counts are int32).
   integer, parameter :: MAX_CHUNK = 16777216
@@ -271,6 +277,37 @@ contains
     enddo
 
   end subroutine reduce_accumulators
+
+
+  !> Records a fatal error inside a parcel loop (any thread; the first message is kept). The caller
+  !  abandons its parcel; region_fail_check aborts every rank once the loop has joined.
+  subroutine region_fail(message)
+    character(len=*), intent(in) :: message
+    !$OMP CRITICAL (igloo_region_fail)
+    if (.not. regionMsgSet) then
+      regionMsg    = message
+      regionMsgSet = .true.
+    endif
+    !$OMP END CRITICAL (igloo_region_fail)
+    !$OMP ATOMIC WRITE
+    regionFailed = .true.
+  end subroutine region_fail
+
+
+  !> True once a parcel of the current loop has failed (read by every thread).
+  logical function region_failed()
+    logical :: f
+    !$OMP ATOMIC READ
+    f = regionFailed
+    region_failed = f
+  end function region_failed
+
+
+  !> After a parcel loop has joined (master thread, so MPI_THREAD_FUNNELED holds): aborts every rank
+  !  with the recorded message.
+  subroutine region_fail_check()
+    if (regionFailed) call mpi_abort_all(trim(regionMsg))
+  end subroutine region_fail_check
 
 
   !> Aborts every rank; the fatal path to use wherever MPI may be live.
