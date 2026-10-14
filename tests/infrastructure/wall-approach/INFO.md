@@ -76,5 +76,5 @@ contact, at `x = 0.370000 / 0.420000 / 0.470000` — the a-priori prediction
 `4.0e-6 / 3.3e-5 / 2.6e-4 m`, decay residual 0.54/0.54/0.51 of the bound.
 
 The companion unit gate is [ghost_bc](../ghost_bc/test_ghost_bc.f90), which pins the faces,
-edges, corners, the positivity guard and the 101/201 partner copy — the last has no e2e
-coverage anywhere, since no ord2 fixture in the tree carries those codes.
+edges, corners, the positivity guard and the ghost nodes of connected faces (101/201/102), the
+last also end to end in `two-fam-bc-2blk-stretch-ord2` and `chimera-2blk-shift-ord2`.

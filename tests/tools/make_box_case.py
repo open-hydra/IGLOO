@@ -27,6 +27,9 @@ Geometry / BCs:
     written 100 (ATLAS's unresolved connection, header only).
   - --families F: the face table written once per family (ATLAS's order, block-outermost),
     family c with loading KRHO/c and radius c*rp, and a phase.txt of one material, F groups.
+  - --stretch R: the right half of the cells along x (block 2 with --blocks 2) R times as long as
+    the left half, Lx unchanged; --gradient G: the gas temperature varies linearly along x,
+    T = T_g + G*x at each cell centre (G in K/m).
 
 Variable header is reused VERBATIM from the working nozzle solfile so the name-based
 gas import (allocation.f90 import_gas) maps identically. Vars 4-21 are cell-centered;
@@ -35,6 +38,7 @@ gas vars are set to SI constants, particle vars to 0.
 Usage:
     make_box_case.py <out_dir> [--kv KV] [--kt KT] [--rp RP] [--alpha A] [--blocks 2] [--tg TG]
                      [--nx NX] [--ny NY] [--nz NZ] [--overlap N [--shift S] [--rim]] [--families F]
+                     [--stretch R] [--gradient G]
         writes <out_dir>/solfile.tec and <out_dir>/bc.txt (and phase.txt with --families > 1)
         --kv : inlet velocity scaling  (v0 = kv*|u_g|; 1.0 => no drag slip, Re=0)
         --kt : inlet temperature scaling (Tp0 = kt*T_g; 1.0 => no thermal slip)
@@ -50,6 +54,8 @@ Usage:
         --shift : block 2's offset along x in cells (with --overlap; default 0)
         --rim : block 2 one row shorter in y (with --overlap)
         --families : copies of the face table, one per family (default 1)
+        --stretch : the right half's cells R times the left half's along x (default 1)
+        --gradient : gas temperature gradient along x [K/m] (default 0: uniform)
         Defaults reproduce the drag-stokes case (kv=0.1, kt=1.0, rp=5.945e-6).
 """
 import argparse
@@ -142,7 +148,17 @@ def chimera_donors(layout, rb, g):
     return [(b, i, w / tot) for b, i, w in out]
 
 
-def write_solfile(path, blocks=1, tg=None, nx=NX, ny=NY, nz=NZ, overlap=0, shift=0.0, rim=False):
+def node_x(g, nx, stretch, dx):
+    """x of global node g: uniform, or the right half's cells stretch times the left half's."""
+    if stretch == 1.0:
+        return g * dx
+    h = nx // 2
+    dx1 = LX / (h * (1.0 + stretch))
+    return g * dx1 if g <= h else h * dx1 + (g - h) * stretch * dx1
+
+
+def write_solfile(path, blocks=1, tg=None, nx=NX, ny=NY, nz=NZ, overlap=0, shift=0.0, rim=False,
+                  stretch=1.0, gradient=None):
     layout = block_layout(blocks, nx, ny, overlap, shift, rim)
     dx, dy, dz = LX / nx, LY / ny, LZ / nz
     with open(path, "w") as f:
@@ -163,12 +179,19 @@ def write_solfile(path, blocks=1, tg=None, nx=NX, ny=NY, nz=NZ, overlap=0, shift
                             val = (i0 + i, j, k)[comp] * (dx, dy, dz)[comp]
                             if comp == 0 and sh:
                                 val = (i0 + i + sh) * dx
+                            if comp == 0 and stretch != 1.0:
+                                val = node_x(i0 + i, nx, stretch, dx)
                             buf.append(f"  {val:.15E}\n")
                 f.writelines(buf)
-            # cell-centered gas/particle vars: ncell identical constants each
+            # cell-centered gas/particle vars: ncell identical constants each (T linear in x with --gradient)
             for name, val in GAS_VARS:
                 if name == "T" and tg is not None:
                     val = tg
+                if name == "T" and gradient:
+                    xs = [node_x(i0 + i + sh, nx, stretch, dx) for i in range(ncx + 1)]
+                    row = [f"  {val + gradient * 0.5 * (xs[i] + xs[i + 1]):.15E}\n" for i in range(ncx)]
+                    f.writelines(row * (ncy * nz))
+                    continue
                 f.writelines([f"  {val:.15E}\n"] * ncell)
     return I, J, K, nnode, ncell
 
@@ -262,6 +285,9 @@ def main():
     p.add_argument("--shift", type=float, default=0.0, help="block 2's x offset in cells (with --overlap)")
     p.add_argument("--rim", action="store_true", help="block 2 one row shorter in y (with --overlap)")
     p.add_argument("--families", type=int, default=1, help="one face-table copy per family (default 1)")
+    p.add_argument("--stretch", type=float, default=1.0,
+                   help="the right half's cells along x this many times the left half's (default 1)")
+    p.add_argument("--gradient", type=float, default=0.0, help="gas temperature gradient along x [K/m]")
     a = p.parse_args()
     if a.law:
         global SIGMAP, LAW
@@ -276,10 +302,12 @@ def main():
         p.error("--rim needs --ny >= 2")
     if a.families < 1:
         p.error("--families must be >= 1")
+    if a.stretch <= 0.0 or (a.stretch != 1.0 and (a.overlap or a.nx % 2)):
+        p.error("--stretch must be > 0, with an even --nx and no --overlap")
     os.makedirs(a.out_dir, exist_ok=True)
     I, J, K, nnode, ncell = write_solfile(os.path.join(a.out_dir, "solfile.tec"), a.blocks, a.tg,
                                           nx=a.nx, ny=a.ny, nz=a.nz, overlap=a.overlap, shift=a.shift,
-                                          rim=a.rim)
+                                          rim=a.rim, stretch=a.stretch, gradient=a.gradient)
     n_inlet = write_bc(os.path.join(a.out_dir, "bc.txt"), a.kv, a.kt, a.rp, a.alpha,
                        periodic_y=a.periodic_y, blocks=a.blocks, nx=a.nx, ny=a.ny, nz=a.nz,
                        overlap=a.overlap, shift=a.shift, rim=a.rim, families=a.families)
@@ -288,11 +316,16 @@ def main():
     print(f"[ok] box solfile: I={I} J={J} K={K} nnode={nnode} ncell={ncell} "
           + ("(3D, mesh2D=False)" if a.nz > 1 else "(one k-layer, mesh2D=True)")
           + (f" for the last block, 2 blocks overlapping by {2 * a.overlap} cells, joined by chimera (102) faces"
-             if a.overlap else " per block, 2 blocks joined at x = Lx/2 by 101 records" if a.blocks == 2 else ""))
+             if a.overlap else " per block, 2 blocks joined at the middle node plane by 101 records" if a.blocks == 2
+             else ""))
     print(f"[ok] bc.txt: {n_inlet} inlet (401) cells on face 1; "
           + ("faces 3/4 periodic (201), rest wall (400)" if a.periodic_y
              else "all other faces wall (400)"))
-    print(f"     domain x[0,{LX}] y[0,{LY}] z[0,{LZ}]; dx={LX/a.nx*1e3:.2f}mm")
+    if a.stretch != 1.0:
+        dx1 = node_x(1, a.nx, a.stretch, LX / a.nx)
+        print(f"     domain x[0,{LX}] y[0,{LY}] z[0,{LZ}]; dx={dx1*1e3:.4f}mm then {a.stretch*dx1*1e3:.4f}mm")
+    else:
+        print(f"     domain x[0,{LX}] y[0,{LY}] z[0,{LZ}]; dx={LX/a.nx*1e3:.2f}mm")
     print(f"     inlet: kv={a.kv} (v0={a.kv*10:.3g} m/s)  kt={a.kt}  rp={a.rp} (d={2*a.rp*1e6:.3g} um)")
 
 

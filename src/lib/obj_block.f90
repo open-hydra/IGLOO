@@ -4,7 +4,7 @@ module IGLOO_data_block
   implicit none
   private
   public :: fillGhostPartners
-  public :: buildInterfaceLinks, reportNonAligned, hasConnectedFaces
+  public :: buildInterfaceLinks, reportNonAligned, hasConnectedFaces, buildGhostLinks
   public :: mollifyEulerBlocks, mollifySourceBlocks
 
   type, public :: obj_bc_cell
@@ -55,6 +55,15 @@ module IGLOO_data_block
     procedure, pass(self), public :: fmn2ijk
   end type obj_block
 
+  !> A ghost node (gi,gj,gk) of a connected face (or an edge or corner next to one) and the dual cell
+  !  sc of block sb holding it, with the weights of that cell's nodes (getVertices order).
+  type, public :: ghostLink
+    integer  :: gi = 0, gj = 0, gk = 0
+    integer  :: sb = 0, sc(3) = 0
+    real(R8) :: w(8) = 0._R8
+    logical  :: edge = .false.
+  end type ghostLink
+
   type, extends(obj_block), public :: obj_flowblock
     integer :: nproperties
     real(R8), dimension(:,:,:,:), allocatable :: density
@@ -65,6 +74,8 @@ module IGLOO_data_block
     logical,  dimension(:,:,:),   allocatable :: isDeformed
     !> dual ghost nodes that fill_dual_nodes projected onto the symmetry axis
     logical,  dimension(:,:,:),   allocatable :: nodeOnAxis
+    !> ghost nodes at connected faces and where they lie in the connected block's dual mesh
+    type(ghostLink), allocatable :: glink(:)
   contains
     private
     procedure, pass(self), public :: allocate
@@ -1359,7 +1370,8 @@ contains
   !> bc value of one face ghost (g*) after the linear fill: gas-solid planes (300/301) mirror the
   !  interior partner's (i*) normal velocity; a non-positive extrapolated scalar falls back to
   !  zero-gradient. Every other code keeps the linear fill -- 400 (an outlet, the box generators'
-  !  outlet/side code), 100 (ATLAS's unresolved connection), 102 (chimera); 101/201 are the partner pass.
+  !  outlet/side code), 100 (ATLAS's unresolved connection); fillGhostPartners then overwrites the
+  !  ghosts of 101/103/201/102 faces with the connected block's gas.
   subroutine bcFaceGhost(self, cell, gi, gj, gk, ii, ij, ik)
     implicit none
     class(obj_flowblock), intent(inout) :: self
@@ -1379,7 +1391,7 @@ contains
         self%gam        (   gi,gj,gk) = self%gam        (   ii,ij,ik)
         self%R          (   gi,gj,gk) = self%R          (   ii,ij,ik)
       endif
-    case default   !> 0, 100, 102, 4xx, non-axis 200 (axisGhost overrides on-axis nodes), 101/201: linear fill
+    case default   !> 0, 100, 4xx, non-axis 200 (axisGhost overrides on-axis nodes), 101/103/201/102: linear fill
     end select
   end subroutine bcFaceGhost
 
@@ -1427,46 +1439,243 @@ contains
   end subroutine bcEdgeGhost
 
 
-  !> 101/201 face ghosts: the partner block's boundary-adjacent interior state, per sweep. The
-  !  partner may be the same block, so this cannot be a type-bound method taking `gasall` beside
-  !  `self`. Edge ghosts next to such a face stay cascaded from the pre-copy face values, as the
-  !  retired setup pass left them.
+  !> Ghost nodes at connected faces (101, 103 with a partner, 201, 102), per sweep: the gas of the
+  !  connected block interpolated at the node, from the ring every block holds after
+  !  fillGhostGradient (every value is computed before any is written, so no block reads another's
+  !  overridden ring); edge and corner nodes then take the mirrors of their solid faces again. The
+  !  links are built on the first call unless buildGhostLinks ran.
   subroutine fillGhostPartners(gasall, geoall)
     implicit none
     type(obj_flowblock), intent(inout) :: gasall(:)
     type(obj_block),     intent(in)    :: geoall(:)
-    integer :: b, f, m, n, gi, gj, gk
+    type(blockField), allocatable :: val(:)
+    integer :: b, l, ns, nin, nmiss
 
+    if (.not. allocated(gasall(1)%glink)) call buildGhostLinks(gasall, geoall, nin, nmiss)
+    ns = size(gasall(1)%density, 1)
+    allocate(val(size(gasall)))
     do b = 1, size(gasall)
-      associate(gas => gasall(b), blk => geoall(b))
-      do f = 1, 6
-        if (f >= 5 .and. gas%Nz == 1) cycle
-        do n = 1, blk%face(f)%Nn; do m = 1, blk%face(f)%Nm
-          associate(cell => blk%face(f)%cell(m,n))
-          if (cell%bcdef == 101 .or. cell%bcdef == 201) then
-            select case (f)
-            case(1); gi = 0;        gj = m; gk = n
-            case(2); gi = gas%Nx+1; gj = m; gk = n
-            case(3); gi = m; gj = 0;        gk = n
-            case(4); gi = m; gj = gas%Ny+1; gk = n
-            case(5); gi = m; gj = n; gk = 0
-            case(6); gi = m; gj = n; gk = gas%Nz+1
-            end select
-            associate(p => gasall(cell%connection(1)), ip => cell%connection(2), &
-                      jp => cell%connection(3),        kp => cell%connection(4))
-            gas%density    (:, gi,gj,gk) = p%density    (:, ip,jp,kp)
-            gas%velocity   (:, gi,gj,gk) = p%velocity   (:, ip,jp,kp)
-            gas%temperature(   gi,gj,gk) = p%temperature(   ip,jp,kp)
-            gas%mil(gi,gj,gk) = p%mil(ip,jp,kp);  gas%kl(gi,gj,gk) = p%kl(ip,jp,kp)
-            gas%gam(gi,gj,gk) = p%gam(ip,jp,kp);  gas%R (gi,gj,gk) = p%R (ip,jp,kp)
-            end associate
-          endif
-          end associate
-        enddo; enddo
+      allocate(val(b)%q(ns + 8, size(gasall(b)%glink), 1))
+      do l = 1, size(gasall(b)%glink)
+        associate(g => gasall(b)%glink(l))
+        if (g%sb > 0) call interpNodes(gasall(g%sb), g, ns, val(b)%q(:, l, 1))
+        end associate
+      enddo
+    enddo
+    do b = 1, size(gasall)
+      associate(gas => gasall(b))
+      do l = 1, size(gas%glink)
+        associate(g => gas%glink(l), v => val(b)%q(:, l, 1))
+        if (g%sb == 0) cycle
+        gas%density (:, g%gi, g%gj, g%gk) = v(1:ns)
+        gas%velocity(:, g%gi, g%gj, g%gk) = v(ns+1:ns+3)
+        gas%temperature(g%gi, g%gj, g%gk) = v(ns+4)
+        gas%mil(g%gi, g%gj, g%gk) = v(ns+5); gas%kl(g%gi, g%gj, g%gk) = v(ns+6)
+        gas%gam(g%gi, g%gj, g%gk) = v(ns+7); gas%R (g%gi, g%gj, g%gk) = v(ns+8)
+        end associate
+      enddo
+      do l = 1, size(gas%glink)
+        if (gas%glink(l)%sb > 0 .and. gas%glink(l)%edge) &
+          call bcEdgeGhost(gas, geoall(b), gas%glink(l)%gi, gas%glink(l)%gj, gas%glink(l)%gk)
       enddo
       end associate
     enddo
+
+  contains
+
+    !> The gas of block src at the link's position: the weighted sum over its dual cell's nodes.
+    subroutine interpNodes(src, g, ns, v)
+      type(obj_flowblock), intent(in)  :: src
+      type(ghostLink),     intent(in)  :: g
+      integer,             intent(in)  :: ns
+      real(R8),            intent(out) :: v(:)
+      integer :: k, nn, idx(3,8)
+      call dualNodes(g%sc, src%Nz == 1, nn, idx)
+      v = 0._R8
+      do k = 1, nn
+        associate(i => idx(1,k), j => idx(2,k), kk => idx(3,k))
+        v(1:ns)      = v(1:ns)      + g%w(k)*src%density (:, i, j, kk)
+        v(ns+1:ns+3) = v(ns+1:ns+3) + g%w(k)*src%velocity(:, i, j, kk)
+        v(ns+4) = v(ns+4) + g%w(k)*src%temperature(i, j, kk)
+        v(ns+5) = v(ns+5) + g%w(k)*src%mil(i, j, kk)
+        v(ns+6) = v(ns+6) + g%w(k)*src%kl (i, j, kk)
+        v(ns+7) = v(ns+7) + g%w(k)*src%gam(i, j, kk)
+        v(ns+8) = v(ns+8) + g%w(k)*src%R  (i, j, kk)
+        end associate
+      enddo
+    end subroutine interpNodes
+
   end subroutine fillGhostPartners
+
+
+  !> The dual nodes of dual cell c in getVertices order (4 on a planar 2D mesh, 8 in 3D).
+  pure subroutine dualNodes(c, planar, nn, idx)
+    implicit none
+    integer, intent(in)  :: c(3)
+    logical, intent(in)  :: planar
+    integer, intent(out) :: nn, idx(3,8)
+    if (planar) then
+      nn = 4
+      idx(:,1:4) = reshape([c(1)-1, c(2)-1, 1,  c(1), c(2)-1, 1,  c(1), c(2), 1,  c(1)-1, c(2), 1], [3, 4])
+    else
+      nn = 8
+      idx = reshape([c(1)-1, c(2)-1, c(3)-1,  c(1)-1, c(2)-1, c(3),  c(1)-1, c(2), c(3),  c(1)-1, c(2), c(3)-1, &
+                     c(1),   c(2)-1, c(3)-1,  c(1),   c(2)-1, c(3),  c(1),   c(2), c(3),  c(1),   c(2), c(3)-1], [3, 8])
+    endif
+  end subroutine dualNodes
+
+
+  !> For every ghost node of a connected face (101 or 103 with a partner cell, 201, 102) -- the face
+  !  nodes and the edge and corner nodes of its plane, a node shared by two connected faces taken
+  !  by the first -- the dual cell of the connected block holding it (after the periodic translation
+  !  for 201; for 102 in the layer-1 donors' blocks by decreasing weight) and the weights there.
+  !  Nodes on the symmetry axis are left out. nin nodes are located, nmiss are not (they keep the
+  !  ring's own fill); nfar 102 nodes lie in a dual cell none of whose nodes is a listed donor or
+  !  next to one (interpolated all the same).
+  subroutine buildGhostLinks(gasall, geoall, nin, nmiss, nfar)
+    use IGLOO_variables, only: mesh2D
+    implicit none
+    type(obj_flowblock), intent(inout) :: gasall(:)
+    type(obj_block),     intent(in)    :: geoall(:)
+    integer,             intent(out)   :: nin, nmiss
+    integer, optional,   intent(out)   :: nfar
+    type(ghostLink), allocatable :: tmp(:)
+    logical, allocatable :: done(:,:,:)
+    integer :: b, f, nf, a1, a2, ga, gb, gi, gj, gk, m, n, kmin, kmax, nl, d, t, cb, pm, pn, nfr
+    logical :: found
+    logical, allocatable :: tried(:)
+    real(R8) :: p(3), tr(3)
+
+    nin = 0; nmiss = 0; nfr = 0
+    nf = merge(4, 6, mesh2D)
+    do b = 1, size(gasall)
+      associate(gas => gasall(b), blk => geoall(b))
+      kmin = merge(1, 0, mesh2D); kmax = merge(1, gas%Nz + 1, mesh2D)
+      allocate(done(0:gas%Nx+1, 0:gas%Ny+1, kmin:kmax))
+      done = .false.
+      allocate(tmp(2*((gas%Nx+2)*(gas%Ny+2) + (gas%Nx+2)*(kmax-kmin+1) + (gas%Ny+2)*(kmax-kmin+1))))
+      nl = 0
+      do f = 1, nf
+        !> the plane's two in-plane index ranges
+        select case (f)
+        case (1, 2); a1 = gas%Ny; a2 = merge(1, gas%Nz, mesh2D)
+        case (3, 4); a1 = gas%Nx; a2 = merge(1, gas%Nz, mesh2D)
+        case (5, 6); a1 = gas%Nx; a2 = gas%Ny
+        end select
+        do gb = merge(1, 0, mesh2D .and. f <= 4), merge(1, a2 + 1, mesh2D .and. f <= 4)
+          do ga = 0, a1 + 1
+            m = min(max(ga, 1), a1); n = min(max(gb, 1), a2)
+            select case (f)
+            case (1); gi = 0;        gj = ga; gk = gb
+            case (2); gi = gas%Nx+1; gj = ga; gk = gb
+            case (3); gi = ga; gj = 0;        gk = gb
+            case (4); gi = ga; gj = gas%Ny+1; gk = gb
+            case (5); gi = ga; gj = gb; gk = 0
+            case (6); gi = ga; gj = gb; gk = gas%Nz+1
+            end select
+            if (done(gi,gj,gk)) cycle
+            associate(cell => blk%face(f)%cell(m,n))
+            select case (cell%bcdef)
+            case (101, 103, 201); if (cell%connection(1) <= 0) cycle
+            case (102)
+            case default; cycle
+            end select
+            done(gi,gj,gk) = .true.
+            if (allocated(gas%nodeOnAxis)) then
+              if (gas%nodeOnAxis(gi,gj,gk)) cycle
+            endif
+            nl = nl + 1
+            tmp(nl) = ghostLink(gi=gi, gj=gj, gk=gk, edge=(ga < 1 .or. ga > a1 .or. gb < 1 .or. gb > a2))
+            p = gas%node(:, gi, gj, gk)
+            found = .false.
+            select case (cell%bcdef)
+            case (101, 103)
+              cb = cell%connection(1)
+              call locateDual(gasall(cb), p, cell%connection(2:4), tmp(nl)%sc, tmp(nl)%w, found)
+            case (201)
+              cb = cell%connection(1)
+              call geoall(cb)%ijk2fmn(cell%connection(2), cell%connection(3), cell%connection(4), &
+                                      cell%connectionFace, pm, pn)
+              if (pm > 0) then
+                tr = geoall(cb)%face(cell%connectionFace)%cell(pm,pn)%center - cell%center
+                if (mesh2D) tr(3) = 0._R8
+                call locateDual(gasall(cb), p + tr, cell%connection(2:4), tmp(nl)%sc, tmp(nl)%w, found)
+              endif
+            case (102)
+              allocate(tried(cell%chimN(1)))
+              tried = .false.
+              do t = 1, cell%chimN(1)
+                d = maxloc(cell%chimW, dim=1, mask=.not.tried)
+                tried(d) = .true.
+                cb = cell%chimDonor(d,1)
+                call locateDual(gasall(cb), p, cell%chimDonor(d,2:4), tmp(nl)%sc, tmp(nl)%w, found)
+                if (found) exit
+              enddo
+              deallocate(tried)
+              !> dual cell c spans geo cells c-1..c: a donor within one cell of them
+              if (found) then
+                if (.not. any([(cell%chimDonor(t,1) == cb .and. &
+                                all(abs(2*cell%chimDonor(t,2:4) - 2*tmp(nl)%sc + 1) <= 3), &
+                                t = 1, cell%chimN(1))])) nfr = nfr + 1
+              endif
+            end select
+            end associate
+            if (found) then
+              tmp(nl)%sb = cb; nin = nin + 1
+            else
+              tmp(nl)%sb = 0; nmiss = nmiss + 1
+            endif
+          enddo
+        enddo
+      enddo
+      gas%glink = tmp(1:nl)
+      deallocate(tmp, done)
+      end associate
+    enddo
+    if (present(nfar)) nfar = nfr
+  end subroutine buildGhostLinks
+
+
+  !> The dual cell of gas holding p, searched in a box of +-2 cells around the seed's indices and
+  !  then over the whole dual mesh, with the weights of its nodes at p: a cell holds p when every
+  !  weight is >= -1e-12 (p on a face shared by two cells is taken by the first).
+  subroutine locateDual(gas, p, seed, c, w, found)
+    use IGLOO_variables, only: mesh2D
+    use Lib_Equations,   only: dualShapeWeights
+    implicit none
+    type(obj_flowblock), intent(in)  :: gas
+    real(R8),            intent(in)  :: p(3)
+    integer,             intent(in)  :: seed(3)
+    integer,             intent(out) :: c(3)
+    real(R8),            intent(out) :: w(8)
+    logical,             intent(out) :: found
+    integer  :: hi(3), lo(3), up(3), ci, cj, ck, nv, nd, pass
+    real(R8) :: vert(3,8), wt(8), bmin(3), bmax(3), pad
+
+    found = .false.
+    c = 0; w = 0._R8
+    nv = merge(4, 8, mesh2D); nd = merge(2, 3, mesh2D)
+    hi = [gas%Nx + 1, gas%Ny + 1, merge(1, gas%Nz + 1, mesh2D)]
+    do pass = 1, 2
+      if (pass == 1) then
+        lo = max(1, min(seed, hi) - 2); up = min(hi, max(seed, 1) + 2)
+      else
+        lo = 1; up = hi
+      endif
+      do ck = lo(3), up(3); do cj = lo(2), up(2); do ci = lo(1), up(1)
+        call gas%getVertices([ci, cj, ck], vert(:,1:nv), mesh2D)
+        bmin(1:nd) = minval(vert(1:nd,1:nv), dim=2); bmax(1:nd) = maxval(vert(1:nd,1:nv), dim=2)
+        pad = 1.e-12_R8*maxval(bmax(1:nd) - bmin(1:nd))
+        if (any(p(1:nd) < bmin(1:nd) - pad) .or. any(p(1:nd) > bmax(1:nd) + pad)) cycle
+        call dualShapeWeights(vert(:,1:nv), nv, p, wt(1:nv))
+        if (.not. all(wt(1:nv) >= -1.e-12_R8)) cycle
+        c = [ci, cj, ck]
+        w(1:nv) = wt(1:nv)
+        found = .true.
+        return
+      enddo; enddo; enddo
+    enddo
+  end subroutine locateDual
 
 
   !> Link table of the 101 face cells, one entry per cell: the partner cell and face of its

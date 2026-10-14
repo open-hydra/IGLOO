@@ -7,6 +7,7 @@ module Lib_Equations
     public :: interphase
     public :: interp2ndOrder
     public :: interp2ndOrder2D
+    public :: dualShapeWeights
     public :: sampleGas2D
     public :: meridianToAzimuth
     public :: toMeridian
@@ -145,6 +146,126 @@ contains
     end subroutine getShapeFunctions
 
   end subroutine interp2ndOrder
+
+  !> Weights of the nodes of a dual cell at p, in getVertices order (8 in 3D, 4 in a planar 2D cell):
+  !  a node within 1e-12 of the cell diagonal of p takes the whole weight; in a cell aligned with the
+  !  axes the local coordinates are the position along each edge; otherwise Newton on the trilinear
+  !  (bilinear) map to |F| < 1e-14 of the diagonal, at most 50 iterations.
+  pure subroutine dualShapeWeights(vertices, nv, p, w)
+    implicit none
+    integer,  intent(in)  :: nv
+    real(R8), intent(in)  :: vertices(3,nv), p(3)
+    real(R8), intent(out) :: w(nv)
+    real(R8) :: h, tb, xi(3), F(3), J(3,3), N(8), dN(3,8), detJ, d(3), dist
+    integer  :: iter, i, k
+
+    if (nv == 8) then; h = norm2(vertices(:,7) - vertices(:,1))
+    else;              h = norm2(vertices(1:2,3) - vertices(1:2,1)); endif
+    k = 0
+    dist = huge(1._R8)
+    do i = 1, nv
+      if (nv == 8) then
+        if (norm2(p - vertices(:,i)) < dist) then; dist = norm2(p - vertices(:,i)); k = i; endif
+      else
+        if (norm2(p(1:2) - vertices(1:2,i)) < dist) then; dist = norm2(p(1:2) - vertices(1:2,i)); k = i; endif
+      endif
+    enddo
+    if (dist <= 1.e-12_R8*h) then
+      w = 0._R8; w(k) = 1._R8
+      return
+    endif
+    tb = 1.e-13_R8*h
+
+    if (nv == 4) then
+      if (abs(vertices(1,1) - vertices(1,4)) <= tb .and. abs(vertices(1,2) - vertices(1,3)) <= tb .and. &
+          abs(vertices(2,1) - vertices(2,2)) <= tb .and. abs(vertices(2,3) - vertices(2,4)) <= tb) then
+        xi(1) = (p(1) - vertices(1,1))/(vertices(1,2) - vertices(1,1))
+        xi(2) = (p(2) - vertices(2,1))/(vertices(2,4) - vertices(2,1))
+      else
+        xi(1:2) = 0.5_R8
+        do iter = 1, 50
+          call quad(xi(1), xi(2), N(1:4), dN(1:2,1:4))
+          F(1:2) = -p(1:2)
+          do i = 1, 4
+            F(1:2) = F(1:2) + N(i)*vertices(1:2,i)
+          enddo
+          if (norm2(F(1:2)) < 1.e-14_R8*h) exit
+          J(1:2,1:2) = 0._R8
+          do i = 1, 4
+            J(1:2,1) = J(1:2,1) + dN(1,i)*vertices(1:2,i)
+            J(1:2,2) = J(1:2,2) + dN(2,i)*vertices(1:2,i)
+          enddo
+          detJ = J(1,1)*J(2,2) - J(1,2)*J(2,1)
+          d(1) = ( J(2,2)*F(1) - J(1,2)*F(2))/detJ
+          d(2) = (-J(2,1)*F(1) + J(1,1)*F(2))/detJ
+          xi(1:2) = xi(1:2) - d(1:2)
+        enddo
+      endif
+      call quad(xi(1), xi(2), N(1:4), dN(1:2,1:4))
+      w = N(1:4)
+      return
+    endif
+
+    if (maxval(abs(vertices(1,1:4) - vertices(1,1))) <= tb .and. maxval(abs(vertices(1,5:8) - vertices(1,7))) <= tb .and. &
+        maxval(abs(vertices(2,[1,2,5,6]) - vertices(2,1))) <= tb .and.                                              &
+        maxval(abs(vertices(2,[3,4,7,8]) - vertices(2,7))) <= tb .and.                                              &
+        maxval(abs(vertices(3,[1,4,5,8]) - vertices(3,1))) <= tb .and.                                              &
+        maxval(abs(vertices(3,[2,3,6,7]) - vertices(3,7))) <= tb) then
+      xi = (p - vertices(:,1))/(vertices(:,7) - vertices(:,1))
+    else
+      xi = 0.5_R8
+      do iter = 1, 50
+        call hex(xi, N, dN)
+        F = -p
+        do i = 1, 8
+          F = F + N(i)*vertices(:,i)
+        enddo
+        if (norm2(F) < 1.e-14_R8*h) exit
+        J = 0._R8
+        do i = 1, 8
+          J(:,1) = J(:,1) + dN(1,i)*vertices(:,i)
+          J(:,2) = J(:,2) + dN(2,i)*vertices(:,i)
+          J(:,3) = J(:,3) + dN(3,i)*vertices(:,i)
+        enddo
+        detJ = J(1,1)*(J(2,2)*J(3,3) - J(2,3)*J(3,2)) - J(1,2)*(J(2,1)*J(3,3) - J(2,3)*J(3,1)) + &
+               J(1,3)*(J(2,1)*J(3,2) - J(2,2)*J(3,1))
+        d(1) = (F(1)*(J(2,2)*J(3,3) - J(2,3)*J(3,2)) + F(2)*(J(1,3)*J(3,2) - J(1,2)*J(3,3)) + &
+                F(3)*(J(1,2)*J(2,3) - J(1,3)*J(2,2)))/detJ
+        d(2) = (F(1)*(J(2,3)*J(3,1) - J(2,1)*J(3,3)) + F(2)*(J(1,1)*J(3,3) - J(1,3)*J(3,1)) + &
+                F(3)*(J(1,3)*J(2,1) - J(1,1)*J(2,3)))/detJ
+        d(3) = (F(1)*(J(2,1)*J(3,2) - J(2,2)*J(3,1)) + F(2)*(J(1,2)*J(3,1) - J(1,1)*J(3,2)) + &
+                F(3)*(J(1,1)*J(2,2) - J(1,2)*J(2,1)))/detJ
+        xi = xi - d
+      enddo
+    endif
+    call hex(xi, N, dN)
+    w = N
+
+  contains
+
+    !> Trilinear shape functions and derivatives, getVertices order (u along i, v along j, w along k).
+    pure subroutine hex(c, N, dN)
+      real(R8), intent(in)  :: c(3)
+      real(R8), intent(out) :: N(8), dN(3,8)
+      real(R8) :: u, v, s
+      u = c(1); v = c(2); s = c(3)
+      N = [(1-u)*(1-v)*(1-s), (1-u)*(1-v)*s, (1-u)*v*s, (1-u)*v*(1-s), &
+           u*(1-v)*(1-s),     u*(1-v)*s,     u*v*s,     u*v*(1-s)]
+      dN(1,:) = [-(1-v)*(1-s), -(1-v)*s, -v*s, -v*(1-s), (1-v)*(1-s), (1-v)*s, v*s, v*(1-s)]
+      dN(2,:) = [-(1-u)*(1-s), -(1-u)*s, (1-u)*s, (1-u)*(1-s), -u*(1-s), -u*s, u*s, u*(1-s)]
+      dN(3,:) = [-(1-u)*(1-v), (1-u)*(1-v), (1-u)*v, -(1-u)*v, -u*(1-v), u*(1-v), u*v, -u*v]
+    end subroutine hex
+
+    !> Bilinear shape functions and derivatives of a planar quad, getVertices order.
+    pure subroutine quad(u, v, N, dN)
+      real(R8), intent(in)  :: u, v
+      real(R8), intent(out) :: N(4), dN(2,4)
+      N = [(1-u)*(1-v), u*(1-v), u*v, (1-u)*v]
+      dN(1,:) = [-(1-v), (1-v), v, -v]
+      dN(2,:) = [-(1-u), -u, u, (1-u)]
+    end subroutine quad
+
+  end subroutine dualShapeWeights
 
   !> Bilinear interpolation of the gas at p0 in a quadrilateral: analytic inverse map, then
   !  shape-function weighting.

@@ -4,7 +4,7 @@ module IGLOO_module
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_data_block, only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, fillGhostPartners, &
                               buildInterfaceLinks, reportNonAligned, mollifyEulerBlocks, mollifySourceBlocks, &
-                              hasConnectedFaces
+                              hasConnectedFaces, buildGhostLinks
   use IGLOO_data_phases, only: obj_material
   use IGLOO_Lib_Mollify, only: cellLink
   implicit none
@@ -71,7 +71,7 @@ contains
     type(orion_data)     :: own_gas
     character(len=llen)  :: gasfile
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
-    integer              :: m, g, fam, nthreads
+    integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar
     character(len=2)     :: method
 
     if (self%staticDone) then
@@ -133,6 +133,13 @@ contains
     call buildInterfaceLinks(self%geoblock, self%links)
     if (mpi_is_root) call reportNonAligned(self%links)
     self%connFaces = hasConnectedFaces(self%geoblock)
+    if (ord2) then
+      call buildGhostLinks(self%gasblock, self%geoblock, nGhostIn, nGhostMiss, nGhostFar)
+      if (mpi_is_root .and. nGhostIn + nGhostMiss > 0) write(*,'(A,2(I0,A))') &
+        ' [IGLOO] ghost nodes at connected faces: ', nGhostIn, ' interpolated, ', nGhostMiss, ' not covered'
+      if (mpi_is_root .and. nGhostFar > 0) write(*,'(A,I0)') &
+        ' [IGLOO] chimera ghost nodes located away from their ATLAS donors: ', nGhostFar
+    endif
     call tm_phase(TM_PIN)
     call initRandomSeed(rng_seed)   ! before pinning: stochastic injection diameters
     fam = 0

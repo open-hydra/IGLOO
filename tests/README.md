@@ -50,7 +50,7 @@ tests/
 ├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
 │   └── tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/   # e2e
 ├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/
-│   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ chimera-2blk/ chimera-2blk-rim/ periodic-y/ periodic-2d/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ varcp-tmin/ psd-bare-token/   # e2e
+│   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ periodic-y/ periodic-2d/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ varcp-tmin/ psd-bare-token/   # e2e
 │   └── refusals/{p2t,zgr,lk-d2law,properties-*,bc-copies,bc-copy-order,chimera-*,*-token,phase-token-real,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre,psd-*}/   # setup-refusal gates
 ├── repeatability/                # two-sweep gates: drag-stokes/ drag-stokes-dopri5/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/ tab-dopri5/ solid-box/ evap-breakup/
 └── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ bc-center-2grp/ two-mat/ consistency/ consistency-two-mat/
@@ -97,7 +97,7 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 180/180 in a serial build (140 e2e + 39 unit, `self_test` and `registry-docs` among the latter, and the
+ctest 182/182 in a serial build (142 e2e + 39 unit, `self_test` and `registry-docs` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
 is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 7 more `mpi-*` cases, 185/185. The e2e entries are 79 solver cases, two further
 oracles on `khrt-e2e`'s run, the twelve two-sweep gates and the forty-six setup refusals; the unit entries are 34
@@ -109,7 +109,8 @@ ODE breakup (model 4), breakup events in the mass state and the KH-shed source a
 `scatter-weight`, `scatter-weight-evap` and `scatter-weight-solid`. Reading a boundary file of several blocks and
 families, and a parcel's crossing of a block interface, are gated by `two-fam-bc-2blk`; the field mollifier
 across a block interface by `two-fam-bc-2blk-mollify` and `test_mollify_blocks`; chimera faces by `chimera-2blk`,
-`chimera-2blk-rim` and `test_bc_families`. The enthalpy state of a varying-cp material, on
+`chimera-2blk-rim` and `test_bc_families`; the gas ghost nodes of connected faces by
+`two-fam-bc-2blk-stretch-ord2`, `chimera-2blk-shift-ord2` and `test_ghost_bc`. The enthalpy state of a varying-cp material, on
 tables that start above 1 K, is gated by `test_properties_reader` (PR14), `temp-relax-varcp` and `varcp-tmin`; a density
 that varies with temperature by `temp-relax-varrho` (the diameter at constant mass) and `tab-varrho`,
 `tab-evap-frozen-varrho` and `khrt-varrho` (the mass kept between breakup events and conserved across them).

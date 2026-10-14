@@ -190,8 +190,16 @@ The gas state vector at a particle position is assembled as:
 | 9 | $k_g$ (W m⁻¹ K⁻¹) |
 
 When `gas-order = 2`, `interp2ndOrder` (3D) or `sampleGas2D` (2D / axisymmetric) in
-`Lib_Equations.f90` evaluates the gas state via trilinear (or bilinear) inverse mapping
-with Newton-Raphson iteration (max 10 steps, $\boldsymbol{\xi}$ clamped to $[0,1]^3$).
+`Lib_Equations.f90` evaluates the gas state via trilinear inverse mapping with
+Newton-Raphson iteration (max 10 steps, stopped once the position residual is below
+$10^{-5}$ m, $\boldsymbol{\xi}$ clamped to $[0,1]^3$), or bilinear with an analytic inverse.
 On an axisymmetric wedge the meridian field is sampled at the particle's $(x, r)$ and its
 velocity rotated to the particle's azimuth before it enters the ODE.  When
 `gas-order = 1`, the cell-centre values are used directly.
+
+The dual mesh of a block reaches one node past each boundary face, a ring of ghost nodes
+filled once per sweep: by linear extrapolation from the interior, mirrored at a solid face,
+and — at a face connected to another block (101, 201, 102) — with that block's gas
+interpolated at the node by the same trilinear (bilinear) weights. A linear field is then
+continuous across a block interface whatever the cells on either side
+([Boundary conditions](../user/boundary-conditions.md#connected-faces-the-gas-ghost-ring)).
