@@ -17,14 +17,17 @@ module IGLOO_Lib_Statistics
     public :: RonsinRammlerMoments
 
     !> Injection-diameter sampling
-    public :: sampleDiameter, lawCode, initRandomSeed
-    public :: DiracDistr, NormalDistr, LogNorDistr, RosRamDistr
+    public :: sampleDiameter, lawCode, isLawName, initRandomSeed
+    public :: loadPSDTable
+    public :: DiracDistr, NormalDistr, LogNorDistr, RosRamDistr, TableDistrBase
 
     !> Distribution-law codes (stored as col-8 of cell%properties; see IO.f90)
     integer, parameter :: DiracDistr  = 0
     integer, parameter :: NormalDistr = 1
     integer, parameter :: LogNorDistr = 2
     integer, parameter :: RosRamDistr = 3
+    !> Size-distribution table k has the code TableDistrBase + k.
+    integer, parameter :: TableDistrBase = 100
 
     !> splitmix64 constants as signed decimal (two's-complement images of the published hex values).
     integer(I8), parameter :: SM_GOLDEN = -7046029254386353131_I8
@@ -276,8 +279,27 @@ contains
     end function sampleDiameter
 
     !> Maps a distribution-law name (empty/none/dirac, normal, lognormal, rosinrammler) to its
-    !  *Distr code; any other token is rejected.
+    !  *Distr code; any other token is refused.
     function lawCode(name) result(code)
+        implicit none
+        character(len=*), intent(in) :: name
+        integer :: code
+        code = lawIndex(name)
+        if (code < 0) then
+            write(*,'(A)') ' [ERROR] [IGLOO::read_cdp_bc_file] unsupported distribution law: '//trim(name)
+            error stop 'IGLOO: unsupported distribution law'
+        endif
+    end function lawCode
+
+    !> True when `name` is one of lawCode's names.
+    pure logical function isLawName(name)
+        implicit none
+        character(len=*), intent(in) :: name
+        isLawName = lawIndex(name) >= 0
+    end function isLawName
+
+    !> *Distr code of a law name, -1 for any other token.
+    pure function lawIndex(name) result(code)
         implicit none
         character(len=*), intent(in) :: name
         integer :: code
@@ -293,10 +315,40 @@ contains
         case ('rosinrammler')
             code = RosRamDistr
         case default
-            write(*,*) ' [IGLOO::read_cdp_bc_file] unsupported distribution law: ', trim(name)
-            error stop 1
+            code = -1
         end select
-    end function lawCode
+    end function lawIndex
+
+    !> Registry index of the size-distribution table named by `path`.
+    function loadPSDTable(path) result(idx)
+        implicit none
+        character(len=*), intent(in) :: path
+        integer :: idx
+        character(len=:), allocatable :: file
+        file = resolvePSDPath(path)
+        write(*,'(A)') ' [ERROR] tabulated size distributions are not implemented yet: '//file
+        error stop 'IGLOO: tabulated size distribution not implemented'
+        idx = 0
+    end function loadPSDTable
+
+    !> The table file: `path` as written (relative to the case directory), else INPUT/ + its basename.
+    function resolvePSDPath(path) result(file)
+        implicit none
+        character(len=*), intent(in) :: path
+        character(len=:), allocatable :: file, alt
+        logical :: there
+        file = trim(adjustl(path))
+        inquire(file=file, exist=there)
+        if (there) return
+        alt = 'INPUT/'//file(index(file, '/', back=.true.)+1:)
+        inquire(file=alt, exist=there)
+        if (there) then
+            file = alt
+            return
+        endif
+        write(*,'(A)') ' [ERROR] size-distribution file not found: tried '//file//' and '//alt
+        error stop 'IGLOO: size-distribution file not found'
+    end function resolvePSDPath
 
     !> Seeds the intrinsic RNG deterministically from one integer.
     subroutine initRandomSeed(seed)

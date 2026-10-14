@@ -317,7 +317,7 @@ contains
     use IGLOO_data_block,            only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, obj_bc_cell
     use IGLOO_data_phases,           only: obj_material
     use IGLOO_RayFaceIntersection3D, only: computeArea
-    use IGLOO_Lib_Statistics,        only: lawCode, DiracDistr
+    use IGLOO_Lib_Statistics,        only: DiracDistr, TableDistrBase
     implicit none
     character(len=*)     , intent(in)    :: name
     type(obj_material)   , intent(in)    :: material(nm)
@@ -334,8 +334,9 @@ contains
     integer            :: i_g, j_g, k_g
     real(R8)           :: propBuffer(nPropDP)
     real(R8)           :: vertices(3, 8)
-    character(len=64)  :: tok(nPropDP)
+    character(len=256) :: tok(nPropDP)
     character(len=512) :: lineString
+    integer            :: ipos, lawc
 
     totFam = 0
     do mat = 1, nm
@@ -479,19 +480,31 @@ contains
           case (102)
             call skipPayload(u, 102)
 
-          ! Inflows — token-tolerant read: legacy 7-column files
+          ! Inflows — blank/tab tokens (a slash is an ordinary character); legacy 7-column files
           case (401:403)
-            read(u,'(A)') lineString
+            read(u,'(A)',advance='no',iostat=ios) lineString     !> ios = 0: the line fills the buffer
+            if (ios == 0) then
+              write(*,'(A,I0,A)') ' [ERROR] INPUT/'//trim(name)//'bc.txt: an inlet payload line of ', &
+                len(lineString), ' characters or more'
+              error stop 'IGLOO: bc.txt inlet payload line too long'
+            elseif (.not. is_iostat_eor(ios)) then
+              write(*,'(A)') ' [ERROR] INPUT/'//trim(name)//'bc.txt: an inlet payload line cannot be read'
+              error stop 'IGLOO: bc.txt inlet payload line unreadable'
+            endif
             nTok = countTokens(lineString)
             if (nTok == 0) then
               write(*,*) ' [IGLOO::read_cdp_bc_file] empty property line for inflow cell'
               error stop 1
             endif
-            read(lineString,*,iostat=ios) (tok(s), s = 1, min(nTok, nPropDP))
-            if (ios /= 0) then
-              write(*,*) ' [IGLOO::read_cdp_bc_file] failed to tokenise line: ', trim(lineString)
-              error stop 1
-            endif
+            ipos = 1
+            do s = 1, min(nTok, nPropDP)
+              call next_token(lineString, ipos, tok(s))
+              if (len_trim(tok(s)) >= len(tok(s))) then
+                write(*,'(A,I0,A)') ' [ERROR] INPUT/'//trim(name)//'bc.txt: an inlet payload token of ', &
+                  len(tok(s)), ' characters or more'
+                error stop 'IGLOO: bc.txt inlet payload token too long'
+              endif
+            enddo
             ! Cols 1..7 numeric (6 = rp, 7 = sigmap); 'normal' direction tokens map to a sentinel.
             do s = 1, min(nTok, 7)
               propBuffer(s) = parse_dir_tok(tok(s))
@@ -499,13 +512,11 @@ contains
             do s = nTok + 1, 7
               propBuffer(s) = 0._R8
             enddo
-            ! Col 8: distribution-law name -> code (absent or sigmap <= 0 => Dirac).
-            if (nTok >= 8) then
-              propBuffer(8) = real(lawCode(tok(8)), R8)
-            else
-              propBuffer(8) = real(DiracDistr, R8)
-            endif
-            if (propBuffer(7) <= 0._R8) propBuffer(8) = real(DiracDistr, R8)
+            ! Col 8: a law name (sigmap <= 0 => Dirac) or a size-distribution file; absent => Dirac.
+            lawc = DiracDistr
+            if (nTok >= 8) lawc = law_token_code(tok(8))
+            if (lawc < TableDistrBase .and. propBuffer(7) <= 0._R8) lawc = DiracDistr
+            propBuffer(8) = real(lawc, R8)
             ! Col 9: per-cell injection spacing ds [m] (absent => 0 => global [IGLOO-BC] ds).
             if (nTok >= 9) then
               read(tok(9),*,iostat=ios) propBuffer(9)
@@ -1084,6 +1095,25 @@ contains
     tok = str(p:q-1)
     p = q
   end subroutine next_token
+
+
+  !> bc.txt column 8 -> law code: a law name, else a size-distribution file (a token holding '.'
+  !  or '/') as TableDistrBase + its registry index; any other token is refused.
+  function law_token_code(tok) result(code)
+    use IGLOO_Lib_Statistics, only: lawCode, isLawName, loadPSDTable, TableDistrBase
+    implicit none
+    character(len=*), intent(in) :: tok
+    integer :: code
+    if (isLawName(tok)) then
+      code = lawCode(tok)
+    elseif (scan(trim(tok), './') > 0) then
+      code = TableDistrBase + loadPSDTable(tok)
+    else
+      write(*,'(A)') ' [ERROR] [IGLOO::read_cdp_bc_file] unsupported distribution law: '//trim(tok)
+      write(*,'(A)') '         expected Dirac, Normal, LogNormal, RosinRammler or the path of a size-distribution file'
+      error stop 'IGLOO: unsupported distribution law'
+    endif
+  end function law_token_code
 
 
   !> Refuses INPUT/<prefix>properties.dat: the reason and the expected header, then the stop.
