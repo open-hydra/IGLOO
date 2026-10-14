@@ -4,7 +4,7 @@ module IGLOO_data_block
   implicit none
   private
   public :: fillGhostPartners
-  public :: buildInterfaceLinks, reportNonAligned
+  public :: buildInterfaceLinks, reportNonAligned, hasConnectedFaces
   public :: mollifyEulerBlocks, mollifySourceBlocks
 
   type, public :: obj_bc_cell
@@ -1358,8 +1358,8 @@ contains
 
   !> bc value of one face ghost (g*) after the linear fill: gas-solid planes (300/301) mirror the
   !  interior partner's (i*) normal velocity; a non-positive extrapolated scalar falls back to
-  !  zero-gradient. Every other code keeps the linear fill -- 100 is the box generators'
-  !  outlet/side code, not a gas-solid plane, and 101/201 are the partner pass.
+  !  zero-gradient. Every other code keeps the linear fill -- 400 (an outlet, the box generators'
+  !  outlet/side code), 100 (ATLAS's unresolved connection), 102 (chimera); 101/201 are the partner pass.
   subroutine bcFaceGhost(self, cell, gi, gj, gk, ii, ij, ik)
     implicit none
     class(obj_flowblock), intent(inout) :: self
@@ -1379,7 +1379,7 @@ contains
         self%gam        (   gi,gj,gk) = self%gam        (   ii,ij,ik)
         self%R          (   gi,gj,gk) = self%R          (   ii,ij,ik)
       endif
-    case default   !> 0, 100, 4xx, non-axis 200 (axisGhost overrides on-axis nodes), 101/201: linear fill
+    case default   !> 0, 100, 102, 4xx, non-axis 200 (axisGhost overrides on-axis nodes), 101/201: linear fill
     end select
   end subroutine bcFaceGhost
 
@@ -1518,6 +1518,23 @@ contains
       enddo
     enddo
   end subroutine buildInterfaceLinks
+
+
+  !> True when a face cell carries a connected, periodic or unresolved code (101, 103, 201, 102, 100).
+  logical function hasConnectedFaces(geo)
+    implicit none
+    type(obj_block), intent(in) :: geo(:)
+    integer :: b, f
+    hasConnectedFaces = .false.
+    do b = 1, size(geo)
+      do f = 1, 6
+        if (.not. allocated(geo(b)%face(f)%cell)) cycle
+        associate(c => geo(b)%face(f)%cell(:,:)%bcdef)
+        if (any(c == 101 .or. c == 103 .or. c == 201 .or. c == 102 .or. c == 100)) hasConnectedFaces = .true.
+        end associate
+      enddo
+    enddo
+  end function hasConnectedFaces
 
 
   !> One warning line per pair of 101 faces normal to different index directions: the field

@@ -31,11 +31,16 @@ committed; `INPUT/properties.dat` is `common/properties.dat`, symlinked):
 | id | kind | assertion |
 |---|---|---|
 | E1 | target | the run log carries the routing line `chimera facelets: 50 (0 with an empty donor layer, 0 unresolved (code 100), 0 header-only 104)`: 25 facelets on each chimera face, counted once for the two copies |
-| C1 | control | 50 exits (25 parcels per family), every one at x = 0.15: a parcel that leaves block 1 at x = 0.085 continues in block 2 (the cell search finds it there) |
+| K2 | target | the run log's block-change line: `block changes: 50 via the connected cell, 0 via the block sweep, 0 rim exits; stencil refreshed on a block change at a boundary entry: 0` — every parcel leaving block 1 at x = 0.085 found in a layer-1 donor cell of block 2 |
+| X1 | target | the same box as one block (`make_box_case.py`, two families, generated and run by `check.py` into `ref-1blk/` with this `input.ini`): trajectory rows away from the chimera planes x = 0.065 and 0.085, and the exit records, equal as sorted multisets |
+| C1 | control | 50 exits (25 parcels per family), every one at x = 0.15: a parcel that leaves block 1 at x = 0.085 continues in block 2 |
 | C2 | control | no `stuck in cell`, `no net progress` or `outer maxIter` line in `run_out.txt` |
 
 **RED.** A reader without the 102 record stops at its first scan of the file: the 6-integer header
 read takes the counts line and the first donor line, its code is the donor's k (1), and the run ends
 with `bad BC cell line: record 27, bcdef = 1 ... Legacy-schema bc.txt?` (exit 1); E1 and C1 fail.
-The payload checks are gated by the `refuse-chimera-*` cases ([refusals](../refusals/INFO.md)) and the
-stored counts, donors and weights by `test_bc_families` (F6).
+K2 is RED on the cell search without the connected-cell step (no block-change line; with the step skipped
+`0 via the connected cell, 50 via the block sweep`); X1 is RED when a parcel leaving through a 102 facelet
+skips both searches and goes to the exit branch: every parcel leaves at x = 0.085, 1250 trajectory rows
+differ (1650 against 2900) and all 50 exits. The payload checks are gated by the `refuse-chimera-*` cases
+([refusals](../refusals/INFO.md)) and the stored counts, donors and weights by `test_bc_families` (F6).

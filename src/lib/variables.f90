@@ -32,6 +32,8 @@ module IGLOO_variables
   real(R8), parameter :: sectorTol = 1.e-12_R8  !> distance past a k-plane that counts as outside [m]
   integer  :: nSectorFold = 0, nMultiFold = 0  !> per-sweep witnesses: sector folds done, folds that rotated by > 1 sector
   integer  :: nStencilRefresh = 0  !> per-sweep: gas stencils re-sought after a block change found at a gas-boundary entry
+  !> per-sweep block changes: through the connected cell of a connected face, through the block sweep, rim exits
+  integer  :: nConnHit = 0, nSweepHit = 0, nRimExit = 0
   integer  :: fsample, nb, nm, nfam, iprint, trajSample
   integer, allocatable :: nspecies(:)
   real(R8) :: ds, mdotMax, dtprint

@@ -181,7 +181,7 @@ Conformal connections (`bcdef` 101) are coincident interfaces between adjacent s
 
 **Setup.** IGLOO lists every 101 face cell with its partner cell and checks the pair: the partner block and cell must exist, the partner cell must lie on the partner face, and its 101 record on that face must name this cell and this face — otherwise the run stops (`IGLOO: a 101 connection names a block outside the mesh`, `... names a cell outside its block`, `... is not mutual: the partner cell does not name this cell`). On a one-layer (2D) mesh a 101 record on face 5 or 6 is refused.
 
-**Particles.** When a step ends past the face, the cell search (`updateCell` → `findParticle`) looks in the current block first and then in every other block; the first block that contains the point takes the particle, so it continues in the partner block. The containment tests are inclusive, so a conformal interface leaves no gap between the blocks. The index jump of `bcDef` (into the cell the record names) runs only when no block contains the point. With `gas-order = 2` the integration step ends at the block face, where a single block would not end it: the trajectory gains a row at the interface and scatter samples near it can move by a fraction of a step; the deposited fields are additive over the cut.
+**Particles.** When a step ends past the face, the cell search (`updateCell`) looks first in the partner cell the record names, and around it, starting from the point where the step crossed the face (see [Connected faces](#connected-faces-the-particle-search)); only if the partner block does not hold the point does it search the current block and then every other block. The containment tests are inclusive, so a conformal interface leaves no gap between the blocks. The index jump of `bcDef` (into the cell the record names) runs only when no block contains the point. With `gas-order = 2` the integration step ends at the block face, where a single block would not end it: the trajectory gains a row at the interface and scatter samples near it can move by a fraction of a step; the deposited fields are additive over the cut.
 
 **Fields.** The field mollifier smooths across the interface as across an interior face when both faces are normal to the same index direction; an interface whose two faces are normal to different index directions is smoothed with zero flux, and the setup names it with one warning line per face pair (see [Field mollification](../theory/mollification.md#block-interfaces)). With `gas-order = 2` each block keeps its own dual mesh: at a 101 face the boundary dual cells of each block are clipped to the half inside it, the ghost nodes of the face take the partner's boundary-adjacent cell (the partner copy above), and a deposit near the face is reduced to the geometry cells of the block that received it.
 
@@ -208,9 +208,36 @@ then prints, when the file holds any chimera, unresolved (100) or header-only 10
 
 counted per facelet (not per family copy).
 
-A particle that leaves a block through a chimera facelet continues in whichever block contains its
-position (the cell search looks in the current block, then in every other block); one that no block
-contains leaves the domain there. Each particle deposits into the block it is tracked in, so the cells
+A particle that leaves a block through a chimera facelet is searched for first in the facelet's layer-1
+donor cells, by decreasing weight, then in every block (see [Connected faces](#connected-faces-the-particle-search));
+one that no block contains leaves the domain there, a rim exit. Each particle deposits into the block it is tracked in, so the cells
 of the other block in the overlap receive none of its deposits; the field mollifier gives a chimera face
 zero flux, and under `gas-order = 2` its ghost ring is the linear fill.
+
+---
+
+## Connected faces: the particle search
+
+A face cell is connected when its record names where a particle continues: a 101 (or a 103 with a
+partner cell) names the partner cell, a 201 the partner cell across the periodic pair, a 102 its layer-1
+donor cells. When a step ends outside its cell through a connected face cell, `updateCell` searches the
+connected cell first — the partner cell, the partner cell after the periodic transport, or each donor by
+decreasing weight — together with its ±1 neighbourhood and a walk from the point where the step crossed
+the face. Only when that search fails does it fall back to the cell search of the current block and of
+every other block, and only when no block contains the point does the face's own rule apply (the 101
+index jump, the 201 transport, an exit).
+
+A particle that leaves the domain through a 100 facelet (ATLAS's unresolved connection: a connection or
+chimera facelet that found no partner) or through a 102 facelet whose donors and blocks do not hold it is
+a *rim exit*; its exit record is an ordinary one (position, `Af` of the facelet). When the bc file holds
+any 101, 103, 201, 102 or 100 facelet, `solve` prints once per sweep, summed over the MPI ranks:
+
+```
+ [IGLOO] block changes: N via the connected cell, M via the block sweep, K rim exits; stencil refreshed on a block change at a boundary entry: n
+```
+
+N counts the particles placed by the connected-cell search, M the block changes the cell search of the
+blocks made instead (none on a conformal or overlapping interface whose records are complete), K the rim
+exits, and n the gas stencils re-sought under `gas-order = 2` because the cell search at the entry of a
+boundary dual cell found the particle in another block.
 

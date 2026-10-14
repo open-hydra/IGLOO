@@ -20,6 +20,9 @@ payload, or a parcel does not cross the interface
   X2  the one-block sibling: trajectories, exits and scatter of both materials equal as sorted
       multisets; euler1, euler2 and source equal cell by cell (block 2's cell i is the sibling's
       30 + i) to 1e-12 of the field scale
+  K1  the run log's block-change line: all 50 parcels change block through the connected cell (the
+      partner cell of the 101 face cell they leave through), none through the block sweep, no rim
+      exit, no stencil refresh
 Controls -- pass either way
   C1  A's parcels pass the Stokes oracle at d = 11.89 um; A and B inject from the same 25 stations
   C2  25 exits per material, scatter-<mat>.dat non-empty
@@ -183,6 +186,15 @@ def main():
         rc |= fail(f"C4 run_out.txt holds {hits} stuck / no-progress / maxIter lines")
     else:
         print("C4 no stuck, no-progress or maxIter line in run_out.txt PASS")
+
+    # K1: the block changes ------------------------------------------------------------------------
+    want = (" [IGLOO] block changes: 50 via the connected cell, 0 via the block sweep, 0 rim exits; "
+            "stencil refreshed on a block change at a boundary entry: 0")
+    lines = [ln for ln in log.split("\n") if "block changes" in ln]
+    if lines != [want]:
+        rc |= fail(f"K1 block-change line {lines!r}, expected [{want!r}]")
+    else:
+        print("K1 50 block changes through the connected cell, none through the block sweep, no rim exit PASS")
 
     # T4 / C3: the cell fields of both zones ------------------------------------------------------
     try:

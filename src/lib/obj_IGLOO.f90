@@ -3,7 +3,8 @@
 module IGLOO_module
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_data_block, only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, fillGhostPartners, &
-                              buildInterfaceLinks, reportNonAligned, mollifyEulerBlocks, mollifySourceBlocks
+                              buildInterfaceLinks, reportNonAligned, mollifyEulerBlocks, mollifySourceBlocks, &
+                              hasConnectedFaces
   use IGLOO_data_phases, only: obj_material
   use IGLOO_Lib_Mollify, only: cellLink
   implicit none
@@ -13,6 +14,8 @@ module IGLOO_module
     type(obj_flowblock),   allocatable :: gasblock(:)
     !> The 101 face cells and their partner cells, built once after the bc read.
     type(cellLink),        allocatable :: links(:)
+    !> A face cell carries 101, 103, 201, 102 or 100: solve reports the block changes.
+    logical :: connFaces = .false.
     !> Valid only between a solve and the next reset_state (which deallocates them).
     type(obj_sourceblock), allocatable :: source(:)
     type(obj_eulerblock),  allocatable :: euler(:,:)
@@ -129,6 +132,7 @@ contains
     call tm_phase(TM_BLOCKS)
     call buildInterfaceLinks(self%geoblock, self%links)
     if (mpi_is_root) call reportNonAligned(self%links)
+    self%connFaces = hasConnectedFaces(self%geoblock)
     call tm_phase(TM_PIN)
     call initRandomSeed(rng_seed)   ! before pinning: stochastic injection diameters
     fam = 0
@@ -267,6 +271,7 @@ contains
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
                                 trajOn, scatOn, dNscat, trajSample, threshold, &
                                 probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
+                                nConnHit, nSweepHit, nRimExit, &
                                 unitSnap, snapOn, timeOn, tEnd
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
@@ -304,7 +309,7 @@ contains
       error stop 1
     endif
     self%stateIsFresh = .false.
-    nSectorFold = 0; nMultiFold = 0; nStencilRefresh = 0
+    nSectorFold = 0; nMultiFold = 0; nStencilRefresh = 0; nConnHit = 0; nSweepHit = 0; nRimExit = 0
 
     sourceSwitch = self%srcSwitch
     eulerSwitch  = self%eulSwitch
@@ -652,6 +657,7 @@ contains
       if (mpi_is_root .and. sum(foldStat) > 0) write(*,'(A,I0,A,I0,A)') '     - wedge sector folds: ', &
                                                  foldStat(1), ' (multi-sector: ', foldStat(2), ')'
     endif
+    if (self%connFaces) call reportBlockChanges()
     if (mpi_is_root) then
       if (snapOn) then
         write(*,'(A,ES16.8E2,A)') '  Stop condition : time-end = ', tEnd, ' s reached, or the particle left the domain'
@@ -731,6 +737,19 @@ contains
     call tm_report(self%sweep)
 
   end subroutine writeout
+
+
+  !> The sweep's block changes, summed over the ranks and printed by the root rank.
+  subroutine reportBlockChanges()
+    use IGLOO_variables, only: nConnHit, nSweepHit, nRimExit, nStencilRefresh
+    use IGLOO_Mod_MPI,   only: mpi_allreduce_sum_i4_array, mpi_is_root
+    implicit none
+    integer :: cnt(4)
+    cnt = [nConnHit, nSweepHit, nRimExit, nStencilRefresh]
+    call mpi_allreduce_sum_i4_array(cnt, 4)
+    if (mpi_is_root) write(*,'(A,4(I0,A))') ' [IGLOO] block changes: ', cnt(1), ' via the connected cell, ', cnt(2), &
+      ' via the block sweep, ', cnt(3), ' rim exits; stencil refreshed on a block change at a boundary entry: ', cnt(4), ''
+  end subroutine reportBlockChanges
 
 
   !> Print the IGLOO banner.

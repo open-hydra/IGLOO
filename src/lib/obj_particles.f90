@@ -8,7 +8,7 @@ module IGLOO_particles
   use IGLOO_Lib_Properties, only: tableValue, comp_TfromTab, Tmin, Tmax
   use IGLOO_Lib_Solidification, only: hSolid
   use IGLOO_bcBox
-  use IGLOO_data_block, only: obj_block, obj_flowblock
+  use IGLOO_data_block, only: obj_block, obj_flowblock, obj_bc_cell
   use IGLOO_RayFaceIntersection3D
   implicit none
 
@@ -122,6 +122,7 @@ module IGLOO_particles
     procedure, pass(self) :: computeDs
     procedure, pass(self) :: computeDeltat
     procedure, pass(self) :: findParticle
+    procedure, pass(self) :: connectedExit
     procedure, pass(self) :: findDualCell
     procedure, pass(self) :: advanceGasCell
     procedure, pass(self) :: updateCell
@@ -484,8 +485,9 @@ contains
   end function searchInBlock
 
 
-  !> Relocates the particle after a cell crossing: cell search, then boundary handling (periodic
-  !  transport, BC definitions) with a flip-flop cycle breaker.
+  !> Relocates the particle after a cell crossing: the connected cell of a connected block face,
+  !  the cell search, then boundary handling (periodic transport, BC definitions) with a flip-flop
+  !  cycle breaker.
   subroutine updateCell(self,block,lookGas)
     implicit none
     class(obj_particle), intent(inout) :: self
@@ -499,7 +501,16 @@ contains
     gasGeo = .false.   !> no declaration initializer: it would imply SAVE
     if (present(lookGas)) gasGeo = lookGas
 
-    if (self%findParticle(block)) return
+    if (.not.gasGeo) then
+      if (self%connectedExit(block) == 1) return
+    endif
+    if (self%findParticle(block)) then
+      if (self%iold(1) > 0 .and. self%i(1) /= self%iold(1)) then
+        !$OMP ATOMIC
+        nSweepHit = nSweepHit + 1
+      endif
+      return
+    endif
 
     !> Check over boundaries 
     if (gasGeo) then; iold = [self%iold(1), self%igasOld] 
@@ -527,6 +538,11 @@ contains
           call bcDef(blk%face(f)%cell(m,n),vertices,pold,vold,  &
                       intersectionPoint,f,p,v,self%time,iold,   &
                       self%angle,self%Af,found,self%gone,retry)
+          !> a rim: an unresolved connection (100) or a chimera face no donor holds the particle in
+          if (self%gone .and. (blk%face(f)%cell(m,n)%bcdef == 100 .or. blk%face(f)%cell(m,n)%bcdef == 102)) then
+            !$OMP ATOMIC
+            nRimExit = nRimExit + 1
+          endif
         endif
       endif
       if (retry) then
@@ -560,6 +576,90 @@ contains
     endif
 
   end subroutine updateCell
+
+
+  !> After a step out of the current cell through a connected block face (101/103 with a partner
+  !  cell, 201, 102), searches the connected cell first: the partner cell, the partner cell after the
+  !  periodic transport, or the layer-1 donors by decreasing weight. 1 = found (self%i set), 0 = not
+  !  such an exit, -1 = not found.
+  integer function connectedExit(self, block)
+    implicit none
+    class(obj_particle), intent(inout) :: self
+    class(obj_block),    intent(in)    :: block(nb)
+    real(R8) :: verts(3,8), p(3), pt(3), ipt(3)
+    integer  :: b, m, n, f, ci, cj, ck, d, k, loc(3), partner(4)
+    logical  :: noB, hit
+    logical, allocatable :: tried(:)
+
+    connectedExit = 0
+    if (self%exitFace <= 0 .or. self%i(1) <= 0) return
+    b = self%i(1)
+    call block(b)%ijk2fmn(self%i(2), self%i(3), self%i(4), self%exitFace, m, n)
+    if (m == 0) return
+    if (.not. isConnected(block(b)%face(self%exitFace)%cell(m,n))) return
+    p = self%stateVar(1:3)
+    call block(b)%getVertices(self%i(2:4), verts)
+    if (isPointInsideCell(p, verts, mesh2D)) return
+    !> the crossing point of the step on the exit face
+    ci = self%i(2); cj = self%i(3); ck = self%i(4)
+    call checkBoundary(block(b), verts, p, self%oldstate(1:3), self%oldstate(4:6), ci, cj, ck, ipt, f, m, n, noB, hit)
+    if (noB) return
+    associate(cell => block(b)%face(f)%cell(m,n))
+    if (.not. isConnected(cell)) return
+    connectedExit = -1
+    select case (cell%bcdef)
+    case (101, 103)
+      if (searchInBlock(block(cell%connection(1)), p, cell%connection(2:4), 0, .false., &
+                        ipt, self%oldstate(4:6), loc)) then
+        self%i = [cell%connection(1), loc]
+        self%wasin = .true.; self%lost = .false.
+        connectedExit = 1
+      endif
+    case (201)
+      !> the state the transport of the boundary pass leaves: cell and old cell the partner's
+      pt = p
+      call periodicTransport(block, cell, pt, partner)
+      if (searchInBlock(block(partner(1)), pt, partner(2:4), 0, .false., &
+                        self%oldstate(1:3), self%oldstate(4:6), loc)) then
+        self%stateVar(1:3) = pt
+        self%i = [partner(1), loc]
+        self%iold = self%i
+        connectedExit = 1
+      endif
+    case (102)
+      allocate(tried(cell%chimN(1)))
+      tried = .false.
+      do k = 1, cell%chimN(1)
+        d = maxloc(cell%chimW, dim=1, mask=.not.tried)
+        tried(d) = .true.
+        if (searchInBlock(block(cell%chimDonor(d,1)), p, cell%chimDonor(d,2:4), 0, .false., &
+                          ipt, self%oldstate(4:6), loc)) then
+          self%i = [cell%chimDonor(d,1), loc]
+          self%wasin = .true.; self%lost = .false.
+          connectedExit = 1
+          exit
+        endif
+      enddo
+    end select
+    end associate
+    if (connectedExit == 1) then
+      !$OMP ATOMIC
+      nConnHit = nConnHit + 1
+    endif
+
+  contains
+
+    !> A connected facelet: 101/103 with a partner cell, 201, or 102.
+    logical function isConnected(cell)
+      type(obj_bc_cell), intent(in) :: cell
+      select case (cell%bcdef)
+      case (101, 103, 201); isConnected = cell%connection(1) > 0
+      case (102);           isConnected = .true.
+      case default;         isConnected = .false.
+      end select
+    end function isConnected
+
+  end function connectedExit
 
 
   !> Locates the gas dual cell containing the particle in the one-cell neighbourhood of its geometry indices.
