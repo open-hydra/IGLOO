@@ -312,9 +312,9 @@ For output-heavy runs put `OUTPUT/` on tmpfs (`mkdir -p /dev/shm/$USER/<case> &&
 /dev/shm/$USER/<case> OUTPUT`): the storage term of the scatter output is nearly constant in the
 thread count, so it bounds the speed-up first.
 
-!!! danger "`--use-mpi` and `--use-tecio` cannot be combined"
-    ORION builds `teciompi` under MPI but links `tecio::tecio`, so the configure fails. ASCII
-    `.tec` I/O works fine without TecIO, which is what the whole test suite uses.
+With `--use-tecio` an MPI build links ORION's `teciompi` (built once into
+`lib/ORION/lib/TecIO/teciompi-install-*`). ASCII `.tec` I/O needs no TecIO, which is what the
+test suite uses; `-DUSE_TECIO=OFF` skips the TecIO build.
 
 !!! danger "`bin/IGLOO` is ONE link target shared by every build tree"
     `cmake --build <tree>` is a **no-op** when that tree has nothing to recompile, so it can

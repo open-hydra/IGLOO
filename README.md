@@ -53,7 +53,7 @@ cd IGLOO                         # install.sh build fetches the lib/ submodules 
   --include-oslo=$HYDRADIR/lib/OSLO \
   --include-finer=$HYDRADIR/lib/third_party/FiNeR
 
-# Hybrid MPI + OpenMP (not combinable with --use-tecio)
+# Hybrid MPI + OpenMP (combines with --use-tecio)
 ./install.sh build --compilers=intel --use-openmp --use-mpi
 ```
 

@@ -74,7 +74,7 @@ def read_block_tec(path):
         head = f.readline()
         zone = f.readline()
         vals = [float(t) for ln in f for t in ln.split()]
-    names = [n for n in head.split('"')[1::2] if n.strip()]
+    names = [n for n in head.split('"')[1::2] if n.strip()] or head.split("=", 1)[1].replace(",", " ").split()
     dims = {}
     for tok in zone.replace(",", " ").split():
         k, _, v = tok.partition("=")

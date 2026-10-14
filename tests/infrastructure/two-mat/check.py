@@ -89,7 +89,7 @@ def read_tec_block(path):
         for ln in f:
             s = ln.strip()
             if s.upper().startswith("VARIABLES"):
-                names = [n for n in s.split('"')[1::2]]
+                names = [n for n in s.split('"')[1::2]] or s.split("=", 1)[1].replace(",", " ").split()
                 continue
             if s.upper().startswith("ZONE") or s.upper().startswith("TITLE"):
                 continue

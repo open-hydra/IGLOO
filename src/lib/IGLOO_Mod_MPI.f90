@@ -164,20 +164,23 @@ contains
   end subroutine mpi_bcast_r8_array
 
 
-  !> Gives every rank rank 0's gas/mesh field: variable names, solution time and, per block, name,
-  !  dimensions, mesh and variables with their bounds. No-op at one rank.
+  !> Gives every rank rank 0's gas/mesh field: variable names, solution time, data location (the
+  !  reader sets it) and, per block, name, dimensions, mesh and variables with their bounds. No-op at
+  !  one rank.
   subroutine mpi_bcast_orion(orion)
     use Lib_ORION_data, only: orion_data
     type(orion_data), intent(inout) :: orion
 #ifdef USE_MPI
-    integer :: hdr(4), dims(21), ierr, b
+    integer :: hdr(5), dims(21), ierr, b
     if (mpi_size_ <= 1) return
     hdr = 0
     if (mpi_is_root) then
       if (allocated(orion%varnames)) hdr(1:2) = [1, size(orion%varnames)]
       if (allocated(orion%block))    hdr(3:4) = [1, size(orion%block)]
+      if (orion%tec%node)            hdr(5)   = 1
     endif
-    call MPI_BCAST(hdr, 4, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr); call check_mpi_error(ierr)
+    call MPI_BCAST(hdr, size(hdr), MPI_INTEGER, 0, MPI_COMM_WORLD, ierr); call check_mpi_error(ierr)
+    orion%tec%node = (hdr(5) == 1)
     if (hdr(1) == 1) then
       if (.not. mpi_is_root) then
         if (allocated(orion%varnames)) deallocate(orion%varnames)

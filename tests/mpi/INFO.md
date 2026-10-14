@@ -4,8 +4,8 @@ Registered **only** when the build has MPI. `USE_MPI` defaults OFF, so a plain `
 not see these tests at all and is unchanged by their existence.
 
 ```bash
-# From tests/. USE_MPI=ON builds and tests build/mpi; build/verif is left alone. TecIO OFF:
-# ORION builds teciompi but links `tecio::tecio`, so USE_MPI=ON + USE_TECIO=ON cannot configure.
+# From tests/. USE_MPI=ON builds and tests build/mpi; build/verif is left alone. TecIO OFF skips
+# building ORION's teciompi; with TecIO ON the MPI build links it.
 USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF
 ```
 

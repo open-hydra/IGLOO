@@ -63,7 +63,7 @@ The three options are independent: any dependency left out comes from the in-tre
 | `--compilers=intel` or `--compilers=gnu` | Selects the compiler family. When omitted, CMake decides. |
 | `--use-openmp` | Enables OpenMP parallelization. |
 | `--use-tecio` | Enables Tecplot binary I/O (requires C++ compiler). |
-| `--use-mpi` | Enables the hybrid MPI + OpenMP build (see [Parallelization](../development/parallelization.md)). Cannot be combined with `--use-tecio`. |
+| `--use-mpi` | Enables the hybrid MPI + OpenMP build (see [Parallelization](../development/parallelization.md)). With `--use-tecio`, ORION builds and links its MPI TecIO library. |
 
 The `build` command wipes `build/`, runs a clean CMake configure and build, then writes `CMakePresets.json` from the populated `CMakeCache.txt`. The executable is placed at `bin/IGLOO`.
 
