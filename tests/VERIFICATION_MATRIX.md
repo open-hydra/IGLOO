@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (177 in a serial build: 138 e2e + 38 unit incl. `self_test` and
+One row per registered CTest entry (178 in a serial build: 138 e2e + 39 unit incl. `self_test` and
 `registry-docs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 7 `mpi-*` rows in their own
-section, 184).
+section, 185).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -270,6 +270,7 @@ box/BC. Sub-test IDs in parentheses.
 | **test_mhb98_decane** | `[MHB98]` Fig. 4 **M7** (decane, T_G=1000 K, T_d,0=315 K, D0=2.0 mm, Re_d,0=17; exp Wong & Lin 1992) | *validation* (E-VAL-2b) — THE model-discriminating case: Fig. 4b spans ~200 K across M1–M8 vs 0.47 K in Fig. 2b. GATES: **DC1** IGLOO `evaporation()` CEM+LK mdot vs an independently re-coded M7 chain (eqs 10, 15–18) at 25 sampled states, 1e-12 (measured **3.5e-16**) + **DC2** IGLOO `blowingFactor()` vs eq. 19 `f2=b/(e^b−1)`, 1e-12 (measured **9.4e-15**; f2 spans **0.40–0.88**, i.e. convective heat cut up to 60 %) + **DC3** the re-coded M7 at MHB98's OWN 0.552 vs three PIXEL-MEASURED Fig. 4 quantities: β 1.579 vs 1.60 (**1.3 %**), T_d(3.5 s) 393.7 vs 397 K (**3.3 K**), D²(4.0 s) 1.908 vs 1.885 mm² (**1.2 %**) (fixture: **FIXED SLIP** (suspended drop, Re ∝ d): free flight was REFUTED by measurement (β 1.31–1.44 for every Sc). All properties = MHB98 App. A at their T_R=420.19 K; **Le=1 deliberately, NOT their App. Γ_V** (which gives Le=4.40 and misses the plateau by +40 K — paper is self-inconsistent); needs `blowing = LK`; trajectory RK4'd in-test over IGLOO's kernels — a unit test, not e2e, since fixed slip would need a no-drag flag and `t=x/U` is invalid with real slip. **Confound quantified, not hidden:** IGLOO's Ranz-Marshall carries 0.600, MHB98 eq. 6 prints 0.552 (8.7 %); DC1/DC2 use 0.600 (implementation), DC3 uses 0.552 (paper)) |
 | **test_rng_stream** | — | *stream contract* of the per-parcel splitmix64 RNG (`Lib_Statistics::rngSeedFor`/`rngNext`): seed distinctness (8 families × 4000 IDs, 0 collisions), reproducibility, uniformity — the property no e2e gate can see (one shared seed reproduces perfectly and passes every e2e oracle) |
 | **test_psd_table** | `[Kol33]`,`[AD54]`,`[Ste74]`,`[MM04]` | *closed form* CDFs typed in the test (table6's hand knots, truncated Normal, LogNormal, Rosin-Rammler) against 10⁵ draws of the production `sampleDiameter` per law: Kolmogorov-Smirnov D_n < 6.165e-3 and A² < 5.969 at seed 42, seeds 43..61 printed (max D_n 4.8e-3, max A² 2.9, none above). Also the table knots to 1e-15, one load per token, the `INPUT/` fallback, a one-row Dirac that draws nothing. RED (one-line sampler changes): class-centre atoms D 0.175, number fractions D 0.702, next class D 0.350, last edge shortened D 0.050 / A² 202, Normal clipped D 0.022 / A² 201, LogNormal log-space σ D 0.593, Rosin-Rammler n +10 % D 0.025 / A² 199, untruncated Normal oracle D 0.023 / A² 184 |
+| **test_slot_order** | — | *layout contract* of the packed property slots: every per-material property gets a distinct value, `setupRHS` + `packAuxVars` pack it for models 2, 4, 5 and 6, and every read through the readers' own indices returns the property of that name — `ep(iMv..imuLiq)` of `IGLOO_Lib_Evaporation` (nep = 10, and `ind_Lv..ind_e5` naming the same slots) and `mp(imKb..imQc)` of `IGLOO_Lib_Combustion` (nmp = nmetal = 11; `h-fus`, `cp-solid` where `rhsSolidification` reads them). RED: `T-ign`/`T-melt` exchanged in the metal list (S3, S4), `Lv`/`cpv` written to each other's slot (S1, S2) |
 | **test_axis_dispatch** | — | *dispatch equivalence*: bcdef-200 faces classified by GEOMETRY (azimuthal normal ⇒ wedge rotation, radial ⇒ axis reflection) for wedges built on i, j and k at all six face indices; pins equivalence with the retired `f==6` rule; the only coverage of `bcDef`'s fold branch (`axisymFold` re-sectors first, so no e2e case reaches it) |
 | **test_graze_standoff** | — | *contract pin*: the grazing standoff is an absolute length capped at a fraction of the cell (`grazeOffset`), checked across 12 decades of cell thickness |
 | **test_dual_clip** | — | *tiling invariant*: sum(dual cellVol) == domain volume plus the per-cell 1/2, 1/4, 1/8 boundary factors, in 2D and 3D; proven RED against the unclipped dual; the only gate on the 3D dual (no e2e case gates it) |
@@ -297,12 +298,12 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-138 `e2e`-labelled + 38 `unit`-labelled + the optional `vortex-cloud-3way` = **177 CTest entries** in a
-serial build (+7 `mpi-*` under `USE_MPI`, 184), all green (counted from `tests/CMakeLists.txt`). The 138
+138 `e2e`-labelled + 39 `unit`-labelled + the optional `vortex-cloud-3way` = **178 CTest entries** in a
+serial build (+7 `mpi-*` under `USE_MPI`, 185), all green (counted from `tests/CMakeLists.txt`). The 138
 `e2e` entries are the 78 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the twelve `repeat-*` two-sweep gates and the forty-six `refuse-*` setup-refusal gates. The
-38 `unit` entries are 33 compiled unit tests, the property-table reader on its three fixtures
+39 `unit` entries are 34 compiled unit tests, the property-table reader on its three fixtures
 (`test_properties_reader`, `-two-material`, `-atlas-water`), `self_test` and `registry-docs`. Unit
 families that emit a production-vs-reference overlay (`verif_dump` → `tools/plot_curves.py` →
 `docs/vv/images/unit-*.svg`): drag, heat, evaporation-CEM, LK, TC, the MHB98 decane kernel,
