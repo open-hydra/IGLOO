@@ -3,7 +3,7 @@
 module IGLOO_module
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_data_block, only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, fillGhostPartners, &
-                              buildInterfaceLinks, reportNonAligned
+                              buildInterfaceLinks, reportNonAligned, mollifyEulerBlocks, mollifySourceBlocks
   use IGLOO_data_phases, only: obj_material
   use IGLOO_Lib_Mollify, only: cellLink
   implicit none
@@ -586,29 +586,27 @@ contains
     !> Allreduce the partial grid sums across ranks before finalize, which is nonlinear.
     call reduce_accumulators(self%source, self%euler, sourceSwitch, eulerSwitch)
 
-    !> Finalize the source/euler fields: normalize the moments, reduce to geoblock shape under ord2.
+    !> Finalize the source/euler fields: reduce to geoblock shape under ord2, mollify across the
+    !  blocks, normalize the eulerian moments.
     if (sourceSwitch) then
       do b = 1, nb
         call self%source(b)%finalize(self%geoblock(b))
       enddo
+      call mollifySourceBlocks(self%source, self%geoblock, self%links)
     endif
     if (eulerSwitch) then
-      ! allocate(famDone(size(self%euler, 2)))
-      ! famDone = .false.
       do m = 1, nm
         do g = 1, self%material(m)%ngroups
           fam = self%material(m)%group(g)%famID
-          ! if (.not. famDone(fam)) then
           do b = 1, nb
-            call self%euler(b, fam)%finalize(self%geoblock(b), &
-                                              self%material(m)%hTab, &
-                                              self%material(m)%cpVariable)
+            call self%euler(b, fam)%reduce(self%geoblock(b))
           enddo
-            ! famDone(fam) = .true.
-          ! endif
+          call mollifyEulerBlocks(self%euler(:, fam), self%geoblock, self%links)
+          do b = 1, nb
+            call self%euler(b, fam)%normalize(self%material(m)%hTab, self%material(m)%cpVariable)
+          enddo
         enddo
       enddo
-      ! deallocate(famDone)
     endif
 
     !> Wedge fold counters.

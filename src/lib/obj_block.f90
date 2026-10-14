@@ -1,10 +1,11 @@
 module IGLOO_data_block
   use, intrinsic :: iso_fortran_env, only : R8 => real64
-  use IGLOO_Lib_Mollify, only: binomial_smooth, cellLink
+  use IGLOO_Lib_Mollify, only: binomial_smooth, mollifyBlocks, cellLink, blockField
   implicit none
   private
   public :: fillGhostPartners
   public :: buildInterfaceLinks, reportNonAligned
+  public :: mollifyEulerBlocks, mollifySourceBlocks
 
   type, public :: obj_bc_cell
     real(R8),dimension(:,:),allocatable :: properties !> first index per group (family)
@@ -90,7 +91,8 @@ module IGLOO_data_block
     private
     procedure, pass(self), public :: allocate => allocateEUL
     procedure, pass(self), public :: pass_geometry => pass_geometryEUL
-    procedure, pass(self), public :: finalize => finalizeEUL
+    procedure, pass(self), public :: reduce => reduceEUL
+    procedure, pass(self), public :: normalize => normalizeEUL
   end type obj_eulerblock
 
 contains
@@ -180,9 +182,10 @@ contains
   end subroutine allocateEUL
 
   !> End-of-solve source finalization: under ord2 the dual-shape accumulators are redistributed
-  !  to geoblock cells by the assembled octant weights (conservative); then the field is mollified.
+  !  to geoblock cells by the assembled octant weights (conservative). The caller mollifies
+  !  (mollifySourceBlocks).
   subroutine finalizeSRC(self, geoblock)
-    use IGLOO_variables, only: toll, ord2, mesh2D, nm, mollifyPasses
+    use IGLOO_variables, only: toll, ord2, mesh2D, nm
     implicit none
     class(obj_sourceblock), intent(inout) :: self
     type(obj_block),        intent(in)    :: geoblock
@@ -233,27 +236,22 @@ contains
       call move_alloc(sourceEn_geo,   self%sourceEn)
     endif
 
-    if (mollifyPasses > 0) call mollifySource(self, geoblock)
-
   end subroutine finalizeSRC
 
-  !> End-of-solve eulerian finalization: 1. (ord2) reduce the raw accumulators to geoblock
-  !  cells; 2. mollify the conserved densities; 3. normalize velocity and temperature by density.
-  subroutine finalizeEUL(self, geoblock, hTab, cpVariable)
-    use IGLOO_Lib_Properties, only: comp_TfromTab
-    use IGLOO_variables,      only: toll, ord2, mesh2D, mollifyPasses
+  !> End-of-solve eulerian reduction (ord2): the raw dual-shape numerators to geoblock cells, the
+  !  sub-octant-volume mean of each cell's eight dual nodes. The caller then mollifies the conserved
+  !  densities (mollifyEulerBlocks) and normalizes them (normalizeEUL).
+  subroutine reduceEUL(self, geoblock)
+    use IGLOO_variables, only: toll, ord2, mesh2D
     implicit none
     class(obj_eulerblock), intent(inout) :: self
     type(obj_block),       intent(in)    :: geoblock
-    real(R8),              intent(in)    :: hTab(:)
-    logical,               intent(in)    :: cpVariable
     integer  :: i, j, k, gi, gj, gk, da, db, dc, oct, gNx, gNy, gNz
     integer  :: lo_i, hi_i, lo_j, hi_j, lo_k, hi_k
-    real(R8) :: rho, v, sumVol, accDens, accNp, accVel(3), accT
+    real(R8) :: v, sumVol, accDens, accNp, accVel(3), accT
     real(R8), allocatable :: density_geo(:,:,:), np_geo(:,:,:)
     real(R8), allocatable :: velocity_geo(:,:,:,:), temperature_geo(:,:,:)
 
-    !> Step 1 (ord2): reduce the raw numerators to geoblock cells before normalizing.
     if (ord2) then
       gNx = geoblock%Nx;  gNy = geoblock%Ny;  gNz = geoblock%Nz
       allocate(density_geo    (1:gNx, 1:gNy, 1:gNz))
@@ -303,13 +301,20 @@ contains
       call move_alloc(temperature_geo, self%temperature)
     endif
 
-    !> Step 2: mollify the conserved densities {rho, rho*v, rho*e, n}.
+  end subroutine reduceEUL
 
-    if (mollifyPasses > 0) call mollifyEuler(self, geoblock)
+  !> End-of-solve eulerian normalization in place: velocity = momentum/density, temperature =
+  !  energy/density (h -> T for cpVariable groups).
+  subroutine normalizeEUL(self, hTab, cpVariable)
+    use IGLOO_Lib_Properties, only: comp_TfromTab
+    use IGLOO_variables,      only: toll
+    implicit none
+    class(obj_eulerblock), intent(inout) :: self
+    real(R8),              intent(in)    :: hTab(:)
+    logical,               intent(in)    :: cpVariable
+    integer  :: i, j, k
+    real(R8) :: rho
 
-
-    !> Step 3: normalize in place; velocity = momentum/density, temperature = energy/density
-    !  (h -> T for cpVariable groups).
     do k = lbound(self%density, 3), ubound(self%density, 3)
       do j = lbound(self%density, 2), ubound(self%density, 2)
         do i = lbound(self%density, 1), ubound(self%density, 1)
@@ -329,7 +334,7 @@ contains
       enddo
     enddo
 
-  end subroutine finalizeEUL
+  end subroutine normalizeEUL
 
   !> Mollify the eulerian conserved densities {rho, rho*v, rho*e, n} in place with the
   !  local binomial smoother.
@@ -384,6 +389,103 @@ contains
     end associate
     deallocate(tmp, qold)
   end subroutine mollifySource
+
+  !> Mollify one family's eulerian densities over every block: each block on its own when no
+  !  aligned 101 link joins two cells (mollifyEuler), else across the links (mollifyBlocks).
+  subroutine mollifyEulerBlocks(eul, geo, links)
+    use IGLOO_variables, only: mesh2D, mollifyPasses
+    implicit none
+    type(obj_eulerblock), intent(inout) :: eul(:)
+    type(obj_block),      intent(in)    :: geo(:)
+    type(cellLink),       intent(in)    :: links(:)
+    type(blockField), allocatable :: fld(:), vol(:)
+    integer :: ndim, b, c, iv
+
+    if (mollifyPasses <= 0) return
+    if (.not. any(links(:)%dir > 0)) then
+      do b = 1, size(eul)
+        call mollifyEuler(eul(b), geo(b))
+      enddo
+      return
+    endif
+    ndim = merge(2, 3, mesh2D)
+    allocate(fld(size(eul)), vol(size(eul)))
+    do b = 1, size(eul)
+      vol(b)%q = geo(b)%cellVol
+    enddo
+    !> rho, rho*u (three components), rho*e, n: the order of mollifyEuler
+    do iv = 1, 6
+      do b = 1, size(eul)
+        select case (iv)
+        case (1);    fld(b)%q = eul(b)%density
+        case (2:4);  fld(b)%q = eul(b)%velocity(iv-1,:,:,:)
+        case (5);    fld(b)%q = eul(b)%temperature
+        case (6);    fld(b)%q = eul(b)%np
+        end select
+      enddo
+      call mollifyBlocks(fld, vol, links, mollifyPasses, ndim)
+      do b = 1, size(eul)
+        select case (iv)
+        case (1);    eul(b)%density = fld(b)%q
+        case (2:4);  c = iv - 1; eul(b)%velocity(c,:,:,:) = fld(b)%q
+        case (5);    eul(b)%temperature = fld(b)%q
+        case (6);    eul(b)%np = fld(b)%q
+        end select
+      enddo
+    enddo
+  end subroutine mollifyEulerBlocks
+
+  !> Mollify the source totals {mass, mom, en} over every block, as densities (/V, smoothed, *V):
+  !  each block on its own when no aligned 101 link joins two cells (mollifySource), else across
+  !  the links (mollifyBlocks).
+  subroutine mollifySourceBlocks(src, geo, links)
+    use IGLOO_variables, only: mesh2D, mollifyPasses, nm
+    implicit none
+    type(obj_sourceblock), intent(inout) :: src(:)
+    type(obj_block),       intent(in)    :: geo(:)
+    type(cellLink),        intent(in)    :: links(:)
+    type(blockField), allocatable :: fld(:), vol(:)
+    integer :: ndim, b, iv
+
+    if (mollifyPasses <= 0) return
+    if (.not. any(links(:)%dir > 0)) then
+      do b = 1, size(src)
+        call mollifySource(src(b), geo(b))
+      enddo
+      return
+    endif
+    ndim = merge(2, 3, mesh2D)
+    allocate(fld(size(src)), vol(size(src)))
+    do b = 1, size(src)
+      vol(b)%q = geo(b)%cellVol
+    enddo
+    !> mass of each material, the three momentum components, energy: the order of mollifySource
+    do iv = 1, nm + 4
+      do b = 1, size(src)
+        associate(V => geo(b)%cellVol)
+        if (iv <= nm) then
+          fld(b)%q = src(b)%sourceMass(iv,:,:,:) / V
+        elseif (iv <= nm + 3) then
+          fld(b)%q = src(b)%sourceMom(iv-nm,:,:,:) / V
+        else
+          fld(b)%q = src(b)%sourceEn / V
+        endif
+        end associate
+      enddo
+      call mollifyBlocks(fld, vol, links, mollifyPasses, ndim)
+      do b = 1, size(src)
+        associate(V => geo(b)%cellVol)
+        if (iv <= nm) then
+          src(b)%sourceMass(iv,:,:,:) = fld(b)%q * V
+        elseif (iv <= nm + 3) then
+          src(b)%sourceMom(iv-nm,:,:,:) = fld(b)%q * V
+        else
+          src(b)%sourceEn = fld(b)%q * V
+        endif
+        end associate
+      enddo
+    enddo
+  end subroutine mollifySourceBlocks
 
   !> Cell indices (i,j,k) on face af -> face-local pair (m,n); (0,0) if the cell is not on it.
   pure subroutine ijk2fmn(self,Ai,Aj,Ak,af,am,an)
