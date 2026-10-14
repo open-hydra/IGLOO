@@ -29,6 +29,18 @@ module IGLOO_Lib_Statistics
     !> Size-distribution table k has the code TableDistrBase + k.
     integer, parameter :: TableDistrBase = 100
 
+    !> Tabulated size distribution: K classes, their edges as diameters and the cumulative mass
+    !  fraction at each edge (piecewise-linear between edges; one row = Dirac at edge(0)).
+    type, public :: psdTable
+        character(len=:), allocatable :: key     !> the bc.txt column-8 token, as written
+        character(len=:), allocatable :: file    !> the file read
+        integer :: K = 0
+        real(R8), allocatable :: edge(:)         !> (0:K) class edges [m], diameter
+        real(R8), allocatable :: cdf(:)          !> (0:K) cumulative mass fraction at the edges
+    end type psdTable
+    !> The tables in use, one per distinct token.
+    type(psdTable), allocatable, public, protected :: psdTab(:)
+
     !> splitmix64 constants as signed decimal (two's-complement images of the published hex values).
     integer(I8), parameter :: SM_GOLDEN = -7046029254386353131_I8
     integer(I8), parameter :: SM_IDMIX  = -4417276706812531889_I8
@@ -242,6 +254,7 @@ contains
 
     !> Samples an injection diameter from the per-inlet distribution law `code`: p1 = mean /
     !  characteristic diameter, p2 = width (std, or Rosin-Rammler n); p2 <= 0 returns p1 with no draw.
+    !  A size-distribution table (code >= TableDistrBase) ignores p1 and p2.
     function sampleDiameter(p1, p2, code) result(d)
         implicit none
         real(R8), intent(in) :: p1, p2
@@ -250,6 +263,10 @@ contains
         real(R8) :: d, sig2
         integer  :: i
 
+        if (code >= TableDistrBase) then
+            d = psdTableSample(code - TableDistrBase)
+            return
+        endif
         if (p2 <= 0._R8) then          ! Dirac / opt-out: no RNG consumed
             d = p1
             return
@@ -319,17 +336,174 @@ contains
         end select
     end function lawIndex
 
-    !> Registry index of the size-distribution table named by `path`.
+    !> Registry index of the size-distribution table named by `path`, read once per distinct token.
     function loadPSDTable(path) result(idx)
         implicit none
         character(len=*), intent(in) :: path
-        integer :: idx
-        character(len=:), allocatable :: file
-        file = resolvePSDPath(path)
-        write(*,'(A)') ' [ERROR] tabulated size distributions are not implemented yet: '//file
-        error stop 'IGLOO: tabulated size distribution not implemented'
-        idx = 0
+        integer :: idx, n
+        type(psdTable), allocatable :: grown(:)
+
+        n = 0
+        if (allocated(psdTab)) n = size(psdTab)
+        do idx = 1, n
+            if (psdTab(idx)%key == trim(adjustl(path))) return
+        enddo
+        allocate(grown(n+1))
+        if (n > 0) grown(1:n) = psdTab
+        call readPSDTable(trim(adjustl(path)), grown(n+1))
+        call move_alloc(grown, psdTab)
+        idx = n + 1
     end function loadPSDTable
+
+    !> Reads a size-distribution file: per data line the particle radius [m] and its mass fraction
+    !  (any scale, normalised here); blank lines and lines starting with #, ! or ; are skipped.
+    !  Histogram reading: class k holds its mass uniformly between the mid-points to its neighbours,
+    !  the end classes extended by half the adjacent spacing (the first edge floored at r1/2).
+    subroutine readPSDTable(key, tab)
+        implicit none
+        character(len=*), intent(in)  :: key
+        type(psdTable),   intent(out) :: tab
+        character(len=1024)   :: line
+        real(R8), allocatable :: r(:), m(:), csum(:)
+        real(R8) :: v(2)
+        integer  :: u, ios, nline, nk, k
+
+        tab%key  = key
+        tab%file = resolvePSDPath(key)
+        open(newunit=u, file=tab%file, status='old', action='read', iostat=ios)
+        if (ios /= 0) then
+            write(*,'(A)') ' [ERROR] size-distribution file '//tab%file//' cannot be opened'
+            error stop 'IGLOO: size-distribution file cannot be read'
+        endif
+        allocate(r(0), m(0))
+        nline = 0
+        do
+            read(u, '(A)', iostat=ios) line
+            if (is_iostat_end(ios)) exit
+            if (ios /= 0) then
+                write(*,'(A)') ' [ERROR] size-distribution file '//tab%file//' cannot be read'
+                error stop 'IGLOO: size-distribution file cannot be read'
+            endif
+            nline = nline + 1
+            line = adjustl(line)
+            if (len_trim(line) == 0) cycle
+            if (scan(line(1:1), '#!;') > 0) cycle
+            if (.not. twoNumbers(line, v)) then
+                write(*,'(A,I0,A)') ' [ERROR] '//tab%file//' line ', nline, ': '//trim(line)
+                error stop 'IGLOO: size-distribution file: a data line must hold exactly two finite numbers'
+            endif
+            r = [r, v(1)]
+            m = [m, v(2)]
+        enddo
+        close(u)
+
+        nk = size(r)
+        if (nk == 0) then
+            write(*,'(A)') ' [ERROR] size-distribution file '//tab%file//' holds no data rows'
+            error stop 'IGLOO: size-distribution file holds no data rows'
+        endif
+        allocate(csum(0:nk))
+        csum(0) = 0._R8
+        do k = 1, nk
+            if (.not. (r(k) > 0._R8)) then
+                write(*,'(A,I0,A)') ' [ERROR] '//tab%file//': data row ', k, ' has a radius <= 0'
+                error stop 'IGLOO: size-distribution file: a radius is not positive'
+            endif
+            if (k > 1) then
+                if (.not. (r(k) > r(k-1))) then
+                    write(*,'(A,I0,A)') ' [ERROR] '//tab%file//': data row ', k, ' does not increase the radius'
+                    error stop 'IGLOO: size-distribution file: the radii must increase'
+                endif
+            endif
+            if (m(k) < 0._R8) then
+                write(*,'(A,I0,A)') ' [ERROR] '//tab%file//': data row ', k, ' has a negative mass fraction'
+                error stop 'IGLOO: size-distribution file: a mass fraction is negative'
+            endif
+            csum(k) = csum(k-1) + m(k)
+        enddo
+        if (.not. (csum(nk) > 0._R8)) then
+            write(*,'(A)') ' [ERROR] size-distribution file '//tab%file//': the mass fractions sum to 0'
+            error stop 'IGLOO: size-distribution file: the mass fractions sum to zero'
+        endif
+
+        tab%K = nk
+        allocate(tab%edge(0:nk), tab%cdf(0:nk))
+        if (nk == 1) then
+            tab%edge = 2._R8*r(1)
+            tab%cdf  = [0._R8, 1._R8]
+            return
+        endif
+        tab%edge(0) = r(1) - 0.5_R8*(r(2) - r(1))
+        if (tab%edge(0) <= 0._R8) tab%edge(0) = 0.5_R8*r(1)
+        do k = 1, nk-1
+            tab%edge(k) = 0.5_R8*(r(k) + r(k+1))
+        enddo
+        tab%edge(nk) = r(nk) + 0.5_R8*(r(nk) - r(nk-1))
+        tab%edge = 2._R8*tab%edge          ! radius -> diameter
+        tab%cdf  = csum/csum(nk)
+    end subroutine readPSDTable
+
+    !> True when `line` holds exactly two finite numbers separated by blanks, tabs or a comma.
+    function twoNumbers(line, v) result(ok)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        implicit none
+        character(len=*), intent(in)  :: line
+        real(R8),         intent(out) :: v(2)
+        logical :: ok
+        integer :: i, n, a, ios, last
+
+        ok = .false.
+        v = 0._R8
+        n = 0
+        a = 0
+        last = len_trim(line)
+        do i = 1, last + 1
+            if (i <= last) then
+                if (index(' ,'//achar(9), line(i:i)) == 0) then
+                    if (a == 0) a = i
+                    cycle
+                endif
+            endif
+            if (a == 0) cycle
+            n = n + 1
+            if (n > 2) return
+            if (scan(line(a:i-1), '/*') > 0) return      ! list-directed end-of-input / repeat count
+            read(line(a:i-1), *, iostat=ios) v(n)
+            if (ios /= 0) return
+            if (.not. ieee_is_finite(v(n))) return
+            a = 0
+        enddo
+        ok = (n == 2)
+    end function twoNumbers
+
+    !> One draw of table `idx`: the inverse of its piecewise-linear mass CDF (one row: no draw).
+    function psdTableSample(idx) result(d)
+        implicit none
+        integer, intent(in) :: idx
+        real(R8) :: d, u
+        integer  :: lo, hi, mid
+
+        if (.not. allocated(psdTab)) error stop 'IGLOO: sampleDiameter: no size-distribution table loaded'
+        if (idx < 1 .or. idx > size(psdTab)) error stop 'IGLOO: sampleDiameter: no such size-distribution table'
+        associate(t => psdTab(idx))
+        if (t%K == 1) then
+            d = t%edge(0)
+        else
+            call random_number(u)
+            lo = 0
+            hi = t%K
+            do while (hi - lo > 1)              ! keeps cdf(lo) <= u < cdf(hi)
+                mid = (lo + hi)/2
+                if (u < t%cdf(mid)) then
+                    hi = mid
+                else
+                    lo = mid
+                endif
+            enddo
+            d = t%edge(lo) + (u - t%cdf(lo))/(t%cdf(hi) - t%cdf(lo))*(t%edge(hi) - t%edge(lo))
+        endif
+        end associate
+    end function psdTableSample
 
     !> The table file: `path` as written (relative to the case directory), else INPUT/ + its basename.
     function resolvePSDPath(path) result(file)

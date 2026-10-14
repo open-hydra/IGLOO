@@ -337,11 +337,13 @@ contains
     character(len=256) :: tok(nPropDP)
     character(len=512) :: lineString
     integer            :: ipos, lawc
+    logical            :: psdNotice
 
     totFam = 0
     do mat = 1, nm
       totFam = totFam + material(mat)%ngroups
     enddo
+    psdNotice = .false.
 
     if (mesh2D) then; ci_n = 4; else; ci_n = 5; endif
 
@@ -516,6 +518,8 @@ contains
             lawc = DiracDistr
             if (nTok >= 8) lawc = law_token_code(tok(8))
             if (lawc < TableDistrBase .and. propBuffer(7) <= 0._R8) lawc = DiracDistr
+            if (lawc >= TableDistrBase .and. .not. psdNotice) &
+              psdNotice = psd_rp_notice(lawc - TableDistrBase, propBuffer(6), name)
             propBuffer(8) = real(lawc, R8)
             ! Col 9: per-cell injection spacing ds [m] (absent => 0 => global [IGLOO-BC] ds).
             if (nTok >= 9) then
@@ -1114,6 +1118,22 @@ contains
       error stop 'IGLOO: unsupported distribution law'
     endif
   end function law_token_code
+
+
+  !> True when the column-6 radius rp > 0 lies outside table idx (a table ignores it); the root rank says so.
+  logical function psd_rp_notice(idx, rp, name) result(noticed)
+    use IGLOO_Lib_Statistics, only: psdTab
+    use IGLOO_Mod_MPI,        only: mpi_is_root
+    implicit none
+    integer,          intent(in) :: idx
+    real(R8),         intent(in) :: rp
+    character(len=*), intent(in) :: name
+    associate(t => psdTab(idx))
+    noticed = rp > 0._R8 .and. (2._R8*rp < t%edge(0) .or. 2._R8*rp > t%edge(t%K))
+    if (noticed .and. mpi_is_root) write(*,'(A)') ' [NOTICE] INPUT/'//trim(name)//'bc.txt: the radius in column 6'// &
+                                                  ' lies outside '//t%file//', which sets the size (columns 6 and 7 are ignored)'
+    end associate
+  end function psd_rp_notice
 
 
   !> Refuses INPUT/<prefix>properties.dat: the reason and the expected header, then the stop.
