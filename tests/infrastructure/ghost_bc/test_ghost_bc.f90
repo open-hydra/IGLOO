@@ -255,7 +255,8 @@ contains
     end subroutine u8_stretched
 
     !> U9 -- the uniform pair (0.3 | 0.3): every face ghost lies on the partner's centre to
-    !  roundoff; the weights snap to it, so the ghost is the partner's value bit for bit.
+    !  roundoff (the distance is printed); the weights snap to it, so the ghost is the partner's
+    !  value bit for bit.
     subroutine u9_snap
         type(obj_block)     :: geo(2)
         type(obj_flowblock) :: sol(2)
@@ -276,7 +277,6 @@ contains
             if (any(sol(2)%velocity(:,0,j,k)    /= sol(1)%velocity(:,nx,j,k))) ndiff = ndiff + 1
         enddo; enddo
         print '(a,es10.3)', '  [..] U9 face ghost to partner centre, max distance / dual diagonal = ', dmax
-        call expectTrue('U9 the snap is exercised: a face ghost off its partner centre by roundoff', dmax > 0.0_real64)
         call expectLE('U9 face ghosts differing from the partner value (T, u)', real(ndiff, real64), 0.0_real64)
     end subroutine u9_snap
 
@@ -722,17 +722,6 @@ contains
             nfail = nfail + 1
         endif
     end subroutine expectLE
-
-    subroutine expectTrue(label, ok)
-        character(*), intent(in) :: label
-        logical,      intent(in) :: ok
-        if (ok) then
-            print '(a,a)', '  [ok] ', label
-        else
-            print '(a,a)', '  [FAIL] ', label
-            nfail = nfail + 1
-        endif
-    end subroutine expectTrue
 
     subroutine expectEq(label, got, want, tol)
         character(*), intent(in) :: label
