@@ -1,6 +1,6 @@
 # Verification matrix
 
-One row per registered CTest entry (178 in a serial build: 138 e2e + 39 unit incl. `self_test` and
+One row per registered CTest entry (179 in a serial build: 139 e2e + 39 unit incl. `self_test` and
 `registry-docs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 7 `mpi-*` rows in their own
 section, 185).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
@@ -30,13 +30,13 @@ Columns:
 
 ---
 
-## Shared box fixture (37 of 77 e2e fixtures)
+## Shared box fixture (38 of 78 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
 writes with its defaults.
 
-Thirty-seven fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
+Thirty-eight fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
 once here, referenced as **"shared box"** below. The other forty:
@@ -104,6 +104,7 @@ oracle possible.
 | **psd-normal** | `[Kol33]`,`[AD54]`,`[Ste74]` | *closed form* — the Normal truncated to d > 0, μ = 20 µm, σ = 10 µm, as `psd-table` (shared `check.py`). Measured D_n 7.51e-3, A² 1.008. RED: rejection removed and draws clipped to 1 µm, D 0.0233, A² 40.9 (the tail defect A² sees by a factor 7) | as `psd-table` | as `psd-table`, columns 6-8 `1e-5 1e-5 Normal` |
 | **psd-lognormal** | `[Kol33]`,`[AD54]`,`[Ste74]` | *closed form* — LogNormal of mean 20 µm and standard deviation 10 µm. Measured D_n 7.40e-3, A² 0.917. RED: σ_p taken as the log-space σ, D 0.593 | as `psd-table` | as `psd-table`, columns 6-8 `1e-5 1e-5 LogNormal` |
 | **psd-rosinrammler** | `[Kol33]`,`[AD54]`,`[Ste74]` | *closed form* — Rosin-Rammler x0 = 30 µm, n = 2.5. Measured D_n 5.13e-3, A² 0.457. RED: n 10 % high, D 0.0271, A² 41.3; x0 and n exchanged, D 0.632 and 276 parcels lost | as `psd-table` | as `psd-table`, columns 6-8 `1.5e-5 2.5 RosinRammler` |
+| **psd-bare-token** | — (the token rule of bc.txt column 8) | *exact* — column 8 names the size-distribution file `psd` (no `.`, no `/`) in the case directory: a token that is not a law name is a file when one exists under it (as written, then `INPUT/` + its basename). The one-row table makes every parcel a Dirac at 2r₁ = 24 µm: 25 parcels, d on every first trajectory row to the E13.6 half-ULP, one notice for column 6 outside the table. RED on a reader that takes only a token holding `.` or `/` as a file: refused at setup (`unsupported distribution law: psd`, exit 128) | shared box | inlet-face 401 (drag-stokes's), columns 6-8 `5.945e-6 0 psd`; outlet + walls |
 | **vortex-cloud-st0p01 / -st0p1 / -st1 / -st10** | ICE verification case I (`test/verification/I-vortex-cloud/run.py`; closed form τz″ + z′ = iΩz) | *closed form, per parcel* — the conformal map z = C(t)·z0, C = A e^{λ+t} + B e^{λ−t}, λ± = (−1 ± √(1+4iΩτ))/(2τ), for a parcel seeded at the gas velocity; G1 self-checks it (C(0) = 1, C′(0) = iΩ, rotation and dilation monotone, RK4 to 1e-12). G0′ premise: 1672 IDs from their seed states, all 1672 in `snapshot-A.dat` at t = QUARTER = π/2 (1e-8 s), no exit, planar single-layer path; G2′: every time-stamped row and snapshot record within 3e-6 m / 3e-6 m/s of C(t)z0 / C′(t)z0 — measured 6.7e-7–7.0e-7 m and 7.0e-7 m/s (the F12.6 floor √2·5e-7) at every St; the cloud's |C| and lag at QUARTER equal the closed form (1.015723 / 0.000310 … 1.828830 / 0.538470). RED (worst G2′ residual): `NoDrag` 6.7e-2–1.23 m, ρ_p doubled 1.7e-2–0.20 m, seeded at rest 1.1e-2–1.56 m, `gas-order = 1` 1.4e-3–1.4e-2 m; `time-end` absent: no snapshot; `out-time = off`: no time column | Own generator `tools/make_vortex_case.py` (ICE's constants): [−2,2]² at 96×96, one cell of thickness 1/24 in z (planar single layer), frozen solid-body gas u = −Ωy, v = Ωx (Ω = 1), ρ 1.2, T 300, μ 1.8e-5; every face 400 | DB, 1672 parcels on an h/2 lattice within 4σ of (0.6, 0), seeded at (−Ωy0, Ωx0), d = ICE's dp for St = 0.01/0.1/1/10 at ρ_p 1000 (case-local `properties.dat`), `mdot` = ρ_p0(z0)(h/2)²h; `time-end = QUARTER`, `out-time = on` |
 | **vortex-cloud-3way** | ICE case I, three-way | *report driver*, optional: hydra's `test/vortex-cloud/compare.py --check` runs ICE (history via `sol-overwrite = false`) and this tree's IGLOO on the case and checks IGLOO's cloud against the closed form at QUARTER (5e-6 in |C| and lag) and ICE's against the closed form at its own final time (`run.py`'s 5e-3). Skipped (exit 77) without `HYDRADIR`, the driver, ICE's scripts or an ICE binary | as `vortex-cloud-st*` | as `vortex-cloud-st*` |
 | **d2law** | `[God53]`,`[Spa53]` (+`[RM52]`,`[Lef89]`) | *run-conditioned* — Godsave–Spalding kernel d(d²)/dt=−(8k_g/c_pg·ρ_p)·ln(1+B_T) integrated in `check.py` **along the measured T_p(x)** from production output (no static file) | shared box | inlet-face 401; `evaporation=d2-law`; κ_t=0.5, d=30 µm, ρ_p=8000; fuel L_v=2e5, M_v=100, T_boil=900, p_sat=1e4; outlet + walls |
@@ -298,9 +299,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-138 `e2e`-labelled + 39 `unit`-labelled + the optional `vortex-cloud-3way` = **178 CTest entries** in a
-serial build (+7 `mpi-*` under `USE_MPI`, 185), all green (counted from `tests/CMakeLists.txt`). The 138
-`e2e` entries are the 78 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+139 `e2e`-labelled + 39 `unit`-labelled + the optional `vortex-cloud-3way` = **179 CTest entries** in a
+serial build (+7 `mpi-*` under `USE_MPI`, 185), all green (counted from `tests/CMakeLists.txt`). The 139
+`e2e` entries are the 79 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the twelve `repeat-*` two-sweep gates and the forty-six `refuse-*` setup-refusal gates. The
 39 `unit` entries are 34 compiled unit tests, the property-table reader on its three fixtures

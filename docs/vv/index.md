@@ -194,7 +194,7 @@ solver could only emulate with a no-drag production flag.  See
 | INI pipeline | INI → module-variable round-trip, IP1–IP5 | `test_ini_pipeline`; `registry-docs` |
 | Property tables | `properties.dat` read by column name (PR1–PR3, PR6, PR7, PR9, PR10), its header, row, node, column and `Psat` checks (PR4, PR5, PR8, PR11–PR13), and the enthalpy-to-temperature inversion of a varying $c_p$ (PR14) | `test_properties_reader` (three working directories); five `refuse-properties-*` cases; `temp-relax-varcp` and `varcp-tmin` e2e |
 | Breakup (TAB/ETAB/RD/PE/KHRT) | All five models vs the primary papers (PE87, TAB-872089, Tanner 97/98, Reitz-87, RD-860469, Beale-Reitz-99) | 8 unit tests (including `test_tab_moments` and the ETAB child $v_\perp = A\dot{x}$ check ET4); five Weber-sweep e2e cases |
-| Injection size distributions | The injection laws (Dirac, truncated Normal, LogNormal, Rosin–Rammler) and size-distribution files (histogram reading), as mass-flow distributions | `test_psd_table` (T1–T5) + `psd-table`, `psd-normal`, `psd-lognormal`, `psd-rosinrammler` e2e + ten `refuse-psd-*` refusals |
+| Injection size distributions | The injection laws (Dirac, truncated Normal, LogNormal, Rosin–Rammler) and size-distribution files (histogram reading), as mass-flow distributions | `test_psd_table` (T1–T5) + `psd-table`, `psd-normal`, `psd-lognormal`, `psd-rosinrammler`, `psd-bare-token` e2e + ten `refuse-psd-*` refusals |
 | Combustion | Beckstead $d^n$ Al burn law | `test_combustion` (CB1–CB4) + `burn-box` e2e |
 | Solidification | Supercooling, recalescence, freezing plateau and melting (model 6) | `test_solidification` (SG0–SG9) + `solid-box`, `solid-melt`, `solid-box-euler`, `solid-box-2mat`, `scatter-weight-solid` e2e, `repeat-solid-box` |
 

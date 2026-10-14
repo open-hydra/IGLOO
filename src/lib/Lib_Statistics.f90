@@ -18,7 +18,7 @@ module IGLOO_Lib_Statistics
 
     !> Injection-diameter sampling
     public :: sampleDiameter, lawCode, isLawName, initRandomSeed
-    public :: loadPSDTable
+    public :: loadPSDTable, isPSDFile
     public :: DiracDistr, NormalDistr, LogNorDistr, RosRamDistr, TableDistrBase
 
     !> Distribution-law codes (stored as col-8 of cell%properties; see IO.f90)
@@ -509,20 +509,46 @@ contains
     function resolvePSDPath(path) result(file)
         implicit none
         character(len=*), intent(in) :: path
-        character(len=:), allocatable :: file, alt
-        logical :: there
-        file = trim(adjustl(path))
-        inquire(file=file, exist=there)
-        if (there) return
-        alt = 'INPUT/'//file(index(file, '/', back=.true.)+1:)
-        inquire(file=alt, exist=there)
-        if (there) then
-            file = alt
-            return
-        endif
-        write(*,'(A)') ' [ERROR] size-distribution file not found: tried '//file//' and '//alt
+        character(len=:), allocatable :: file, given
+        file = locatePSDFile(path)
+        if (len(file) > 0) return
+        given = trim(adjustl(path))
+        write(*,'(A)') ' [ERROR] size-distribution file not found: tried '//given//' and INPUT/'// &
+                       given(index(given, '/', back=.true.)+1:)
         error stop 'IGLOO: size-distribution file not found'
     end function resolvePSDPath
+
+    !> resolvePSDPath without the refusal: '' when neither name exists.
+    function locatePSDFile(path) result(file)
+        implicit none
+        character(len=*), intent(in) :: path
+        character(len=:), allocatable :: file, given
+        logical :: there
+        given = trim(adjustl(path))
+        file = given
+        inquire(file=file, exist=there)
+        if (there) return
+        file = 'INPUT/'//given(index(given, '/', back=.true.)+1:)
+        inquire(file=file, exist=there)
+        if (there) return
+        file = ''
+    end function locatePSDFile
+
+    !> True when `path` is a loaded size-distribution table or names a file (as written, or as
+    !  INPUT/ + its basename).
+    function isPSDFile(path) result(found)
+        implicit none
+        character(len=*), intent(in) :: path
+        logical :: found
+        integer :: i
+        found = .false.
+        if (allocated(psdTab)) then
+            do i = 1, size(psdTab)
+                if (psdTab(i)%key == trim(adjustl(path))) found = .true.
+            enddo
+        endif
+        if (.not. found) found = len(locatePSDFile(path)) > 0
+    end function isPSDFile
 
     !> Seeds the intrinsic RNG deterministically from one integer.
     subroutine initRandomSeed(seed)
