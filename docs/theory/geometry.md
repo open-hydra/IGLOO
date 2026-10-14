@@ -112,7 +112,9 @@ tests are inclusive (to 1e-15), so a conformal interface leaves no gap. `bcDef`'
 index jump into the cell named by the bc file, runs only when no block contains the point. With
 `gas-order = 2` the ODE step ends at the block face, since the particle must change block there:
 the trajectory gains a row at the interface that a single block would not write, and scatter samples
-beside it can move; the deposits are additive over the cut step.
+beside it can move; the deposits are additive over the cut step. The gas stencil is then sought in
+the new block's own dual mesh, and so is it when the cell search at the entry of a boundary dual cell
+finds the particle in another block.
 
 ---
 

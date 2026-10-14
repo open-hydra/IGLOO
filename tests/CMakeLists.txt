@@ -10,7 +10,7 @@
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ chimera-2blk/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero}}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ periodic-2d/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ chimera-2blk/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero}}
 #   repeatability/      two-sweep gates (twosweep driver): 12 cases
 #   mpi/                registered only under USE_MPI: 6 rank-count cases + 2 consistency + 1 determinism
 #                       + 12 two-sweep cases
@@ -776,6 +776,10 @@ igloo_refusal_case(refuse-psd-mass-zero    infrastructure/refusals/psd-mass-zero
 igloo_e2e_case(drag-stokes-dopri5 standard/drag-stokes-dopri5 "e2e;standard")
 # translational periodic pair (bcdef 201): closed-form v(x) across wraps + modular-y
 igloo_e2e_case(periodic-y infrastructure/periodic-y "e2e;infrastructure")
+# periodic-2d: periodic-y on a one-layer box, the 201 lines in ATLAS's nine-integer single-layer form (the partner
+# face is the fifth integer). RED on a reader taking four index integers there: the partner's k read as its face,
+# 18 of 25 parcels cycling to the outer iteration cap, the run not ending in 300 s.
+igloo_e2e_case(periodic-2d infrastructure/periodic-2d "e2e;infrastructure;bc")
 # A24 (2026-08-07): first coverage for pin_particles_bc_center. Every other case sets
 # `ds` (20) or injects an assigned/DB stream (3), and every other phase.txt declares one
 # group, so this routine ran in no test at all -- long enough to accumulate two

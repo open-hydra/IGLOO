@@ -1469,16 +1469,15 @@ contains
   end subroutine fillGhostPartners
 
 
-  !> Link table of the 101 face cells, one entry per cell: the partner cell of its connection and
-  !  the partner face, which is the face of the partner cell whose own 101 record names this cell
-  !  (the payload's face column is not used). Refuses a partner outside the mesh, a connection
-  !  that is not mutual and, on a one-layer mesh, a 101 record on face 5 or 6.
+  !> Link table of the 101 face cells, one entry per cell: the partner cell and face of its
+  !  connection. Refuses a partner outside the mesh, a connection that is not mutual (the partner
+  !  face's record must name this cell and face) and, on a one-layer mesh, a 101 record on face 5 or 6.
   subroutine buildInterfaceLinks(geo, links)
     use IGLOO_variables, only: mesh2D
     implicit none
     type(obj_block),             intent(in)  :: geo(:)
     type(cellLink), allocatable, intent(out) :: links(:)
-    integer :: nl, l, b, f, m, n, i, j, k, pb, pi, pj, pk, pf, qf, qm, qn, hits
+    integer :: nl, l, b, f, m, n, i, j, k, pb, pi, pj, pk, pf, qm, qn
 
     nl = 0
     do b = 1, size(geo)
@@ -1503,18 +1502,15 @@ contains
           pk = geo(b)%face(f)%cell(m,n)%connection(4)
           if (pi < 1 .or. pi > geo(pb)%Nx .or. pj < 1 .or. pj > geo(pb)%Ny .or. pk < 1 .or. pk > geo(pb)%Nz) &
             error stop 'IGLOO: a 101 connection names a cell outside its block'
-          hits = 0; pf = 0
-          do qf = 1, 6
-            if (mesh2D .and. qf >= 5) cycle
-            call geo(pb)%ijk2fmn(pi, pj, pk, qf, qm, qn)
-            if (qm == 0) cycle
-            if (geo(pb)%face(qf)%cell(qm,qn)%bcdef /= 101) cycle
-            if (geo(pb)%face(qf)%cell(qm,qn)%connection(1) /= b) cycle
-            if (any(geo(pb)%face(qf)%cell(qm,qn)%connection(2:4) /= [i, j, k])) cycle
-            hits = hits + 1
-            if (hits == 1 .or. qf == geo(b)%face(f)%cell(m,n)%connectionFace) pf = qf
-          enddo
-          if (hits == 0) error stop 'IGLOO: a 101 connection is not mutual: the partner cell does not name this cell'
+          pf = geo(b)%face(f)%cell(m,n)%connectionFace
+          qm = 0
+          if (pf >= 1 .and. pf <= merge(4, 6, mesh2D)) call geo(pb)%ijk2fmn(pi, pj, pk, pf, qm, qn)
+          if (qm == 0) error stop 'IGLOO: a 101 connection is not mutual: the partner cell does not name this cell'
+          associate(q => geo(pb)%face(pf)%cell(qm,qn))
+          if (q%bcdef /= 101 .or. q%connection(1) /= b .or. any(q%connection(2:4) /= [i, j, k]) &
+              .or. q%connectionFace /= f) &
+            error stop 'IGLOO: a 101 connection is not mutual: the partner cell does not name this cell'
+          end associate
           l = l + 1
           links(l) = cellLink(b=b, f=f, i=i, j=j, k=k, pb=pb, pf=pf, pi=pi, pj=pj, pk=pk, &
                               dir=merge((f+1)/2, 0, (f+1)/2 == (pf+1)/2))

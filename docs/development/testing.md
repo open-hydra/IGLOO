@@ -79,7 +79,7 @@ tests/
 ├── combustion/                   # Beckstead unit family + burn-box e2e
 ├── solidification/               # solidification unit family + solid-box/solid-melt/solid-box-euler/solid-box-2mat/scatter-weight-solid e2e
 ├── infrastructure/               # gas_reconstruction, ini_pipeline, properties_reader, rng_stream, axis_dispatch, graze_standoff, dual_clip, source_reduction, ghost_bc, bc_families, mollify_blocks;
-│                                 # db-injection/coupled-body/db-2daxi/axis-200/wedge-fold/planar-slab/wedge-axis-row/two-mat/two-fam-bc/two-fam-bc-2blk/two-fam-bc-2blk-mollify/chimera-2blk/periodic-y/bc-center-2grp/ini-comment-eq/solver-fail-consumed/solver-fail-consumed-m4/wall-approach/varcp-tmin (e2e)
+│                                 # db-injection/coupled-body/db-2daxi/axis-200/wedge-fold/planar-slab/wedge-axis-row/two-mat/two-fam-bc/two-fam-bc-2blk/two-fam-bc-2blk-mollify/chimera-2blk/periodic-y/periodic-2d/bc-center-2grp/ini-comment-eq/solver-fail-consumed/solver-fail-consumed-m4/wall-approach/varcp-tmin (e2e)
 │                                 # refusals/{p2t,zgr,lk-d2law,properties-*,bc-copies,bc-copy-order,chimera-*,*-token,phase-token-real,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre} (setup-refusal gates)
 ├── repeatability/                # two-sweep state-leak gates: drag-stokes/drag-stokes-dopri5/db-injection/two-mat/d2law/khrt/vie-plait/etab/tab/tab-dopri5/solid-box/evap-breakup
 └── mpi/                          # USE_MPI build only: drag-stokes/conv-nu/khrt/bc-center-2grp/two-mat/consistency/consistency-two-mat

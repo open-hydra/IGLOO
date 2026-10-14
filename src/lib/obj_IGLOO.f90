@@ -266,7 +266,7 @@ contains
                                 eulerSwitch, sourceSwitch, unitTraj, unitScat, &
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
                                 trajOn, scatOn, dNscat, trajSample, threshold, &
-                                probeOn, probeIDs, axisym, nSectorFold, nMultiFold, &
+                                probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
                                 unitSnap, snapOn, timeOn, tEnd
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
@@ -304,7 +304,7 @@ contains
       error stop 1
     endif
     self%stateIsFresh = .false.
-    nSectorFold = 0; nMultiFold = 0
+    nSectorFold = 0; nMultiFold = 0; nStencilRefresh = 0
 
     sourceSwitch = self%srcSwitch
     eulerSwitch  = self%eulSwitch

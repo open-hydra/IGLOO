@@ -18,7 +18,7 @@ contains
                                 nb,toll,ord2,mesh2D,threshold,            &
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
-                                nSectorFold, nMultiFold,                   &
+                                nSectorFold, nMultiFold, nStencilRefresh,  &
                                 trajOn, scatOn, dNscat, sixOverPi, pi
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs
@@ -304,8 +304,14 @@ contains
         call setAtGasBoundary()
         if (atGasBoundary .and. .not.wasBoundary) then
           if (part%findParticle(geoblock)) then
-            b = part%i(1)
-            call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen)
+            if (part%i(1) /= b) then
+              !> the block changed: the gas stencil and state are re-sought in the new block
+              !$OMP ATOMIC
+              nStencilRefresh = nStencilRefresh + 1
+              call handleGeoEvent()
+            else
+              call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen)
+            endif
           else
             call part%updateCell(geoblock); call handleGeoEvent()
           endif
