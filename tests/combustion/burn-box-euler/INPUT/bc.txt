@@ -1,0 +1,1 @@
+../../burn-box/INPUT/bc.txt

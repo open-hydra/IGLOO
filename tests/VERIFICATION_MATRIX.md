@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (176 in a serial build: 137 e2e + 38 unit incl. `self_test` and
+One row per registered CTest entry (177 in a serial build: 138 e2e + 38 unit incl. `self_test` and
 `registry-docs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 7 `mpi-*` rows in their own
-section, 183).
+section, 184).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,13 +30,13 @@ Columns:
 
 ---
 
-## Shared box fixture (36 of 76 e2e fixtures)
+## Shared box fixture (37 of 77 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
 writes with its defaults.
 
-Thirty-six fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
+Thirty-seven fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
 once here, referenced as **"shared box"** below. The other forty:
@@ -118,6 +118,7 @@ oracle possible.
 | **tc-box-euler** | infrastructure/evaporation (Eulerian deposit for ODE models 2/5) | *behavioral* — no reference curve. The per-cell ratio `rho_p / n_p` is the time-mean droplet mass, an **intensive** quantity, compared with the mean of the two trajectory rows bounding the cell; plus `u_p = 10 m/s`, zero transverse velocity, `T_p` inside the cell's `[T_in, T_out]` band, and a coarse conservation ratio. 1475 of 1500 cells are checked (the outlet layer has no exit row) and the count is asserted. **The suite's only coverage of the model-2/5 Eulerian branch**: every other Euler writer is model 1, every other model-2/5 case writes `out-file = S` | `evaporation/tc-box`'s case (`INPUT/` per-file symlinks) | tc-box's conditions with `out-file = ALL` (so `euler1.tec` is written) and `mollify = off` (the smoother mixes `rho_p` and `n_p` with the same kernel; the ratio is exact only unsmoothed). ρ_p = 2950 from `properties.dat` col 3 — the INI's `[GPB-Phase1] rho = 8000` is **not read** by IGLOO. Tolerances are measured and bit-stable at OMP 1/2/5 (each parcel owns its own cell column) |
 | **tc-box-ord2-row** | infrastructure/evaporation (ord2 source-reduction conservation, e2e) | *behavioral* — no reference curve. Telescoping audit: `Σ wdot` over every `source.tec` cell against `Σ_p npdot·(m_inject − m_exit)` read from the trajectory rows, an oracle that never touches the field it checks. Four DB parcels are placed INSIDE the `j = 1` boundary dual row — the row the pre-fix volume-average handed on at ½. **The only gate on the wiring**: `test_source_reduction` calls `precomputeDualWeights` itself, so it cannot see a missing call in `allocate_blocks` | `evaporation/tc-box`'s case (three per-file `INPUT/` symlinks + a `bc.txt` from the committed `make_fixture.py`) | tc-box's conditions at **`gas-order = 2`**, **`mollify = off`** (the smoother is conservative but spreads the row 60+ cells inward), DB injection at `x = 5.5 mm` (off the node plane), `y = 2 mm` (the face row), `z = 12/22/32/42 mm` (interior). No `temp0` ⇒ drops start at 600 K and cool, **not** tc-box's 300 K regime |
 | **burn-box** | `[Beck05]` | *mixed* — diameter d^n(x)=d₀^n−K_eff·(x−x_a)/u_g is a **closed form** (T_p-independent above ignition); temperature T_p(x) is an **independent RK4** energy balance (Nu=2 conduction + combustion release); `reference/beckstead.txt` | shared box | inlet-face 401; `combustion=Beckstead` (K-burn=4.5e-7, n=1.8, X-eff=0.5, T-ign=550, β=0.3, q-comb=1e6); κ_t=1.0, d=30 µm, ρ_p=8000; outlet + walls |
+| **burn-box-euler** | — (the burn law is `burn-box`'s) | *per-cell identity* — the equivalent-Eulerian field of ODE model 5 (`out-file = ALL`, `mollify = off`): ρ_p/n_p = ∫m dt/T_stay against (m_in + m_out)/2 of the two bounding trajectory rows (1e-4; measured 2.1e-5) over 1475 cells, u_p = u_g (5.5e-14), T_p inside the rows' band (0 K), coarse Σρ_pV against Σṅ∫m dt (1.009); bit-stable at 1/2/5 threads. RED: model 5's deposit without the number rate (E3 1.000, T_p 1.05e10 K; `tc-box-euler` stays green), model 5 on the default branch (E3 1.754) | shared box | as `burn-box` (INPUT symlinked) |
 | **solid-box** | `[JANAF98]` (alumina data, guidance only) | *closed form* (Tier V) — liquid relaxation to the nucleation point x_n = L_l ln[(T₀−T_g)/(T_n−T_g)], recalescence to T_m with f₀ = c_l(T_m−T_n)/h_fus, plateau at T_m to x_s, solid relaxation with c_s; gates E1 liquid / E3 solid anchored exponentials (F12.6 budget), E2 9 ± 1 plateau rows, E2c first plateau row at the first face after x_n, E4 global energy telescoping of `source.tec`, E4b per-cell plateau heat ṅ_p πd k_g Nu (T_m−T_g) dx/u_g and no gas sink, E5 guards; measured 2.9e-7 (the ṁ print floor). RED on the previous binary (setup refused), and one measured mutation per model element (see its INFO.md) | shared box | inlet-face 401; κ_v=1 (Re=0, Nu=2), κ_t=4 (T₀=2400 K), d=30 µm, ρ_p=2950, c_l=1250; `A 1 solidification=on h-fus=1.07e6 cp-solid=600` (T-melt 2327, T-nuc 0.8·T-melt defaults); `mollify = off`; outlet + walls |
 | **solid-melt** | — | *closed form* (Tier V) — solid relaxation to the melt point x_m = L_s ln[(T_g−T₀)/(T_g−T_m)], the melting plateau at T_m (f from 1 to 0 at the latent-heat rate) to x_l, liquid relaxation with c_l; gates S1 solid / S3 liquid anchored exponentials (F12.6 budget), S2 the plateau rows (contiguous, every row in (x_m+dx, x_l−dx), the first at the face after x_m, the last at the face before x_l), S3 the exit temperature against the closed form 2611.7044 K within the chord bound of the interpolated melt event (0.056 K; measured 1.2e-4 K), S4 the heat taken from the gas per plateau cell ṅ_p πd k_g Nu (T_m−T_g) dx/u_g, no crossed cell with E ≥ 0 and the global energy telescoping (2.9e-7, the ṁ print floor), S5 25/25 exits and no stuck / no-progress / inner-loop line, guards. RED on the code before melting: no row at T_m, exit 2920.5310 K (308.8 K off), 25 `solid above T-melt` warnings; with the non-strict event rule the exit is 0.084 K low on 25/25 parcels | shared box, gas at 3000 K (`make_box_case.py --tg 3000`) | inlet-face 401; κ_v=1 (Re=0, Nu=2), κ_t=0.5 (T₀=1500 K, injected solid), d=30 µm, ρ_p=2950, c_l=1250; `A 1 solidification=on h-fus=4e5 cp-solid=600` (T-melt 2327, T-nuc 0.8·T-melt defaults); `mollify = off`; outlet + walls |
 | **solid-box-euler** | — | *behavioral* — the Eulerian field of model 6 per cell: coverage (all 60 cells of every column), ρ_p/n_p = m (4e-15), u_p = u_g, T_p inside the band of the bounding rows and = T_m on the 200 plateau cells. RED with the ODE-state count left at 7 (100 of 1500 cells covered, u_p off by 0.9999) and with the in-step event detection removed (12.6 K outside the band) | as `solid-box` (per-file INPUT symlinks) | as `solid-box`, `out-file = ALL` |
@@ -296,9 +297,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-137 `e2e`-labelled + 38 `unit`-labelled + the optional `vortex-cloud-3way` = **176 CTest entries** in a
-serial build (+7 `mpi-*` under `USE_MPI`, 183), all green (counted from `tests/CMakeLists.txt`). The 137
-`e2e` entries are the 77 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+138 `e2e`-labelled + 38 `unit`-labelled + the optional `vortex-cloud-3way` = **177 CTest entries** in a
+serial build (+7 `mpi-*` under `USE_MPI`, 184), all green (counted from `tests/CMakeLists.txt`). The 138
+`e2e` entries are the 78 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the twelve `repeat-*` two-sweep gates and the forty-six `refuse-*` setup-refusal gates. The
 38 `unit` entries are 33 compiled unit tests, the property-table reader on its three fixtures
