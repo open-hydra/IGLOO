@@ -44,3 +44,15 @@ K2 is RED on the cell search without the connected-cell step (no block-change li
 skips both searches and goes to the exit branch: every parcel leaves at x = 0.085, 1250 trajectory rows
 differ (1650 against 2900) and all 50 exits. The payload checks are gated by the `refuse-chimera-*` cases
 ([refusals](../refusals/INFO.md)) and the stored counts, donors and weights by `test_bc_families` (F6).
+
+**Measured, not gated: the fields in the overlap.** A parcel deposits into the block it is tracked in,
+so the overlap's deposits sit in block 1 (the parcels change block at x = 0.085) and block 2's cells
+there receive none. Against the box as one block, `source.tec` with `mollify = off`: block 1's cells
+27–34 equal the one-block cells bit for bit, block 2's cells 1–8 hold 0, every cell outside the
+overlap equals its one-block cell in both blocks, and the two blocks' totals equal the one-block total
+to 1.2e-15. With the mollifier at its default (8 passes, zero flux at the chimera faces) the totals
+still agree (4e-16), but the smoothing cannot carry a deposit across x = 0.085: summed over both
+blocks, the energy source of the last column before that plane exceeds the one-block run's by 17.6 %
+of the field's largest column and the first column after it falls short by as much, down to 0.4 % five
+columns away on either side (`Fx` 16.7 %); block 2 also spreads its own deposits back into its overlap
+cells, up to 7e-3 of the field scale. Nothing shows at x = 0.065, where no parcel enters block 2.
