@@ -13,6 +13,7 @@
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ chimera-2blk/ varcp-tmin/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero}}
 #   repeatability/      two-sweep gates (twosweep driver): 12 cases
 #   mpi/                registered only under USE_MPI: 6 rank-count cases + 2 consistency + 1 determinism
+#                       + 12 two-sweep cases
 #
 # Run everything via ../test.sh (builds bin/IGLOO too — e2e cases use it).
 
@@ -850,6 +851,39 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
         LABELS "e2e;mpi;infrastructure;consistency"
         ENVIRONMENT "OMP_NUM_THREADS=1;KMP_STACKSIZE=100M"
         TIMEOUT 900)
+
+    # The two-sweep harness under mpiexec (setup_static, then reset_state + solve + writeout per sweep:
+    # the embedding mode) in a private dir that symlinks the repeatability case's INPUT/ and input.ini.
+    # rc gate != 0 as igloo_e2e_case_mpi, the rank witness on every log, check_twosweep.py unchanged.
+    function(igloo_twosweep_case_mpi name casedir nranks nthreads labels gasfile)
+        set(_oracle "python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_twosweep.py")
+        set(_run "${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${nranks} ${CMAKE_CURRENT_BINARY_DIR}/twosweep")
+        set(_wit "MPI ranks = ${nranks}")
+        set(_cmd "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${_run} 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ne 0 ]; then echo \"[FAIL] mpiexec exit $rc on ${nranks} ranks\"; tail -20 run_out.txt; exit 1; fi; grep -q \"${_wit}\" run_out.txt || { echo \"[FAIL] harness did not report ${nranks} ranks -- is twosweep an MPI build?\"; exit 1; }; ${_oracle} steady || exit 1")
+        if(NOT "${gasfile}" STREQUAL "")
+            string(APPEND _cmd "; rm -rf OUTPUT; mkdir -p OUTPUT; ${_run} ${gasfile} 1>run_out_gas.txt 2>run_err_gas.txt; rc=$?; if [ \"$rc\" -ne 0 ]; then echo \"[FAIL] gas-cycle mpiexec exit $rc on ${nranks} ranks\"; tail -20 run_out_gas.txt; exit 1; fi; grep -q \"${_wit}\" run_out_gas.txt || { echo \"[FAIL] gas-cycle did not report ${nranks} ranks\"; exit 1; }; ${_oracle} gas-cycle || exit 1")
+        endif()
+        add_test(NAME ${name} COMMAND bash -c "${_cmd}"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
+        set_tests_properties(${name} PROPERTIES
+            LABELS "${labels}"
+            ENVIRONMENT "OMP_NUM_THREADS=${nthreads};KMP_STACKSIZE=100M"
+            TIMEOUT 900)
+    endfunction()
+    # every repeatability case at 2 ranks x 2 threads (children, RNG, evaporation, ord2 accumulator shape,
+    # two materials, the explicit solver, the gas-refresh cycle on drag-stokes and vie-plait)
+    igloo_twosweep_case_mpi(mpi-repeat-drag-stokes        mpi/repeat-drag-stokes        2 2 "e2e;mpi;repeatability" "INPUT/solfile.tec")
+    igloo_twosweep_case_mpi(mpi-repeat-drag-stokes-dopri5 mpi/repeat-drag-stokes-dopri5 2 2 "e2e;mpi;repeatability" "")
+    igloo_twosweep_case_mpi(mpi-repeat-db-injection       mpi/repeat-db-injection       2 2 "e2e;mpi;repeatability" "")
+    igloo_twosweep_case_mpi(mpi-repeat-two-mat            mpi/repeat-two-mat            2 2 "e2e;mpi;repeatability" "")
+    igloo_twosweep_case_mpi(mpi-repeat-d2law              mpi/repeat-d2law              2 2 "e2e;mpi;repeatability" "")
+    igloo_twosweep_case_mpi(mpi-repeat-khrt               mpi/repeat-khrt               2 2 "e2e;mpi;repeatability" "")
+    igloo_twosweep_case_mpi(mpi-repeat-vie-plait          mpi/repeat-vie-plait          2 2 "e2e;mpi;repeatability" "INPUT/solfile.tec")
+    igloo_twosweep_case_mpi(mpi-repeat-etab               mpi/repeat-etab               2 2 "e2e;mpi;repeatability" "")
+    igloo_twosweep_case_mpi(mpi-repeat-tab                mpi/repeat-tab                2 2 "e2e;mpi;repeatability" "")
+    igloo_twosweep_case_mpi(mpi-repeat-tab-dopri5         mpi/repeat-tab-dopri5         2 2 "e2e;mpi;repeatability" "")
+    igloo_twosweep_case_mpi(mpi-repeat-solid-box          mpi/repeat-solid-box          2 2 "e2e;mpi;repeatability" "")
+    igloo_twosweep_case_mpi(mpi-repeat-evap-breakup       mpi/repeat-evap-breakup       2 2 "e2e;mpi;repeatability" "")
 endif()
 
 # A7 resolved 2026-07-15 as source-faithful (Shimada2006 eq.45 quoting NASA-SP-8039

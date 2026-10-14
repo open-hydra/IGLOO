@@ -267,7 +267,7 @@ cloud.
 
 ## How this is verified
 
-Rank-count invariance is **gated**, not assumed. Nine MPI cases run under `mpiexec`
+Rank-count invariance is **gated**, not assumed. Twenty-one MPI cases run under `mpiexec`
 (`tests/mpi/`), registered only in a `USE_MPI` build:
 
 | gate | ranks × threads |
@@ -281,6 +281,7 @@ Rank-count invariance is **gated**, not assumed. Nine MPI cases run under `mpiex
 | `mpi-consistency` | cross-rank-count comparison |
 | `mpi-consistency-two-mat` | cross-rank-count comparison, two materials |
 | `mpi-determinism` | 3 and 4 × 1: grid bytes independent of the collective algorithm, within 1e-12 of n = 1 |
+| `mpi-repeat-<case>` (12) | 2 × 2: every two-sweep repeatability case (the embedding mode) |
 
 Each case symlinks its parent case's `INPUT/`, `input.ini` and `check.py`, so the fixture and
 the oracle are shared with the serial gate — the MPI case adds only the launch and the

@@ -42,6 +42,7 @@ green, nothing decomposed. Without the witness this whole directory would be a v
 | `mpi-consistency` | 1 vs 4 | the cross-rank-count gate (below) |
 | `mpi-consistency-two-mat` | 1 vs 4 | the same gate (same `check.py`, symlinked) on the `nm=2` fixture |
 | `mpi-determinism` | 1, 3, 4 | the rank-order cross-rank sum: grid bytes at n = 3 and 4 independent of the collective algorithm (below) |
+| `mpi-repeat-<case>` (12) | 2 | every `repeatability/` case under `mpiexec`: the two-sweep harness (`setup_static`, then `reset_state` + `solve` + `writeout` per sweep) with the rank witness on every log, `check_twosweep.py` unchanged; the gas-refresh cycle on `drag-stokes` and `vie-plait` |
 
 Each variant directory **symlinks** its parent case's `INPUT/`, `input.ini` and `check.py`. The oracle
 is therefore the same inode as the serial case's — "the oracle passes unmodified" is not a claim to
@@ -66,6 +67,18 @@ and not sufficient: an oracle checks **physics**, and most of what MPI can break
    never a per-value relative error. See that file for the measurement behind the choice.
 
 Plus an integration criterion, because two runs that both produced nothing would agree perfectly.
+
+## The two-sweep cases under MPI
+
+`igloo_twosweep_case_mpi` runs `build/mpi/tests/twosweep` under `mpiexec -n 2` in `mpi/repeat-<case>/`,
+which symlinks `repeatability/<case>/INPUT` and `input.ini` (so the serial and MPI variants never share
+an `OUTPUT/`). What only a second sweep under MPI can see: the accumulators are deallocated every
+sweep and reduced at the shape `solve` allocates; the sweep tag is part of every shard name the merge
+consumes; `nactive`/`nparticles` are rank-local after a solve and are restored from the pin-time
+census. The witness is load-bearing here too: a serial `twosweep` under `mpiexec -n 2` runs two
+independent copies and `check_twosweep.py` passes on their output; only the missing `MPI ranks = 2`
+line fails it. Removing the barrier at the top of `writeout` turns nothing red: the cross-rank sum in
+`solve` already waits for every rank, after each has closed its shards.
 
 ## Why `mpi-determinism` exists
 
