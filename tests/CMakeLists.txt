@@ -157,7 +157,8 @@ igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;
 # was overwritten before any read. Pins the mirror on 300/301 (faces, edges, corners), the
 # positivity guard, and the ghost nodes of connected faces (101/201/102) interpolated from the
 # connected block's gas: exact on a linear field across unequal and warped cells, the snap to a
-# partner centre bit for bit, order-free between blocks, within q h^2/4 on a quadratic 102 field.
+# partner centre bit for bit, order-free between blocks, within q h^2/4 on a quadratic 102 field;
+# and a face whose ring a parent provided (setGhostFace), kept through the fill.
 igloo_unit_test(test_ghost_bc           infrastructure/ghost_bc           "unit;infrastructure;bc;gas;t1")
 # a bc.txt with one copy of every block's table per family (what ATLAS writes for a phase with several
 # populations, block-outermost): copy c is family c. A reader that feeds copy 1 to every family fails

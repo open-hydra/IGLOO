@@ -64,6 +64,12 @@ module IGLOO_data_block
     logical  :: edge = .false.
   end type ghostLink
 
+  !> One face of the ghost ring as a parent solver provided it, over the face's interior range.
+  type :: ghostFaceData
+    real(R8), allocatable :: density(:,:,:), velocity(:,:,:)
+    real(R8), allocatable :: temperature(:,:), mil(:,:), kl(:,:), gam(:,:), R(:,:)
+  end type ghostFaceData
+
   type, extends(obj_block), public :: obj_flowblock
     integer :: nproperties
     real(R8), dimension(:,:,:,:), allocatable :: density
@@ -76,12 +82,16 @@ module IGLOO_data_block
     logical,  dimension(:,:,:),   allocatable :: nodeOnAxis
     !> ghost nodes at connected faces and where they lie in the connected block's dual mesh
     type(ghostLink), allocatable :: glink(:)
+    !> faces whose ghost ring a parent provided for this sweep, and the values
+    logical :: ghostExternal(6) = .false.
+    type(ghostFaceData) :: ghostData(6)
   contains
     private
     procedure, pass(self), public :: allocate
     procedure, pass(self), public :: pass_geometry
     procedure, pass(self), public :: gasProperties
     procedure, pass(self), public :: fillGhostGradient
+    procedure, pass(self), public :: setGhostFace
     procedure, pass(self), public :: initMdotGas
   end type obj_flowblock
 
@@ -1187,8 +1197,8 @@ contains
   end function CalculateNormal
 
 
-  !> Fill the ghost ring of the gas field by linear extrapolation: faces, then the
-  !  symmetry-axis override, then edges and corners.
+  !> Fill the ghost ring of the gas field by linear extrapolation: faces (a parent's face over it),
+  !  then the symmetry-axis override, then edges and corners.
   subroutine fillGhostGradient(self, geoblock)
     implicit none
     class(obj_flowblock), intent(inout) :: self
@@ -1256,20 +1266,23 @@ contains
       enddo; enddo
     endif
 
+    !> faces a parent provided: its values replace the linear fill (setGhostFace)
+    if (any(self%ghostExternal)) call applyGhostData(self)
+
     !> bc-aware face ghosts: gas-solid planes (300/301) get the interior normal velocity
     !  mirrored so the sampled v_n at the plane is 0; extrapolated scalars are guarded there.
     do k = 1, Nz; do j = 1, Ny
-      call bcFaceGhost(self, geoblock%face(1)%cell(j,k), 0,    j, k,  1, j, k)
-      call bcFaceGhost(self, geoblock%face(2)%cell(j,k), Nx+1, j, k, Nx, j, k)
+      if (.not. self%ghostExternal(1)) call bcFaceGhost(self, geoblock%face(1)%cell(j,k), 0,    j, k,  1, j, k)
+      if (.not. self%ghostExternal(2)) call bcFaceGhost(self, geoblock%face(2)%cell(j,k), Nx+1, j, k, Nx, j, k)
     enddo; enddo
     do k = 1, Nz; do i = 1, Nx
-      call bcFaceGhost(self, geoblock%face(3)%cell(i,k), i, 0,    k, i, 1,  k)
-      call bcFaceGhost(self, geoblock%face(4)%cell(i,k), i, Ny+1, k, i, Ny, k)
+      if (.not. self%ghostExternal(3)) call bcFaceGhost(self, geoblock%face(3)%cell(i,k), i, 0,    k, i, 1,  k)
+      if (.not. self%ghostExternal(4)) call bcFaceGhost(self, geoblock%face(4)%cell(i,k), i, Ny+1, k, i, Ny, k)
     enddo; enddo
     if (is3D) then
       do j = 1, Ny; do i = 1, Nx
-        call bcFaceGhost(self, geoblock%face(5)%cell(i,j), i, j, 0,    i, j, 1 )
-        call bcFaceGhost(self, geoblock%face(6)%cell(i,j), i, j, Nz+1, i, j, Nz)
+        if (.not. self%ghostExternal(5)) call bcFaceGhost(self, geoblock%face(5)%cell(i,j), i, j, 0,    i, j, 1 )
+        if (.not. self%ghostExternal(6)) call bcFaceGhost(self, geoblock%face(6)%cell(i,j), i, j, Nz+1, i, j, Nz)
       enddo; enddo
     endif
     !> mit is not refilled: nothing packs it (gasProperties packs rho, u, v, w, T, mil, gam, R, kl).
@@ -1277,17 +1290,17 @@ contains
     !> symmetry-axis override for ghosts sitting on the axis (before the edge/corner cascade)
     if (allocated(self%nodeOnAxis)) then
       do k = 1, Nz; do j = 1, Ny
-        if (self%nodeOnAxis(0,   j,k)) call axisGhost(self, 0,   j,k,  1, j,k)
-        if (self%nodeOnAxis(Nx+1,j,k)) call axisGhost(self, Nx+1,j,k, Nx, j,k)
+        if (self%nodeOnAxis(0,   j,k) .and. .not. self%ghostExternal(1)) call axisGhost(self, 0,   j,k,  1, j,k)
+        if (self%nodeOnAxis(Nx+1,j,k) .and. .not. self%ghostExternal(2)) call axisGhost(self, Nx+1,j,k, Nx, j,k)
       enddo; enddo
       do k = 1, Nz; do i = 1, Nx
-        if (self%nodeOnAxis(i,0,   k)) call axisGhost(self, i,0,   k, i, 1,k)
-        if (self%nodeOnAxis(i,Ny+1,k)) call axisGhost(self, i,Ny+1,k, i,Ny,k)
+        if (self%nodeOnAxis(i,0,   k) .and. .not. self%ghostExternal(3)) call axisGhost(self, i,0,   k, i, 1,k)
+        if (self%nodeOnAxis(i,Ny+1,k) .and. .not. self%ghostExternal(4)) call axisGhost(self, i,Ny+1,k, i,Ny,k)
       enddo; enddo
       if (is3D) then
         do j = 1, Ny; do i = 1, Nx
-          if (self%nodeOnAxis(i,j,0   )) call axisGhost(self, i,j,0,    i,j, 1)
-          if (self%nodeOnAxis(i,j,Nz+1)) call axisGhost(self, i,j,Nz+1, i,j,Nz)
+          if (self%nodeOnAxis(i,j,0   ) .and. .not. self%ghostExternal(5)) call axisGhost(self, i,j,0,    i,j, 1)
+          if (self%nodeOnAxis(i,j,Nz+1) .and. .not. self%ghostExternal(6)) call axisGhost(self, i,j,Nz+1, i,j,Nz)
         enddo; enddo
       endif
     endif
@@ -1343,6 +1356,77 @@ contains
     endif
 
   end subroutine fillGhostGradient
+
+
+  !> A parent's ghost ring on face f: the values at the face's ghost nodes over its interior range
+  !  (index 0 or N+1 along the face normal), kept for this sweep's fill; the face is flagged until
+  !  the next reset_state.
+  subroutine setGhostFace(self, f, density, velocity, temperature, mil, kl, gam, R)
+    implicit none
+    class(obj_flowblock), intent(inout) :: self
+    integer,              intent(in)    :: f
+    real(R8),             intent(in)    :: density(:,:,:), velocity(:,:,:)
+    real(R8),             intent(in)    :: temperature(:,:), mil(:,:), kl(:,:), gam(:,:), R(:,:)
+    integer :: na, nc
+
+    select case (f)
+    case (1, 2); na = self%Ny; nc = self%Nz
+    case (3, 4); na = self%Nx; nc = self%Nz
+    case (5, 6); na = self%Nx; nc = self%Ny
+    case default; error stop 'IGLOO: set_ghost_face: the face is not 1..6'
+    end select
+    if (f >= 5 .and. self%Nz == 1) error stop 'IGLOO: set_ghost_face: a one-layer block has no ring on face 5 or 6'
+    if (any(shape(density) /= [size(self%density,1), na, nc]) .or. any(shape(velocity) /= [3, na, nc]) .or. &
+        any(shape(temperature) /= [na, nc]) .or. any(shape(mil) /= [na, nc]) .or. any(shape(kl) /= [na, nc]) .or. &
+        any(shape(gam) /= [na, nc]) .or. any(shape(R) /= [na, nc])) &
+      error stop 'IGLOO: set_ghost_face: the arrays do not match the face'
+    associate(d => self%ghostData(f))
+    d%density = density; d%velocity = velocity; d%temperature = temperature
+    d%mil = mil; d%kl = kl; d%gam = gam; d%R = R
+    end associate
+    self%ghostExternal(f) = .true.
+  end subroutine setGhostFace
+
+
+  !> The parent's values on the flagged faces, over the linear fill; a non-positive scalar falls
+  !  back to the interior cell's (zero gradient), as at a wall.
+  subroutine applyGhostData(self)
+    implicit none
+    class(obj_flowblock), intent(inout) :: self
+    integer :: f, a, c, gi, gj, gk, ii, ij, ik, na, nc
+
+    do f = 1, 6
+      if (.not. self%ghostExternal(f)) cycle
+      associate(d => self%ghostData(f))
+      na = size(d%temperature, 1); nc = size(d%temperature, 2)
+      do c = 1, nc; do a = 1, na
+        select case (f)
+        case (1); gi = 0;          gj = a; gk = c; ii = 1;       ij = a; ik = c
+        case (2); gi = self%Nx+1;  gj = a; gk = c; ii = self%Nx; ij = a; ik = c
+        case (3); gi = a; gj = 0;          gk = c; ii = a; ij = 1;       ik = c
+        case (4); gi = a; gj = self%Ny+1;  gk = c; ii = a; ij = self%Ny; ik = c
+        case (5); gi = a; gj = c; gk = 0;          ii = a; ij = c; ik = 1
+        case (6); gi = a; gj = c; gk = self%Nz+1;  ii = a; ij = c; ik = self%Nz
+        end select
+        self%density (:, gi,gj,gk) = d%density (:, a, c)
+        self%velocity(:, gi,gj,gk) = d%velocity(:, a, c)
+        self%temperature(gi,gj,gk) = d%temperature(a, c)
+        self%mil(gi,gj,gk) = d%mil(a, c); self%kl(gi,gj,gk) = d%kl(a, c)
+        self%gam(gi,gj,gk) = d%gam(a, c); self%R (gi,gj,gk) = d%R (a, c)
+        if (any(self%density(:, gi,gj,gk) <= 0._R8) .or. self%temperature(gi,gj,gk) <= 0._R8 .or. &
+            self%mil(gi,gj,gk) <= 0._R8 .or. self%kl(gi,gj,gk) <= 0._R8 .or.                      &
+            self%gam(gi,gj,gk) <= 0._R8 .or. self%R(gi,gj,gk) <= 0._R8) then
+          self%density    (:, gi,gj,gk) = self%density    (:, ii,ij,ik)
+          self%temperature(   gi,gj,gk) = self%temperature(   ii,ij,ik)
+          self%mil        (   gi,gj,gk) = self%mil        (   ii,ij,ik)
+          self%kl         (   gi,gj,gk) = self%kl         (   ii,ij,ik)
+          self%gam        (   gi,gj,gk) = self%gam        (   ii,ij,ik)
+          self%R          (   gi,gj,gk) = self%R          (   ii,ij,ik)
+        endif
+      enddo; enddo
+      end associate
+    enddo
+  end subroutine applyGhostData
 
 
   !> Ghost values for a node on the symmetry axis (g*): scalars copied from the interior
@@ -1467,6 +1551,7 @@ contains
       do l = 1, size(gas%glink)
         associate(g => gas%glink(l), v => val(b)%q(:, l, 1))
         if (g%sb == 0) cycle
+        if (parentOwns(gas, g%gi, g%gj, g%gk)) cycle
         gas%density (:, g%gi, g%gj, g%gk) = v(1:ns)
         gas%velocity(:, g%gi, g%gj, g%gk) = v(ns+1:ns+3)
         gas%temperature(g%gi, g%gj, g%gk) = v(ns+4)
@@ -1475,13 +1560,25 @@ contains
         end associate
       enddo
       do l = 1, size(gas%glink)
-        if (gas%glink(l)%sb > 0 .and. gas%glink(l)%edge) &
-          call bcEdgeGhost(gas, geoall(b), gas%glink(l)%gi, gas%glink(l)%gj, gas%glink(l)%gk)
+        if (gas%glink(l)%sb > 0 .and. gas%glink(l)%edge) then
+          if (.not. parentOwns(gas, gas%glink(l)%gi, gas%glink(l)%gj, gas%glink(l)%gk)) &
+            call bcEdgeGhost(gas, geoall(b), gas%glink(l)%gi, gas%glink(l)%gj, gas%glink(l)%gk)
+        endif
       enddo
       end associate
     enddo
 
   contains
+
+    !> Every face the node lies beyond was provided by a parent this sweep.
+    logical function parentOwns(gas, gi, gj, gk)
+      type(obj_flowblock), intent(in) :: gas
+      integer,             intent(in) :: gi, gj, gk
+      logical :: beyond(6)
+      beyond = [gi == 0, gi == gas%Nx + 1, gj == 0, gj == gas%Ny + 1, &
+                gk == 0 .and. gas%Nz > 1, gk == gas%Nz + 1 .and. gas%Nz > 1]
+      parentOwns = all(gas%ghostExternal .or. .not. beyond)
+    end function parentOwns
 
     !> The gas of block src at the link's position: the weighted sum over its dual cell's nodes.
     subroutine interpNodes(src, g, ns, v)

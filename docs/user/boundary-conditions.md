@@ -277,7 +277,9 @@ corner cascade), each located ghost node takes the weighted sum of the connected
 for density, velocity, temperature, viscosity, conductivity, γ and R. Every value is computed from the
 rings as the blocks' own fills left them before any is written, so no block reads another block's
 overridden ring and the result does not depend on the order of the blocks. Edge and corner nodes that
-also touch a wall (300/301) then take the wall's mirror again.
+also touch a wall (300/301) then take the wall's mirror again. A face whose ring a parent solver provided
+for the sweep keeps it (see [Using IGLOO](using.md#embedding-in-hydra)); on a connected face its edge and
+corner nodes are still interpolated unless their other face is provided too.
 
 **Accuracy.** A field linear in space is reproduced at every ghost node, whatever the cells on either
 side: the node interpolates the connected block's centres and, near its boundary, that block's own

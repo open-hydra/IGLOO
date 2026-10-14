@@ -46,6 +46,7 @@ Methods:
 | `setup([external_gas])` | `setup_static` + `reset_state`: read config and gas field, pin particles at injection points |
 | `setup_static([external_gas])` | Once per run: INI, mesh, BCs, particle pinning |
 | `reset_state([external_gas])` | Once per sweep: restore the pinned population to its injection state and re-import the gas |
+| `set_ghost_face(b, f, density, velocity, temperature, mil, kl, gam, R)` | Gas-order 2, between `reset_state` and `solve`: the parent's values at the ghost nodes of face `f` of block `b`, kept for that sweep in place of IGLOO's own fill |
 | `solve()` | OpenMP-parallel sweep of all particles |
 | `writeout()` | Write Eulerian and source fields to `OUTPUT/` |
 | `getSourceTerms(...)` | `pure` function; returns drag force and heat-transfer rate for given local state (used by hydra) |

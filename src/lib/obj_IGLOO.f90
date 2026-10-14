@@ -30,6 +30,7 @@ module IGLOO_module
     procedure, pass(self) :: setup
     procedure, pass(self) :: setup_static
     procedure, pass(self) :: reset_state
+    procedure, pass(self) :: set_ghost_face
     procedure, pass(self) :: sweepTag
     procedure, pass(self) :: solve
     procedure, pass(self) :: getSourceTerms
@@ -187,6 +188,11 @@ contains
       call import_gas(own_gas, self%gasblock)
     endif
 
+    !> A parent's ghost faces hold for one sweep only.
+    do b = 1, nb
+      self%gasblock(b)%ghostExternal = .false.
+    enddo
+
     !> Drop last sweep's source/euler accumulators (all of them); solve re-allocates them at the right shape.
     do b = 1, nb
       if (allocated(self%source(b)%sourceMass)) deallocate(self%source(b)%sourceMass)
@@ -248,6 +254,24 @@ contains
     self%stateIsFresh = .true.
 
   end subroutine reset_state
+
+
+  !> A parent's gas ghost ring on face f of block b, for the next solve only (reset_state drops it):
+  !  the values at the face's ghost nodes over its interior range, gas-order 2. They replace the
+  !  ring's own fill there (a non-positive scalar falls back to the interior cell's), a connected
+  !  face keeps them instead of the interpolated ones, and the edge and corner nodes beside the face
+  !  are extrapolated from them. Call after reset_state, before solve.
+  subroutine set_ghost_face(self, b, f, density, velocity, temperature, mil, kl, gam, R)
+    use IGLOO_variables, only: ord2
+    implicit none
+    class(obj_IGLOO), intent(inout) :: self
+    integer,          intent(in)    :: b, f
+    real(R8),         intent(in)    :: density(:,:,:), velocity(:,:,:)
+    real(R8),         intent(in)    :: temperature(:,:), mil(:,:), kl(:,:), gam(:,:), R(:,:)
+    if (.not. ord2) error stop 'IGLOO: set_ghost_face: the ghost ring exists only under gas-order 2'
+    if (b < 1 .or. b > size(self%gasblock)) error stop 'IGLOO: set_ghost_face: the block is not in the mesh'
+    call self%gasblock(b)%setGhostFace(f, density, velocity, temperature, mil, kl, gam, R)
+  end subroutine set_ghost_face
 
 
   !> Filename tag of the current output generation: empty on sweep 0, '-sweep<N>' afterwards.

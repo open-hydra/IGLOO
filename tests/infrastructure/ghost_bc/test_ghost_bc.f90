@@ -46,6 +46,12 @@ program test_ghost_bc
     !   U11 2D+3D warped, dx 0.3 | 0.6  T, u linear     RED absolute Newton exit       GREEN exact (1e-12)
     !   G6u 2D, overlap, 102            T quadratic     RED own fill: -2 q h^2         GREEN within q h^2/4
     !
+    ! A face of the ring provided by a parent solver (setGhostFace):
+    !
+    !   U5  3D, face 1 provided         T varying       RED flag ignored: linear fill  GREEN the written ring kept
+    !       (edges beside it extrapolated from it, the other faces as without it; on a provided 101 face
+    !       the face nodes keep the ring, the edge nodes are interpolated; a non-positive value falls back)
+    !
     ! G1's T check is a control, not a target: the profile is linear, so both fills reproduce
     ! it exactly and T = 300 at the plane either way. It fails only if the bc pass corrupts a
     ! scalar it must not touch. G6 is its counterpart: there the linear fill DOES go negative
@@ -83,6 +89,7 @@ program test_ghost_bc
     call u11_warped(.true.)
     call u11_warped(.false.)
     call g6u_chimera
+    call u5_parent_face
 
     if (nfail == 0) then
         print '(a)', ''
@@ -359,7 +366,73 @@ contains
     end subroutine g6u_chimera
 
 
-    ! ------------------------------------------------------------------ fixture
+      !> U5 -- a face of the ring provided by a parent (setGhostFace), here a 300 face: the fill keeps
+    !  it (no linear fill, no mirror), the edge ghosts beside it are extrapolated from it, every
+    !  other ghost is what the block without the provided face gets; on a provided 101 face the face
+    !  nodes keep the ring while the edge nodes are interpolated from the other block; a
+    !  non-positive provided value falls back to the interior cell's.
+    subroutine u5_parent_face
+        type(obj_block)     :: geoA, geoB, geo(2)
+        type(obj_flowblock) :: solA, solB, sol(2)
+        real(real64), allocatable :: rho(:,:,:), vel(:,:,:), t(:,:), one(:,:)
+        real(real64) :: e1, e2, eT, eU
+        integer :: i, j, k, ny, nz, ndiff
+        fa = 300.0_real64; fb = 100.0_real64; fc = 40.0_real64; fd = 20.0_real64; fq = 0.0_real64
+        call build3D(geoA, solA, 4, 3, 2); call tagAll(geoA, 400); call tag(geoA, 1, 300); call setField(geoA, solA)
+        call build3D(geoB, solB, 4, 3, 2); call tagAll(geoB, 400); call tag(geoB, 1, 300); call setField(geoB, solB)
+        ny = solA%Ny; nz = solA%Nz
+        allocate(rho(1, ny, nz), vel(3, ny, nz), t(ny, nz), one(ny, nz))
+        rho = 2.0_real64; one = 1.0_real64
+        vel(1,:,:) = 3.0_real64; vel(2,:,:) = 0.5_real64; vel(3,:,:) = 0.0_real64
+        do k = 1, nz; do j = 1, ny
+            t(j,k) = 450.0_real64 + 10.0_real64*j + 5.0_real64*k
+        enddo; enddo
+        call solA%setGhostFace(1, rho, vel, t, 1.8e-5_real64*one, 0.026_real64*one, 1.4_real64*one, 287.0_real64*one)
+        call solA%fillGhostGradient(geoA)
+        call solB%fillGhostGradient(geoB)
+        e1 = max(maxval(abs(solA%temperature(0,1:ny,1:nz) - t)), maxval(abs(solA%velocity(:,0,1:ny,1:nz) - vel)), &
+                 maxval(abs(solA%density(:,0,1:ny,1:nz) - rho)))
+        call expectLE('U5 the provided face keeps the written ring, max |diff|', e1, 0.0_real64)
+        e2 = 0.0_real64
+        do k = 1, nz
+            e2 = max(e2, abs(solA%temperature(0,0,k) - (2.0_real64*t(1,k) - t(2,k))), &
+                         abs(solA%temperature(0,ny+1,k) - (2.0_real64*t(ny,k) - t(ny-1,k))))
+        enddo
+        do j = 1, ny
+            e2 = max(e2, abs(solA%temperature(0,j,0) - (2.0_real64*t(j,1) - t(j,2))), &
+                         abs(solA%temperature(0,j,nz+1) - (2.0_real64*t(j,nz) - t(j,nz-1))))
+        enddo
+        call expectLE('U5 edge ghosts beside it extrapolated from the written ring, max |diff|', e2, 1.0e-12_real64)
+        ndiff = 0
+        do k = 0, nz+1; do j = 0, ny+1; do i = 1, solA%Nx+1
+            if (i <= solA%Nx .and. j >= 1 .and. j <= ny .and. k >= 1 .and. k <= nz) cycle
+            if (solA%temperature(i,j,k) /= solB%temperature(i,j,k)) ndiff = ndiff + 1
+            if (any(solA%velocity(:,i,j,k) /= solB%velocity(:,i,j,k))) ndiff = ndiff + 1
+        enddo; enddo; enddo
+        call expectLE('U5 ghosts off face 1 differing from the block without it (T, u)', real(ndiff, real64), 0.0_real64)
+        t(2,1) = -1.0_real64
+        call solB%setGhostFace(1, rho, vel, t, 1.8e-5_real64*one, 0.026_real64*one, 1.4_real64*one, 287.0_real64*one)
+        call solB%fillGhostGradient(geoB)
+        call expectEq('U5 a non-positive provided T falls back to the interior cell''s', solB%temperature(0,2,1), &
+                      solB%temperature(1,2,1), 0.0_real64)
+        call buildPair(geo, sol, 4, 0.3_real64, 3, 0.6_real64, 3, 2, 0.0_real64, .false.)
+        t = 777.0_real64
+        call sol(1)%setGhostFace(2, rho, vel, t, 1.8e-5_real64*one, 0.026_real64*one, 1.4_real64*one, 287.0_real64*one)
+        call fillPair(geo, sol)
+        e1 = maxval(abs(sol(1)%temperature(sol(1)%Nx+1, 1:ny, 1:nz) - 777.0_real64))
+        call expectLE('U5 a provided 101 face: the face nodes keep the written ring, max |diff|', e1, 0.0_real64)
+        eT = 0.0_real64; eU = 0.0_real64
+        do k = 0, nz+1; do j = 0, ny+1
+            if (j >= 1 .and. j <= ny .and. k >= 1 .and. k <= nz) cycle
+            eT = max(eT, abs(sol(1)%temperature(sol(1)%Nx+1,j,k) - fieldT(sol(1)%node(:,sol(1)%Nx+1,j,k))))
+            eU = max(eU, abs(sol(1)%velocity(1,sol(1)%Nx+1,j,k) - fieldU(sol(1)%node(:,sol(1)%Nx+1,j,k))))
+        enddo; enddo
+        call expectLE('U5 a provided 101 face: its edge nodes still interpolated, T |err|/T', eT/fa, 1.0e-12_real64)
+        call expectLE('U5 a provided 101 face: its edge nodes still interpolated, u |err|', eU, 1.0e-12_real64)
+    end subroutine u5_parent_face
+
+
+  ! ------------------------------------------------------------------ fixture
 
     !> y of geo cell row j, and the linear temperature profile on it.
     pure function yc(j) result(y)

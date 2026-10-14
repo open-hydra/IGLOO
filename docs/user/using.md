@@ -164,3 +164,24 @@ enddo
 `reset_state` restores every pinned particle to its injection state (same stochastic diameter draw every sweep) and re-imports the gas; it is not optional — `solve` refuses to run on a stale state. The source and eulerian blocks (`particles%source`, `particles%euler`) are valid between a `solve` and the next `reset_state`, which deallocates them. Output files of sweep $N > 0$ carry a `-sweep<N>` suffix; sweep 0 is untagged, so single-sweep runs keep the plain names. Under MPI the parent owns `MPI_Init`/`MPI_Finalize` and must pass `external_gas` identically on every rank (see [Parallelization](../development/parallelization.md)).
 
 After `solve`, hydra can also retrieve the instantaneous gas-coupling terms via `obj_IGLOO%getSourceTerms`, a pure function that evaluates drag force and heat transfer for a given local gas/particle state.
+
+Under `gas-order = 2` the gas is interpolated on a dual mesh whose boundary cells reach one node past every
+block face, and IGLOO fills that ring of ghost nodes itself at the start of each `solve` (see
+[Boundary conditions](boundary-conditions.md#connected-faces-the-gas-ghost-ring)). A parent that holds better values
+for a face — the ghost cells of its own solver — hands them over between `reset_state` and `solve`:
+
+```fortran
+call particles%reset_state(external_gas=gas_field)
+call particles%set_ghost_face(b, f, density, velocity, temperature, mil, kl, gam, R)   ! per face, per sweep
+call particles%solve()
+```
+
+The arrays hold the values at the face's ghost nodes over its interior range: `density(nspecies, na, nb)`,
+`velocity(3, na, nb)` and the scalars `(na, nb)`, with `(na, nb)` = (Ny, Nz) on faces 1–2, (Nx, Nz) on faces 3–4
+and (Nx, Ny) on faces 5–6 (a one-layer block has no ring on faces 5 and 6). They replace IGLOO's own fill on that
+face — the linear extrapolation, a wall's mirror, the axis rule and, on a connected face, the interpolated values;
+a node with a non-positive scalar falls back to the interior cell's values. The edge and corner nodes beside the
+face are extrapolated from the provided values as from IGLOO's own, and on a connected face they are still
+interpolated from the connected block unless their other face is provided too. `reset_state` drops every provided
+face, so a parent provides them again for each sweep (under MPI identically on every rank, as the gas); a run
+that provides none is unchanged.
