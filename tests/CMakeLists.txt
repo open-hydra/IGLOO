@@ -5,12 +5,12 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ temp-relax-varcp/ temp-relax-varrho/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ scatter-weight/ vortex-cloud-st{0p01,0p1,1,10}/ (e2e; + vortex-cloud-3way, optional)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ temp-relax-varcp/ temp-relax-varrho/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ scatter-weight/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ chimera-2blk/ varcp-tmin/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ chimera-2blk/ varcp-tmin/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero}}
 #   repeatability/      two-sweep gates (twosweep driver): 12 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
@@ -131,6 +131,11 @@ foreach(_set hexadecane two-material atlas-water)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/infrastructure/properties_reader/${_set}")
 endforeach()
 igloo_unit_test(test_rng_stream         infrastructure/rng_stream         "unit;infrastructure;rng;t1")
+# Injection size distributions through the production sampleDiameter: the knots of a size-distribution
+# file (radius, mass fraction; histogram reading), one load per token, the INPUT/ fallback, a one-row
+# Dirac that draws nothing, and Kolmogorov-Smirnov + Anderson-Darling of 1e5 draws against the
+# prescribed CDFs (table, truncated Normal, LogNormal, Rosin-Rammler) at alpha = 1e-3.
+igloo_unit_test(test_psd_table          infrastructure/psd_table          "unit;infrastructure;injection;t1")
 # bcdef-200 dispatch must key off face GEOMETRY, not face index: the wedge is not pinned to
 # faces 5/6 by anything. Covers all six indices for wedges built on i, j and k, and pins the
 # equivalence with the retired `f==6` rule. No e2e case reaches bcDef's fold branch (axisymFold
@@ -353,6 +358,16 @@ igloo_e2e_case(no-exchange standard/no-exchange "e2e;standard;drag;heat")
 # input taken with its half-ULP. RED when a step cut at a cell face adds its weight twice: every parcel
 # 2 to 3 markers above the bound (X about 10, about sixty cut steps per parcel).
 igloo_e2e_case(scatter-weight standard/scatter-weight "e2e;standard;scatter")
+# psd-*: the injected diameters follow bc.txt column 8 -- a size-distribution file (psd-table) or a
+# parametric law -- on a 200 x 100 inlet in the cell-centre mode (one parcel per cell, 20 000 parcels of
+# equal mass flow). Kolmogorov-Smirnov and Anderson-Darling at alpha = 1e-3 on each parcel's first
+# trajectory row. RED: the table's slash ends a list-directed read (unsupported law "INPUT"); Normal
+# clipped instead of truncated, LogNormal spread taken as the log-space sigma, Rosin-Rammler x0 and n
+# swapped. One check.py, shared through symlinks; psd-table holds the box.
+igloo_e2e_case(psd-table        standard/psd-table        "e2e;standard;injection")
+igloo_e2e_case(psd-normal       standard/psd-normal       "e2e;standard;injection")
+igloo_e2e_case(psd-lognormal    standard/psd-lognormal    "e2e;standard;injection")
+igloo_e2e_case(psd-rosinrammler standard/psd-rosinrammler "e2e;standard;injection")
 # vortex-cloud: ICE's verification case I -- a cloud of 1672 parcels released at the gas velocity into a
 # frozen solid-body vortex, stopped at a quarter turn (time-end, out-time). Exact per parcel, z = C(t) z0:
 # every time-stamped row within 3e-6 of the closed form (floor 7e-7). One dir per Stokes number, INPUT and
@@ -716,6 +731,29 @@ igloo_refusal_case(refuse-solid-varrho     infrastructure/refusals/solid-varrho
 # would run with everything rotated by delthe/2. Tiny generated wedge (make_wedge_case.py --theta0-deg 0.5).
 igloo_refusal_case(refuse-wedge-offcentre  infrastructure/refusals/wedge-offcentre
                    "IGLOO: wedge sector must be centred"                "e2e;refusal;infrastructure;axisym")
+# bc.txt column 8 and size-distribution files: drag-stokes with one offending inlet payload or table. RED
+# before the tokenizer: a list-directed read ended a path at its slash (unsupported law "tables", exit 1),
+# cut a 600-character line to 512 silently and ran it as Dirac (exit 0), and lawCode stopped with code 1.
+igloo_refusal_case(refuse-psd-missing      infrastructure/refusals/psd-missing
+                   "IGLOO: size-distribution file not found"            "e2e;refusal;injection")
+igloo_refusal_case(refuse-psd-line-long    infrastructure/refusals/psd-line-long
+                   "IGLOO: bc.txt inlet payload line too long"          "e2e;refusal;injection")
+igloo_refusal_case(refuse-psd-token-long   infrastructure/refusals/psd-token-long
+                   "IGLOO: bc.txt inlet payload token too long"         "e2e;refusal;injection")
+igloo_refusal_case(refuse-psd-law-typo     infrastructure/refusals/psd-law-typo
+                   "IGLOO: unsupported distribution law"                "e2e;refusal;injection")
+igloo_refusal_case(refuse-psd-unsorted     infrastructure/refusals/psd-unsorted
+                   "IGLOO: size-distribution file: the radii must increase" "e2e;refusal;injection")
+igloo_refusal_case(refuse-psd-negative     infrastructure/refusals/psd-negative
+                   "IGLOO: size-distribution file: a mass fraction is negative" "e2e;refusal;injection")
+igloo_refusal_case(refuse-psd-three-col    infrastructure/refusals/psd-three-col
+                   "IGLOO: size-distribution file: a data line must hold exactly two finite numbers" "e2e;refusal;injection")
+igloo_refusal_case(refuse-psd-empty        infrastructure/refusals/psd-empty
+                   "IGLOO: size-distribution file holds no data rows"   "e2e;refusal;injection")
+igloo_refusal_case(refuse-psd-radius-zero  infrastructure/refusals/psd-radius-zero
+                   "IGLOO: size-distribution file: a radius is not positive" "e2e;refusal;injection")
+igloo_refusal_case(refuse-psd-mass-zero    infrastructure/refusals/psd-mass-zero
+                   "IGLOO: size-distribution file: the mass fractions sum to zero" "e2e;refusal;injection")
 # drag-stokes-dopri5: ode-solver = H-dopri5 on drag-stokes's own oracle -- the only exercise of the
 # explicit solver. RED at OSlo fb8255d (ledger O25: dopri5.f:512 called the eleven-argument SOLOUT,
 # IGLOO's interrupt never reached DOPRI5, every parcel lost at injection with exit 0); green since the

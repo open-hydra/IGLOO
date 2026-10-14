@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (153 in a serial build: 116 e2e + 36 unit incl. `self_test` and
+One row per registered CTest entry (176 in a serial build: 137 e2e + 38 unit incl. `self_test` and
 `registry-docs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 7 `mpi-*` rows in their own
-section, 160).
+section, 183).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (36 of 72 e2e fixtures)
+## Shared box fixture (36 of 76 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,7 +39,7 @@ writes with its defaults.
 Thirty-six fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other thirty-six:
+once here, referenced as **"shared box"** below. The other forty:
 
 - non-uniform gas (eleven): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
@@ -55,7 +55,7 @@ once here, referenced as **"shared box"** below. The other thirty-six:
   `etab-e2e` and `etab-evap-frozen` on a 0.6 m × 240-cell box at U=50 m/s, T=300 K (the TAB/ETAB onset);
   `evap-breakup-box` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
   (`--t-gas --kt`);
-- uniform gas on another mesh (eight): `mhb98-water` and `mhb98-water-psat` (a `make_box_case.py`
+- uniform gas on another mesh (twelve): `mhb98-water` and `mhb98-water-psat` (a `make_box_case.py`
   variant lengthened to 0.17 m at the same Δx: water in air at T_G=298 K with a near-static
   U=1.9×10⁻⁴ m/s clock, the Miller-Harstad-Bellan Fig-2 conditions); `planar-slab` (a 20×20
   single-layer planar slab), `wall-approach` (a 100×20 single layer, the gas drifting toward the wall
@@ -63,7 +63,8 @@ once here, referenced as **"shared box"** below. The other thirty-six:
   `two-fam-bc-2blk` (the box split into two 30×5×5 blocks at x=0.075 m by `make_box_case.py`, a 101
   connection between them), `two-fam-bc-2blk-mollify` (the same two blocks, `INPUT/` symlinked) and
   `chimera-2blk` (the box as two overlapping 34×5×5 blocks joined by chimera (102) faces, `make_box_case.py
-  --overlap 4`).
+  --overlap 4`); `psd-table`, `psd-normal`, `psd-lognormal` and `psd-rosinrammler` (the box in one cell along x
+  with a 200×100 inlet, `make_box_case.py --nx 1 --ny 200 --nz 100`).
 
 `khrt-e2e-rt` and `khrt-e2e-threads` are further oracles on `khrt-e2e`'s run (the second at 1/2/4
 threads) and add no fixture; `khrt-stress` differs from `khrt-e2e` only in `mShedLim`, and the twins
@@ -99,6 +100,10 @@ oracle possible.
 | **swirl-wedge-spin** | — (derived: Cartesian Stokes oracle + the solver's dual-to-geo rule) | *sector-edge segments* (O23 many-sector case) on the swirl-wedge fixture with ONE over-spun parcel (r0 0.2, up 0.05, wp 2: ~34 sectors per cell at injection): the run's `wedge sector folds: N (multi-sector: M)` witness — M = 0, N within 2 of the oracle sweep to the outer wall (79; a binary without the line fails); every row in-sector; `w_p`, `v_r`, `u` vs the 6-state Cartesian RK4 oracle at each row's closest approach in (x, r) (2e-5 = the F12.6 floor through the 20 m/s² acceleration; measured ≤ 7e-6); eulerian mass per geo cell `ρ_p V` vs the oracle residence per dual cell projected with `finalizeEUL`'s sub-quadrant volume weights (2 %, 97 cells ≥ 1 % of the peak; measured 4e-3), tiling total `Σρ_pV = ṁT_wall` (5e-3; 1.000044); RED on `fc6c5f4` (no witness; +33 % / −37 % on the injection column's first rows, mass total unchanged) | as `swirl-wedge` (symlinked INPUT) | DB, 1 parcel at (0.105, 0.2, 0), up 0.05, wp 2.0; `out-file = ALL`, `mollify = off` |
 | **no-exchange** | — (definition: `drag = NoDrag` ⇒ Cd=0, `heat = NoHeat` ⇒ Nu=0) | *closed form, exact* — dv/dt=0, dT_p/dt=0: every trajectory row and exit prints (u,v,w,T)=(κ_v·u_g,0,0,κ_t·T_g)=(1,0,0,300) to the last F12.6 digit, and every `source.tec` cell (`wdot`, `Fx`, `Fy`, `Fz`, `E`) is exactly 0.0 (ṁ·(v_in−v_out) from the full-precision state: bit-identical states or it is non-zero); ≥ 20 parcels, ≥ 60 rows each, exit at x=0.15. RED on `aba343c` (refused at setup, exit 128); each switch alone fails the oracle on its own quantity (Stokes: u→9.999961; Ranz–Marshall: T→600) | shared box (solfile symlinked from `drag-stokes`) | inlet-face 401; κ_v=0.1 (9 m/s slip), κ_t=0.5 (300 K slip), d=11.89 µm, ρ_p=2950; outlet + walls |
 | **scatter-weight** | — (definition of the scatter cloud: one marker per `dNscat` of number flow) | *closed form* — per parcel ⌊X⌋−1 ≤ N ≤ ⌊X⌋, X = frac(ID·φ) + ṅ_p·t_exit/dNscat, from the exit record (`out-time`), the injection row (ṅ_p = ṁ/m0) and the `dNscat` line, every printed value with its half-ULP; ≥ 10 parcels at N = ⌊X⌋ (measured 25/25, 244 markers, X ≈ 10). RED when a step cut at a cell face adds its scatter weight twice: every parcel 2 to 3 markers above the bound (312 markers) | shared box (INPUT symlinked from `drag-stokes`) | as `drag-stokes`; `out-time = on` |
+| **psd-table** | `[Kol33]`,`[AD54]`,`[Ste74]`,`[MM04]` (goodness of fit); the histogram reading of a size-distribution file | *closed form* — the piecewise-linear mass CDF of `INPUT/table6.dat` (radii 2.5–30 µm, bimodal mass fractions; class edges at the mid-points, the end classes extended by half a spacing; d = 2r), typed in `check.py` and cross-checked against the file; Kolmogorov-Smirnov D_n < 1.94947/√n and case-0 Anderson-Darling A² < 5.969 (α = 10⁻³) on each parcel's first trajectory row, 20 000 parcels; equal ṁ per parcel (spread ≤ 1e-12) and the ṁ-weighted D_n = D_n; one parcel per inlet cell; one notice for r_p outside the table. Measured D_n 5.13e-3, A² 0.457. RED: a list-directed reader ends the path at its slash (`unsupported distribution law: INPUT`, no output); class-centre atoms D 0.175, number fractions D 0.703 | box in one cell along x, 200×100 inlet (`make_box_case.py --nx 1 --ny 200 --nz 100 --kv 1.0`), uniform gas | inlet-face 401, cell-centre mode (`fsample = 1`, no `ds`, no `mdot-max`), columns 6-8 `1e-4 0 INPUT/table6.dat`; outlet + walls |
+| **psd-normal** | `[Kol33]`,`[AD54]`,`[Ste74]` | *closed form* — the Normal truncated to d > 0, μ = 20 µm, σ = 10 µm, as `psd-table` (shared `check.py`). Measured D_n 7.51e-3, A² 1.008. RED: rejection removed and draws clipped to 1 µm, D 0.0233, A² 40.9 (the tail defect A² sees by a factor 7) | as `psd-table` | as `psd-table`, columns 6-8 `1e-5 1e-5 Normal` |
+| **psd-lognormal** | `[Kol33]`,`[AD54]`,`[Ste74]` | *closed form* — LogNormal of mean 20 µm and standard deviation 10 µm. Measured D_n 7.40e-3, A² 0.917. RED: σ_p taken as the log-space σ, D 0.593 | as `psd-table` | as `psd-table`, columns 6-8 `1e-5 1e-5 LogNormal` |
+| **psd-rosinrammler** | `[Kol33]`,`[AD54]`,`[Ste74]` | *closed form* — Rosin-Rammler x0 = 30 µm, n = 2.5. Measured D_n 5.13e-3, A² 0.457. RED: n 10 % high, D 0.0271, A² 41.3; x0 and n exchanged, D 0.632 and 276 parcels lost | as `psd-table` | as `psd-table`, columns 6-8 `1.5e-5 2.5 RosinRammler` |
 | **vortex-cloud-st0p01 / -st0p1 / -st1 / -st10** | ICE verification case I (`test/verification/I-vortex-cloud/run.py`; closed form τz″ + z′ = iΩz) | *closed form, per parcel* — the conformal map z = C(t)·z0, C = A e^{λ+t} + B e^{λ−t}, λ± = (−1 ± √(1+4iΩτ))/(2τ), for a parcel seeded at the gas velocity; G1 self-checks it (C(0) = 1, C′(0) = iΩ, rotation and dilation monotone, RK4 to 1e-12). G0′ premise: 1672 IDs from their seed states, all 1672 in `snapshot-A.dat` at t = QUARTER = π/2 (1e-8 s), no exit, planar single-layer path; G2′: every time-stamped row and snapshot record within 3e-6 m / 3e-6 m/s of C(t)z0 / C′(t)z0 — measured 6.7e-7–7.0e-7 m and 7.0e-7 m/s (the F12.6 floor √2·5e-7) at every St; the cloud's |C| and lag at QUARTER equal the closed form (1.015723 / 0.000310 … 1.828830 / 0.538470). RED (worst G2′ residual): `NoDrag` 6.7e-2–1.23 m, ρ_p doubled 1.7e-2–0.20 m, seeded at rest 1.1e-2–1.56 m, `gas-order = 1` 1.4e-3–1.4e-2 m; `time-end` absent: no snapshot; `out-time = off`: no time column | Own generator `tools/make_vortex_case.py` (ICE's constants): [−2,2]² at 96×96, one cell of thickness 1/24 in z (planar single layer), frozen solid-body gas u = −Ωy, v = Ωx (Ω = 1), ρ 1.2, T 300, μ 1.8e-5; every face 400 | DB, 1672 parcels on an h/2 lattice within 4σ of (0.6, 0), seeded at (−Ωy0, Ωx0), d = ICE's dp for St = 0.01/0.1/1/10 at ρ_p 1000 (case-local `properties.dat`), `mdot` = ρ_p0(z0)(h/2)²h; `time-end = QUARTER`, `out-time = on` |
 | **vortex-cloud-3way** | ICE case I, three-way | *report driver*, optional: hydra's `test/vortex-cloud/compare.py --check` runs ICE (history via `sol-overwrite = false`) and this tree's IGLOO on the case and checks IGLOO's cloud against the closed form at QUARTER (5e-6 in |C| and lag) and ICE's against the closed form at its own final time (`run.py`'s 5e-3). Skipped (exit 77) without `HYDRADIR`, the driver, ICE's scripts or an ICE binary | as `vortex-cloud-st*` | as `vortex-cloud-st*` |
 | **d2law** | `[God53]`,`[Spa53]` (+`[RM52]`,`[Lef89]`) | *run-conditioned* — Godsave–Spalding kernel d(d²)/dt=−(8k_g/c_pg·ρ_p)·ln(1+B_T) integrated in `check.py` **along the measured T_p(x)** from production output (no static file) | shared box | inlet-face 401; `evaporation=d2-law`; κ_t=0.5, d=30 µm, ρ_p=8000; fuel L_v=2e5, M_v=100, T_boil=900, p_sat=1e4; outlet + walls |
@@ -194,6 +199,16 @@ oracle possible.
 | **refuse-solid-varcp** | — (kind 8, refusal) | *setup refusal*: a `properties.dat` whose `Cp` varies → `solidification=on requires a constant-cp material` | as `drag-stokes` | own phase.txt + 10-row properties.dat |
 | **refuse-solid-varrho** | — (kind 8, refusal) | *setup refusal*: a `properties.dat` whose `Density` varies → `solidification=on requires a constant-density material` | as `drag-stokes` | own phase.txt + 10-row properties.dat |
 | **refuse-wedge-offcentre** | — (kind 8, refusal) | *setup refusal*: a wedge whose sector is not centred on the azimuth origin (k-planes at 0 and +1°) → `IGLOO: wedge sector must be centred on the azimuth origin` at mesh import — the fold band, the 2.5D gas sample and the meridian-frame deposits assume k-planes at ∓δ/2 (W-plan Q7 contract); RED on the pre-tripwire binary (ran to completion, exit 0) | tiny generated wedge (`make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`, 4×4×1) | one DB parcel (never placed) |
+| **refuse-psd-missing** | — (kind 8, refusal) | *setup refusal*: bc.txt column 8 `tables/psd.dat`, found neither as written nor as `INPUT/psd.dat` → `IGLOO: size-distribution file not found` (RED on a list-directed reader: the path ends at its slash, `unsupported distribution law: tables`, exit 1) | as `drag-stokes` | own bc.txt |
+| **refuse-psd-line-long** | — (kind 8, refusal) | *setup refusal*: an inlet payload line of 600 characters → `IGLOO: bc.txt inlet payload line too long` (RED: the line cut to 512 characters and run as a Dirac, exit 0) | as `drag-stokes` | own bc.txt |
+| **refuse-psd-token-long** | — (kind 8, refusal) | *setup refusal*: a column-8 path of 256 characters → `IGLOO: bc.txt inlet payload token too long` | as `drag-stokes` | own bc.txt |
+| **refuse-psd-law-typo** | — (kind 8, refusal) | *setup refusal*: column 8 `lognorml` → `IGLOO: unsupported distribution law` (RED: `error stop 1`, no payload) | as `drag-stokes` | own bc.txt |
+| **refuse-psd-unsorted** | — (kind 8, refusal) | *setup refusal*: table radii that do not increase → `IGLOO: size-distribution file: the radii must increase` | as `drag-stokes` | `refuse-psd-missing`'s bc.txt + own `INPUT/psd.dat` |
+| **refuse-psd-negative** | — (kind 8, refusal) | *setup refusal*: a negative mass fraction → `IGLOO: size-distribution file: a mass fraction is negative` | as `drag-stokes` | as `refuse-psd-unsorted` |
+| **refuse-psd-three-col** | — (kind 8, refusal) | *setup refusal*: a three-column data line → `IGLOO: size-distribution file: a data line must hold exactly two finite numbers` | as `drag-stokes` | as `refuse-psd-unsorted` |
+| **refuse-psd-empty** | — (kind 8, refusal) | *setup refusal*: no data rows → `IGLOO: size-distribution file holds no data rows` | as `drag-stokes` | as `refuse-psd-unsorted` |
+| **refuse-psd-radius-zero** | — (kind 8, refusal) | *setup refusal*: a radius of 0 → `IGLOO: size-distribution file: a radius is not positive` | as `drag-stokes` | as `refuse-psd-unsorted` |
+| **refuse-psd-mass-zero** | — (kind 8, refusal) | *setup refusal*: mass fractions summing to 0 → `IGLOO: size-distribution file: the mass fractions sum to zero` | as `drag-stokes` | as `refuse-psd-unsorted` |
 | **drag-stokes-dopri5** | `[Stokes]` (drag-stokes's oracle, symlinked) | `ode-solver = H-dopri5`, otherwise `drag-stokes` — the only exercise of the explicit solver. RED at OSlo `fb8255d` (ledger O25): every parcel died at injection (NMAX exceeded) because `dopri5.f:512` still called Hairer's eleven-argument `SOLOUT` and IGLOO's interrupt never reached DOPRI5; green since the fork's `fix/dopri5-solout` (six-argument call, silent label 79): 25/25, resid/tol 0.014 | as `drag-stokes` | as `drag-stokes` |
 | **khrt-e2e-rt** | `[Reitz87]` (as `khrt-e2e`) | *RT-shatter persistence gate* (`check_rt.py`) on `khrt-e2e`'s own run: the RT/shed event must fire, apply, and persist as a mass-consistent discontinuous shatter (found and gated A19; promoted from a `WILL_FAIL` sentinel 2026-07-23) | as `khrt-e2e` | as `khrt-e2e` |
 | **repeat-drag-stokes** | — (kind 8, harness contract) | *two-sweep repeatability* (`support/twosweep.f90` + `tools/check_twosweep.py`): sweep 1 ≡ sweep 0 — `.dat` sorted multisets identical, `.tec` ≤ 1e-12 scale-relative; **plus gas-cycle**: original field → `U` doubled → original, sweep 1 must differ, sweep 2 must match sweep 0 | as `drag-stokes` | as `drag-stokes` |
@@ -253,6 +268,7 @@ box/BC. Sub-test IDs in parentheses.
 ---
 | **test_mhb98_decane** | `[MHB98]` Fig. 4 **M7** (decane, T_G=1000 K, T_d,0=315 K, D0=2.0 mm, Re_d,0=17; exp Wong & Lin 1992) | *validation* (E-VAL-2b) — THE model-discriminating case: Fig. 4b spans ~200 K across M1–M8 vs 0.47 K in Fig. 2b. GATES: **DC1** IGLOO `evaporation()` CEM+LK mdot vs an independently re-coded M7 chain (eqs 10, 15–18) at 25 sampled states, 1e-12 (measured **3.5e-16**) + **DC2** IGLOO `blowingFactor()` vs eq. 19 `f2=b/(e^b−1)`, 1e-12 (measured **9.4e-15**; f2 spans **0.40–0.88**, i.e. convective heat cut up to 60 %) + **DC3** the re-coded M7 at MHB98's OWN 0.552 vs three PIXEL-MEASURED Fig. 4 quantities: β 1.579 vs 1.60 (**1.3 %**), T_d(3.5 s) 393.7 vs 397 K (**3.3 K**), D²(4.0 s) 1.908 vs 1.885 mm² (**1.2 %**) (fixture: **FIXED SLIP** (suspended drop, Re ∝ d): free flight was REFUTED by measurement (β 1.31–1.44 for every Sc). All properties = MHB98 App. A at their T_R=420.19 K; **Le=1 deliberately, NOT their App. Γ_V** (which gives Le=4.40 and misses the plateau by +40 K — paper is self-inconsistent); needs `blowing = LK`; trajectory RK4'd in-test over IGLOO's kernels — a unit test, not e2e, since fixed slip would need a no-drag flag and `t=x/U` is invalid with real slip. **Confound quantified, not hidden:** IGLOO's Ranz-Marshall carries 0.600, MHB98 eq. 6 prints 0.552 (8.7 %); DC1/DC2 use 0.600 (implementation), DC3 uses 0.552 (paper)) |
 | **test_rng_stream** | — | *stream contract* of the per-parcel splitmix64 RNG (`Lib_Statistics::rngSeedFor`/`rngNext`): seed distinctness (8 families × 4000 IDs, 0 collisions), reproducibility, uniformity — the property no e2e gate can see (one shared seed reproduces perfectly and passes every e2e oracle) |
+| **test_psd_table** | `[Kol33]`,`[AD54]`,`[Ste74]`,`[MM04]` | *closed form* CDFs typed in the test (table6's hand knots, truncated Normal, LogNormal, Rosin-Rammler) against 10⁵ draws of the production `sampleDiameter` per law: Kolmogorov-Smirnov D_n < 6.165e-3 and A² < 5.969 at seed 42, seeds 43..61 printed (max D_n 4.8e-3, max A² 2.9, none above). Also the table knots to 1e-15, one load per token, the `INPUT/` fallback, a one-row Dirac that draws nothing. RED (one-line sampler changes): class-centre atoms D 0.175, number fractions D 0.702, next class D 0.350, last edge shortened D 0.050 / A² 202, Normal clipped D 0.022 / A² 201, LogNormal log-space σ D 0.593, Rosin-Rammler n +10 % D 0.025 / A² 199, untruncated Normal oracle D 0.023 / A² 184 |
 | **test_axis_dispatch** | — | *dispatch equivalence*: bcdef-200 faces classified by GEOMETRY (azimuthal normal ⇒ wedge rotation, radial ⇒ axis reflection) for wedges built on i, j and k at all six face indices; pins equivalence with the retired `f==6` rule; the only coverage of `bcDef`'s fold branch (`axisymFold` re-sectors first, so no e2e case reaches it) |
 | **test_graze_standoff** | — | *contract pin*: the grazing standoff is an absolute length capped at a fraction of the cell (`grazeOffset`), checked across 12 decades of cell thickness |
 | **test_dual_clip** | — | *tiling invariant*: sum(dual cellVol) == domain volume plus the per-cell 1/2, 1/4, 1/8 boundary factors, in 2D and 3D; proven RED against the unclipped dual; the only gate on the 3D dual (no e2e case gates it) |
@@ -280,12 +296,12 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-123 `e2e`-labelled + 37 `unit`-labelled + the optional `vortex-cloud-3way` = **161 CTest entries** in a
-serial build (+7 `mpi-*` under `USE_MPI`, 168), all green (counted from `tests/CMakeLists.txt`). The 123
-`e2e` entries are the 73 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+137 `e2e`-labelled + 38 `unit`-labelled + the optional `vortex-cloud-3way` = **176 CTest entries** in a
+serial build (+7 `mpi-*` under `USE_MPI`, 183), all green (counted from `tests/CMakeLists.txt`). The 137
+`e2e` entries are the 77 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
-threads), the twelve `repeat-*` two-sweep gates and the thirty-six `refuse-*` setup-refusal gates. The
-37 `unit` entries are 32 compiled unit tests, the property-table reader on its three fixtures
+threads), the twelve `repeat-*` two-sweep gates and the forty-six `refuse-*` setup-refusal gates. The
+38 `unit` entries are 33 compiled unit tests, the property-table reader on its three fixtures
 (`test_properties_reader`, `-two-material`, `-atlas-water`), `self_test` and `registry-docs`. Unit
 families that emit a production-vs-reference overlay (`verif_dump` → `tools/plot_curves.py` →
 `docs/vv/images/unit-*.svg`): drag, heat, evaporation-CEM, LK, TC, the MHB98 decane kernel,

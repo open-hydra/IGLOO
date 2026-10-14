@@ -58,7 +58,7 @@ to overlook when counting coverage:
   above 1 K, columns in any order, both enthalpy datums, a `Psat` column, and the file ATLAS
   GPB writes; plus the table and `Psat` checks and the enthalpy-to-temperature inversion on synthetic input),
   `registry-docs` (the tracked parameter registry page equals DocGen's output),
-  the thirty-six `refusals/*` cases (inputs the solver must refuse at setup with exit
+  the forty-six `refusals/*` cases (inputs the solver must refuse at setup with exit
   128 and nothing integrated), and `self_test` (which exercises the verification
   support library itself).  No physics, no curve, by design.
 
