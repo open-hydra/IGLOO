@@ -308,8 +308,10 @@ mpirun -n 4 ./bin/IGLOO
 
 ## Known limits
 
-- **Setup is replicated, including the Tecplot read**: N ranks read the same file — a
-  one-time cost at this scale.
+- **Setup is replicated, except the Tecplot read**: rank 0 parses the gas file and broadcasts
+  the field (`mpi_bcast_orion`: names, solution time, block dimensions, mesh and variables);
+  every rank then builds the blocks, the geometry and the pinning itself — a one-time cost at
+  this scale.
 - **Memory does not scale**: every rank holds the full mesh, gas field and accumulators
   (`O(nb × nfam × cells)` per rank). Breaking that wall would need shared-memory windows
   (`MPI_Win_allocate_shared`) or genuine domain decomposition — neither is implemented.

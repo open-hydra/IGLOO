@@ -19,7 +19,7 @@ module IGLOO_Mod_MPI
   public :: mpi_abort_all, check_mpi_error
   public :: owns_particle
   public :: rank_suffix
-  public :: mpi_ordered_sum_r8_array, mpi_bcast_r8_array
+  public :: mpi_ordered_sum_r8_array, mpi_bcast_r8_array, mpi_bcast_orion
   public :: mpi_allreduce_sum_i4_array
   public :: reduce_accumulators
 
@@ -156,6 +156,67 @@ contains
     enddo
 #endif
   end subroutine mpi_bcast_r8_array
+
+
+  !> Gives every rank rank 0's gas/mesh field: variable names, solution time and, per block, name,
+  !  dimensions, mesh and variables with their bounds. No-op at one rank.
+  subroutine mpi_bcast_orion(orion)
+    use Lib_ORION_data, only: orion_data
+    type(orion_data), intent(inout) :: orion
+#ifdef USE_MPI
+    integer :: hdr(4), dims(21), ierr, b
+    if (mpi_size_ <= 1) return
+    hdr = 0
+    if (mpi_is_root) then
+      if (allocated(orion%varnames)) hdr(1:2) = [1, size(orion%varnames)]
+      if (allocated(orion%block))    hdr(3:4) = [1, size(orion%block)]
+    endif
+    call MPI_BCAST(hdr, 4, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr); call check_mpi_error(ierr)
+    if (hdr(1) == 1) then
+      if (.not. mpi_is_root) then
+        if (allocated(orion%varnames)) deallocate(orion%varnames)
+        allocate(orion%varnames(hdr(2)))
+      endif
+      call MPI_BCAST(orion%varnames, len(orion%varnames)*hdr(2), MPI_CHARACTER, 0, MPI_COMM_WORLD, ierr)
+      call check_mpi_error(ierr)
+    endif
+    call MPI_BCAST(orion%solutiontime, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+    call check_mpi_error(ierr)
+    if (hdr(3) /= 1) return
+    if (.not. mpi_is_root) then
+      if (allocated(orion%block)) deallocate(orion%block)
+      allocate(orion%block(hdr(4)))
+    endif
+    do b = 1, hdr(4)
+      associate(blk => orion%block(b))
+      !> dims: Ni Nj Nk | mesh flag, lbound(4), ubound(4) | vars flag, lbound(4), ubound(4)
+      dims = 0
+      if (mpi_is_root) then
+        dims(1:3) = [blk%Ni, blk%Nj, blk%Nk]
+        if (allocated(blk%mesh)) then
+          dims(4) = 1; dims(5:8) = lbound(blk%mesh); dims(9:12) = ubound(blk%mesh)
+        endif
+        if (allocated(blk%vars)) then
+          dims(13) = 1; dims(14:17) = lbound(blk%vars); dims(18:21) = ubound(blk%vars)
+        endif
+      endif
+      call MPI_BCAST(dims, size(dims), MPI_INTEGER, 0, MPI_COMM_WORLD, ierr); call check_mpi_error(ierr)
+      call MPI_BCAST(blk%name, len(blk%name), MPI_CHARACTER, 0, MPI_COMM_WORLD, ierr)
+      call check_mpi_error(ierr)
+      if (.not. mpi_is_root) then
+        blk%Ni = dims(1); blk%Nj = dims(2); blk%Nk = dims(3)
+        if (allocated(blk%mesh)) deallocate(blk%mesh)
+        if (allocated(blk%vars)) deallocate(blk%vars)
+        if (dims(4) == 1) allocate(blk%mesh(dims(5):dims(9), dims(6):dims(10), dims(7):dims(11), dims(8):dims(12)))
+        if (dims(13) == 1) &
+          allocate(blk%vars(dims(14):dims(18), dims(15):dims(19), dims(16):dims(20), dims(17):dims(21)))
+      endif
+      if (dims(4) == 1)  call mpi_bcast_r8_array(blk%mesh, size(blk%mesh), 0)
+      if (dims(13) == 1) call mpi_bcast_r8_array(blk%vars, size(blk%vars), 0)
+      end associate
+    enddo
+#endif
+  end subroutine mpi_bcast_orion
 
 
   !> In-place allreduce SUM over an integer array; n must be identical on every rank.
