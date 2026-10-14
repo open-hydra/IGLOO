@@ -862,6 +862,7 @@ contains
         !$OMP ATOMIC UPDATE
         sblock%sourceMass(nmat,ii,jj,kk) = sblock%sourceMass(nmat,ii,jj,kk) + (masIn-masOut)
       else
+        !> Every rank stores the same 0 (fields pre-zeroed); a non-zero constant would be summed over the ranks.
         sblock%sourceMass(nmat,ii,jj,kk) = 0.0
       endif
       !$OMP ATOMIC UPDATE

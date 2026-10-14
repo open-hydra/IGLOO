@@ -11,7 +11,7 @@ IF(USE_OPENMP)
                           LINK_FLAGS "${OpenMP_Fortran_FLAGS}")
 ENDIF(USE_OPENMP)
 
-# MPI (hybrid MPI + OpenMP; see plan-bucket/mpi-parallelization-plan.md).
+# MPI (hybrid MPI + OpenMP; see docs/development/parallelization.md).
 #
 # find_package is called HERE, not only at the top level, on purpose. When hydra configures IGLOO the
 # root CMakeLists' `if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)` guard is FALSE, so
