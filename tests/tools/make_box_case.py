@@ -25,6 +25,7 @@ gas vars are set to SI constants, particle vars to 0.
 
 Usage:
     make_box_case.py <out_dir> [--kv KV] [--kt KT] [--rp RP] [--alpha A] [--blocks 2] [--tg TG]
+                     [--nx NX] [--ny NY] [--nz NZ]
         writes <out_dir>/solfile.tec and <out_dir>/bc.txt
         --kv : inlet velocity scaling  (v0 = kv*|u_g|; 1.0 => no drag slip, Re=0)
         --kt : inlet temperature scaling (Tp0 = kt*T_g; 1.0 => no thermal slip)
@@ -34,6 +35,8 @@ Usage:
                   (obj_particles initializePart). Default: 'normal' sentinel.
         --blocks : 2 writes the box as two blocks joined at x = Lx/2 (default 1)
         --tg : gas temperature [K] (default the module's 600 K)
+        --nx, --ny, --nz : cells per direction over the same Lx, Ly, Lz (default 60 5 5;
+                  --blocks 2 splits nx in two, so nx must be even; --nz 1 is a one-layer box)
         Defaults reproduce the drag-stokes case (kv=0.1, kt=1.0, rp=5.945e-6).
 """
 import argparse
@@ -94,12 +97,12 @@ BCDEF_PER   = 201                        # translational periodic: cell line + c
 BCDEF_CONN  = 101                        # block interface: cell line + partner line
 
 
-def write_solfile(path, blocks=1, tg=None):
-    nxb = NX // blocks
-    I, J, K = nxb + 1, NY + 1, NZ + 1
-    dx, dy, dz = LX / NX, LY / NY, LZ / NZ
+def write_solfile(path, blocks=1, tg=None, nx=NX, ny=NY, nz=NZ):
+    nxb = nx // blocks
+    I, J, K = nxb + 1, ny + 1, nz + 1
+    dx, dy, dz = LX / nx, LY / ny, LZ / nz
     nnode = I * J * K
-    ncell = nxb * NY * NZ
+    ncell = nxb * ny * nz
     with open(path, "w") as f:
         f.write(' TITLE="IGLOO verification: uniform-gas box"\n')
         f.write(VARLINE)
@@ -123,12 +126,12 @@ def write_solfile(path, blocks=1, tg=None):
     return I, J, K, nnode, ncell
 
 
-def write_bc(path, kv, kt, rp, alpha=None, periodic_y=False, blocks=1):
+def write_bc(path, kv, kt, rp, alpha=None, periodic_y=False, blocks=1, nx=NX, ny=NY, nz=NZ):
     # reader loop order (IO.f90 read_cdp_bc_file): b=1..nb, f=1..6, n=1..nend(f), m=1..mend(f).
     # mend/nend per face: f1,2->(Ny,Nz); f3,4->(Nx,Nz); f5,6->(Nx,Ny), Nx the block's.
-    nxb = NX // blocks
-    ranges = {1: (NY, NZ), 2: (NY, NZ), 3: (nxb, NZ),
-              4: (nxb, NZ), 5: (nxb, NY), 6: (nxb, NY)}
+    nxb = nx // blocks
+    ranges = {1: (ny, nz), 2: (ny, nz), 3: (nxb, nz),
+              4: (nxb, nz), 5: (nxb, ny), 6: (nxb, ny)}
     data = inlet_data(kv, kt, rp, alpha)
     n_inlet = 0
     with open(path, "w") as f:
@@ -151,9 +154,9 @@ def write_bc(path, kv, kt, rp, alpha=None, periodic_y=False, blocks=1):
                         elif bcdef == BCDEF_PER:
                             # connection line (3D reader: block,i,j,k,face + 4 int weights).
                             # face3 cell (m,n) = geo cell (i=m, j=1,  k=n) partners face4's
-                            # (i=m, j=NY, k=n) and vice versa; periodicTransport translates by
+                            # (i=m, j=ny, k=n) and vice versa; periodicTransport translates by
                             # partner_face_center - exit_face_center = -+Ly*yhat.
-                            pj, pf = (NY, 4) if face == 3 else (1, 3)
+                            pj, pf = (ny, 4) if face == 3 else (1, 3)
                             f.write(f"   {b:6d}{m:6d}{pj:6d}{n:6d}{pf:6d}"
                                     f"{1:6d}{0:6d}{0:6d}{1:6d}\n")
                         elif bcdef == BCDEF_CONN:
@@ -177,17 +180,24 @@ def main():
     p.add_argument("--blocks", type=int, choices=(1, 2), default=1,
                    help="2: two zones split at x = Lx/2, joined by a 101 connection")
     p.add_argument("--tg", type=float, default=None, help="gas temperature [K] (default 600)")
+    p.add_argument("--nx", type=int, default=NX, help="cells along x (default 60)")
+    p.add_argument("--ny", type=int, default=NY, help="cells along y (default 5)")
+    p.add_argument("--nz", type=int, default=NZ, help="cells along z (default 5; 1 = one-layer box)")
     a = p.parse_args()
+    if min(a.nx, a.ny, a.nz) < 1 or a.nx % a.blocks:
+        p.error("--nx/--ny/--nz must be >= 1 and --nx a multiple of --blocks")
     os.makedirs(a.out_dir, exist_ok=True)
-    I, J, K, nnode, ncell = write_solfile(os.path.join(a.out_dir, "solfile.tec"), a.blocks, a.tg)
+    I, J, K, nnode, ncell = write_solfile(os.path.join(a.out_dir, "solfile.tec"), a.blocks, a.tg,
+                                          nx=a.nx, ny=a.ny, nz=a.nz)
     n_inlet = write_bc(os.path.join(a.out_dir, "bc.txt"), a.kv, a.kt, a.rp, a.alpha,
-                       periodic_y=a.periodic_y, blocks=a.blocks)
-    print(f"[ok] box solfile: I={I} J={J} K={K} nnode={nnode} ncell={ncell} (3D, mesh2D=False)"
+                       periodic_y=a.periodic_y, blocks=a.blocks, nx=a.nx, ny=a.ny, nz=a.nz)
+    print(f"[ok] box solfile: I={I} J={J} K={K} nnode={nnode} ncell={ncell} "
+          + ("(3D, mesh2D=False)" if a.nz > 1 else "(one k-layer, mesh2D=True)")
           + (" per block, 2 blocks joined at x = Lx/2 by 101 records" if a.blocks == 2 else ""))
     print(f"[ok] bc.txt: {n_inlet} inlet (401) cells on face 1; "
           + ("faces 3/4 periodic (201), rest wall (400)" if a.periodic_y
              else "all other faces wall (400)"))
-    print(f"     domain x[0,{LX}] y[0,{LY}] z[0,{LZ}]; dx={LX/NX*1e3:.2f}mm")
+    print(f"     domain x[0,{LX}] y[0,{LY}] z[0,{LZ}]; dx={LX/a.nx*1e3:.2f}mm")
     print(f"     inlet: kv={a.kv} (v0={a.kv*10:.3g} m/s)  kt={a.kt}  rp={a.rp} (d={2*a.rp*1e6:.3g} um)")
 
 
