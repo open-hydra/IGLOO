@@ -610,7 +610,7 @@ contains
       close(unitExit)
     enddo
 
-    !> Allreduce the partial grid sums across ranks before finalize, which is nonlinear.
+    !> Sum the partial grid sums across ranks, in rank order, before finalize, which is nonlinear.
     call tm_phase(TM_REDUCE)
     call reduce_accumulators(self%source, self%euler, sourceSwitch, eulerSwitch)
     call tm_phase(TM_FINALIZE)

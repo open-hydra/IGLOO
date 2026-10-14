@@ -19,12 +19,14 @@ module IGLOO_Mod_MPI
   public :: mpi_abort_all, check_mpi_error
   public :: owns_particle
   public :: rank_suffix
-  public :: mpi_allreduce_sum_r8_array
+  public :: mpi_ordered_sum_r8_array, mpi_bcast_r8_array
   public :: mpi_allreduce_sum_i4_array
   public :: reduce_accumulators
 
   !> Chunk size of array reductions (MPI counts are int32).
   integer, parameter :: MAX_CHUNK = 16777216
+  !> Chunk of the rank-ordered sum (8 MiB per message) and its message tag.
+  integer, parameter :: SUM_CHUNK = 1048576, TAG_SUM = 7101
 
 contains
 
@@ -104,10 +106,43 @@ contains
   end function rank_suffix
 
 
-  !> In-place allreduce SUM over a real(R8) array, chunked against int32 count overflow.
-  subroutine mpi_allreduce_sum_r8_array(arr, n)
+  !> In-place cross-rank SUM over a real(R8) array in rank order, ((v0 + v1) + v2) + ...: rank r
+  !  receives the sum of ranks 0..r-1, adds its own part and passes it on; the last rank's total is
+  !  broadcast. The same bits on every rank, for every rank placement and collective algorithm.
+  subroutine mpi_ordered_sum_r8_array(arr, n)
     integer,  intent(in)    :: n
     !> Assumed-size: callers pass whole (contiguous) accumulator arrays.
+    real(R8), intent(inout) :: arr(*)
+#ifdef USE_MPI
+    real(R8), allocatable :: part(:)
+    integer :: ierr, i0, cnt, last
+    if (mpi_size_ <= 1 .or. n <= 0) return
+    last = mpi_size_ - 1
+    allocate(part(min(SUM_CHUNK, n)))
+    i0 = 1
+    do while (i0 <= n)
+      cnt = min(SUM_CHUNK, n - i0 + 1)
+      if (mpi_rank_ > 0) then
+        call MPI_RECV(part, cnt, MPI_DOUBLE_PRECISION, mpi_rank_-1, TAG_SUM, MPI_COMM_WORLD, &
+                      MPI_STATUS_IGNORE, ierr)
+        call check_mpi_error(ierr)
+        arr(i0:i0+cnt-1) = part(1:cnt) + arr(i0:i0+cnt-1)
+      endif
+      if (mpi_rank_ < last) then
+        call MPI_SEND(arr(i0), cnt, MPI_DOUBLE_PRECISION, mpi_rank_+1, TAG_SUM, MPI_COMM_WORLD, ierr)
+        call check_mpi_error(ierr)
+      endif
+      i0 = i0 + cnt
+    enddo
+    deallocate(part)
+    call mpi_bcast_r8_array(arr, n, last)
+#endif
+  end subroutine mpi_ordered_sum_r8_array
+
+
+  !> In-place broadcast of a real(R8) array from rank `root`, chunked against int32 count overflow.
+  subroutine mpi_bcast_r8_array(arr, n, root)
+    integer,  intent(in)    :: n, root
     real(R8), intent(inout) :: arr(*)
 #ifdef USE_MPI
     integer :: ierr, i0, cnt
@@ -115,19 +150,18 @@ contains
     i0 = 1
     do while (i0 <= n)
       cnt = min(MAX_CHUNK, n - i0 + 1)
-      call MPI_ALLREDUCE(MPI_IN_PLACE, arr(i0), cnt, MPI_DOUBLE_PRECISION, MPI_SUM, &
-                         MPI_COMM_WORLD, ierr)
+      call MPI_BCAST(arr(i0), cnt, MPI_DOUBLE_PRECISION, root, MPI_COMM_WORLD, ierr)
       call check_mpi_error(ierr)
       i0 = i0 + cnt
     enddo
 #endif
-  end subroutine mpi_allreduce_sum_r8_array
+  end subroutine mpi_bcast_r8_array
 
 
   !> In-place allreduce SUM over an integer array; n must be identical on every rank.
   subroutine mpi_allreduce_sum_i4_array(arr, n)
     integer, intent(in)    :: n
-    integer, intent(inout) :: arr(*)          !> assumed-size; see mpi_allreduce_sum_r8_array
+    integer, intent(inout) :: arr(*)          !> assumed-size: whole contiguous arrays
 #ifdef USE_MPI
     integer :: ierr, i0, cnt
     if (mpi_size_ <= 1 .or. n <= 0) return
@@ -142,8 +176,8 @@ contains
   end subroutine mpi_allreduce_sum_i4_array
 
 
-  !> Allreduces the per-rank partial source/euler sums so every rank holds identical raw totals.
-  !  Called inside solve, before finalize (which is nonlinear).
+  !> Sums the per-rank partial source/euler accumulators in rank order so every rank holds the same
+  !  raw totals. Called inside solve, before finalize (which is nonlinear).
   subroutine reduce_accumulators(srcblock, eulblock, srcSwitch, eulSwitch)
     type(obj_sourceblock), intent(inout) :: srcblock(:)
     type(obj_eulerblock),  intent(inout) :: eulblock(:,:)
@@ -155,22 +189,22 @@ contains
     do b = 1, size(srcblock)
       if (srcSwitch) then
         if (allocated(srcblock(b)%sourceMass)) &
-          call mpi_allreduce_sum_r8_array(srcblock(b)%sourceMass, size(srcblock(b)%sourceMass))
+          call mpi_ordered_sum_r8_array(srcblock(b)%sourceMass, size(srcblock(b)%sourceMass))
         if (allocated(srcblock(b)%sourceMom)) &
-          call mpi_allreduce_sum_r8_array(srcblock(b)%sourceMom,  size(srcblock(b)%sourceMom))
+          call mpi_ordered_sum_r8_array(srcblock(b)%sourceMom,  size(srcblock(b)%sourceMom))
         if (allocated(srcblock(b)%sourceEn)) &
-          call mpi_allreduce_sum_r8_array(srcblock(b)%sourceEn,   size(srcblock(b)%sourceEn))
+          call mpi_ordered_sum_r8_array(srcblock(b)%sourceEn,   size(srcblock(b)%sourceEn))
       endif
       if (eulSwitch) then
         do fam = 1, size(eulblock, 2)
           if (allocated(eulblock(b,fam)%density)) &
-            call mpi_allreduce_sum_r8_array(eulblock(b,fam)%density,     size(eulblock(b,fam)%density))
+            call mpi_ordered_sum_r8_array(eulblock(b,fam)%density,     size(eulblock(b,fam)%density))
           if (allocated(eulblock(b,fam)%velocity)) &
-            call mpi_allreduce_sum_r8_array(eulblock(b,fam)%velocity,    size(eulblock(b,fam)%velocity))
+            call mpi_ordered_sum_r8_array(eulblock(b,fam)%velocity,    size(eulblock(b,fam)%velocity))
           if (allocated(eulblock(b,fam)%temperature)) &
-            call mpi_allreduce_sum_r8_array(eulblock(b,fam)%temperature, size(eulblock(b,fam)%temperature))
+            call mpi_ordered_sum_r8_array(eulblock(b,fam)%temperature, size(eulblock(b,fam)%temperature))
           if (allocated(eulblock(b,fam)%np)) &
-            call mpi_allreduce_sum_r8_array(eulblock(b,fam)%np,          size(eulblock(b,fam)%np))
+            call mpi_ordered_sum_r8_array(eulblock(b,fam)%np,          size(eulblock(b,fam)%np))
         enddo
       endif
     enddo

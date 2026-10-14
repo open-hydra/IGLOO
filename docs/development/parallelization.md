@@ -22,7 +22,7 @@ flowchart TB
         SN["identical replicated setup"] --> PN["own parcels<br/>ip ≡ N-1 (mod N)"]
         PN --> TN["OpenMP threads"]
     end
-    T0 --> A["MPI_Allreduce(SUM)<br/>source + euler accumulators"]
+    T0 --> A["rank-order sum<br/>source + euler accumulators"]
     T1 --> A
     TN --> A
     A --> W["root-only grid write<br/>(.tec)"]
@@ -43,6 +43,20 @@ Consequence: any partition of the parcel set produces the same trajectories. Onl
 *grid* accumulators need combining, and summation is associative up to floating-point
 re-association — which is why the grid `.tec` is compared with a tolerance while the
 particle `.dat` is compared as an exact multiset.
+
+### The cross-rank sum is fixed in rank order
+
+The ranks' partial accumulators are added in rank order, `((v0 + v1) + v2) + …`: rank r
+receives the sum of ranks 0..r−1, adds its own part and passes it on, and the last rank's
+total is broadcast (`mpi_ordered_sum_r8_array`). A library reduction (`MPI_Allreduce`) would
+let the MPI library choose the association per message size and rank count — on Intel MPI
+the ring algorithm (`I_MPI_ADJUST_ALLREDUCE=8`) and the default give different bytes on the
+1672-parcel vortex cloud at three and four ranks. With the fixed order the grid fields at a
+given rank count are the same bytes on every run, placement and library tuning, at one
+thread per rank (inside a rank, the `!$OMP ATOMIC` deposits of several threads still land in
+scheduling order). The cost per accumulator array is p − 1 point-to-point messages per 8 MiB
+chunk plus one broadcast; the integer census and fold counters keep `MPI_Allreduce`
+(integer sums are exact in any order).
 
 ## Level 1 — MPI, across ranks
 
@@ -70,7 +84,7 @@ The whole MPI surface is three places. Everything else is serial-identical code.
 | # | Where | What it does |
 |---|---|---|
 | 1 | `owns_particle` in `solve`'s two `!$OMP PARALLEL DO` loops | each rank integrates only its stripe |
-| 2 | `reduce_accumulators` at the end of `solve` | `MPI_Allreduce(SUM)` over the source and euler accumulators |
+| 2 | `reduce_accumulators` at the end of `solve` | sum of the source and euler accumulators over the ranks, in rank order |
 | 3 | `merge_rank_particle_files` in `writeout` | root collapses per-rank `.dat` shards into the serial file layout |
 
 Every `#ifdef USE_MPI` in `src/` lives inside `IGLOO_Mod_MPI.f90`, apart from the timing
@@ -139,7 +153,7 @@ time order, which is what the per-ID loaders in the oracles actually rely on.
 At one rank the suffix is empty and the merge is a no-op, so **a serial run keeps
 byte-identical filenames**. Nothing downstream needs to know the rank count.
 
-Grid output (`.tec`) is **root-only**, after the allreduce.
+Grid output (`.tec`) is **root-only**, after the cross-rank sum.
 
 ## Level 2 — OpenMP, within a rank
 
@@ -238,7 +252,7 @@ cloud.
 
 ## How this is verified
 
-Rank-count invariance is **gated**, not assumed. Eight MPI cases run under `mpiexec`
+Rank-count invariance is **gated**, not assumed. Nine MPI cases run under `mpiexec`
 (`tests/mpi/`), registered only in a `USE_MPI` build:
 
 | gate | ranks × threads |
@@ -251,6 +265,7 @@ Rank-count invariance is **gated**, not assumed. Eight MPI cases run under `mpie
 | `mpi-timing-report` | 4 × 2 (the per-rank lines of the timing report) |
 | `mpi-consistency` | cross-rank-count comparison |
 | `mpi-consistency-two-mat` | cross-rank-count comparison, two materials |
+| `mpi-determinism` | 3 and 4 × 1: grid bytes independent of the collective algorithm, within 1e-12 of n = 1 |
 
 Each case symlinks its parent case's `INPUT/`, `input.ini` and `check.py`, so the fixture and
 the oracle are shared with the serial gate — the MPI case adds only the launch and the

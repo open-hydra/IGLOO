@@ -12,7 +12,7 @@
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ chimera-2blk/ varcp-tmin/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero}}
 #   repeatability/      two-sweep gates (twosweep driver): 12 cases
-#   mpi/                registered only under USE_MPI: 6 rank-count cases + 2 consistency
+#   mpi/                registered only under USE_MPI: 6 rank-count cases + 2 consistency + 1 determinism
 #
 # Run everything via ../test.sh (builds bin/IGLOO too — e2e cases use it).
 
@@ -838,6 +838,17 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
     set_tests_properties(mpi-consistency-two-mat PROPERTIES
         LABELS "e2e;mpi;infrastructure;consistency"
         ENVIRONMENT "OMP_NUM_THREADS=2;KMP_STACKSIZE=100M"
+        TIMEOUT 900)
+    # the cross-rank sum in rank order: at n = 3 and 4 the grid fields are the same bytes with the library's
+    # default collectives and with I_MPI_ADJUST_ALLREDUCE=8, and within 1e-12 of n = 1. Fixture: the
+    # 1672-parcel vortex cloud (every cell fed by every rank); check.py sets one thread per rank itself.
+    add_test(NAME mpi-determinism
+        COMMAND python3 -B check.py "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}"
+                                   "${CMAKE_SOURCE_DIR}/bin/IGLOO"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mpi/determinism")
+    set_tests_properties(mpi-determinism PROPERTIES
+        LABELS "e2e;mpi;infrastructure;consistency"
+        ENVIRONMENT "OMP_NUM_THREADS=1;KMP_STACKSIZE=100M"
         TIMEOUT 900)
 endif()
 

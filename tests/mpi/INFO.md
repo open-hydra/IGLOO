@@ -41,6 +41,7 @@ green, nothing decomposed. Without the witness this whole directory would be a v
 | `mpi-timing-report` | 4 | the `[IGLOO-timing]` report (`timing = on`): the per-rank gather, one line and the strided parcel count per rank |
 | `mpi-consistency` | 1 vs 4 | the cross-rank-count gate (below) |
 | `mpi-consistency-two-mat` | 1 vs 4 | the same gate (same `check.py`, symlinked) on the `nm=2` fixture |
+| `mpi-determinism` | 1, 3, 4 | the rank-order cross-rank sum: grid bytes at n = 3 and 4 independent of the collective algorithm (below) |
 
 Each variant directory **symlinks** its parent case's `INPUT/`, `input.ini` and `check.py`. The oracle
 is therefore the same inode as the serial case's — "the oracle passes unmodified" is not a claim to
@@ -65,6 +66,20 @@ and not sufficient: an oracle checks **physics**, and most of what MPI can break
    never a per-value relative error. See that file for the measurement behind the choice.
 
 Plus an integration criterion, because two runs that both produced nothing would agree perfectly.
+
+## Why `mpi-determinism` exists
+
+The ranks' partial grid sums are added in rank order, so at a fixed rank count the `.tec` files
+are the same bytes whatever the MPI library does. The gate runs the 1672-parcel vortex cloud
+(`standard/vortex-cloud-st1`, symlinked) at n = 1, then at n = 3 and n = 4 twice each, once with
+the library's default collectives and once with `I_MPI_ADJUST_ALLREDUCE=8` (Intel MPI's ring
+algorithm; other libraries ignore the variable and the pair is a plain rerun), all at one thread
+per rank, and asserts the pair byte-identical, every `.dat` multiset equal to n = 1's and the
+`.tec` within the scale-relative 1e-12 of n = 1. The fixture matters: in the box cases each cell
+row is fed by one or two parcels, so no reduction order can move a printed digit there; in the
+vortex cloud every cell on the cloud's path is fed by parcels of every rank. A library
+reduction fails it: with `MPI_Allreduce` 38 values of `source.tec` at n = 3 and 45 at n = 4
+change between the two algorithms (5.1e-20 of field scale).
 
 ## Comparison rules (measured, not chosen)
 
