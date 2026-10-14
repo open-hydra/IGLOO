@@ -308,6 +308,10 @@ index instead of the global band turns `mpi-khrt` red at n ≥ 2.
 mpirun -n 4 ./bin/IGLOO
 ```
 
+For output-heavy runs put `OUTPUT/` on tmpfs (`mkdir -p /dev/shm/$USER/<case> && ln -s
+/dev/shm/$USER/<case> OUTPUT`): the storage term of the scatter output is nearly constant in the
+thread count, so it bounds the speed-up first.
+
 !!! danger "`--use-mpi` and `--use-tecio` cannot be combined"
     ORION builds `teciompi` under MPI but links `tecio::tecio`, so the configure fails. ASCII
     `.tec` I/O works fine without TecIO, which is what the whole test suite uses.

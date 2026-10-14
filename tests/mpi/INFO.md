@@ -9,6 +9,9 @@ not see these tests at all and is unchanged by their existence.
 USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF
 ```
 
+For an output-heavy run by hand, put `OUTPUT/` on tmpfs: `ln -s /dev/shm/$USER/<case> OUTPUT` (after
+`mkdir -p` of the target); `tests/tools/mpi_scaling_smoke.sh` takes the same choice as `OUTPUT_DIR=/dev/shm/$USER`.
+
 `bin/IGLOO` and `bin/DocGen` are each **one link target shared by every build tree**, so whichever tree
 built last wins. `test.sh` removes both before its build, so each of its runs relinks them from the tree
 it tests: `./test.sh all` after an MPI run is serial again. After a build by hand, switching back is not
