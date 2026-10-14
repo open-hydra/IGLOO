@@ -326,6 +326,38 @@ thread count, so it bounds the speed-up first.
     ldd bin/IGLOO | grep -c libmpi        # 0 = serial, >0 = MPI
     ```
 
+## Memory per rank
+
+Every rank, and every thread team inside it, shares one copy of each array below; every rank
+holds all of them. Real (8-byte) values per block of `Ni × Nj × Nk` cells, with `N³ = Ni·Nj·Nk`
+and `(N+k)³ = (Ni+k)(Nj+k)(Nk+k)` (on a single-layer 2D block the `k` factor of the dual and
+ghost-ringed arrays is 1); `nsc` gas species, `nm` materials, `nfam` families (Σ groups);
+`S = 1` with source output, `E = 1` with Eulerian output (`out-file`).
+
+| arrays | gas-order 2 | gas-order 1 |
+|---|---|---|
+| gas fields: density per species, velocity, temperature, five property arrays | `(nsc + 9) (N+2)³` | `(nsc + 9) N³` |
+| accumulators at the solve shape: mass per material, momentum, energy; per family density, number, velocity, temperature | `[(nm + 4) S + 6 nfam E] (N+1)³` | `[(nm + 4) S + 6 nfam E] N³` |
+| geometry block: nodes, centres, edge lengths, minimum edge, cell volumes; octant volumes and dual weights | `4 (N+1)³ + 16 N³` | `3 (N+1)³ + 8 N³` |
+| gas block: dual nodes, dual volumes | `3 (N+2)³ + (N+1)³` | `3 (N+1)³` |
+| copies of nodes, centres, edge lengths, minimum edge in the source block and in each family's Eulerian block | `(S + nfam E) [3 (N+1)³ + 7 N³]` | the same |
+
+During `finalize` at gas-order 2 the cell-shaped results are built beside the dual-shaped
+accumulators, `[(nm + 4) S + 6 nfam E] N³` more, and the mollifier adds two (source) or one
+(Eulerian) cell-sized scratch arrays. `[IGLOO-General] timing = on` prints the allocated totals
+of the first three groups as the `sizes` line, gas / geometry (the last three rows) /
+accumulators: the `timing-report` gate checks that line against this table.
+
+Worked example, `standard/vie-plait` (one block of 120 × 50 × 5 cells, gas-order 2, `nsc = 1`,
+`nm = 1`, source output only): `N³ = 30000`, `(N+1)³ = 37026`, `(N+2)³ = 44408`; gas
+`10 × 44408 = 444080`; accumulators `5 × 37026 = 185130`; geometry `(4 × 37026 + 16 × 30000) +
+(3 × 44408 + 37026) + (3 × 37026 + 7 × 30000) = 1119432`; together 1748642 values, 13.3 MiB per
+rank, which is what the run prints. At gas-order 1 the same totals hold on `infrastructure/coupled-body`
+(60 × 5 × 5, source and Eulerian output, one family): gas 15000, geometry 59352, accumulators
+16500. On a 200³ block with one species, material and family and both outputs (gas-order 2) the
+table gives about 82 M gas, 89 M accumulator and 354 M geometry values — 3.9 GiB per rank,
+two thirds of it geometry, of which the per-family copies are 161 M.
+
 ## Known limits
 
 - **Setup is replicated, except the Tecplot read**: rank 0 parses the gas file and broadcasts
@@ -333,7 +365,7 @@ thread count, so it bounds the speed-up first.
   every rank then builds the blocks, the geometry and the pinning itself — a one-time cost at
   this scale.
 - **Memory does not scale**: every rank holds the full mesh, gas field and accumulators
-  (`O(nb × nfam × cells)` per rank). Breaking that wall would need shared-memory windows
+  (see [Memory per rank](#memory-per-rank)). Breaking that wall would need shared-memory windows
   (`MPI_Win_allocate_shared`) or genuine domain decomposition — neither is implemented.
 - The parallelization is **one-way**: the gas field is steady and read-only within a sweep.
   Two-way coupling would need the accumulators fed back, which changes the communication
