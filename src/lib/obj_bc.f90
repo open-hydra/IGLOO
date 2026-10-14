@@ -179,8 +179,8 @@ contains
       p = rotateVector(p, axisDir, rot)
       v = rotateVector(v, axisDir, rot)
 
-    !> Connected interface (101/103): index jump into the partner cell, no remap.
-    elseif (cell%bcdef==101 .or. cell%bcdef==103) then
+    !> Connected interface (101/103 with a partner cell; a 103 without one is a wall): index jump, no remap.
+    elseif ((cell%bcdef==101 .or. cell%bcdef==103) .and. cell%connection(1) > 0) then
       retry = .true.
       iold = cell%connection(1:4)
 

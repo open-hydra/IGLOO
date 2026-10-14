@@ -24,6 +24,13 @@ program test_bc_families
     !                                both families, three more 401 cells on b2 face 6
     !   F4  two copies, 402          mdotPart = (0.1 + 0.2) H^2                         RED 0.2 H^2
     !   F5  two copies, ds on copy 2 properties(2,9) = 0.01, dsSwitch on               RED 0, off
+    !   F6  chimera (102) faces, two blocks, two copies: face 2 of block 1 and face 1 of block 2
+    !       carry ATLAS's payload (the donor counts of the two ghost layers, then one line per
+    !       donor: block, i, j, k, weight), repeated in copy 2. Each facelet keeps its counts and
+    !       its layer-1 donors and weights in file order (one, two, or none with a layer-2 donor);
+    !       layer 2 is dropped; every other face 400. RED: a reader without 102 stops at pass 0
+    !       on the first chimera record; with the layer-1 lines stored in reverse order the
+    !       two-donor facelet fails (0.75, 0.25)
     !
     ! A pair (a, b) is a family's payload columns 1 and 6: krho (401) or gp (402), and rp.
     !
@@ -48,6 +55,7 @@ program test_bc_families
     call f3_two_blocks
     call f4_mass_flux
     call f5_ds
+    call f6_chimera
 
     if (nfail == 0) then
         print '(a)', ''
@@ -167,6 +175,51 @@ contains
     end subroutine f5_ds
 
 
+    !> F6 -- chimera (102) facelets: face 2 of block 1 (4 x 3 x 1) names cells of block 2, face 1
+    !  of block 2 (5 x 3 x 1) cells of block 1; two copies, the second repeating the first.
+    subroutine f6_chimera
+        type(obj_block)                 :: geo(2)
+        type(obj_flowblock)             :: gas(2)
+        type(obj_sourceblock)           :: src(2)
+        type(obj_eulerblock)            :: eul(2,2)
+        type(obj_material), allocatable :: mat(:)
+        integer :: u, c, m, b, f, n102(2), n400(2)
+        call setup(geo, reshape([4, 3, 1, 5, 3, 1], [3, 2]), mat, [1, 1])
+        open(newunit=u, file='INPUT/famtest-F6-bc.txt', status='replace', action='write')
+        do c = 1, 2
+            call writeChimCopy(u, 1, 4, 3, 1, 2)
+        enddo
+        do c = 1, 2
+            call writeChimCopy(u, 2, 5, 3, 1, 1)
+        enddo
+        close(u)
+        call read_cdp_bc_file('famtest-F6-', mat, geo, gas, src, eul, .false., .false.)
+        call expectChim('F6 block 1 face 2 m=1', geo(1)%face(2)%cell(1,1), [1, 1], &
+                        reshape([2, 1, 1, 1], [1, 4]), [1.0_real64])
+        call expectChim('F6 block 1 face 2 m=2', geo(1)%face(2)%cell(2,1), [2, 1], &
+                        reshape([2, 2, 1, 2, 2, 2, 1, 1], [2, 4]), [0.25_real64, 0.75_real64])
+        call expectChim('F6 block 1 face 2 m=3', geo(1)%face(2)%cell(3,1), [0, 1], &
+                        reshape([integer ::], [0, 4]), [real(real64) ::])
+        do m = 1, 3
+            call expectChim('F6 block 2 face 1 m='//itoa(m), geo(2)%face(1)%cell(m,1), [1, 0], &
+                            reshape([1, 4, m, 1], [1, 4]), [1.0_real64])
+        enddo
+        do b = 1, 2
+            n102(b) = 0; n400(b) = 0
+            do f = 1, 6
+                n102(b) = n102(b) + count(geo(b)%face(f)%cell(:,:)%bcdef == 102)
+                n400(b) = n400(b) + count(geo(b)%face(f)%cell(:,:)%bcdef == 400)
+            enddo
+        enddo
+        if (all(n102 == 3) .and. n400(1) == 35 .and. n400(2) == 43) then
+            print '(a)', '  [ok]   famtest F6 tags: 3 x 102 and the rest 400 on both blocks'
+        else
+            print '(a,4(i0,1x))', '  [FAIL] famtest F6 tags (102 per block, 400 per block): ', n102, n400
+            nfail = nfail + 1
+        endif
+    end subroutine f6_chimera
+
+
     ! ------------------------------------------------------------------ fixture
 
     !> Blocks of the given sizes through the production geometry path, mdotGas seeded on every
@@ -233,7 +286,80 @@ contains
     end subroutine writeCopy
 
 
+    !> One copy of block b's table with face cf a chimera face: its cells carry code 102 and the
+    !  payload of F6 (block 1: one, two and no layer-1 donor in block 2; block 2: one donor in
+    !  block 1, layer 2 empty); every other face 400.
+    subroutine writeChimCopy(u, b, nx, ny, nz, cf)
+        integer, intent(in) :: u, b, nx, ny, nz, cf
+        integer :: f, m, n, i, j, k, mend(6), nend(6)
+        mend(1:2) = ny; nend(1:2) = nz
+        mend(3:4) = nx; nend(3:4) = nz
+        mend(5:6) = nx; nend(5:6) = ny
+        do f = 1, 6; do n = 1, nend(f); do m = 1, mend(f)
+            select case (f)
+            case (1); i = 1;  j = m;  k = n
+            case (2); i = nx; j = m;  k = n
+            case (3); i = m;  j = 1;  k = n
+            case (4); i = m;  j = ny; k = n
+            case (5); i = m;  j = n;  k = 1
+            case (6); i = m;  j = n;  k = nz
+            end select
+            if (f /= cf) then
+                write(u, '(6i8)') b, i, j, k, f, 400
+                cycle
+            endif
+            write(u, '(6i8)') b, i, j, k, f, 102
+            if (b == 2) then
+                write(u, '(2i8)') 1, 0
+                write(u, '(4i8,es24.16)') 1, 4, m, 1, 1.0_real64
+            elseif (m == 1) then
+                write(u, '(2i8)') 1, 1
+                write(u, '(4i8,es24.16)') 2, 1, 1, 1, 1.0_real64
+                write(u, '(4i8,es24.16)') 2, 2, 1, 1, 1.0_real64
+            elseif (m == 2) then
+                write(u, '(2i8)') 2, 1
+                write(u, '(4i8,es24.16)') 2, 1, 2, 1, 0.25_real64
+                write(u, '(4i8,es24.16)') 2, 2, 2, 1, 0.75_real64
+                write(u, '(4i8,es24.16)') 2, 3, 2, 1, 1.0_real64
+            else
+                write(u, '(2i8)') 0, 1
+                write(u, '(4i8,es24.16)') 2, 1, 3, 1, 1.0_real64
+            endif
+        enddo; enddo; enddo
+    end subroutine writeChimCopy
+
+
     ! ------------------------------------------------------------------ report
+
+    !> A chimera facelet: code 102, the two layer counts, and the layer-1 donors and weights in order.
+    subroutine expectChim(lab, cell, nchi, donor, w)
+        use IGLOO_data_block, only: obj_bc_cell
+        character(*),      intent(in) :: lab
+        type(obj_bc_cell), intent(in) :: cell
+        integer,           intent(in) :: nchi(2), donor(:,:)
+        real(real64),      intent(in) :: w(:)
+        logical :: ok
+        ok = cell%bcdef == 102 .and. all(cell%chimN == nchi)
+        if (ok) then
+            if (nchi(1) == 0) then
+                ok = .not. allocated(cell%chimDonor) .and. .not. allocated(cell%chimW)
+            else
+                ok = allocated(cell%chimDonor) .and. allocated(cell%chimW)
+                if (ok) ok = all(shape(cell%chimDonor) == shape(donor)) .and. size(cell%chimW) == size(w)
+                if (ok) ok = all(cell%chimDonor == donor) .and. all(abs(cell%chimW - w) <= TOL)
+            endif
+        endif
+        if (ok) then
+            print '(a,2(i0,a))', '  [ok]   famtest '//lab//': 102, counts ', nchi(1), ' and ', nchi(2), &
+                ', layer-1 donors and weights as written'
+        else
+            print '(a,i0,a,2(i0,1x))', '  [FAIL] famtest '//lab//': bcdef ', cell%bcdef, ', counts ', cell%chimN
+            if (allocated(cell%chimDonor)) print '(a,*(i0,1x))', '         donors ', cell%chimDonor
+            if (allocated(cell%chimW))     print '(a,*(es12.5,1x))', '         weights ', cell%chimW
+            nfail = nfail + 1
+        endif
+    end subroutine expectChim
+
 
     !> Face-1 inlet cells of blk: code 401, (column 1, column 6) per family, krhoTot.
     subroutine expectInlet(lab, blk, col1, rp, krhoTot)

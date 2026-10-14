@@ -15,9 +15,12 @@ module IGLOO_data_block
     real(R8)     :: area      = 0._R8 !> face area [m²]
     integer      :: nInj      = 0     !> injection particles pinned in this cell
     integer      :: bcdef     = 0     !> boundary code; 0 until read_cdp_bc_file tags the cell
-    integer      :: connection(4)   !> partner cell [block,i,j,k] (101/103/201)
+    integer      :: connection(4) = 0 !> partner cell [block,i,j,k] of a 101/201 payload; 0 = none
     integer      :: connectionFace=0!> partner face index (201 periodic)
     integer      :: orient(4) = 0     !> 101/201 orientation integers d11 d12 d21 d22 of the payload
+    integer      :: chimN(2)  = 0     !> 102: donor counts of the two ghost layers
+    integer,  allocatable :: chimDonor(:,:) !> 102: layer-1 donor cells (n, [block,i,j,k])
+    real(R8), allocatable :: chimW(:)       !> 102: layer-1 donor volume weights
     real(R8)     :: center(3)
     real(R8)     :: normal(3)
   end type obj_bc_cell

@@ -329,7 +329,7 @@ contains
     integer, parameter :: nPropDP = 9
     integer            :: b, mat, p, f, m, n, i, mend(6), nend(6)
     integer            :: u, dumi, totFam, ci_n, s, ios, nTok, readLine(9)
-    integer            :: c, nCopies, nrec, nFaceTot, nfb, ic, code, hdr(5)
+    integer            :: c, nCopies, nrec, nFaceTot, nfb, ic, code, hdr(5), nchi(2)
     integer, allocatable :: hdr1(:,:)   !> copy-1 headers of the current block, one column per face
     integer            :: i_g, j_g, k_g
     real(R8)           :: propBuffer(nPropDP)
@@ -401,6 +401,8 @@ contains
             select case (cell%bcdef)
               case (101,201)
                 read(u,*)
+              case (102)
+                call readChimera(u, cell)
               case (401:403)
                 read(u,*)
                 if (allocated(cell%properties)) deallocate(cell%properties)
@@ -422,7 +424,19 @@ contains
                 ' does not repeat the faces of family 1, at record ', ic
               error stop 'IGLOO: bc.txt family copies do not repeat the faces of copy 1'
             endif
-            call skipPayload(u, code)
+            if (code == 102) then
+              call readChimeraCounts(u, nchi)
+              if (any(nchi /= cell%chimN)) then
+                write(*,'(A,I0,A,I0,A,I0)') ' [IGLOO::read_cdp_bc_file] family ', c, ' of block ', b, &
+                  ' does not repeat the chimera donor counts of family 1, at record ', ic
+                error stop 'IGLOO: bc.txt family copies do not repeat the chimera donor counts of copy 1'
+              endif
+              do i = 1, sum(nchi)
+                read(u,*)
+              enddo
+            else
+              call skipPayload(u, code)
+            endif
           endif
           end associate
         enddo; enddo; enddo
@@ -460,6 +474,10 @@ contains
               cell%connectionFace  = readLine(5)   !> [block,i,j,k, face, d11..d22]
             endif
             cell%orient = readLine(ci_n+1:ci_n+4)
+
+          ! Chimera: the donors were taken in pass 1
+          case (102)
+            call skipPayload(u, 102)
 
           ! Inflows — token-tolerant read: legacy 7-column files
           case (401:403)
@@ -532,7 +550,109 @@ contains
     enddo
     close(u)
 
+    call checkChimera(geoblock)
+
   end subroutine read_cdp_bc_file
+
+
+  !> Layer-1 donors of a 102 facelet (block, i, j, k and a volume weight per line) kept on the cell;
+  !  the layer-2 lines are read and dropped.
+  subroutine readChimera(u, cell)
+    use IGLOO_data_block, only: obj_bc_cell
+    implicit none
+    integer,           intent(in)    :: u
+    type(obj_bc_cell), intent(inout) :: cell
+    character(len=256) :: line
+    integer :: d, ios
+
+    call readChimeraCounts(u, cell%chimN)
+    if (allocated(cell%chimDonor)) deallocate(cell%chimDonor)
+    if (allocated(cell%chimW))     deallocate(cell%chimW)
+    if (cell%chimN(1) > 0) allocate(cell%chimDonor(cell%chimN(1), 4), cell%chimW(cell%chimN(1)))
+    do d = 1, cell%chimN(1)
+      read(u,'(A)') line
+      read(line,*,iostat=ios) cell%chimDonor(d,:), cell%chimW(d)
+      if (ios /= 0 .or. countTokens(line) /= 5) then
+        write(*,*) ' [IGLOO::read_cdp_bc_file] chimera donor line: ', trim(line)
+        error stop 'IGLOO: chimera donor line is not four integers and a weight'
+      endif
+    enddo
+    do d = 1, cell%chimN(2)
+      read(u,*)
+    enddo
+  end subroutine readChimera
+
+
+  !> The counts line of a 102 record: the donor counts of the two ghost layers.
+  subroutine readChimeraCounts(u, nchi)
+    implicit none
+    integer, intent(in)  :: u
+    integer, intent(out) :: nchi(2)
+    character(len=256) :: line
+    integer :: ios
+
+    read(u,'(A)',iostat=ios) line
+    if (ios == 0) read(line,*,iostat=ios) nchi
+    if (ios /= 0 .or. countTokens(line) /= 2) then
+      write(*,*) ' [IGLOO::read_cdp_bc_file] chimera counts line: ', trim(line)
+      error stop 'IGLOO: chimera donor counts line is not two non-negative integers'
+    endif
+    if (any(nchi < 0)) then
+      write(*,*) ' [IGLOO::read_cdp_bc_file] chimera counts line: ', trim(line)
+      error stop 'IGLOO: chimera donor counts line is not two non-negative integers'
+    endif
+  end subroutine readChimeraCounts
+
+
+  !> 102 donors: interior cells of another block, layer-1 weights summing to 1 within 1e-6; prints
+  !  the chimera routing line when any 102, 100 or 104 facelet exists.
+  subroutine checkChimera(geoblock)
+    use IGLOO_data_block, only: obj_block
+    use IGLOO_Mod_MPI,    only: mpi_is_root
+    implicit none
+    type(obj_block), intent(in) :: geoblock(:)
+    integer :: b, f, m, n, d, db, nChim, nEmpty, nUnres, nHdr
+
+    nChim = 0; nEmpty = 0; nUnres = 0; nHdr = 0
+    do b = 1, size(geoblock)
+      do f = 1, 6
+        do n = 1, geoblock(b)%face(f)%Nn; do m = 1, geoblock(b)%face(f)%Nm
+          associate(cell => geoblock(b)%face(f)%cell(m,n))
+          select case (cell%bcdef)
+          case (100); nUnres = nUnres + 1
+          case (104); nHdr   = nHdr + 1
+          case (102)
+            nChim = nChim + 1
+            if (cell%chimN(1) == 0) nEmpty = nEmpty + 1
+            do d = 1, cell%chimN(1)
+              db = cell%chimDonor(d,1)
+              if (db < 1 .or. db > size(geoblock) .or. db == b) then
+                write(*,'(A,4(I0,A))') ' [IGLOO::read_cdp_bc_file] chimera donor of block ', b, ' face ', f, &
+                  ' facelet (', m, ',', n, ') names another block outside the mesh or its own block'
+                error stop 'IGLOO: chimera donor list names a cell outside the donor block'
+              endif
+              if (any(cell%chimDonor(d,2:4) < 1) .or. cell%chimDonor(d,2) > geoblock(db)%Nx .or. &
+                  cell%chimDonor(d,3) > geoblock(db)%Ny .or. cell%chimDonor(d,4) > geoblock(db)%Nz) then
+                write(*,'(A,4(I0,A))') ' [IGLOO::read_cdp_bc_file] chimera donor of block ', b, ' face ', f, &
+                  ' facelet (', m, ',', n, ') names a cell outside its block'
+                error stop 'IGLOO: chimera donor list names a cell outside the donor block'
+              endif
+            enddo
+            if (cell%chimN(1) > 0) then
+              if (abs(sum(cell%chimW) - 1._R8) > 1.e-6_R8) then
+                write(*,'(A,4(I0,A),ES12.5)') ' [IGLOO::read_cdp_bc_file] chimera donors of block ', b, ' face ', f, &
+                  ' facelet (', m, ',', n, '): weights sum to ', sum(cell%chimW)
+                error stop 'IGLOO: chimera donor list is not normalised'
+              endif
+            endif
+          end select
+          end associate
+        enddo; enddo
+      enddo
+    enddo
+    if (mpi_is_root .and. nChim + nUnres + nHdr > 0) write(*,'(A,4(I0,A))') ' [IGLOO] chimera facelets: ', nChim, &
+      ' (', nEmpty, ' with an empty donor layer, ', nUnres, ' unresolved (code 100), ', nHdr, ' header-only 104)'
+  end subroutine checkChimera
 
 
   !> Read the background gas field from an ASCII Tecplot multiblock file.
@@ -884,12 +1004,19 @@ contains
   end function shard_name
 
 
-  !> Skip the payload line of a bc.txt record whose header carries `code` (101/201 connection, 401-403 inlet).
+  !> Skip the payload of a bc.txt record whose header carries `code`: one line for a 101/201
+  !  connection or a 401-403 inlet; the counts line and the donor lines of a 102 chimera facelet.
   subroutine skipPayload(u, code)
     implicit none
     integer, intent(in) :: u, code
+    integer :: nchi(2), d
     select case (code)
     case (101, 201, 401:403); read(u,*)
+    case (102)
+      call readChimeraCounts(u, nchi)
+      do d = 1, sum(nchi)
+        read(u,*)
+      enddo
     end select
   end subroutine skipPayload
 

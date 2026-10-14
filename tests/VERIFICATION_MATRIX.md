@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (36 of 71 e2e fixtures)
+## Shared box fixture (36 of 72 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,7 +39,7 @@ writes with its defaults.
 Thirty-six fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other thirty-five:
+once here, referenced as **"shared box"** below. The other thirty-six:
 
 - non-uniform gas (eleven): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
@@ -55,13 +55,15 @@ once here, referenced as **"shared box"** below. The other thirty-five:
   `etab-e2e` and `etab-evap-frozen` on a 0.6 m × 240-cell box at U=50 m/s, T=300 K (the TAB/ETAB onset);
   `evap-breakup-box` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
   (`--t-gas --kt`);
-- uniform gas on another mesh (seven): `mhb98-water` and `mhb98-water-psat` (a `make_box_case.py`
+- uniform gas on another mesh (eight): `mhb98-water` and `mhb98-water-psat` (a `make_box_case.py`
   variant lengthened to 0.17 m at the same Δx: water in air at T_G=298 K with a near-static
   U=1.9×10⁻⁴ m/s clock, the Miller-Harstad-Bellan Fig-2 conditions); `planar-slab` (a 20×20
   single-layer planar slab), `wall-approach` (a 100×20 single layer, the gas drifting toward the wall
   at V=−0.5 m/s), `wedge-axis-row` (a 20×8 single-layer wedge whose axis row sits at r=1e-8) and
   `two-fam-bc-2blk` (the box split into two 30×5×5 blocks at x=0.075 m by `make_box_case.py`, a 101
-  connection between them) and `two-fam-bc-2blk-mollify` (the same two blocks, `INPUT/` symlinked).
+  connection between them), `two-fam-bc-2blk-mollify` (the same two blocks, `INPUT/` symlinked) and
+  `chimera-2blk` (the box as two overlapping 34×5×5 blocks joined by chimera (102) faces, `make_box_case.py
+  --overlap 4`).
 
 `khrt-e2e-rt` and `khrt-e2e-threads` are further oracles on `khrt-e2e`'s run (the second at 1/2/4
 threads) and add no fixture; `khrt-stress` differs from `khrt-e2e` only in `mShedLim`, and the twins
@@ -272,11 +274,11 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-117 `e2e`-labelled + 37 `unit`-labelled + the optional `vortex-cloud-3way` = **155 CTest entries** in a
-serial build (+7 `mpi-*` under `USE_MPI`, 162), all green (counted from `tests/CMakeLists.txt`). The 117
-`e2e` entries are the 72 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+123 `e2e`-labelled + 37 `unit`-labelled + the optional `vortex-cloud-3way` = **161 CTest entries** in a
+serial build (+7 `mpi-*` under `USE_MPI`, 168), all green (counted from `tests/CMakeLists.txt`). The 123
+`e2e` entries are the 73 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
-threads), the twelve `repeat-*` two-sweep gates and the thirty-one `refuse-*` setup-refusal gates. The
+threads), the twelve `repeat-*` two-sweep gates and the thirty-six `refuse-*` setup-refusal gates. The
 37 `unit` entries are 32 compiled unit tests, the property-table reader on its three fixtures
 (`test_properties_reader`, `-two-material`, `-atlas-water`), `self_test` and `registry-docs`. Unit
 families that emit a production-vs-reference overlay (`verif_dump` → `tools/plot_curves.py` →
