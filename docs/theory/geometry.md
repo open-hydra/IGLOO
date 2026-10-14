@@ -103,6 +103,17 @@ known cell.
 
 `part%advanceGasCell(gasblock)` is the gas-dual-mesh analogue, using `part%gasExitFace`.
 
+**Crossing a block interface.** `updateCell` calls `findParticle` first: the search starts in the
+current block (the neighbour across the exit face, a ±1 box around the last cell and a guided walk,
+then the whole block after its bounding-box test) and continues in every other block in index order;
+the first block that contains the point takes the particle. Past a conformal connection (`bcdef`
+101) the point lies in the partner block, so the particle changes block there; the containment
+tests are inclusive (to 1e-15), so a conformal interface leaves no gap. `bcDef`'s 101 branch, an
+index jump into the cell named by the bc file, runs only when no block contains the point. With
+`gas-order = 2` the ODE step ends at the block face, since the particle must change block there:
+the trajectory gains a row at the interface that a single block would not write, and scatter samples
+beside it can move; the deposits are additive over the cut step.
+
 ---
 
 ## Boundary handling

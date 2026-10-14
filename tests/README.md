@@ -107,7 +107,8 @@ ODE breakup (model 4), breakup events in the mass state and the KH-shed source a
 `khrt-evap-frozen-euler`, `khrt-e2e-euler`, `khrt-shed-noexchange`,
 `solver-fail-consumed-m4` and `repeat-evap-breakup`. The scatter cloud's marker count per parcel is gated by
 `scatter-weight`, `scatter-weight-evap` and `scatter-weight-solid`. Reading a boundary file of several blocks and
-families, and a parcel's crossing of a block interface, are gated by `two-fam-bc-2blk`. The enthalpy state of a varying-cp material, on
+families, and a parcel's crossing of a block interface, are gated by `two-fam-bc-2blk`; the field mollifier
+across a block interface by `two-fam-bc-2blk-mollify` and `test_mollify_blocks`. The enthalpy state of a varying-cp material, on
 tables that start above 1 K, is gated by `test_properties_reader` (PR14), `temp-relax-varcp` and `varcp-tmin`; a density
 that varies with temperature by `temp-relax-varrho` (the diameter at constant mass) and `tab-varrho`,
 `tab-evap-frozen-varrho` and `khrt-varrho` (the mass kept between breakup events and conserved across them).

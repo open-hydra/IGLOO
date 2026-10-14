@@ -26,3 +26,8 @@ columns 30 and 31): of the field scale, `E` 9.08e-4, `Fx` 3.59e-4, `euler2` ρ_p
 u_p 8.64e-4, `euler1` ρ_p and n_p 1.22e-4 and u_p 2.56e-4; v_p, w_p, Fy, Fz and the `wdot` slots
 are untouched. With one pass the differing cells are columns 30 and 31 only. W1 and W2 pass in both
 states (the smoothing moves all 1500 cells of the one-block E).
+
+**GREEN.** With the flux carried across the 101 face through a one-cell halo (`mollifyBlocks`), every
+field matches the one-block run to 1.5e-15 of its scale; built with `-fp-model strict` the two runs
+are bit-identical, cell for cell: the default build evaluates the cell update differently in the
+two smoothing loops, in the last bits only.

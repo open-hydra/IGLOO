@@ -132,8 +132,10 @@ All accumulations are `!$OMP ATOMIC UPDATE`.
 
 ### Finalization
 
-After all particles are integrated, `obj_eulerblock%finalize` divides velocity and
-temperature numerators by `density` (Favre-type weighted average):
+After all particles are integrated, every block's fields are reduced to geometry cells
+(`obj_eulerblock%reduce`), smoothed (see [Field mollification](mollification.md)), and
+`obj_eulerblock%normalize` divides the velocity and temperature numerators by `density`
+(Favre-type weighted average):
 
 $$
 \langle\mathbf{v}_p\rangle = \frac{\sum \rho_p\,\mathbf{v}_p\,\delta L^{-1}\,T_\mathrm{stay}/V}{\sum \rho_p\,T_\mathrm{stay}/V}
