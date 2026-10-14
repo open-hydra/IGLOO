@@ -21,6 +21,7 @@ reader.
 | IP3 | body force | `bodyAccel=(0,−200,0)`, `bodyForce=.true.` | PASS |
 | IP4 | ODE tol + ds conversion | `rtol=atol=1e-11`; `ds=10 cm → 0.1 m` **to sp-literal error** (`ds*1e-2` single-precision literal ⇒ 2.2e-9 abs) | PASS |
 | IP5 | RNG seed default | `rng_seed=42` when the option is absent | PASS |
+| IP6 | `[IGLOO-General] timing` | `timing = on` sets the timing switch (default off) | PASS |
 
 ## Notes
 

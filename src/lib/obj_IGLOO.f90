@@ -60,6 +60,7 @@ contains
     use IGLOO_IO_INI, only: read_IGLOO_input
     use IGLOO_Lib_Statistics, only: initRandomSeed
     use IGLOO_Mod_MPI,        only: mpi_is_root, mpi_size_
+    use IGLOO_Mod_Timing,     only: tm_phase, TM_IDLE, TM_INPUT, TM_GASREAD, TM_BLOCKS, TM_IMPORT, TM_PIN
     use Lib_ORION_data
     implicit none
     class(obj_IGLOO), intent(inout)        :: self
@@ -91,7 +92,9 @@ contains
       write(*,'(A,I0)')" MPI ranks = ", mpi_size_
     endif
 
+    call tm_phase(TM_INPUT)
     call read_IGLOO_input(method,self%srcSwitch,self%eulSwitch,gasfile,pos0,vel0,temp0,mdot,diam)
+    call tm_phase(TM_GASREAD)
     if (present(external_gas)) then
       call copyORION(external_gas,own_gas)
     else
@@ -99,7 +102,9 @@ contains
       call read_TECsolfile(gasfile,own_gas)
     endif
 
+    call tm_phase(TM_INPUT)
     call read_cdp_properties(IGLOO_phase_prefix,self%material)
+    call tm_phase(TM_BLOCKS)
     call allocate_blocks(own_gas,self%material,self%geoblock,self%gasblock, &
                          self%source,self%euler,self%srcSwitch,self%eulSwitch)
     !> 2D mesh: drop the out-of-plane body-acceleration component.
@@ -109,7 +114,9 @@ contains
       bodyForce    = any(bodyAccel /= 0._R8)
       srcBodyForce = sourceSwitch .and. bodyForce
     endif
+    call tm_phase(TM_IMPORT)
     call import_gas(own_gas,self%gasblock)
+    call tm_phase(TM_INPUT)
     !> 2.5D notice: DB injection with an out-of-plane velocity.
     if (mesh2D .and. mpi_is_root) then
       if (allocated(vel0)) then
@@ -119,8 +126,10 @@ contains
     endif
     call read_cdp_bc_file(IGLOO_phase_prefix,self%material,self%geoblock, &
                           self%gasblock,self%source,self%euler,self%srcSwitch,self%eulSwitch)
+    call tm_phase(TM_BLOCKS)
     call buildInterfaceLinks(self%geoblock, self%links)
     if (mpi_is_root) call reportNonAligned(self%links)
+    call tm_phase(TM_PIN)
     call initRandomSeed(rng_seed)   ! before pinning: stochastic injection diameters
     fam = 0
     do m = 1, nm
@@ -139,6 +148,7 @@ contains
       enddo
     enddo
     nfam = fam
+    call tm_phase(TM_IDLE)
     self%staticDone = .true.
 
   end subroutine setup_static
@@ -265,6 +275,10 @@ contains
     use IGLOO_Mod_MPI,        only: mpi_size_, mpi_abort_all, owns_particle,           &
                                     mpi_allreduce_sum_i4_array, mpi_is_root, rank_suffix, &
                                     reduce_accumulators
+    use IGLOO_Mod_Timing,     only: tm_phase, tm_nest, tm_unnest, tm_parcel_begin, tm_parcel_end, &
+                                    TM_IDLE, TM_ACCUM, TM_GHOST, TM_SOLVE, TM_LOOP, TM_CENSUS, &
+                                    TM_REDUCE, TM_FINALIZE, TM_SMOOTH
+    use IGLOO_Mod_Footprint,  only: record_footprint
     use oslo
     use omp_lib
     implicit none
@@ -295,14 +309,18 @@ contains
     sourceSwitch = self%srcSwitch
     eulerSwitch  = self%eulSwitch
     !> Allocate and zero the source/euler accumulators.
+    call tm_phase(TM_ACCUM)
     call allocateAccumulators(self%source, self%euler, sourceSwitch, eulerSwitch)
     call initialize_fields(self%source,self%euler,sourceSwitch,eulerSwitch)
+    call record_footprint(self%geoblock, self%gasblock, self%source, self%euler)
+    call tm_phase(TM_GHOST)
     if (ord2) then
       do m = 1, nb
         call self%gasblock(m)%fillGhostGradient(self%geoblock(m))
       enddo
       call fillGhostPartners(self%gasblock, self%geoblock)
     endif
+    call tm_phase(TM_SOLVE)
 
     !> Domain length scale (bounding-box diagonal) for the scatter weight-quantum estimate.
     xmin =  huge(1._R8); xmax = -huge(1._R8)
@@ -428,6 +446,7 @@ contains
               call gr%shed(ip)%reserve(1)
             enddo
 
+            call tm_phase(TM_LOOP)
             !$OMP PARALLEL DO SCHEDULE(DYNAMIC)
             do ip = start, nEnd
               if (probeOn) then; if (.not.any(gr%particle(ip)%ID==probeIDs)) cycle; endif
@@ -435,11 +454,14 @@ contains
               if (loopCounter == 1) then
                 if (.not. owns_particle(ip)) cycle
               endif
+              call tm_parcel_begin()
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                              mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab,    &
                              gr%shed(ip), noShed=(loopCounter==maxLoop))
+              call tm_parcel_end()
             enddo
             !$OMP END PARALLEL DO
+            call tm_phase(TM_CENSUS)
 
             !> Shed census of the current generation, indexed by position in its global ID band.
             oldStart = start
@@ -557,6 +579,7 @@ contains
               exit
             endif
           enddo
+          call tm_phase(TM_SOLVE)
 
           !> Trim excess capacity and sync nparticles (both rank-local after a solve).
           if (size(gr%particle) > gr%nactive) then
@@ -564,15 +587,19 @@ contains
           endif
           gr%nparticles = gr%nactive
         else
+          call tm_phase(TM_LOOP)
           !$OMP PARALLEL DO SCHEDULE(DYNAMIC)
           do ip = 1,gr%nparticles
             if (probeOn) then; if (.not.any(gr%particle(ip)%ID==probeIDs)) cycle; endif
             !> MPI ownership filter.
             if (.not. owns_particle(ip)) cycle
+            call tm_parcel_begin()
             call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                             mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab)
+            call tm_parcel_end()
           enddo
           !$OMP END PARALLEL DO
+          call tm_phase(TM_SOLVE)
         endif
         end associate group
       enddo
@@ -584,7 +611,9 @@ contains
     enddo
 
     !> Allreduce the partial grid sums across ranks before finalize, which is nonlinear.
+    call tm_phase(TM_REDUCE)
     call reduce_accumulators(self%source, self%euler, sourceSwitch, eulerSwitch)
+    call tm_phase(TM_FINALIZE)
 
     !> Finalize the source/euler fields: reduce to geoblock shape under ord2, mollify across the
     !  blocks, normalize the eulerian moments.
@@ -592,7 +621,9 @@ contains
       do b = 1, nb
         call self%source(b)%finalize(self%geoblock(b))
       enddo
+      call tm_nest(TM_SMOOTH)
       call mollifySourceBlocks(self%source, self%geoblock, self%links)
+      call tm_unnest()
     endif
     if (eulerSwitch) then
       do m = 1, nm
@@ -601,13 +632,16 @@ contains
           do b = 1, nb
             call self%euler(b, fam)%reduce(self%geoblock(b))
           enddo
+          call tm_nest(TM_SMOOTH)
           call mollifyEulerBlocks(self%euler(:, fam), self%geoblock, self%links)
+          call tm_unnest()
           do b = 1, nb
             call self%euler(b, fam)%normalize(self%material(m)%hTab, self%material(m)%cpVariable)
           enddo
         enddo
       enddo
     endif
+    call tm_phase(TM_SOLVE)
 
     !> Wedge fold counters.
     if (axisym) then
@@ -623,6 +657,7 @@ contains
         write(*,*)" Stop condition : All particles out of domain!"
       endif
     endif
+    call tm_phase(TM_IDLE)
 
   end subroutine solve
 
@@ -669,24 +704,29 @@ contains
   end function getSourceTerms
 
 
-  !> Write the grid fields (root only) and merge this sweep's per-rank particle files.
+  !> Write the grid fields (root only), merge this sweep's per-rank particle files and print the
+  !  timing report (timing = on).
   subroutine writeout(self)
     use IGLOO_IO
-    use IGLOO_Mod_MPI, only: mpi_is_root, mpi_barrier_env
+    use IGLOO_Mod_MPI,    only: mpi_is_root, mpi_barrier_env
+    use IGLOO_Mod_Timing, only: tm_phase, tm_report, TM_WRITE
     implicit none
     class(obj_IGLOO), intent(inout) :: self
 
     !> Every rank has closed its shards before root merges them.
+    call tm_phase(TM_WRITE)
     call mpi_barrier_env()
 
-    !> Root only from here on.
-    if (.not. mpi_is_root) return
+    if (mpi_is_root) then
+      call write_outfield(self%material,self%geoblock,self%source,self%euler,self%srcSwitch, &
+                          self%eulSwitch, tag=self%sweepTag())
 
-    call write_outfield(self%material,self%geoblock,self%source,self%euler,self%srcSwitch, &
-                        self%eulSwitch, tag=self%sweepTag())
+      !> Collapse this sweep's per-rank .dat shards into the serial layout (no-op at one rank).
+      call merge_rank_particle_files(self%material, tag=self%sweepTag())
+    endif
 
-    !> Collapse this sweep's per-rank .dat shards into the serial layout (no-op at one rank).
-    call merge_rank_particle_files(self%material, tag=self%sweepTag())
+    !> Every rank: one gather to root when timing is on.
+    call tm_report(self%sweep)
 
   end subroutine writeout
 

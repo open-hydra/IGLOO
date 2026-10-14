@@ -73,8 +73,10 @@ The whole MPI surface is three places. Everything else is serial-identical code.
 | 2 | `reduce_accumulators` at the end of `solve` | `MPI_Allreduce(SUM)` over the source and euler accumulators |
 | 3 | `merge_rank_particle_files` in `writeout` | root collapses per-rank `.dat` shards into the serial file layout |
 
-Every `#ifdef USE_MPI` in `src/` lives inside `IGLOO_Mod_MPI.f90`; the rest of the tree
-calls its wrappers (`mpi_init_env`, `owns_particle`, `reduce_accumulators`, …). A serial
+Every `#ifdef USE_MPI` in `src/` lives inside `IGLOO_Mod_MPI.f90`, apart from the timing
+report's one gather in `IGLOO_Mod_Timing.f90` (a leaf module, so that any routine can mark a
+phase); the rest of the tree calls their wrappers (`mpi_init_env`, `owns_particle`,
+`reduce_accumulators`, …). A serial
 build compiles the module to no-ops (`mpi_size_ = 1`, `mpi_is_root = .true.`,
 `rank_suffix()` empty), so **the serial code path carries no MPI logic at all**.
 
@@ -177,6 +179,35 @@ acquisitions on the output unit is the number of parcels, not the number of reco
 the formatting happens *inside* the parallel region where it scales. Memory is bounded by
 one parcel's records (~270 kB), not by the total cloud.
 
+## Per-phase timers
+
+`[IGLOO-General] timing = on` makes `writeout` print an `[IGLOO-timing]` report of the sweep it
+closes (under hydra-MI2, which calls `writeout` once, of every solve since setup). Off by default,
+and then nothing is printed.
+
+| line | content |
+|---|---|
+| `sweep` | sweep number, solves covered, ranks, threads of rank 0 |
+| `phase` | wall time of rank 0, with the minimum and maximum over the ranks |
+| `thread` | parcels integrated and the time spent inside `integrate`, per thread of rank 0 |
+| `rank` | parcel-loop wall time, parcels, threads, summed `integrate` time and the thread max/mean, per rank |
+| `imbalance` | max/mean over the ranks of the parcel-loop wall time |
+| `sizes` | allocated real values per rank: gas fields, geometry arrays, accumulators at the solve shape |
+
+Phases, in order: `setup:input` (input files), `setup:gas-read` (the gas field: the Tecplot read,
+or the copy of the field a parent hands in), `setup:blocks` (block allocation, geometry, dual
+weights and metrics, block-interface links), `setup:gas-import`, `setup:pinning`; then per
+sweep `accumulators` (allocation and zeroing), `ghost-fill` (gas-order 2), `parcel-loop`,
+`census` (the child census of the breakup passes), `reduce` (cross-rank sum of the
+accumulators), `finalize`, `smoothing` (the mollifier across the blocks, timed apart from the
+finalize around it), `writeout+merge`, and
+`solve-other` (the rest of `solve`: file opens, the scatter pre-pass, ODE set-up). Setup
+phases are repeated in every report; sweep phases restart at zero after each.
+
+The report costs one `MPI_Gather` of a fixed per-rank record after the files are written, outside
+every loop; no other collective is added. The per-parcel accounting reads the clock twice per
+parcel and only when `timing = on`.
+
 ## Measured performance
 
 `khrt-stress`, **single rank** (pure OpenMP scaling), measured on sprop1 at load 41–42,
@@ -207,7 +238,7 @@ cloud.
 
 ## How this is verified
 
-Rank-count invariance is **gated**, not assumed. Seven MPI cases run under `mpiexec`
+Rank-count invariance is **gated**, not assumed. Eight MPI cases run under `mpiexec`
 (`tests/mpi/`), registered only in a `USE_MPI` build:
 
 | gate | ranks × threads |
@@ -217,6 +248,7 @@ Rank-count invariance is **gated**, not assumed. Seven MPI cases run under `mpie
 | `mpi-khrt` | 4 × 2 |
 | `mpi-bc-center-2grp` | 4 × 2 |
 | `mpi-two-mat` | 4 × 2 |
+| `mpi-timing-report` | 4 × 2 (the per-rank lines of the timing report) |
 | `mpi-consistency` | cross-rank-count comparison |
 | `mpi-consistency-two-mat` | cross-rank-count comparison, two materials |
 
