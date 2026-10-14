@@ -52,7 +52,7 @@ VARLINE = (' VARIABLES = "X", "Y", "Z",'
 
 # ---- bc.txt inlet property line (UNUSED by DB injection; cosmetic) ----
 KRHO, KV, KT, RP = 0.34, 0.1, 1.0, 5.945e-6
-BCDEF_INLET, BCDEF_WALL = 401, 100
+BCDEF_INLET, BCDEF_WALL = 401, 400
 
 
 def write_solfile(path, eps, ug0, yaxis):

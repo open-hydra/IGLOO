@@ -26,7 +26,7 @@ This case is also the **only** gate on the *wiring*: `test_source_reduction` cal
 ## Fixture
 `INPUT/{solfile.tec,phase.txt,properties.dat}` symlink `../../tc-box/INPUT/`;
 `INPUT/bc.txt` is written by the committed `make_fixture.py` (`python3 make_fixture.py`,
-1250 lines, every face `bcdef = 100`). The shared `tests/tools/make_box_case.py` cannot be
+1250 lines, every face `bcdef = 400`). The shared `tests/tools/make_box_case.py` cannot be
 reused: its `write_bc` hardcodes `401` on face 1, and this case injects by coordinate
 instead of through an inlet face.
 

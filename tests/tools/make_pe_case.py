@@ -24,7 +24,7 @@ PE_SWEEP = [20, 30, 40, 50, 60, 75, 90, 110, 130, 150, 175, 200, 230, 260,
             290, 320, 351, 380, 420, 470, 530, 600, 700, 850, 1000]
 RHOG = 1.2
 KRHO = 0.34                               # number-density factor
-BCDEF_INLET, BCDEF_WALL = 401, 100
+BCDEF_INLET, BCDEF_WALL = 401, 400
 
 
 def gas_vars(u_gas, t_gas):

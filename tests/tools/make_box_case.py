@@ -14,7 +14,7 @@ Geometry / BCs:
   - x in [0,Lx] axial (i), y in [0,Ly] (j), z in [0,Lz] (k). Nz>=2 => 3D (mesh2D=False,
     no axisymmetric wedge fold).
   - face 1 (i=1, x=0 plane) = inlet (bcdef 401): one property line per cell.
-  - all other faces = wall/outflow (bcdef 100 -> bcDef 'else' branch => particle exits).
+  - all other faces = wall/outflow (bcdef 400 -> bcDef 'else' branch => particle exits).
     Pure +x motion only ever reaches face 2 (x=Lx); the side faces are never hit.
   - --blocks 2: two zones split at x = Lx/2 (Nx/2 cells each); face 2 of block 1 and face 1
     of block 2 are a 101 connection, each record's line naming the partner cell and face.
@@ -89,7 +89,7 @@ def inlet_data(kv, kt, rp, alpha=None):
 
 
 BCDEF_INLET = 401
-BCDEF_WALL  = 100                        # bcDef 'else' branch => wall/outflow (particle gone)
+BCDEF_WALL  = 400                        # bcDef 'else' branch => wall/outflow (particle gone)
 BCDEF_PER   = 201                        # translational periodic: cell line + connection line
 BCDEF_CONN  = 101                        # block interface: cell line + partner line
 
@@ -185,8 +185,8 @@ def main():
     print(f"[ok] box solfile: I={I} J={J} K={K} nnode={nnode} ncell={ncell} (3D, mesh2D=False)"
           + (" per block, 2 blocks joined at x = Lx/2 by 101 records" if a.blocks == 2 else ""))
     print(f"[ok] bc.txt: {n_inlet} inlet (401) cells on face 1; "
-          + ("faces 3/4 periodic (201), rest wall (100)" if a.periodic_y
-             else "all other faces wall (100)"))
+          + ("faces 3/4 periodic (201), rest wall (400)" if a.periodic_y
+             else "all other faces wall (400)"))
     print(f"     domain x[0,{LX}] y[0,{LY}] z[0,{LZ}]; dx={LX/NX*1e3:.2f}mm")
     print(f"     inlet: kv={a.kv} (v0={a.kv*10:.3g} m/s)  kt={a.kt}  rp={a.rp} (d={2*a.rp*1e6:.3g} um)")
 

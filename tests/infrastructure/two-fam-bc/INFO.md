@@ -22,7 +22,7 @@ line in every copy).
 
 **Fixture.** `two-mat`'s case with its own `bc.txt`: the `drag-stokes` box (60 × 5 × 5 cells,
 0.15 × 0.05 × 0.05 m, uniform gas ρ 1.2, U 10, T 600, μ 1.8e-5; face 1 the inlet, 25 cells of
-0.01 × 0.01 m, every other face 100), `phase.txt` `A 1` / `B 1` and the two-zone `properties.dat`
+0.01 × 0.01 m, every other face 400), `phase.txt` `A 1` / `B 1` and the two-zone `properties.dat`
 (ρ_A 2950, ρ_B 1000) symlinked from `two-mat`, `drag = Stokes`, `[IGLOO-BC] ds = 10.0` (one
 centred parcel per inlet cell). `INPUT/bc.txt` is written by `make_fixture.py` (committed; run once
 from this directory, `python3 make_fixture.py`): 2 × 1250 records, family 1 (A) = `drag-stokes`'s
