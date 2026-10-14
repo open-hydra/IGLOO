@@ -278,8 +278,8 @@ Rank-count invariance is **gated**, not assumed. Twenty-one MPI cases run under 
 | `mpi-bc-center-2grp` | 4 × 2 |
 | `mpi-two-mat` | 4 × 2 |
 | `mpi-timing-report` | 4 × 2 (the per-rank lines of the timing report) |
-| `mpi-consistency` | cross-rank-count comparison |
-| `mpi-consistency-two-mat` | cross-rank-count comparison, two materials |
+| `mpi-consistency` | 1 vs 4 ranks, then 4 ranks at 1 and 5 threads: multisets, layout, `.tec` |
+| `mpi-consistency-two-mat` | the same, two materials |
 | `mpi-determinism` | 3 and 4 × 1: grid bytes independent of the collective algorithm, within 1e-12 of n = 1 |
 | `mpi-repeat-<case>` (12) | 2 × 2: every two-sweep repeatability case (the embedding mode) |
 

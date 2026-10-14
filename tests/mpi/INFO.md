@@ -39,8 +39,8 @@ green, nothing decomposed. Without the witness this whole directory would be a v
 | `mpi-bc-center-2grp` | 4 | the suite's **only** `ngroups=2` case, so the only real exercise of the rank-file merge's per-zone loop |
 | `mpi-two-mat` | 4 | the suite's **only** `nm=2` case: six shards merged per sweep, two `sourceMass` slots, two euler families reduced |
 | `mpi-timing-report` | 4 | the `[IGLOO-timing]` report (`timing = on`): the per-rank gather, one line and the strided parcel count per rank |
-| `mpi-consistency` | 1 vs 4 | the cross-rank-count gate (below) |
-| `mpi-consistency-two-mat` | 1 vs 4 | the same gate (same `check.py`, symlinked) on the `nm=2` fixture |
+| `mpi-consistency` | 1 vs 4; 4 at 1 and 5 threads | the cross-rank-count and cross-thread-count gate (below) |
+| `mpi-consistency-two-mat` | 1 vs 4; 4 at 1 and 5 threads | the same gate (same `check.py`, symlinked) on the `nm=2` fixture |
 | `mpi-determinism` | 1, 3, 4 | the rank-order cross-rank sum: grid bytes at n = 3 and 4 independent of the collective algorithm (below) |
 | `mpi-repeat-<case>` (12) | 2 | every `repeatability/` case under `mpiexec`: the two-sweep harness (`setup_static`, then `reset_state` + `solve` + `writeout` per sweep) with the rank witness on every log, `check_twosweep.py` unchanged; the gas-refresh cycle on `drag-stokes` and `vie-plait` |
 
@@ -54,7 +54,8 @@ lets the two run concurrently under `ctest -j`.
 
 The four variant cases prove each case's own oracle still passes under `mpiexec`. That is necessary
 and not sufficient: an oracle checks **physics**, and most of what MPI can break here is not physics.
-`mpi-consistency` runs the same binary at 1 and 4 ranks and compares four axes:
+`mpi-consistency` runs the same binary at 1 and 4 ranks (the ctest thread count, 2), then at 4 ranks
+with 1 and with 5 threads per rank, and compares every run with the 1-rank run on four axes:
 
 1. **Witness** — the 4-rank run reports `MPI ranks = 4`; the 1-rank run must not print the banner at
    all (it prints only when decomposed, which is what keeps serial and `-n 1` byte-identical).
@@ -67,6 +68,12 @@ and not sufficient: an oracle checks **physics**, and most of what MPI can break
    never a per-value relative error. See that file for the measurement behind the choice.
 
 Plus an integration criterion, because two runs that both produced nothing would agree perfectly.
+
+The thread arms exist because rank invariance holds by construction (per-parcel RNG streams), and a
+defect that depends on the thread count would leave every rank-count arm at a fixed thread count
+green. Measured: a deposit perturbation keyed on the team size (identity at 2 threads) fails the
+4 x 1 and 4 x 5 arms on every `.dat` multiset and both `.tec` fields while 1 x 2 and 4 x 2 stay
+identical.
 
 ## The two-sweep cases under MPI
 

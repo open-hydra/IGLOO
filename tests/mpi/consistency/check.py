@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""MPI rank-count consistency gate: one rank and four ranks must produce the same run.
+"""MPI rank-count and thread-count consistency gate: every (ranks, threads) arm must produce the same run.
 
     check.py <mpiexec> <numproc-flag> <path-to-IGLOO>
 
 The other cases under `tests/mpi/` prove that each case's own oracle still passes under mpiexec.
 That is necessary and not sufficient: an oracle checks PHYSICS, and the things MPI can break here are
-mostly not physics. This gate compares a 1-rank run against a 4-rank run of the same binary, with the
-rank count as the only variable, on four axes:
+mostly not physics. This gate compares runs of the same binary over a rank axis (1 vs 4 ranks at the
+ctest thread count) and a thread axis (4 ranks at 1 and at 5 threads per rank) against the 1-rank
+run, on four axes:
 
   1. WITNESS -- the 4-rank run must report `MPI ranks = 4` and the 1-rank run must NOT print the line
      at all. Without this the gate is vacuous in the most likely wrong configuration: `bin/IGLOO` is
@@ -25,8 +26,12 @@ rank count as the only variable, on four axes:
      non-associative sum; that is the same FP-reassociation class already floored at <= 4e-15
      run-to-run.
 
-Plus an integration criterion: two runs that both produced nothing would agree perfectly. Both runs
+Plus an integration criterion: two runs that both produced nothing would agree perfectly. Every run
 must show particles that actually moved.
+
+The thread axis exists because rank invariance holds "by construction" (per-parcel RNG streams), and a
+sampler that drew from a shared stream inside the parallel region would break the thread count first;
+at a fixed thread count the rank axis cannot see that.
 
 PASS stdout is deliberately reproducible -- no `.tec` residuals or diff counts, which vary with
 thread interleaving (BUGS.md O2: an irreproducible gate stdout pollutes every future byte-inert A/B).
@@ -43,7 +48,8 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'tools'))
 from compare_tec import compare_tec, DEFAULT_TOL          # noqa: E402
 
-RANKS = (1, 4)
+#> (ranks, threads per rank); None = the ctest environment's OMP_NUM_THREADS. The first arm is the reference.
+ARMS = ((1, None), (4, None), (4, 1), (4, 5))
 MIN_RECORDS = 20          #> below this the comparison is too thin to mean anything
 MIN_MOVE = 1.0e-9         #> metres; a particle that moved less never left its injection point
 
@@ -83,14 +89,28 @@ def moved(recs):
     return max(xs) - min(xs)
 
 
-def run(mpiexec, npflag, exe, n, keep):
+def tag(arm):
+    n, t = arm
+    return f"n{n}" if t is None else f"n{n}_t{t}"
+
+
+def label(arm):
+    n, t = arm
+    return f"n={n}" if t is None else f"n={n},omp={t}"
+
+
+def run(mpiexec, npflag, exe, arm, keep):
+    n, t = arm
     shutil.rmtree("OUTPUT", ignore_errors=True)
     os.makedirs("OUTPUT", exist_ok=True)
-    log = f"run_n{n}.txt"
-    with open(log, "w") as out, open(f"err_n{n}.txt", "w") as err:
-        rc = subprocess.call([mpiexec, npflag, str(n), exe], stdout=out, stderr=err)
+    env = dict(os.environ)
+    if t is not None:
+        env["OMP_NUM_THREADS"] = str(t)
+    log = f"run_{tag(arm)}.txt"
+    with open(log, "w") as out, open(f"err_{tag(arm)}.txt", "w") as err:
+        rc = subprocess.call([mpiexec, npflag, str(n), exe], stdout=out, stderr=err, env=env)
     if rc != 0:
-        print(f"[FAIL] mpiexec exit {rc} at n={n}")
+        print(f"[FAIL] mpiexec exit {rc} at {label(arm)}")
         print(open(log, errors='replace').read()[-800:])
         return None
     text = open(log, errors='replace').read()
@@ -134,64 +154,63 @@ def main():
         return 1
     mpiexec, npflag, exe = sys.argv[1], sys.argv[2], sys.argv[3]
 
-    print(f"MPI consistency gate: n = {' vs '.join(str(n) for n in RANKS)}, "
-          f"rank count is the only variable")
+    print(f"MPI consistency gate: {' vs '.join(label(a) for a in ARMS)}; the rank count, then the "
+          f"thread count, is the only variable")
     snaps, keeps = {}, {}
-    for n in RANKS:
-        keeps[n] = f"tec_n{n}"
-        shutil.rmtree(keeps[n], ignore_errors=True)
-        os.makedirs(keeps[n], exist_ok=True)
-        got = run(mpiexec, npflag, exe, n, keeps[n])
+    for arm in ARMS:
+        keeps[arm] = f"tec_{tag(arm)}"
+        shutil.rmtree(keeps[arm], ignore_errors=True)
+        os.makedirs(keeps[arm], exist_ok=True)
+        got = run(mpiexec, npflag, exe, arm, keeps[arm])
         if got is None:
             return 1
-        snaps[n] = got
-        print(f"  n={n}: " + "  ".join(
+        snaps[arm] = got
+        print(f"  {label(arm)}: " + "  ".join(
             f"{name}={h}({nr}r,{nl}L,{nz}Z)" for name, (h, nr, nl, nz, _) in sorted(got.items())))
 
-    ref = RANKS[0]
+    ref = ARMS[0]
     bad = []
 
     #> Integration criterion: two empty runs would agree perfectly.
-    for n in RANKS:
-        tot = sum(nr for _, nr, _, _, _ in snaps[n].values())
+    for arm in ARMS:
+        tot = sum(nr for _, nr, _, _, _ in snaps[arm].values())
         if tot < MIN_RECORDS:
-            bad.append(f"n={n} produced only {tot} records (< {MIN_RECORDS}) -- too thin to compare")
-        if not any(mv > MIN_MOVE for *_, mv in snaps[n].values()):
-            bad.append(f"n={n}: no particle moved more than {MIN_MOVE} m -- the population never "
+            bad.append(f"{label(arm)} produced only {tot} records (< {MIN_RECORDS}) -- too thin to compare")
+        if not any(mv > MIN_MOVE for *_, mv in snaps[arm].values()):
+            bad.append(f"{label(arm)}: no particle moved more than {MIN_MOVE} m -- the population never "
                        f"integrated, so any agreement here is vacuous")
 
     #> Axes 2 (second half) and 3.
-    missing = set(snaps[ref]) ^ set(snaps[RANKS[-1]])
-    for name in sorted(missing):
-        bad.append(f"{name}: present at one rank count and not the other")
-    for n in RANKS[1:]:
-        for name, (h, nr, nl, nz, _) in sorted(snaps[n].items()):
+    for arm in ARMS[1:]:
+        for name in sorted(set(snaps[ref]) ^ set(snaps[arm])):
+            bad.append(f"{name}: present at {label(ref)} or at {label(arm)}, not both")
+        for name, (h, nr, nl, nz, _) in sorted(snaps[arm].items()):
             if name not in snaps[ref]:
                 continue
             rh, rnr, rnl, rnz, _ = snaps[ref][name]
             if nl != rnl:
-                bad.append(f"{name}: {nl} lines at n={n} vs {rnl} at n={ref} "
+                bad.append(f"{name}: {nl} lines at {label(arm)} vs {rnl} at {label(ref)} "
                            f"(a duplicated or dropped header/zone)")
             if nz != rnz:
-                bad.append(f"{name}: {nz} Zone records at n={n} vs {rnz} at n={ref}")
+                bad.append(f"{name}: {nz} Zone records at {label(arm)} vs {rnz} at {label(ref)}")
             if h != rh:
-                bad.append(f"{name}: record multiset differs -- {nr} records {h} at n={n} "
-                           f"vs {rnr} records {rh} at n={ref}")
+                bad.append(f"{name}: record multiset differs -- {nr} records {h} at {label(arm)} "
+                           f"vs {rnr} records {rh} at {label(ref)}")
 
     #> Axis 4.
     ntec = 0
     for src in sorted(glob.glob(os.path.join(keeps[ref], "*.tec"))):
         name = os.path.basename(src)
-        for n in RANKS[1:]:
-            other = os.path.join(keeps[n], name)
+        for arm in ARMS[1:]:
+            other = os.path.join(keeps[arm], name)
             if not os.path.exists(other):
-                bad.append(f"{name}: written at n={ref} but not at n={n}")
+                bad.append(f"{name}: written at {label(ref)} but not at {label(arm)}")
                 continue
             ok, worst, ndiff, nval = compare_tec(src, other)
             ntec += 1
             if not ok:
                 bad.append(f"{name}: scale-relative error {worst:.3e} exceeds {DEFAULT_TOL:.0e} "
-                           f"between n={ref} and n={n} ({ndiff} of {nval} values differ)")
+                           f"between {label(ref)} and {label(arm)} ({ndiff} of {nval} values differ)")
     if ntec == 0:
         bad.append("no .tec field was compared -- this fixture is supposed to write source/euler "
                    "output, so axis 4 silently covered nothing")
@@ -202,8 +221,8 @@ def main():
         return 1
 
     print(f"  [PASS] {len(snaps[ref])} .dat multisets exact, layout identical, "
-          f"{ntec} .tec field(s) within scale-relative {DEFAULT_TOL:.0e}, across n = "
-          f"{', '.join(str(n) for n in RANKS)}")
+          f"{ntec} .tec comparison(s) within scale-relative {DEFAULT_TOL:.0e}, across "
+          f"{', '.join(label(a) for a in ARMS)}")
     return 0
 
 
