@@ -40,7 +40,7 @@ IGLOO can also run standalone — without MOSE — when the gas field is provide
 | **Evaporation** | d²-law, CEM, CEM-B, Abramzon–Sirignano and Tonini–Cossali mass transfer; equilibrium or Langmuir–Knudsen interface; optional Stefan-blowing heat reduction |
 | **Metal combustion** | Beckstead $d^n$ aluminium burn law with ignition gate, heat release and burnout |
 | **Secondary breakup** | Five models (Pilch–Erdman, Reitz–Diwakar, Reitz-KHRT, TAB, ETAB); KHRT child-particle generation with dynamic array compaction/growth |
-| **Injection** | Boundary-patch injection (2D sweep or 3D advancing-front hexagonal packing); assigned position injection; stochastic diameter distributions (Dirac, Normal, LogNormal, Rosin–Rammler) |
+| **Injection** | Boundary-patch injection (2D sweep or 3D advancing-front hexagonal packing); assigned position injection; stochastic diameter distributions (Dirac, Normal, LogNormal, Rosin–Rammler) and tabulated size distributions (radius, mass fraction) |
 | **Eulerian feedback** | Particle statistics deposited onto the gas mesh as Eulerian and source fields, smoothed by a volume-weighted binomial mollifier |
 | **ODE integration** | Explicit (DOPRI5) or stiff implicit (H-SDIRK4) stepping via the OSlo library; geometric cell tracking by ray/face intersection |
 | **Parallelism** | OpenMP-parallel hot loop over particles; optional MPI decomposition over particles with rank-count-invariant output |

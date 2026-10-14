@@ -76,17 +76,41 @@ tail.  Maximum particle count is hard-capped at `alloc = 10⁷`.
 ## Stochastic diameter sampling
 
 After all positions are pinned, each particle's diameter is drawn by `sampleDiameter`
-from `src/lib/Lib_Statistics.f90` using three face-cell properties:
+from `src/lib/Lib_Statistics.f90` using three face-cell properties (`bc.txt` columns 6-8,
+see [Boundary conditions](../user/boundary-conditions.md#injection-patches)):
 
 | Property index | Meaning |
 | :---: | :--- |
-| `(fam, 6)` | Mean radius $\bar{r}_p$ |
-| `(fam, 7)` | Spread parameter $\sigma_p$ |
-| `(fam, 8)` | Distribution law code (integer) |
+| `(fam, 6)` | Radius $r_p$ |
+| `(fam, 7)` | Width $\sigma_p$ |
+| `(fam, 8)` | Law code: Dirac 0, Normal 1, LogNormal 2, Rosin–Rammler 3; $100 + k$ for the $k$-th size-distribution file |
 
-Every parcel draws from its own RNG stream seeded from `(seed, family, ID)` — with
-`seed` from `[IGLOO-General]` — so the sampled diameters are reproducible and independent
-of thread scheduling and MPI rank count.
+| Law | Parameters | Cumulative distribution of the injected diameter $d$ |
+| :--- | :--- | :--- |
+| Dirac | $2r_p$ (also every law with $\sigma_p \le 0$) | a step at $2r_p$; no draw |
+| Normal | $\mu = 2r_p$, $\sigma = \sigma_p$ | truncated to $d > 0$ by rejection: $\dfrac{\Phi((d-\mu)/\sigma) - \Phi(-\mu/\sigma)}{1 - \Phi(-\mu/\sigma)}$ |
+| LogNormal | mean $\mu = 2r_p$, standard deviation $\sigma_p$ | $\Phi\big((\ln d - m)/s\big)$, $s^2 = \ln(1 + \sigma_p^2/\mu^2)$, $m = \ln\mu - s^2/2$ |
+| Rosin–Rammler | $x_0 = 2r_p$, $n = \sigma_p$ | $1 - \exp\big(-(d/x_0)^n\big)$ |
+| size-distribution file | radii $r_k$, mass fractions $w_k$ (normalised) | piecewise linear through the class edges $e_k$ (mid-points between radii, the end classes extended by half a spacing, doubled to diameters): $F(e_k) = \sum_{j \le k} w_j$; one row = Dirac at $2r_1$ |
+
+**What a law describes.** Inside an inlet cell every parcel carries the same mass flow,
+$\dot m_\mathrm{cell}/N_\mathrm{inj}$, whatever diameter it drew (`obj_particles.f90::initializePart`),
+and its number rate is $\dot m/m$ with $m = \pi\rho_p d^3/6$. The sampled law $f(d)$ is therefore the
+distribution of the injected **mass flow** over the diameter, and the number of particles is
+distributed as $f(d)/d^3$ (normalised); a size-distribution file lists mass fractions for that
+reason. (TAB's Rosin–Rammler product size is a number distribution, a different object.)
+
+**Random stream.** The draws come from the intrinsic `random_number`, seeded from
+`[IGLOO-General] seed` (default 42) just before pinning and consumed in pin order. Pinning is
+serial and replicated on every MPI rank, so the
+diameters do not depend on the thread or rank count; the intrinsic generator belongs to the compiler,
+so they do depend on it. The draw happens once, at setup: every sweep re-injects the same diameters.
+The per-parcel streams seeded from `(seed, family, ID)` serve the draws made inside the parallel
+region (TAB and ETAB breakup).
+
+Verified by `test_psd_table` (10⁵ draws per law) and the `psd-table`, `psd-normal`, `psd-lognormal` and
+`psd-rosinrammler` cases (20 000 injected parcels each), with the Kolmogorov-Smirnov and the
+Anderson-Darling statistics at $\alpha = 10^{-3}$.
 
 ---
 
