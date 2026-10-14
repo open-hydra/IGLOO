@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (38 of 78 e2e fixtures)
+## Shared box fixture (38 of 82 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -307,9 +307,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-139 `e2e`-labelled + 39 `unit`-labelled + the optional `vortex-cloud-3way` = **179 CTest entries** in a
-serial build (+7 `mpi-*` under `USE_MPI`, 185), all green (counted from `tests/CMakeLists.txt`). The 139
-`e2e` entries are the 79 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+144 `e2e`-labelled + 39 `unit`-labelled + the optional `vortex-cloud-3way` = **184 CTest entries** in a
+serial build (+7 `mpi-*` under `USE_MPI`, 191), all green (counted from `tests/CMakeLists.txt`). The 144
+`e2e` entries are the 84 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the twelve `repeat-*` two-sweep gates and the forty-six `refuse-*` setup-refusal gates. The
 39 `unit` entries are 34 compiled unit tests, the property-table reader on its three fixtures
