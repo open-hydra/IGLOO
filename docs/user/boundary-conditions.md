@@ -62,6 +62,8 @@ The last column is what the code does to the **gas** ghost ring under `gas-order
 |------|------|----------|----------------|
 | `101` | Conformal connection | Conformal block interface: the particle continues in the partner block (see [Block Connections](#block-connections-code-101)). An extra data line follows with the partner block/i/j(/k)/face and the four orientation integers. | **Partner copy** — the partner block's boundary-adjacent interior state. |
 | `201` | Periodic transport | Translational periodicity: position is shifted by the vector from the exit face center to the partner face center; velocity is unchanged. The partner cell is read from the extra data line. | **Partner copy**, as 101. |
+| `102` | Chimera (overset) face | The block overlaps another one: the particle continues in whichever block contains it (see [Chimera faces](#chimera-faces-code-102)); one found in no block leaves the domain there. The record carries the donor cells of the two ghost layers behind the facelet. | Linear fill. |
+| `100` | Unresolved connection | ATLAS's code for a connection or chimera facelet that found no partner or donor; header only. The particle leaves the domain there. | Linear fill. |
 | `300` | Symmetry / reflection | Velocity is reflected through the face normal (elastic wall). Grazing impacts ($v_n / \|v\| < 0.02$) slide along the face to prevent micro-bounce skating. | **Mirror** — the interior partner's normal component is reflected into the ghost (`v_g·n = −v_i·n`), the tangential part kept from the linear fill, so the sampled `v_n` at the plane is 0 for any profile. A non-positive extrapolated scalar falls back to zero-gradient. |
 | `200` | Axisymmetric wedge | Position and velocity are rotated by $\pm\Delta\theta$ about the x-axis to fold the particle back into the wedge sector. `face6` (+k) rotates by $-\Delta\theta$; `face5` (-k) by $+\Delta\theta$. $\Delta\theta$ is the wedge angle, computed from the mesh k-layer geometry. | Linear fill; a ghost node flagged `nodeOnAxis` is then overridden by `axisGhost` (scalars copied, velocity reduced to its axis-parallel component). |
 | `401` | Inlet (krho) | Injection boundary; mass loading specified as a density ratio `krho` ∈ [0,1). Particle mass flow is $\dot{m}_p = \frac{k_\rho}{1-\sum k_\rho} (\dot{m}_\mathrm{gas} + \dot{m}_\mathrm{part})$. | Linear fill. |
@@ -70,7 +72,7 @@ The last column is what the code does to the **gas** ghost ring under `gas-order
 | All others | Wall / outflow | Particle is marked as exited (`gone = true`). Its exit position, speed, impact angle, and cell face area are recorded in `outloc-<mat>.dat`. | `301` — the code ATLAS writes for a dispersed phase at a `type = wall` patch, and therefore the one a gas-solid wall reaches IGLOO as — **mirrors**, exactly as 300. Every other code, `400` (the box generators' outlet/side tag) included, keeps the linear fill. |
 
 !!! note "Default is wall/outflow"
-    Any `bcdef` code not listed above (e.g. 0, 404–407, 420) is treated as a wall or outflow: the particle is removed from the domain at the crossing point. Code `103` is dispatched like `101` by `bcDef`, but `bc.txt` supplies partner data only for `101` and `201`, so it is not a usable code.
+    Any `bcdef` code not listed above (e.g. 0, 404–407, 420) is treated as a wall or outflow: the particle is removed from the domain at the crossing point. Code `103` (a connection between blocks of different phases) and `104` (a chimera face between blocks of different phases) are header only in a dispersed-phase file, so a particle leaves the domain there.
 
 ---
 
@@ -107,7 +109,7 @@ A family is one population of one material: the `<groups>` of every material lin
 | the family count × that | one copy per family: copy `c` of each block is family `c` |
 | anything else | refused at setup: `IGLOO: bc.txt record count is neither one copy nor one copy per family` (the three counts are printed first) |
 
-With one copy per family, copy 1 tags the face cells, and every later copy must repeat copy 1's header integers and codes record by record — otherwise the run stops with `IGLOO: bc.txt family copies do not repeat the faces of copy 1`. The inlet columns (loading, velocity, direction, temperature, radius, width, law, `ds`) are then per family, and the 401 normalisation uses the sum of the families' own `krho`: $\dot m_p = \frac{k_{\rho,\mathrm{fam}}}{1-\sum_\mathrm{fam} k_\rho}(\dot m_\mathrm{gas} + \dot m_\mathrm{part})$, with $\dot m_\mathrm{part} = \sum_\mathrm{fam} g_{p,\mathrm{fam}} A_\mathrm{cell}$ for 402/403. For 101/201 cells the connection line is read from every copy and the last one is kept (ATLAS writes the same line in each). Verified by `test_bc_families` (one and two blocks) and the `two-fam-bc`, `refuse-bc-copies` and `refuse-bc-copy-order` cases (see the [V&V overview](../vv/index.md)).
+With one copy per family, copy 1 tags the face cells, and every later copy must repeat copy 1's header integers and codes record by record — otherwise the run stops with `IGLOO: bc.txt family copies do not repeat the faces of copy 1`. The inlet columns (loading, velocity, direction, temperature, radius, width, law, `ds`) are then per family, and the 401 normalisation uses the sum of the families' own `krho`: $\dot m_p = \frac{k_{\rho,\mathrm{fam}}}{1-\sum_\mathrm{fam} k_\rho}(\dot m_\mathrm{gas} + \dot m_\mathrm{part})$, with $\dot m_\mathrm{part} = \sum_\mathrm{fam} g_{p,\mathrm{fam}} A_\mathrm{cell}$ for 402/403. For 101/201 cells the connection line is read from every copy and the last one is kept (ATLAS writes the same line in each); for a chimera (102) facelet copy 1's payload is kept and every later copy must repeat its donor counts. Verified by `test_bc_families` (one and two blocks) and the `two-fam-bc`, `refuse-bc-copies` and `refuse-bc-copy-order` cases (see the [V&V overview](../vv/index.md)).
 
 ---
 
@@ -144,3 +146,33 @@ Conformal connections (`bcdef` 101) are coincident interfaces between adjacent s
 **Particles.** When a step ends past the face, the cell search (`updateCell` → `findParticle`) looks in the current block first and then in every other block; the first block that contains the point takes the particle, so it continues in the partner block. The containment tests are inclusive, so a conformal interface leaves no gap between the blocks. The index jump of `bcDef` (into the cell the record names) runs only when no block contains the point. With `gas-order = 2` the integration step ends at the block face, where a single block would not end it: the trajectory gains a row at the interface and scatter samples near it can move by a fraction of a step; the deposited fields are additive over the cut.
 
 **Fields.** The field mollifier smooths across the interface as across an interior face when both faces are normal to the same index direction; an interface whose two faces are normal to different index directions is smoothed with zero flux, and the setup names it with one warning line per face pair (see [Field mollification](../theory/mollification.md#block-interfaces)). With `gas-order = 2` each block keeps its own dual mesh: at a 101 face the boundary dual cells of each block are clipped to the half inside it, the ghost nodes of the face take the partner's boundary-adjacent cell (the partner copy above), and a deposit near the face is reduced to the geometry cells of the block that received it.
+
+---
+
+## Chimera faces (code 102)
+
+A chimera face lies inside another block: the two blocks overlap. ATLAS writes, after the facelet's
+header, a counts line — the donor counts `n1 n2` of the two ghost layers behind the facelet — and then
+`n1 + n2` donor lines, one per donor cell of another block: `block i j k weight` (the weights of each
+layer are volume fractions normalised to 1; layer 1 first). With several families the payload is
+repeated in every copy of the face table.
+
+IGLOO keeps, for every chimera facelet, the two counts and the layer-1 donors and weights of copy 1
+(layer 2 is read and dropped; a facelet whose layer 1 is empty keeps no donor list) and checks the
+record: a counts line that is not two non-negative integers, a donor line that is not four integers and
+a weight, a donor that is not a cell of another block, a layer-1 list whose weights do not sum to 1
+within 1e-6, and a family copy whose counts differ from copy 1's each stop the run at setup. The setup
+then prints, when the file holds any chimera, unresolved (100) or header-only 104 facelet,
+
+```
+ [IGLOO] chimera facelets: N (M with an empty donor layer, U unresolved (code 100), H header-only 104)
+```
+
+counted per facelet (not per family copy).
+
+A particle that leaves a block through a chimera facelet continues in whichever block contains its
+position (the cell search looks in the current block, then in every other block); one that no block
+contains leaves the domain there. Each particle deposits into the block it is tracked in, so the cells
+of the other block in the overlap receive none of its deposits; the field mollifier gives a chimera face
+zero flux, and under `gas-order = 2` its ghost ring is the linear fill.
+
