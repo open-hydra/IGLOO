@@ -2,13 +2,17 @@
 !  setup / reset_state / solve / writeout entry points.
 module IGLOO_module
   use, intrinsic :: iso_fortran_env, only : R8 => real64
-  use IGLOO_data_block, only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, fillGhostPartners
+  use IGLOO_data_block, only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, fillGhostPartners, &
+                              buildInterfaceLinks, reportNonAligned
   use IGLOO_data_phases, only: obj_material
+  use IGLOO_Lib_Mollify, only: cellLink
   implicit none
 
   type, public :: obj_IGLOO
     type(obj_block),       allocatable :: geoblock(:)
     type(obj_flowblock),   allocatable :: gasblock(:)
+    !> The 101 face cells and their partner cells, built once after the bc read.
+    type(cellLink),        allocatable :: links(:)
     !> Valid only between a solve and the next reset_state (which deallocates them).
     type(obj_sourceblock), allocatable :: source(:)
     type(obj_eulerblock),  allocatable :: euler(:,:)
@@ -115,6 +119,8 @@ contains
     endif
     call read_cdp_bc_file(IGLOO_phase_prefix,self%material,self%geoblock, &
                           self%gasblock,self%source,self%euler,self%srcSwitch,self%eulSwitch)
+    call buildInterfaceLinks(self%geoblock, self%links)
+    if (mpi_is_root) call reportNonAligned(self%links)
     call initRandomSeed(rng_seed)   ! before pinning: stochastic injection diameters
     fam = 0
     do m = 1, nm

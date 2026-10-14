@@ -1,9 +1,10 @@
 module IGLOO_data_block
   use, intrinsic :: iso_fortran_env, only : R8 => real64
-  use IGLOO_Lib_Mollify, only: binomial_smooth
+  use IGLOO_Lib_Mollify, only: binomial_smooth, cellLink
   implicit none
   private
   public :: fillGhostPartners
+  public :: buildInterfaceLinks, reportNonAligned
 
   type, public :: obj_bc_cell
     real(R8),dimension(:,:),allocatable :: properties !> first index per group (family)
@@ -12,9 +13,10 @@ module IGLOO_data_block
     real(R8)     :: mdotPart  = 0._R8 !> particle mass flow rate from 402/403 families [kg/s]
     real(R8)     :: area      = 0._R8 !> face area [m²]
     integer      :: nInj      = 0     !> injection particles pinned in this cell
-    integer      :: bcdef
+    integer      :: bcdef     = 0     !> boundary code; 0 until read_cdp_bc_file tags the cell
     integer      :: connection(4)   !> partner cell [block,i,j,k] (101/103/201)
     integer      :: connectionFace=0!> partner face index (201 periodic)
+    integer      :: orient(4) = 0     !> 101/201 orientation integers d11 d12 d21 d22 of the payload
     real(R8)     :: center(3)
     real(R8)     :: normal(3)
   end type obj_bc_cell
@@ -1360,6 +1362,84 @@ contains
       end associate
     enddo
   end subroutine fillGhostPartners
+
+
+  !> Link table of the 101 face cells, one entry per cell: the partner cell of its connection and
+  !  the partner face, which is the face of the partner cell whose own 101 record names this cell
+  !  (the payload's face column is not used). Refuses a partner outside the mesh, a connection
+  !  that is not mutual and, on a one-layer mesh, a 101 record on face 5 or 6.
+  subroutine buildInterfaceLinks(geo, links)
+    use IGLOO_variables, only: mesh2D
+    implicit none
+    type(obj_block),             intent(in)  :: geo(:)
+    type(cellLink), allocatable, intent(out) :: links(:)
+    integer :: nl, l, b, f, m, n, i, j, k, pb, pi, pj, pk, pf, qf, qm, qn, hits
+
+    nl = 0
+    do b = 1, size(geo)
+      do f = 1, 6
+        if (allocated(geo(b)%face(f)%cell)) nl = nl + count(geo(b)%face(f)%cell(:,:)%bcdef == 101)
+      enddo
+    enddo
+    allocate(links(nl))
+    if (nl == 0) return
+
+    l = 0
+    do b = 1, size(geo)
+      do f = 1, 6
+        do n = 1, geo(b)%face(f)%Nn; do m = 1, geo(b)%face(f)%Nm
+          if (geo(b)%face(f)%cell(m,n)%bcdef /= 101) cycle
+          if (mesh2D .and. f >= 5) error stop 'IGLOO: a 101 connection on face 5 or 6 of a one-layer (2D) mesh'
+          call geo(b)%fmn2ijk(f, m, n, i, j, k)
+          pb = geo(b)%face(f)%cell(m,n)%connection(1)
+          if (pb < 1 .or. pb > size(geo)) error stop 'IGLOO: a 101 connection names a block outside the mesh'
+          pi = geo(b)%face(f)%cell(m,n)%connection(2)
+          pj = geo(b)%face(f)%cell(m,n)%connection(3)
+          pk = geo(b)%face(f)%cell(m,n)%connection(4)
+          if (pi < 1 .or. pi > geo(pb)%Nx .or. pj < 1 .or. pj > geo(pb)%Ny .or. pk < 1 .or. pk > geo(pb)%Nz) &
+            error stop 'IGLOO: a 101 connection names a cell outside its block'
+          hits = 0; pf = 0
+          do qf = 1, 6
+            if (mesh2D .and. qf >= 5) cycle
+            call geo(pb)%ijk2fmn(pi, pj, pk, qf, qm, qn)
+            if (qm == 0) cycle
+            if (geo(pb)%face(qf)%cell(qm,qn)%bcdef /= 101) cycle
+            if (geo(pb)%face(qf)%cell(qm,qn)%connection(1) /= b) cycle
+            if (any(geo(pb)%face(qf)%cell(qm,qn)%connection(2:4) /= [i, j, k])) cycle
+            hits = hits + 1
+            if (hits == 1 .or. qf == geo(b)%face(f)%cell(m,n)%connectionFace) pf = qf
+          enddo
+          if (hits == 0) error stop 'IGLOO: a 101 connection is not mutual: the partner cell does not name this cell'
+          l = l + 1
+          links(l) = cellLink(b=b, f=f, i=i, j=j, k=k, pb=pb, pf=pf, pi=pi, pj=pj, pk=pk, &
+                              dir=merge((f+1)/2, 0, (f+1)/2 == (pf+1)/2))
+        enddo; enddo
+      enddo
+    enddo
+  end subroutine buildInterfaceLinks
+
+
+  !> One warning line per pair of 101 faces normal to different index directions: the field
+  !  mollifier gives such an interface zero flux.
+  subroutine reportNonAligned(links)
+    implicit none
+    type(cellLink), intent(in) :: links(:)
+    integer :: l, s
+    logical :: seen
+
+    do l = 1, size(links)
+      if (links(l)%dir /= 0) cycle
+      if (links(l)%b > links(l)%pb .or. (links(l)%b == links(l)%pb .and. links(l)%f > links(l)%pf)) cycle
+      seen = .false.
+      do s = 1, l - 1
+        if (links(s)%dir == 0 .and. links(s)%b == links(l)%b .and. links(s)%f == links(l)%f .and. &
+            links(s)%pb == links(l)%pb .and. links(s)%pf == links(l)%pf) seen = .true.
+      enddo
+      if (.not. seen) write(*,'(A,4(I0,A))') ' [WARNING] 101 interface block ', links(l)%b, ' face ', links(l)%f, &
+        ' - block ', links(l)%pb, ' face ', links(l)%pf, &
+        ': faces normal to different index directions, the field mollifier gives it zero flux'
+    enddo
+  end subroutine reportNonAligned
 
 
   !> Linear extrapolation of the gas state to ghost (ig,jg,kg) from (i1,j1,k1) and (i2,j2,k2).

@@ -7,6 +7,14 @@ module IGLOO_Lib_Mollify
   public :: binomial_smooth
   public :: DEFAULT_MOLLIFY_PASSES
 
+  !> A cell of block b on its 101 face f joined to cell (pi,pj,pk) of block pb on face pf; dir is
+  !  the index direction normal to both faces (0 when they are normal to different directions).
+  type, public :: cellLink
+    integer :: b = 0, f = 0, i = 0, j = 0, k = 0
+    integer :: pb = 0, pf = 0, pi = 0, pj = 0, pk = 0
+    integer :: dir = 0
+  end type cellLink
+
   !> Per-sweep Laplacian coefficient: 1/4 gives the [1/4, 1/2, 1/4] binomial filter.
   real(R8), parameter :: theta = 0.25_R8
 

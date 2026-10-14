@@ -459,6 +459,7 @@ contains
               cell%connection(1:4) = readLine(1:4)
               cell%connectionFace  = readLine(5)   !> [block,i,j,k, face, d11..d22]
             endif
+            cell%orient = readLine(ci_n+1:ci_n+4)
 
           ! Inflows — token-tolerant read: legacy 7-column files
           case (401:403)
