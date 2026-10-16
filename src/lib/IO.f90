@@ -362,7 +362,7 @@ contains
         write(*,'(A,I0,A,I0)') ' [IGLOO::read_cdp_bc_file] bad BC cell line: record ', nrec + 1, ', bcdef = ', code
         write(*,*) '  expected 6 integer columns with a 3-digit code (or 0) in column 6.'
         write(*,*) '  Legacy-schema bc.txt? Regenerate it (ATLAS BCB) before running IGLOO.'
-        error stop 1
+        error stop 'IGLOO: bc.txt line is not six integers with a 3-digit code (legacy schema?)'
       endif
       nrec = nrec + 1
       call skipPayload(u, code)
@@ -499,7 +499,7 @@ contains
             nTok = countTokens(lineString)
             if (nTok == 0) then
               write(*,*) ' [IGLOO::read_cdp_bc_file] empty property line for inflow cell'
-              error stop 1
+              error stop 'IGLOO: bc.txt inlet payload line is empty'
             endif
             ipos = 1
             do s = 1, min(nTok, nPropDP)
