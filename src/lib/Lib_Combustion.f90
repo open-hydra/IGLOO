@@ -8,9 +8,9 @@ module IGLOO_Lib_Combustion
     public :: becksteadRate
 
     !> Metal parameter slots; the order is mirrored by Lib_RHS ind_mb../nmetal.
-    integer(I4), parameter, public :: nmp = 11
+    integer(I4), parameter, public :: nmp = 9
     integer(I4), parameter, public :: imKb=1, imN=2, imXe=3, imBeta=4, imXi=5
-    integer(I4), parameter, public :: imTig=6, imTm=7, imHf=8, imTn=9, imCps=10, imQc=11
+    integer(I4), parameter, public :: imTig=6, imHf=7, imCps=8, imQc=9
 
     !> X_eff exponent of the Beckstead (2005) correlation.
     real(R8), parameter, public :: aXeff = 1.0_R8

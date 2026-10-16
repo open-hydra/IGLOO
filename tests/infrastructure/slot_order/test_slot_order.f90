@@ -10,7 +10,7 @@ program test_slot_order
     !
     !   S1  model 2 (CEM): the ten ep slots; nep = 10; the slice inside aux; ind_Lv.. agree with ep
     !   S2  model 4 (CEM + Reitz-Diwakar): the same ep slots
-    !   S3  model 5 (Beckstead): the eleven metal slots; nmp = nmetal = 11; the slice inside aux
+    !   S3  model 5 (Beckstead): the nine metal slots; nmp = nmetal = 9; the slice inside aux
     !   S4  model 6 (solidification): the same metal block, h-fus and cp-solid where its RHS reads them
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
@@ -19,7 +19,7 @@ program test_slot_order
                                      ind_Mv, ind_Lv, ind_Cv, ind_Le, ind_Yi, ind_e1, ind_e2, ind_e3, ind_e4, ind_e5
     use IGLOO_Lib_Evaporation, only: nep, iMv, iLv, icpv, iLe, iYinf, iLvMvOverRu, iinvTboil, &
                                      ialphaE, ikLiq, imuLiq
-    use IGLOO_Lib_Combustion,  only: nmp, imKb, imN, imXe, imBeta, imXi, imTig, imTm, imHf, imTn, imCps, imQc
+    use IGLOO_Lib_Combustion,  only: nmp, imKb, imN, imXe, imBeta, imXi, imTig, imHf, imCps, imQc
     implicit none
 
     type(obj_particle)    :: p
@@ -36,24 +36,23 @@ program test_slot_order
     p%LvMvOverRu = 106._R8;  p%invTboil = 107._R8;  p%alphaE = 108._R8;  p%kLiq = 109._R8
     p%muLiq = 110._R8
     p%Kburn = 201._R8;  p%nBurn = 202._R8;  p%Xeff = 203._R8;  p%betaPart = 204._R8
-    p%xiCap = 205._R8;  p%Tign = 206._R8;  p%Tmelt = 207._R8;  p%hFus = 208._R8
-    p%Tnuc = 209._R8;  p%cpSol = 210._R8;  p%qComb = 211._R8
+    p%xiCap = 205._R8;  p%Tign = 206._R8;  p%hFus = 207._R8;  p%cpSol = 208._R8;  p%qComb = 209._R8
 
     ! ---- S1, S2: the evaporation slice --------------------------------------------------------
-    call setupRHS(2, 0, 2, 0, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
+    call setupRHS(2, 0, 2, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
     call pack()
     call check(nep == 10, 'S1 nep = 10 evaporation slots', nbad)
     call checkEvap('S1 model 2')
-    call setupRHS(4, 2, 2, 0, 0, 0, 0, 0, propFlags, [0._R8], 1, 1._R8, nAux, nAuxSt, nEvV)
+    call setupRHS(4, 2, 2, 0, 0, 0, 0, propFlags, [0._R8], 1, 1._R8, nAux, nAuxSt, nEvV)
     call pack()
     call checkEvap('S2 model 4')
 
     ! ---- S3, S4: the metal block ----------------------------------------------------------------
-    call setupRHS(5, 0, 0, 0, 0, 0, 1, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
+    call setupRHS(5, 0, 0, 0, 0, 0, 1, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
     call pack()
-    call check(nmp == nmetal .and. nmp == 11, 'S3 nmp = nmetal = 11 metal slots', nbad)
+    call check(nmp == nmetal .and. nmp == 9, 'S3 nmp = nmetal = 9 metal slots', nbad)
     call checkMetal('S3 model 5')
-    call setupRHS(6, 0, 0, 0, 0, 0, 0, 1, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
+    call setupRHS(6, 0, 0, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
     call pack()
     call checkMetal('S4 model 6')
     call check(aux(ind_mb+imHf-1) == p%hFus .and. aux(ind_mb+imCps-1) == p%cpSol, &
@@ -94,7 +93,7 @@ contains
         if (nbad > 0) write(*,'(A,10F7.1)') '        ep = ', ep
     end subroutine checkEvap
 
-    !> mp(name) = aux(ind_mb + name - 1) for the eleven names; the slice lies inside aux.
+    !> mp(name) = aux(ind_mb + name - 1) for the nine names; the slice lies inside aux.
     subroutine checkMetal(tag)
         character(len=*), intent(in) :: tag
         real(R8) :: mp(nmp)
@@ -104,10 +103,9 @@ contains
         call check(mp(imKb) == p%Kburn .and. mp(imN) == p%nBurn .and. mp(imXe) == p%Xeff .and. &
                    mp(imBeta) == p%betaPart .and. mp(imXi) == p%xiCap .and. mp(imQc) == p%qComb, &
                    tag//': mp K-burn, n-burn, X-eff, beta-part, xi-cap, q-comb', nbad)
-        call check(mp(imTig) == p%Tign .and. mp(imTm) == p%Tmelt .and. mp(imHf) == p%hFus .and. &
-                   mp(imTn) == p%Tnuc .and. mp(imCps) == p%cpSol, &
-                   tag//': mp T-ign, T-melt, h-fus, T-nuc, cp-solid', nbad)
-        if (nbad > 0) write(*,'(A,11F7.1)') '        mp = ', mp
+        call check(mp(imTig) == p%Tign .and. mp(imHf) == p%hFus .and. mp(imCps) == p%cpSol, &
+                   tag//': mp T-ign, h-fus, cp-solid', nbad)
+        if (nbad > 0) write(*,'(A,9F7.1)') '        mp = ', mp
     end subroutine checkMetal
 
     subroutine check(cond, name, nbad)

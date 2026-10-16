@@ -237,11 +237,11 @@ contains
     if (self%evapSelect > 0) propFlags(5) = self%psatVariable
     if (self%brkupSelect > 0) then
       call setupRHS(mdl, self%brkupSelect, self%evapSelect, self%liqSelect, self%intfSelect, &
-                    self%boilSelect, self%combSelect, self%solidSelect, propFlags, &
+                    self%boilSelect, self%combSelect, propFlags, &
                     bp, bpMethod, bpScale, nAux, nAuxSt, nEvV)
     else
       call setupRHS(mdl, self%brkupSelect, self%evapSelect, self%liqSelect, self%intfSelect, &
-                    self%boilSelect, self%combSelect, self%solidSelect, propFlags, &
+                    self%boilSelect, self%combSelect, propFlags, &
                     bp_empty, 1, 1._R8, nAux, nAuxSt, nEvV)
     endif
 
@@ -250,8 +250,6 @@ contains
       !> State arrays are re-sized whenever neq changes between calls.
       call sizeTo(part%stateVar, self%neq)
       call sizeTo(part%oldState, self%neq)
-      if (nAuxSt > 0) call sizeTo(part%auxState, nAuxSt)
-      if (nEvV   > 0) call sizeTo(part%eventVar, nEvV)
       if (eulerSwitch) then
         select case(mdl)
         case(2,5);    call sizeTo(part%intE, 5)

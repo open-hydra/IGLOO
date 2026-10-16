@@ -97,7 +97,7 @@ contains
         srcBodyForce = .false.;  sourceSwitch = .false.;  phaseChange = .true.
 
         propFlags = .false.
-        call setupRHS(2, 0, 1, 0, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
+        call setupRHS(2, 0, 1, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
 
         p%cp = 4180._R8;  p%rho = rho_p;  p%d = dp0
         p%m  = rho_p*(PI/6._R8)*dp0**3

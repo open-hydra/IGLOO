@@ -310,21 +310,18 @@ contains
   !  pass 1 tags every face cell from copy 1 and seeds the inflow cells (area, mdotGas); pass 2
   !  fills properties/connections, copy c into family c. The ord2 gas ghost ring is IGLOO's,
   !  filled per sweep by fillGhostGradient/fillGhostPartners -- never here.
-  subroutine read_cdp_bc_file(name,material,geoblock,gasblock,sourceblock,eulerblock,srcSwitch,eulSwitch)
+  subroutine read_cdp_bc_file(name,material,geoblock,gasblock)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_variables,             only: nb, nm, mesh2D, dsSwitch
-    use IGLOO_data_block,            only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, obj_bc_cell
+    use IGLOO_data_block,            only: obj_block, obj_flowblock, obj_bc_cell
     use IGLOO_data_phases,           only: obj_material
     use IGLOO_RayFaceIntersection3D, only: computeArea
     use IGLOO_Lib_Statistics,        only: DiracDistr, TableDistrBase
     implicit none
     character(len=*)     , intent(in)    :: name
     type(obj_material)   , intent(in)    :: material(nm)
-    logical,               intent(in)    :: srcSwitch, eulSwitch
     type(obj_block)      , intent(inout) :: geoblock(nb)
     type(obj_flowblock)  , intent(inout) :: gasblock(nb)
-    type(obj_sourceblock), intent(inout) :: sourceblock(nb)
-    type(obj_eulerblock) , intent(inout) :: eulerblock(:,:)
     integer, parameter :: nPropDP = 9
     integer            :: b, mat, p, f, m, n, i, mend(6), nend(6)
     integer            :: u, dumi, totFam, ci_n, s, ios, nTok, readLine(9)

@@ -107,7 +107,7 @@ contains
         call assign_heat('Ranz-Marshall', heatSelect)
 
         propFlags = .false.
-        call setupRHS(4, 2, 1, 0, 0, 0, 0, 0, propFlags, bp_rd, 1, 1._R8, nAux, nAuxSt, nEvV)
+        call setupRHS(4, 2, 1, 0, 0, 0, 0, propFlags, bp_rd, 1, 1._R8, nAux, nAuxSt, nEvV)
 
         p%cp = cp_l;  p%rho = rho_l;  p%d = dp;  p%m = m
         p%sigma = sigma;  p%mup = mu_l
