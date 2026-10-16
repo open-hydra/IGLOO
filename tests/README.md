@@ -61,7 +61,8 @@ Each unit family carries an `INFO.md` cataloguing its tests; `tools/aggregate_re
 (the aggregator consistency gate) fails the run if a family listed in its `FAMILY_DIRS` lacks one
 for the schema and `REFERENCES.md` for the master bibliography. E2e cases are
 self-contained: `input.ini`, `INPUT/`, independent oracle `check.py`
-(PASS == exit 0; the solver's stderr is NOT the gate).
+(PASS == exit 0, after `tools/check_finite.py` found every number of `OUTPUT/*.tec` and `*.dat`
+finite; the solver's stderr is NOT the gate).
 
 ctest labels: category (`standard`/`evaporation`/`breakup`/`combustion`/`infrastructure`)
 + kind (`unit`/`e2e`) + family tags (`drag`, `heat`, `tab`, …). There is **no `xfail`

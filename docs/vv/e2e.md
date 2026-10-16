@@ -102,8 +102,10 @@ gated so the comparison cannot pass vacuously.
 The e2e cases are registered in `tests/CMakeLists.txt` (`igloo_e2e_case`) and run
 by CTest under `-DBUILD_VERIFICATION=ON`.  Each case runs the build tree's
 `IGLOO` (`build/verif/bin/IGLOO`) in its own directory with `OMP_NUM_THREADS=5`, `KMP_STACKSIZE=100M`,
-and `ulimit -s unlimited`, then invokes its oracle.  The pass criterion is
-`check.py` exit 0; the solver's own exit code is not gated (benign compiler stderr
+and `ulimit -s unlimited`, checks that every number of `OUTPUT/*.tec` and `OUTPUT/*.dat` is
+finite (`tests/tools/check_finite.py`: no NaN, no infinity, no field of asterisks), then
+invokes its oracle.  The pass criterion is both checks' exit 0; the solver's own exit code
+is not gated (benign compiler stderr
 warnings are ignored).  Oracles read the per-parcel files by column: trajectory and
 exit rows carry no time unless a case sets `out-time = on`, which appends the particle
 time as the last column, and a case that must stop at a fixed time sets `time-end`,

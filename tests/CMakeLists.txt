@@ -55,9 +55,10 @@ function(igloo_unit_test name srcdir labels)
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 endfunction()
 
-# e2e case: run this build tree's IGLOO in the case dir, then its oracle (IGLOO_EXE names it for sibling runs).
+# e2e case: run this build tree's IGLOO in the case dir, check every output number is finite, then its oracle
+# (IGLOO_EXE names the executable for sibling runs).
 # Ordinary solver exit codes are deliberately NOT gated (benign ifort stderr warnings);
-# PASS == check.py exit 0.
+# PASS == check_finite.py and check.py exit 0.
 # EXCEPT signals (rc >= 128): 2026-08-03 a SIGSEGV in the KHRT child-creation path still
 # reported PASS, because check.py happily read the PARTIAL trajectory written before the
 # crash. A crashed solver must never be green, so death-by-signal now fails the case
@@ -65,7 +66,7 @@ endfunction()
 # tolerance that the comment above is about.
 function(igloo_e2e_case name casedir labels)
     add_test(NAME ${name}
-        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; $<TARGET_FILE:IGLOO> 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ge 128 ]; then echo \"[FAIL] solver died on signal (exit $rc)\"; exit 1; fi; python3 -B check.py"
+        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; $<TARGET_FILE:IGLOO> 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ge 128 ]; then echo \"[FAIL] solver died on signal (exit $rc)\"; exit 1; fi; python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_finite.py || exit 1; python3 -B check.py"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
     set_tests_properties(${name} PROPERTIES
         LABELS "${labels}"
@@ -88,7 +89,7 @@ endfunction()
 #    all and lets the two run concurrently under `ctest -j`.
 function(igloo_e2e_case_mpi name casedir nranks nthreads labels)
     add_test(NAME ${name}
-        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${nranks} $<TARGET_FILE:IGLOO> 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ne 0 ]; then echo \"[FAIL] mpiexec exit $rc on ${nranks} ranks\"; tail -20 run_out.txt; exit 1; fi; grep -q \"MPI ranks = ${nranks}\" run_out.txt || { echo \"[FAIL] solver did not report ${nranks} ranks -- is this tree's IGLOO an MPI build?\"; exit 1; }; python3 -B check.py"
+        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${nranks} $<TARGET_FILE:IGLOO> 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ne 0 ]; then echo \"[FAIL] mpiexec exit $rc on ${nranks} ranks\"; tail -20 run_out.txt; exit 1; fi; grep -q \"MPI ranks = ${nranks}\" run_out.txt || { echo \"[FAIL] solver did not report ${nranks} ranks -- is this tree's IGLOO an MPI build?\"; exit 1; }; python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_finite.py || exit 1; python3 -B check.py"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
     set_tests_properties(${name} PROPERTIES
         LABELS "${labels}"
