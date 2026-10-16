@@ -316,14 +316,14 @@ With `--use-tecio` an MPI build links ORION's `teciompi` (built once into
 `lib/ORION/lib/TecIO/teciompi-install-*`). ASCII `.tec` I/O needs no TecIO, which is what the
 test suite uses; `-DUSE_TECIO=OFF` skips the TecIO build.
 
-!!! danger "`bin/IGLOO` is ONE link target shared by every build tree"
-    `cmake --build <tree>` is a **no-op** when that tree has nothing to recompile, so it can
-    leave the *other* tree's binary in place and the gates will run that instead — green, and
-    meaningless. After any cross-tree build:
+!!! note "`bin/IGLOO` is the copy of the last tree built"
+    Each build tree links its own `<tree>/bin/IGLOO`, which its tests run, and publishes a copy to
+    `bin/IGLOO` whenever it relinks. `cmake --build <tree>` with nothing to recompile publishes
+    nothing, so after builds in several trees check which one `bin/IGLOO` is:
 
     ```bash
-    rm -f bin/IGLOO && cmake --build build/verif -j 8
     ldd bin/IGLOO | grep -c libmpi        # 0 = serial, >0 = MPI
+    rm -f build/verif/bin/IGLOO && cmake --build build/verif -j 8   # republish the serial tree
     ```
 
 ## Memory per rank

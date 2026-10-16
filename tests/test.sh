@@ -3,9 +3,9 @@
 #         FILE: test.sh
 #        USAGE: ./test.sh [all|<category>|<test-name>|clean] [-- <cmake args>]
 #  DESCRIPTION: MOSE-style runner for the IGLOO test suite. Configures + builds
-#               build/verif/ (build/mpi/ when USE_MPI=ON), relinking bin/IGLOO
-#               and bin/DocGen from that tree, then dispatches to ctest by label
-#               or name.
+#               build/verif/ (build/mpi/ when USE_MPI=ON), whose tests run that
+#               tree's own IGLOO, publishes its IGLOO and DocGen to bin/, then
+#               dispatches to ctest by label or name.
 #               Categories: standard evaporation combustion solidification breakup infrastructure unit e2e
 #===============================================================================
 set -euo pipefail
@@ -57,9 +57,15 @@ cmake -B "${BUILD_DIR}" -S "${IGLOO_ROOT}" \
     -DCMAKE_BUILD_TYPE=RELEASE \
     "${EXTRA_CMAKE_ARGS[@]}"
 
-# bin/IGLOO and bin/DocGen are link targets of every build tree: relink them from this one.
-rm -f "${IGLOO_ROOT}/bin/IGLOO" "${IGLOO_ROOT}/bin/DocGen"
 cmake --build "${BUILD_DIR}" -j
+
+# bin/ holds the executables of the tree tested last: copy, then rename (a launch never sees a partial file).
+mkdir -p "${IGLOO_ROOT}/bin"
+for exe in IGLOO DocGen; do
+    part="${IGLOO_ROOT}/bin/.${exe}.test-sh.$$.part"
+    cp -f "${BUILD_DIR}/bin/${exe}" "${part}"
+    mv -f "${part}" "${IGLOO_ROOT}/bin/${exe}"
+done
 
 if [[ "${TARGET}" == all ]]; then
     ctest --test-dir "${BUILD_DIR}" --output-on-failure

@@ -100,8 +100,8 @@ gated so the comparison cannot pass vacuously.
 ```
 
 The e2e cases are registered in `tests/CMakeLists.txt` (`igloo_e2e_case`) and run
-by CTest under `-DBUILD_VERIFICATION=ON`.  Each case runs the freshly built
-`bin/IGLOO` in its own directory with `OMP_NUM_THREADS=5`, `KMP_STACKSIZE=100M`,
+by CTest under `-DBUILD_VERIFICATION=ON`.  Each case runs the build tree's
+`IGLOO` (`build/verif/bin/IGLOO`) in its own directory with `OMP_NUM_THREADS=5`, `KMP_STACKSIZE=100M`,
 and `ulimit -s unlimited`, then invokes its oracle.  The pass criterion is
 `check.py` exit 0; the solver's own exit code is not gated (benign compiler stderr
 warnings are ignored).  Oracles read the per-parcel files by column: trajectory and

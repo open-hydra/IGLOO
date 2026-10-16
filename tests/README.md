@@ -9,7 +9,7 @@ Registry of record: [`CMakeLists.txt`](CMakeLists.txt) (every gate) and
 ## Run
 
 ```bash
-./tests/test.sh all              # build (build/verif/, relinking bin/IGLOO and bin/DocGen) + full ctest + aggregated report
+./tests/test.sh all              # build (build/verif/, publishing its IGLOO and DocGen to bin/) + full ctest + aggregated report
 ./tests/test.sh standard         # one category: standard|evaporation|combustion|solidification|breakup|infrastructure|repeatability|mpi
 ./tests/test.sh e2e              # by kind: unit|e2e
 USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # the rank-count gates, built in build/mpi/
@@ -19,9 +19,10 @@ USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # the rank-count gates, buil
 
 Opt-in via `-DBUILD_VERIFICATION=ON` (default OFF, so the production build is
 byte-for-byte untouched). `test.sh` configures a **separate `build/verif/`**
-(`build/mpi/` with `USE_MPI=ON`) and relinks `bin/IGLOO` and `bin/DocGen` from it
-before every run (same source, RELEASE, in-tree `lib/` dependencies) — the executables the e2e
-cases and `registry-docs` run, shared by every build tree.
+(`build/mpi/` with `USE_MPI=ON`) and builds it before every run (same source, RELEASE, in-tree
+`lib/` dependencies). The e2e cases and `registry-docs` run the tree's own `IGLOO` and `DocGen`
+(`<tree>/bin/`); `bin/IGLOO` and `bin/DocGen` are copies of the last tree built, which `test.sh`
+publishes after its build.
 
 ## Layout
 
@@ -97,11 +98,11 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 187/187 in a serial build (147 e2e + 39 unit, `self_test` and `registry-docs` among the latter, and the
+ctest 188/188 in a serial build (147 e2e + 40 unit, `self_test`, `registry-docs` and `exe-per-tree` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 21 more `mpi-*` cases, 208 in all (the 21 `mpi-*` pass). The e2e entries are 85 solver cases, two further
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 21 more `mpi-*` cases, 209 in all (the 21 `mpi-*` pass). The e2e entries are 85 solver cases, two further
 oracles on `khrt-e2e`'s run, the twelve two-sweep gates and the forty-eight setup refusals; the unit entries are 34
-compiled unit tests, the property-table reader on three fixtures, `self_test` and `registry-docs`. Evaporation with
+compiled unit tests, the property-table reader on three fixtures, `self_test`, `registry-docs` and `exe-per-tree`. Evaporation with
 ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,
 `evap-breakup-box`, `d2law-brk-dormant`, `rd-evap-frozen`, `tab-evap-frozen`, `etab-evap-frozen`, `khrt-evap-frozen`,
 `khrt-evap-frozen-euler`, `khrt-e2e-euler`, `khrt-shed-noexchange`,

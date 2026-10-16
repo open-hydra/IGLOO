@@ -40,7 +40,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SIB = os.path.join(HERE, "..", "two-fam-bc")
-IGLOO = os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO"))
+IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
 
 
 def load(name, path):

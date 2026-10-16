@@ -10,8 +10,8 @@ ctest thread count) and a thread axis (4 ranks at 1 and at 5 threads per rank) a
 run, on four axes:
 
   1. WITNESS -- the 4-rank run must report `MPI ranks = 4` and the 1-rank run must NOT print the line
-     at all. Without this the gate is vacuous in the most likely wrong configuration: `bin/IGLOO` is
-     ONE link target shared by every build tree, so a USE_MPI=OFF binary can end up here, and under
+     at all. Without this the gate is vacuous in the most likely wrong configuration: a USE_MPI=OFF
+     binary passed as the executable (a serial tree's, or bin/IGLOO from the last tree built), and under
      `mpiexec -n 4` it runs four independent full sweeps that clobber one another's OUTPUT/. Every
      after-the-fact file check then passes while nothing was decomposed.
   2. LAYOUT -- no `*.rank<r>.dat` shard survives (the in-code merge ran and deleted them), and the
@@ -118,8 +118,8 @@ def run(mpiexec, npflag, exe, arm, keep):
     #> Axis 1: the witness. Absent at n=1 by design (the banner prints only when decomposed).
     banner = f"MPI ranks = {n}"
     if n > 1 and banner not in text:
-        print(f"[FAIL] n={n}: solver never reported '{banner}'. Either bin/IGLOO is not an MPI "
-              f"build (it is one link target shared by every build tree) or MPI_COMM_SIZE "
+        print(f"[FAIL] n={n}: solver never reported '{banner}'. Either the executable is not an MPI "
+              f"build (a serial tree's) or MPI_COMM_SIZE "
               f"disagrees with mpiexec -- in the first case nothing was decomposed and this "
               f"comparison would have been vacuous.")
         return None

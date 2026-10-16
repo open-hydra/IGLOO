@@ -20,8 +20,8 @@ MPIEXEC="${MPIEXEC:-mpiexec}"
 
 command -v "$MPIEXEC" >/dev/null || { echo "no mpiexec on PATH; skipping"; exit 0; }
 if ! ldd "$ROOT/bin/IGLOO" 2>/dev/null | grep -q libmpi; then
-    echo "bin/IGLOO is not an MPI build (bin/IGLOO is one link target shared by every build"
-    echo "tree -- rebuild the MPI tree first). Skipping."
+    echo "bin/IGLOO is not an MPI build (bin/IGLOO is a copy of the last tree built --"
+    echo "build the MPI tree first). Skipping."
     exit 0
 fi
 

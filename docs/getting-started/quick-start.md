@@ -75,7 +75,7 @@ Run all oracle-checked cases at once with the test runner:
 ./tests/test.sh e2e
 ```
 
-`test.sh` builds `build/verif/` (refreshing `bin/IGLOO`) and drives the cases through CTest. Each e2e case runs `bin/IGLOO` in its own directory with `ulimit -s unlimited`, `KMP_STACKSIZE=100M`, and `OMP_NUM_THREADS=5`, then runs its oracle. Pass/fail is determined by the oracle exit code, not by whether stderr is empty.
+`test.sh` builds `build/verif/` (publishing its executable to `bin/IGLOO`) and drives the cases through CTest. Each e2e case runs the build tree's `IGLOO` (`build/verif/bin/IGLOO`) in its own directory with `ulimit -s unlimited`, `KMP_STACKSIZE=100M`, and `OMP_NUM_THREADS=5`, then runs its oracle. Pass/fail is determined by the oracle exit code, not by whether stderr is empty.
 
 To clean output files and the verification build:
 

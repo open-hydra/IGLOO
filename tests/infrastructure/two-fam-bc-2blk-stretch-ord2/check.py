@@ -32,7 +32,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
 import make_box_case as box  # noqa: E402
 
-IGLOO = os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO"))
+IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
 STRETCH, GRADIENT, FAMILIES = 2.0, 1000.0, 2
 NX1 = box.NX // 2
 X_FACE = box.node_x(NX1, box.NX, STRETCH, box.LX / box.NX)

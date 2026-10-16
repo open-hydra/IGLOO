@@ -12,20 +12,19 @@ USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF
 For an output-heavy run by hand, put `OUTPUT/` on tmpfs: `ln -s /dev/shm/$USER/<case> OUTPUT` (after
 `mkdir -p` of the target); `tests/tools/mpi_scaling_smoke.sh` takes the same choice as `OUTPUT_DIR=/dev/shm/$USER`.
 
-`bin/IGLOO` and `bin/DocGen` are each **one link target shared by every build tree**, so whichever tree
-built last wins. `test.sh` removes both before its build, so each of its runs relinks them from the tree
-it tests: `./test.sh all` after an MPI run is serial again. After a build by hand, switching back is not
-just a rebuild:
+Each build tree links its own `IGLOO` and `DocGen` into `<tree>/bin/`, and its tests run those: the MPI
+tests run `build/mpi/bin/IGLOO`, the serial ones `build/verif/bin/IGLOO`. `bin/IGLOO` and `bin/DocGen` are
+copies of the last tree built (a build that relinks publishes them; `test.sh` publishes the tree it
+tested), so `./test.sh all` after an MPI run leaves them serial again. After a build by hand:
 
 ```bash
-rm -f bin/IGLOO bin/DocGen && cmake --build build/verif -j 8   # from the repository root: force the relinks
+rm -f build/verif/bin/IGLOO build/verif/bin/DocGen && cmake --build build/verif -j 8   # republish the serial tree
 ldd bin/IGLOO bin/DocGen | grep -c libmpi                     # 0 = both serial
 ```
 
 ⚠ `cmake --build build/verif` **on its own is a no-op** when no source changed since that tree's last
-build — the link step never re-runs, and `bin/IGLOO` quietly stays whatever the other tree put there.
-Measured 2026-08-10 while trying to falsify the witness assertion below: the "serial" run was still
-the MPI binary. Always check `ldd`, never infer from a successful build.
+build: nothing relinks, nothing is published, and `bin/IGLOO` stays whatever another tree put there.
+Always check `ldd`, never infer from a successful build.
 
 That trap is exactly why every case here asserts the solver reported the rank count it was launched
 with. Measured, three runs out of three: a **serial** binary under `mpiexec -n 4` exits 0 and

@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (187 in a serial build: 147 e2e + 39 unit incl. `self_test` and
-`registry-docs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 21 `mpi-*` rows in their own
-section, 208).
+One row per registered CTest entry (188 in a serial build: 147 e2e + 40 unit incl. `self_test`,
+`registry-docs` and `exe-per-tree` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 21 `mpi-*` rows in their own
+section, 209).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -293,6 +293,7 @@ box/BC. Sub-test IDs in parentheses.
 | **test_source_reduction** | — | *conservation identity*: the ord2 source reduction must satisfy `Σ_geo == Σ_dual`. 14 cases — uniform 3D/2D, single-cell deposits at interior/face/edge/corner, and a **curvilinear** mesh, which is what separates "conserves on a nice mesh" from "conserves by construction". Proven RED at 0.4000 / 0.2963 / 0.6000 / 0.4444 and 1, ½, ¼, ⅛; GREEN exact (0.00E+00 everywhere). Also pins the partition-of-unity invariant `Σ dualW == Σ subVol`. ⚠ `Σ dualW == Σ cellVol` is asserted only on the Cartesian cases: `hexVolume`'s 5-tet split takes `abs()` per tet and is not additive under octant subdivision on a curved hex (measured 5.1e-3 relative), so on the curvilinear case that assertion would be RED on the CORRECT code |
 | **test_mollify_blocks** | — | *one block, cut*: a random field in [−1, 1] and random cell volumes in [0.5, 1.5] cut into blocks along whole index planes, every face cell on a cut linked to the cell across it; `mollifyBlocks` on the blocks against `binomial_smooth` on the uncut grid, 8 passes. U1a 3D cuts along x, y and z (12×9×8), three blocks along x, 2×2 blocks in x-y, an 80×12×12 grid cut above the OpenMP threshold, 2D (14×11×1) cuts along x and y: every cell to 1e-13 of the field scale (measured ≤ 4.0e-16; bit-identical under `-fp-model strict`); U1b Σ q·V over the blocks to 1e-13 of Σ \|q\|·V; U1c without an aligned link (none, or links between faces normal to different directions) each block equals `binomial_smooth` on its own, bit for bit. RED: with no flux at the cut every U1a cut fails (all cells, 0.43–0.86 of the field scale); one pass short in the no-link path fails both U1c cases |
 | **registry-docs** | — (kind 8, contract meta-test) | *regeneration diff*: `DocGen` regenerates `docs/user/registry.md` into the build tree and `tools/check_registry.cmake` fails on any difference from the tracked file (they disagreed twice on 2026-07-30) |
+| **exe-per-tree** | — (kind 8, contract meta-test) | *build-tree contract*: `tools/check_exe_per_tree.py` reads the generated `CTestTestfile.cmake` and fails if a registered test names `<source>/bin/IGLOO` or `bin/DocGen` (the copies another tree's build replaces), if a test of `igloo_e2e_case`, `igloo_e2e_case_mpi` or `igloo_refusal_case` lacks `IGLOO_EXE` in its environment, or if a test script builds the path `bin/IGLOO` outside the default of an `IGLOO_EXE` read. On the shared layout it fails on 137 registrations (136 naming `bin/IGLOO`, `registry-docs` naming `bin/DocGen`), 133 helper registrations and 8 scripts |
 
 ## MPI build only (`USE_MPI=ON`, 21 entries)
 
@@ -326,13 +327,13 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-147 `e2e`-labelled + 39 `unit`-labelled + the optional `vortex-cloud-3way` = **187 CTest entries** in a
-serial build (+21 `mpi-*` under `USE_MPI`, 208), all green (counted from `tests/CMakeLists.txt`). The 147
+147 `e2e`-labelled + 40 `unit`-labelled + the optional `vortex-cloud-3way` = **188 CTest entries** in a
+serial build (+21 `mpi-*` under `USE_MPI`, 209), all green (counted from `tests/CMakeLists.txt`). The 147
 `e2e` entries are the 85 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the twelve `repeat-*` two-sweep gates and the forty-eight `refuse-*` setup-refusal gates. The
-39 `unit` entries are 34 compiled unit tests, the property-table reader on its three fixtures
-(`test_properties_reader`, `-two-material`, `-atlas-water`), `self_test` and `registry-docs`. Unit
+40 `unit` entries are 34 compiled unit tests, the property-table reader on its three fixtures
+(`test_properties_reader`, `-two-material`, `-atlas-water`), `self_test`, `registry-docs` and `exe-per-tree`. Unit
 families that emit a production-vs-reference overlay (`verif_dump` → `tools/plot_curves.py` →
 `docs/vv/images/unit-*.svg`): drag, heat, evaporation-CEM, LK, TC, the MHB98 decane kernel,
 combustion, solidification, the five breakup models, and interp — 14 figures. `ini_pipeline` (config

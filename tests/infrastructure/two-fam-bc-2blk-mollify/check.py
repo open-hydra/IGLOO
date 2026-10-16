@@ -24,7 +24,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SIB = os.path.join(HERE, "..", "two-fam-bc")
-IGLOO = os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO"))
+IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
 TOL_FIELD = 1.0e-12
 X_OUT = 0.15
 MOLLIFY_LINE = "Field mollification ON: 8 binomial pass(es)"
