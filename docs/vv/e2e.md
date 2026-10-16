@@ -34,18 +34,24 @@ a real MOSE nozzle solution on an axisymmetric wedge (`tests/common/`).
 ### `make_box_case.py` knobs
 
 ```bash
-# Create a box case in the current directory
-python3 tests/tools/make_box_case.py \
+# Create a box case in INPUT/ (solfile.tec + bc.txt)
+python3 tests/tools/make_box_case.py INPUT \
     --kv 0.1   \   # inlet axial velocity = kv * U_g
     --kt 0.5   \   # inlet temperature    = kt * T_g
     --rp 5.945e-6 \ # particle radius [m]
-    --alpha 0.0     # inlet cone half-angle [deg]
+    --alpha 0.0     # in-plane injection angle [rad] (default: along the face normal)
 ```
 
 `--kv 1.0` sets the injection velocity exactly equal to the gas velocity, zeroing
 axial slip so that drag is a no-op.  `--kt 1.0` zeroes thermal slip.  These two
 knobs are the main isolation switches used to decouple heat and momentum in the
-`temp-relax` and `body-force` cases.
+`temp-relax` and `body-force` cases.  The mesh and the gas take further options
+(`python3 tests/tools/make_box_case.py --help`): cell counts, two blocks joined by a
+connection or by overlapping chimera faces, block 2 rotated about y, stretched cells
+along x, rows graded along y, translational periodic y faces, the outlet face's code,
+the gas temperature and x-velocity, linear temperature gradients along x and z and a
+cosine wave along y, the size law, and the families.  The defaults reproduce the
+`drag-stokes` box.
 
 ---
 

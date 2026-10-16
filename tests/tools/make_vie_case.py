@@ -23,8 +23,10 @@ bc.txt. Injection coordinates in input.ini should sit on cell CENTRES (avoid the
 face-sliver containment trap): centres are x=(i-0.5)dx, y=(j-0.5)dy, z=(k-0.5)dz.
 
 Usage:
-    make_vie_case.py <out_dir> [--eps E] [--ug0 U] [--yaxis Y]
+    make_vie_case.py <out_dir> [--eps E] [--ug0 U] [--yaxis Y] [--kv KV] [--rp RP]
         writes <out_dir>/solfile.tec and <out_dir>/bc.txt
+        --kv, --rp : the inlet payload's velocity scaling and particle radius [m] (default 0.1,
+                     5.945e-6), read by a face-injected (FB) case only
 """
 import argparse
 import os
@@ -50,7 +52,7 @@ UNIFORM = {"Roi( 1 )": RHO_G, "W": 0.0, "P": P_G, "T": T_G, "MIL": MU_G,
 VARLINE = (' VARIABLES = "X", "Y", "Z",'
            + ",".join(f'"{n}"' for n in GAS_NAMES) + "\n")
 
-# ---- bc.txt inlet property line (UNUSED by DB injection; cosmetic) ----
+# ---- bc.txt inlet property line (unused by DB injection; --kv/--rp for an FB case) ----
 KRHO, KV, KT, RP = 0.34, 0.1, 1.0, 5.945e-6
 BCDEF_INLET, BCDEF_WALL = 401, 400
 
@@ -93,12 +95,12 @@ def write_solfile(path, eps, ug0, yaxis):
     return I, J, K, ncell
 
 
-def write_bc(path):
+def write_bc(path, kv=KV, rp=RP):
     # face->(mend,nend): f1,2->(Ny,Nz); f3,4->(Nx,Nz); f5,6->(Nx,Ny)
     ranges = {1: (NY, NZ), 2: (NY, NZ), 3: (NX, NZ),
               4: (NX, NZ), 5: (NX, NY), 6: (NX, NY)}
-    data = (f"   {KRHO:.5E}   {KV:.5E}   normal,   normal,   {KT:.5E}"
-            f"   {RP:.5E}   0.00000E+00   Dirac   0.00000E+00\n")
+    data = (f"   {KRHO:.5E}   {kv:.5E}   normal,   normal,   {KT:.5E}"
+            f"   {rp:.5E}   0.00000E+00   Dirac   0.00000E+00\n")
     for face in range(1, 7):
         mend, nend = ranges[face]
         bcdef = BCDEF_INLET if face == 1 else BCDEF_WALL
@@ -116,13 +118,15 @@ def main():
     p.add_argument("--eps", type=float, default=EPS)
     p.add_argument("--ug0", type=float, default=UG0)
     p.add_argument("--yaxis", type=float, default=Y_AXIS)
+    p.add_argument("--kv", type=float, default=KV, help="inlet velocity scaling (bc.txt col 2)")
+    p.add_argument("--rp", type=float, default=RP, help="particle radius [m] (bc.txt col 6)")
     a = p.parse_args()
     os.makedirs(a.out_dir, exist_ok=True)
     sf = os.path.join(a.out_dir, "solfile.tec")
     bc = os.path.join(a.out_dir, "bc.txt")
     open(bc, "w").close()
     I, J, K, ncell = write_solfile(sf, a.eps, a.ug0, a.yaxis)
-    write_bc(bc)
+    write_bc(bc, a.kv, a.rp)
     dx, dy, dz = LX / NX, LY / NY, LZ / NZ
     print(f"[ok] Vie solfile: I={I} J={J} K={K} ncell={ncell} (3D)")
     print(f"     domain x[0,{LX}] y[0,{LY}] z[0,{LZ}]; dx={dx} dy={dy} dz={dz}")
