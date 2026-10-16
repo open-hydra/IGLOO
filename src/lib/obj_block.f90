@@ -412,7 +412,7 @@ contains
   end subroutine mollifySource
 
   !> Mollify one family's eulerian densities over every block: each block on its own when no
-  !  aligned 101 link joins two cells (mollifyEuler), else across the links (mollifyBlocks).
+  !  aligned 101/201 link joins two cells (mollifyEuler), else across the links (mollifyBlocks).
   subroutine mollifyEulerBlocks(eul, geo, links)
     use IGLOO_variables, only: mesh2D, mollifyPasses
     implicit none
@@ -457,7 +457,7 @@ contains
   end subroutine mollifyEulerBlocks
 
   !> Mollify the source totals {mass, mom, en} over every block, as densities (/V, smoothed, *V):
-  !  each block on its own when no aligned 101 link joins two cells (mollifySource), else across
+  !  each block on its own when no aligned 101/201 link joins two cells (mollifySource), else across
   !  the links (mollifyBlocks).
   subroutine mollifySourceBlocks(src, geo, links)
     use IGLOO_variables, only: mesh2D, mollifyPasses, nm
@@ -1718,20 +1718,22 @@ contains
   end subroutine locateDual
 
 
-  !> Link table of the 101 face cells, one entry per cell: the partner cell and face of its
+  !> Link table of the 101 and 201 face cells, one entry per cell: the partner cell and face of its
   !  connection. Refuses a partner outside the mesh, a connection that is not mutual (the partner
-  !  face's record must name this cell and face) and, on a one-layer mesh, a 101 record on face 5 or 6.
+  !  face's record must carry the same code and name this cell and face) and, on a one-layer mesh, a
+  !  101 or 201 record on face 5 or 6.
   subroutine buildInterfaceLinks(geo, links)
     use IGLOO_variables, only: mesh2D
     implicit none
     type(obj_block),             intent(in)  :: geo(:)
     type(cellLink), allocatable, intent(out) :: links(:)
-    integer :: nl, l, b, f, m, n, i, j, k, pb, pi, pj, pk, pf, qm, qn
+    integer :: nl, l, b, f, m, n, i, j, k, pb, pi, pj, pk, pf, qm, qn, code
 
     nl = 0
     do b = 1, size(geo)
       do f = 1, 6
-        if (allocated(geo(b)%face(f)%cell)) nl = nl + count(geo(b)%face(f)%cell(:,:)%bcdef == 101)
+        if (allocated(geo(b)%face(f)%cell)) nl = nl + count(geo(b)%face(f)%cell(:,:)%bcdef == 101 .or. &
+                                                             geo(b)%face(f)%cell(:,:)%bcdef == 201)
       enddo
     enddo
     allocate(links(nl))
@@ -1741,24 +1743,25 @@ contains
     do b = 1, size(geo)
       do f = 1, 6
         do n = 1, geo(b)%face(f)%Nn; do m = 1, geo(b)%face(f)%Nm
-          if (geo(b)%face(f)%cell(m,n)%bcdef /= 101) cycle
-          if (mesh2D .and. f >= 5) error stop 'IGLOO: a 101 connection on face 5 or 6 of a one-layer (2D) mesh'
+          code = geo(b)%face(f)%cell(m,n)%bcdef
+          if (code /= 101 .and. code /= 201) cycle
+          if (mesh2D .and. f >= 5) error stop 'IGLOO: a 101/201 connection on face 5 or 6 of a one-layer (2D) mesh'
           call geo(b)%fmn2ijk(f, m, n, i, j, k)
           pb = geo(b)%face(f)%cell(m,n)%connection(1)
-          if (pb < 1 .or. pb > size(geo)) error stop 'IGLOO: a 101 connection names a block outside the mesh'
+          if (pb < 1 .or. pb > size(geo)) error stop 'IGLOO: a 101/201 connection names a block outside the mesh'
           pi = geo(b)%face(f)%cell(m,n)%connection(2)
           pj = geo(b)%face(f)%cell(m,n)%connection(3)
           pk = geo(b)%face(f)%cell(m,n)%connection(4)
           if (pi < 1 .or. pi > geo(pb)%Nx .or. pj < 1 .or. pj > geo(pb)%Ny .or. pk < 1 .or. pk > geo(pb)%Nz) &
-            error stop 'IGLOO: a 101 connection names a cell outside its block'
+            error stop 'IGLOO: a 101/201 connection names a cell outside its block'
           pf = geo(b)%face(f)%cell(m,n)%connectionFace
           qm = 0
           if (pf >= 1 .and. pf <= merge(4, 6, mesh2D)) call geo(pb)%ijk2fmn(pi, pj, pk, pf, qm, qn)
-          if (qm == 0) error stop 'IGLOO: a 101 connection is not mutual: the partner cell does not name this cell'
+          if (qm == 0) error stop 'IGLOO: a 101/201 connection is not mutual: the partner cell does not name this cell'
           associate(q => geo(pb)%face(pf)%cell(qm,qn))
-          if (q%bcdef /= 101 .or. q%connection(1) /= b .or. any(q%connection(2:4) /= [i, j, k]) &
+          if (q%bcdef /= code .or. q%connection(1) /= b .or. any(q%connection(2:4) /= [i, j, k]) &
               .or. q%connectionFace /= f) &
-            error stop 'IGLOO: a 101 connection is not mutual: the partner cell does not name this cell'
+            error stop 'IGLOO: a 101/201 connection is not mutual: the partner cell does not name this cell'
           end associate
           l = l + 1
           links(l) = cellLink(b=b, f=f, i=i, j=j, k=k, pb=pb, pf=pf, pi=pi, pj=pj, pk=pk, &
@@ -1786,7 +1789,7 @@ contains
   end function hasConnectedFaces
 
 
-  !> One warning line per pair of 101 faces normal to different index directions: the field
+  !> One warning line per pair of 101/201 faces normal to different index directions: the field
   !  mollifier gives such an interface zero flux.
   subroutine reportNonAligned(links)
     implicit none
@@ -1802,7 +1805,7 @@ contains
         if (links(s)%dir == 0 .and. links(s)%b == links(l)%b .and. links(s)%f == links(l)%f .and. &
             links(s)%pb == links(l)%pb .and. links(s)%pf == links(l)%pf) seen = .true.
       enddo
-      if (.not. seen) write(*,'(A,4(I0,A))') ' [WARNING] 101 interface block ', links(l)%b, ' face ', links(l)%f, &
+      if (.not. seen) write(*,'(A,4(I0,A))') ' [WARNING] 101/201 interface block ', links(l)%b, ' face ', links(l)%f, &
         ' - block ', links(l)%pb, ' face ', links(l)%pf, &
         ': faces normal to different index directions, the field mollifier gives it zero flux'
     enddo

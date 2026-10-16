@@ -36,6 +36,10 @@ ref-plain
 ref-S
 # mhb98-water-blowing runs the droplet without blowing into ref-noblow/ (tests/evaporation/mhb98-water-blowing/check.py)
 ref-noblow
+# periodic-y and periodic-2d run unsmoothed and first-row siblings (tests/infrastructure/periodic-y/check.py)
+ref-raw
+ref-row
+ref-row-raw
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/

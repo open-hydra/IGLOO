@@ -38,6 +38,7 @@ output written).
 | `refuse-chimera-donor-cell` | the same box, that donor naming cell i = 99 of block 2 (5 cells along x) | `IGLOO: chimera donor list names a cell outside the donor block` |
 | `refuse-chimera-weights` | the same box, that donor's weight 0.9 (its layer sums to 0.9) | `IGLOO: chimera donor list is not normalised` |
 | `refuse-chimera-copies` | the same box, copy 2 of that record writing the counts `2 0` against copy 1's `1 1` (the same number of payload lines) | `IGLOO: bc.txt family copies do not repeat the chimera donor counts of copy 1` |
+| `refuse-periodic-not-mutual` | own `INPUT/` (`python3 make_periodic.py`, run from this directory): a box with faces 3/4 a periodic pair (`tools/make_box_case.py --nx 8 --ny 2 --nz 2 --periodic-y`) whose face-4 records are all header-only 400, so no face-3 facelet's partner names it back | `IGLOO: a 101/201 connection is not mutual: the partner cell does not name this cell` — refused when the field mollifier's link table is built |
 | `refuse-drag-token` | `drag = no-such-drag-law` | `IGLOO: unknown drag model` |
 | `refuse-heat-token` | `heat = no-such-nusselt-law` | `IGLOO: unknown heat model` |
 | `refuse-breakup-token` | `breakup = no-such-breakup-model` | `IGLOO: unknown breakup model` |
@@ -81,7 +82,7 @@ output written).
 | `refuse-bc-empty-payload` | own `INPUT/bc.txt`: `drag-stokes`'s with the first inlet payload line empty (`make_bc_refusals.py`) | `IGLOO: bc.txt inlet payload line is empty` |
 | `refuse-body-accel` | `body-force` (`INPUT/` symlinked) with `body-accel = 0.0 -200.0` | `body-accel: expected 3 values (gx gy gz)` |
 
-All fifty-nine exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All sixty exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
@@ -93,7 +94,9 @@ cases are also RED on a loader that resolves the file but refuses every table (`
 distribution not implemented`, not their payload). **The five chimera cases are RED** on a
 reader without the 102 record, which stops each of them at the first chimera payload (`bad BC cell line`,
 exit 1, not their payload), and on the reader with its five chimera checks taken out, which runs each of them
-to "Stop condition" with exit 0 and writes its output. **The three `properties.dat` cases were
+to "Stop condition" with exit 0 and writes its output. **`refuse-periodic-not-mutual` is RED** on the link
+table of 101 records only, which never looks at the 201 faces: the run integrates to "Stop condition" with
+exit 0 and writes its output. **The three `properties.dat` cases were
 RED first**: the reader that took three columns by position ran each of them to "All particles out of
 domain" with exit 0 — the two-enthalpy header as an absolute datum with `hOff = 0`, the typed row with
 its enthalpy undefined (ORION keeps only the last row's read status), and the decreasing `Psat` column

@@ -10,7 +10,7 @@
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
 #   repeatability/      two-sweep gates (twosweep driver): 13 cases
 #   mpi/                registered only under USE_MPI: 7 rank-count cases + 3 consistency + 1 determinism
 #                       + 13 two-sweep cases
@@ -184,6 +184,7 @@ igloo_unit_test(test_ghost_bc           infrastructure/ghost_bc           "unit;
 # a bc.txt with one copy of every block's table per family (what ATLAS writes for a phase with several
 # populations, block-outermost): copy c is family c. A reader that feeds copy 1 to every family fails
 # F2-F5 (per-family krho/rp/gp/ds, one and two blocks) while the one-copy control F1 passes either way.
+# F8: the mollifier's link table joins a 201 pair (0 links on a table of 101 records only).
 igloo_unit_test(test_bc_families        infrastructure/bc_families        "unit;infrastructure;bc;io;t1")
 # the ord2 dual must TILE the domain: its boundary cells straddle the boundary face, so an
 # unclipped one dilutes its deposited density by the outside fraction. Pins sum(dual cellVol)
@@ -202,7 +203,8 @@ igloo_unit_test(test_dual_clip          infrastructure/dual_clip          "unit;
 igloo_unit_test(test_source_reduction  infrastructure/source_reduction   "unit;infrastructure;euler;t1")
 # The field mollifier over blocks joined by 101 links (mollifyBlocks): a random grid cut into blocks
 # smooths as the uncut grid (3D and 2D cuts, three blocks, 2 x 2 blocks, above the OpenMP threshold),
-# Sum(q V) holds over the blocks, and without an aligned link each block is smoothed on its own.
+# Sum(q V) holds over the blocks, and without an aligned link each block is smoothed on its own; U1d a
+# periodic (201) pair in one block smooths as the grid with j wrapped.
 igloo_unit_test(test_mollify_blocks    infrastructure/mollify_blocks     "unit;infrastructure;mollify;t1")
 igloo_unit_test(test_host_assoc        infrastructure/host_assoc         "unit;infrastructure;build;t1")
 
@@ -842,6 +844,10 @@ igloo_refusal_case(refuse-chimera-weights  infrastructure/refusals/chimera-weigh
                    "IGLOO: chimera donor list is not normalised" "e2e;refusal;infrastructure;bc;chimera")
 igloo_refusal_case(refuse-chimera-copies   infrastructure/refusals/chimera-copies
                    "IGLOO: bc.txt family copies do not repeat the chimera donor counts of copy 1" "e2e;refusal;infrastructure;bc;chimera")
+# A one-sided periodic (201) face (refusals/make_periodic.py: face 3 names face-4 partners whose records are 400):
+# the field mollifier's link table refuses it. RED before that table took 201: the run integrates and exits 0.
+igloo_refusal_case(refuse-periodic-not-mutual infrastructure/refusals/periodic-not-mutual
+                   "IGLOO: a 101/201 connection is not mutual: the partner cell does not name this cell" "e2e;refusal;infrastructure;bc")
 # Unknown model tokens (ledger O26): the selectors used to print the menu and execute a plain
 # `stop`, exit 0 -- invisible to any harness or embedding parent. Now error stops.
 igloo_refusal_case(refuse-drag-token        infrastructure/refusals/drag-token
@@ -951,11 +957,14 @@ igloo_refusal_case(refuse-body-accel       infrastructure/refusals/body-accel
 # fork's fix/dopri5-solout (six-argument call, silent label 79). Needs BOTH OSlo checkouts (IGLOO's
 # lib/OSLO, hydra's lib/OSLO) on that commit.
 igloo_e2e_case(drag-stokes-dopri5 standard/drag-stokes-dopri5 "e2e;standard")
-# translational periodic pair (bcdef 201): closed-form v(x) across wraps + modular-y
+# translational periodic pair (bcdef 201): closed-form v(x) across wraps + modular-y; the source smoothed across the
+# pair (S-P: unsmoothed siblings smoothed by check.py, periodic in y). S-P RED with zero flux at the 201 faces:
+# 2.5e-8 of the field scale on the case itself (its deposits are uniform in y), 0.36 with only face 1's first row injecting.
 igloo_e2e_case(periodic-y infrastructure/periodic-y "e2e;infrastructure")
 # periodic-2d: periodic-y on a one-layer box, the 201 lines in ATLAS's nine-integer single-layer form (the partner
 # face is the fifth integer). RED on a reader taking four index integers there: the partner's k read as its face,
-# 18 of 25 parcels cycling to the outer iteration cap, the run not ending in 300 s.
+# 18 of 25 parcels cycling to the outer iteration cap, the run not ending in 300 s. S-P as periodic-y's: RED 6.1e-8
+# (the case), 0.29 (first row).
 igloo_e2e_case(periodic-2d infrastructure/periodic-2d "e2e;infrastructure;bc")
 # periodic-2d-ord2: periodic-2d at gas-order 2 with a temperature wave across the 201 pair: T follows the periodic
 # extension of the cell-centre field (the 201 ghosts carry the partner side's gas). RED on the ring's linear fill.

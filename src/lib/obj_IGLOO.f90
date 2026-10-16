@@ -12,7 +12,7 @@ module IGLOO_module
   type, public :: obj_IGLOO
     type(obj_block),       allocatable :: geoblock(:)
     type(obj_flowblock),   allocatable :: gasblock(:)
-    !> The 101 face cells and their partner cells, built once after the bc read.
+    !> The 101 and 201 face cells and their partner cells, built once after the bc read.
     type(cellLink),        allocatable :: links(:)
     !> A face cell carries 101, 103, 201, 102 or 100: solve reports the block changes.
     logical :: connFaces = .false.

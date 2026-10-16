@@ -17,6 +17,11 @@ program test_mollify_blocks
     !   U1c  no aligned link: mollifyBlocks equals binomial_smooth block by block, bit for bit,
     !        with no link at all and with links between faces normal to different directions
     !        (dir = 0, zero flux)
+    !   U1d  a periodic pair (201): every face-3 cell of a block linked to the face-4 cell of its
+    !        column in the same block and back; the oracle is the test's own smoother with j
+    !        wrapped (zero flux in i and k), to 1e-13 of the field scale: one block in 3D and in 2D,
+    !        and the 3D grid cut along x into two blocks, each with its own pair (101 and 201 links
+    !        together); Sum(q V) to 1e-13 of Sum(|q| V)
     !
     use, intrinsic :: iso_fortran_env, only: real64
     use IGLOO_Lib_Mollify, only: binomial_smooth, mollifyBlocks, cellLink, blockField
@@ -40,10 +45,14 @@ program test_mollify_blocks
     call cutCase('2D x',           14, 11,  1, [7],        [integer::], [integer::])
     call cutCase('2D y',           14, 11,  1, [integer::], [6],        [integer::])
     call noLinkCases()
+    !                    label            Nx  Ny  Nz  cuts in i
+    call periodicCase('3D periodic y',     10,  7,  6, [integer::])
+    call periodicCase('2D periodic y',     12,  9,  1, [integer::])
+    call periodicCase('3D periodic y, x',  12,  7,  6, [6])
 
     if (nfail == 0) then
         print '(a)', ''
-        print '(a)', '[PASS] test_mollify_blocks: blocks joined by 101 links smooth as one block'
+        print '(a)', '[PASS] test_mollify_blocks: blocks joined by 101 and 201 links smooth as one block'
     else
         print '(a)', ''
         print '(a,i0,a)', '[FAIL] test_mollify_blocks: ', nfail, ' assertion(s) failed'
@@ -143,6 +152,99 @@ contains
             deallocate(links, bq, bv, br)
         enddo
     end subroutine noLinkCases
+
+    !> U1d: the grid cut along x after the listed planes, each block's face-3 and face-4 cells linked
+    !  to each other (a periodic pair in j), against the uncut grid smoothed with j wrapped.
+    subroutine periodicCase(lab, nx, ny, nz, ci)
+        character(*), intent(in) :: lab
+        integer,      intent(in) :: nx, ny, nz, ci(:)
+        real(real64), allocatable :: qg(:,:,:), vg(:,:,:), q1(:,:,:)
+        type(blockField), allocatable :: bq(:), bv(:)
+        type(cellLink),   allocatable :: links(:), cut(:)
+        integer, allocatable :: lo(:,:), hi(:,:)
+        integer :: ndim, b, i, k, n, nbit
+        real(real64) :: scale, worst, s0, s1, l1
+
+        call randomGrid(nx, ny, nz, qg, vg)
+        ndim = merge(2, 3, nz == 1)
+        call cutBlocks(nx, ny, nz, ci, [integer::], [integer::], lo, hi)
+        call linkCuts(lo, hi, cut)
+        allocate(links(size(cut) + 2*sum((hi(1,:)-lo(1,:)+1)*(hi(3,:)-lo(3,:)+1))))
+        links(1:size(cut)) = cut
+        n = size(cut)
+        do b = 1, size(lo,2)
+            do k = 1, hi(3,b)-lo(3,b)+1; do i = 1, hi(1,b)-lo(1,b)+1
+                n = n + 1
+                links(n) = cellLink(b=b, f=3, i=i, j=1,  k=k, pb=b, pf=4, pi=i, pj=ny, pk=k, dir=2)
+                n = n + 1
+                links(n) = cellLink(b=b, f=4, i=i, j=ny, k=k, pb=b, pf=3, pi=i, pj=1,  pk=k, dir=2)
+            enddo; enddo
+        enddo
+        allocate(bq(size(lo,2)), bv(size(lo,2)))
+        s0 = 0._real64
+        do b = 1, size(lo,2)
+            bq(b)%q = qg(lo(1,b):hi(1,b), lo(2,b):hi(2,b), lo(3,b):hi(3,b))
+            bv(b)%q = vg(lo(1,b):hi(1,b), lo(2,b):hi(2,b), lo(3,b):hi(3,b))
+            s0 = s0 + sum(bq(b)%q*bv(b)%q)
+        enddo
+        q1 = qg
+        call periodicSmooth(q1, vg, NPASS, ndim)
+        call mollifyBlocks(bq, bv, links, NPASS, ndim)
+
+        scale = maxval(abs(q1)); worst = 0._real64; nbit = 0; s1 = 0._real64; l1 = 0._real64
+        do b = 1, size(lo,2)
+            associate(r => q1(lo(1,b):hi(1,b), lo(2,b):hi(2,b), lo(3,b):hi(3,b)))
+            worst = max(worst, maxval(abs(bq(b)%q - r))/scale)
+            nbit  = nbit + count(bq(b)%q /= r)
+            end associate
+            s1 = s1 + sum(bq(b)%q*bv(b)%q)
+            l1 = l1 + sum(abs(bq(b)%q)*bv(b)%q)
+        enddo
+        if (worst <= TOL_CUT .and. abs(s1 - s0) <= TOL_SUM*l1) then
+            print '(a,i0,a,i0,a,es9.2,a,i0,a,es9.2,a)', '  [ok]   U1d '//lab//': ', size(lo,2), ' block(s), ', &
+                size(links), ' links; worst ', worst, ' of the field scale (', nbit, &
+                ' cells not bit-identical); Sum(q V) drift ', abs(s1 - s0)/l1, ' of Sum(|q| V)'
+        else
+            print '(a,i0,a,i0,a,es9.2,a,i0,a,es9.2,a)', '  [FAIL] U1d '//lab//': ', size(lo,2), ' block(s), ', &
+                size(links), ' links; worst ', worst, ' of the field scale (', nbit, &
+                ' cells differ); Sum(q V) drift ', abs(s1 - s0)/l1, ' of Sum(|q| V)'
+            nfail = nfail + 1
+        endif
+    end subroutine periodicCase
+
+    !> The oracle of U1d: binomial_smooth's passes with j wrapped (cell 1 and cell Ny neighbours), zero
+    !  flux in i and k; the flux theta*min(V, V')*(q' - q) of every face.
+    subroutine periodicSmooth(q, V, npass, ndim)
+        real(real64), intent(inout) :: q(:,:,:)
+        real(real64), intent(in)    :: V(:,:,:)
+        integer,      intent(in)    :: npass, ndim
+        real(real64), allocatable :: s(:,:,:)
+        real(real64), parameter :: th = 0.25_real64
+        real(real64) :: phiL, phiR
+        integer :: nx, ny, nz, i, j, k, p, d, jp, jm
+        nx = size(q,1); ny = size(q,2); nz = size(q,3)
+        do p = 1, npass
+            do d = 1, ndim
+                s = q
+                do k = 1, nz; do j = 1, ny; do i = 1, nx
+                    phiR = 0._real64; phiL = 0._real64
+                    select case (d)
+                    case (1)
+                        if (i < nx) phiR = th*min(V(i,j,k), V(i+1,j,k))*(s(i+1,j,k) - s(i,j,k))
+                        if (i > 1)  phiL = th*min(V(i-1,j,k), V(i,j,k))*(s(i,j,k) - s(i-1,j,k))
+                    case (2)
+                        jp = merge(1, j+1, j == ny); jm = merge(ny, j-1, j == 1)
+                        phiR = th*min(V(i,j,k), V(i,jp,k))*(s(i,jp,k) - s(i,j,k))
+                        phiL = th*min(V(i,jm,k), V(i,j,k))*(s(i,j,k) - s(i,jm,k))
+                    case (3)
+                        if (k < nz) phiR = th*min(V(i,j,k), V(i,j,k+1))*(s(i,j,k+1) - s(i,j,k))
+                        if (k > 1)  phiL = th*min(V(i,j,k-1), V(i,j,k))*(s(i,j,k) - s(i,j,k-1))
+                    end select
+                    q(i,j,k) = s(i,j,k) + phiR/V(i,j,k) - phiL/V(i,j,k)
+                enddo; enddo; enddo
+            enddo
+        enddo
+    end subroutine periodicSmooth
 
     ! ------------------------------------------------------------------ fixture
 

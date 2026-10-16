@@ -828,9 +828,13 @@ path: the body-force decoupling with $g_y = -8000$ drives each particle across
 the $y$-periodic pair 2–3 times.  The anchored $v(x)$ closed form must hold
 across every wrap (the transport leaves velocity untouched) and $y(x)$ must
 equal the unwrapped closed form **modulo $L_y$** (the transport is an exact
-$\pm L_y$ translation).
+$\pm L_y$ translation).  The deposited source is smoothed across the periodic
+pair: a run with `mollify = off`, smoothed by the check itself with the first
+and last $y$ rows neighbours, equals the solver's smoothed `source.tec`, on the
+case and on a sibling where only the first inlet row injects.
 
-**Result:** residual $\sim 5\cdot10^{-7}$ m.
+**Result:** residual $\sim 5\cdot10^{-7}$ m; smoothed source within
+$1.3\cdot10^{-14}$ of the field scale.
 
 <figure>
   {% include "vv/images/periodic-y.svg" ignore missing %}

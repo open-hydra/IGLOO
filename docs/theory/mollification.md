@@ -6,7 +6,8 @@ by a dimension-split binomial smoother controlled by `mollify` and `mollify-pass
 entirely.
 
 The smoother is implemented in `src/lib/Lib_Mollify.f90::binomial_smooth` (one block) and
-`mollifyBlocks` (several blocks joined by 101 connections), called through `mollifyEulerBlocks` and
+`mollifyBlocks` (blocks joined by 101 connections, faces paired by periodic (201) connections), called
+through `mollifyEulerBlocks` and
 `mollifySourceBlocks` in `src/lib/obj_block.f90`.
 
 ---
@@ -56,7 +57,7 @@ $$
 (per-pass variance $= 1/2$ cell² for the $\theta = 1/4$ binomial kernel; independence
 from mesh cell size is by design).
 
-### Block interfaces
+### Block interfaces and periodic faces
 
 A block face joined to another block by a conformal connection (`bcdef` 101) is an interior
 face of the domain, and the smoother treats it as one: before each sweep direction of each pass,
@@ -73,8 +74,12 @@ conserved; a mesh split into blocks along whole index planes is smoothed as the 
 arithmetic is the same; the default optimised build may differ in the last bits). The halo needs the
 two faces to be normal to the same index direction (an i-face joined to an i-face, and so on); an
 interface whose faces are normal to different index directions keeps zero flux, and the setup prints
-one warning line per such face pair. Every other block face — walls, inlets, outlets, periodic (201)
-and chimera faces — keeps zero flux. The conservation guard sums $q V$ over every block.
+one warning line per such face pair. A translational periodic pair (`bcdef` 201) is smoothed the same
+way: each face cell's partner is the cell its connection names on the paired face, in the same block
+or another, so the cells next to the two faces are neighbours, as in one unrolled period (periodicity
+is translational, so the momentum source needs no rotation across the face). Every other block face —
+walls, inlets, outlets and chimera faces — keeps zero flux. The conservation guard sums $q V$ over
+every block.
 
 ---
 
@@ -117,7 +122,7 @@ conserved density numerators of each family before Favre averaging (`obj_eulerbl
 Each scalar field is divided by cell volume before smoothing and multiplied back out
 after, satisfying the $\sum q V$ conservation invariant.
 
-On a mesh without a 101 interface each block is smoothed on its own (`mollifyEuler`,
+On a mesh without a 101 or 201 face each block is smoothed on its own (`mollifyEuler`,
 `mollifySource`), with an optional pre-allocated scratch buffer (`work`) reused across all 6
 (Euler) or $n_m+4$ (source) calls, avoiding repeated allocations in the inner loop.
 

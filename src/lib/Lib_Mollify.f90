@@ -8,8 +8,8 @@ module IGLOO_Lib_Mollify
   public :: mollifyBlocks
   public :: DEFAULT_MOLLIFY_PASSES
 
-  !> A cell of block b on its 101 face f joined to cell (pi,pj,pk) of block pb on face pf; dir is
-  !  the index direction normal to both faces (0 when they are normal to different directions).
+  !> A cell of block b on its 101 or 201 face f joined to cell (pi,pj,pk) of block pb on face pf; dir
+  !  is the index direction normal to both faces (0 when they are normal to different directions).
   type, public :: cellLink
     integer :: b = 0, f = 0, i = 0, j = 0, k = 0
     integer :: pb = 0, pf = 0, pi = 0, pj = 0, pk = 0
@@ -138,8 +138,8 @@ contains
 
 
   !> binomial_smooth over several blocks at once: before every sweep direction of every pass a
-  !  one-cell halo takes the partner's current value and volume on each aligned 101 face cell, so
-  !  the flux crosses the face as it crosses an interior face; the conservation guard sums every
+  !  one-cell halo takes the partner's current value and volume on each aligned 101/201 face cell,
+  !  so the flux crosses the face as it crosses an interior face; the conservation guard sums every
   !  block. Without an aligned link each block goes through binomial_smooth on its own.
   subroutine mollifyBlocks(q, V, links, npass, ndim)
     implicit none

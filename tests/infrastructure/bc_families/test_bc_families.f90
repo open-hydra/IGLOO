@@ -36,12 +36,16 @@ program test_bc_families
     !       (block, i, j, face, d11..d22); each cell keeps its partner cell, partner face and the
     !       four orientation integers. RED: a reader taking four index integers on a one-layer mesh
     !       stores k (1) as face 3's partner face and (4, 1, 0, 0) as its orientation
+    !   F8  the field mollifier's link table (buildInterfaceLinks) on F7's block: 8 links, each face-3
+    !       cell joined to the face-4 cell of its column and back, both normal to index direction 2.
+    !       RED: a table of the 101 records only holds no link
     !
     ! A pair (a, b) is a family's payload columns 1 and 6: krho (401) or gp (402), and rp.
     !
     use, intrinsic :: iso_fortran_env, only: real64
     use IGLOO_IO,          only: read_cdp_bc_file
-    use IGLOO_data_block,  only: obj_block, obj_flowblock
+    use IGLOO_data_block,  only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, buildInterfaceLinks
+    use IGLOO_Lib_Mollify, only: cellLink
     use IGLOO_data_phases, only: obj_material
     use IGLOO_variables,   only: nb, nm, mesh2D, dsSwitch
     implicit none
@@ -254,7 +258,38 @@ contains
             call expectConn('F7 face 4 m='//itoa(m)//' (eight integers)', geo(1)%face(4)%cell(m,1), &
                             [1, m, 1, 1], 3, [1, 0, 0, 1])
         enddo
+        call f8_periodic_links(geo)
     end subroutine f7_connection_2d
+
+    !> F8 -- the mollifier's link table on F7's block: one link per 201 face cell, joined to the cell
+    !  of its column on the other face, both faces normal to index direction 2.
+    subroutine f8_periodic_links(geo)
+        type(obj_block), intent(in) :: geo(:)
+        type(cellLink), allocatable :: links(:)
+        integer :: l, nbad, n3, n4
+        call buildInterfaceLinks(geo, links)
+        nbad = 0; n3 = 0; n4 = 0
+        do l = 1, size(links)
+            associate(c => links(l))
+            if (c%b /= 1 .or. c%pb /= 1 .or. c%dir /= 2 .or. c%k /= 1 .or. c%pk /= 1 .or. c%pi /= c%i) then
+                nbad = nbad + 1
+            elseif (c%f == 3 .and. c%j == 1 .and. c%pf == 4 .and. c%pj == 3) then
+                n3 = n3 + 1
+            elseif (c%f == 4 .and. c%j == 3 .and. c%pf == 3 .and. c%pj == 1) then
+                n4 = n4 + 1
+            else
+                nbad = nbad + 1
+            endif
+            end associate
+        enddo
+        if (size(links) == 8 .and. n3 == 4 .and. n4 == 4 .and. nbad == 0) then
+            print '(a)', '  [ok]   famtest F8 link table: 8 links, face 3 (i,1) <-> face 4 (i,3) of each column, dir 2'
+        else
+            print '(a,4(i0,a))', '  [FAIL] famtest F8 link table: ', size(links), ' links (expected 8), ', n3, &
+                ' face 3 -> 4, ', n4, ' face 4 -> 3, ', nbad, ' other'
+            nfail = nfail + 1
+        endif
+    end subroutine f8_periodic_links
 
 
     ! ------------------------------------------------------------------ fixture
