@@ -29,7 +29,11 @@ is the ETAB-specific check. The v-perp product kick (Tanner eq. 8-10) is azimuth
 and NOT gated here (only the deterministic size is).
 """
 import math
+import os
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+from trajtime import cumulative_time  # noqa: E402
 
 TRAJ = "OUTPUT/trajectories-A.dat"
 
@@ -123,9 +127,8 @@ def drop_report(rows):
     d0, u0 = rows[0][2], rows[0][1]
     slip0 = U_GAS - u0
     wer = 0.5 * d0 * RHOG * slip0**2 / SIGMA
-    t, kb = [0.0], None
+    t, kb = cumulative_time([r[0] for r in rows], [r[1] for r in rows]), None
     for k in range(1, len(rows)):
-        t.append(t[-1] + (rows[k][0] - rows[k - 1][0]) / (0.5 * (rows[k - 1][1] + rows[k][1])))
         if kb is None and rows[k][2] < d0 * (1.0 - 1e-9):
             kb = k
     tref = tbu_analytic(0.5 * d0, slip0)

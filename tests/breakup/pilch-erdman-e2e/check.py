@@ -35,7 +35,11 @@ tol 12% (asymptotic-approach tail + current-slip-vs-initial-U0 convention; the A
 failure mode read 1.48-1.50 and the A16 one far worse — cleanly discriminated).
 """
 import math
+import os
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+from trajtime import cumulative_time  # noqa: E402
 
 TRAJ = "OUTPUT/trajectories-A.dat"
 
@@ -137,13 +141,12 @@ def measured_rate0(rows, max_loss=0.03, nmax=6):
     adapts the window to each drop's speed: 1 interval for fast small drops, more for
     slow big ones."""
     d0 = rows[0][2]
-    t, dd = [0.0], [d0]
+    dd = [d0]
     for k in range(1, min(nmax + 1, len(rows))):
-        x0, u0, _ = rows[k - 1]; x1, u1, _ = rows[k]
-        t.append(t[-1] + (x1 - x0) / (0.5 * (u0 + u1)))
         dd.append(rows[k][2])
         if (d0 - rows[k][2]) / d0 > max_loss:      # stop once past the clean window
             break
+    t = cumulative_time([r[0] for r in rows[:len(dd)]], [r[1] for r in rows[:len(dd)]])
     n = len(t)
     if n < 2:
         return None
@@ -209,13 +212,12 @@ def windowed_rates(rows, max_loss=0.03, nmax=6):
     finite-window bias of a decelerating rate cancels; what remains is the model
     difference at the injection We."""
     d0 = rows[0][2]
-    t, dm = [0.0], [d0]
+    dm = [d0]
     for k in range(1, min(nmax + 1, len(rows))):
-        x0, u0, _ = rows[k - 1]; x1, u1, _ = rows[k]
-        t.append(t[-1] + (x1 - x0) / (0.5 * (u0 + u1)))
         dm.append(rows[k][2])
         if (d0 - rows[k][2]) / d0 > max_loss:
             break
+    t = cumulative_time([r[0] for r in rows[:len(dm)]], [r[1] for r in rows[:len(dm)]])
     n = len(t)
     if n < 2:
         return None, None
