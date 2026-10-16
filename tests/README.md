@@ -14,7 +14,7 @@ Registry of record: [`CMakeLists.txt`](CMakeLists.txt) (every gate) and
 ./tests/test.sh e2e              # by kind: unit|e2e
 USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # the rank-count gates, built in build/mpi/
 ./tests/test.sh conv-nu          # single test by ctest name
-./tests/test.sh clean            # wipe e2e OUTPUT/run logs + build/verif/
+./tests/test.sh clean            # wipe what the tests write in their directories + build/verif/
 ```
 
 Opt-in via `-DBUILD_VERIFICATION=ON` (default OFF, so the production build is
@@ -32,7 +32,7 @@ tests/
 ├── CMakeLists.txt                # single ctest registry (unit + e2e, labeled)
 ├── test.sh                       # MOSE-style runner: standard evaporation combustion solidification breakup infrastructure repeatability mpi unit e2e
 ├── vv_style.py                   # the single plot-style source for every SVG
-├── common/                       # shared box fixtures + the MOSE nozzle solfile (db-2daxi, axis-200)
+├── common/                       # shared phase.txt and properties.dat + the MOSE nozzle solfile (db-2daxi, axis-200)
 ├── tools/                        # make_box_case.py make_pe_case.py make_vie_case.py make_vortex_case.py make_wedge_case.py make_uniform_gas.py
 │                                 # make_psat_table.py proptab.py set_kv.py ks_ad.py
 │                                 # aggregate_report.py check_twosweep.py check_refusal.py compare_tec.py check_registry.cmake plot_curves.py mpi_scaling_smoke.sh

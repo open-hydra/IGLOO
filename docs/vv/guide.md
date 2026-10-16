@@ -51,7 +51,7 @@ A healthy run ends like:
 | `./tests/test.sh standard` | one model category: `standard`, `evaporation`, `combustion`, `breakup`, `infrastructure`, `repeatability`, `mpi` |
 | `./tests/test.sh unit` / `e2e` | by kind: compiled unit tests / end-to-end solver cases |
 | `./tests/test.sh conv-nu` | a single test by its CTest name (e.g. `test_breakup_tab`, `drag-stokes`) |
-| `./tests/test.sh clean` | wipe e2e `OUTPUT/` + run logs + `build/verif/` |
+| `./tests/test.sh clean` | wipe what the tests write in their directories (`OUTPUT/`, run logs, sibling runs) + `build/verif/` |
 
 Every invocation rebuilds incrementally first, so a source edit is always picked up.
 Extra CMake flags pass through after `--`:

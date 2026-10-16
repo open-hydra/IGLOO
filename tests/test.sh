@@ -20,7 +20,7 @@ usage() {
     echo "  <category>     one of: ${CATEGORIES}"
     echo "  mpi            USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF (builds build/mpi, see mpi/INFO.md)"
     echo "  <test-name>    single ctest name (e.g. conv-nu, test_breakup_tab)"
-    echo "  clean          remove e2e OUTPUT/run logs and build/verif/ (build/mpi/ with USE_MPI=ON)"
+    echo "  clean          remove what the tests write in their directories and build/verif/ (build/mpi/ with USE_MPI=ON)"
     exit 1
 }
 
@@ -40,11 +40,13 @@ BUILD_DIR="${IGLOO_ROOT}/build/verif"
 if [[ "${MPI}" == ON ]]; then BUILD_DIR="${IGLOO_ROOT}/build/mpi"; fi
 
 if [[ "${TARGET}" == clean ]]; then
-    for d in "${SCRIPT_DIR}"/*/*/; do
-        [ -f "${d}/check.py" ] || continue
-        rm -rf "${d}/OUTPUT" "${d}/run_out.txt" "${d}/run_err.txt"
+    # every directory a test runs in holds an input.ini; remove what the runs and their checks write there
+    while IFS= read -r d; do
+        rm -rf "${d}/OUTPUT" "${d}"/run_out*.txt "${d}"/run_err*.txt "${d}/rc.txt" "${d}"/run_n*.txt \
+               "${d}"/err_n*.txt "${d}"/tec_n*/ "${d}"/ref-*/ "${d}/diag_threads.txt"
         echo "cleaned ${d#"${SCRIPT_DIR}"/}"
-    done
+    done < <(find "${SCRIPT_DIR}" -name input.ini -not -path '*/OUTPUT/*' -not -path '*/ref-*/*' \
+                  -not -path '*/_run-*/*' -printf '%h\n' | sort -u)
     rm -rf "${BUILD_DIR}"
     exit 0
 fi

@@ -36,7 +36,7 @@ USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # rank-count gates, built in
 # Single test by ctest name
 ./tests/test.sh conv-nu
 
-# Wipe e2e OUTPUT/, run logs, and build/verif/
+# Wipe what the tests write in their directories (OUTPUT/, run logs, sibling runs) and build/verif/
 ./tests/test.sh clean
 ```
 
@@ -62,7 +62,7 @@ tests/
 ├── CMakeLists.txt                # single ctest registry (unit + e2e, labeled)
 ├── test.sh                       # MOSE-style runner
 ├── vv_style.py                   # the single plot-style source for every SVG
-├── common/                       # shared box fixtures + the MOSE nozzle solfile
+├── common/                       # shared phase.txt and properties.dat + the MOSE nozzle solfile
 ├── tools/                        # make_box_case.py, make_vie_case.py, make_wedge_case.py, plot_curves.py, …
 ├── support/                      # shared Fortran library (NOT a test family)
 │   ├── verif_norms.f90
