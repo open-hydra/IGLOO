@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (185 in a serial build: 145 e2e + 39 unit incl. `self_test` and
+One row per registered CTest entry (187 in a serial build: 147 e2e + 39 unit incl. `self_test` and
 `registry-docs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 21 `mpi-*` rows in their own
-section, 206).
+section, 208).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -184,6 +184,8 @@ oracle possible.
 | **refuse-properties-two-enthalpy** | — (kind 8, refusal) | *setup refusal*: a header naming both `"Enthalpy"` and `"Enthalpy_abs"` → `the enthalpy datum is ambiguous` (RED on the positional reader: run as an absolute datum with `hOff = 0`, exit 0) | as `drag-stokes` | own 10-row properties.dat |
 | **refuse-properties-bad-row** | — (kind 8, refusal) | *setup refusal*: a data row whose enthalpy is typed `375O.000000` → `unreadable rows: line 7 does not hold 4 numbers` (RED: ORION kept only the last row's status, the run completed) | as `drag-stokes` | own 10-row properties.dat |
 | **refuse-properties-psat** | — (kind 8, refusal) | *setup refusal*: an evaporating material whose `Psat` column decreases once → `Psat column: a pressure that decreases with T` (RED: the column was not read, the run completed) | as `tc-box` | tc-box's table on 1..1000 K + its Clausius-Clapeyron line as `Psat`, two values swapped |
+| **refuse-pure2d-mesh** | — (kind 8, refusal) | *setup refusal*: `planar-slab`'s gas file reduced to its first node plane (`K=1`, `refusals/make_pure2d.py`), which ORION reads as a block of zero cells in k → `IGLOO: a pure 2D mesh (one node plane) is not supported: give IGLOO the mesh of one cell layer`, at mesh import. RED on the solver without the check: the record-count stop (880 records against the 800 faces of the zero-thickness block) | own (`planar-slab`'s first node plane) | as `planar-slab` |
+| **refuse-pure2d-bc** | — (kind 8, refusal) | *setup refusal*: `planar-slab`'s boundary records of faces 1–4 with 5-integer headers `b i j f code`, as ATLAS writes a pure-2D mesh (`refusals/make_pure2d.py`) → `IGLOO: bc.txt has 5 header integers (a pure 2D ATLAS file): give IGLOO the boundary file of the one-cell-layer mesh`. RED on the reader without the check: the legacy-schema stop (the first header's sixth value borrowed from the next line, `bcdef = 1`) | as `planar-slab` | own (5-integer headers, faces 1–4) |
 | **refuse-bc-copies** | — (kind 8, refusal) | *setup refusal*: `phase.txt` `A 3` (three families) with `two-fam-bc`'s two-copy `bc.txt` — 2500 records against 1250 (one copy) or 3750 (one per family) → `IGLOO: bc.txt record count is neither one copy nor one copy per family`, the three counts printed first. RED on a reader consuming copy 1 only: exit 0, krhoTot = 1.02 and ṁ = −2.04e-2 kg/s per parcel (negative), 75 exits | as `drag-stokes` | `phase.txt` `A 3`, `common/properties.dat`, `two-fam-bc`'s `bc.txt` |
 | **refuse-bc-copy-order** | — (kind 8, refusal) | *setup refusal*: `two-fam-bc`'s file with two face-3 headers of copy 2 exchanged (`make_fixture.py --swap`; same codes, so the payload lines stay in place) → `IGLOO: bc.txt family copies do not repeat the faces of copy 1` (`family 2 of block 1 ... at record 51`). RED on a reader consuming copy 1 only: exit 0, six output files | as `drag-stokes` | two-mat's `phase.txt`/`properties.dat`, the swapped two-copy `bc.txt` |
 | **refuse-chimera-counts** | — (kind 8, refusal) | *setup refusal*: a box of two overlapping blocks joined by chimera (102) faces in which the counts line of block 1's first chimera record holds three integers → `IGLOO: chimera donor counts line is not two non-negative integers` — refused at the first scan of the file. RED on a reader without the 102 record (`bad BC cell line`, exit 1) and on the reader with its chimera checks taken out (exit 0, output written) | own two-zone `solfile.tec` (`refusals/make_chimera.py`: `make_box_case.py --nx 8 --ny 2 --nz 2 --blocks 2 --overlap 1 --families 2`) | own `bc.txt` (one record spoiled) and `phase.txt` (`A 2`), `common/properties.dat` |
@@ -324,11 +326,11 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-145 `e2e`-labelled + 39 `unit`-labelled + the optional `vortex-cloud-3way` = **185 CTest entries** in a
-serial build (+21 `mpi-*` under `USE_MPI`, 206), all green (counted from `tests/CMakeLists.txt`). The 145
+147 `e2e`-labelled + 39 `unit`-labelled + the optional `vortex-cloud-3way` = **187 CTest entries** in a
+serial build (+21 `mpi-*` under `USE_MPI`, 208), all green (counted from `tests/CMakeLists.txt`). The 147
 `e2e` entries are the 85 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
-threads), the twelve `repeat-*` two-sweep gates and the forty-six `refuse-*` setup-refusal gates. The
+threads), the twelve `repeat-*` two-sweep gates and the forty-eight `refuse-*` setup-refusal gates. The
 39 `unit` entries are 34 compiled unit tests, the property-table reader on its three fixtures
 (`test_properties_reader`, `-two-material`, `-atlas-water`), `self_test` and `registry-docs`. Unit
 families that emit a production-vs-reference overlay (`verif_dump` → `tools/plot_curves.py` →

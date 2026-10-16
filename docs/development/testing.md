@@ -105,7 +105,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **185 tests** in a serial build (145 e2e + 39 unit, `self_test` and
+Current gate: **187 tests** in a serial build (147 e2e + 39 unit, `self_test` and
 `registry-docs` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 21 more
 `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.

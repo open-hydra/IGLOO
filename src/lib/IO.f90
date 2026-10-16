@@ -349,6 +349,12 @@ contains
       nFaceTot = nFaceTot + 2*(geoblock(b)%Ny*geoblock(b)%Nz + geoblock(b)%Nx*geoblock(b)%Nz + &
                                geoblock(b)%Nx*geoblock(b)%Ny)
     enddo
+    !> A first header of 5 integers (b i j f code) is ATLAS's pure 2D layout.
+    read(u,'(A)',iostat=ios) lineString
+    if (ios == 0 .and. countTokens(lineString) == 5) &
+      error stop 'IGLOO: bc.txt has 5 header integers (a pure 2D ATLAS file): give IGLOO the boundary &
+                 &file of the one-cell-layer mesh'
+    rewind(u)
     nrec = 0
     do
       read(u,*,iostat=ios) dumi, dumi, dumi, dumi, dumi, code

@@ -45,6 +45,8 @@ contains
       write(*,'(A,*(I0,1X))') '         Nk per block: ', orion%block(:)%Nk
       error stop 'IGLOO: mixed 2D/3D blocks are not supported'
     endif
+    if (any(orion%block(:)%Nk < 1)) &
+      error stop 'IGLOO: a pure 2D mesh (one node plane) is not supported: give IGLOO the mesh of one cell layer'
     mesh2D = any(orion%block(:)%Nk == 1)
     !> Tripwire: an Nk = 1 block must take the 2D path.
     if (any(orion%block(:)%Nk == 1) .and. .not.mesh2D) &

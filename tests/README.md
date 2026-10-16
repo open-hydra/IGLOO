@@ -97,10 +97,10 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 185/185 in a serial build (145 e2e + 39 unit, `self_test` and `registry-docs` among the latter, and the
+ctest 187/187 in a serial build (147 e2e + 39 unit, `self_test` and `registry-docs` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 21 more `mpi-*` cases, 206 in all (the 21 `mpi-*` pass). The e2e entries are 85 solver cases, two further
-oracles on `khrt-e2e`'s run, the twelve two-sweep gates and the forty-six setup refusals; the unit entries are 34
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 21 more `mpi-*` cases, 208 in all (the 21 `mpi-*` pass). The e2e entries are 85 solver cases, two further
+oracles on `khrt-e2e`'s run, the twelve two-sweep gates and the forty-eight setup refusals; the unit entries are 34
 compiled unit tests, the property-table reader on three fixtures, `self_test` and `registry-docs`. Evaporation with
 ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,
 `evap-breakup-box`, `d2law-brk-dormant`, `rd-evap-frozen`, `tab-evap-frozen`, `etab-evap-frozen`, `khrt-evap-frozen`,
