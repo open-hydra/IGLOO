@@ -31,7 +31,7 @@ program test_slot_order
     propFlags = .false.
     !> distinct values, one per property
     p%cp = 1.0_R8;  p%rho = 2.0_R8;  p%m = 3.0_R8;  p%d = 4.0_R8;  p%mdot = 5.0_R8
-    p%sigma = 6.0_R8;  p%mup = 7.0_R8;  p%psat = 8.0_R8
+    p%sigma = 6.0_R8;  p%mup = 7.0_R8
     p%Mv = 101._R8;  p%Lv = 102._R8;  p%cpv = 103._R8;  p%Le = 104._R8;  p%Yinf = 105._R8
     p%LvMvOverRu = 106._R8;  p%invTboil = 107._R8;  p%alphaE = 108._R8;  p%kLiq = 109._R8
     p%muLiq = 110._R8

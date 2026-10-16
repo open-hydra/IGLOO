@@ -112,7 +112,7 @@ contains
         p%cp = cp_l;  p%rho = rho_l;  p%d = dp;  p%m = m
         p%sigma = sigma;  p%mup = mu_l
         p%Mv = Mv;  p%Lv = Lv;  p%cpv = cpv;  p%Le = 1._R8;  p%Yinf = yinf
-        p%LvMvOverRu = Lv*Mv/Ru;  p%invTboil = 1._R8/Tboil;  p%psat = 1.0e4_R8;  p%alphaE = 1._R8
+        p%LvMvOverRu = Lv*Mv/Ru;  p%invTboil = 1._R8/Tboil;  p%alphaE = 1._R8
         allocate(aux(nauxvar), auxst(max(1,nauxstate)))
         auxst = 0._R8
         call packAuxVars(p, nauxvar, aux)

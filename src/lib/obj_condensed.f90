@@ -48,7 +48,6 @@ module IGLOO_data_phases
     !> Composable phase-change axes
     integer  :: liqSelect=0, intfSelect=0, boilSelect=0, combSelect=0, solidSelect=0
     logical  :: psatVariable=.false.
-    real(R8) :: pSat       = 0._R8
     real(R8) :: Mv         = 0._R8
     real(R8) :: Lv         = 0._R8
     real(R8) :: Tboil      = 0._R8
@@ -95,7 +94,6 @@ module IGLOO_data_phases
     !> Composable phase-change axes
     integer  :: liqSelect=0, intfSelect=0, boilSelect=0, combSelect=0, solidSelect=0
     logical  :: psatVariable=.false.
-    real(R8) :: pSat       = 0._R8
     real(R8) :: Mv         = 0._R8
     real(R8) :: Lv         = 0._R8
     real(R8) :: Tboil      = 0._R8
@@ -189,7 +187,6 @@ contains
         gr%Yinf         = self%Yinf
         gr%LvMvOverRu   = self%LvMvOverRu
         gr%invTboil     = self%invTboil
-        if (.not.self%psatVariable) gr%psat = self%psat
         gr%alphaE = self%alphaE; gr%kLiq = self%kLiq; gr%muLiq = self%muLiq
       endif
       !> Composable axes + metal properties
@@ -341,7 +338,6 @@ contains
       part%evapSelect = self%evapSelect
       if (self%evapSelect > 0) then
         part%varPsat = self%psatVariable
-        if (.not.self%psatVariable) part%psat = self%psat
         part%Mv           = self%Mv
         part%Lv           = self%Lv
         part%Tboil        = self%Tboil

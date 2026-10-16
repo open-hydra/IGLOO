@@ -25,7 +25,7 @@ contains
                                      check_table_nodes, check_table_columns, validate_psat_column, &
                                      table_reason, psat_reason
     use IGLOO_IO_INI,          only: ini_Mv, ini_Lv, ini_Tboil, ini_cpv, ini_Le, ini_Yinf, &
-                                        ini_sigma, ini_mu, ini_psat, &
+                                        ini_sigma, ini_mu, &
                                         set_material_defaults, apply_material_key, finalize_material_models
     use Lib_ORION_data
     use Lib_Tecplot
@@ -253,7 +253,6 @@ contains
       !> evaporation properties
       if (phaseChange) then
         !> constants from [IGLOO-Properties]
-        if (allocated(ini_psat)) material(i)%psat = ini_psat(i)
         if (allocated(ini_Mv)) then;    material(i)%Mv = ini_Mv(i)
         else; error stop '[ERROR] Evaporation requires Mv. Provide in [IGLOO-Properties]'
         endif

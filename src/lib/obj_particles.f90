@@ -101,7 +101,6 @@ module IGLOO_particles
     real(R8)     :: Yinf       = 0._R8
     real(R8)     :: LvMvOverRu = 0._R8
     real(R8)     :: invTboil   = 0._R8
-    real(R8)     :: psat       = 0._R8
     !> Optional per-material properties; each is read only by the model that needs it.
     real(R8)     :: alphaE     = 1._R8  !> LK accommodation coefficient
     real(R8)     :: kLiq       = 0._R8  !> liquid thermal conductivity [W/m/K] (reserved for P2T)

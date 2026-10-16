@@ -10,7 +10,7 @@ module Lib_RHS
   public  :: rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, rhsAlCombustion
   public  :: rhsSolidification
   public  :: ind_d, ind_rho, ind_sig, ind_mup
-  public  :: ind_ps, ind_Mv, ind_Lv, ind_Cv
+  public  :: ind_Mv, ind_Lv, ind_Cv
   public  :: ind_Le, ind_Yi, ind_e1, ind_e2, ind_cp, ind_m
   public  :: ind_sxi, ind_sb1, ind_sb2, ind_sph
   public  :: ind_evd, ind_evn, ind_evm0, ind_ev1, ind_ev2
@@ -37,7 +37,7 @@ module Lib_RHS
   !> AuxVars indices (set by computeNaux, 0 = absent)
   integer :: ind_cp  = 0, ind_m  = 0, ind_d   = 0, ind_rho = 0
   integer :: ind_sig = 0, ind_mup = 0
-  integer :: ind_ps  = 0, ind_Mv  = 0, ind_Lv = 0, ind_Cv = 0
+  integer :: ind_Mv  = 0, ind_Lv = 0, ind_Cv = 0
   integer :: ind_Le  = 0, ind_Yi  = 0, ind_e1 = 0, ind_e2  = 0
   integer :: ind_e3  = 0, ind_e4  = 0, ind_e5 = 0  !> alpha_e (LK interface); k_liq / mu_liq reserved for P2T
   integer :: ind_mb  = 0                            !> metal-block start (combustion), 0 = absent
@@ -143,9 +143,6 @@ contains
 
     !> evaporation: ind_Mv..ind_e5 contiguous, ordered as IGLOO_Lib_Evaporation ep(1:10)
     if (evapSelect > 0) then
-      if (.not.propFlags(5)) then
-        nEvap = nEvap + 1; ind_ps = ind; ind = ind + 1    !> psat (const)
-      endif
       nEvap = nEvap + 10
       ind_Mv = ind; ind = ind + 1                         !> Mv       → ep(1)
       ind_Lv = ind; ind = ind + 1                         !> Lv       → ep(2)
@@ -251,7 +248,7 @@ contains
     !> Reset all ind_* to 0 (sentinel: 0 = not in aux)
     ind_cp=0;  ind_m=0;   ind_d=0;  ind_rho=0
     ind_sig=0; ind_mup=0
-    ind_ps=0;  ind_Mv=0;  ind_Lv=0; ind_Cv=0; ind_Le=0; ind_Yi=0
+    ind_Mv=0;  ind_Lv=0; ind_Cv=0; ind_Le=0; ind_Yi=0
     ind_e1=0;  ind_e2=0;  ind_e3=0; ind_e4=0; ind_e5=0
     ind_mb=0
     !> Compute layouts
@@ -283,7 +280,6 @@ contains
     if (ind_sig > 0) aux(ind_sig) = particle%sigma
     if (ind_mup > 0) aux(ind_mup) = particle%mup
     !> evaporation (contiguous ep(10) slice: Mv,Lv,cpv,Le,Yinf,LvMvOverRu,invTboil,alphaE,kLiq,muLiq)
-    if (ind_ps > 0) aux(ind_ps) = particle%psat
     if (ind_Mv > 0) then
       aux(ind_Mv) = particle%Mv
       aux(ind_Lv) = particle%Lv
