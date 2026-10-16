@@ -170,12 +170,6 @@ contains
         eulblock(ib,v)%Ny = oBlk%Nj
         eulblock(ib,v)%Nz = oBlk%Nk
       enddo
-      if (srcSwitch) call srcblock(ib)%pass_geometry(blk)
-      if (eulSwitch) then
-        do v = 1, ntot
-          call eulblock(ib,v)%pass_geometry(blk)
-        enddo
-      endif
 
       !> Node bounding boxes for the searchInBlock early-out.
       call blk%computeBBox

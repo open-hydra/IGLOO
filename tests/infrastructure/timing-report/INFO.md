@@ -28,8 +28,8 @@ Closed form (gas-order 2, a 3D block of Ni x Nj x Nk cells, N^3 = Ni Nj Nk, (N+k
   the ghost-ringed dual mesh);
 - accumulators: (nm + 4) (N+1)^3 (mass per material, momentum, energy on the dual mesh);
 - geometry: geometry block 4 (N+1)^3 + 16 N^3 (nodes, dual weights; centres, edge lengths, minimum
-  edge, octant volumes, cell volumes), gas block 3 (N+2)^3 + (N+1)^3 (dual nodes, dual volumes),
-  and the source block's own copy 3 (N+1)^3 + 7 N^3 (nodes, centres, edge lengths, minimum edge).
+  edge, octant volumes, cell volumes) and gas block 3 (N+2)^3 + (N+1)^3 (dual nodes, dual volumes);
+  the source block holds no geometry.
 
 ## RED
 A binary without the report prints no `[IGLOO-timing]` line (FAIL on the first check). With the

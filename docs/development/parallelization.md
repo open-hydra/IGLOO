@@ -340,23 +340,22 @@ ghost-ringed arrays is 1); `nsc` gas species, `nm` materials, `nfam` families (�
 | accumulators at the solve shape: mass per material, momentum, energy; per family density, number, velocity, temperature | `[(nm + 4) S + 6 nfam E] (N+1)³` | `[(nm + 4) S + 6 nfam E] N³` |
 | geometry block: nodes, centres, edge lengths, minimum edge, cell volumes; octant volumes and dual weights | `4 (N+1)³ + 16 N³` | `3 (N+1)³ + 8 N³` |
 | gas block: dual nodes, dual volumes | `3 (N+2)³ + (N+1)³` | `3 (N+1)³` |
-| copies of nodes, centres, edge lengths, minimum edge in the source block and in each family's Eulerian block | `(S + nfam E) [3 (N+1)³ + 7 N³]` | the same |
 
 During `finalize` at gas-order 2 the cell-shaped results are built beside the dual-shaped
 accumulators, `[(nm + 4) S + 6 nfam E] N³` more, and the mollifier adds two (source) or one
 (Eulerian) cell-sized scratch arrays. `[IGLOO-General] timing = on` prints the allocated totals
-of the first three groups as the `sizes` line, gas / geometry (the last three rows) /
+of the first three groups as the `sizes` line, gas / geometry (the last two rows) /
 accumulators: the `timing-report` gate checks that line against this table.
 
 Worked example, `standard/vie-plait` (one block of 120 × 50 × 5 cells, gas-order 2, `nsc = 1`,
 `nm = 1`, source output only): `N³ = 30000`, `(N+1)³ = 37026`, `(N+2)³ = 44408`; gas
 `10 × 44408 = 444080`; accumulators `5 × 37026 = 185130`; geometry `(4 × 37026 + 16 × 30000) +
-(3 × 44408 + 37026) + (3 × 37026 + 7 × 30000) = 1119432`; together 1748642 values, 13.3 MiB per
-rank, which is what the run prints. At gas-order 1 the same totals hold on `infrastructure/coupled-body`
-(60 × 5 × 5, source and Eulerian output, one family): gas 15000, geometry 59352, accumulators
+(3 × 44408 + 37026) = 798354`; together 1427564 values, 10.9 MiB per rank, which is what the run
+prints. At gas-order 1 the same totals hold on `infrastructure/coupled-body`
+(60 × 5 × 5, source and Eulerian output, one family): gas 15000, geometry 25176, accumulators
 16500. On a 200³ block with one species, material and family and both outputs (gas-order 2) the
-table gives about 82 M gas, 89 M accumulator and 354 M geometry values — 3.9 GiB per rank,
-two thirds of it geometry, of which the per-family copies are 161 M.
+table gives about 82 M gas, 89 M accumulator and 193 M geometry values — 2.7 GiB per rank,
+about half of it geometry.
 
 ## Known limits
 

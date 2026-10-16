@@ -11,8 +11,8 @@ that do not come from the timers.
   4. the rank imbalance max/mean is >= 1 (exactly 1 at one rank);
   5. the allocated sizes equal the closed form of the fixture's mesh (gas-order 2, 3D, source
      output only): gas (nsc+9)(Ni+2)(Nj+2)(Nk+2); accumulators (nm+4)(Ni+1)(Nj+1)(Nk+1);
-     geometry = geo block 4(N+1)^3 + 16 N^3, gas block 3(N+2)^3 + (N+1)^3, source block copy
-     3(N+1)^3 + 7 N^3 (N^3 = Ni Nj Nk, (N+k)^3 = (Ni+k)(Nj+k)(Nk+k)).
+     geometry = geo block 4(N+1)^3 + 16 N^3, gas block 3(N+2)^3 + (N+1)^3; the source block
+     holds no geometry (N^3 = Ni Nj Nk, (N+k)^3 = (Ni+k)(Nj+k)(Nk+k)).
 
 PASS stdout carries no times (they vary run to run).
 """
@@ -127,7 +127,7 @@ def main():
             p2 = (ni + 2) * (nj + 2) * (nk + 2)
             gas += (nsc + 9) * p2
             acc += (nm + 4) * p1
-            geo += (4 * p1 + 16 * n3) + (3 * p2 + p1) + (3 * p1 + 7 * n3)
+            geo += (4 * p1 + 16 * n3) + (3 * p2 + p1)
         got = tuple(int(sz[0].group(k)) for k in (1, 2, 3))
         if got != (gas, geo, acc):
             fail(f'sizes gas/geometry/accumulators {got}, closed form {(gas, geo, acc)}')
