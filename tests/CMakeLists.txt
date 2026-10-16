@@ -538,6 +538,19 @@ igloo_e2e_case(pilch-erdman-e2e breakup/pilch-erdman-e2e "e2e;breakup;val;pe")
 # first-breakup time to sub-percent). Found + gated the A18 fix (event-breakup path was
 # dead; now live: TAB breaks on time, resized drops persist). GREEN.
 igloo_e2e_case(tab-e2e breakup/tab-e2e "e2e;breakup;val;tab")
+# vv-order: the tab-e2e and burn-box figures (verify.py) are the same bytes whatever order an OpenMP run gives the
+# records of each zone of their .dat files; it reads those cases' fresh OUTPUT/, which both start by removing.
+set_tests_properties(tab-e2e PROPERTIES FIXTURES_SETUP vv_order_tab RESOURCE_LOCK tab_e2e_output)
+set_tests_properties(burn-box PROPERTIES FIXTURES_SETUP vv_order_burn RESOURCE_LOCK burn_box_output)
+add_test(NAME vv-order COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/vv_order_check.py
+    ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/vv-order breakup/tab-e2e combustion/burn-box)
+set_tests_properties(vv-order PROPERTIES
+    LABELS "e2e;infrastructure;vv"
+    FIXTURES_REQUIRED "vv_order_tab;vv_order_burn"
+    RESOURCE_LOCK "tab_e2e_output;burn_box_output"
+    SKIP_RETURN_CODE 77
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    TIMEOUT 300)
 # B-VAL-5 (2026-07-22): ETAB vs Tanner 97/98 — shared TAB oscillator (onset + t_bu) plus
 # the deterministic exponential-cascade product size across the bag/stripping branches.
 igloo_e2e_case(etab-e2e breakup/etab-e2e "e2e;breakup;val;etab")

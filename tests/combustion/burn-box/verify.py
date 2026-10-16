@@ -50,8 +50,8 @@ def best_particle(path):
                 continue
             parts.setdefault(pid, []).append((x, T, d))
     best = None
-    for pid, raw in parts.items():
-        raw.sort()
+    for pid in sorted(parts):                  # ID order: a tie in sampling goes to the lowest ID
+        raw = sorted(parts[pid])
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:
