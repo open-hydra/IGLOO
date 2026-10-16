@@ -2,7 +2,7 @@
 !> row, node and column checks of INPUT/<prefix>properties.dat (the same checks as ICE's reader).
 module IGLOO_Lib_Properties
   use, intrinsic :: iso_fortran_env, only: R8 => real64
-  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
   implicit none
   private :: table_h_offset
   integer :: Tmin, Tmax    ! Extreme temperatures in tables
@@ -28,7 +28,7 @@ module IGLOO_Lib_Properties
 
 contains
 
-  !> Linear between the nodes, the end segments continued outside (enthalpy, sigma, mu).
+  !> Linear between the nodes, the end segments continued outside (enthalpy, sigma, mu); NaN at a non-finite T.
   pure function lookupTab(tab, T) result(val)
     implicit none
     real(8), intent(in) :: tab(Tmin:Tmax), T
@@ -36,6 +36,10 @@ contains
     real(8) :: Vij, Viij, Tdiff
     integer :: T_i
 
+    if (.not. ieee_is_finite(T)) then
+      val = ieee_value(val, ieee_quiet_nan)
+      return
+    endif
     !> Index clamped to the end segments.
     T_i   = min(max(idint(T), Tmin), Tmax-1)
     Tdiff = T - T_i
@@ -73,18 +77,6 @@ contains
     endif
 
   end function comp_TfromTab
-
-  !> Forward difference of a property table at T.
-  pure function comp_derivativeTab(tab,T) result(dprop)
-    implicit none
-    real(8), intent(in) :: T, tab(Tmin:Tmax)
-    real(8) :: dprop
-    integer :: Tprev
-
-    Tprev = idint(T)
-    dprop = tab(Tprev+1)-tab(Tprev)
-
-  end function comp_derivativeTab
 
   !> Linear between the nodes, the end value outside (density, psat); a NaN temperature returns NaN.
   pure function tableValue(tab, lo, hi, T) result(v)

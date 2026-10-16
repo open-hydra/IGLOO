@@ -11,6 +11,7 @@ program test_properties_reader
     !                 PR4 validate_psat_column, PR5 check_table_nodes, PR8 classify_table_tokens,
     !                 PR11 check_table_columns, PR12 tableValue, PR13 scan_rows (scan-*.dat)
     !                 PR14 comp_TfromTab: the inverse of lookupTab on tables from 250 K, 300 K and 1 K
+    !                 PR15 lookupTab at a non-finite temperature: NaN, and no invalid flag
     !   two-material  PR9 nm-: zone A tabulated, zone B all zero (Clausius-Clapeyron)
     !   atlas-water   PR10 atlas-: the table ATLAS GPB writes for water with psat-vapour = H2O
     !
@@ -27,7 +28,9 @@ program test_properties_reader
                                     TAB_H_CP_MISMATCH, TAB_DATUM_MISMATCH, TAB_NEGATIVE_T, &
                                     PSAT_OK, PSAT_ABSENT, PSAT_NONFINITE, PSAT_NEGATIVE, PSAT_NONMONOTONE, &
                                     PSAT_CONSTANT, PSAT_TBOIL_RANGE, PSAT_TBOIL_MISMATCH
-    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_nan
+    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_nan, ieee_positive_inf, &
+                                             ieee_negative_inf
+    use, intrinsic :: ieee_exceptions, only: ieee_set_flag, ieee_get_flag, ieee_invalid
     use IGLOO_variables,      only: llen, nm
     implicit none
 
@@ -48,6 +51,7 @@ program test_properties_reader
         call hexadecane_legs(nbad)
         call function_legs(nbad)
         call inversion_legs(nbad)
+        call nonfinite_legs(nbad)
     case ('two-material')
         call two_material_legs(nbad)
     case ('atlas-water')
@@ -394,6 +398,29 @@ contains
 
         Tmin = lo0; Tmax = hi0
     end subroutine inversion_legs
+
+
+    !> lookupTab on the hexadecane enthalpy at T = +Inf, -Inf and NaN: NaN, and the NaN lookup raises no invalid flag.
+    subroutine nonfinite_legs(nbad)
+        integer, intent(inout) :: nbad
+        type(obj_material), allocatable :: mat(:)
+        character(len=32) :: prefix
+        real(R8), volatile :: Tin, v
+        logical :: flag
+
+        prefix = 'legacy-'
+        call read_cdp_properties(prefix, mat)
+        call check(ieee_is_nan(lookupTab(mat(1)%hTab, ieee_value(1._R8, ieee_positive_inf))), &
+                   'PR15 legacy-: h at T = +Inf is NaN', nbad)
+        call check(ieee_is_nan(lookupTab(mat(1)%hTab, ieee_value(1._R8, ieee_negative_inf))), &
+                   'PR15 legacy-: h at T = -Inf is NaN', nbad)
+        Tin = ieee_value(1._R8, ieee_quiet_nan)
+        call ieee_set_flag(ieee_invalid, .false.)
+        v = lookupTab(mat(1)%hTab, Tin)
+        call check(ieee_is_nan(v),                                      'PR15 legacy-: h at T = NaN is NaN', nbad)
+        call ieee_get_flag(ieee_invalid, flag)
+        call check(.not. flag,                                          'PR15 legacy-: the NaN lookup raises no invalid flag', nbad)
+    end subroutine nonfinite_legs
 
 
     !> lookupTab then comp_TfromTab returns every T within 4 eps (|h|/s + |T|), s the table's smallest slope.

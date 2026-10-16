@@ -40,6 +40,7 @@ ICE's reader's, statement for statement, so one table is accepted or refused by 
 | PR12 | `tableValue` | linear between the nodes; the end values outside; `tab(Tmax)` at `Tmax`; NaN for a NaN temperature |
 | PR13 | `scan_rows` | `scan-short.dat` (row 3 short: bad line 7), `scan-trail.dat` (text after the rows), `scan-count.dat` (`I=4` over 3 rows), `nm-properties.dat` (clean) |
 | PR14 | `comp_TfromTab` | the inverse of `lookupTab` on a 250..260 K table (`cp = 1000 + 10 (T − 250)`, `h` its trapezoid sum): every node exactly; between the nodes, below `Tmin` (the first segment extended) and above `Tmax` (the last one) within `4 ε (|h|/s + |T|)`; ICE's energy rule on the same table (`e = h − hOff`, the line from `e(0) = 0` below `Tmin`, the last segment above `Tmax`) gives the same `h` and `T`; a two-row 300..301 K table; a 1..5 K table below 1 K; NaN in, NaN out |
+| PR15 | `lookupTab` | NaN at `T` = +Inf, −Inf and NaN on `legacy-`'s enthalpy; the IEEE invalid flag, cleared before the NaN lookup, still clear after it (a classification raises no flag) |
 
 **RED first.** Against the reader that read three columns by position (the test compiles against it
 for PR1–PR10): `hexadecane` 10 assertions fail — `legacy-`'s constant cp read as varying (its
@@ -52,7 +53,10 @@ offset), both enthalpy names accepted (PR8), `tab(hi-1)` as the end value (PR12 
 `Tmax`), the relative-datum rule off (PR11), the row check off (PR13 short row). PR14 against the inversion that
 searched the table from index 1: 8 of its 9 legs fail (NaN in, NaN out holds on any code); for the tables that
 start above 1 K it returns what precedes the table in memory (7 to 185 K in the measured run), so the failing
-set can vary between runs, and below 1 K it reads `h(0)` (0.4975 K for 0.5 K).
+set can vary between runs, and below 1 K it reads `h(0)` (0.4975 K for 0.5 K). PR15 against the lookup
+that indexes by `idint(T)` with no finite check: 3 of its 4 legs fail — `idint` of ±Inf is −2147483648,
+clamped to `Tmin`, so ±Inf returns ±Inf, and the NaN lookup raises the invalid flag; NaN in, NaN out holds
+on any code.
 
 `abs-` keeps a constant cp on purpose: the datum `hOff` and the relative-header check exist only for a
 constant-cp table, so a varying cp would let PR7 pass on any reader.
