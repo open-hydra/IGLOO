@@ -92,6 +92,13 @@ i.e. it discards most of the deposit exactly where an injected spray puts it. No
 assembled weight is used rather than the clipped physical dual volume: a conservation
 identity must not be routed through an approximate geometry.
 
+**Chimera overlaps.** A parcel deposits into the block it is tracked in. On a mesh with chimera
+(102) faces the gas solver keeps a copy of the overlap in each block, so after the reduction (and
+before the smoothing) every cell adds the owner-only deposits of the cells of the other blocks whose
+centroids it contains (a centroid on its chimera face excepted): $S'(c') = S(c') + \sum_{c \to c'} S(c)$, amounts as they are. The mirrored
+part of block $b$, $M(b) = \sum_{c'} \big(S'(c') - S(c')\big)$, is reported per sweep, so the once-counted
+total is $\sum_b \sum_c S'(c) - \sum_b M(b)$, exactly (see [Boundary conditions](../user/boundary-conditions.md#chimera-faces-code-102)).
+
 ---
 
 ## Euler fields
@@ -133,7 +140,9 @@ All accumulations are `!$OMP ATOMIC UPDATE`.
 ### Finalization
 
 After all particles are integrated, every block's fields are reduced to geometry cells
-(`obj_eulerblock%reduce`), smoothed (see [Field mollification](mollification.md)), and
+(`obj_eulerblock%reduce`), on a mesh with chimera faces mirrored into every block that covers them
+(the density numerators $q$ of each cell $c$ added to the covering cell $c'$ as
+$q(c)\,V(c)/V(c')$, which preserves the amount), smoothed (see [Field mollification](mollification.md)), and
 `obj_eulerblock%normalize` divides the velocity and temperature numerators by `density`
 (Favre-type weighted average):
 

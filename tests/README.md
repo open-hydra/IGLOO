@@ -114,7 +114,8 @@ ODE breakup (model 4), breakup events in the mass state and the KH-shed source a
 families, and a parcel's crossing of a block interface, are gated by `two-fam-bc-2blk`; the field mollifier
 across a block interface by `two-fam-bc-2blk-mollify` and `test_mollify_blocks`, across a periodic pair by `periodic-y`,
 `periodic-2d`, `test_mollify_blocks` and `refuse-periodic-not-mutual`; chimera faces by `chimera-2blk`,
-`chimera-2blk-rim` and `test_bc_families`; the gas ghost nodes of connected faces by
+`chimera-2blk-rim` and `test_bc_families`, the deposits of a chimera overlap mirrored into every covering block by
+`chimera-2blk` and `test_mollify_blocks`; the gas ghost nodes of connected faces by
 `two-fam-bc-2blk-stretch-ord2`, `chimera-2blk-shift-ord2` and `test_ghost_bc`. The enthalpy state of a varying-cp material, on
 tables that start above 1 K, is gated by `test_properties_reader` (PR14), `temp-relax-varcp` and `varcp-tmin`; a density
 that varies with temperature by `temp-relax-varrho` (the diameter at constant mass) and `tab-varrho`,

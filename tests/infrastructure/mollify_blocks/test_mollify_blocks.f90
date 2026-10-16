@@ -22,6 +22,21 @@ program test_mollify_blocks
     !        wrapped (zero flux in i and k), to 1e-13 of the field scale: one block in 3D and in 2D,
     !        and the 3D grid cut along x into two blocks, each with its own pair (101 and 201 links
     !        together); Sum(q V) to 1e-13 of Sum(|q| V)
+    !   U-T  the overlap map's tie rule at a chimera face: two blocks of a regular grid overlapping
+    !        along x, block 2 shifted by half a cell, so that a column of each block has its centroids
+    !        on the other block's chimera (102) face: neither is covered by the other block (coverage
+    !        count 1), while centroids on the other block's interior faces are (inclusive); moved inside
+    !        by a quarter of the tie tolerance tau = max(1e-12 h, 64 eps L) of the cell holding them
+    !        they are still on the face, by 2 tau they are covered
+    !   U-M  (i) the chimera overlap mirror (IGLOO_overlap): one 3D grid of warped cells cut into two
+    !        blocks that overlap by four columns (the overlap map built by buildOverlapMap from the
+    !        geometry), random owner-only source and eulerian fields (each overlap cell's deposit in
+    !        the block that owns it, 0 in the other); after mirrorSource each block's source equals
+    !        the grid's on its range bit for bit, after mirrorEuler its eulerian densities to 1e-14 of
+    !        the field scale (the two copies of a warped cell can differ in volume by an ULP, and the
+    !        amount moves as q V_source/V_target), the coverage count is 2 in the overlap and 1
+    !        elsewhere, the mirrored totals equal the other copy's owner deposits and their sum equals
+    !        Sum (n - 1) S over the owner-only fields, to 1e-14 of Sum |S|
     !
     use, intrinsic :: iso_fortran_env, only: real64
     use IGLOO_Lib_Mollify, only: binomial_smooth, mollifyBlocks, cellLink, blockField
@@ -49,6 +64,8 @@ program test_mollify_blocks
     call periodicCase('3D periodic y',     10,  7,  6, [integer::])
     call periodicCase('2D periodic y',     12,  9,  1, [integer::])
     call periodicCase('3D periodic y, x',  12,  7,  6, [6])
+    call tieCase()
+    call mirrorCase()
 
     if (nfail == 0) then
         print '(a)', ''
@@ -245,6 +262,205 @@ contains
             enddo
         enddo
     end subroutine periodicSmooth
+
+    !> U-T: block 1 = columns 1..I1 of a regular grid of edge H, block 2 = NX2 columns from x = (I0 - 1/2) H
+    !  - delta; face 2 of block 1 and face 1 of block 2 are chimera faces. delta = 0: block 1's column I0 and
+    !  block 2's column I1 - I0 + 1 have their centroids on the other block's chimera face.
+    subroutine tieCase()
+        use IGLOO_data_block, only: obj_block
+        use IGLOO_overlap,    only: overlapMap, buildOverlapMap
+        use IGLOO_variables,  only: mesh2D
+        integer, parameter :: NY = 3, NZ = 2, I0 = 5, I1 = 8, NX2 = 6
+        real(real64), parameter :: H = 1.0e-2_real64
+        type(obj_block), allocatable :: geo(:)
+        type(overlapMap) :: ovl
+        integer, allocatable :: npair(:,:)
+        real(real64) :: tau, delta, x0(2), v(3,8)
+        integer :: icase, b, i, j, k, f, nfr, nexp, nbad
+        character(len=60) :: lab
+
+        mesh2D = .false.
+        !> the tie tolerance of the two cells that hold the fringe centroids (block 2's first, block 1's last)
+        tau = 0._real64
+        do b = 1, 2
+            v(1, :) = merge(I1 - 1, I0 - 1, b == 1)*H + H*[0, 0, 0, 0, 1, 1, 1, 1]
+            v(2, :) = H*[0, 0, 1, 1, 0, 0, 1, 1]
+            v(3, :) = H*[0, 1, 1, 0, 0, 1, 1, 0]
+            if (b == 2) v(1, :) = v(1, :) + 0.5_real64*H
+            tau = max(tau, max(1.e-12_real64*norm2(v(:,7) - v(:,1)), 64._real64*epsilon(1._real64)*maxval(abs(v))))
+        enddo
+        do icase = 1, 3
+            select case (icase)
+            case (1); delta = 0._real64;          lab = 'on the face'
+            case (2); delta = 0.25_real64*tau;    lab = 'inside by tau/4 (the tie band)'
+            case (3); delta = 2._real64*tau;      lab = 'inside by 2 tau'
+            end select
+            x0 = [0._real64, (I0 - 1 + 0.5_real64)*H - delta]
+            if (allocated(geo)) deallocate(geo)
+            allocate(geo(2))
+            do b = 1, 2
+                geo(b)%Nx = merge(I1, NX2, b == 1); geo(b)%Ny = NY; geo(b)%Nz = NZ
+                allocate(geo(b)%node(3, 0:geo(b)%Nx, 0:NY, 0:NZ), geo(b)%center(3, geo(b)%Nx, NY, NZ))
+                do k = 0, NZ; do j = 0, NY; do i = 0, geo(b)%Nx
+                    geo(b)%node(:, i, j, k) = [x0(b) + i*H, j*H, k*H]
+                enddo; enddo; enddo
+                call geo(b)%compute_geometry
+                call geo(b)%precomputeMetric
+                call geo(b)%computeBBox
+                do f = 1, 6
+                    geo(b)%face(f)%cell(:,:)%bcdef = 400
+                enddo
+            enddo
+            geo(1)%face(2)%cell(:,:)%bcdef = 102
+            geo(2)%face(1)%cell(:,:)%bcdef = 102
+            call buildOverlapMap(geo, ovl, npair)
+            !> fringe columns: block 1's column I0, block 2's column I1 - I0 + 1
+            nfr = 0
+            do k = 1, NZ; do j = 1, NY
+                nfr = nfr + ovl%blk(1)%n(I0 + (j-1)*I1 + (k-1)*I1*NY) - 1
+                nfr = nfr + ovl%blk(2)%n(I1 - I0 + 1 + (j-1)*NX2 + (k-1)*NX2*NY) - 1
+            enddo; enddo
+            nexp = merge(2*NY*NZ, 0, icase == 3)
+            nbad = abs(nfr - nexp) + count(npair /= reshape([0, (I1 - I0 + merge(1, 0, icase == 3))*NY*NZ, &
+                                                              (I1 - I0 + merge(1, 0, icase == 3))*NY*NZ, 0], [2, 2]))
+            call verdict('U-T fringe centroids '//trim(lab)//': '//trim(merge('covered    ', 'not covered', icase == 3))// &
+                         ' (map pairs '//itoaT(npair(2, 1))//' and '//itoaT(npair(1, 2))//', fringe coverage '// &
+                         itoaT(nfr)//' of '//itoaT(2*NY*NZ)//')', nbad == 0, nbad)
+        enddo
+    end subroutine tieCase
+
+    function itoaT(i) result(r)
+        integer, intent(in) :: i
+        character(:), allocatable :: r
+        character(16) :: buf
+        write(buf, '(i0)') i
+        r = trim(buf)
+    end function itoaT
+
+    !> U-M (i): one grid of NX x NY x NZ warped cells, block 1 = columns 1..I1, block 2 = I0..NX; in the
+    !  overlap block 1 owns the columns up to ISPLIT and block 2 the rest.
+    subroutine mirrorCase()
+        use IGLOO_data_block, only: obj_block, obj_sourceblock, obj_eulerblock
+        use IGLOO_overlap,    only: overlapMap, mirroredTotals, buildOverlapMap, mirrorSource, mirrorEuler
+        use IGLOO_variables,  only: mesh2D
+        integer, parameter :: NX = 12, NY = 5, NZ = 4, NMAT = 2, I0 = 5, I1 = 8, ISPLIT = 6
+        real(real64), parameter :: H = 1.0e-2_real64
+        type(obj_block)       :: geo(2)
+        type(obj_sourceblock) :: src(2)
+        type(obj_eulerblock)  :: eul(2)
+        type(overlapMap)      :: ovl
+        type(mirroredTotals), allocatable :: mir(:)
+        integer, allocatable  :: npair(:,:)
+        real(real64) :: node(3, 0:NX, 0:NY, 0:NZ)
+        real(real64) :: sm(NMAT, NX, NY, NZ), so(3, NX, NY, NZ), se(NX, NY, NZ)
+        real(real64) :: ed(NX, NY, NZ), en(NX, NY, NZ), ev(3, NX, NY, NZ), et(NX, NY, NZ)
+        real(real64) :: expM(NMAT+4, 2), gotM(NMAT+4, 2), sumNS(NMAT+4), l1(NMAT+4), cellS(NMAT+4), werr, vmis
+        integer :: lo(2), hi(2), b, i, j, k, g, c, nsrc, neul, ncov, nm4
+        logical :: own
+
+        mesh2D = .false.
+        nm4 = NMAT + 4
+        do k = 0, NZ; do j = 0, NY; do i = 0, NX
+            node(:, i, j, k) = [i, j, k]*H
+            if (i > 0 .and. i < NX .and. j > 0 .and. j < NY .and. k > 0 .and. k < NZ) &
+                node(:, i, j, k) = node(:, i, j, k) + 0.15_real64*H*[2*uniform() - 1, 2*uniform() - 1, 2*uniform() - 1]
+        enddo; enddo; enddo
+        do k = 1, NZ; do j = 1, NY; do i = 1, NX
+            sm(:, i, j, k) = [2*uniform() - 1, 2*uniform() - 1]
+            so(:, i, j, k) = [2*uniform() - 1, 2*uniform() - 1, 2*uniform() - 1]
+            se(i, j, k)    = 2*uniform() - 1
+            ed(i, j, k)    = 0.5_real64 + uniform()
+            en(i, j, k)    = 0.5_real64 + uniform()
+            ev(:, i, j, k) = [2*uniform() - 1, 2*uniform() - 1, 2*uniform() - 1]
+            et(i, j, k)    = 0.5_real64 + uniform()
+        enddo; enddo; enddo
+
+        lo = [1, I0]; hi = [I1, NX]
+        do b = 1, 2
+            geo(b)%Nx = hi(b) - lo(b) + 1; geo(b)%Ny = NY; geo(b)%Nz = NZ
+            allocate(geo(b)%node(3, 0:geo(b)%Nx, 0:NY, 0:NZ), geo(b)%center(3, geo(b)%Nx, NY, NZ))
+            geo(b)%node = node(:, lo(b)-1:hi(b), :, :)
+            call geo(b)%compute_geometry
+            call geo(b)%precomputeMetric
+            call geo(b)%computeBBox
+            allocate(src(b)%sourceMass(NMAT, geo(b)%Nx, NY, NZ), src(b)%sourceMom(3, geo(b)%Nx, NY, NZ), &
+                     src(b)%sourceEn(geo(b)%Nx, NY, NZ))
+            allocate(eul(b)%density(geo(b)%Nx, NY, NZ), eul(b)%np(geo(b)%Nx, NY, NZ), &
+                     eul(b)%velocity(3, geo(b)%Nx, NY, NZ), eul(b)%temperature(geo(b)%Nx, NY, NZ))
+            do k = 1, NZ; do j = 1, NY; do i = 1, geo(b)%Nx
+                g = lo(b) + i - 1
+                own = g < I0 .or. g > I1 .or. (b == 1 .and. g <= ISPLIT) .or. (b == 2 .and. g > ISPLIT)
+                src(b)%sourceMass(:, i, j, k) = merge(sm(:, g, j, k), 0._real64, own)
+                src(b)%sourceMom(:, i, j, k)  = merge(so(:, g, j, k), 0._real64, own)
+                src(b)%sourceEn(i, j, k)      = merge(se(g, j, k), 0._real64, own)
+                eul(b)%density(i, j, k)       = merge(ed(g, j, k), 0._real64, own)
+                eul(b)%np(i, j, k)            = merge(en(g, j, k), 0._real64, own)
+                eul(b)%velocity(:, i, j, k)   = merge(ev(:, g, j, k), 0._real64, own)
+                eul(b)%temperature(i, j, k)   = merge(et(g, j, k), 0._real64, own)
+            enddo; enddo; enddo
+        enddo
+
+        call buildOverlapMap(geo, ovl, npair)
+        !> expected mirrored totals (the other block's owner deposits in this block's overlap columns, in
+        !  this block's cell order) and Sum (n - 1) S over the owner-only fields
+        expM = 0._real64; sumNS = 0._real64; l1 = 0._real64; ncov = 0
+        do b = 1, 2
+            do k = 1, NZ; do j = 1, NY; do i = 1, geo(b)%Nx
+                g = lo(b) + i - 1
+                c = i + (j-1)*geo(b)%Nx + (k-1)*geo(b)%Nx*NY
+                cellS = [src(b)%sourceMass(:, i, j, k), src(b)%sourceMom(:, i, j, k), src(b)%sourceEn(i, j, k)]
+                sumNS = sumNS + (ovl%blk(b)%n(c) - 1)*cellS
+                l1 = l1 + abs(cellS)
+                if (ovl%blk(b)%n(c) /= merge(2, 1, g >= I0 .and. g <= I1)) ncov = ncov + 1
+                if (g >= I0 .and. g <= I1 .and. (b == 1 .eqv. g > ISPLIT)) &
+                    expM(:, b) = expM(:, b) + [sm(:, g, j, k), so(:, g, j, k), se(g, j, k)]
+            enddo; enddo; enddo
+        enddo
+        call mirrorSource(src, ovl, mir)
+        call mirrorEuler(eul, geo, ovl)
+
+        nsrc = 0; neul = 0; werr = 0._real64; vmis = 0._real64
+        do b = 1, 2
+            gotM(:, b) = [mir(b)%mass, mir(b)%mom, mir(b)%en]
+            do k = 1, NZ; do j = 1, NY; do i = 1, geo(b)%Nx
+                g = lo(b) + i - 1
+                if (any(src(b)%sourceMass(:, i, j, k) /= sm(:, g, j, k)) .or. any(src(b)%sourceMom(:, i, j, k) /= so(:, g, j, k)) &
+                    .or. src(b)%sourceEn(i, j, k) /= se(g, j, k)) nsrc = nsrc + 1
+                if (eul(b)%density(i, j, k) /= ed(g, j, k) .or. eul(b)%np(i, j, k) /= en(g, j, k) .or. &
+                    any(eul(b)%velocity(:, i, j, k) /= ev(:, g, j, k)) .or. eul(b)%temperature(i, j, k) /= et(g, j, k)) &
+                    neul = neul + 1
+                werr = max(werr, abs(eul(b)%density(i, j, k) - ed(g, j, k))/maxval(abs(ed)), &
+                           abs(eul(b)%np(i, j, k) - en(g, j, k))/maxval(abs(en)), &
+                           maxval(abs(eul(b)%velocity(:, i, j, k) - ev(:, g, j, k)))/maxval(abs(ev)), &
+                           abs(eul(b)%temperature(i, j, k) - et(g, j, k))/maxval(abs(et)))
+                if (b == 2 .and. g <= I1) &
+                    vmis = max(vmis, abs(geo(2)%cellVol(i, j, k) - geo(1)%cellVol(g, j, k))/geo(1)%cellVol(g, j, k))
+            enddo; enddo; enddo
+        enddo
+        call verdict('U-M (i) source: every cell of both blocks equals the grid''s, bit for bit', nsrc == 0, nsrc)
+        print '(a,es9.2,a,i0,a,es9.2,a)', '  [info] U-M (i) eulerian: worst ', werr, ' of the field scale (', neul, &
+            ' cells not bit-identical; the two copies of a cell differ in volume by up to ', vmis, ')'
+        call verdict('U-M (i) eulerian: every cell of both blocks equals the grid''s to 1e-14 of the field scale', &
+                     werr <= 1.0e-14_real64, neul)
+        call verdict('U-M (i) coverage count: 2 in the overlap, 1 elsewhere; the map pairs 4 x 5 x 4 cells each way', &
+                     ncov == 0 .and. all(npair == reshape([0, 80, 80, 0], [2, 2])), ncov)
+        nsrc = count(abs(gotM - expM) > 1.0e-14_real64*spread(l1, 2, 2))
+        call verdict('U-M (i) mirrored totals: the other block''s owner deposits in the overlap', nsrc == 0, nsrc)
+        nsrc = count(abs(gotM(:, 1) + gotM(:, 2) - sumNS) > 1.0e-14_real64*l1)
+        call verdict('U-M (i) Sum of the mirrored totals = Sum (n - 1) S of the owner-only fields', nsrc == 0, nsrc)
+    end subroutine mirrorCase
+
+    subroutine verdict(lab, ok, nbad)
+        character(*), intent(in) :: lab
+        logical,      intent(in) :: ok
+        integer,      intent(in) :: nbad
+        if (ok) then
+            print '(a)', '  [ok]   '//lab
+        else
+            print '(a,i0,a)', '  [FAIL] '//lab//' (', nbad, ' off)'
+            nfail = nfail + 1
+        endif
+    end subroutine verdict
 
     ! ------------------------------------------------------------------ fixture
 

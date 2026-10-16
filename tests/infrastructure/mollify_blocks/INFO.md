@@ -1,4 +1,4 @@
-# INFO — mollify_blocks (the field mollifier across 101 block interfaces and 201 periodic faces)
+# INFO — mollify_blocks (the field mollifier across 101 block interfaces and 201 periodic faces; the chimera overlap mirror)
 
 `mollifyBlocks` (`src/lib/Lib_Mollify.f90`) runs `binomial_smooth`'s passes over every block of the
 mesh at once. Before each sweep direction of each pass, a one-cell halo takes the current value and
@@ -23,6 +23,8 @@ through `binomial_smooth`, 8 passes each.
 | U1b | Σ q·V over the blocks after the passes against the sum before, to 1e-13 of Σ \|q\|·V | PASS |
 | U1c | without an aligned link — no link at all, and links between faces normal to different directions — each block equals `binomial_smooth` on its own, bit for bit | PASS |
 | U1d | a periodic pair: every face-3 cell of a block linked to the face-4 cell of its column in the same block and back; the oracle is the test's own smoother with j wrapped (zero flux in i and k), to 1e-13 of the field scale, and Σ q·V to 1e-13 of Σ \|q\|·V: one block 10 × 7 × 6, one block 12 × 9 × 1 (2D), and a 12 × 7 × 6 grid cut along x into two blocks, each with its own pair (101 and 201 links together); measured ≤ 3.2e-16 | PASS |
+| U-T | the overlap map's tie rule at a chimera face (`buildOverlapMap`): two blocks of a regular 1 cm grid overlapping along x, block 2 shifted by half a cell, face 2 of block 1 and face 1 of block 2 chimera faces, so that a column of each block has its centroids on the other block's chimera face: neither column is covered (coverage count 1, the map pairs 18 cells each way) while the centroids on the other block's interior faces are; moved inside by a quarter of the tie tolerance max(1e-12 h, 64 ε L) the fringe centroids are still on the face, by twice the tolerance they are covered (24 pairs each way, coverage 2) | PASS |
+| U-M (i) | the chimera overlap mirror (`IGLOO_overlap`): a 12 × 5 × 4 grid of warped cells cut into two blocks overlapping by four columns, the overlap map built from the geometry (`buildOverlapMap`), random owner-only fields (each overlap cell's deposit in the block that owns it, 0 in the other); after `mirrorSource` each block's source equals the grid's on its range bit for bit, after `mirrorEuler` its eulerian densities to 1e-14 of the field scale (measured 1.5e-16: the amount moves as q·V_source/V_target, and the compiler's division can leave an ULP although the two volumes are equal); the coverage count is 2 in the overlap and 1 elsewhere, the map pairs 80 cells each way, the mirrored totals equal the other block's owner deposits and their sum Σ(n − 1)·S, to 1e-14 of Σ\|S\| | PASS |
 
 ## RED
 
@@ -30,6 +32,12 @@ through `binomial_smooth`, 8 passes each.
   flux at its 101 faces): U1a fails on all eight cuts, every cell of every block differing, worst 0.43
   to 0.86 of the field scale; U1b and U1c pass (the total holds per block either way).
 - **One pass short in the no-link path** (`npass − 1`): both U1c cases fail, 864 of 864 cells.
+- **Inclusive containment at the chimera face too** (the map before the tie rule): U-T fails on the face
+  and in the tie band — the fringe columns covered (coverage 12 of 12, 24 pairs each way instead of 18);
+  inside by twice the tolerance it passes.
+- **The mirror adding the target's own deposits** (one line in `mirrorSource` and one in `mirrorEuler`):
+  U-M (i) fails — 160 of 160 overlap cells of the source, the eulerian fields off by 0.999 of the scale,
+  12 mirrored totals.
 - **A partner in the same block ignored** (links whose partner block is the cell's own left out of
   the face maps): the three U1d cases fail, 0.77, 0.43 and 0.75 of the field scale; U1a–U1c pass.
 

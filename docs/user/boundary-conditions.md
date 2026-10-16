@@ -212,10 +212,39 @@ counted per facelet (not per family copy).
 
 A particle that leaves a block through a chimera facelet is searched for first in the facelet's layer-1
 donor cells, by decreasing weight, then in every block (see [Connected faces](#connected-faces-the-particle-search));
-one that no block contains leaves the domain there, a rim exit. Each particle deposits into the block it is tracked in, so the cells
-of the other block in the overlap receive none of its deposits; the field mollifier gives a chimera face
-zero flux, and under `gas-order = 2` its ghost nodes hold the overlapping block's gas interpolated at the
-node (see [Connected faces: the gas ghost ring](#connected-faces-the-gas-ghost-ring)).
+one that no block contains leaves the domain there, a rim exit. Under `gas-order = 2` a chimera face's
+ghost nodes hold the overlapping block's gas interpolated at the node (see [Connected faces: the gas
+ghost ring](#connected-faces-the-gas-ghost-ring)).
+
+**The overlap's deposits.** The gas solver keeps a complete copy of the overlap in each block, so every
+copy that covers a location receives the deposits made there. When the file holds a chimera facelet the
+setup maps every cell to the cell of each other block that contains its centroid (inclusive containment:
+a centroid on a face between two of that block's cells goes to one of them) — except a centroid lying on
+that block's chimera face, within max(10⁻¹² h, 64 ε L) of the face (h the cell diagonal, L its largest node
+coordinate): there the other block's grid is the fringe, interpolated from this one, not a copy of the
+flow — and prints one line per ordered block pair,
+
+```
+ [IGLOO] chimera overlap: N cells of block b covered by block b'
+```
+
+A particle deposits into the block it is tracked in; at the end of `solve`, after the deposits are
+reduced to the geometry cells and before the field mollifier, every cell adds the deposits the other
+blocks made in the cells mapped onto it, from a copy of the owner-only fields (so a deposit is mirrored
+once into each other covering block, never twice): source amounts as they are, eulerian densities
+scaled by the volume ratio, so the amount is preserved. Each sweep prints, per block, what the mirror
+added to its source,
+
+```
+ [IGLOO] chimera overlap: block b mirrored source (mass, momentum, energy): ...
+```
+
+and keeps it in `mirrored(b)` (mass per material, momentum, energy), valid like `source` between a
+`solve` and the next `reset_state`: the once-counted total of an overlapping mesh is the sum over every
+block minus the mirrored totals. A parent solver that sums its own copies of the overlap can weight each
+cell by `1/ovl%blk(b)%n(c)`, the number of blocks that cover the centroid of cell `c` (cells numbered
+`i + (j−1)·Nx + (k−1)·Nx·Ny`). Verified by `chimera-2blk` (each block's fields equal the one-block run on
+its cells; the mirrored totals) and `test_mollify_blocks` (U-M).
 
 ---
 

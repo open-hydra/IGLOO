@@ -7,6 +7,7 @@ module IGLOO_module
                               hasConnectedFaces, buildGhostLinks
   use IGLOO_data_phases, only: obj_material
   use IGLOO_Lib_Mollify, only: cellLink
+  use IGLOO_overlap,     only: overlapMap, mirroredTotals
   implicit none
 
   type, public :: obj_IGLOO
@@ -16,6 +17,10 @@ module IGLOO_module
     type(cellLink),        allocatable :: links(:)
     !> A face cell carries 101, 103, 201, 102 or 100: solve reports the block changes.
     logical :: connFaces = .false.
+    !> Chimera faces only: each cell's covering cells in the other blocks and its coverage count.
+    type(overlapMap) :: ovl
+    !> Chimera faces only: what the overlap mirror added to each block's source; valid as `source`.
+    type(mirroredTotals),  allocatable :: mirrored(:)
     !> Valid only between a solve and the next reset_state (which deallocates them).
     type(obj_sourceblock), allocatable :: source(:)
     type(obj_eulerblock),  allocatable :: euler(:,:)
@@ -63,6 +68,7 @@ contains
     use IGLOO_allocation
     use IGLOO_IO_INI, only: read_IGLOO_input
     use IGLOO_Lib_Statistics, only: initRandomSeed
+    use IGLOO_overlap,        only: hasChimeraFaces, buildOverlapMap
     use IGLOO_Mod_MPI,        only: mpi_is_root, mpi_size_
     use IGLOO_Mod_Timing,     only: tm_phase, TM_IDLE, TM_INPUT, TM_GASREAD, TM_BLOCKS, TM_IMPORT, TM_PIN
     use Lib_ORION_data
@@ -72,7 +78,8 @@ contains
     type(orion_data)     :: own_gas
     character(len=llen)  :: gasfile
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
-    integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar
+    integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar, b, b2
+    integer, allocatable :: npair(:,:)
     character(len=2)     :: method
 
     if (self%staticDone) then
@@ -133,6 +140,15 @@ contains
     call buildInterfaceLinks(self%geoblock, self%links)
     if (mpi_is_root) call reportNonAligned(self%links)
     self%connFaces = hasConnectedFaces(self%geoblock)
+    if (hasChimeraFaces(self%geoblock)) then
+      call buildOverlapMap(self%geoblock, self%ovl, npair)
+      if (mpi_is_root) then
+        do b = 1, size(npair, 1); do b2 = 1, size(npair, 2)
+          if (npair(b, b2) > 0) write(*,'(A,3(I0,A))') ' [IGLOO] chimera overlap: ', npair(b, b2), &
+            ' cells of block ', b, ' covered by block ', b2
+        enddo; enddo
+      endif
+    endif
     if (ord2) then
       call buildGhostLinks(self%gasblock, self%geoblock, nGhostIn, nGhostMiss, nGhostFar)
       if (mpi_is_root .and. nGhostIn + nGhostMiss > 0) write(*,'(A,2(I0,A))') &
@@ -193,6 +209,7 @@ contains
     enddo
 
     !> Drop last sweep's source/euler accumulators (all of them); solve re-allocates them at the right shape.
+    if (allocated(self%mirrored)) deallocate(self%mirrored)
     do b = 1, nb
       if (allocated(self%source(b)%sourceMass)) deallocate(self%source(b)%sourceMass)
       if (allocated(self%source(b)%sourceMom))  deallocate(self%source(b)%sourceMom)
@@ -314,6 +331,7 @@ contains
                                     TM_IDLE, TM_ACCUM, TM_GHOST, TM_SOLVE, TM_LOOP, TM_CENSUS, &
                                     TM_REDUCE, TM_FINALIZE, TM_SMOOTH
     use IGLOO_Mod_Footprint,  only: record_footprint
+    use IGLOO_overlap,        only: mirrorSource, mirrorEuler
     use oslo
     use omp_lib
     implicit none
@@ -659,6 +677,16 @@ contains
       do b = 1, nb
         call self%source(b)%finalize(self%geoblock(b))
       enddo
+      if (allocated(self%ovl%blk)) then
+        call mirrorSource(self%source, self%ovl, self%mirrored)
+        if (mpi_is_root) then
+          do b = 1, nb
+            write(*,'(A,I0,A,*(1X,ES23.15E3))') ' [IGLOO] chimera overlap: block ', b, &
+              ' mirrored source (mass, momentum, energy):', self%mirrored(b)%mass, self%mirrored(b)%mom, &
+              self%mirrored(b)%en
+          enddo
+        endif
+      endif
       call tm_nest(TM_SMOOTH)
       call mollifySourceBlocks(self%source, self%geoblock, self%links)
       call tm_unnest()
@@ -670,6 +698,7 @@ contains
           do b = 1, nb
             call self%euler(b, fam)%reduce(self%geoblock(b))
           enddo
+          if (allocated(self%ovl%blk)) call mirrorEuler(self%euler(:, fam), self%geoblock, self%ovl)
           call tm_nest(TM_SMOOTH)
           call mollifyEulerBlocks(self%euler(:, fam), self%geoblock, self%links)
           call tm_unnest()

@@ -204,7 +204,8 @@ igloo_unit_test(test_source_reduction  infrastructure/source_reduction   "unit;i
 # The field mollifier over blocks joined by 101 links (mollifyBlocks): a random grid cut into blocks
 # smooths as the uncut grid (3D and 2D cuts, three blocks, 2 x 2 blocks, above the OpenMP threshold),
 # Sum(q V) holds over the blocks, and without an aligned link each block is smoothed on its own; U1d a
-# periodic (201) pair in one block smooths as the grid with j wrapped.
+# periodic (201) pair in one block smooths as the grid with j wrapped; U-T a centroid on the other block's
+# chimera face is not covered by it; U-M (i) the chimera overlap mirror.
 igloo_unit_test(test_mollify_blocks    infrastructure/mollify_blocks     "unit;infrastructure;mollify;t1")
 igloo_unit_test(test_host_assoc        infrastructure/host_assoc         "unit;infrastructure;build;t1")
 
@@ -777,7 +778,9 @@ igloo_e2e_case(rot-2blk infrastructure/rot-2blk "e2e;infrastructure;bc;io")
 # chimera-2blk: drag-stokes's box as two overlapping blocks joined by chimera (102) faces (make_box_case.py
 # --overlap 4 --families 2), each family copy repeating the chimera payload: the file is read (the routing
 # line counts 50 facelets) and every parcel leaves at x = 0.15. RED on a reader without 102: pass 0 stops on
-# the first payload ("bad BC cell line ... Legacy-schema").
+# the first payload ("bad BC cell line ... Legacy-schema"). G-M1/G-M2: the overlap's deposits mirrored into
+# both blocks (each equal to the one-block run on its cells; the mirrored totals). RED without the mirror:
+# block 2's overlap cells 0 (E 2.2e-2 of the scale), no mirrored-total line.
 igloo_e2e_case(chimera-2blk infrastructure/chimera-2blk "e2e;infrastructure;bc;io;chimera")
 # chimera-2blk-rim: block 2 one row shorter in y, block 1's face-2 facelets of the uncovered row written 100 (no
 # donor): the block-change line counts 40 crossings through the connected cell and 10 rim exits, which leave at
