@@ -25,6 +25,7 @@ contains
     type(obj_eulerblock) , intent(inout), allocatable :: eulblock(:,:)
     integer      :: ib, i, j, k, v, nsc, ntot, kmin, kmax, im, jm, in, jn
     real(R8)     :: rmax, rmin, r2, rvec(3), binormal(3), th0, th1, th0n, th1n
+    logical      :: tinySector
     
 
     !> Look for gas densities
@@ -57,6 +58,7 @@ contains
     allocate(solblock(1:nb))
     allocate(srcblock(1:nb))
     allocate(eulblock(1:nb,1:ntot))
+    tinySector = .false.
     do ib = 1, nb
       associate(oBlk => orion%block(ib), blk => geoblock(ib), sol => solblock(ib))
       write(*,'(A,I3,A,3I8)') '     - Block ', ib, ' size = ', oBlk%Ni, oBlk%Nj, oBlk%Nk
@@ -82,7 +84,14 @@ contains
         th0 = atan2(dot_product(blk%node(:,im,jm,0), binormal), dot_product(blk%node(:,im,jm,0), refDir))
         th1 = atan2(dot_product(blk%node(:,im,jm,1), binormal), dot_product(blk%node(:,im,jm,1), refDir))
         delthe = th1 - th0
-        axisym = abs(delthe) > 1.e-9_R8
+        axisym = abs(delthe) > 1.e-6_R8
+        !> A sector at or below 1e-6 rad is planar: the fold's slack nears roundoff there.
+        if (.not.axisym .and. delthe /= 0._R8) then
+          if (.not.tinySector) write(*,'(A,ES10.3,A)') '     - Sector of ', delthe, &
+            ' rad at the outermost node, below 1e-6 rad: planar single layer'
+          tinySector = .true.
+          delthe = 0._R8
+        endif
         !> A planar slab (two parallel k-planes) also spans a non-zero angle at the outermost node,
         !  atan(thickness/r). A wedge spans the SAME angle at every radius; a slab's span decays as 1/r.
         !  Compare with the innermost node that is clearly off the axis (r > 1e-3 r_max: an axis row

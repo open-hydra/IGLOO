@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (184 in a serial build: 144 e2e + 39 unit incl. `self_test` and
+One row per registered CTest entry (185 in a serial build: 145 e2e + 39 unit incl. `self_test` and
 `registry-docs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 21 `mpi-*` rows in their own
-section, 205).
+section, 206).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (38 of 82 e2e fixtures)
+## Shared box fixture (38 of 83 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,7 +39,7 @@ writes with its defaults.
 Thirty-eight fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other forty-four:
+once here, referenced as **"shared box"** below. The other forty-five:
 
 - non-uniform gas (thirteen): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
@@ -58,11 +58,12 @@ once here, referenced as **"shared box"** below. The other forty-four:
   `etab-e2e` and `etab-evap-frozen` on a 0.6 m × 240-cell box at U=50 m/s, T=300 K (the TAB/ETAB onset);
   `evap-breakup-box` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
   (`--t-gas --kt`);
-- uniform gas on another mesh (fourteen): `mhb98-water` and `mhb98-water-psat` (a `make_box_case.py`
+- uniform gas on another mesh (fifteen): `mhb98-water` and `mhb98-water-psat` (a `make_box_case.py`
   variant lengthened to 0.17 m at the same Δx: water in air at T_G=298 K with a near-static
   U=1.9×10⁻⁴ m/s clock, the Miller-Harstad-Bellan Fig-2 conditions); `planar-slab` (a 20×20
   single-layer planar slab), `wall-approach` (a 100×20 single layer, the gas drifting toward the wall
-  at V=−0.5 m/s), `wedge-axis-row` (a 20×8 single-layer wedge whose axis row sits at r=1e-8) and
+  at V=−0.5 m/s), `wedge-axis-row` (a 20×8 single-layer wedge whose axis row sits at r=1e-8), `wedge-tiny`
+  (`swirl-wedge`'s 200×40 annular mesh with a 5e-7 rad sector and no swirl) and
   `two-fam-bc-2blk` (the box split into two 30×5×5 blocks at x=0.075 m by `make_box_case.py`, a 101
   connection between them), `two-fam-bc-2blk-mollify` (the same two blocks, `INPUT/` symlinked) and
   `chimera-2blk` (the box as two overlapping 34×5×5 blocks joined by chimera (102) faces, `make_box_case.py
@@ -164,6 +165,7 @@ oracle possible.
 | **wedge-fold** | — (behavioral; the O22 fold-sense defect it pins) | *the 200-face FOLD must rotate a swirling parcel back into the sector*: axis-200 plus `wp = 0.5` on the near-axis parcel (r0 = 1e-4), so it leaves the 1° sector in its first ODE segment and the fold (position AND velocity rotated about the axis) is exercised — the only case in the suite with z ≠ 0 on a wedge. G1 no give-up (the O22 signature was "outer maxIter (500000); flagging gone"), G2 both parcels exit at x > 2.0, G3 every trajectory row inside the sector (print-aware: |z| ≤ |y|·tan(δ/2) + 1e-6 and y > −1e-6), G4 vacuity — W₀ = 0.5 injected and ≥ 9 z-sign flips on ID 1 (measured 18, identical at OMP 1/5 × 3), G5 the wp-free control parcel exits at axis-200's x to 1e-6 (its rows are byte-identical to axis-200's). RED on the pre-fix binary: G1, G2, G3 (500000 rows at θ ≈ 179°) | `axis-200`'s (symlinked) | DB, the two axis-200 parcels; ID 1 additionally `wp = 0.5`; `bc.txt` = axis-200's (symlink) |
 | **planar-slab** | — (behavioral; slab/wedge classifier) | *a single-layer box of finite thickness is a planar 2D case*: 20×20×1 cells over 0.1×0.1×0.005 m, uniform gas u = 5 m/s, T = 350 K, two parcels at the gas velocity at different radii from the x axis. The log reports `Planar slab (parallel k-planes)` and no wedge; no give-up; both parcels exit at x ≥ 0.0999 with y and z at their injection values to 1e-9 on every trajectory row | own (`make_fixture.py`) | six symmetry faces (300), face 2 an outlet (400); two parcels in the mid-plane |
 | **wedge-axis-row** | — (behavioral; slab/wedge classifier) | *a wedge whose axis row sits at r = 1e-8 stays a wedge*: 1-degree wedge, 20×8 cells, the j = 0 row at r = 1e-8 with z = 0, uniform gas u = 5 m/s, two parcels in the meridian plane at the gas velocity. The log reports `Axisymmetric wedge: delthe = 0.01745329` and no `Planar slab`; no give-up; both parcels leave through the outlet (x ≥ 0.0999) with y and z at their injection values to 1e-9 | own (`make_fixture.py`) | x-min 300, x-max 400, axis 200, outer 300, wedge planes 200; two parcels |
+| **wedge-tiny** | — (behavioral; slab/wedge classifier) | *a single-layer sector at or below 1e-6 rad is planar*: `swirl-wedge`'s 200×40 annular mesh with the k-planes 5e-7 rad apart and no swirl, `swirl-wedge`'s three DB parcels at the gas velocity. The log carries the tiny-sector notice with the generator's span (within 1e-3) and the planar line, no `Axisymmetric wedge` or `Planar slab` line, no give-up; three exits at x = 2 with y and z at their injection values to 1e-6, read by the header's column names. RED at the 1e-9 rad threshold: `Axisymmetric wedge: delthe = 0.00000050 rad` | own solfile (`make_wedge_case.py --delthe-deg 2.8647890e-05 --omega 0`); `bc.txt`, phase and properties symlinked to `swirl-wedge`'s | x-min/x-max 400, inner/outer 301, k-planes 200; three DB parcels |
 | **two-mat** | — (drag-stokes's `[Stokes]` closed form, per material) | *arity 2*: the first case anywhere with TWO materials (nm = 2) — same box, gas, inlet and parcels as `drag-stokes`, materials A (ρ = 2950) and B (ρ = 1000) from a two-zone `properties.dat`. M1 the drag-stokes oracle (imported, not copied) on `trajectories-A.dat` at 2950 and on `-B.dat` at 1000; M2 both materials inject the same parcel set (identical injection rows, m_B/m_A = 1000/2950); M3 the lighter material relaxes faster at every parcel's first interior row; M4 `source.tec` carries `wdot(A)` and `wdot(B)`, finite and zero, Fx finite/non-zero; M5 `euler1.tec`/`euler2.tec` same shape, finite, different; M6 25 exits per material. Falsified 2026-09-16: phase lines swapped → M1 RED (zones bind by ORDER); one zone for two materials → error stop (was a SIGSEGV) | `drag-stokes`'s (symlinked) | FB `krho` streams, `drag-stokes`'s `bc.txt` (symlinked): one property line per inlet cell feeds both families |
 | **two-fam-bc** | — (drag-stokes's `[Stokes]` closed form, per family) | *per-family boundary file*: two-mat's case with a `bc.txt` carrying one copy of the inlet table per family in ATLAS's order (block, material, population; copy c = family c) — A = drag-stokes's line (krho 0.34, rp 5.945e-6), B half the loading and twice the radius (krho 0.17, rp 1.189e-5). T1 B's parcels on the Stokes closed form at d = 23.78 µm, τ = 1.745e-3 s (the imported oracle checks every row's diameter); T2 ṁ = krho/(1 − 0.51) · 1.2e-3 on every exit: 8.326531e-4 (A), 4.163265e-4 (B); T3 m_B/m_A = 2.711864 at injection; T4 ρ_p/n_p = 7.0410e-12 in `euler2.tec` (A's 2.596e-12 in `euler1.tec`); controls C1 A's closed form and identical injection stations, C2 25 exits each, C3 zero `wdot` slots and the Fx/E balance with each parcel's own ṁ. RED on a reader feeding copy 1 to both families: T1 `dp=1.1890e-05` on 25/25 parcels, T2 1.275000e-03 on every exit of both materials, T3 0.338983, T4 8.8012e-13 in 1500/1500 cells; C1–C3 green in both states | `drag-stokes`'s (symlinked) | FB `krho` streams; own `bc.txt` from the committed `make_fixture.py`: 2 × 1250 records, ATLAS headers `b i j k f code`, face 1 = 401, every other face 100 |
 | **two-fam-bc-2blk** | — (drag-stokes's `[Stokes]` closed form, per family; the one-block `two-fam-bc` run) | *two blocks, per-family boundary file*: two-fam-bc's case on the same box split into two blocks at x = 0.075 m, joined by a 101 connection whose line names the partner cell; `bc.txt` holds each block's face table once per family in ATLAS's order (block 1 A, block 1 B, block 2 A, block 2 B). T1–T4 and C1–C3 as `two-fam-bc` over both zones; X1 every parcel of both materials has rows on both sides of x = 0.075 and leaves at x = 0.15; X2 the one-block sibling, run by `check.py` into `ref-1blk/`: trajectories, exits and scatter equal as sorted multisets, `euler1`, `euler2` and `source` equal cell by cell to 1e-12 of the field scale (measured: bit-identical); C4 no stuck, no-progress or maxIter line; K1 the block-change line `block changes: 50 via the connected cell, 0 via the block sweep, 0 rim exits; stencil refreshed on a block change at a boundary entry: 0` (RED without the connected-cell step: no line, or `0 via the connected cell, 50 via the block sweep` with the step skipped). `mollify = off`: the mollifier at its default is gated by `two-fam-bc-2blk-mollify`. RED on a reader taking one copy per block: block 2 reads block 1's copy B, an inlet at x = 0.075 (A starts 50 parcels) and a connection on the outlet face; 0 exits, ctest timeout at 300 s | own two-zone `solfile.tec` (`make_box_case.py` with two blocks, via `make_fixture.py`) | FB `krho` streams on block 1's face 1; own `bc.txt` from the committed `make_fixture.py`: 2 blocks × 2 copies × 650 records, ATLAS headers `b i j k f code`, 101 partner lines in every copy |
@@ -322,9 +324,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-144 `e2e`-labelled + 39 `unit`-labelled + the optional `vortex-cloud-3way` = **184 CTest entries** in a
-serial build (+21 `mpi-*` under `USE_MPI`, 205), all green (counted from `tests/CMakeLists.txt`). The 144
-`e2e` entries are the 84 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+145 `e2e`-labelled + 39 `unit`-labelled + the optional `vortex-cloud-3way` = **185 CTest entries** in a
+serial build (+21 `mpi-*` under `USE_MPI`, 206), all green (counted from `tests/CMakeLists.txt`). The 145
+`e2e` entries are the 85 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the twelve `repeat-*` two-sweep gates and the forty-six `refuse-*` setup-refusal gates. The
 39 `unit` entries are 34 compiled unit tests, the property-table reader on its three fixtures
