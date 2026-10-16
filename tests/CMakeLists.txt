@@ -324,6 +324,12 @@ add_test(NAME exe-per-tree COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/
 set_tests_properties(exe-per-tree PROPERTIES
     LABELS "unit;infrastructure;build"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# lint-test-inputs: every test INI separates list values by one blank (FiNeR counts blanks + 1) and is ASCII.
+add_test(NAME lint-test-inputs COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/lint_inputs.py
+    ${CMAKE_CURRENT_SOURCE_DIR})
+set_tests_properties(lint-test-inputs PROPERTIES
+    LABELS "unit;infrastructure;lint"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # DB ("assigned position") injection — regression gate for bug B1 (fixed 2026-07-08):
 igloo_e2e_case(db-injection infrastructure/db-injection "e2e;infrastructure;injection")
 configure_file(infrastructure/ini_pipeline/input.ini ${CMAKE_CURRENT_BINARY_DIR}/input.ini COPYONLY)
