@@ -101,18 +101,20 @@ contains
 
     end function isPointInsideHexahedron
 
-    !> Point-in-hexahedron test with each face split into two triangles (12 planes).
+    !> Point-in-hexahedron test with each face split into two triangles (12 planes); a face rejects the
+    !  point when it lies beyond both triangle planes by more than hexTol(vertices).
     logical function isPointInsideHexahedron12(pt, vertices, face)
       implicit none
       real(R8), intent(in) :: pt(3)
       real(R8), intent(in) :: vertices(3,8)
       integer, optional, intent(out) :: face  !> crossed guide face 1..6 on miss, 0 if inside
       real(R8) :: v(3,3), facePlane(3,2), vert(3,4)
-      real(R8), parameter :: toll=1e-20, eps=1e-15
+      real(R8), parameter :: toll=1e-20
       integer :: f, t, vertstart
       logical :: isDegenerate
-      real(R8) :: distance(2)
+      real(R8) :: distance(2), eps
 
+      eps = hexTol(vertices)
       do f = 1, 6
         vert(:,1) = vertices(:,guide(f,1))
         vert(:,2) = vertices(:,guide(f,2))
@@ -147,9 +149,9 @@ contains
 
     end function isPointInsideHexahedron12
 
-    !> Point-in-cell dispatcher: 2D quadrilateral or 3D hexahedron (precomputed planes when given);
-    !  on a wedge also reports whether the azimuth left the sector.
-    logical function isPointInsideCell(pt, vertices, is2D, norms, centroids, is_degen, crossedFace, sectorOut)
+    !> Point-in-cell dispatcher: 2D quadrilateral or 3D hexahedron (precomputed planes when given, with
+    !  their tolerance tol); on a wedge also reports whether the azimuth left the sector.
+    logical function isPointInsideCell(pt, vertices, is2D, norms, centroids, is_degen, crossedFace, sectorOut, tol)
       implicit none
       real(R8), intent(in) :: pt(3)
       real(R8), intent(in) :: vertices(:,:)  !> (3,4) or (3,8)
@@ -159,6 +161,7 @@ contains
       logical,  optional, intent(in)  :: is_degen(2,6)
       integer,  optional, intent(out) :: crossedFace  !> exit face on miss (3D guide 1..6 / 2D edge 1..4), 0 if inside
       logical,  optional, intent(out) :: sectorOut    !> wedge only: azimuth outside the k-plane band
+      real(R8), optional, intent(in)  :: tol          !> precomputeHex12's tolerance of the cached planes
       real(R8) :: quadVert(3,4)
 
       !> Wedge: flag an azimuth outside the k-plane band.
@@ -183,7 +186,7 @@ contains
       end if
       ! 3D path
       if (present(norms)) then
-        isPointInsideCell = isInsideHex12Fast(pt, norms, centroids, is_degen, crossedFace)
+        isPointInsideCell = isInsideHex12Fast(pt, norms, centroids, is_degen, crossedFace, tol)
       else
         isPointInsideCell = isPointInsideHexahedron12(pt, vertices, crossedFace)
       end if
@@ -306,13 +309,15 @@ contains
     end function computeTrianglePlanes
 
 
-    !> Precomputes the 12 triangle planes (unit normals, centroids, degenerate flags) for isInsideHex12Fast.
-    pure subroutine precomputeHex12(vertices, norms, centroids, is_degen)
+    !> Precomputes the 12 triangle planes (unit normals, centroids, degenerate flags) for isInsideHex12Fast,
+    !  and the cell's containment tolerance hexTol.
+    pure subroutine precomputeHex12(vertices, norms, centroids, is_degen, tol)
         implicit none
         real(R8), intent(in)  :: vertices(3,8)
         real(R8), intent(out) :: norms(3,2,6)
         real(R8), intent(out) :: centroids(3,2,6)
         logical,  intent(out) :: is_degen(2,6)
+        real(R8), optional, intent(out) :: tol
         real(R8), parameter :: toll=1e-20
         real(R8) :: vert(3,4), v1(3), v2(3), v3(3), e1(3), e2(3), n(3), nmag
         integer  :: f, t, vs
@@ -339,19 +344,31 @@ contains
                 end if
             end do
         end do
+        if (present(tol)) tol = hexTol(vertices)
     end subroutine precomputeHex12
 
 
-    !> Fast point-in-hexahedron test using precomputed planes
-    logical function isInsideHex12Fast(pt, norms, centroids, is_degen, face)
+    !> Containment tolerance of a hexahedron [m]: 1e-12 of its diagonal |v7 - v1|, at least 64 eps times
+    !  the largest coordinate magnitude of its nodes (a triangle distance's rounding far from the origin).
+    pure real(R8) function hexTol(vertices)
+        implicit none
+        real(R8), intent(in) :: vertices(3,8)
+        hexTol = max(1.e-12_R8*norm2(vertices(:,7) - vertices(:,1)), 64._R8*epsilon(1._R8)*maxval(abs(vertices)))
+    end function hexTol
+
+
+    !> Fast point-in-hexahedron test using precomputed planes; tol: precomputeHex12's (absent: 1e-15 m).
+    logical function isInsideHex12Fast(pt, norms, centroids, is_degen, face, tol)
         implicit none
         real(R8), intent(in) :: pt(3), norms(3,2,6), centroids(3,2,6)
         logical,  intent(in) :: is_degen(2,6)
         integer, optional, intent(out) :: face  !> crossed guide face 1..6 on miss, 0 if inside
-        real(R8), parameter  :: eps=1e-15
-        real(R8) :: d1, d2
+        real(R8), optional, intent(in) :: tol
+        real(R8) :: d1, d2, eps
         integer  :: f
 
+        eps = 1.e-15_R8
+        if (present(tol)) eps = tol
         isInsideHex12Fast = .true.
         do f = 1, 6
             if (is_degen(1,f)) then

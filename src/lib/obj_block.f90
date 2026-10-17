@@ -620,8 +620,9 @@ contains
   end subroutine computeBBox
 
 
-  !> Vertices of cell si (4 in 2D, 8 in 3D); optionally the 12-plane inside-test precompute (3D).
-  pure subroutine getVertices(self,si,vert,is2D,norms,centroids,degen)
+  !> Vertices of cell si (4 in 2D, 8 in 3D); optionally the 12-plane inside-test precompute and its
+  !  tolerance (3D).
+  pure subroutine getVertices(self,si,vert,is2D,norms,centroids,degen,tol)
     use IGLOO_variables, only: mesh2D
     use IGLOO_RayFaceIntersection3D, only: precomputeHex12
     implicit none
@@ -632,6 +633,7 @@ contains
     !> 12-plane inside-test precompute, filled only in 3D
     real(R8), optional, intent(inout) :: norms(3,2,6), centroids(3,2,6)
     logical,  optional, intent(inout) :: degen(2,6)
+    real(R8), optional, intent(inout) :: tol
     logical :: quad
     integer :: i, j, k
 
@@ -655,7 +657,7 @@ contains
     endif
 
     if (present(norms)) then
-      if (.not.(mesh2D.or.quad)) call precomputeHex12(vert, norms, centroids, degen)
+      if (.not.(mesh2D.or.quad)) call precomputeHex12(vert, norms, centroids, degen, tol)
     endif
 
   end subroutine getVertices

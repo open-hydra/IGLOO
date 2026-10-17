@@ -40,13 +40,25 @@ The public entry point; dispatches based on `is2D` and the precomputed cache:
 Each quad face is split into 2 triangles (12 planes total) using `chooseVector` to pick
 a non-degenerate starting vertex.  A degenerate triangle (zero-area cross product) is
 treated as inside (`distance = -1`) to avoid spuriously rejecting nearly-flat cells.
-The tolerance is `eps = 1e-15`.
+A face rejects the point only when it lies beyond both of its triangle planes by more than the cell's
+tolerance
+
+$$
+\tau = \max\left(10^{-12}\,h,\; 64\,\varepsilon\,L\right),
+$$
+
+with $h = |v_7 - v_1|$ the cell diagonal, $L$ the largest coordinate magnitude of the cell's nodes and
+$\varepsilon$ the machine epsilon (`hexTol`). The first term scales the test with the cell; the second covers
+the rounding of a triangle distance $n\cdot(p - c)$ far from the origin, where $p$ and $c$ carry coordinates
+of magnitude $L$: with an absolute $10^{-15}$ m, points of a face shared by two cells 100 m from the origin
+can lie in neither cell.
 
 ### `precomputeHex12` + `isInsideHex12Fast`
 
 `precomputeHex12` is called once per cell entry (and after any boundary event) to cache
 the 12 triangle normals and centroids into `geoHexNorms(3,2,6)` / `geoHexCentroids(3,2,6)`
-/ `geoHexDegen(2,6)`.  `isInsideHex12Fast` then performs the containment test using only
+/ `geoHexDegen(2,6)`, and the cell's tolerance $\tau$ into `geoHexTol` (`gasHex*` for the gas dual cell), so
+the two copies of the test decide alike (`test_containment` C2).  `isInsideHex12Fast` then performs the containment test using only
 dot products — avoiding the cross products needed by `isPointInsideHexahedron12`.
 
 This cache is the hot path in `solout`, called at every accepted ODE step.
@@ -110,7 +122,7 @@ by decreasing weight — with its ±1 box and a guided walk from the point where
 face. Otherwise, or if that fails, it calls `findParticle`: the search starts in the current block (the
 neighbour across the exit face, a ±1 box around the last cell and a guided walk, then the whole block
 after its bounding-box test) and continues in every other block in index order; the first block that
-contains the point takes the particle. The containment tests are inclusive (to 1e-15), so a conformal
+contains the point takes the particle. The containment tests are inclusive (to the cell's tolerance), so a conformal
 interface leaves no gap. `bcDef`'s 101 branch, an index jump into the cell named by the bc file, runs
 only when no block contains the point. With
 `gas-order = 2` the ODE step ends at the block face, since the particle must change block there:

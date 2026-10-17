@@ -146,11 +146,11 @@ contains
   end subroutine buildOverlapMap
 
 
-  !> True when p lies on a chimera (102) face of block g at its cell loc: within
-  !  max(1e-12 h, 64 eps L) of the face's plane (h the cell diagonal, L its largest node coordinate).
+  !> True when p lies on a chimera (102) face of block g at its cell loc: within the cell's containment
+  !  tolerance (hexTol) of the face's plane.
   logical function onChimeraFace(g, loc, p)
     use IGLOO_data_block,            only: obj_block
-    use IGLOO_RayFaceIntersection3D, only: guide, computeFacePlane
+    use IGLOO_RayFaceIntersection3D, only: guide, computeFacePlane, hexTol
     implicit none
     type(obj_block), intent(in) :: g
     integer,         intent(in) :: loc(3)
@@ -160,7 +160,7 @@ contains
 
     onChimeraFace = .false.
     call g%getVertices(loc, vert)
-    tol = max(1.e-12_R8*norm2(vert(:,7) - vert(:,1)), 64._R8*epsilon(1._R8)*maxval(abs(vert)))
+    tol = hexTol(vert)
     do f = 1, 6
       if (.not. allocated(g%face(f)%cell)) cycle
       call g%ijk2fmn(loc(1), loc(2), loc(3), f, m, n)
