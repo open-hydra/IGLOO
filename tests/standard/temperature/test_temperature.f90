@@ -8,6 +8,11 @@ program test_temperature
     !   BO  order-of-accuracy on the LINEAR (Nu=2) heat RHS -> p_obs ~ 4
     !   B2  with slip (Ranz-Marshall Nu=2+0.6 Re^.5 Pr^{1/3}, coupled to Stokes
     !       drag) -> independent RK4 oracle
+    !   B3  invariants, one fixed SDIRK4 step per call at dt/tau_T = 0.1, 1, 10:
+    !       B3a T0 = Tg stays Tg bit for bit (zero slip); B3b from T0 < Tg and
+    !       T0 > Tg (zero slip, Nu = 2) and B3c the same at a constant slip
+    !       (NoDrag, Ranz-Marshall): T - Tg keeps its sign or reaches 0 and
+    !       |T - Tg| never increases, compared down to 1e3 eps Tg
     !
     ! Zero slip is realised by gas velocity = particle velocity (=0), so Re=0,
     ! Nu=2 exactly and the drag RHS stays zero (velocity constant). Tolerances
@@ -21,7 +26,7 @@ program test_temperature
     implicit none
 
     real(R8), parameter :: PI = 4.0_R8*atan(1.0_R8)
-    integer,  parameter :: DRAG_STOKES = 2, HEAT_RM = 5
+    integer,  parameter :: DRAG_STOKES = 2, HEAT_RM = 5, DRAG_NONE = 14
     integer,  parameter :: NEQ = 7
 
     real(R8), parameter :: rho_p = 1000.0_R8, dp = 50.0e-6_R8
@@ -48,6 +53,7 @@ program test_temperature
     call run_B1(ok_all)
     call run_BO(ok_all)
     call run_B2(ok_all)
+    call run_B3(ok_all)
 
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then
@@ -137,6 +143,74 @@ contains
         ok = ok .and. pass
         call append_row('B2_ranz_marshall', 'vx,T', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_B2
+
+    !---------------------------------------------------------------!
+    ! B3: temperature invariants, one fixed SDIRK4 step per call.     !
+    !---------------------------------------------------------------!
+    subroutine run_B3(ok)
+        logical, intent(inout) :: ok
+        real(R8), parameter :: STEPS(3) = [0.1_R8, 1._R8, 10._R8]
+        real(R8), parameter :: Ug = 10.0_R8
+        real(R8) :: g0(9), tauC, Re, Pr, Nu, floorT, worst(3)
+        integer  :: is, nbadA, nbadB, nbadC, ncmp(3)
+        logical  :: pass
+        floorT = 1.0e3_R8*epsilon(1._R8)*Tg
+        ! constant-slip relaxation time: NoDrag keeps v = 0 against u_g = Ug
+        Re   = rho_g*Ug*dp/mu_g
+        Pr   = mu_g*gam*Rg/((gam - 1.0_R8)*kg)
+        Nu   = 2.0_R8 + 0.6_R8*sqrt(Re)*Pr**(1.0_R8/3.0_R8)
+        tauC = cp_p*rho_p*dp*dp/(6.0_R8*Nu*kg)
+        g0 = gas9;  g0(2) = Ug
+        nbadA = 0;  nbadB = 0;  nbadC = 0;  ncmp = 0;  worst = 0._R8
+        do is = 1, 3
+            call b3_walk(gas9, DRAG_STOKES, Tg,  STEPS(is)*tauT, .true.,  floorT, nbadA, ncmp(1), worst(1))
+            call b3_walk(gas9, DRAG_STOKES, T0,  STEPS(is)*tauT, .false., floorT, nbadB, ncmp(2), worst(2))
+            call b3_walk(gas9, DRAG_STOKES, 500._R8, STEPS(is)*tauT, .false., floorT, nbadB, ncmp(2), worst(2))
+            call b3_walk(g0,   DRAG_NONE,   T0,  STEPS(is)*tauC, .false., floorT, nbadC, ncmp(3), worst(3))
+            call b3_walk(g0,   DRAG_NONE,   500._R8, STEPS(is)*tauC, .false., floorT, nbadC, ncmp(3), worst(3))
+        end do
+        write(*,'(a,3(i0,1x),a,es10.3,a,f8.4)') '   [B3] steps compared (a,b,c): ', ncmp, &
+            ' floor ', floorT, ' K;  constant-slip Nu = ', Nu
+        pass = assert_lt('B3a T0 = Tg: steps with T /= Tg', real(nbadA, R8), 0.5_R8) .and. &
+               assert_lt('B3b Nu=2: sign changes or |T-Tg| increases', real(nbadB, R8), 0.5_R8) .and. &
+               assert_lt('B3c constant slip: sign changes or |T-Tg| increases', real(nbadC, R8), 0.5_R8)
+        ok = ok .and. pass
+        call append_row('B3_invariants', 'T', real(nbadA + nbadB + nbadC, R8), maxval(worst), 0._R8, 0._R8, 0.5_R8, pass)
+    end subroutine run_B3
+
+    !> Steps one fixed SDIRK4 step at a time from (x, v) = 0 and T = Tstart; equil: every T must equal
+    !! Tg exactly; otherwise T - Tg keeps its sign or reaches 0 and |T - Tg| does not grow, compared while
+    !! |T - Tg| > floorT. nbad counts violations; ncmp the steps compared; worst the largest growth of |T - Tg|.
+    subroutine b3_walk(g, dragSel, Tstart, dt, equil, floorT, nbad, ncmp, worst)
+        real(R8), intent(in)    :: g(9), Tstart, dt, floorT
+        integer,  intent(in)    :: dragSel
+        logical,  intent(in)    :: equil
+        integer,  intent(inout) :: nbad, ncmp
+        real(R8), intent(inout) :: worst
+        integer,  parameter :: NMAX = 2000, NEQUIL = 20
+        real(R8) :: y(NEQ), yn(NEQ), dOld, dNew
+        integer  :: k, ierr
+        y = 0._R8;  y(7) = Tstart
+        do k = 1, merge(NEQUIL, NMAX, equil)
+            call advance(g, cp_p, rho_p, dp, mass, dragSel, HEAT_RM, &
+                         y, NEQ, MODE_SDIRK_FIXEDSTEP, dt, 1, yn, ierr)
+            if (ierr < 0) then
+                nbad = nbad + 1;  return
+            end if
+            ncmp = ncmp + 1
+            if (equil) then
+                if (yn(7) /= Tg) nbad = nbad + 1
+            else
+                dOld = y(7) - Tg;  dNew = yn(7) - Tg
+                if (dNew*dOld < 0._R8 .or. abs(dNew) > abs(dOld)) then
+                    nbad = nbad + 1
+                    worst = max(worst, abs(dNew) - abs(dOld))
+                end if
+                if (abs(dNew) <= floorT) return
+            end if
+            y = yn
+        end do
+    end subroutine b3_walk
 
     !> Independent coupled drag+heat RHS for the oracle: y=(vx, T).
     !! dvx = (u-vx)/taup ; dT = Nu(Re,Pr)*6*k*(Tg-T)*cTfac/(rho_p d^2)
