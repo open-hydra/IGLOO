@@ -1,0 +1,2 @@
+condensed-dispersed
+A 1 combustion=Beckstead K-burn=4.5e-07 X-eff=1.5

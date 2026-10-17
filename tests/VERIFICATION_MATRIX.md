@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (195 in a serial build: 152 e2e + 42 unit incl. `self_test`,
+One row per registered CTest entry (207 in a serial build: 164 e2e + 42 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 21 `mpi-*`
-rows in their own section, 216).
+rows in their own section, 228).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (40 of 87 e2e fixtures)
+## Shared box fixture (40 of 88 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,7 +39,7 @@ writes with its defaults.
 Forty fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other forty-seven:
+once here, referenced as **"shared box"** below. The other forty-eight:
 
 - non-uniform gas (fifteen): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
@@ -60,7 +60,7 @@ once here, referenced as **"shared box"** below. The other forty-seven:
   `etab-e2e` and `etab-evap-frozen` on a 0.6 m × 240-cell box at U=50 m/s, T=300 K (the TAB/ETAB onset);
   `evap-breakup-box` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
   (`--t-gas --kt`);
-- uniform gas on another mesh (fifteen): `mhb98-water` and `mhb98-water-psat` (a `make_box_case.py`
+- uniform gas on another mesh (sixteen): `mhb98-water` and `mhb98-water-psat` (a `make_box_case.py`
   variant lengthened to 0.17 m at the same Δx: water in air at T_G=298 K with a near-static
   U=1.9×10⁻⁴ m/s clock, the Miller-Harstad-Bellan Fig-2 conditions); `planar-slab` (a 20×20
   single-layer planar slab), `wall-approach` (a 100×20 single layer, the gas drifting toward the wall
@@ -71,7 +71,8 @@ once here, referenced as **"shared box"** below. The other forty-seven:
   `chimera-2blk` (the box as two overlapping 34×5×5 blocks joined by chimera (102) faces, `make_box_case.py
   --overlap 4`), `chimera-2blk-rim` (the same with block 2 one row shorter, `--rim`) and `periodic-2d` (a one-layer 60×25×1 box, `make_box_case.py --nz 1 --ny 25 --periodic-y`);
   `psd-table`, `psd-normal`, `psd-lognormal` and `psd-rosinrammler` (the box in one cell along x
-  with a 200×100 inlet, `make_box_case.py --nx 1 --ny 200 --nz 100`).
+  with a 200×100 inlet, `make_box_case.py --nx 1 --ny 200 --nz 100`); `stuck-cell` (the box with the gas at rest,
+  `make_box_case.py --ug 0`).
 
 `khrt-e2e-rt` and `khrt-e2e-threads` are further oracles on `khrt-e2e`'s run (the second at 1/2/4
 threads) and add no fixture; `khrt-stress` differs from `khrt-e2e` only in `mShedLim`, and the twins
@@ -162,6 +163,7 @@ oracle possible.
 | **ini-comment-eq** | infrastructure (INI parser contract) | *behavioral* — no reference curve. `drag-stokes`' own `input.ini` with one `;` comment line carrying an `=` inserted inside `[IGLOO-General]`, right after `gas-file`; the oracle is the three keys that follow it. Asserts a clean stderr, `gas-order = 1` (no `Defaulting to 2nd order`), `out-file = S` by its **positive** log witness ` >> Output field: gas coupling source` (an absence-only check passes on a run that never read the file), `source.tec` written with no `euler1.tec`, and 25 exit rows. Pins that an in-section inline comment is inert, i.e. that the in-tree FiNeR and hydra's (`--include-finer`) parse the same file identically | shared box (`INPUT/` symlinks `standard/drag-stokes/INPUT`) | `drag-stokes`' conditions verbatim (inlet-face 401, κ_ρ=0.34, κ_v=0.1, d=11.89 µm, ρ_p=2950, Stokes drag, `gas-order = 1`, `out-file = S`) plus the single added comment line. Its **preamble** keeps seven `=`-bearing `;` lines: those precede the first `[`, so they are outside every section and inert under either parser — the trap is in-section only |
 | **solver-fail-consumed** | infrastructure (integration exit contract; O30 step 4b) | *behavioral* — no reference curve. A parcel deleted because `Run_ODESolver` returned `err < 0` must still hand its remaining mass to the gas for consumption models 2/5, as the non-finite exit beside it already does; otherwise the remnant leaves the mass balance. Asserts the branch actually fired (25 `Run_ODESolver err=` lines — a positive witness), that no parcel took the non-finite exit instead, 25 exit rows, and `Σ wdot` = `Σ npdot·m_inj` to 1e-5. **The only fixture that reaches that branch**: after the `rhsEvaporation` scrub even tc-hexadecane burns out cleanly | `evaporation/tc-hexadecane`'s case (`INPUT/` symlinked whole) | tc-hexadecane's conditions with the ODE tolerances at **1e-30**, below double-precision resolution, so SDIRK4 fails on the first step of every parcel. All 25 then die at injection carrying their FULL mass ⇒ the source total is all-or-nothing (RED 0.0 / GREEN the whole stream). The 100 % remnant is also what makes the cost of the contract visible |
 | **solver-fail-consumed-m4** | infrastructure (integration exit contract, model 4) | as `solver-fail-consumed` (its `check.py`) with `breakup=Reitz-Diawakar` added: the `err < 0` exit hands a model-4 parcel's remnant to the gas (resid 2.941e-7). RED unfixed: Σ`wdot` = 0, resid 1.0 | as `tc-hexadecane` | as `solver-fail-consumed` + `breakup=Reitz-Diawakar` (σ 0.072, μ_l 1e-3) |
+| **stuck-cell** | — (guard) | *integration exit contract*: parcels at rest in a gas at rest (402 inlet with \|v\| = 0) never leave their cell; S1 one `stuck in cell` line per parcel (25, the IDs of the exit records), S2 25 exit records at the injection points, S3 no other guard (no net progress, inner loop, outer maxIter, non-finite), S4 the run ends normally. RED with the residency guard disabled: the zero-progress guard ends every parcel (S1, S3) | own `solfile.tec` (`make_box_case.py --ug 0`: the shared box's mesh, the gas at rest), own `bc.txt` (`make_fixture.py`) | inlet-face 402 at rest on every cell (gp 1.0, Tp 600 K); outlet + walls |
 | **periodic-y** | infrastructure (translational periodic path) | *closed form* — body-force closed form folded **modulo L_y**; velocity unchanged across each wrap (transport = exact ±L_y translation), residual ~5e-7 m | shared box + `body-accel=(0,−8000,0)` (drives 2–3 y-wraps) | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; **faces 3/4 translational-periodic (bcdef 201)**; face2 outlet; faces 5/6 wall |
 | **periodic-2d** | infrastructure (translational periodic path, one-layer mesh) | *closed form* — `periodic-y`'s oracle unchanged (body-force closed form folded modulo L_y, velocity unchanged across each wrap, >= 2 wraps, every particle out at x = L_x) on a one-layer box whose 201 lines carry ATLAS's nine integers (block, i, j, k = 1, partner face, four orientation integers): the partner face is the fifth. RED on a reader taking four index integers on a one-layer mesh: the partner's k (1) read as its face, 18 of 25 parcels cycling to the outer iteration cap near the inlet, the run not ending in 300 s | own one-layer `solfile.tec` (`make_box_case.py --nz 1 --ny 25 --periodic-y --kv 1.0`, 60×25×1 cells) + `body-accel=(0,−8000,0)` | inlet-face 401 (25 cells); κ_v=1.0, κ_t=1.0, d=11.89 µm; **faces 3/4 201 with nine-integer lines**; every other face 400 |
 | **periodic-2d-ord2** | derived (`periodic-y`'s closed forms + `[RM52]`) | *RK4 along the closed-form path* — the periodic ghosts at gas-order 2: T(t) integrated along `periodic-y`'s closed-form path through the periodic extension of the cell-centre field (piecewise linear through the node lines, T(0) = T(N_y), T(N_y+1) = T(1)), steps split at the node lines, checked at half the steps (4.4e-10 K); every row with \|T − T_g\| > 1 K within δ_T + \|dT/dt\|·δ_t + 1e-6 K (worst 0.78 of it); `periodic-y`'s v and modular-y gates, ≥ 2 wraps on 20 of 25 parcels, 25 exits at x = 0.15; non-vacuity against the ring's linear fill (≥ 1.0e5 tol_T apart). RED with 201 dropped from the ghost links: 25 of 25 parcels off by 0.29–0.66 K; RED without the stencil refresh after the transport: every parcel stops at its first wrap | own one-layer `solfile.tec` (`make_box_case.py --nz 1 --ny 25 --periodic-y --kv 1.0 --kt 0.5 --wave-y 100`: T = 600 + 100 cos(2πy/L_y) at the cell centres) + `body-accel=(0,−8000,0)`, gas-order 2 | inlet-face 401 (25 cells); κ_v=1.0, κ_t=0.5, d=11.89 µm; **faces 3/4 201**; every other face 400 |
@@ -231,6 +233,17 @@ oracle possible.
 | **refuse-psd-empty** | — (kind 8, refusal) | *setup refusal*: no data rows → `IGLOO: size-distribution file holds no data rows` | as `drag-stokes` | as `refuse-psd-unsorted` |
 | **refuse-psd-radius-zero** | — (kind 8, refusal) | *setup refusal*: a radius of 0 → `IGLOO: size-distribution file: a radius is not positive` | as `drag-stokes` | as `refuse-psd-unsorted` |
 | **refuse-psd-mass-zero** | — (kind 8, refusal) | *setup refusal*: mass fractions summing to 0 → `IGLOO: size-distribution file: the mass fractions sum to zero` | as `drag-stokes` | as `refuse-psd-unsorted` |
+| **refuse-comb-brk** | — (kind 8, refusal) | *setup refusal*: a Beckstead burn law with `breakup = TAB` → `combustion=Beckstead with breakup is not supported` | as `burn-box` | as `burn-box` |
+| **refuse-comb-kburn** | — (kind 8, refusal) | *setup refusal*: a Beckstead burn law without `K-burn` → `combustion=Beckstead requires K-burn > 0` | as `burn-box` | own `phase.txt` |
+| **refuse-comb-nburn** | — (kind 8, refusal) | *setup refusal*: `n-burn=3.0` → `combustion=Beckstead requires 0 < n-burn < 3` | as `burn-box` | own `phase.txt` |
+| **refuse-comb-xeff** | — (kind 8, refusal) | *setup refusal*: `X-eff=1.5` → `combustion=Beckstead requires 0 < X-eff <= 1` | as `burn-box` | own `phase.txt` |
+| **refuse-brk-sigma** | — (kind 8, refusal) | *setup refusal*: breakup without `sigma` → `Breakup requires sigma` | as `tab-e2e` | as `tab-e2e` |
+| **refuse-brk-mu** | — (kind 8, refusal) | *setup refusal*: breakup without `mu` → `Breakup requires mu` | as `tab-e2e` | as `tab-e2e` |
+| **refuse-sigma-size** | — (kind 8, refusal) | *setup refusal*: `Le` of one value, `sigma` of two → `sigma: size mismatch with other property vectors` | as `tab-e2e` | as `tab-e2e` |
+| **refuse-sigma-nm** | — (kind 8, refusal) | *setup refusal*: `sigma` and `mu` of two values for one material → `sigma: size /= number of materials` | as `tab-e2e` | as `tab-e2e` |
+| **refuse-bc-legacy** | — (kind 8, refusal) | *setup refusal*: a boundary file in the legacy single-digit schema (`refusals/make_bc_refusals.py`) → `IGLOO: bc.txt line is not six integers with a 3-digit code` | as `drag-stokes` | own `bc.txt` (401 → 4, 400 → 1) |
+| **refuse-bc-empty-payload** | — (kind 8, refusal) | *setup refusal*: the first inlet payload line empty (`refusals/make_bc_refusals.py`) → `IGLOO: bc.txt inlet payload line is empty` | as `drag-stokes` | own `bc.txt` |
+| **refuse-body-accel** | — (kind 8, refusal) | *setup refusal*: `body-accel = 0.0 -200.0` → `body-accel: expected 3 values (gx gy gz)` | as `body-force` | as `body-force` |
 | **drag-stokes-dopri5** | `[Stokes]` (drag-stokes's oracle, symlinked) | `ode-solver = H-dopri5`, otherwise `drag-stokes` — the only exercise of the explicit solver. RED at OSlo `fb8255d` (ledger O25): every parcel died at injection (NMAX exceeded) because `dopri5.f:512` still called Hairer's eleven-argument `SOLOUT` and IGLOO's interrupt never reached DOPRI5; green since the fork's `fix/dopri5-solout` (six-argument call, silent label 79): 25/25, resid/tol 0.014 | as `drag-stokes` | as `drag-stokes` |
 | **khrt-e2e-rt** | `[Reitz87]` (as `khrt-e2e`) | *RT-shatter persistence gate* (`check_rt.py`) on `khrt-e2e`'s own run: the RT/shed event must fire, apply, and persist as a mass-consistent discontinuous shatter (found and gated A19; promoted from a `WILL_FAIL` sentinel 2026-07-23) | as `khrt-e2e` | as `khrt-e2e` |
 | **repeat-drag-stokes** | — (kind 8, harness contract) | *two-sweep repeatability* (`support/twosweep.f90` + `tools/check_twosweep.py`): sweep 1 ≡ sweep 0 — `.dat` sorted multisets identical, `.tec` ≤ 1e-12 scale-relative; **plus gas-cycle**: original field → `U` doubled → original, sweep 1 must differ, sweep 2 must match sweep 0 | as `drag-stokes` | as `drag-stokes` |
@@ -336,11 +349,11 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-152 `e2e`-labelled + 42 `unit`-labelled + the optional `vortex-cloud-3way` = **195 CTest entries** in a
-serial build (+21 `mpi-*` under `USE_MPI`, 216), all green (counted from `tests/CMakeLists.txt`). The 152
-`e2e` entries are the 89 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+164 `e2e`-labelled + 42 `unit`-labelled + the optional `vortex-cloud-3way` = **207 CTest entries** in a
+serial build (+21 `mpi-*` under `USE_MPI`, 228), all green (counted from `tests/CMakeLists.txt`). The 164
+`e2e` entries are the 90 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
-threads), the twelve `repeat-*` two-sweep gates, the forty-eight `refuse-*` setup-refusal gates and `vv-order`
+threads), the twelve `repeat-*` two-sweep gates, the fifty-nine `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The
 42 `unit` entries are 35 compiled unit tests, the property-table reader on its three fixtures
 (`test_properties_reader`, `-two-material`, `-atlas-water`), `self_test`, `registry-docs`, `exe-per-tree` and

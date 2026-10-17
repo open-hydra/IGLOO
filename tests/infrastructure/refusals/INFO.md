@@ -69,8 +69,19 @@ output written).
 | `refuse-psd-empty` | comment and blank lines only | `IGLOO: size-distribution file holds no data rows` |
 | `refuse-psd-radius-zero` | a first radius of 0 | `IGLOO: size-distribution file: a radius is not positive` |
 | `refuse-psd-mass-zero` | every mass fraction 0 | `IGLOO: size-distribution file: the mass fractions sum to zero` |
+| `refuse-comb-brk` | `burn-box` (`INPUT/` symlinked) with `[IGLOO-Models] breakup = TAB` | `combustion=Beckstead with breakup is not supported` |
+| `refuse-comb-kburn` | own `INPUT/phase.txt` `A 1 combustion=Beckstead n-burn=1.8` (no `K-burn`, so 0), `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `combustion=Beckstead requires K-burn > 0` |
+| `refuse-comb-nburn` | as above with `K-burn=4.5e-07 n-burn=3.0` | `combustion=Beckstead requires 0 < n-burn < 3` |
+| `refuse-comb-xeff` | as above with `K-burn=4.5e-07 X-eff=1.5` | `combustion=Beckstead requires 0 < X-eff <= 1` |
+| `refuse-brk-sigma` | `tab-e2e` (`INPUT/` symlinked) without `[IGLOO-Properties] sigma` | `Breakup requires sigma` |
+| `refuse-brk-mu` | `tab-e2e` without `mu` | `Breakup requires mu` |
+| `refuse-sigma-size` | `tab-e2e` with `Le = 1.0` added and `sigma = 0.072 0.072`, `mu = 1.0e-3 1.0e-3`: the vectors are read in the order psat, Mv, Lv, Tboil, cpv, Le, Yinf, sigma, mu and the first present (`Le`, one value) sets the length | `sigma: size mismatch with other property vectors` |
+| `refuse-sigma-nm` | `tab-e2e` with `sigma = 0.072 0.072`, `mu = 1.0e-3 1.0e-3` for its one material | `sigma: size /= number of materials` |
+| `refuse-bc-legacy` | own `INPUT/bc.txt`: `drag-stokes`'s with every code in the legacy single-digit schema (401 → 4, 400 → 1; `python3 make_bc_refusals.py`, run from this directory) | `IGLOO: bc.txt line is not six integers with a 3-digit code` |
+| `refuse-bc-empty-payload` | own `INPUT/bc.txt`: `drag-stokes`'s with the first inlet payload line empty (`make_bc_refusals.py`) | `IGLOO: bc.txt inlet payload line is empty` |
+| `refuse-body-accel` | `body-force` (`INPUT/` symlinked) with `body-accel = 0.0 -200.0` | `body-accel: expected 3 values (gx gy gz)` |
 
-All forty-eight exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All fifty-nine exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
@@ -106,6 +117,11 @@ solution centres to exactly 0.0 — and on a [0, δ] sector the binary before th
 its three families of A on copy 1's `krho` 0.34, i.e. `krhoTot` = 1.02 and ṁ = 0.34/(1 − 1.02) · 1.2e-3 =
 −2.04e-2 kg/s per parcel — a negative mass flow, 75 exits, exit 0 — and `bc-copy-order` ran like
 `two-fam-bc` fed copy 1 for both families (exit 0, six output files).
+
+**The eleven cases of the phase file's burn-law and breakup checks, the property sizes, the two boundary files
+and `body-accel` are RED** on the solver with each of their error stops turned into a plain write: eight run on
+to "Stop condition" with exit 0 and write their output, and `sigma-size`, `sigma-nm` and `bc-legacy` end on a
+later stop with another payload (`mu: size mismatch`, `mu: size /= number of materials`, the record count).
 
 **Not here.** A mixed-Nk mesh (`allocation.f90`, `af307dd`) needs a two-zone `solfile.tec`; exercised in a
 throwaway only. `refuse-dopri5` (the interim `H-dopri5` refusal of ledger O25) was dropped with the

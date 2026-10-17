@@ -10,7 +10,7 @@
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero}}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
 #   repeatability/      two-sweep gates (twosweep driver): 12 cases
 #   mpi/                registered only under USE_MPI: 6 rank-count cases + 2 consistency + 1 determinism
 #                       + 12 two-sweep cases
@@ -845,6 +845,30 @@ igloo_refusal_case(refuse-psd-radius-zero  infrastructure/refusals/psd-radius-ze
                    "IGLOO: size-distribution file: a radius is not positive" "e2e;refusal;injection")
 igloo_refusal_case(refuse-psd-mass-zero    infrastructure/refusals/psd-mass-zero
                    "IGLOO: size-distribution file: the mass fractions sum to zero" "e2e;refusal;injection")
+# The phase file's burn-law and breakup checks, the [IGLOO-Properties] vector sizes, a legacy-schema and an
+# empty-payload boundary file, a body acceleration of two components: each its own error stop.
+igloo_refusal_case(refuse-comb-brk         infrastructure/refusals/comb-brk
+                   "combustion=Beckstead with breakup is not supported" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-comb-kburn       infrastructure/refusals/comb-kburn
+                   "combustion=Beckstead requires K-burn > 0" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-comb-nburn       infrastructure/refusals/comb-nburn
+                   "combustion=Beckstead requires 0 < n-burn < 3" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-comb-xeff        infrastructure/refusals/comb-xeff
+                   "combustion=Beckstead requires 0 < X-eff <= 1" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-brk-sigma        infrastructure/refusals/brk-sigma
+                   "Breakup requires sigma" "e2e;refusal;breakup")
+igloo_refusal_case(refuse-brk-mu           infrastructure/refusals/brk-mu
+                   "Breakup requires mu" "e2e;refusal;breakup")
+igloo_refusal_case(refuse-sigma-size       infrastructure/refusals/sigma-size
+                   "sigma: size mismatch with other property vectors" "e2e;refusal;breakup")
+igloo_refusal_case(refuse-sigma-nm         infrastructure/refusals/sigma-nm
+                   "sigma: size /= number of materials" "e2e;refusal;breakup")
+igloo_refusal_case(refuse-bc-legacy        infrastructure/refusals/bc-legacy
+                   "IGLOO: bc.txt line is not six integers with a 3-digit code" "e2e;refusal;infrastructure;bc")
+igloo_refusal_case(refuse-bc-empty-payload infrastructure/refusals/bc-empty-payload
+                   "IGLOO: bc.txt inlet payload line is empty" "e2e;refusal;infrastructure;bc")
+igloo_refusal_case(refuse-body-accel       infrastructure/refusals/body-accel
+                   "body-accel: expected 3 values (gx gy gz)" "e2e;refusal;standard")
 # drag-stokes-dopri5: ode-solver = H-dopri5 on drag-stokes's own oracle -- the only exercise of the
 # explicit solver. RED at OSlo fb8255d (ledger O25: dopri5.f:512 called the eleven-argument SOLOUT,
 # IGLOO's interrupt never reached DOPRI5, every parcel lost at injection with exit 0); green since the
@@ -895,6 +919,9 @@ igloo_e2e_case(solver-fail-consumed infrastructure/solver-fail-consumed "e2e;inf
 # solver-fail-consumed-m4: the same failure exit under model 4 (breakup on, rate zero): the remnant must
 # reach the gas as for model 2. RED while model 4 is not a consumption model on that exit.
 igloo_e2e_case(solver-fail-consumed-m4 infrastructure/solver-fail-consumed-m4 "e2e;infrastructure;m4")
+# stuck-cell: parcels at rest in a gas at rest (402 inlet, |v| = 0): the residency guard ends each one once, at its
+# injection point, before the zero-progress guard or the outer cap.
+igloo_e2e_case(stuck-cell infrastructure/stuck-cell "e2e;infrastructure;guard")
 
 # ---------- mpi (registered only in a USE_MPI build) ----------------------------
 # See mpi/INFO.md. Each dir symlinks its parent case's INPUT/, input.ini and check.py, so the fixture
