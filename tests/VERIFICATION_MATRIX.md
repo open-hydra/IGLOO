@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (232 in a serial build: 188 e2e + 43 unit incl. `self_test`,
+One row per registered CTest entry (233 in a serial build: 189 e2e + 43 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 24 `mpi-*`
-rows in their own section, 256).
+rows in their own section, 257).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,13 +30,13 @@ Columns:
 
 ---
 
-## Shared box fixture (53 of 105 e2e fixtures)
+## Shared box fixture (54 of 106 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
 writes with its defaults.
 
-Fifty-three fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
+Fifty-four fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
 once here, referenced as **"shared box"** below. The other fifty-two:
@@ -131,6 +131,7 @@ oracle possible.
 | **d2law** | `[God53]`,`[Spa53]` (+`[RM52]`,`[Lef89]`) | *run-conditioned* — Godsave–Spalding kernel d(d²)/dt=−(8k_g/c_pg·ρ_p)·ln(1+B_T) integrated in `check.py` **along the measured T_p(x)** from production output (no static file) | shared box | inlet-face 401; `evaporation=d2-law`; κ_t=0.5, d=30 µm, ρ_p=8000; fuel L_v=2e5, M_v=100, T_boil=900, p_sat=1e4; outlet + walls |
 | **threads-d2law** | — (OMP invariance) | *cross-run invariant* — `tools/check_threads_case.py` runs `d2law`'s input at OMP_NUM_THREADS 1, 2 and 5 in `d2law/threads-omp<N>/` (`INPUT/` and `input.ini` symlinked): the thread witness (no `OpenMP threads` line at 1, the count at 2 and 5), every number finite, every `.dat` an exact sorted multiset, every `.tec` within 1e-12 of the field scale, `d2law`'s `check.py` on the 1-thread run. Evaporating parcels and their mass source. RED (as each thread gate) with the trajectory ID shifted by the thread count | as `d2law` | as `d2law` |
 | **d2law-line** | `[God53]`,`[Spa53]` | *closed form* (Tier V) — input-only line d²(x)=d0²−K0·(x−x_a)/u_g, K0=8k_g·ln(1+B_T0)/(cp_g·ρ_p), B_T0 at T_p0=κ_t·T_g=300 K; tolerance = theory budget (monotone K-drift bound from measured T_p span + E13.6 truncation + floor); measured T_p bounds the budget, never the reference | shared box | inlet-face 401; `evaporation=d2-law`; κ_v=1 (Re=0), κ_t=0.5, d=30 µm; ρ_p=8000 with **cp=125000 (100×)** via local ATLAS-GPB `properties.dat` (freezes T_p: drift 0.76 K, d² loss 39 %); fuel L_v=2e5; outlet + walls |
+| **d2law-varcp** | `[God53]`, `[Spa53]`; the table's h(T) | *kernels + telescoping* — `d2law`'s case with a varying cp (`make_table.py`: 250..900 K, cp = 1000 + 2(T − 250), h its trapezoid sum): the state is the enthalpy, dh/dt = (Q + ṁL_v)/m. V1 `d2law`'s mass-rate oracle along the measured T (0.34); V2 an RK4 of dh/dt along each parcel's measured d (cubic in t between rows), T(h) by the check's inversion of the table, against the measured T on every row (worst 0.67 of the print + sampling + integrator budget); V3 ΣE of `source.tec` = Σṅ[m(h + v²/2)]_in − [..]_exit at the table's h, the exit flow valued by Σẇ (one history, asserted): 1.6e-8 W of 5.2e3. RED: the latent term with a T-state factor (V2, 22.4 K); the deposit's enthalpy as cp·T (V3, 4.1e3 W) | shared box (`d2law`'s `solfile.tec`, symlinked) | `d2law`'s (`bc.txt` symlinked); own `properties.dat` |
 | **lk-neq** | `[MHB98]` | *run-conditioned* — LK-corrected CEM d²-ODE RK4-integrated along measured T_p; VLE-equilibrium curve as the regression the case must out-distance | shared box | inlet-face 401; `evaporation=CEM`+`interface=LK`, α_e=1.0; κ_t=0.5, d=20 µm, ρ_p=8000; outlet + walls |
 | **tc-box** | `[TC2012]`,`[ATC24]` | *run-conditioned* — Tonini–Cossali Stefan–Fuchs d²-ODE RK4-integrated along measured T_p; CEM-Spalding as the silent regression | shared box | inlet-face 401; `evaporation=TC`+`interface=VLE`; κ_t=0.5, d=20 µm; fuel L_v=1e6, T_boil=600; outlet + walls |
 | **datum-abs** | infrastructure/evaporation (property-table enthalpy datum) | *behavioral* — tc-box with its constant-cp table shifted by H_OFF = −1.7113460e7 J/kg and tagged `Enthalpy_abs`, against tc-box's own relative table run as a sibling into `ref-rel/`: `wdot`, `Fx`, `Fy`, `Fz` of `source.tec` bit-identical cell by cell, `E_abs − E_rel = H_OFF·wdot` to 1e-9 of the largest `|H_OFF·wdot|`, and the log reporting `enthalpy datum absolute` with `hOff = H_OFF` | as `tc-box` | as `tc-box` |
@@ -378,9 +379,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-188 `e2e`-labelled + 43 `unit`-labelled + the optional `vortex-cloud-3way` = **232 CTest entries** in a
-serial build (+24 `mpi-*` under `USE_MPI`, 256), all green (counted from `tests/CMakeLists.txt`). The 188
-`e2e` entries are the 109 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+189 `e2e`-labelled + 43 `unit`-labelled + the optional `vortex-cloud-3way` = **233 CTest entries** in a
+serial build (+24 `mpi-*` under `USE_MPI`, 257), all green (counted from `tests/CMakeLists.txt`). The 189
+`e2e` entries are the 110 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the four `threads-*` thread-count gates, the thirteen `repeat-*` two-sweep gates, the fifty-nine `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The
