@@ -39,6 +39,10 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
   EV2 Ranz-Marshall Sh ratio exact; EV3 CEM-B 1/3-rule film chain at Re=0,
   6e-19. Confirms the models are sound at function level — the breakage is at
   the call sites.
+  EV10 ASM near equilibrium (surface state Y_s = 0.25 exactly, B_M = k·2⁻⁵⁵/0.75 from
+  3.7e-17 to 1.04e-2, three φ/Re settings): ṁ and Q_G against the same algorithm in
+  quadruple precision from the same inputs, 1e-12; EV11 the corner B_M ≤ 1.1e-16 (and
+  φ = 0.3 at k = 4, 8): Q_G against the Stefan-free limit π·d·k_g·Nu₀·(T_g − T_p), 1e-12.
 - `test_evap_probes.f90` (ctest `test_evap_probes`, ordinary gate — bug-transcription pin): XE1
   d2law/literature ratio measured = exactly 0.5 (bug A3); XE2 single REAL
   `rhsEvaporation` evaluation (production call site, gas packed per contract)

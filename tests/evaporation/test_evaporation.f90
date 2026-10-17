@@ -18,10 +18,14 @@ program test_evaporation
     !   EV8  psatExt = the Clausius-Clapeyron value re-typed: mdot, Qdot, override as without it
     !        (CEM and TC) -- the table branch adds nothing but the pressure it is given.
     !   EV9  psatExt = 1.2 x Clausius-Clapeyron: mdot follows the CEM chain at the raised Xs.
+    !   EV10 ASM near equilibrium (BM = k 2^-55/0.75, k = 1 .. 2^48, three phi/Re settings): mdot and
+    !        Q_G against the same algorithm in quadruple precision from the same inputs, 1e-12.
+    !   EV11 ASM at BM <= 1.1e-16 (and phi = 0.3 at k = 4, 8): Q_G against the Stefan-free limit
+    !        pi d k_g Nu0 (T_g - T_p), 1e-12.
     !
     ! Water-like fuel, hot air. ep layout: [Mv,Lv,cpv,Le,Yinf,LvMv/Ru,1/Tboil].
     !
-    use, intrinsic :: iso_fortran_env, only: R8 => real64
+    use, intrinsic :: iso_fortran_env, only: R8 => real64, QP => real128
     use IGLOO_Lib_Evaporation, only: evaporation, nep, xsCap
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
@@ -45,6 +49,13 @@ program test_evaporation
     integer, parameter :: CEM = 2, CEMB = 3, ASM = 4, TC = 5
     !> Boiling corner: psat(420 K) = 4.374e5 Pa >= p = rho_g*Rg*Tg = 2.7552e5 Pa (boiling from 404.0 K).
     real(R8), parameter :: Tp_b = 420._R8
+    !> EV10/EV11 surface state: Mg = Ru/RgE = 32 = MvE, p = RgE*256, psat = p/4 => Xs = Ys = 0.25 exactly.
+    real(R8), parameter :: rhoE = 1._R8, RgE = Ru/32._R8, TgE = 256._R8, TpE = 200._R8, dpE = 1.e-4_R8
+    real(R8), parameter :: muE = 1.8e-5_R8, kgE = 0.026_R8, gamE = 1.4_R8, MvE = 32._R8
+    real(R8), parameter :: two55 = 2._R8**(-55)
+    integer,  parameter :: nkE = 14
+    real(R8), parameter :: kE(nkE) = [1._R8, 2._R8, 3._R8, 4._R8, 8._R8, 16._R8, 2._R8**10, 2._R8**20, &
+                                      2._R8**25, 2._R8**30, 2._R8**36, 2._R8**40, 2._R8**45, 2._R8**48]
 
     integer :: exit_code
     logical :: ok_all
@@ -61,6 +72,9 @@ program test_evaporation
     call run_EV7(ok_all)
     call run_EV8(ok_all)
     call run_EV9(ok_all)
+    call check_EV_surface()
+    call run_EV10(ok_all)
+    call run_EV11(ok_all)
 
     call dump_EV2()
 
@@ -294,6 +308,150 @@ contains
         ok = ok .and. pass
         call append_row('EV9_psat_ext_live', 'mdot', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_EV9
+
+    !> One ASM call at the EV10 surface state (Ys = 0.25), Le = 1, f_cp = 1, VLE interface.
+    subroutine asm_call(YinfV, Re, cpvV, mdot, qd, ovr)
+        real(R8), intent(in)  :: YinfV, Re, cpvV
+        real(R8), intent(out) :: mdot, qd
+        logical,  intent(out) :: ovr
+        real(R8) :: epE(nep), p
+        p   = rhoE*RgE*TgE
+        epE = [MvE, Lv, cpvV, 1._R8, YinfV, Lv*MvE/Ru, 1._R8/Tboil, 1._R8, 0._R8, 0._R8]
+        call evaporation(rhoE, TgE, gamE, RgE, muE, kgE, TpE, dpE, Re, 1._R8, ASM, 0, epE, mdot, qd, ovr, &
+                         psatExt=p/4._R8)
+    end subroutine asm_call
+
+    !> Ys = 0.25 exactly: the model is skipped at Yinf = 0.25 and runs one double below it.
+    subroutine check_EV_surface()
+        real(R8) :: m1, q1, m2, q2, cpg
+        logical  :: o1, o2
+        cpg = gamE*RgE/(gamE-1._R8)
+        call asm_call(0.25_R8,         0._R8, 1.9_R8*cpg, m1, q1, o1)
+        call asm_call(0.25_R8 - two55, 0._R8, 1.9_R8*cpg, m2, q2, o2)
+        if (o1 .or. .not. o2) then
+            write(*,'(a)') '  [FAIL] EV10 surface state: Y_s /= 0.25 exactly. The test repeats Ru = 8314.46 of '// &
+                           'Lib_Evaporation.f90 (Mg = Ru/RgE must be 32): align it'
+            error stop 'test_evaporation: EV10 surface state broken (Ru)'
+        end if
+        write(*,'(a)') '  [PASS] EV10 surface state: Y_s = 0.25 exactly (model skipped at Yinf = 0.25, run one double below)'
+    end subroutine check_EV_surface
+
+    !> F(B) of the ASM algorithm in quadruple precision (F = 1 at B <= 1e-10, as coded).
+    pure function fq(B) result(F)
+        real(QP), intent(in) :: B
+        real(QP) :: F
+        if (B > real(1.0e-10_R8, QP)) then
+            F = (1._QP + B)**real(0.7_R8, QP)*log(1._QP + B)/B
+        else
+            F = 1._QP
+        end if
+    end function fq
+
+    !> The ASM algorithm of asm_call (five phi-BT-FT-Nu* passes) in quadruple precision, same double inputs.
+    subroutine asm_quad(YinfV, Re, cpvV, mdotQ, qdQ)
+        real(R8), intent(in)  :: YinfV, Re, cpvV
+        real(QP), intent(out) :: mdotQ, qdQ
+        real(QP) :: rho, Tg, Rg, kg, Tp, dp, cpg, p, Mg, Xs, Ys, BM, Pr, Re05, third, c552, cpv
+        real(QP) :: Dv, lnBM, FM, Sh0, Shs, Nu0, Nus, phi, BT, FT
+        integer  :: it
+        rho = real(rhoE, QP); Tg = real(TgE, QP); Rg = real(RgE, QP); kg = real(kgE, QP)
+        Tp  = real(TpE, QP);  dp = real(dpE, QP); cpv = real(cpvV, QP)
+        third = real(1._R8/3._R8, QP); c552 = real(0.552_R8, QP)
+        cpg  = real(gamE, QP)*Rg/(real(gamE, QP) - 1._QP)
+        p    = rho*Rg*Tg
+        Mg   = real(Ru, QP)/Rg
+        Xs   = (p/4._QP)/p
+        Ys   = Xs*real(MvE, QP)/(Xs*real(MvE, QP) + (1._QP - Xs)*Mg)
+        BM   = (Ys - real(YinfV, QP))/(1._QP - Ys)
+        Re05 = sqrt(real(Re, QP))
+        Pr   = real(muE, QP)*cpg/kg
+        Dv   = kg/(rho*cpg)
+        lnBM = log(1._QP + BM)
+        FM   = fq(BM)
+        Sh0  = 2._QP + c552*Re05*Pr**third
+        Shs  = 2._QP + (Sh0 - 2._QP)/FM
+        mdotQ = -real(PI, QP)*dp*rho*Dv*Shs*lnBM
+        Nu0  = 2._QP + c552*Re05*Pr**third
+        Nus  = Nu0
+        do it = 1, 5
+            phi = cpv/cpg*Shs/Nus
+            BT  = (1._QP + BM)**phi - 1._QP
+            FT  = fq(BT)
+            Nus = 2._QP + (Nu0 - 2._QP)/FT
+        end do
+        qdQ = -mdotQ*cpv*(Tg - Tp)/BT
+    end subroutine asm_quad
+
+    !> EV10: ASM near equilibrium against its own algorithm in quadruple precision.
+    subroutine run_EV10(ok)
+        logical, intent(inout) :: ok
+        real(R8), parameter :: tol = 1.0e-12_R8
+        real(R8) :: ReS(3), fS(3), cpg, cpvV, YinfV, mdot, qd, errM, errQ, worst, BM
+        real(QP) :: mQ, qQ
+        logical  :: ovr, pass, passS
+        integer  :: s, i
+        character(len=12) :: tag(3)
+        ReS = [0._R8, 0._R8, 100._R8]; fS = [1.9_R8, 0.3_R8, 1.9_R8]
+        tag = ['Re0_cpv1.9  ', 'Re0_cpv0.3  ', 'Re100_cpv1.9']
+        cpg = gamE*RgE/(gamE-1._R8)
+        do s = 1, 3
+            cpvV = fS(s)*cpg
+            passS = .true.; worst = 0._R8
+            do i = 1, nkE
+                YinfV = 0.25_R8 - kE(i)*two55
+                BM    = (0.25_R8 - YinfV)/(1._R8 - 0.25_R8)
+                call asm_call(YinfV, ReS(s), cpvV, mdot, qd, ovr)
+                call asm_quad(YinfV, ReS(s), cpvV, mQ, qQ)
+                errM = real(abs(real(mdot, QP) - mQ)/abs(mQ), R8)
+                errQ = real(abs(real(qd, QP) - qQ)/abs(qQ), R8)
+                pass = (errM < tol) .and. (errQ < tol) .and. ovr
+                passS = passS .and. pass
+                worst = max(worst, errM, errQ)
+                write(*,'(a,a,a,es10.3,a,es10.3,a,es10.3,a,es10.3,a,a)') '  EV10 ', tag(s), ' k=', kE(i), &
+                    ' BM=', BM, ' err mdot=', errM, ' err Q_G=', errQ, '  ', merge('PASS', 'FAIL', pass)
+            end do
+            ok = ok .and. passS
+            call append_row('EV10_asm_near_eq_'//trim(tag(s)), 'mdot_QG', worst, worst, 0._R8, 0._R8, tol, passS)
+        end do
+    end subroutine run_EV10
+
+    !> EV11: at BM <= 1.1e-16 (phi = 0.3 also k = 4, 8) Q_G is the Stefan-free limit pi d k_g Nu0 (T_g - T_p).
+    subroutine run_EV11(ok)
+        logical, intent(inout) :: ok
+        real(R8), parameter :: tol = 1.0e-12_R8
+        real(R8) :: ReS(3), fS(3), cpg, cpvV, YinfV, mdot, qd, err, worst, BM, Pr, Nu0, Qlim
+        real(R8) :: kL(5)
+        logical  :: ovr, pass, passS, fallback
+        integer  :: s, i, nk
+        character(len=12) :: tag(3)
+        ReS = [0._R8, 0._R8, 100._R8]; fS = [1.9_R8, 0.3_R8, 1.9_R8]
+        tag = ['Re0_cpv1.9  ', 'Re0_cpv0.3  ', 'Re100_cpv1.9']
+        cpg = gamE*RgE/(gamE-1._R8)
+        Pr  = muE*cpg/kgE
+        do s = 1, 3
+            cpvV = fS(s)*cpg
+            if (s == 2) then; nk = 5; kL = [1._R8, 2._R8, 3._R8, 4._R8, 8._R8]
+            else;             nk = 3; kL = [1._R8, 2._R8, 3._R8, 0._R8, 0._R8]; endif
+            Nu0  = 2._R8 + 0.552_R8*sqrt(ReS(s))*Pr**(1._R8/3._R8)
+            Qlim = PI*dpE*kgE*Nu0*(TgE - TpE)
+            passS = .true.; worst = 0._R8
+            do i = 1, nk
+                YinfV = 0.25_R8 - kL(i)*two55
+                BM    = (0.25_R8 - YinfV)/(1._R8 - 0.25_R8)
+                call asm_call(YinfV, ReS(s), cpvV, mdot, qd, ovr)
+                err  = abs(qd - Qlim)/Qlim
+                pass = (err < tol) .and. ovr
+                passS = passS .and. pass
+                worst = max(worst, err)
+                fallback = (qd == -mdot*cpvV*(TgE - TpE)/BM)
+                write(*,'(a,a,a,es10.3,a,es10.3,a,es12.5,a,es10.3,a,l1,a,a)') '  EV11 ', tag(s), ' k=', kL(i), &
+                    ' BM=', BM, ' Q_G=', qd, ' err vs Stefan-free limit=', err, ' fallback BT=BM:', fallback, &
+                    '  ', merge('PASS', 'FAIL', pass)
+            end do
+            ok = ok .and. passS
+            call append_row('EV11_asm_limit_'//trim(tag(s)), 'QG', worst, worst, 0._R8, 0._R8, tol, passS)
+        end do
+    end subroutine run_EV11
 
     !> EV2: CEM convective enhancement mdot(Re)/mdot(0) vs (2+0.6 Re^{1/2} Sc^{1/3})/2,
     !> Re 1e-1..1e3 xlog (16-arg call replicated exactly, incl. 10th arg 1._R8, intf=0)

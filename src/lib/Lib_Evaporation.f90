@@ -378,7 +378,7 @@ contains
 
         override_Qdot = .true.
         Dv   = kg / (rhog * cpg * Le)
-        lnBM = log(1._R8 + BM)
+        lnBM = log1pS(BM)
 
         !> Step 1: Modified Sherwood (mass transfer)
         FM  = F_correction(BM)
@@ -401,11 +401,10 @@ contains
         Nu_star = Nu0
         do iter = 1, 5
             phi = cpv_eff / cpg * Sh_star / Nu_star / Le  ! eq. 22
-            BT  = (1._R8 + BM)**phi - 1._R8               ! eq. 23
-            if (BT <= 0._R8) then
-                BT = BM  ! fallback
-                Nu_star = Nu0
-                exit
+            if (BM >= 1.e-2_R8) then
+                BT = (1._R8 + BM)**phi - 1._R8            ! eq. 23
+            else
+                BT = expm1S(phi * lnBM)                   ! eq. 23 without cancellation
             endif
             FT = F_correction(BT)
             Nu_star = 2._R8 + (Nu0 - 2._R8) / FT         ! eq. 11
@@ -415,7 +414,7 @@ contains
         if (BT > 0._R8) then
             Qdot_evap = -mdot * cpv_eff * (Tg - Tp) / BT * cpFactor
         else
-            Qdot_evap = 0._R8
+            Qdot_evap = 0._R8  ! BT underflows only with mdot (subnormal BM): no flux
         endif
 
     end subroutine ASM_model
@@ -503,12 +502,44 @@ contains
         real(R8) :: F
 
         if (B > 1.0e-10_R8) then
-            F = (1._R8 + B)**0.7_R8 * log(1._R8 + B) / B
+            F = (1._R8 + B)**0.7_R8 * log1pS(B) / B
         else
             F = 1._R8  ! limit for B→0
         endif
 
     end function F_correction
+
+
+    !> ln(1+x): the series below |x| = 1e-2 (truncation <= x^8/9 relative).
+    pure function log1pS(x) result(y)
+        implicit none
+        real(R8), intent(in) :: x
+        real(R8) :: y
+
+        if (abs(x) >= 1.e-2_R8) then
+            y = log(1._R8 + x)
+        else
+            y = x*(1._R8 - x*(0.5_R8 - x*(1._R8/3._R8 - x*(0.25_R8 - x*(0.2_R8 - x*(1._R8/6._R8 &
+                  - x*(1._R8/7._R8 - x*0.125_R8)))))))
+        endif
+
+    end function log1pS
+
+
+    !> e^y - 1: the series below |y| = 1e-2 (truncation <= y^8/9! relative).
+    pure function expm1S(y) result(e)
+        implicit none
+        real(R8), intent(in) :: y
+        real(R8) :: e
+
+        if (abs(y) >= 1.e-2_R8) then
+            e = exp(y) - 1._R8
+        else
+            e = y*(1._R8 + y*(0.5_R8 + y*(1._R8/6._R8 + y*(1._R8/24._R8 + y*(1._R8/120._R8 &
+                  + y*(1._R8/720._R8 + y*(1._R8/5040._R8 + y/40320._R8)))))))
+        endif
+
+    end function expm1S
 
 
     !> Clausius-Clapeyron saturation pressure psat(T) = Patm exp(-LvMv/Ru (1/T - 1/Tboil)).

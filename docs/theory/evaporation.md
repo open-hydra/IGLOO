@@ -168,6 +168,16 @@ where $f_\mathrm{cp}$ converts to the units expected by the state assembly in `i
 conditions.  The latent-heat sink is contributed separately by the ODE state assembly;
 $L_v$ does **not** appear here.
 
+Near equilibrium the model is evaluated without cancellation: below $B_M = 10^{-2}$,
+$\ln(1+B_M)$ and $B_T = e^{\phi\,\ln(1+B_M)} - 1$ are computed from their series (eight terms,
+truncation below $10^{-17}$ relative), and $F(B)$ takes $\ln(1+B)$ from the same series.  The
+rate and $B_T$ then keep their relative precision as $B_M \to 0^+$, and the heat flux tends to
+the Stefan-free convective flux
+
+$$
+\dot{Q}_\mathrm{evap} \to \pi\,d\,k_g\,\mathrm{Nu}_0\,(T_g - T_p)\,f_\mathrm{cp}.
+$$
+
 ---
 
 ### TC — Tonini–Cossali analytical model
