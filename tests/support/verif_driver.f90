@@ -73,7 +73,7 @@ contains
 
         type(obj_particle) :: p
         integer(I4) :: nAux, nAuxSt, nEvV
-        logical :: propFlags(5)
+        logical :: propFlags(7)
 
         ! --- production runtime flags for an isolated drag/heat run ---
         ord2        = .false.;  mesh2D       = .false.

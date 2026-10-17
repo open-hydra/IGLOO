@@ -12,7 +12,7 @@ the working directory, and the three fixtures need different `[IGLOO-Properties]
 |---|---|---|
 | `test_properties_reader` | `hexadecane/` | tc-hexadecane's (Tboil 560 K, evaporation TC) |
 | `test_properties_reader-two-material` | `two-material/` | the same, one value per material |
-| `test_properties_reader-atlas-water` | `atlas-water/` | mhb98-water's (Tboil 373.15 K, evaporation CEM) |
+| `test_properties_reader-atlas-water` | `atlas-water/` | mhb98-water's Tboil 373.15 K, Le, Yinf (evaporation CEM); `Lv`, `Mv`, `cpv` from the table's columns |
 
 ## Legs (`test_properties_reader.f90`)
 
@@ -25,15 +25,18 @@ the working directory, and the three fixtures need different `[IGLOO-Properties]
 | PR7 | `abs-` (`"Enthalpy_abs"`, constant cp) | absolute datum, `hOff = -2.0e6` J/kg, `h(280 K) = cp*T + hOff` |
 | PR9 | `nm-`, two zones | zone A tabulated (`psat(560 K) = 1 atm`, `psat(1 K) = 0` by underflow); zone B all zero → no table |
 | PR10 | `atlas-` | `H2O(L)` on `[280, 380]`, cp 4184, rho 997, absolute datum `hOff = -17112459.6`, psat(300 K) = `3.533623e+03` as written |
+| PR-V1 | `atlas-` | `Lv`, `Mv`, `Cpv` found by name: both tables built, `Mv = 18.015` from its column; `Lv` and `cpv` through `tableValue` at 250, 298.15, 300, 337.5, 373.15 and 400 K equal to the file's own rows read by the test (list-directed) by the same formula — exact on a node and outside the table, `4 ε` between nodes; the scalar `Lv` = `Lv(298.15 K)` |
 
 The checks behind the reader (`classify_table_tokens`, `scan_rows`, `check_table_nodes`,
 `check_table_columns`, `validate_psat_column`, `tableValue`, in `src/lib/Lib_Thermodynamics.f90`) are
-ICE's reader's, statement for statement, so one table is accepted or refused by both solvers. The
-`hexadecane` entry also pins them on synthetic input:
+ICE's reader's (`src/lib/io/Load_Table.f90`), statement for statement, so one table is accepted or refused
+by both solvers; `validate_vapour_columns` and `vapour_reason`, the checks of the `Lv`, `Mv`, `Cpv`
+columns, belong to the same shared text. The `hexadecane` entry also pins them on synthetic input:
 
 | id | function | asserts |
 |---|---|---|
 | PR4 | `validate_psat_column` | every code once, in precedence order; `psat(Tboil)` at 1.9 and 0.6 atm accepted (a database curve), 3 and 0.4 atm refused; equal neighbours (low-T underflow to 0) accepted |
+| PR-V2 | `validate_vapour_columns` | every code once on columns beside PR4's Psat curve (`Lv·Mv/Ru` = its 5000 K slope): OK, all zero ABSENT, a NaN NONFINITE, `Cpv` zero on three rows PARTIAL, `Cpv` negative NONPOSITIVE, `Mv` not constant MV_VARIES, no Psat column WITHOUT_PSAT, `Lv` in kJ/kg CC_MISMATCH; with the `Mv` column absent the slope takes `MvKey` (18 accepted, 18/2.5 refused) |
 | PR5 | `check_table_nodes` | 1e-7 K off the nodes accepted; a uniform 0.4 K offset and a missing node refused; one row, a NaN, a node below 0 K |
 | PR8 | `classify_table_tokens` | the 4-column header; aliases in another order (`Psat` first, `enthalpy_abs`); both enthalpy names; a name twice; `Temperature` not first; no Cp / Density / enthalpy |
 | PR11 | `check_table_columns` | `h = cp*T` relative; an offset absolute (accepted) and relative (refused); a row off `cp*T`; `h` not increasing; `rho = 0`; `cp < 0`; a NaN; a varying cp with `h` its trapezoid sum (accepted) and its right Riemann sum (refused) |
@@ -58,6 +61,11 @@ that indexes by `idint(T)` with no finite check: 3 of its 4 legs fail — `idint
 clamped to `Tmin`, so ±Inf returns ±Inf, and the NaN lookup raises the invalid flag; NaN in, NaN out holds
 on any code.
 
+PR-V1 and PR-V2 are RED on one mutation each: the `Lv` (or `Cpv`) names dropped from
+`classify_table_tokens` make the `atlas-water` reader stop at setup (`Evaporation requires Lv: give it in
+[IGLOO-Properties] or as the Lv column of properties.dat`: the fixture's INI carries no `Lv`); each
+`validate_vapour_columns` branch removed fails its own PR-V2 leg (the slope check both CC legs).
+
 `abs-` keeps a constant cp on purpose: the datum `hOff` and the relative-header check exist only for a
 constant-cp table, so a varying cp would let PR7 pass on any reader.
 
@@ -79,6 +87,6 @@ under `"Enthalpy_abs"`, `psat-` = `legacy-` plus the column of
 `--zone 1`: zone A the curve, zone B zeros.
 
 `atlas-water/INPUT/` — ATLAS GPB output copied byte for byte: `atlas-properties.dat` is ATLAS's
-`test/GPB/CP-psat-water/reference/part-properties.dat` (md5 `b1edc9967083f67dac171c85807dbf70`,
-`"Enthalpy_abs", "Psat"`, T 280..380), `atlas-phase.txt` its `CP-fixmat-h0/reference/part-phase.txt`
+`test/GPB/CP-psat-water/reference/part-properties.dat` (md5 `f533b126d5841a0861b9e6cf148896cc`,
+`"Enthalpy_abs", "Psat", "Lv", "Mv", "Cpv"`, T 280..380), `atlas-phase.txt` its `CP-fixmat-h0/reference/part-phase.txt`
 (md5 `533dd5ae468eb8dec222018520773bc2`). Refresh both from ATLAS when its writer changes; never edit them here.

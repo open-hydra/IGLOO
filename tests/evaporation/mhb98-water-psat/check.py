@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""Gate for mhb98-water-psat: the water droplet of mhb98-water with p_sat from the Psat column
-that ATLAS GPB writes for water (NASA9 H2O(L)/H2O pair, INPUT/properties.dat byte for byte) -- a
-positive control of the tabulated saturation pressure on the CEM + Langmuir-Knudsen path.
+"""Gate for mhb98-water-psat: the water droplet of mhb98-water with p_sat and the vapour data from
+the columns that ATLAS GPB writes for water (NASA9 H2O(L)/H2O pair: Psat, Lv, Mv, Cpv;
+INPUT/properties.dat byte for byte) -- a positive control of the tabulated saturation pressure and
+latent heat on the CEM + Langmuir-Knudsen path.
 
 Not a validation: MHB98's own model line is Clausius-Clapeyron-based, and the table moves IGLOO
-away from it (by ~14 % in p_sat at 282 K). The gates are the parent's, with the oracle's p_sat
-read from the same column the solver reads (tests/tools/proptab.py, linear between the nodes):
+away from it (by ~14 % in p_sat at 282 K). The gates are the parent's, with the oracle's p_sat and
+L_v read from the same columns the solver reads (tests/tools/proptab.py, linear between the nodes):
 
   - the LK-kernel d^2 history along the measured Tp (run-conditioned, tight);
-  - the K <-> wet-bulb identity K = (TG - Twb) * 8 kg / (rho_l Lv) (Lv the latent-heat sink);
+  - the K <-> wet-bulb identity K = (TG - Twb) * 8 kg / (rho_l Lv(Twb)), K and Twb both from the
+    last half of the rows (no blowing: the factor f2 is 1), Lv(Twb) from the Lv column;
   - mass telescoping and two-phase mass conservation (source.tec's mass column);
   - PC0: the run reported "p_sat tabulated from properties.dat";
   - PC1: the wet-bulb at least 0.6 K below the parent's 282.33 K (Clausius-Clapeyron, same
-    kernel and inputs); the table predicts ~281.3 K.
+    kernel and inputs); the table predicts ~281.3 K;
+  - PC2: the run reported "vapour data tabulated from properties.dat".
 The parent's two digitized-M7 legs are not carried: they gate the Clausius-Clapeyron case.
 """
 import math
@@ -30,6 +33,8 @@ SRC    = "OUTPUT/source.tec"
 LOG    = "run_out.txt"
 TMIN, TMAX, _COLS = load_properties(os.path.join(HERE, "INPUT", "properties.dat"))
 PSAT = _COLS.get("psat")          # ATLAS GPB's NASA9 H2O(L)/H2O curve, the column the solver reads
+LVT  = _COLS.get("Lv")            # its latent heat Lv(T) [J/kg], the latent-heat sink the solver reads
+VAP_LINE = "vapour data tabulated from properties.dat"   # the solver's setup line (IO.f90)
 TWB_CC = 282.33                   # mhb98-water's wet-bulb with Clausius-Clapeyron (its gate prints it)
 DTWB_MIN = 0.6                    # PC1: required depression of the wet-bulb [K]
 TELESCOPE_TOL = 0.02
@@ -53,8 +58,7 @@ GAM    = 1.4085719  # NOT a physical gamma: it encodes MHB98's c_p,g = Pr_C*lamb
                     # no other effect (Ma=0). Reproduces App.A Pr_C(T_R)=0.70826 exactly.
 R_G    = 287.0      # gas specific gas const  [J/kg/K]  (= Ru/W_C, App.A air W_C=28.97)
 RHO_P  = 997.0      # water density   App.A (properties.dat Density; [GPB-Phase1] rho ignored)
-LV     = 2.462478e6 # latent heat [J/kg] App.A water 2.257e6+2595*(373.15-T_R)
-MV     = 18.015     # vapour molar mass       [kg/kmol]([IGLOO-Properties] Mv)
+MV     = 18.015     # vapour molar mass       [kg/kmol] (properties.dat Mv column, checked in main)
 TBOIL  = 373.15     # boiling temperature     [K]      ([IGLOO-Properties] Tboil)
 LE     = 1.0        # Lewis number            ([IGLOO-Properties] Le)
 YINF   = 0.0        # ambient vapour mass frac ([IGLOO-Properties] Yinf, dry air)
@@ -89,9 +93,10 @@ TOL_U_REL      = 1.0e-3     # u must equal u_g (coast) -> t = x/u_g valid
 TOL_D0_REL     = 1.0e-2
 TOL_T0         = 1.0e-3 * T_G
 TOL_MD_REL     = 1.0e-3
-# wet-bulb self-consistency: K == (TG - Twb) * 8 kg / (rho_l Lv)
-TOL_WB_REL     = 0.02
-WB_TAIL_FRAC   = 0.5       # average Tp over the last half of the path for Twb
+# wet-bulb self-consistency: K == (TG - Twb) * 8 kg / (rho_l Lv(Twb)), K and Twb from the last half;
+# 10x the measured residual (1.138e-4); Lv at 298.15 K, at the boiling point, the constant 2.462478e6: 1.6e-2, 9.3e-2, 7.8e-3
+TOL_WB_REL     = 1.14e-3
+WB_TAIL_FRAC   = 0.5       # K fitted and Tp averaged over the last half of the path
 def xs_eq(Tp):
     return min(table_value(PSAT, TMIN, TMAX, Tp) / P_G, 1.0)
 
@@ -245,6 +250,10 @@ def main():
     if PSAT is None:
         print("[FAIL] INPUT/properties.dat has no Psat column: the rate oracle takes p_sat from it")
         return 1
+    if LVT is None or any(v != MV for v in _COLS.get("Mv", [None])):
+        print(f"[FAIL] INPUT/properties.dat needs the Lv column and an Mv column of {MV} on every row: "
+              f"the identity takes Lv(Twb) from it, the kernel Mv")
+        return 1
     try:
         parts = load_trajectories(TRAJ)
     except FileNotFoundError:
@@ -256,7 +265,8 @@ def main():
 
     print(f"oracle: p={P_G:.4e} Pa  Pr={PR:.4f}  Sc={SC:.4f}  Dv={DV:.4e} m^2/s  "
           f"d0^2={D0**2:.4e} m^2  Tp0={TP0:.1f} K  u_g={U_G} m/s")
-    print(f"K<->wet-bulb identity coeff 8kg/(rho_l Lv) = {8.0*KG/(RHO_P*LV):.4e} m^2/s/K")
+    print(f"K<->wet-bulb identity coeff 8kg/(rho_l Lv(T)), Lv from the column: "
+          f"{8.0*KG/(RHO_P*table_value(LVT, TMIN, TMAX, 281.0)):.4e} m^2/s/K at 281 K")
     print(f"checking {len(parts)} particle(s)\n")
 
     n_violation = 0
@@ -354,24 +364,26 @@ def main():
                       f"(meas {d2s[k]:.5e}, CEM pred {pf[k]:.5e})")
                 n_violation += 1; bad = True
 
-        # wet-bulb self-consistency: K == (TG - Twb) * 8 kg / (rho_l Lv)
+        # wet-bulb self-consistency: K == (TG - Twb) * 8 kg / (rho_l Lv(Twb)), both from the last half
         i0 = int((1.0 - WB_TAIL_FRAC) * (nrow - 1))
         twb = sum(Tps[i0:]) / (nrow - i0)
         twbs.append(twb)
-        ts  = [x / U_G for x in xs]
-        n = nrow; sx = sum(ts); sy = sum(d2s)
-        sxx = sum(t*t for t in ts); sxy = sum(t*y for t, y in zip(ts, d2s))
+        ts  = [x / U_G for x in xs[i0:]]
+        tail = d2s[i0:]
+        n = len(ts); sx = sum(ts); sy = sum(tail)
+        sxx = sum(t*t for t in ts); sxy = sum(t*y for t, y in zip(ts, tail))
         Kfit = -(n*sxy - sx*sy) / (n*sxx - sx*sx)      # -slope of d^2 vs t
         kfits.append(Kfit)
-        Kwb  = (T_G - twb) * 8.0 * KG / (RHO_P * LV)
+        lv_wb = table_value(LVT, TMIN, TMAX, twb)
+        Kwb  = (T_G - twb) * 8.0 * KG / (RHO_P * lv_wb)
         wb_rel = abs(Kfit - Kwb) / Kwb
         worst_wb = max(worst_wb, wb_rel)
         wb_seen += 1
         if wb_rel <= TOL_WB_REL:
             wb_ok += 1
         else:
-            print(f"[FAIL] ID={pid}: K-wetbulb identity off: Kfit={Kfit:.4e} vs "
-                  f"(TG-Twb)8kg/(rho_l Lv)={Kwb:.4e} (Twb={twb:.2f}K, rel {wb_rel:.2%})")
+            print(f"[FAIL] ID={pid}: K-wetbulb identity off: Kfit={Kfit:.6e} vs "
+                  f"(TG-Twb)8kg/(rho_l Lv(Twb))={Kwb:.6e} (Twb={twb:.4f}K, Lv={lv_wb:.6e}, rel {wb_rel:.3e})")
             n_violation += 1
 
         rel_loss = (d2a - d2s[-1]) / d2a
@@ -388,8 +400,8 @@ def main():
     print(f"max relative d^2 loss over a particle: {worst_loss*100:.2f}%  "
           f"(need >= {LOSS_MIN_REL*100:.0f}% to count; {n_noevap} below)")
     print(f"worst kernel point: {worst[1]}  (resid/tol = {worst[0]:.3f})")
-    print(f"K<->wet-bulb identity: {wb_ok}/{wb_seen} within {TOL_WB_REL:.0%} "
-          f"(worst {worst_wb:.2%})")
+    print(f"K<->wet-bulb identity: {wb_ok}/{wb_seen} within {TOL_WB_REL:.2e} "
+          f"(worst {worst_wb:.3e})")
     print(f"verified evaporators (loss>={LOSS_MIN_REL*100:.0f}%, >={MIN_PTS} rows, in tol): "
           f"{verified} (need >= {N_GOOD})")
 
@@ -405,6 +417,12 @@ def main():
     print(f"[{'PASS' if pc1 else 'FAIL'}] PC1 wet-bulb {twb_ig:.2f} K at least {DTWB_MIN} K below the "
           f"Clausius-Clapeyron case's {TWB_CC:.2f} K")
     if not pc1:
+        n_violation += 1
+    n_vap = sum(1 for l in open(LOG, errors="replace") if VAP_LINE in l) if os.path.exists(LOG) else 0
+    pc2 = n_vap >= 1
+    print(f"[{'PASS' if pc2 else 'FAIL'}] PC2 the run tabulated the vapour data from the Lv, Mv, Cpv columns "
+          f"({n_vap} report(s) in {LOG})")
+    if not pc2:
         n_violation += 1
 
     n_violation += check_mass_telescoping(parts)

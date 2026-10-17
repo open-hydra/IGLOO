@@ -4,11 +4,11 @@
     from proptab import load_properties, lookup, table_value
     Tmin, Tmax, cols = load_properties("INPUT/properties.dat")   # zone 1
     h = lookup(cols["h"], Tmin, Tmax, Tp)                        # lookupTab: h, sigma, mu
-    rho = table_value(cols["rho"], Tmin, Tmax, Tp)               # tableValue: rho, psat
+    rho = table_value(cols["rho"], Tmin, Tmax, Tp)               # tableValue: rho, psat, Lv, cpv
 
 The header is the first line holding VARIABLES; its double-quoted names name the columns, the
-first being the temperature. Known names map to the slots IGLOO reads (T, cp, rho, h, psat) with
-the alias set of the solver's reader; any other column keeps its own name. Rows are consecutive
+first being the temperature. Known names map to the slots IGLOO reads (T, cp, rho, h, psat, Lv, Mv,
+cpv) with the alias set of the solver's reader; any other column keeps its own name. Rows are consecutive
 integer kelvins, one zone per material in phase-file order.
 
 The two interpolations replicate the solver statement for statement: `lookup` clamps the INDEX to
@@ -24,6 +24,9 @@ SLOTS = {
     "Density": "rho", "density": "rho",
     "Enthalpy": "h", "enthalpy": "h", "Enthalpy_abs": "h", "enthalpy_abs": "h",
     "Psat": "psat", "psat": "psat", "PSAT": "psat",
+    "Lv": "Lv", "lv": "Lv", "LV": "Lv",
+    "Mv": "Mv", "mv": "Mv", "MV": "Mv",
+    "Cpv": "cpv", "cpv": "cpv", "CPV": "cpv",
 }
 
 

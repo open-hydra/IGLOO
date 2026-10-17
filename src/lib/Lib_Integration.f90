@@ -11,7 +11,7 @@ contains
   !> Integrate one particle from its current state to domain exit (or burnout) through the
   !  steady gas field, one cell segment at a time, depositing source and Eulerian moments.
   subroutine integrate(part,geoblock,gasblock,srcblock,eulblock,     &
-                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab, shed,noShed)
+                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, shed,noShed)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
     use IGLOO_variables,  only: unitTraj,unitExit,unitScat,unitSnap,iprint,dtprint,tEnd,timeOn,snapOn, &
@@ -47,7 +47,7 @@ contains
     type(obj_sourceblock), intent(inout) :: srcblock(nb)
     type(obj_eulerblock),  intent(inout) :: eulblock(nb)
     real(R8),              intent(in)    :: hTab(:),cpTab(:),rhoTab(:),     &
-                                            mupTab(:),sigTab(:),psatTab(:)
+                                            mupTab(:),sigTab(:),psatTab(:),LvTab(:),cpvTab(:)
     !> This parent's shed list (intent(inout) required).
     type(shedList),        intent(inout), optional :: shed
     !> True on the last generation pass: sheds are suppressed and the parent keeps the mass.
@@ -661,7 +661,8 @@ contains
     end subroutine rhs1
     subroutine rhs2(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
-      call rhsEvaporation(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,psatTab, gas,gasVert,gasState, ng,ngVert)
+      call rhsEvaporation(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,psatTab,LvTab,cpvTab, &
+                          gas,gasVert,gasState, ng,ngVert)
     end subroutine rhs2
     subroutine rhs3(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
@@ -669,7 +670,8 @@ contains
     end subroutine rhs3
     subroutine rhs4(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
-      call rhsEvapBreakup(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,mupTab,sigTab,psatTab, gas,gasVert,gasState, ng,ngVert)
+      call rhsEvapBreakup(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,mupTab,sigTab,psatTab, &
+                          LvTab,cpvTab, gas,gasVert,gasState, ng,ngVert)
     end subroutine rhs4
     subroutine rhs5(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)

@@ -48,6 +48,16 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
   `rhsEvaporation` evaluation (production call site, gas packed per contract)
   → F(8)=mdot≡0 (A4). Suite flips RED when both are fixed → promote + unblock
   C1-C4 and tests/evaporation/d2law.
+- `test_vapour_tables.f90` (ctest `test_vapour_tables`): the `Lv` and `Cpv` columns of
+  `properties.dat` at the droplet temperature. One production right-hand side per leg at
+  T_p = 337.5 K with one property tabulated on 280–400 K and its packed scalar poisoned (1e30),
+  against the same evaluation with the table off and the scalar set to the table's value at
+  T_p, equal to 1e-15 relative (measured 0) and the drop evaporating: VT1 CEM, the latent sink
+  F(7); VT2 d²-law, the rate F(8) (B_T); VT3 TC, `Cpv` in F(7) and F(8); VT4 CEM + Reitz-Diwakar
+  (ODE model 4), the latent sink of ṁ_evap. RED on one-line mutations of `Lib_RHS.f90`: the
+  model-2 `Lv` override deleted (VT1 1.9e23, VT2 F(8) = 0), the model-4 one (VT4), the `Cpv`
+  override (VT3 2.4 and 0.67), the model-2 sink back to the packed scalar (VT1 only, VT2 green)
+  and the model-4 one (VT4 only).
 
 ## Evaporation with ODE breakup (ODE model 4)
 

@@ -28,7 +28,7 @@ module Lib_RHS
   integer :: mod_intfSelect = 0         !> interface:   0 VLE, 1 Langmuir-Knudsen
   integer :: mod_boilSelect = 0         !> boiling:     0 clamp, 1 ZGR (not implemented)
   integer :: mod_combSelect = 0         !> metal combustion: 0 off, 1 Beckstead
-  logical :: mod_propFlags(5) = .false. !> [varCp, varRho, varSig, varMup, varPsat]
+  logical :: mod_propFlags(7) = .false. !> [varCp, varRho, varSig, varMup, varPsat, varLv, varCpv]
   real(R8), allocatable :: mod_bp(:)    !> breakup params (copy of bp from IGLOO_Lib_Breakup)
   integer  :: mod_bpMethod  = 1         !> TAB sub-method selector
   real(R8) :: mod_bpScale   = 1._R8     !> TAB precomputed scale factor
@@ -105,7 +105,7 @@ contains
   subroutine computeNaux(model,brkSelect,evapSelect,combSelect, &
                          propFlags,ord2,mesh2D,nAux)
     integer, intent(in)  :: model, brkSelect, evapSelect, combSelect
-    logical, intent(in)  :: ord2, mesh2D, propFlags(5)
+    logical, intent(in)  :: ord2, mesh2D, propFlags(7)
     integer, intent(out) :: nAux
     integer :: nBase, nBrk, nEvap, nComb, ind
 
@@ -169,7 +169,7 @@ contains
   subroutine computeNauxState(model,brkSelect,propFlags, &
                               ord2,mesh2D,nAuxState)
     integer, intent(in)  :: model, brkSelect
-    logical, intent(in)  :: ord2, mesh2D, propFlags(5)
+    logical, intent(in)  :: ord2, mesh2D, propFlags(7)
     integer, intent(out) :: nAuxState
     integer :: ind
 
@@ -226,7 +226,7 @@ contains
     !$ use omp_lib, only: omp_in_parallel
     integer,  intent(in) :: model, brkSelect, evapSelect
     integer,  intent(in) :: liqSelect, intfSelect, boilSelect, combSelect
-    logical,  intent(in) :: propFlags(5)
+    logical,  intent(in) :: propFlags(7)
     real(R8), intent(in) :: bp_in(:)
     integer,  intent(in) :: bpMethod_in
     real(R8), intent(in) :: bpScale_in
@@ -539,12 +539,12 @@ contains
 
   !> Model 2: variable mass via evaporation.
   subroutine rhsEvaporation(neq, time, Z, F, aux,naux, auxst,nauxst, &
-                             hTabM, rhoTabM, psatTabM,         &
+                             hTabM, rhoTabM, psatTabM, LvTabM, cpvTabM, &
                              gasNodes, gasVert,gas,nsp,nNodes)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
-    use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor
+    use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor, iLv, icpv
     use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
@@ -554,12 +554,13 @@ contains
     real(R8), intent(out)   :: F(neq)
     real(R8), intent(in)    :: aux(naux)
     real(R8), intent(inout) :: auxst(nauxst)
-    real(R8), intent(in)    :: hTabM(:), rhoTabM(:), psatTabM(:)
+    real(R8), intent(in)    :: hTabM(:), rhoTabM(:), psatTabM(:), LvTabM(:), cpvTabM(:)
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
     ! locals
     real(R8) :: normVel, slip, mdot, Vdif(3), Re, cpFactor, tp, d, rho, m, psat, xi0_loc(3)
     real(R8) :: Fdrag(3), Qdot, Qdot_evap
+    real(R8) :: ep(nep)
     logical  :: override
 
     F = 0._R8
@@ -584,15 +585,19 @@ contains
     Re   = gas(1) * slip * d / gas(6)
 
     call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot)
+    !> vapour data: the packed scalars, Lv and cpv at the droplet temperature when tabulated
+    ep = aux(ind_Mv:ind_Mv+nep-1)
+    if (mod_propFlags(6)) ep(iLv)  = tableValue(LvTabM, Tmin, Tmax, tp)
+    if (mod_propFlags(7)) ep(icpv) = tableValue(cpvTabM, Tmin, Tmax, tp)
     !> gas packs (5)=T,(6)=mu,(7)=gamma,(8)=R,(9)=k; signature is (rhog,Tg,gamma,Rg,mug,kg)
     if (mod_propFlags(5)) then
       psat = tableValue(psatTabM, Tmin, Tmax, tp)
       call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
-                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
+                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
                        mdot, Qdot_evap, override, psatExt=psat)
     else
       call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
-                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
+                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
                        mdot, Qdot_evap, override)
     endif
     if (override) Qdot = Qdot_evap
@@ -603,7 +608,7 @@ contains
     F(4:6) = Fdrag / m
     if (bodyForce) F(4:6) = F(4:6) + bodyAccel
     !> m*cp*dT/dt = Q + mdot*Lv (MHB98 eq.3): latent term only, no sensible-carry term
-    F(7)   = (Qdot + mdot*aux(ind_Lv)*cpFactor) / m
+    F(7)   = (Qdot + mdot*ep(iLv)*cpFactor) / m
     F(8)   = mdot
 
     if (eulerSwitch) then
@@ -709,13 +714,13 @@ contains
   !> Model 4: breakup ODE + evaporation.
   !  State: Z(1:3)=pos, Z(4:6)=vel, Z(7)=T/h, Z(8)=mass, Z(9)=npdot.
   subroutine rhsEvapBreakup(neq, time, Z, F, aux,naux, auxst,nauxst,     &
-                             hTabM, rhoTabM, mupTabM, sigTabM, psatTabM, &
+                             hTabM, rhoTabM, mupTabM, sigTabM, psatTabM, LvTabM, cpvTabM, &
                              gasNodes, gasVert,gas,nsp,nNodes)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
     use IGLOO_Lib_Breakup,     only: breakupOde
-    use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor
+    use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor, iLv, icpv
     use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
@@ -726,13 +731,14 @@ contains
     real(R8), intent(in)    :: aux(naux)
     real(R8), intent(inout) :: auxst(nauxst)
     real(R8), intent(in)    :: hTabM(:), rhoTabM(:)
-    real(R8), intent(in)    :: mupTabM(:), sigTabM(:), psatTabM(:)
+    real(R8), intent(in)    :: mupTabM(:), sigTabM(:), psatTabM(:), LvTabM(:), cpvTabM(:)
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
     ! locals
     real(R8) :: normVel, slip, mdot, mdot_evap, Vdif(3), Re, mTraj, cpFactor, sigma, mup, psat
     real(R8) :: tp, d, rho, m, xi0_loc(3)
     real(R8) :: Fdrag(3), Qdot, Qdot_evap, acc(3), brkupVar(2)
+    real(R8) :: ep(nep)
     logical  :: override
 
     F = 0._R8
@@ -769,15 +775,19 @@ contains
     if (ind_sb1 > 0) auxst(ind_sb1:ind_sb2) = brkupVar
 
     ! Evaporation
+    !> vapour data: the packed scalars, Lv and cpv at the droplet temperature when tabulated
+    ep = aux(ind_Mv:ind_Mv+nep-1)
+    if (mod_propFlags(6)) ep(iLv)  = tableValue(LvTabM, Tmin, Tmax, tp)
+    if (mod_propFlags(7)) ep(icpv) = tableValue(cpvTabM, Tmin, Tmax, tp)
     !> gas packs (5)=T,(6)=mu,(7)=gamma,(8)=R,(9)=k; signature is (rhog,Tg,gamma,Rg,mug,kg)
     if (mod_propFlags(5)) then
       psat = tableValue(psatTabM, Tmin, Tmax, tp)
       call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
-                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
+                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
                        mdot_evap, Qdot_evap, override, psatExt=psat)
     else
       call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
-                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, aux(ind_Mv:ind_Mv+nep-1), &
+                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
                        mdot_evap, Qdot_evap, override)
     endif
     if (override) Qdot = Qdot_evap
@@ -792,7 +802,7 @@ contains
     F(4:6) = acc
     if (bodyForce) F(4:6) = F(4:6) + bodyAccel
     !> Same latent-only form as model 2 (see rhsEvaporation): no sensible-carry term
-    F(7)   = (Qdot + mdot_evap*aux(ind_Lv)*cpFactor) / m
+    F(7)   = (Qdot + mdot_evap*ep(iLv)*cpFactor) / m
     F(8)   = mdot
 
     if (eulerSwitch) then

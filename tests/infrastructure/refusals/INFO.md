@@ -81,12 +81,16 @@ output written).
 | `refuse-bc-legacy` | own `INPUT/bc.txt`: `drag-stokes`'s with every code in the legacy single-digit schema (401 → 4, 400 → 1; `python3 make_bc_refusals.py`, run from this directory) | `IGLOO: bc.txt line is not six integers with a 3-digit code` |
 | `refuse-bc-empty-payload` | own `INPUT/bc.txt`: `drag-stokes`'s with the first inlet payload line empty (`make_bc_refusals.py`) | `IGLOO: bc.txt inlet payload line is empty` |
 | `refuse-body-accel` | `body-force` (`INPUT/` symlinked) with `body-accel = 0.0 -200.0` | `body-accel: expected 3 values (gx gy gz)` |
+| `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
+| `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All sixty exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All sixty-two exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
-line) — neither is their payload. **The ten size-distribution cases are
+line) — neither is their payload. **The two vapour-column cases are RED**
+on a reader that does not know the `Lv`, `Mv`, `Cpv` columns: both stop at `Evaporation requires Mv` (exit 128,
+not their payload). **The ten size-distribution cases are
 RED** on a reader that splits the inlet line with a list-directed read: a path ends at its slash (`tables`,
 `INPUT`), so nine of them stop at `unsupported distribution law` with exit 1 and no payload, and the
 600-character line is cut to 512 characters and run as a Dirac (exit 0, output written). The six table

@@ -513,7 +513,7 @@ contains
               call tm_parcel_begin()
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                              mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab,    &
-                             gr%shed(ip), noShed=(loopCounter==maxLoop))
+                             mat%LvTab,mat%cpvTab, gr%shed(ip), noShed=(loopCounter==maxLoop))
               call tm_parcel_end()
             enddo
             !$OMP END PARALLEL DO
@@ -653,7 +653,8 @@ contains
             if (.not. owns_particle(ip)) cycle
             call tm_parcel_begin()
             call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
-                            mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab)
+                            mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
+                            mat%LvTab,mat%cpvTab)
             call tm_parcel_end()
           enddo
           !$OMP END PARALLEL DO

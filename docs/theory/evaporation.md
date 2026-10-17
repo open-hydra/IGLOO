@@ -54,8 +54,20 @@ through the Langmuir-Knudsen iteration, to $\dot{m} = 0$.  The same constant cap
 the Tonini-Cossali model, so every gas-side model shares one clamp.  The cap is a numerical
 floor on the clamp, not a physical model of boiling: `boiling = ZGR` is that.  Species properties $M_v, L_v,
 T_\mathrm{boil}, c_{p,v}, \mathrm{Le}, Y_\infty, \alpha_e$ are read from the array
-`ep(nep)` assembled from `INPUT/properties.dat` and the `[IGLOO-Properties]` overrides
+`ep(nep)` assembled from `INPUT/properties.dat` and the `[IGLOO-Properties]` keys
 in `input.ini`.
+
+When the table also carries the `Lv`, `Mv` and `Cpv` columns of the same liquid/vapour pair,
+$L_v$ and $c_{p,v}$ are taken at the droplet temperature in every right-hand side,
+$L_v = L_v(T_p)$ and $c_{p,v} = c_{p,v}(T_p)$ (linear between the nodes, the end values
+outside), wherever they enter: the latent sink of the energy equation, the d²-law transfer
+number $B_T$, and the vapour heat capacity of ASM and TC; $M_v$ is the column's constant.
+ATLAS writes $L_v(T) = \Delta h(T_e)/M_v$ with the same enthalpy difference
+$\Delta h = h^\circ_v - h^\circ_l$ that the `Psat` column's Clausius-Clapeyron extension uses
+($T_e$ the node clamped to the pair's common range), so the four columns satisfy
+$\mathrm{d}\ln p_\mathrm{sat}/\mathrm{d}T = L_v M_v/(R_u T^2)$ on every node: the latent heat the
+droplet pays is the slope of the saturation curve it evaporates on.  The material's scalar
+$L_v$ is then $L_v(298.15\ \mathrm{K})$, the temperature of the enthalpy datum.
 
 The $X_s$ above is the **equilibrium** (VLE) surface mole fraction; the
 `interface` selector can depress it before the gas-side rate is evaluated
@@ -331,9 +343,9 @@ when `blowing = LK`.  No sensible-enthalpy term for the departing vapour is carr
 
 | INI key (`[IGLOO-Properties]`) | Array slot | Meaning |
 | :--- | :---: | :--- |
-| `Mv` | `ep(iMv)` | Vapour molar mass (kg kmol⁻¹) |
-| `Lv` | `ep(iLv)` | Latent heat (J kg⁻¹) |
-| `cpv` | `ep(icpv)` | Vapour specific heat (J kg⁻¹ K⁻¹); ASM and TC |
+| `Mv` | `ep(iMv)` | Vapour molar mass (kg kmol⁻¹); or the table's `Mv` column |
+| `Lv` | `ep(iLv)` | Latent heat (J kg⁻¹); or the table's `Lv` column, at $T_p$ |
+| `cpv` | `ep(icpv)` | Vapour specific heat (J kg⁻¹ K⁻¹); ASM and TC; or the table's `Cpv` column, at $T_p$ |
 | `Le` | `ep(iLe)` | Lewis number |
 | `Yinf` | `ep(iYinf)` | Far-field vapour mass fraction |
 | `boiling-temperature` (alias `Tboil`) | (→`ep(iinvTboil)`) | Normal boiling point (K) |

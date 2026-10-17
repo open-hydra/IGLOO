@@ -26,7 +26,7 @@ program test_evaporation
     ! Water-like fuel, hot air. ep layout: [Mv,Lv,cpv,Le,Yinf,LvMv/Ru,1/Tboil].
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64, QP => real128
-    use IGLOO_Lib_Evaporation, only: evaporation, nep, xsCap
+    use IGLOO_Lib_Evaporation, only: evaporation, nep, xsCap, Ru
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
     use verif_dump,   only: dump_curve
@@ -34,7 +34,7 @@ program test_evaporation
     implicit none
 
     real(R8), parameter :: PI = 4.0_R8*atan(1.0_R8)
-    real(R8), parameter :: Ru = 8314.46_R8, Patm = 101325._R8
+    real(R8), parameter :: Patm = 101325._R8
     ! gas (correct order): rhog, Tg, gamma, Rg, mug, kg
     real(R8), parameter :: rho_g = 1.2_R8, Tg = 800._R8, gam = 1.4_R8
     real(R8), parameter :: Rg = 287._R8, mu_g = 1.8e-5_R8, kg = 0.026_R8
@@ -329,9 +329,8 @@ contains
         call asm_call(0.25_R8,         0._R8, 1.9_R8*cpg, m1, q1, o1)
         call asm_call(0.25_R8 - two55, 0._R8, 1.9_R8*cpg, m2, q2, o2)
         if (o1 .or. .not. o2) then
-            write(*,'(a)') '  [FAIL] EV10 surface state: Y_s /= 0.25 exactly. The test repeats Ru = 8314.46 of '// &
-                           'Lib_Evaporation.f90 (Mg = Ru/RgE must be 32): align it'
-            error stop 'test_evaporation: EV10 surface state broken (Ru)'
+            write(*,'(a)') '  [FAIL] EV10 surface state: Y_s /= 0.25 exactly (Mg = Ru/RgE must be 32)'
+            error stop 'test_evaporation: EV10 surface state broken'
         end if
         write(*,'(a)') '  [PASS] EV10 surface state: Y_s = 0.25 exactly (model skipped at Yinf = 0.25, run one double below)'
     end subroutine check_EV_surface
