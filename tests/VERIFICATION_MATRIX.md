@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (228 in a serial build: 184 e2e + 43 unit incl. `self_test`,
+One row per registered CTest entry (231 in a serial build: 187 e2e + 43 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 24 `mpi-*`
-rows in their own section, 252).
+rows in their own section, 255).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,13 +30,13 @@ Columns:
 
 ---
 
-## Shared box fixture (50 of 101 e2e fixtures)
+## Shared box fixture (53 of 104 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
 writes with its defaults.
 
-Fifty fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
+Fifty-three fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
 once here, referenced as **"shared box"** below. The other fifty-one:
@@ -174,6 +174,9 @@ oracle possible.
 | **db-injection** | infrastructure (no paper; bug-B1 regression) | *behavioral* — no reference curve; asserts placement fidelity, `vInj` hand-off (u starts at u_p=1), Stokes relaxation, and domain exits | shared box | **assigned-position (DB)** injection: 5 parcels at explicit x=0.01, y=0.005…0.045, z=0.025, u_p=1.0 m/s, d=11.89 µm, ṁ=1e-4, T=300 K; outlet + walls |
 | **coupled-body** | analytic (euler+source+body) | *mixed* — body-force v(x) closed form (as body-force) **plus** source-deposit totals vs closed forms: the deposit must be the drag reaction only (body-gained momentum/energy stripped) | shared box + `body-accel=(0,−200,0)`; euler+source accumulators ON (default `out-file`) | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; outlet + walls |
 | **threads-coupled-body** | — (OMP invariance) | *cross-run invariant* — `tools/check_threads_case.py` runs `coupled-body`'s input at OMP_NUM_THREADS 1, 2 and 5 in `coupled-body/threads-omp<N>/` (`INPUT/` and `input.ini` symlinked): the thread witness (no `OpenMP threads` line at 1, the count at 2 and 5), every number finite, every `.dat` an exact sorted multiset, every `.tec` within 1e-12 of the field scale, `coupled-body`'s `check.py` on the 1-thread run. The Euler, source and body-force accumulators (two `.tec` fields). RED (as each thread gate) with the trajectory ID shifted by the thread count | as `coupled-body` | as `coupled-body` |
+| **body-evap-m2** | — (conservation) | *telescoping* — the body-force accumulators J = ∫m dt, W = ∫m g·v dt of model 2: ΣF_y and ΣE of `source.tec` against the trajectory rows (injection state to the state at `time-end`, ṅ from the injection formula, integrals by the trapezoid on the printed time + Richardson), B2 valuing the mass lost by Σẇ (one final state for the 25 parcels) because m c_p T is 10⁸ times the body work; B0 mass and F_x, B3 the d2-law kernel, B4 non-vacuity, in both slot layouts (a `ref-S/` sibling with `out-file = S`), B5 the two layouts cell by cell (regression band). B1 0.07, B2 0.60 of the tolerance (W = 15 tolerances). RED: the closed form of models 1/3 for model 2 (B1 3167 tolerances), W's sign (B2 28.8), half the d2-law rate (B3) | d2law-line's (`INPUT/` symlinked) + `body-accel=(0,−200,0)` | d2law-line's; `out-file = ALL`, `out-time = on`, `time-end = 6.875e-3` (no parcel reaches a wall) |
+| **body-evap-m4** | — (conservation) | *telescoping* — as `body-evap-m2` for model 4 (J the Eulerian mass moment at neq−2 with `out-file = ALL`), plus the dormancy of the breakup (We, We/Re^{1/2} on every row; Σn_p V = 25 ṅ time-end). B1 0.11, B2 0.14 (W = 166 tolerances). RED: J read at neq−1 in the Eulerian layout (B1 5.1e8 N, `ref-S` green, B5), W's sign (B2 332) | d2law-brk-dormant's (`INPUT/` symlinked) + `body-accel=(0,−200,0)` | d2law-brk-dormant's; `out-file = ALL`, `out-time = on`, `time-end = 6.875e-3` |
+| **body-burn-m5** | — (conservation) | *telescoping* — as `body-evap-m2` for model 5 (no B3: the slip changes the burning drop's heat). B1 0.09, B2 0.02 (W = 240 tolerances). RED: the closed form of models 1/3 for model 5 (B1 2669), W's sign (B2 479) | burn-box's (`INPUT/` symlinked) + `body-accel=(0,−200,0)` | burn-box's; `out-file = ALL`, `out-time = on`, `time-end = 6.875e-3` |
 | **db-2daxi** | infrastructure (no paper; promoted legacy `assigned-pos`) | *behavioral*, md5-free — both parcels integrate, exit the nozzle outlet, all fields finite; no analytic oracle (real flow field). Since 2026-09-16 (O16) the ord2 eulerian deposit is audited as in `axis-200`: E1 mass retention total and per parcel 1.001438 / 1.000821 / 1.001482 ± 1e-4 (floor zero; the unclipped-dual defect reads 1.001230 / 1.000453 / 1.001285, a factor-2 field 2.0), E3 per-drop mass identity with two admissible masses (d = 1e-4 / 2e-5: 4691 / 5013 cells, 232 mixed, 0 outside to 1e-12), E4 outlet-band share 2.514026e-3 ± 1e-3 rel (unclipped dual −7.3 %); no E2 (both parcels off-axis) | **NON-UNIFORM real MOSE nozzle**: `common/solfile_mose.tec`, single block I=201×J=181×K=2 (2-D axisymmetric wedge, one cell thick), ~6×10⁵ distinct field values; spatially varying ρ/U/T (~300–3600 K). Drag=Morsi-Alexander, heat=Kavanau-Drake | **assigned-position (DB)** injection: 2 parcels x=[−0.49,0.064], y=[0.55,0.66], d=[1e-4,2e-5], ṁ=[0.1,1.0]; face1 inlet, face2 outlet, **face3 symmetry** (axisymmetric fold), face4 wall; euler-only output |
 | **bc-center-2grp** | infrastructure (no paper; bug-A24 regression) | *behavioral* — no reference curve; every expectation is built from the known inputs (25 inlet cells, `fsample=2`, 2 groups), never from production output: 12 particles per group, ID set exactly {1…12} per group, group 2 an exact clone of group 1 (same cells, same properties, same physics), and every particle writing ≥5 trajectory records and exiting on the outflow plane. The suite's only execution of `pin_particles_bc_center` | shared box (`INPUT/` symlinks `standard/drag-stokes/INPUT`) | inlet-face 401, κ_ρ=0.34, κ_v=0.1, κ_t=1.0, d=11.89 µm, ρ_p=2950; outlet + walls. Two load-bearing deviations from `drag-stokes`: **`ds` deleted** from `[IGLOO-BC]` (⇒ dispatch to `pin_particles_bc_center`, not `_bc_ds`) and **`fsample = 2`** (every 2nd inlet cell ⇒ 12 particles/group), with `phase.txt` = `A 2` (**two groups**). At `fsample = 1` half the defect is invisible — do not "simplify" |
 | **inj-pack** | — (inputs, conservation) | *placement contracts* — several parcels per inlet cell packed at ds = 0.27 cm (the 3D advancing front): J0 every pinned point off the face-cell edges and integrated to an exit, J1 the inlet plane, J2 the first rows of a cell at least R/2 apart and J2b at least R (the lattice; measured 2.699767e-3 m), J3 each cell's parcels sum to its flow (401: κ_ρ/(1−κ_ρ)·ρU·A, 402: gp·A) whatever N_inj (14–20). RED with 402's flow not divided among the cell's parcels: the five 402 cells carry 16–20 × their flow. At ds = 0.25 cm the run stops with a segmentation fault (a lattice point on the face's outer edge: the placement and the search disagree on it; `INFO.md`) | shared box (`solfile.tec` a symlink to `drag-stokes`'s); own `bc.txt` (`make_fixture.py`) | inlet rows 1–4 401, row 5 402 (gp 5.0, \|v\| 4 m/s, Tp 450 K); `ds = 0.27`; `out-time` |
@@ -374,9 +377,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-184 `e2e`-labelled + 43 `unit`-labelled + the optional `vortex-cloud-3way` = **228 CTest entries** in a
-serial build (+24 `mpi-*` under `USE_MPI`, 252), all green (counted from `tests/CMakeLists.txt`). The 184
-`e2e` entries are the 105 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+187 `e2e`-labelled + 43 `unit`-labelled + the optional `vortex-cloud-3way` = **231 CTest entries** in a
+serial build (+24 `mpi-*` under `USE_MPI`, 255), all green (counted from `tests/CMakeLists.txt`). The 187
+`e2e` entries are the 108 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the four `threads-*` thread-count gates, the thirteen `repeat-*` two-sweep gates, the fifty-nine `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The
