@@ -121,12 +121,22 @@ def ulp(tok):
     return 10.0 ** (-len(m.group(1)) + (int(m.group(2)) if m.group(2) else 0))
 
 
-def by_id(path, width):
-    out = {}
-    for ln in open(path):
-        t = ln.split()
-        if len(t) == width and re.match(r"\d+$", t[-1]):
-            out.setdefault(int(t[-1]), []).append(t)
+def by_id(path):
+    """{ID: [{name: token}]} of a .dat file, each row keyed by the names of its variables= header (the printed
+    tokens kept, so a field can be compared to its last printed place)."""
+    out, names = {}, None
+    for n, ln in enumerate(open(path), 1):
+        s = ln.strip()
+        if not s or s.lower().startswith("zone"):
+            continue
+        if s.lower().startswith("variables"):
+            names = re.findall(r'"([^"]*)"', s)
+            continue
+        t = s.split()
+        if names is None or len(t) != len(names):
+            raise ValueError(f"{path}:{n}: {len(t)} values for {len(names or [])} names")
+        row = dict(zip(names, t))
+        out.setdefault(int(row["ID"]), []).append(row)
     return out
 
 
@@ -192,36 +202,38 @@ def main():
         rc |= fail(f"R1 trajectories differ from the one-block run: {len(set(la) ^ set(lb))} distinct lines")
     else:
         print(f"R1 trajectories equal the one-block run as sorted multisets ({len(la)} lines) PASS")
-    # exits: per parcel, every field within one unit of its last printed place
-    ea, eb = by_id(mine("outloc-A.dat"), 9), by_id(theirs("outloc-A.dat"), 9)
+    # exits: per parcel, every field (by its header name) within one unit of its last printed place
+    ea, eb = by_id(mine("outloc-A.dat")), by_id(theirs("outloc-A.dat"))
     flips, worse = 0, []
     for pid in sorted(set(ea) | set(eb)):
         ra, rb = ea.get(pid, []), eb.get(pid, [])
-        if len(ra) != 1 or len(rb) != 1:
+        if len(ra) != 1 or len(rb) != 1 or set(ra[0]) != set(rb[0]):
             worse.append(f"ID {pid}: {len(ra)} vs {len(rb)} exit records")
             continue
-        for c, (x, y) in enumerate(zip(ra[0], rb[0])):
+        for name, x in ra[0].items():
+            y = rb[0][name]
             if x == y:
                 continue
-            if c < 8 and abs(float(x) - float(y)) <= 1.0001 * max(ulp(x), ulp(y)):
+            if "." in x and "." in y and abs(float(x) - float(y)) <= 1.0001 * max(ulp(x), ulp(y)):
                 flips += 1
             else:
-                worse.append(f"ID {pid} column {c + 1}: {x} vs {y}")
+                worse.append(f"ID {pid} {name}: {x} vs {y}")
     if worse:
         rc |= fail(f"R1 exit records beyond one print unit: {worse[:4]}")
     else:
         print(f"R1 exit records equal per parcel within one print unit ({flips} field(s) one unit apart) PASS")
     # scatter: the same markers per parcel (count, Y, Z, d, m); their x and T are the floor's
-    sa, sb = by_id(mine("scatter-A.dat"), 10), by_id(theirs("scatter-A.dat"), 10)
+    sa, sb = by_id(mine("scatter-A.dat")), by_id(theirs("scatter-A.dat"))
+    same = ("Y", "Z", "d<sub>p", "m<sub>p")
     bad, dx, dT = [], 0.0, 0.0
     for pid in sorted(set(sa) | set(sb)):
-        ra = sorted(sa.get(pid, []), key=lambda t: float(t[0]))
-        rb = sorted(sb.get(pid, []), key=lambda t: float(t[0]))
-        if len(ra) != len(rb) or any((x[1], x[2], x[7], x[8]) != (y[1], y[2], y[7], y[8]) for x, y in zip(ra, rb)):
+        ra = sorted(sa.get(pid, []), key=lambda r: float(r["X"]))
+        rb = sorted(sb.get(pid, []), key=lambda r: float(r["X"]))
+        if len(ra) != len(rb) or any(tuple(x[k] for k in same) != tuple(y[k] for k in same) for x, y in zip(ra, rb)):
             bad.append(pid)
             continue
         for x, y in zip(ra, rb):
-            dx = max(dx, abs(float(x[0]) - float(y[0]))); dT = max(dT, abs(float(x[6]) - float(y[6])))
+            dx = max(dx, abs(float(x["X"]) - float(y["X"]))); dT = max(dT, abs(float(x["T"]) - float(y["T"])))
     if bad or not sa:
         rc |= fail(f"R1 scatter markers differ in number or in Y, Z, d, m for parcels {bad[:6]}")
     else:
