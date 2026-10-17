@@ -336,5 +336,8 @@ Full registry: [../user/registry.md](../user/registry.md).
 ## V&V
 
 d²-law, LK and TC evaporation rates against independent kernels, and the
-paper-reproduction cases: [../vv/e2e.md](../vv/e2e.md).  Function-level comparisons
-for all models: [../vv/literature.md](../vv/literature.md).
+paper-reproduction cases: [../vv/e2e.md](../vv/e2e.md).  CEM-B and ASM run end to end with
+a convective Sherwood number in `tests/evaporation/cemb-box` and `asm-box` (d², and for ASM the
+temperature, against the rate laws along the measured state); the blowing factor in
+`mhb98-water-blowing`; a varying $c_p$ under evaporation in `d2law-varcp`.  Function-level
+comparisons for all models: [../vv/literature.md](../vv/literature.md).
