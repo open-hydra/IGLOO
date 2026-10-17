@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (227 in a serial build: 183 e2e + 43 unit incl. `self_test`,
+One row per registered CTest entry (228 in a serial build: 184 e2e + 43 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 24 `mpi-*`
-rows in their own section, 251).
+rows in their own section, 252).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,13 +30,13 @@ Columns:
 
 ---
 
-## Shared box fixture (49 of 100 e2e fixtures)
+## Shared box fixture (50 of 101 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
 writes with its defaults.
 
-Forty-nine fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
+Fifty fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
 once here, referenced as **"shared box"** below. The other fifty-one:
@@ -102,6 +102,7 @@ oracle possible.
 | **drag-chang** | `[Shim06]` eq. 18 (Chang = Clift-Gauvin, the drag law of the hydra JPL cases) | *quadrature* — `drag-morsi`'s `check.py` (symlinked) with C_D = 24/Re (1 + 0.15 Re^0.687 + 0.0175 Re/(1 + 4.25×10⁴ Re^−1.16)): every printed row within the same bound (worst 0.970, nothing beyond the rounding); Re verified 60.0 → 22.2. RED: the law swapped to Schiller-Naumann (+0.08 % in C_D at Re 60: 1475 rows, \|Δu\| 1.32×10⁻³ m/s, 2573× the bound), Chang's 0.42 → 0.43 (1475 rows, 3.2×10⁻⁵ m/s) | as `drag-morsi` (`INPUT/` symlinked) | as `drag-morsi`, `drag = Chang` |
 | **temp-relax** | `[RM52]` | *closed form* — lumped-capacitance Nu=2 relaxation T(x)=T_g+(T_p0−T_g)e^{−x/L}, L=u_g·ρ_p·c_p·d²/(12k_g); `reference/nu2.txt` | shared box | inlet-face 401; κ_v=1.0 (Re=0, drag off), κ_t=0.5 (T_p0=300 K, ΔT=300), d=11.89 µm; outlet + walls |
 | **temp-relax-varcp** | `[RM52]` (Nu = 2); the table's piecewise-linear h(T) | *closed form* — the enthalpy state dh/dt = K(T_g − T), K = 6·Nu·k_g/(ρ_p d²), on a varying-cp table from 250 K: on a segment of slope s the temperature relaxes exponentially over u_g·s/K, and the segments (the end ones extended) are marched from each parcel's first row. V1 every row with \|T − T_g\| > 1 K within the F12.6 truncation carried through the march (worst 0.013 of the tolerance), V2 every exit (0.014), V3 ΣE = Σṁ[h(T₀) − h(T_exit)] to 1e-6 of the gross (6.4e-9), V4 the guards and every parcel of the four groups. RED: refused at setup (exit 128); with the table extended down to 1 K the printed temperature stayed at T₀ on every row (1475 rows and 25 exits off, worst 237 K); the inversion that searched from index 1 put the 210 K group up to 1.87 K off | shared box (`solfile.tec` symlinked from `temp-relax`) | inlet-face 401; κ_v=1.0 (Re=0), κ_t by inlet row 0.35/0.5/1.25/1.25/1.4 (T_p0 = 210/300/750/750/840 K), d=16 µm; own `properties.dat` on 250..800 K, cp = 1000 + (T − 250), ρ_p = 2950 |
+| **temp-relax-varcp-euler** | `[RM52]` (Nu = 2); the table's h(T) | *closed form, integrated* — the Eulerian temperature of every cell of `temp-relax-varcp`'s run (`out-file = ALL`): model 1 deposits ∫\|v\|dt and ∫h\|v\|dt, so with \|v\| constant T_p(c) = T(h̄_c), h̄_c the time mean of the enthalpy over the residence; h(T(t)) is an exponential per table segment, so ∫h dt is exact, the window read from the rows' printed time (`out-time`), T(h) the check's own inverse. E1 every cell within 1e-5 K (worst 2.04e-6), E2 inside the bounding rows' [T_in, T_out], E3 1500/1500 cells. RED: the inversion skipped (T_p = h̄, every cell); a constant-cp inversion h/1250, 75.0 K | as `temp-relax-varcp` (`INPUT/` symlinked) | as `temp-relax-varcp`; `out-file = ALL`, `out-time = on`, `mollify = off` |
 | **temp-relax-varrho** | `[RM52]` (Nu = 2); the table's h(T) and ρ(T) | *reference by quadrature* — `temp-relax-varcp` with ρ = 2950 − 0.5(T − 250) on 250..800 K and its end values outside (where the 210 K and 840 K groups start): a model-1 parcel keeps its mass, so d(T) = (6m/(πρ(T)))^(1/3) and the heat flux follows it; `T(x)` inverts t(T) = ∫ s m / (Nu k_g π d(T)(T_g − T)) dT (Gauss-Legendre per table segment and on the stretch outside). V1 T rows (worst 0.033 of the tolerance), D1/D2 the printed d against d(T_ref) and d(T) (0.991/0.999, print precision), M the mass constant. RED while model 1 printed its injection diameter: 2950 violations, 16.0000 µm printed at 597 K where d(T) = 16.3633 µm; RED with the density continuing the table's end segments: 2370 violations, the 210 K and 840 K masses +0.678 % and −0.748 %; the temperature right | shared box (`solfile.tec` symlinked from `temp-relax`) | as `temp-relax-varcp` (`bc.txt` symlinked); own `properties.dat` |
 | **body-force** | analytic (body-accel model) | *closed form* — transverse terminal drift v(x)=v_∞(1−e^{−x/L}), v_∞=g_y·τ, L=u_g·τ (linear Stokes, `toll=1e-20`); `reference/drift.txt` | shared box + `body-accel=(0,−200,0)` m/s² | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; outlet + walls |
 | **body-force-z** | `[CGW78]` (Stokes) + `[RM52]` | *closed form + RK4 through the k-layers* — the drift along −z crosses k-faces: v_z and z on `body-force`'s closed forms; K1 every parcel reaching x = 0.15 crosses a k-face; K2 the bottom row leaves at z = 0 at the closed-form x (4.1e-7 m); K3 T on every row against an RK4 toward the temperature of the k-layer holding the closed-form path (switched at the k-face planes), tolerance the print floor plus K·\|ΔT\|·ε/\|v\| per crossing (ε = 1e-8 m, the step that ends a crossing segment: measured 4.39e-10 s past the face), worst 0.385. RED with the gas not refreshed after a crossing: 19.9 K on 20 of 20 crossing parcels; the k index of the crossing step is not observable (the ±1-box re-search heals it) | own `solfile.tec` (`make_box_case.py --kv 1.0 --zgradient 2000`: T = 600 + 2000 z K) + `body-accel=(0,0,−600)`, `out-time` | as `body-force` (`bc.txt` symlinked) |
@@ -373,9 +374,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-183 `e2e`-labelled + 43 `unit`-labelled + the optional `vortex-cloud-3way` = **227 CTest entries** in a
-serial build (+24 `mpi-*` under `USE_MPI`, 251), all green (counted from `tests/CMakeLists.txt`). The 183
-`e2e` entries are the 104 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+184 `e2e`-labelled + 43 `unit`-labelled + the optional `vortex-cloud-3way` = **228 CTest entries** in a
+serial build (+24 `mpi-*` under `USE_MPI`, 252), all green (counted from `tests/CMakeLists.txt`). The 184
+`e2e` entries are the 105 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the four `threads-*` thread-count gates, the thirteen `repeat-*` two-sweep gates, the fifty-nine `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The
