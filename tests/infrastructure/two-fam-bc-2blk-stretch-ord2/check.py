@@ -12,10 +12,10 @@ Targets
   R1  the run log's ghost line: 98 ghost nodes interpolated (the 7 x 7 nodes of each face plane, edges
       and corners included), none left uncovered
   G5a trajectory temperature against the one-block run, rows matched by parcel and x, the rows at the
-      face left out: worst difference <= 3e-3 K
-  G5b source E away from the face (columns 1-28 and 33-60) against the one-block run: <= 1e-4 of the
+      face left out: worst difference <= 8e-5 K
+  G5b source E away from the face (columns 1-28 and 33-60) against the one-block run: <= 1.1e-6 of the
       field scale
-  G5c euler T_p away from the face, both families: <= 3e-6 of the field scale
+  G5c euler T_p away from the face, both families: <= 6e-8 of the field scale
 Controls -- pass either way
   C1  50 exits (25 per family), all at x = 0.15
   C2  trajectory velocity within 2e-6 of the one-block run; source Fx away from the face within 1e-7
@@ -40,7 +40,7 @@ X_OUT, N_EXITS = box.LX, 25 * FAMILIES
 GHOSTS = " [IGLOO] ghost nodes at connected faces: 98 interpolated, 0 not covered"
 CHANGES = (" [IGLOO] block changes: 50 via the connected cell, 0 via the block sweep, 0 rim exits; "
            "stencil refreshed on a block change at a boundary entry: 0")
-TOL_T, TOL_E, TOL_TP = 3.0e-3, 1.0e-4, 3.0e-6
+TOL_T, TOL_E, TOL_TP = 8.0e-5, 1.1e-6, 6.0e-8
 TOL_U, TOL_FX = 2.0e-6, 1.0e-7
 
 

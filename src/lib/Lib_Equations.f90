@@ -66,84 +66,27 @@ contains
   end function toMeridian
 
 
-  !> Trilinear interpolation of the gas at p0 in a hexahedron: Newton solve for the local
-  !  coordinates xi, then shape-function weighting.
-  pure subroutine interp2ndOrder(vertices,gasNodes,p0,nsp,xi,gas)
+  !> Trilinear interpolation of the gas at p0 in a hexahedron: Newton from xi to the local coordinates,
+  !  stopped once |x(xi) - p0| < max(1e-12 h, 64 eps L) (h the cell diagonal, L the largest node
+  !  coordinate magnitude), at most 10 steps (nIt), then shape-function weighting; xi returned clamped.
+  pure subroutine interp2ndOrder(vertices,gasNodes,p0,nsp,xi,gas,nIt)
     implicit none
     integer,  intent(in)    :: nsp
     real(R8), intent(in)    :: vertices(3,8), gasNodes(nsp,8)
     real(R8), intent(in)    :: p0(3)
     real(R8), intent(inout) :: xi(3)
     real(R8), intent(out)   :: gas(nsp)
-    real(R8) :: F(3), dFdxi(3,3), deltaXi(3)
-    real(R8) :: N(8), dN(3,8), detJ
-    integer  :: iter, i
+    integer,  intent(out), optional :: nIt
+    real(R8) :: N(8), tol
+    integer  :: it
 
-    do iter = 1,10
-        call getShapeFunctions(xi,N,dN)
-
-        F = -p0
-        do i = 1,8
-            F = F + N(i)*vertices(:,i)
-        enddo
-        if (F(1)*F(1)+F(2)*F(2)+F(3)*F(3) < 1e-10_R8) exit
-
-        dFdxi = 0._R8
-        do i = 1, 8
-            dFdxi(:,1) = dFdxi(:,1) + dN(1,i)*vertices(:,i)
-            dFdxi(:,2) = dFdxi(:,2) + dN(2,i)*vertices(:,i)
-            dFdxi(:,3) = dFdxi(:,3) + dN(3,i)*vertices(:,i)
-        enddo
-        detJ = dFdxi(1,1)*(dFdxi(2,2)*dFdxi(3,3) - dFdxi(2,3)*dFdxi(3,2)) - &
-               dFdxi(1,2)*(dFdxi(2,1)*dFdxi(3,3) - dFdxi(2,3)*dFdxi(3,1)) + &
-               dFdxi(1,3)*(dFdxi(2,1)*dFdxi(3,2) - dFdxi(2,2)*dFdxi(3,1))
-        deltaXi(1) = (F(1)*(dFdxi(2,2)*dFdxi(3,3) - dFdxi(2,3)*dFdxi(3,2)) + &
-                      F(2)*(dFdxi(1,3)*dFdxi(3,2) - dFdxi(1,2)*dFdxi(3,3)) + &
-                      F(3)*(dFdxi(1,2)*dFdxi(2,3) - dFdxi(1,3)*dFdxi(2,2))) / detJ        
-        deltaXi(2) = (F(1)*(dFdxi(2,3)*dFdxi(3,1) - dFdxi(2,1)*dFdxi(3,3)) + &
-                      F(2)*(dFdxi(1,1)*dFdxi(3,3) - dFdxi(1,3)*dFdxi(3,1)) + &
-                      F(3)*(dFdxi(1,3)*dFdxi(2,1) - dFdxi(1,1)*dFdxi(2,3))) / detJ      
-        deltaXi(3) = (F(1)*(dFdxi(2,1)*dFdxi(3,2) - dFdxi(2,2)*dFdxi(3,1)) + &
-                      F(2)*(dFdxi(1,2)*dFdxi(3,1) - dFdxi(1,1)*dFdxi(3,2)) + &
-                      F(3)*(dFdxi(1,1)*dFdxi(2,2) - dFdxi(1,2)*dFdxi(2,1))) / detJ
-        xi = xi - deltaXi
-    enddo
+    tol = max(1.e-12_R8*norm2(vertices(:,7) - vertices(:,1)), 64*epsilon(1._R8)*maxval(abs(vertices)))
+    call hexInverse(vertices, p0, xi, tol, 10, N, it)
+    if (present(nIt)) nIt = it
     xi = max(0._R8, min(1._R8, xi))
 
     gas = N(1)*gasNodes(:,1) + N(2)*gasNodes(:,2) + N(3)*gasNodes(:,3) + N(4)*gasNodes(:,4) +  &
           N(5)*gasNodes(:,5) + N(6)*gasNodes(:,6) + N(7)*gasNodes(:,7) + N(8)*gasNodes(:,8)
-
-  contains
-
-    !> Trilinear shape functions and their derivatives at local coordinates.
-    pure subroutine getShapeFunctions(coords,N,dN)
-        implicit none
-        real(R8), intent(in)  :: coords(3)
-        real(R8), intent(out) :: N(8), dN(3,8)
-        real(R8) :: u, v, w
-
-        u = coords(1); v = coords(2); w = coords(3)
-
-        N(1) = (1._R8-u)*(1._R8-v)*(1._R8-w)
-        N(2) = (1._R8-u)*(1._R8-v)*w
-        N(3) = (1._R8-u)*v*w
-        N(4) = (1._R8-u)*v*(1._R8-w)
-        N(5) = u*(1._R8-v)*(1._R8-w)
-        N(6) = u*(1._R8-v)*w
-        N(7) = u*v*w
-        N(8) = u*v*(1._R8-w)
-
-        !>            dN/du                            dN/dv                            dN/dw
-        dN(1,1) = - (1._R8-v)*(1._R8-w); dN(2,1) = - (1._R8-u)*(1._R8-w); dN(3,1) = - (1._R8-v)*(1._R8-u)
-        dN(1,2) = - (1._R8-v)*    w    ; dN(2,2) = - (1._R8-u)*    w    ; dN(3,2) = - dN(3,1)
-        dN(1,3) = -     v    *    w    ; dN(2,3) = - dN(2,2);             dN(3,3) =   (1._R8-u)*    v
-        dN(1,4) = -     v    *(1._R8-w); dN(2,4) = - dN(2,1);             dN(3,4) = - dN(3,3)
-        dN(1,5) = - dN(1,1);             dN(2,5) = -     u    *(1._R8-w); dN(3,5) = -     u    *(1._R8-v)
-        dN(1,6) = - dN(1,2);             dN(2,6) = -     u    *    w    ; dN(3,6) = - dN(3,5)
-        dN(1,7) = - dN(1,3);             dN(2,7) = - dN(2,6);             dN(3,7) =       u    *    v
-        dN(1,8) = - dN(1,4);             dN(2,8) = - dN(2,5);             dN(3,8) = - dN(3,7)
-
-    end subroutine getShapeFunctions
 
   end subroutine interp2ndOrder
 

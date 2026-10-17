@@ -16,7 +16,7 @@ check.py runs the box as one unshifted block (make_box_case.py, this input.ini) 
   C1  50 exits (25 per family), all at block 2's outlet, x = 0.15125
   X1  the trajectory rows against the one-block run, matched by parcel and x (block 2's faces and
       centres fall on the one-block centres and faces, so most rows of either run have a partner; at
-      least 75 % matched): temperature within 3e-3 K, velocity within 2e-6
+      least 75 % matched): temperature within 8e-5 K, velocity within 2e-6
   C2  no stuck, no-progress or maxIter line
 """
 import os
@@ -37,7 +37,7 @@ ROUTING = (" [IGLOO] chimera facelets: 50 (0 with an empty donor layer, 0 unreso
 GHOSTS = " [IGLOO] ghost nodes at connected faces: 98 interpolated, 0 not covered"
 CHANGES = (" [IGLOO] block changes: 50 via the connected cell, 0 via the block sweep, 0 rim exits; "
            "stencil refreshed on a block change at a boundary entry: 0")
-TOL_T, TOL_U = 3.0e-3, 2.0e-6
+TOL_T, TOL_U = 8.0e-5, 2.0e-6
 
 
 def fail(msg):

@@ -90,12 +90,12 @@ which is why tc-box's own oracle drops the exit layer and this one must not.
 |---|---|---|
 | `Σ wdot` | 4.336423e-04 kg/s | **8.699755e-04 kg/s** |
 | evaporated (oracle) | 8.699722e-04 kg/s | 8.699722e-04 kg/s |
-| **resid** | **5.015e-01** | **3.779e-06** |
+| **resid** | **5.015e-01** | **3.798e-06** |
 
 `rc = 0` in both cases: half the source silently vanished.
 
 ## Pass criterion
-All five PASS. Tolerance `1e-3` sits 265× above the measured floor (3.779e-06, identical at
+All five PASS. Tolerance `1e-3` sits 263× above the measured floor (3.798e-06, identical at
 `OMP_NUM_THREADS` 1, 2 and 5 — the four parcels ride separate `(j,k)` columns, so no two
 threads accumulate into one cell) and 500× below the RED signature. Do not loosen past
 ~1e-2, where the gate stops separating half a deposit from a whole one.

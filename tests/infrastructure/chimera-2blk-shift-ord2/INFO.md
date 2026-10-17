@@ -23,9 +23,9 @@ Two families of material A. `gas-order = 2`, `mollify = off`.
 | R1 | control | the ghost line `ghost nodes at connected faces: 98 interpolated, 0 not covered`, and no ghost node located away from its ATLAS donors |
 | K | control | the block-change line `50 via the connected cell, 0 via the block sweep, 0 rim exits` |
 | C1 | control | 50 exits, all at block 2's outlet, x = 0.15125 |
-| X1 | control | trajectory rows matched by family, parcel and x with the one-block run (block 2's faces and centres fall on the one-block centres and faces; 3500 of 4330 rows matched): T within 3e-3 K, velocity within 2e-6 |
+| X1 | control | trajectory rows matched by family, parcel and x with the one-block run (block 2's faces and centres fall on the one-block centres and faces; 3500 of 4330 rows matched): T within 8e-5 K, velocity within 2e-6 |
 | C2 | control | no stuck, no-progress or maxIter line |
 
-**Numbers** (OMP 5): X1 T 4.47e-4 K, velocity equal to the printed digits — the same with the ghost
-ring's own linear fill (the gas sampling's floor, see `two-fam-bc-2blk-stretch-ord2`); only the ghost
-line is absent there.
+**Numbers** (OMP 5): X1 T 8e-6 K, velocity 1e-6 (one printed digit); the tolerance on T sits ten
+times above. **RED** with the gas sampler's Newton stopped at an absolute residual of 1e-5 m: X1 T
+4.47e-4 K, 5.6 times the tolerance (the floor of `two-fam-bc-2blk-stretch-ord2`).

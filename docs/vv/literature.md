@@ -353,8 +353,11 @@ map — the cell-tracking and interpolation routines used on every time step.
 
 **Tests.** E1 constant field (machine eps); E2 multilinear field on parallelepiped
 (machine eps); E3 smooth field convergence order ($p_\mathrm{obs} \approx 2 \pm 0.3$
-over four refinement levels); E4 forward/inverse hex map round-trip (residual
-$< 10^{-4}$); E5 partition-of-unity and node recovery.
+over four refinement levels); E4 forward/inverse hex map round-trip (residual below
+twice the Newton stop $\tau = \max(10^{-12} h,\ 64\,\varepsilon L)$); E5 partition-of-unity and
+node recovery; E7 the sample from a warm start one step behind the parent on a linear field
+(within $2\tau\lvert\nabla f\rvert$ plus roundoff, on four cells up to 20 m from the origin); E8
+the Newton steps of those samples (mean ≤ 2, max ≤ 3).
 
 <figure>
   {% include "vv/images/unit-infrastructure-interp.svg" ignore missing %}

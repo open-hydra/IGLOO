@@ -6,14 +6,17 @@ program test_gas_reconstruction
     !   E1  constant field, parallelepiped            -> machine precision
     !   E2  multilinear field, parallelepiped         -> Newton-stop bound
     !   E3  smooth field, uniform refinement          -> p_obs ~ 2
-    !   E4  forward-map o Newton-inverse round trip    -> residual < 1e-5
+    !   E4  forward-map o Newton-inverse round trip    -> residual < 2*tau
     !   E5  partition-of-unity / node recovery / C0    -> machine / Newton-stop
+    !   E7  warm start one step behind, linear field   -> f(p1) within the Newton-stop bound
+    !   E8  Newton steps of the E7 samples             -> mean <= 2, max <= 3 per cell
     !
     ! Expected values ALWAYS come from the physical analytic field, never from
     ! the shape functions. Tolerances are theory-derived:
     !   * zero-gradient fields (E1, E5-PoU/C0)  -> 10*eps
-    !   * gradient-bearing fields                -> safety * 1e-5 * |grad f|
-    !     (1e-5 = production Newton stop, |F|^2 < 1e-10 in physical length)
+    !   * gradient-bearing fields                -> 2*tau*|grad f| + 16*eps*max|f|
+    !     (tau = max(1e-12 h, 64 eps L) = production Newton stop on |x(xi) - p| in
+    !      physical length, h = cell diagonal, L = largest node coordinate magnitude)
     !
     use, intrinsic :: iso_fortran_env, only: real64, int64
     use verif_norms,   only: relLinf, assert_lt, observed_order
@@ -25,9 +28,9 @@ program test_gas_reconstruction
     implicit none
 
     real(real64), parameter :: EPS = epsilon(1.0_real64)
-    real(real64), parameter :: NEWTON_LEN = 1.0e-5_real64   ! production |F| stop
-    real(real64), parameter :: SAFETY = 10.0_real64
     real(real64), parameter :: PI = 4.0_real64*atan(1.0_real64)
+    real(real64), parameter :: GRAD7(3) = [1000.0_real64, 300.0_real64, -200.0_real64]   ! E7 field gradient
+    integer,      parameter :: NS7 = 300                                                  ! E7 samples per cell
 
     integer :: exit_code
     logical :: ok_all
@@ -40,6 +43,8 @@ program test_gas_reconstruction
     call run_E3(ok_all)
     call run_E4(ok_all)
     call run_E5(ok_all)
+    call run_E7(ok_all)
+    call run_E8(ok_all)
 
     call dump_E3()
 
@@ -97,7 +102,7 @@ contains
         end do
         errmax = 0._real64
         gmax   = grad_bound(coef, nodes)
-        tol    = SAFETY * NEWTON_LEN * gmax
+        tol    = 2.0_real64*newton_tau(nodes)*gmax + 16.0_real64*EPS*maxval(abs(gasNodes))
         do ip = 1, 20
             p0(1) = 0.05_real64 + 0.90_real64*lcg(rng)
             p0(2) = 0.05_real64 + 0.90_real64*lcg(rng)
@@ -144,7 +149,8 @@ contains
 
     !-------------------------------------------------------------------!
     ! E4 : round trip on a DISTORTED hex. p0 = forward_map(xi_true);     !
-    !      production inverts; residual |forward_map(xi_out)-p0| < 1e-5.  !
+    !      production inverts; residual |forward_map(xi_out)-p0| below   !
+    !      twice the stop tau plus the oracle map's roundoff.            !
     !-------------------------------------------------------------------!
     subroutine run_E4(ok)
         logical, intent(inout) :: ok
@@ -168,7 +174,7 @@ contains
             res  = sqrt(sum((back - p0)**2))
             errmax = max(errmax, res)
         end do
-        tol  = SAFETY * NEWTON_LEN                          ! 1e-4 length
+        tol  = 2.0_real64*newton_tau(nodes) + 16.0_real64*EPS*maxval(abs(nodes))   ! length
         pass = assert_lt('E4 newton round-trip residual', errmax, tol)
         ok = ok .and. pass
         call append_row('E4_roundtrip', 'len', errmax, errmax, 0._real64, 0._real64, tol, pass)
@@ -218,7 +224,7 @@ contains
             gasNodes(1,i) = multilinear_field(coef, nodes(:,i))
         end do
         gmax = grad_bound(coef, nodes)
-        tol  = SAFETY * NEWTON_LEN * gmax
+        tol  = 2.0_real64*newton_tau(nodes)*gmax + 16.0_real64*EPS*maxval(abs(gasNodes))
         err  = 0._real64
         do k = 1, 8
             p0 = nodes(:,k)
@@ -232,7 +238,138 @@ contains
         call append_row('E5c_node_recovery', 'gas', err, err, 0._real64, 0._real64, tol, pass)
     end subroutine run_E5
 
+    !-------------------------------------------------------------------!
+    ! E7 : the warm start of a right-hand side. xi0 = the local coords   !
+    !      of p0, the sample asked at p1 = p0 + delta, each component of !
+    !      delta log-uniform in [1e-9, 5e-6] m with a random sign, on    !
+    !      the linear field f = 300 + 1000x + 300y - 200z: |gas - f(p1)| !
+    !      <= 2 tau |grad f| + 16 eps max|f|, on four cells (E7 cells).  !
+    !-------------------------------------------------------------------!
+    subroutine run_E7(ok)
+        logical, intent(inout) :: ok
+        real(real64) :: nodes(3,8), gasNodes(1,8), xi(3), p1(3), gas(1)
+        real(real64) :: err, errmax, tol
+        integer(int64) :: rng
+        integer :: k, is, i
+        logical :: pass
+        character(len=40) :: tag
+        do k = 1, 4
+            call e7_cell(k, nodes, tag)
+            do i = 1, 8
+                gasNodes(1,i) = field7(nodes(:,i))
+            end do
+            tol = 2.0_real64*newton_tau(nodes)*norm2(GRAD7) + 16.0_real64*EPS*maxval(abs(gasNodes))
+            rng = 7000_int64 + k
+            errmax = 0._real64
+            do is = 1, NS7
+                call e7_draw(rng, nodes, xi, p1)
+                call interp2ndOrder(nodes, gasNodes, p1, 1, xi, gas)
+                err = abs(gas(1) - field7(p1))
+                errmax = max(errmax, err)
+            end do
+            pass = assert_lt('E7 warm-start sample, '//trim(tag), errmax, tol)
+            ok = ok .and. pass
+            call append_row('E7_warm_start', trim(tag), errmax, errmax, 0._real64, 0._real64, tol, pass)
+        end do
+    end subroutine run_E7
+
+    !-------------------------------------------------------------------!
+    ! E8 : the Newton steps the production sampler takes on the E7      !
+    !      samples (same cells, same draws): mean <= 2, max <= 3.        !
+    !-------------------------------------------------------------------!
+    subroutine run_E8(ok)
+        logical, intent(inout) :: ok
+        real(real64) :: nodes(3,8), gasNodes(1,8), xi(3), p1(3), gas(1), mean
+        integer(int64) :: rng
+        integer :: k, is, i, nIt, nsum, nmax
+        logical :: pass
+        character(len=40) :: tag
+        do k = 1, 4
+            call e7_cell(k, nodes, tag)
+            do i = 1, 8
+                gasNodes(1,i) = field7(nodes(:,i))
+            end do
+            rng = 7000_int64 + k
+            nsum = 0; nmax = 0
+            do is = 1, NS7
+                call e7_draw(rng, nodes, xi, p1)
+                call interp2ndOrder(nodes, gasNodes, p1, 1, xi, gas, nIt)
+                nsum = nsum + nIt
+                nmax = max(nmax, nIt)
+            end do
+            mean = real(nsum, real64)/real(NS7, real64)
+            pass = mean <= 2.0_real64 .and. nmax <= 3
+            write(*, '(a,a,a,f6.3,a,i0,a)') merge('  [PASS] ', '  [FAIL] ', pass), &
+                'E8 Newton steps, '//trim(tag), ' : mean ', mean, ' (<= 2), max ', nmax, ' (<= 3)'
+            ok = ok .and. pass
+            call append_row('E8_newton_steps', trim(tag), real(nmax, real64), mean, 0._real64, 0._real64, &
+                            3.0_real64, pass)
+        end do
+    end subroutine run_E8
+
     !=================== helpers ===================!
+
+    !> The production stop of the 3D Newton, max(1e-12 h, 64 eps L) [m].
+    pure function newton_tau(nodes) result(tau)
+        real(real64), intent(in) :: nodes(3,8)
+        real(real64) :: tau
+        tau = max(1.0e-12_real64*norm2(nodes(:,7) - nodes(:,1)), 64.0_real64*EPS*maxval(abs(nodes)))
+    end function newton_tau
+
+    !> E7 field 300 + 1000 x + 300 y - 200 z.
+    pure function field7(x) result(f)
+        real(real64), intent(in) :: x(3)
+        real(real64) :: f
+        f = 300.0_real64 + GRAD7(1)*x(1) + GRAD7(2)*x(2) + GRAD7(3)*x(3)
+    end function field7
+
+    !> E7 cells: 1 a box 1.667e-3 x 1e-2 x 1e-2 m at x ~ 0.1 m, 2 a box 1e-2 x 2e-2 x 1e-2 m at 0.6 m,
+    !! 3/4 a hexahedron of 2e-3 m sheared (x += 0.3 h_y v) and bent (x += 0.2 h_x uvw, y += 0.14 h_y uw)
+    !! at 2 m and 20 m from the origin.
+    subroutine e7_cell(k, nodes, tag)
+        integer,           intent(in)  :: k
+        real(real64),      intent(out) :: nodes(3,8)
+        character(len=*),  intent(out) :: tag
+        real(real64) :: cu(3,8), x0(3), hc(3), shear, bend
+        integer :: i
+        select case (k)
+        case (1)
+            x0 = [0.1_real64, 0.02_real64, 0.02_real64]; hc = [1.667e-3_real64, 1.0e-2_real64, 1.0e-2_real64]
+            shear = 0._real64; bend = 0._real64; tag = 'box at 0.1 m'
+        case (2)
+            x0 = [0.6_real64, 0.5_real64, 0.01_real64]; hc = [1.0e-2_real64, 2.0e-2_real64, 1.0e-2_real64]
+            shear = 0._real64; bend = 0._real64; tag = 'box at 0.6 m'
+        case (3)
+            x0 = [2.0_real64, 1.0_real64, 0.5_real64]; hc = 2.0e-3_real64
+            shear = 0.3_real64; bend = 0.2_real64; tag = 'sheared bent hex at 2 m'
+        case default
+            x0 = [20.0_real64, 10.0_real64, 5.0_real64]; hc = 2.0e-3_real64
+            shear = 0.3_real64; bend = 0.2_real64; tag = 'sheared bent hex at 20 m'
+        end select
+        cu = unit_corners([0._real64, 0._real64, 0._real64], 1.0_real64)
+        do i = 1, 8
+            nodes(:,i) = x0 + cu(:,i)*hc
+            nodes(1,i) = nodes(1,i) + shear*cu(2,i)*hc(2) + bend*cu(1,i)*cu(2,i)*cu(3,i)*hc(1)
+            nodes(2,i) = nodes(2,i) + 0.7_real64*bend*cu(1,i)*cu(3,i)*hc(2)
+        end do
+    end subroutine e7_cell
+
+    !> One E7 draw: xi0 in [0.1,0.9]^3, p0 = forward map (oracle basis), p1 = p0 + delta.
+    subroutine e7_draw(rng, nodes, xi0, p1)
+        integer(int64), intent(inout) :: rng
+        real(real64),   intent(in)    :: nodes(3,8)
+        real(real64),   intent(out)   :: xi0(3), p1(3)
+        real(real64) :: s
+        integer :: c
+        do c = 1, 3
+            xi0(c) = 0.1_real64 + 0.8_real64*lcg(rng)
+        end do
+        p1 = forward_hex_map(nodes, xi0)
+        do c = 1, 3
+            s = merge(1.0_real64, -1.0_real64, lcg(rng) < 0.5_real64)
+            p1(c) = p1(c) + s*1.0e-9_real64*(5.0e3_real64)**lcg(rng)
+        end do
+    end subroutine e7_draw
 
     !> E3: interp error vs grid spacing h over the 4 refinement levels run_E3
     !  sweeps. production error = |interp2ndOrder - smooth_field(c)|; reference =

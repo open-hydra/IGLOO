@@ -710,7 +710,7 @@ Anderson-Darling statistics (see `tests/standard/psd-table/INFO.md`); nor has `p
 size-distribution file named without `.` or `/`, every parcel at the table's single diameter).
 
 The routine-level member of this category is the interpolation family
-`test_gas_reconstruction` (E1–E5), documented under
+`test_gas_reconstruction` (E1–E5, E7, E8), documented under
 [Literature tests](literature.md); `vie-plait` is its in-solver counterpart, the
 only case that exercises the 2nd-order gas rebuild inside the integration loop.
 

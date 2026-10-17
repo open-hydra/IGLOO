@@ -791,7 +791,8 @@ igloo_e2e_case(chimera-2blk-rim infrastructure/chimera-2blk-rim "e2e;infrastruct
 # two-fam-bc-2blk-stretch-ord2: the box as two blocks of 1.667 mm | 3.333 mm cells joined by a 101 face, gas-order
 # 2, T linear in x: the face's ghost nodes interpolated from the other block's gas; check.py holds trajectory T,
 # source E and euler T_p away from the face to the same cells as one block. RED with the ghost ring copying the
-# partner centre: trajectory T 3.07e-2 K, E 9.8e-4 and T_p 2.8e-5 of the scale (10x the tolerances).
+# partner centre: trajectory T 3.07e-2 K, E 9.8e-4 and T_p 2.8e-5 of the scale; with the gas sampler's Newton
+# stopped at an absolute 1e-5 m: 4.43e-4 K, 9.5e-6 and 2.9e-7 (5-9x the tolerances).
 igloo_e2e_case(two-fam-bc-2blk-stretch-ord2 infrastructure/two-fam-bc-2blk-stretch-ord2 "e2e;infrastructure;bc;gas")
 # chimera-2blk-shift-ord2: chimera-2blk with block 2 shifted by half a cell, gas-order 2, T linear in x: each 102
 # ghost node interpolated between two centres of the other block. A control: on a linear field the own linear
