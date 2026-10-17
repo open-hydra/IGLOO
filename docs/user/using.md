@@ -103,7 +103,7 @@ python3 check.py                          # oracle gate
 "X" "Y" "Z" "U" "V" "W" "T" "d_p" "m_p" "ID"
 ```
 
-Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). Rows are written every `print-dcell` cell crossings (default 1) or, when `print-dtime` is positive, at that time interval instead. With `out-time = on` every row carries the particle time [s] as an eleventh column, `"t"`.
+Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). Rows are written every `print-dcell` cell crossings (default 1) and, when `print-dtime` is positive, also at the first segment end at or past each multiple of that interval (for time rows only, set `print-dcell` above the number of crossings). With `out-time = on` every row carries the particle time [s] as an eleventh column, `"t"`.
 
 !!! warning "Non-deterministic ordering"
     With OpenMP enabled, the row order within a zone is non-deterministic across runs (different thread scheduling). Verification scripts must sort by particle ID and position before comparing, not rely on byte-identical output.

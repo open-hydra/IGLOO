@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (212 in a serial build: 169 e2e + 42 unit incl. `self_test`,
+One row per registered CTest entry (215 in a serial build: 172 e2e + 42 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 21 `mpi-*`
-rows in their own section, 233).
+rows in their own section, 236).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,13 +30,13 @@ Columns:
 
 ---
 
-## Shared box fixture (42 of 93 e2e fixtures)
+## Shared box fixture (45 of 96 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
 writes with its defaults.
 
-Forty-two fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
+Forty-five fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
 once here, referenced as **"shared box"** below. The other fifty-one:
@@ -111,6 +111,9 @@ oracle possible.
 | **swirl-wedge-ord1** | derived (`swirl-wedge`'s cylindrical Stokes ODE) | *RK4 with the cell-wise swirl* — gas-order 1 on the axisymmetric wedge: the cell's meridian-frame velocity rotated to the parcel's azimuth (`meridianToAzimuth`); the oracle is `swirl-wedge`'s ODE with Ω·r replaced by the row value W_c(j) = Ω·r̄_j·cos(δ/2), switched where the path crosses a radial face plane (r·cos θ_s on the face, bisection to 1e-14 s), checked at half the step and in Cartesian form; `swirl-wedge`'s G0–G6 with its tolerances (measured at the print floor, max \|dr\| 5.0e-7). RED without the rotation at gas-order 1: P2 off by 3.7e-5 in r (12×) and 5.9e-5 in v_r (20×) | `swirl-wedge`'s (`INPUT/` symlinked) | as `swirl-wedge`, `gas-order = 1` |
 | **no-exchange** | — (definition: `drag = NoDrag` ⇒ Cd=0, `heat = NoHeat` ⇒ Nu=0) | *closed form, exact* — dv/dt=0, dT_p/dt=0: every trajectory row and exit prints (u,v,w,T)=(κ_v·u_g,0,0,κ_t·T_g)=(1,0,0,300) to the last F12.6 digit, and every `source.tec` cell (`wdot`, `Fx`, `Fy`, `Fz`, `E`) is exactly 0.0 (ṁ·(v_in−v_out) from the full-precision state: bit-identical states or it is non-zero); ≥ 20 parcels, ≥ 60 rows each, exit at x=0.15. RED on `aba343c` (refused at setup, exit 128); each switch alone fails the oracle on its own quantity (Stokes: u→9.999961; Ranz–Marshall: T→600) | shared box (solfile symlinked from `drag-stokes`) | inlet-face 401; κ_v=0.1 (9 m/s slip), κ_t=0.5 (300 K slip), d=11.89 µm, ρ_p=2950; outlet + walls |
 | **scatter-weight** | — (definition of the scatter cloud: one marker per `dNscat` of number flow) | *closed form* — per parcel ⌊X⌋−1 ≤ N ≤ ⌊X⌋, X = frac(ID·φ) + ṅ_p·t_exit/dNscat, from the exit record (`out-time`), the injection row (ṅ_p = ṁ/m0) and the `dNscat` line, every printed value with its half-ULP; ≥ 10 parcels at N = ⌊X⌋ (measured 25/25, 244 markers, X ≈ 10). RED when a step cut at a cell face adds its scatter weight twice: every parcel 2 to 3 markers above the bound (312 markers) | shared box (INPUT symlinked from `drag-stokes`) | as `drag-stokes`; `out-time = on` |
+| **out-dcell3** | `[CGW78]` (Stokes, via `drag-stokes`'s oracle) | *closed form + plain run* — `print-dcell = 3`: `drag-stokes`'s closed form on every row; each parcel's rows the plain run's rows 0, 3, 6, … byte for byte (500 of 1500, the plain run by `check.py` into `ref-plain/`); exits and `source.tec` the plain run's. RED with the crossing count ignored: 1500 rows | `drag-stokes`'s (`INPUT/` symlinked) | as `drag-stokes`, `print-dcell = 3` |
+| **out-dtime** | `[CGW78]` (Stokes, via `drag-stokes`'s closed form) | *the time rule* — `print-dtime = 1e-3` s with the crossing cadence out of reach (`print-dcell = 1000000`; the two conditions are OR-ed): the k-th row after injection at t ≥ kΔ, 5 to ⌊t_exit/Δ⌋ rows per parcel (16), the closed form on every row. RED with the threshold not advanced after a row: 59 rows, row 2 before 2Δ | `drag-stokes`'s (`INPUT/` symlinked) | as `drag-stokes`, `print-dtime`, `out-time` |
+| **out-off** | — (the plain run) | *outputs off* — `out-traj = off`, `out-scatter = off`: no trajectory or scatter file; exits and `source.tec` the plain run's (`ref-plain/`). RED with `out-traj` read as on: the trajectory file is written | `drag-stokes`'s (`INPUT/` symlinked) | as `drag-stokes`, both outputs off |
 | **psd-table** | `[Kol33]`,`[AD54]`,`[Ste74]`,`[MM04]` (goodness of fit); the histogram reading of a size-distribution file | *closed form* — the piecewise-linear mass CDF of `INPUT/table6.dat` (radii 2.5–30 µm, bimodal mass fractions; class edges at the mid-points, the end classes extended by half a spacing; d = 2r), typed in `check.py` and cross-checked against the file; Kolmogorov-Smirnov D_n < 1.94947/√n and case-0 Anderson-Darling A² < 5.969 (α = 10⁻³) on each parcel's first trajectory row, 20 000 parcels; equal ṁ per parcel (spread ≤ 1e-12) and the ṁ-weighted D_n = D_n; one parcel per inlet cell; one notice for r_p outside the table. Measured D_n 5.13e-3, A² 0.457. RED: a list-directed reader ends the path at its slash (`unsupported distribution law: INPUT`, no output); class-centre atoms D 0.175, number fractions D 0.703 | box in one cell along x, 200×100 inlet (`make_box_case.py --nx 1 --ny 200 --nz 100 --kv 1.0`), uniform gas | inlet-face 401, cell-centre mode (`fsample = 1`, no `ds`, no `mdot-max`), columns 6-8 `1e-4 0 INPUT/table6.dat`; outlet + walls |
 | **psd-normal** | `[Kol33]`,`[AD54]`,`[Ste74]` | *closed form* — the Normal truncated to d > 0, μ = 20 µm, σ = 10 µm, as `psd-table` (shared `check.py`). Measured D_n 7.51e-3, A² 1.008. RED: rejection removed and draws clipped to 1 µm, D 0.0233, A² 40.9 (the tail defect A² sees by a factor 7) | as `psd-table` | as `psd-table`, columns 6-8 `1e-5 1e-5 Normal` |
 | **psd-lognormal** | `[Kol33]`,`[AD54]`,`[Ste74]` | *closed form* — LogNormal of mean 20 µm and standard deviation 10 µm. Measured D_n 7.40e-3, A² 0.917. RED: σ_p taken as the log-space σ, D 0.593 | as `psd-table` | as `psd-table`, columns 6-8 `1e-5 1e-5 LogNormal` |
@@ -355,9 +358,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-169 `e2e`-labelled + 42 `unit`-labelled + the optional `vortex-cloud-3way` = **212 CTest entries** in a
-serial build (+21 `mpi-*` under `USE_MPI`, 233), all green (counted from `tests/CMakeLists.txt`). The 169
-`e2e` entries are the 95 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+172 `e2e`-labelled + 42 `unit`-labelled + the optional `vortex-cloud-3way` = **215 CTest entries** in a
+serial build (+21 `mpi-*` under `USE_MPI`, 236), all green (counted from `tests/CMakeLists.txt`). The 172
+`e2e` entries are the 98 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the twelve `repeat-*` two-sweep gates, the fifty-nine `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The

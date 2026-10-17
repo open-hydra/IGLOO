@@ -30,6 +30,8 @@ ref-1blk
 ref-1blk-raw
 # conn-103 runs its 400 sibling into ref-400/ (tests/infrastructure/conn-103/check.py)
 ref-400
+# out-dcell3 and out-off run the plain drag-stokes case into ref-plain/ (tests/standard/out-*/check.py)
+ref-plain
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/
