@@ -32,6 +32,15 @@ program test_khrt_interaction
     !   Q3  lambda_RT < dp, tc >  tauRT-> RT due; KH rate must be exactly 0
     !   Q4  tc astride tauRT (+-1e-9)  -> the threshold itself agrees on both paths
     !
+    ! KS — what the KH shed counts under evaporation (model 4 carries n0, the number rate right
+    ! after the last event, as eventvar(5)): the stripped mass flow is (npdot - n0)*m, evaporation
+    ! lowers m and never npdot. One drop at We_g ~ 33 with acc = 0 (no RT branch):
+    !   KS1 no stripping (npdot = n0), 10 % of the drop mass evaporated -> no event, state unchanged
+    !   KS2 npdot = 1.1 n0 and 5 % of the stream mass evaporated -> the child carries (npdot - n0)*m,
+    !       the parent returns to n0, m0 -> m
+    !   KS3 the KS2 state in the model-3 layout (no slot 5) -> the per-drop-deficit trigger and partition
+    !   KS4 npdot*m/m0 <= (npdot - n0)*(d/dStable)^3 < n0 -> no event (the product parcel needs n0 drops)
+    !
     use, intrinsic :: iso_fortran_env, only: R8 => real64, int64
     use IGLOO_Lib_Breakup, only: breakupOde, breakupEvent, nchild
     use IGLOO_variables,   only: pi, toll
@@ -58,6 +67,8 @@ program test_khrt_interaction
     !> accelerations bracketing lambda_RT = dp (drag scale for this drop is ~1.8e5 m/s^2)
     real(R8), parameter :: acc_noRT = 1.0e3_R8, acc_RT = 1.0e6_R8
     real(R8), parameter :: dt_adv = 1.0e-7_R8      ! told->time advance per call
+    !> KS legs: the number rate right after the last event [1/s]
+    real(R8), parameter :: n0KS = 1.0e6_R8
 
     integer :: exit_code
     logical :: ok_all
@@ -71,6 +82,11 @@ program test_khrt_interaction
     call run_quadrant(ok_all, 'Q3 lamRT<dp tc>tau ', acc_RT,    2.0_R8,       .true. )
     call run_quadrant(ok_all, 'Q4 tc just below   ', acc_RT,    1.0_R8-1e-9_R8, .false.)
     call run_quadrant(ok_all, 'Q4 tc just above   ', acc_RT,    1.0_R8+1e-9_R8, .true. )
+
+    call run_KS1(ok_all)
+    call run_KS2(ok_all)
+    call run_KS3(ok_all)
+    call run_KS4(ok_all)
 
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then
@@ -208,5 +224,156 @@ contains
             ' shed=', shed_taken, '  ', merge('PASS', 'FAIL', pass)
         call append_row(label, 'RT_path_agreement', 0._R8, 0._R8, 0._R8, 0._R8, 0._R8, pass)
     end subroutine run_quadrant
+
+    !> We_g (radius) and dStable = 2 B0 lambda_KH at (d, slip), Reitz-87 as coded.
+    subroutine kh_scales(d, slip, WeGas, dStable)
+        real(R8), intent(in)  :: d, slip
+        real(R8), intent(out) :: WeGas, dStable
+        real(R8) :: r, Oh, Tay, lambdaKH
+        r        = 0.5_R8*d
+        WeGas    = r*rho_g*slip**2/sigma
+        Oh       = mu_l/sqrt(rho_l*sigma*r)
+        Tay      = Oh*sqrt(WeGas)
+        lambdaKH = r*9.02_R8*(1._R8 + 0.45_R8*sqrt(Oh))*(1._R8 + 0.4_R8*Tay**0.7_R8) &
+                   /(1._R8 + 0.87_R8*WeGas**1.67_R8)**0.6_R8
+        dStable  = 2._R8*bp_kh(1)*lambdaKH
+    end subroutine kh_scales
+
+    !> One event call at d = dp0, slip uslip, acc = 0 (no RT branch), exitLoop = .true.
+    subroutine ks_event(ev, nev, bp, event, addChild, childState)
+        integer,  intent(in)    :: nev
+        real(R8), intent(inout) :: ev(nev)
+        real(R8), intent(in)    :: bp(6)
+        logical,  intent(out)   :: event, addChild
+        real(R8), intent(out)   :: childState(nchild)
+        real(R8) :: brkupState(2), acc(3), vp(3)
+        acc = 0._R8
+        vp  = [uslip, 0._R8, 0._R8]
+        brkupState = 0._R8
+        call breakupEvent(ev, nev, brkupState, 2, &
+                          sigma, mu_l, rho_l, rho_g, uslip, 0._R8, dt_adv, acc, vp, dt_adv, &
+                          3, bp, 1, 1._R8, &
+                          event, childState, addChild, .true., tRng)
+    end subroutine ks_event
+
+    !> Child mass flow nChild * pi/6 rho dStable^3 (0 without a child).
+    pure function child_flow(addChild, childState) result(f)
+        logical,  intent(in) :: addChild
+        real(R8), intent(in) :: childState(nchild)
+        real(R8) :: f
+        f = 0._R8
+        if (addChild) f = childState(5)*pi/6._R8*rho_l*childState(4)**3
+    end function child_flow
+
+    !> KS1: npdot = n0 (no stripping), 10 % of the drop mass evaporated: no event, state unchanged.
+    subroutine run_KS1(ok)
+        logical, intent(inout) :: ok
+        real(R8) :: ev(5), ev0(5), childState(nchild), WeGas, dStable, m
+        logical  :: event, addChild, pass
+        call kh_scales(dp0, uslip, WeGas, dStable)
+        m   = pi/6._R8*rho_l*dp0**3
+        ev0 = [dp0, n0KS, m/0.9_R8, 0._R8, n0KS]
+        ev  = ev0
+        call ks_event(ev, 5, bp_kh, event, addChild, childState)
+        pass = (.not. event) .and. (.not. addChild) .and. all(ev == ev0)
+        write(*,'(a,es10.3,a,f6.2,a,es10.3,a,l2,a,l2,a,f8.5,a,f8.5,a,a)') '  KS1 dStable/dp=', dStable/dp0, &
+            ' We_g=', WeGas, ' (dStable/dLast)^3=', 0.9_R8*(dStable/dp0)**3, ' event=', event, ' child=', addChild, &
+            ' child flow/(n0 m0)=', child_flow(addChild, childState)/(n0KS*ev0(3)), ' npdot/n0 after=', ev(2)/n0KS, &
+            '  '//merge('PASS', 'FAIL', pass)
+        ok = ok .and. pass
+        call append_row('KS1_evaporation_only_no_shed', 'event', merge(0._R8, 1._R8, pass), 0._R8, &
+                        0._R8, 0._R8, 0._R8, pass)
+    end subroutine run_KS1
+
+    !> KS2: npdot = 1.1 n0, npdot*m = 0.95 n0 m0: the child carries (npdot - n0)*m, the parent returns to n0.
+    subroutine run_KS2(ok)
+        logical, intent(inout) :: ok
+        real(R8), parameter :: tol = 1.0e-14_R8
+        real(R8) :: ev(5), childState(nchild), WeGas, dStable, m, npd, m0, flowRef, errF, errN, errD, errM
+        logical  :: event, addChild, pass
+        call kh_scales(dp0, uslip, WeGas, dStable)
+        m   = pi/6._R8*rho_l*dp0**3
+        npd = 1.1_R8*n0KS
+        m0  = npd*m/(0.95_R8*n0KS)
+        ev  = [dp0, npd, m0, 0._R8, n0KS]
+        call ks_event(ev, 5, bp_kh, event, addChild, childState)
+        flowRef = (npd - n0KS)*m
+        errF = huge(1._R8); errN = huge(1._R8); errD = huge(1._R8)
+        if (addChild) then
+            errF = abs(child_flow(addChild, childState) - flowRef)/flowRef
+            errN = abs(childState(5) - (npd - n0KS)*(dp0/childState(4))**3)/childState(5)
+            errD = abs(childState(4) - dStable)/dStable
+        end if
+        errM = abs(ev(3) - m)/m
+        pass = event .and. addChild .and. (errF < tol) .and. (errN < tol) .and. (errD < 1.0e-12_R8) .and. &
+               (ev(1) == dp0) .and. (ev(2) == n0KS) .and. (errM < tol) .and. (ev(5) == n0KS)
+        write(*,'(a,es10.3,a,f6.2,a,l2,a,f8.5,a,f8.5,a,f8.5,a,es9.2,a,a)') '  KS2 dStable/dp=', dStable/dp0, &
+            ' We_g=', WeGas, ' child=', addChild, ' child flow/(n0 m0)=', child_flow(addChild, childState)/(n0KS*m0), &
+            ' vs (npdot-n0)m=', flowRef/(n0KS*m0), ' npdot/n0 after=', ev(2)/n0KS, ' err=', max(errF, errN, errM), &
+            '  '//merge('PASS', 'FAIL', pass)
+        ok = ok .and. pass
+        call append_row('KS2_stripped_mass_partition', 'child_flow', errF, max(errN, errM), 0._R8, 0._R8, tol, pass)
+    end subroutine run_KS2
+
+    !> KS3: the KS2 state in the model-3 layout (no n0 slot): the trigger and partition of the
+    !> per-drop deficit m0 - m, recomputed here (1e-14: a few roundings); the result printed in hex.
+    subroutine run_KS3(ok)
+        logical, intent(inout) :: ok
+        real(R8), parameter :: tol = 1.0e-14_R8
+        real(R8) :: ev(4), childState(nchild), WeGas, dStable, m, npd, m0, errN, errP
+        real(R8) :: dLast, mShed, npdotLast, nChild
+        logical  :: event, addChild, pass, trig
+        call kh_scales(dp0, uslip, WeGas, dStable)
+        m   = pi/6._R8*rho_l*dp0**3
+        npd = 1.1_R8*n0KS
+        m0  = npd*m/(0.95_R8*n0KS)
+        ev  = [dp0, npd, m0, 0._R8]
+        call ks_event(ev, 4, bp_kh, event, addChild, childState)
+        dLast     = (6._R8*m0/(pi*rho_l))**(1._R8/3._R8)
+        mShed     = m0 - pi/6._R8*rho_l*dp0**3
+        trig      = mShed/m0 > bp_kh(5)
+        npdotLast = npd*dp0**3/dLast**3
+        nChild    = 0._R8
+        if (addChild) nChild = npdotLast*(dLast**3 - dp0**3)/childState(4)**3
+        errN = abs(childState(5) - nChild)/max(nChild, tiny(1._R8))
+        errP = abs(ev(2) - npdotLast)/npdotLast
+        pass = trig .and. event .and. addChild .and. (errN < tol) .and. (errP < tol) .and. &
+               (abs(ev(3) - m)/m < tol) .and. (ev(1) == dp0)
+        write(*,'(a,es10.3,a,f6.2,a,l2,a,f8.5,a,f8.5,a,2es10.2,a,z16.16,1x,z16.16,a,a)') '  KS3 dStable/dp=', &
+            dStable/dp0, ' We_g=', WeGas, ' child=', addChild, ' child flow/(n0 m0)=', &
+            child_flow(addChild, childState)/(n0KS*m0), ' npdot/n0 after=', ev(2)/n0KS, ' rel dev nChild, npdot=', &
+            errN, errP, ' hex nChild, npdot=', childState(5), ev(2), '  '//merge('PASS', 'FAIL', pass)
+        ok = ok .and. pass
+        call append_row('KS3_model3_layout_unchanged', 'nChild', errN, errP, 0._R8, 0._R8, tol, pass)
+    end subroutine run_KS3
+
+    !> KS4: 10 % of the stream mass evaporated and npdot = n0 (1 + 0.95 (dStable/d)^3): the stripped mass passes
+    !> the trigger and gives nChild = 0.95 n0, at or above npdot*m/m0 = 0.9 n0 but below n0: no product parcel.
+    subroutine run_KS4(ok)
+        logical, intent(inout) :: ok
+        real(R8) :: ev(5), ev0(5), childState(nchild), bp4(6), WeGas, dStable, q, m, npd, m0
+        real(R8) :: nChildNew, npdotLast, trigRatio
+        logical  :: event, addChild, pass, placed
+        bp4 = bp_kh; bp4(5) = 1.0e-3_R8
+        call kh_scales(dp0, uslip, WeGas, dStable)
+        q   = (dStable/dp0)**3
+        m   = pi/6._R8*rho_l*dp0**3
+        npd = n0KS*(1._R8 + 0.95_R8*q)
+        m0  = npd*m/(0.9_R8*n0KS)
+        nChildNew = (npd - n0KS)/q
+        npdotLast = npd*m/m0
+        trigRatio = (npd - n0KS)*m/(bp4(5)*n0KS*m0)
+        placed = (trigRatio > 1._R8) .and. (npdotLast <= nChildNew) .and. (nChildNew < n0KS)
+        ev0 = [dp0, npd, m0, 0._R8, n0KS]
+        ev  = ev0
+        call ks_event(ev, 5, bp4, event, addChild, childState)
+        pass = placed .and. (.not. event) .and. (.not. addChild) .and. all(ev == ev0)
+        write(*,'(a,es10.3,a,f6.2,a,f7.4,a,f7.4,a,f7.2,a,l2,a,l2,a,f8.5,a,a)') '  KS4 dStable/dp=', dStable/dp0, &
+            ' We_g=', WeGas, ' npdot*m/m0/n0=', npdotLast/n0KS, ' nChild/n0=', nChildNew/n0KS, &
+            ' Ms/(mShedLim n0 m0)=', trigRatio, ' event=', event, ' child=', addChild, &
+            ' child flow/(n0 m0)=', child_flow(addChild, childState)/(n0KS*m0), '  '//merge('PASS', 'FAIL', pass)
+        ok = ok .and. pass
+        call append_row('KS4_product_count_n0', 'event', merge(0._R8, 1._R8, pass), 0._R8, 0._R8, 0._R8, 0._R8, pass)
+    end subroutine run_KS4
 
 end program test_khrt_interaction

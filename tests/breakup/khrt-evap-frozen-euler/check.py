@@ -19,7 +19,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 EUL, OUTLOC = "OUTPUT/euler1.tec", "OUTPUT/outloc-A.dat"
-TOL_EUL = 1.0e-5     # |sum rho_p V - sum F_p t_p| / sum F_p t_p (measured 7.5e-7)
+TOL_EUL = 1.0e-5     # |sum rho_p V - sum F_p t_p| / sum F_p t_p (measured 7.9e-7)
 
 
 def load(name, path):

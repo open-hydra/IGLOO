@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (235 in a serial build: 191 e2e + 43 unit incl. `self_test`,
+One row per registered CTest entry (236 in a serial build: 192 e2e + 43 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 24 `mpi-*`
-rows in their own section, 259).
+rows in their own section, 260).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (58 of 112 e2e fixtures)
+## Shared box fixture (58 of 113 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,7 +39,7 @@ writes with its defaults.
 Fifty-eight fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other fifty-four:
+once here, referenced as **"shared box"** below. The other fifty-five:
 
 - non-uniform gas (eighteen): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
@@ -54,9 +54,9 @@ once here, referenced as **"shared box"** below. The other fifty-four:
   across the periodic pair, `--wave-y 100`) `rot-2blk` (the box as two blocks, block 2 rotated 180° about y,
   T = 600 + 2000 z K, `--blocks 2 --rotate2 y --zgradient 2000`) and `body-force-z` (the box with
   T = 600 + 2000 z K, `--zgradient 2000`);
-- uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (seventeen):
+- uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (eighteen):
   `pilch-erdman-e2e`, `reitz-diwakar-e2e`, `rd-evap-frozen`, `khrt-e2e`, `khrt-e2e-euler`, `khrt-stress`,
-  `khrt-evap-frozen`, `khrt-evap-frozen-euler`, `khrt-shed-noexchange` and `khrt-varrho` on the 0.15 m box at
+  `khrt-evap-frozen`, `khrt-evap-frozen-euler`, `khrt-evap-live`, `khrt-shed-noexchange` and `khrt-varrho` on the 0.15 m box at
   U=200 m/s, T=300 K (the Weber sweeps); `tab-e2e`, `tab-evap-frozen`, `tab-varrho`, `tab-evap-frozen-varrho`,
   `etab-e2e` and `etab-evap-frozen` on a 0.6 m × 240-cell box at U=50 m/s, T=300 K (the TAB/ETAB onset);
   `evap-breakup-box` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
@@ -168,8 +168,9 @@ oracle possible.
 | **rd-evap-frozen** | `[RD87]` | as `reitz-diwakar-e2e` (its `check.py`): model 4 with the evaporation rate zero (`Yinf = 1`); worst 8.33e-4 as the parent. RED unfixed (d = d0 on every row, 25/25) | as `reitz-diwakar-e2e` | as `reitz-diwakar-e2e` + `evaporation=d2-law`, water vapour properties, `Yinf = 1` |
 | **tab-evap-frozen** | `[ORA87]` | as `tab-e2e` (its `check.py`) under model 2 (TAB events, evaporation zero), plus max\|`wdot`\| ≤ 1e-12 of the injected flow (1.8e-18). RED unfixed (0 broken drops, `wdot` 4e16 of the injected flow) | as `tab-e2e` | as `tab-e2e` + `evaporation=d2-law`, water vapour properties, `Yinf = 1` |
 | **etab-evap-frozen** | `[ORA87]`,`[Tan97/98]` | as `etab-e2e` (its `check.py`, the product velocity kick included) under model 2 (ETAB events, evaporation zero), plus max\|`wdot`\| ≤ 1e-12 of the injected flow (1.9e-18); 20/20 broken, 15 kicked. RED with model 2 dropped from the event write-back (0 broken drops, kicked drops seen unbroken, `wdot` 1e4 of the injected flow) | as `etab-e2e` | as `etab-e2e` + `evaporation=d2-law`, water vapour properties, `Yinf = 1` |
-| **khrt-evap-frozen** | `[Reitz87]` | the `khrt-e2e` oracles under model 4 (evaporation zero): KH rate (2.18e-4), RT persistence (134 shatters), children (241), \|Σ`wdot`\| ≤ 1e-9 of the injected flow (1.2e-10), the momentum/energy budgets (5e-6; 5.9e-7, 6.3e-7), and the stripped-mass partition: the exit flows of the 25 parents and 241 children (outloc column 7, model 4: ṅ_p·m) add up to the injected flow (5e-6; 6.3e-7). RED unfixed (KH rate 0, no RT persisting, no child), events not written back (RT 0, Σ`wdot` −0.072 kg/s, exit flows 1.23×), shed flux deposited (Σ`wdot` +0.077 kg/s), a child's number rate doubled (exit flows 1.25×), the exit record printing the injected or birth flow (exit flows 1.25×, momentum 0.38) | as `khrt-e2e` | as `khrt-e2e` + `evaporation=d2-law`, water vapour properties, `Yinf = 1` |
-| **khrt-evap-frozen-euler** | `[Reitz87]` | the `khrt-evap-frozen` oracles with the Eulerian output on (`out-file = ALL`, `mollify = off`, `out-time = on`), plus the Eulerian mass: with evaporation frozen the flow in the box changes only at exits, so Σ_cells ρ_p V = Σ_exits ṁ_exit·t_exit (1e-5; 7.5e-7). RED with a breakup child keeping the default ODE state count (every child burns out at birth, Σ`wdot` +0.077 kg/s, exit flows 0.75×, Eulerian mass 1.13× the exit sum) | as `khrt-e2e` | as `khrt-evap-frozen` + `out-file = ALL`, `mollify = off`, `out-time = on` |
+| **khrt-evap-frozen** | `[Reitz87]` | the `khrt-e2e` oracles under model 4 (evaporation zero): KH rate (2.18e-4), RT persistence (134 shatters), children (241), \|Σ`wdot`\| ≤ 1e-9 of the injected flow (7.7e-11), the momentum/energy budgets (5e-6; 6.5e-7, 6.6e-7), and the stripped-mass partition: the exit flows of the 25 parents and 241 children (outloc column 7, model 4: ṅ_p·m) add up to the injected flow (5e-6; 6.6e-7). RED unfixed (KH rate 0, no RT persisting, no child), events not written back (RT 0, Σ`wdot` −0.072 kg/s, exit flows 1.23×), shed flux deposited (Σ`wdot` +0.077 kg/s), a child's number rate doubled (exit flows 1.25×), the exit record printing the injected or birth flow (exit flows 1.25×, momentum 0.38) | as `khrt-e2e` | as `khrt-e2e` + `evaporation=d2-law`, water vapour properties, `Yinf = 1` |
+| **khrt-evap-frozen-euler** | `[Reitz87]` | the `khrt-evap-frozen` oracles with the Eulerian output on (`out-file = ALL`, `mollify = off`, `out-time = on`), plus the Eulerian mass: with evaporation frozen the flow in the box changes only at exits, so Σ_cells ρ_p V = Σ_exits ṁ_exit·t_exit (1e-5; 7.9e-7). RED with a breakup child keeping the default ODE state count (every child burns out at birth, Σ`wdot` +0.077 kg/s, exit flows 0.75×, Eulerian mass 1.13× the exit sum) | as `khrt-e2e` | as `khrt-evap-frozen` + `out-file = ALL`, `mollify = off`, `out-time = on` |
+| **khrt-evap-live** | `[Reitz87]` p. 322 | model 4 with live evaporation (up to 1.2e-3 of a drop's mass over the box) and negligible KH stripping: a KH shed counts the stripped mass only, the number-rate excess (ṅ − n0)·m over the number rate after the last event, so no child appears (0 children, no exit record above ID 25); the drops evaporate (Σ`wdot` ≥ 1e-4 of the injected flow; 1.495e-4); Σ`wdot` + the exit flows (read by header name) = the injected flow (1e-5; 5.3e-9). RED with the shed counting the per-drop deficit m0 − m: 17 children born from evaporated mass | as `khrt-e2e` | as `khrt-e2e` + `evaporation=CEM`, water vapour properties, `Yinf = 0`, `B1 = 1e8`, `CRT = 1e3`, `mShedLim = 1e-5` |
 | **khrt-e2e-euler** | `[Reitz87]` | the `khrt-e2e` oracles (and `check_rt.py`) under model 3 with the Eulerian output on (`out-file = ALL`, `mollify = off`, `out-time = on`), no solver failure or non-finite state, and the Eulerian mass of `khrt-evap-frozen-euler`: Σ_cells ρ_p V = Σ_exits ṁ_exit·t_exit (1e-5; 7.5e-7). RED before the fixes (241 children lost to a solver failure at their first step, none flies), and with a shed segment deposited at the parent's lowered flow (Eulerian mass 2.4e-3 short) | as `khrt-e2e` | as `khrt-e2e` + `out-file = ALL`, `mollify = off`, `out-time = on` |
 | **khrt-shed-noexchange** | `[CSS77]`,`[Reitz87]` | *cell-local zero* — `khrt-e2e` with `NoDrag`/`NoHeat`: a KH shed is the only exchange left, and every cell of the five `source.tec` fields must be ≤ 1e-12 of the flux scale (measured 1.1e-16); witnesses 553 children, every row at u = 100, T = 300, no RT shatter. RED when the parent deposits the child's birth flux (472/1500 cells, 2.3e-3 of the flux scale; Σ`Fx` = 100 m/s × the children's birth flow) | as `khrt-e2e` | as `khrt-e2e` with `drag=NoDrag`, `heat=NoHeat`, `mollify = off` |
 | **tab-varrho** | `[ORA87]` (the event's constant stream mass) | *invariant* — `tab-e2e` (model 1) with ρ = 1000 − 0.8(T − 270) on 1..1000 K and injection at 270 K: between breakup events the printed mass is constant to print precision (it changes only by ≥ 10 % at a breakup; the smallest measured is 89 %), and the printed d is (6m/(πρ(T)))^(1/3) on every row (worst 0.987 of the tolerance); 18 of 25 parcels break. RED while the segment-end resync took the injection density: 10664 violations, parcel 1's mass +12.75 % over 270 → 271.16 K | as `tab-e2e` | `tab-e2e`'s `bc.txt` with κ_t 0.9; own `properties.dat` |
@@ -313,7 +314,7 @@ box/BC. Sub-test IDs in parentheses.
 | **test_solidification** | `[JANAF98]` (guidance only) | *closed form + independent integration* — SG0 metal-slot pin; SG1 the recalescence jump in both branches (whole freeze at the enthalpy-conserving T_n + L(T_n)/c_s); SG2 plateau rate, RK4 to f = 1, heat balance; SG3 enthalpy continuity at every switch, the melt included, and the melt landing on the plateau at f = 1 − c_s(T−T_m)/h_fus; SG4 three-regime RK4 history with bisected events vs the piecewise closed form (1e-10 on T, 5e-12 on f, above the harness's worst-case rounding of the f and time sums, 1.3e-12); SG5 corners, the solid's melt threshold among the event functions; SG6 one production rhsSolidification call per phase with poisoned metal slots; SG7 the melting history of a solid in a 3000 K gas (solid heating, melting plateau, liquid heating) vs its piecewise closed form (SG4's tolerances); SG8 a transition from a state rounded past its threshold lands inside the new phase; SG9 the event rule (a crossing ends strictly past its threshold from a start at or before it; the segment-start test applies only a threshold strictly passed). Each RED under one mutation of the closures (see `tests/solidification/INFO.md`) | — | — |
 | **test_breakup_khrt** | `[Reitz87]` (KH), `[BR99]` (RT) | *analytic formula @ swept We* — production `Lib_Breakup::breakupOde` (pure-KH, acc=0) vs the coded Reitz-1987 KH linear-stability chain to 1e-12 (KH1 sub-critical, KH2/KH3) |
 | **test_kh_rayleigh_limit** | `[Ray78]` via `[Reitz87]` p.318 | *independent analytic limit* — the ONLY KH reference that shares no constant with the Reitz-87 fit. Recovers `λ_KH`/`Ω_KH` from `breakupOde` by **two-point inversion in `B0`** (the pure-KH rate is affine in `B0`; no production change, no third copy of the correlation), then checks the `We_g→0, Z→0` corner against Rayleigh's dispersion relation solved in-test: `λ/a` 9.02 vs 9.0144 (KHR3, 6.2e-4), `ω*` 0.34 vs 0.34334 (KHR4, 9.7e-3). KHR1/KHR2 pin that the recovered constants ARE the published 9.02/0.34 to 1e-7. **Tolerances = the fit's own accuracy, not implementation error — do not tighten** |
-| **test_khrt_interaction** | — (path-agreement pin) | *cross-path invariant* — KHRT is the only model live on the ODE and event paths at once, each with a verbatim copy of the KH/RT blocks. Asserts the KH rate is exactly 0 **iff** the event path takes the RT branch, over 4 quadrants incl. a ±1e-9 straddle of `tauRT`; that the RT branch lands `dp` on `λ_RT` (5.5e-16); that the duplicated `tc/told` accumulator co-evolves identically, including the by-design reset asymmetry; and the O7-SHED pin that the KH-shed branch is unreachable (A23) |
+| **test_khrt_interaction** | — (path-agreement pin) | *cross-path invariant* — KHRT is the only model live on the ODE and event paths at once, each with a verbatim copy of the KH/RT blocks. Asserts the KH rate is exactly 0 **iff** the event path takes the RT branch, over 4 quadrants incl. a ±1e-9 straddle of `tauRT`; that the RT branch lands `dp` on `λ_RT` (5.5e-16); that the duplicated `tc/told` accumulator co-evolves identically, including the by-design reset asymmetry; and the O7-SHED pin that the KH-shed branch is unreachable (A23). The KS legs (model 4, `n0` in the event variables): no shed from evaporated mass alone (KS1, exact), the child carries (ṅ − n0)·m and the parent returns to n0 (KS2, 1e-14; 2.5e-16), the model-3 layout keeps the per-drop-deficit partition (KS3, 1e-14 against the test's recomputation; 2.3e-15), and a product count between ṅ·m/m0 and n0 sheds nothing (KS4, exact). RED with the per-drop-deficit shed: KS1 sheds 0.09 n0·m0, KS2's child carries 1.5× the stripped mass, KS4 sheds |
 | **test_breakup_tab** | `[ORA87]` | *closed form + independent integration* — production `breakupEvent` oscillator vs the analytic damped-driven-oscillator solution (TAB1); *independent* `rk4_ref` of the raw ORA87 ODE (TAB2); rest-drop critical Weber (TAB3); breakup time via bisection (TAB4) |
 | **test_tab_moments** | `[ORA87]` | *stochastic moments* — child-size E[r], E[r²] over 20 000 sampled breakups vs a truncated Rosin-Rammler moment oracle (CLT-band tolerance; TABM, method 2); the same with method 1 against the chi-square pdf χ²_n scaled by r_s/(n + 4) and truncated to [0.01 r_s, r) (TABM1, n = 3: E[r] off by 1.6e-7 against 4.4e-7). RED: r_s/(n + 2) (E[r] 13.7× the tolerance) |
 | **test_breakup_rd** | `[RD86]` (+`[RD87]` lineage) | *analytic formula @ swept We_r* — production `breakupOde` vs the OpenFOAM-form bag/stripping oracle branches and the regime handoff (RD1–RD4) |
@@ -381,9 +382,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-191 `e2e`-labelled + 43 `unit`-labelled + the optional `vortex-cloud-3way` = **235 CTest entries** in a
-serial build (+24 `mpi-*` under `USE_MPI`, 259), all green (counted from `tests/CMakeLists.txt`). The 191
-`e2e` entries are the 112 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+192 `e2e`-labelled + 43 `unit`-labelled + the optional `vortex-cloud-3way` = **236 CTest entries** in a
+serial build (+24 `mpi-*` under `USE_MPI`, 260), all green (counted from `tests/CMakeLists.txt`). The 192
+`e2e` entries are the 113 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the four `threads-*` thread-count gates, the thirteen `repeat-*` two-sweep gates, the fifty-nine `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The

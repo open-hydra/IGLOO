@@ -19,8 +19,8 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TOL_MASS = 1.0e-9    # |sum wdot| / injected flow: the model-4 product n*m drifts at the ODE tolerance (measured 1.2e-10)
-TOL_EXIT = 5.0e-6    # |sum exit flows - injected| / injected: the E13.6 bound on column 7 (measured 6.3e-7)
+TOL_MASS = 1.0e-9    # |sum wdot| / injected flow: the model-4 product n*m drifts at the ODE tolerance (measured 7.7e-11)
+TOL_EXIT = 5.0e-6    # |sum exit flows - injected| / injected: the E13.6 bound on column 7 (measured 6.6e-7)
 
 
 def load(name, path):

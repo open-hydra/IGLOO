@@ -588,6 +588,7 @@ contains
                 !> parcel mass state: m from (rho, d), then the parcel flow mdot = npdot*m
                 call kid%computeMass(mat%rhoTab)
                 kid%m0   = kid%m
+                kid%n0   = kid%npdot
                 kid%mdot = kid%npdot * kid%m
                 !> ODE state: enthalpy/temperature slot, then the model-3 count slot
                 if (kid%varCp) then

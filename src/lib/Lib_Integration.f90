@@ -156,6 +156,7 @@ contains
       endif
       if (part%varCp) then; part%stateVar(7) = lookupTab(hTab,part%tp); else; part%stateVar(7) = part%tp; endif
       call part%computeMass(rhoTab); part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot
+      part%n0 = part%npdot
 
       select case(part%model)
       case(2,5); part%stateVar(8) = part%m

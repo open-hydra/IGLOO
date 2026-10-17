@@ -21,6 +21,7 @@ module IGLOO_particles
     real(R8), allocatable :: intE(:)     !> self velocity&temperature integral
     real(R8)     :: m         !> mass of the single self
     real(R8)     :: m0        !> initial mass (before mass sheddig due to breakup)
+    real(R8)     :: n0 = 0._R8 !> number rate right after the last breakup event (KH-RT, model 4)
     real(R8)     :: d         !> diameter
     real(R8)     :: tp        !> temperature
     real(R8)     :: hp        !> entalpy

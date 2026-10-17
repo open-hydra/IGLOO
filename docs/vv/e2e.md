@@ -598,6 +598,9 @@ drained after the parallel region.
 `khrt-shed-noexchange` states the same cell by cell: with `NoDrag` and `NoHeat` a shed is the
 only exchange left, and every source cell must be zero.  `khrt-evap-frozen` runs the case with
 evaporation on and frozen (model 4): KH rate, RT persistence, children and no mass to the gas.
+`khrt-evap-live` runs it with live evaporation and negligible stripping: a KH shed counts the
+number-rate excess $(\dot n - n_0)\,m$ since the last event, so the evaporated mass makes no child,
+and the evaporated flow closes the mass budget.
 
 **Result:** KH stripping within $0.03\,\%$ of the Reitz-87 closed form across the
 sweep; RT shatter persists on all eight drops; source budget within the print floor of the

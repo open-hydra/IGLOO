@@ -241,10 +241,17 @@ contains
         if (vel<toll) then; event = .false.; addChild = .false.; return; endif
         !> eventvar(1) = dp, eventvar(2) = npdot (always, for all models)
         select case (brkupSelect)
-        case (3)   !> KHRT: eventvar=[dp,npdot,m0,KHidx], brkupState=[told,tc]
-            call ReitzKHRTevent(eventvar(1),sigma,mup,rhop,eventvar(2),rhog,vel, &
-                                time,acc,vp,eventvar(3),brkupState(1),brkupState(2),      &
-                                eventvar(4), bp, event,childState,addChild,exitLoop,noShed)
+        case (3)   !> KHRT: eventvar=[dp,npdot,m0,KHidx(,n0 under model 4)], brkupState=[told,tc]
+            if (neventvar >= 5) then
+                call ReitzKHRTevent(eventvar(1),sigma,mup,rhop,eventvar(2),rhog,vel, &
+                                    time,acc,vp,eventvar(3),brkupState(1),brkupState(2),      &
+                                    eventvar(4), bp, event,childState,addChild,exitLoop,noShed, &
+                                    n0=eventvar(5))
+            else
+                call ReitzKHRTevent(eventvar(1),sigma,mup,rhop,eventvar(2),rhog,vel, &
+                                    time,acc,vp,eventvar(3),brkupState(1),brkupState(2),      &
+                                    eventvar(4), bp, event,childState,addChild,exitLoop,noShed)
+            endif
         case (4)   !> TAB: eventvar=[dp,npdot,y,yDot]
             addChild = .false.
             call TABmodel(eventvar(1),sigma,mup,rhop,eventvar(2),rhog,vel,dt, &
@@ -261,7 +268,7 @@ contains
     !> KH-RT event: RT breakup into lambdaRT-sized drops, or KH stripping that sheds the stripped
     !  mass into a child parcel once it exceeds mShedLim of the parent drop mass.
     subroutine ReitzKHRTevent(dp,sigma,mup,rhop,npdot,rhog,vel,time,acc,vp,m0,told,tc,KHindex, &
-                               bp, event,childState,addChild,exitLoop,childPending)
+                               bp, event,childState,addChild,exitLoop,childPending,n0)
         use IGLOO_variables, only: pi, toll
         implicit none
         real(R8), intent(in)    :: sigma, mup, rhop, rhog, vel, time, acc(3), vp(3)
@@ -271,9 +278,10 @@ contains
         logical,  intent(out)   :: event, addChild
         logical,  intent(in)    :: exitLoop
         logical,  intent(in)    :: childPending
+        real(R8), intent(inout), optional :: n0   !> model 4: the number rate right after the last event
         real(R8) :: radius, WeGas, WePart, Oh, Tay, omegaKH, lambdaKH, tauKH, dStable!, dOld
         real(R8) :: gt, force, omegaRT, lambdaRT, tauRT, nDrops, mShed!, lengthScale
-        real(R8) :: dLast, npdotLast, nChild
+        real(R8) :: dLast, npdotLast, nChild, mDrop
 
         event    = .false.
         addChild = .false.
@@ -310,6 +318,27 @@ contains
                 dp     = (dp**3/nDrops)**(1._R8/3._R8)
                 npdot  = nDrops*npdot
                 m0     = pi/6._R8*rhop*dp**3
+                if (present(n0)) n0 = npdot
+            endif
+        elseif (dStable < dp .and. .not. childPending .and. present(n0)) then
+            !> model 4: evaporation lowers the drop mass, never npdot => the stripped mass flow is (npdot - n0)*m
+            if (WeGas > bp(6)) then
+                mDrop = pi/6._R8*rhop*dp**3
+                if ((npdot - n0)*mDrop > bp(5)*n0*m0) then
+                    !> the stripped mass goes into drops of size dStable; a product parcel needs nChild >= n0
+                    nChild = (npdot - n0)*(dp/dStable)**3
+                    if (nChild >= n0) then
+                        event = .true.
+                        if (exitLoop) then
+                            addChild        = .true.
+                            childState(1:3) = vp
+                            childState(4)   = dStable
+                            childState(5)   = nChild
+                            npdot = n0      !> the parent returns to n0 => the stripped mass leaves the parcel
+                            m0    = mDrop   !> new accumulation reference
+                        endif
+                    endif
+                endif
             endif
         elseif (dStable < dp .and. .not. childPending) then
             !> no shed when the caller cannot keep a child (last generation pass): the mass stays on the parent

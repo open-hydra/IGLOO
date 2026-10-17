@@ -13,7 +13,7 @@ module Lib_RHS
   public  :: ind_Mv, ind_Lv, ind_Cv
   public  :: ind_Le, ind_Yi, ind_e1, ind_e2, ind_cp, ind_m
   public  :: ind_sxi, ind_sb1, ind_sb2, ind_sph
-  public  :: ind_evd, ind_evn, ind_evm0, ind_ev1, ind_ev2
+  public  :: ind_evd, ind_evn, ind_evm0, ind_ev1, ind_ev2, ind_evn0
   public  :: ind_e3, ind_e4, ind_e5, ind_mb, nmetal
   public  :: mod_model, mod_brkSelect, mod_evapSelect, mod_propFlags
   public  :: mod_liqSelect, mod_intfSelect, mod_boilSelect, mod_combSelect
@@ -54,6 +54,7 @@ module Lib_RHS
   integer :: ind_evn  = 0                   !> npdot in eventVar
   integer :: ind_evm0 = 0                   !> m0 in eventVar
   integer :: ind_ev1  = 0, ind_ev2 = 0      !> model-specific state
+  integer :: ind_evn0 = 0                   !> n0 in eventVar (KHRT under model 4)
   integer :: neventvar = 0                   !> total eventVar size
   integer :: nbrkst   = 0                   !> breakup ODE state size for breakupEvent
 
@@ -199,11 +200,15 @@ contains
 
     nev = 0; nbrkst = 0
     ind_evd = 0; ind_evn = 0; ind_evm0 = 0; ind_ev1 = 0; ind_ev2 = 0
+    ind_evn0 = 0
     select case (brkSelect)
-    case(3)    !> KHRT: [dp, npdot, m0, KHindex]
+    case(3)    !> KHRT: [dp, npdot, m0, KHindex] (+ n0 under model 4)
       ind_evd = 1; ind_evn = 2
       ind_evm0 = 3; ind_ev1 = 4 !> KHindex
       nev = 4; nbrkst = 2       !> brkst = [told, tc]
+      if (model == 4) then
+        ind_evn0 = 5; nev = 5   !> n0: the number rate right after the last event
+      endif
     case(4,5)  !> TAB/ETAB: [dp, npdot, y, yDot]
       ind_evd = 1; ind_evn = 2
       ind_ev1 = 3; ind_ev2 = 4  !> y, yDot
@@ -342,6 +347,7 @@ contains
       ev(ind_evn)  = particle%npdot
       ev(ind_evm0) = particle%m0
       ev(ind_ev1)  = particle%brkupVar(3)
+      if (ind_evn0 > 0) ev(ind_evn0) = particle%n0
     case(4,5)    !> TAB/ETAB: [dp, npdot, y, yDot]
       ev(ind_evd) = particle%d
       ev(ind_evn) = particle%npdot
@@ -363,6 +369,7 @@ contains
       particle%npdot = ev(ind_evn)
       particle%m0    = ev(ind_evm0)
       particle%brkupVar(3) = ev(ind_ev1)
+      if (ind_evn0 > 0) particle%n0 = ev(ind_evn0)
     case(4,5)    !> TAB/ETAB: [dp, npdot, y, yDot]
       particle%d     = ev(ind_evd)
       particle%npdot = ev(ind_evn)
