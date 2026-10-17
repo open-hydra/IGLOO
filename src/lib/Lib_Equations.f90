@@ -212,49 +212,14 @@ contains
         maxval(abs(vertices(3,[1,4,5,8]) - vertices(3,1))) <= tb .and.                                              &
         maxval(abs(vertices(3,[2,3,6,7]) - vertices(3,7))) <= tb) then
       xi = (p - vertices(:,1))/(vertices(:,7) - vertices(:,1))
+      call hex(xi, N, dN)
     else
       xi = 0.5_R8
-      do iter = 1, 50
-        call hex(xi, N, dN)
-        F = -p
-        do i = 1, 8
-          F = F + N(i)*vertices(:,i)
-        enddo
-        if (norm2(F) < 1.e-14_R8*h) exit
-        J = 0._R8
-        do i = 1, 8
-          J(:,1) = J(:,1) + dN(1,i)*vertices(:,i)
-          J(:,2) = J(:,2) + dN(2,i)*vertices(:,i)
-          J(:,3) = J(:,3) + dN(3,i)*vertices(:,i)
-        enddo
-        detJ = J(1,1)*(J(2,2)*J(3,3) - J(2,3)*J(3,2)) - J(1,2)*(J(2,1)*J(3,3) - J(2,3)*J(3,1)) + &
-               J(1,3)*(J(2,1)*J(3,2) - J(2,2)*J(3,1))
-        d(1) = (F(1)*(J(2,2)*J(3,3) - J(2,3)*J(3,2)) + F(2)*(J(1,3)*J(3,2) - J(1,2)*J(3,3)) + &
-                F(3)*(J(1,2)*J(2,3) - J(1,3)*J(2,2)))/detJ
-        d(2) = (F(1)*(J(2,3)*J(3,1) - J(2,1)*J(3,3)) + F(2)*(J(1,1)*J(3,3) - J(1,3)*J(3,1)) + &
-                F(3)*(J(1,3)*J(2,1) - J(1,1)*J(2,3)))/detJ
-        d(3) = (F(1)*(J(2,1)*J(3,2) - J(2,2)*J(3,1)) + F(2)*(J(1,2)*J(3,1) - J(1,1)*J(3,2)) + &
-                F(3)*(J(1,1)*J(2,2) - J(1,2)*J(2,1)))/detJ
-        xi = xi - d
-      enddo
+      call hexInverse(vertices, p, xi, 1.e-14_R8*h, 50, N, iter)
     endif
-    call hex(xi, N, dN)
     w = N
 
   contains
-
-    !> Trilinear shape functions and derivatives, getVertices order (u along i, v along j, w along k).
-    pure subroutine hex(c, N, dN)
-      real(R8), intent(in)  :: c(3)
-      real(R8), intent(out) :: N(8), dN(3,8)
-      real(R8) :: u, v, s
-      u = c(1); v = c(2); s = c(3)
-      N = [(1-u)*(1-v)*(1-s), (1-u)*(1-v)*s, (1-u)*v*s, (1-u)*v*(1-s), &
-           u*(1-v)*(1-s),     u*(1-v)*s,     u*v*s,     u*v*(1-s)]
-      dN(1,:) = [-(1-v)*(1-s), -(1-v)*s, -v*s, -v*(1-s), (1-v)*(1-s), (1-v)*s, v*s, v*(1-s)]
-      dN(2,:) = [-(1-u)*(1-s), -(1-u)*s, (1-u)*s, (1-u)*(1-s), -u*(1-s), -u*s, u*s, u*(1-s)]
-      dN(3,:) = [-(1-u)*(1-v), (1-u)*(1-v), (1-u)*v, -(1-u)*v, -u*(1-v), u*(1-v), u*v, -u*v]
-    end subroutine hex
 
     !> Bilinear shape functions and derivatives of a planar quad, getVertices order.
     pure subroutine quad(u, v, N, dN)
@@ -266,6 +231,60 @@ contains
     end subroutine quad
 
   end subroutine dualShapeWeights
+
+  !> Newton inverse of the trilinear map of a hexahedron (getVertices order) from xi: stops once
+  !  |x(xi) - p| < tol or after maxIt steps; N at the final xi, nIt the steps taken.
+  pure subroutine hexInverse(vertices, p, xi, tol, maxIt, N, nIt)
+    implicit none
+    real(R8), intent(in)    :: vertices(3,8), p(3), tol
+    integer,  intent(in)    :: maxIt
+    real(R8), intent(inout) :: xi(3)
+    real(R8), intent(out)   :: N(8)
+    integer,  intent(out)   :: nIt
+    real(R8) :: F(3), J(3,3), dN(3,8), detJ, d(3)
+    integer  :: iter, i
+
+    nIt = 0
+    do iter = 1, maxIt
+      call hex(xi, N, dN)
+      F = -p
+      do i = 1, 8
+        F = F + N(i)*vertices(:,i)
+      enddo
+      if (norm2(F) < tol) exit
+      J = 0._R8
+      do i = 1, 8
+        J(:,1) = J(:,1) + dN(1,i)*vertices(:,i)
+        J(:,2) = J(:,2) + dN(2,i)*vertices(:,i)
+        J(:,3) = J(:,3) + dN(3,i)*vertices(:,i)
+      enddo
+      detJ = J(1,1)*(J(2,2)*J(3,3) - J(2,3)*J(3,2)) - J(1,2)*(J(2,1)*J(3,3) - J(2,3)*J(3,1)) + &
+             J(1,3)*(J(2,1)*J(3,2) - J(2,2)*J(3,1))
+      d(1) = (F(1)*(J(2,2)*J(3,3) - J(2,3)*J(3,2)) + F(2)*(J(1,3)*J(3,2) - J(1,2)*J(3,3)) + &
+              F(3)*(J(1,2)*J(2,3) - J(1,3)*J(2,2)))/detJ
+      d(2) = (F(1)*(J(2,3)*J(3,1) - J(2,1)*J(3,3)) + F(2)*(J(1,1)*J(3,3) - J(1,3)*J(3,1)) + &
+              F(3)*(J(1,3)*J(2,1) - J(1,1)*J(2,3)))/detJ
+      d(3) = (F(1)*(J(2,1)*J(3,2) - J(2,2)*J(3,1)) + F(2)*(J(1,2)*J(3,1) - J(1,1)*J(3,2)) + &
+              F(3)*(J(1,1)*J(2,2) - J(1,2)*J(2,1)))/detJ
+      xi = xi - d
+      nIt = iter
+    enddo
+    call hex(xi, N, dN)
+  end subroutine hexInverse
+
+  !> Trilinear shape functions and derivatives, getVertices order (u along i, v along j, w along k).
+  pure subroutine hex(c, N, dN)
+    implicit none
+    real(R8), intent(in)  :: c(3)
+    real(R8), intent(out) :: N(8), dN(3,8)
+    real(R8) :: u, v, s
+    u = c(1); v = c(2); s = c(3)
+    N = [(1-u)*(1-v)*(1-s), (1-u)*(1-v)*s, (1-u)*v*s, (1-u)*v*(1-s), &
+         u*(1-v)*(1-s),     u*(1-v)*s,     u*v*s,     u*v*(1-s)]
+    dN(1,:) = [-(1-v)*(1-s), -(1-v)*s, -v*s, -v*(1-s), (1-v)*(1-s), (1-v)*s, v*s, v*(1-s)]
+    dN(2,:) = [-(1-u)*(1-s), -(1-u)*s, (1-u)*s, (1-u)*(1-s), -u*(1-s), -u*s, u*s, u*(1-s)]
+    dN(3,:) = [-(1-u)*(1-v), (1-u)*(1-v), (1-u)*v, -(1-u)*v, -u*(1-v), u*(1-v), u*v, -u*v]
+  end subroutine hex
 
   !> Bilinear interpolation of the gas at p0 in a quadrilateral: analytic inverse map, then
   !  shape-function weighting.
