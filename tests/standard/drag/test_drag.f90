@@ -4,7 +4,9 @@ program test_drag
     ! integrated by the production SDIRK4, driven through verif_driver.
     !
     !   A1  Stokes drag, uniform gas -> exact exponential velocity relaxation
-    !   A4  zero slip (gas vel = particle vel) -> straight-line constant velocity
+    !   A4' zero slip (gas vel = particle vel) -> straight-line constant velocity
+    !   A4  ballistic parabola: NoDrag, NoHeat, body acceleration g ->
+    !       x = x0 + v0 t + g t^2/2, v = v0 + g t, exact for SDIRK4 (fixed steps)
     !   AO  order-of-accuracy on the LINEAR Stokes RHS (fixed-step) -> p_obs ~ 4
     !   A3  Schiller-Naumann (nonlinear) -> independent RK4 oracle
     !
@@ -21,7 +23,7 @@ program test_drag
     implicit none
 
     real(R8), parameter :: PI = 4.0_R8*atan(1.0_R8)
-    integer,  parameter :: DRAG_STOKES = 2, DRAG_SN = 4, HEAT_RM = 5
+    integer,  parameter :: DRAG_STOKES = 2, DRAG_SN = 4, HEAT_RM = 5, DRAG_NONE = 14, HEAT_NONE = 7
     integer,  parameter :: NEQ = 7
 
     ! --- fixed scenario (SI) ---
@@ -50,6 +52,7 @@ program test_drag
 
     call run_A1(ok_all)
     call run_A4(ok_all)
+    call run_A4_ballistic(ok_all)
     call run_AO(ok_all)
     call run_A3(ok_all)
 
@@ -112,6 +115,43 @@ contains
         ok = ok .and. pass
         call append_row('A4_zero_slip', 'x,v', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_A4
+
+    !---------------------------------------------------------------!
+    ! A4: drag-free ballistic parabola. SDIRK4's order conditions     !
+    !     (sum b = 1, sum b c = 1/2) make it exact on the quadratic,   !
+    !     so only roundoff remains: relLinf over every fixed step.    !
+    !---------------------------------------------------------------!
+    subroutine run_A4_ballistic(ok)
+        logical, intent(inout) :: ok
+        integer,  parameter :: NSTEPS = 1000
+        real(R8), parameter :: gacc(3) = [3.0_R8, -9.81_R8, 0.5_R8]
+        real(R8), parameter :: x0(3) = [0.1_R8, 0.2_R8, 0.3_R8], v0(3) = [1.0_R8, 2.0_R8, -0.5_R8]
+        real(R8) :: y(NEQ), yn(NEQ), dt, t, err, tol
+        real(R8), allocatable :: num(:), ex(:)
+        integer  :: k, ierr, nbadT
+        logical  :: pass
+        allocate(num(6*NSTEPS), ex(6*NSTEPS))
+        dt = 1.0e-3_R8;  nbadT = 0;  ierr = 0
+        y = 0._R8;  y(1:3) = x0;  y(4:6) = v0;  y(7) = Tg
+        do k = 1, NSTEPS
+            call advance(gas9, cp_p, rho_p, dp, mass, DRAG_NONE, HEAT_NONE, &
+                         y, NEQ, MODE_SDIRK_FIXEDSTEP, dt, 1, yn, ierr, accel=gacc)
+            if (ierr < 0) exit
+            t = real(k, R8)*dt
+            num(6*k-5:6*k) = yn(1:6)
+            ex(6*k-5:6*k-3) = x0 + v0*t + 0.5_R8*gacc*t*t
+            ex(6*k-2:6*k)   = v0 + gacc*t
+            if (yn(7) /= Tg) nbadT = nbadT + 1
+            y = yn
+        end do
+        err = relLinf(num, ex)
+        tol = 1.0e-12_R8
+        pass = assert_lt('A4 ballistic parabola (x,v), 1000 fixed steps', err, tol) .and. (ierr >= 0) &
+               .and. (nbadT == 0)
+        if (nbadT > 0) write(*,'(a,i0)') '   [A4] steps where T moved under NoHeat: ', nbadT
+        ok = ok .and. pass
+        call append_row('A4_ballistic', 'x,v', err, err, 0._R8, 0._R8, tol, pass)
+    end subroutine run_A4_ballistic
 
     !---------------------------------------------------------------!
     ! AO: order of accuracy, fixed-step SDIRK4 on linear Stokes RHS. !

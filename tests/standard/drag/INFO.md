@@ -16,6 +16,7 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
 | AO | analytic | `[CGW78]` | ISBN 0-12-176950-X | order-of-accuracy on the LINEAR Stokes RHS, fixed-step SDIRK4 (γ=4/15) | `p_obs ≈ 4 ± 0.3` over Δt/τ={0.4,0.2,0.1} | tend=2τ_p, fixed-step direct SDIRK4, tight Newton (WORK4=1e-13) | **PASS** (err 3.5e-5→1.2e-7, p=4.12/4.07) |
 | A3 | analytic | `[SN33]` | (see [SN33]) | Schiller–Naumann `Cd=(24/Re)(1+0.15 Re^0.687)`; reference = self-contained RK4 of same closure (`verif_oracle::rk4_ref`, 2e5 substeps) | `vx,x vs RK4 oracle: relL∞` (L1) | initial Re≈33, constant gas, Tg=Tp | **PASS** (7.3e-11 < 1e-6) |
 | A4′ | analytic | derived | n/a | zero slip (gas vel = particle vel) ⇒ F_drag≡0 ⇒ straight-line constant velocity | `x−x₀−v₀t, v−v₀: relL∞` | gas state set so slip≡0; drag-only | **PASS** (1.4e-17) |
+| A4 | analytic | derived | n/a | ballistic parabola: `drag = NoDrag`, `heat = NoHeat`, body acceleration g = (3, −9.81, 0.5) m/s² through the driver's `accel` ⇒ x = x₀ + v₀t + ½gt², v = v₀ + gt; SDIRK4's order conditions (Σb = 1, Σbc = ½) make it exact on the quadratic, so only roundoff remains | `x, v: relL∞` over 1000 fixed steps of 1 ms (one step per driver call), T unchanged | x₀ = (0.1, 0.2, 0.3) m, v₀ = (1, 2, −0.5) m/s, tolerance 1e-12 | **PASS** (7.3e-15). RED with half the body acceleration in `rhsStandard`: 0.63 |
 
 ## Deferred
 
@@ -23,8 +24,7 @@ Per plan OQ3 (resolved 2026-06-13):
 
 | id | mode | reason |
 |---|---|---|
-| A2 (terminal velocity) | — | Requires a uniform body-force input in IGLOO. To be re-added once that feature lands. |
-| A4 (ballistic parabola) | — | Same dependency. A4′ above is the drag-off straight-line stand-in. |
+| A2 (terminal velocity) | — | `standard/body-force` gates the terminal drift under a body acceleration end to end. |
 
 ## Notes
 
@@ -52,15 +52,14 @@ and drives the production `rhsStandard` through either the adaptive
    RTOL ⇒ loose `FNEWT`. Fixed with default uround + `WORK(4)=1e-13`
    (Newton ≪ truncation, per the task's own guidance) ⇒ clean p≈4.
 
-**Note (scope, surfaced for the user):** `rhsStandard` already reads live
-`bodyForce`/`bodyAccel` from `IGLOO_variables` — the uniform body force the user
-planned to "add separately" appears to be present in production. If confirmed,
-A2 (terminal velocity) and ballistic-A4 become realizable now; left deferred and
-`bodyForce=.false.` here pending the user's decision.
+**Body acceleration.** The driver's optional `accel(3)` turns production's
+`bodyForce`/`bodyAccel` on (A4); the terminal velocity (A2) is gated end to end by
+`standard/body-force`.
 
-**E6 (Stokes-in-linear-field, matrix-exp oracle)** remains deferred: it needs the
-driver to run with `ord2=.true.` and a linear `gasNodes` field, a small driver
-extension not yet built.
+**E6 (Stokes in a linear gas field)** remains deferred. The driver's optional
+`nodes(9,8)`/`verts(3,8)` run production's trilinear sampler (`ord2 = .true.`) on one
+cell, but the sampler accepts a warm start within 1e-5 m of the new position without a
+Newton update, so a floor measured through it would carry the stale local coordinates.
 
 ## Unit tables (T5, 2026-07-02)
 
