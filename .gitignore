@@ -64,6 +64,8 @@ tests/*/*/*/rc.txt
 tests/*/*/diag_*.txt
 # Per-rank-count .tec snapshots kept by the mpi-consistency gate for its cross-rank compare
 tests/mpi/*/tec_n*/
+# Per-thread-count runs of the thread gates (tests/tools/check_threads_case.py)
+tests/*/*/threads-omp*/
 
 # mkdocs build output
 site/

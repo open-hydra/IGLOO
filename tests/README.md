@@ -36,7 +36,7 @@ tests/
 ├── common/                       # shared phase.txt and properties.dat + the MOSE nozzle solfile (db-2daxi, axis-200)
 ├── tools/                        # make_box_case.py make_pe_case.py make_vie_case.py make_vortex_case.py make_wedge_case.py make_uniform_gas.py
 │                                 # make_psat_table.py proptab.py set_kv.py ks_ad.py
-│                                 # aggregate_report.py check_twosweep.py check_refusal.py compare_tec.py check_registry.cmake plot_curves.py mpi_scaling_smoke.sh
+│                                 # aggregate_report.py check_twosweep.py check_refusal.py check_threads_case.py compare_tec.py check_registry.cmake plot_curves.py mpi_scaling_smoke.sh
 ├── support/                      # shared Fortran library (NOT a test family)
 │   ├── verif_norms.f90  verif_report.f90  verif_oracle.f90  verif_interp.f90  verif_dump.f90
 │   ├── verif_driver.f90          # the only module that touches IGLOO production
@@ -100,10 +100,10 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 219/219 in a serial build (175 e2e + 43 unit, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, and the
+ctest 223/223 in a serial build (179 e2e + 43 unit, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 24 more `mpi-*` cases, 243 in all (the 24 `mpi-*` pass). The e2e entries are 100 solver cases, two further
-oracles on `khrt-e2e`'s run, the thirteen two-sweep gates, the fifty-nine setup refusals and `vv-order` (two V&V
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 24 more `mpi-*` cases, 247 in all (the 24 `mpi-*` pass). The e2e entries are 100 solver cases, two further
+oracles on `khrt-e2e`'s run, the four thread-count gates, the thirteen two-sweep gates, the fifty-nine setup refusals and `vv-order` (two V&V
 figures independent of the record order; skipped without matplotlib); the unit entries are 36
 compiled unit tests, the property-table reader on three fixtures, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs`. Evaporation with
 ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,

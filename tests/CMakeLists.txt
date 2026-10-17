@@ -278,6 +278,19 @@ function(igloo_twosweep_case name casedir labels gasfile)
         ENVIRONMENT "OMP_NUM_THREADS=5;KMP_STACKSIZE=100M"
         TIMEOUT 900)
 endfunction()
+# Thread-count invariance of a serial case (tools/check_threads_case.py): its input.ini run at 1, 2 and 5 threads in
+# <case>/threads-omp<N>/ (never the case's own OUTPUT/), the thread witness, every .dat an exact multiset, every .tec
+# within 1e-12 of the field scale, the case's check.py on the 1-thread run.
+function(igloo_threads_case name casedir labels)
+    add_test(NAME ${name}
+        COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_threads_case.py
+                ${CMAKE_CURRENT_SOURCE_DIR}/${casedir} $<TARGET_FILE:IGLOO>
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
+    set_tests_properties(${name} PROPERTIES
+        LABELS "${labels}"
+        ENVIRONMENT "KMP_STACKSIZE=100M;IGLOO_EXE=$<TARGET_FILE:IGLOO>"
+        TIMEOUT 900)
+endfunction()
 
 # The five cases the plan calls for, each exercising a different leak:
 #   drag-stokes   simplest ord1 path -- was already repeatable, so this is a REGRESSION gate
@@ -462,6 +475,8 @@ igloo_unit_test(test_mhb98_decane evaporation "unit;evaporation;val;mhb98;f2")
 # Promoted 2026-07-07 with the A3/A4/A9 production fixes (see BUGS.md):
 igloo_unit_test(test_evap_probes evaporation "unit;evaporation;c;t8")
 igloo_e2e_case(d2law evaporation/d2law "e2e;evaporation")
+# threads-d2law: d2law at 1, 2 and 5 threads (evaporating parcels, the mass source).
+igloo_threads_case(threads-d2law evaporation/d2law "e2e;evaporation;omp")
 # E-VAL-1 (2026-07-22): Tier-V analytic line — cp_p x100 freezes B_T so K is a pure
 # closed form of the inputs (Godsave/Spalding); companion to the run-conditioned d2law.
 igloo_e2e_case(d2law-line evaporation/d2law-line "e2e;evaporation;val;d2line")
@@ -580,6 +595,9 @@ igloo_e2e_case(pilch-erdman-e2e breakup/pilch-erdman-e2e "e2e;breakup;val;pe")
 # first-breakup time to sub-percent). Found + gated the A18 fix (event-breakup path was
 # dead; now live: TAB breaks on time, resized drops persist). GREEN.
 igloo_e2e_case(tab-e2e breakup/tab-e2e "e2e;breakup;val;tab")
+# threads-tab-e2e: tab-e2e at 1, 2 and 5 threads -- the child sizes of the TAB resize are drawn inside the parallel
+# region, from each parcel's own stream. RED with the intrinsic random_number there (RosinRammler).
+igloo_threads_case(threads-tab-e2e breakup/tab-e2e "e2e;breakup;omp")
 # vv-order: the tab-e2e and burn-box figures (verify.py) are the same bytes whatever order an OpenMP run gives the
 # records of each zone of their .dat files; it reads those cases' fresh OUTPUT/, which both start by removing.
 set_tests_properties(tab-e2e PROPERTIES FIXTURES_SETUP vv_order_tab RESOURCE_LOCK tab_e2e_output)
@@ -669,6 +687,8 @@ set_tests_properties(khrt-e2e khrt-e2e-rt khrt-e2e-threads PROPERTIES RESOURCE_L
 # ---------- infrastructure: combined output paths --------------------------------
 # euler+source+body accumulator combination (the 2026-07 merge's last untested path)
 igloo_e2e_case(coupled-body infrastructure/coupled-body "e2e;infrastructure")
+# threads-coupled-body: coupled-body at 1, 2 and 5 threads (the Euler, source and body-force accumulators).
+igloo_threads_case(threads-coupled-body infrastructure/coupled-body "e2e;infrastructure;omp")
 # promoted legacy test/assigned-pos: 2Daxi wedge + real MOSE solfile + DB injection
 # + euler-only output (the B5/B6 path); behavioral gate, md5 A/B stays manual
 igloo_e2e_case(db-2daxi infrastructure/db-2daxi "e2e;infrastructure")
@@ -679,6 +699,8 @@ igloo_e2e_case(db-2daxi infrastructure/db-2daxi "e2e;infrastructure")
 # reached the axis was trapped in a period-2 rotation cycle and discarded.
 # Verified RED before the axis-face fix and GREEN after.
 igloo_e2e_case(axis-200 infrastructure/axis-200 "e2e;infrastructure")
+# threads-axis-200: axis-200 at 1, 2 and 5 threads (the gas-order-2 wedge and its deposits).
+igloo_threads_case(threads-axis-200 infrastructure/axis-200 "e2e;infrastructure;omp")
 # wedge-fold: axis-200 + wp on the near-axis parcel -- the only case in which the 200-face fold
 # ROTATES anything (every other wedge fixture has z == 0). Proven RED on the pre-O22 binary.
 igloo_e2e_case(wedge-fold infrastructure/wedge-fold "e2e;infrastructure")
