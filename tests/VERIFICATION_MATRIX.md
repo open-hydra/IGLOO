@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (193 in a serial build: 150 e2e + 42 unit incl. `self_test`,
+One row per registered CTest entry (194 in a serial build: 151 e2e + 42 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 21 `mpi-*`
-rows in their own section, 214).
+rows in their own section, 215).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,13 +30,13 @@ Columns:
 
 ---
 
-## Shared box fixture (38 of 85 e2e fixtures)
+## Shared box fixture (39 of 86 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
 writes with its defaults.
 
-Thirty-eight fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
+Thirty-nine fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
 once here, referenced as **"shared box"** below. The other forty-seven:
@@ -165,6 +165,7 @@ oracle possible.
 | **periodic-y** | infrastructure (translational periodic path) | *closed form* — body-force closed form folded **modulo L_y**; velocity unchanged across each wrap (transport = exact ±L_y translation), residual ~5e-7 m | shared box + `body-accel=(0,−8000,0)` (drives 2–3 y-wraps) | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; **faces 3/4 translational-periodic (bcdef 201)**; face2 outlet; faces 5/6 wall |
 | **periodic-2d** | infrastructure (translational periodic path, one-layer mesh) | *closed form* — `periodic-y`'s oracle unchanged (body-force closed form folded modulo L_y, velocity unchanged across each wrap, >= 2 wraps, every particle out at x = L_x) on a one-layer box whose 201 lines carry ATLAS's nine integers (block, i, j, k = 1, partner face, four orientation integers): the partner face is the fifth. RED on a reader taking four index integers on a one-layer mesh: the partner's k (1) read as its face, 18 of 25 parcels cycling to the outer iteration cap near the inlet, the run not ending in 300 s | own one-layer `solfile.tec` (`make_box_case.py --nz 1 --ny 25 --periodic-y --kv 1.0`, 60×25×1 cells) + `body-accel=(0,−8000,0)` | inlet-face 401 (25 cells); κ_v=1.0, κ_t=1.0, d=11.89 µm; **faces 3/4 201 with nine-integer lines**; every other face 400 |
 | **periodic-2d-ord2** | derived (`periodic-y`'s closed forms + `[RM52]`) | *RK4 along the closed-form path* — the periodic ghosts at gas-order 2: T(t) integrated along `periodic-y`'s closed-form path through the periodic extension of the cell-centre field (piecewise linear through the node lines, T(0) = T(N_y), T(N_y+1) = T(1)), steps split at the node lines, checked at half the steps (4.4e-10 K); every row with \|T − T_g\| > 1 K within δ_T + \|dT/dt\|·δ_t + 1e-6 K (worst 0.78 of it); `periodic-y`'s v and modular-y gates, ≥ 2 wraps on 20 of 25 parcels, 25 exits at x = 0.15; non-vacuity against the ring's linear fill (≥ 1.0e5 tol_T apart). RED with 201 dropped from the ghost links: 25 of 25 parcels off by 0.29–0.66 K; RED without the stencil refresh after the transport: every parcel stops at its first wrap | own one-layer `solfile.tec` (`make_box_case.py --nz 1 --ny 25 --periodic-y --kv 1.0 --kt 0.5 --wave-y 100`: T = 600 + 100 cos(2πy/L_y) at the cell centres) + `body-accel=(0,−8000,0)`, gas-order 2 | inlet-face 401 (25 cells); κ_v=1.0, κ_t=0.5, d=11.89 µm; **faces 3/4 201**; every other face 400 |
+| **conn-103** | `[CGW78]` (Stokes, via `drag-stokes`'s oracle) | *closed form + sibling* — a 103 face written header only, as ATLAS writes a dispersed-phase 103, names no partner cell: it is not connected and a parcel crossing it exits. C1 `drag-stokes`'s closed form on every row; C2 25 exits at x = 0.15 with Af = 1.000000E-04 m²; C3 the same input on `drag-stokes`'s 400 outlet, run by `check.py` into `ref-400/`: trajectories and exits equal as sorted multisets, `source.tec` within 1e-12 (measured equal); C4 the block-change line once (the 103 was read as 103), none in the 400 run. RED: a 103 taken as connected without a partner (segmentation fault in the retry); a payload read for 103 (end-of-file in `bc.txt` at setup); 103 left out of the connected-face test (C4 alone) | shared box (`make_box_case.py --outlet-code 103`: the outlet face coded 103; `solfile.tec` a symlink to `drag-stokes`'s) | inlet-face 401; κ_v=0.1, κ_t=1.0, d=11.89 µm; outlet face 103 (header only); walls 400 |
 | **axis-200** | — (behavioral + conservation; the 2026-09-03 axis-face cycle and the 2026-09-13 axis dual ghost, both in git) | *behavioral* — the AXIS face tagged `axisymmetric` (bcdef 200, what ATLAS emits): no give-up message, the near-axis parcel reaches r < 1e-5 (coverage witness; `input.ini` gives it `vp = −1` because with v_r = 0 on the axis an equilibrium parcel only approaches asymptotically), both parcels exit at x > 2.0; *conservation* on the ord2 eulerian field with volumes recomputed from the tec NODES (never production's `cellVol`): E1 Σρ_p·V / Σṁ·t = 1.000787 ± 1e-3, E2 near-axis share 0.999005 ± 1e-3, E3 ρ_p/n_p = ρ_ℓ(π/6)d³ to 1e-12; floor exactly zero across runs and thread counts; RED-proven against the pre-fix source (0.931626 / 0.499503) | `db-2daxi`'s MOSE nozzle solution (symlinked) | DB, 2 parcels on one axial station: ID 1 near-axis (y = 1e-4, `vp = −1`), ID 2 off-axis control (y = 0.55); `bc.txt` = db-2daxi's with face 3 retagged 200 |
 | **wedge-fold** | — (behavioral; the O22 fold-sense defect it pins) | *the 200-face FOLD must rotate a swirling parcel back into the sector*: axis-200 plus `wp = 0.5` on the near-axis parcel (r0 = 1e-4), so it leaves the 1° sector in its first ODE segment and the fold (position AND velocity rotated about the axis) is exercised — the only case in the suite with z ≠ 0 on a wedge. G1 no give-up (the O22 signature was "outer maxIter (500000); flagging gone"), G2 both parcels exit at x > 2.0, G3 every trajectory row inside the sector (print-aware: |z| ≤ |y|·tan(δ/2) + 1e-6 and y > −1e-6), G4 vacuity — W₀ = 0.5 injected and ≥ 9 z-sign flips on ID 1 (measured 18, identical at OMP 1/5 × 3), G5 the wp-free control parcel exits at axis-200's x to 1e-6 (its rows are byte-identical to axis-200's). RED on the pre-fix binary: G1, G2, G3 (500000 rows at θ ≈ 179°) | `axis-200`'s (symlinked) | DB, the two axis-200 parcels; ID 1 additionally `wp = 0.5`; `bc.txt` = axis-200's (symlink) |
 | **planar-slab** | — (behavioral; slab/wedge classifier) | *a single-layer box of finite thickness is a planar 2D case*: 20×20×1 cells over 0.1×0.1×0.005 m, uniform gas u = 5 m/s, T = 350 K, two parcels at the gas velocity at different radii from the x axis. The log reports `Planar slab (parallel k-planes)` and no wedge; no give-up; both parcels exit at x ≥ 0.0999 with y and z at their injection values to 1e-9 on every trajectory row | own (`make_fixture.py`) | six symmetry faces (300), face 2 an outlet (400); two parcels in the mid-plane |
@@ -334,9 +335,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-150 `e2e`-labelled + 42 `unit`-labelled + the optional `vortex-cloud-3way` = **193 CTest entries** in a
-serial build (+21 `mpi-*` under `USE_MPI`, 214), all green (counted from `tests/CMakeLists.txt`). The 150
-`e2e` entries are the 87 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+151 `e2e`-labelled + 42 `unit`-labelled + the optional `vortex-cloud-3way` = **194 CTest entries** in a
+serial build (+21 `mpi-*` under `USE_MPI`, 215), all green (counted from `tests/CMakeLists.txt`). The 151
+`e2e` entries are the 88 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the twelve `repeat-*` two-sweep gates, the forty-eight `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The
