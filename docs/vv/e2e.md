@@ -616,7 +616,9 @@ Langmuir–Knudsen model = MHB98's **M7** (M8 is the finite-conductivity variant
 on M7 in this figure), so the gate compares the integrated IGLOO trajectory to the
 **digitized M7 model curve** (WebPlotDigitizer, both panels).  The CTest gates are (i)
 IGLOO-vs-the-LK-kernel (tight, RK4 along the measured $T_p$), (ii) the coupled-physics
-identity $K=(T_G-T_\mathrm{wb})\,8k_g/(\rho_\ell L_v)$, and (iii) a **paper-reproduction
+identity $K=f_2\,(T_G-T_\mathrm{wb})\,8k_g/(\rho_\ell L_v)$ on the last half of the rows to
+$5\times10^{-4}$ ($f_2=1$ here: no blowing; `mhb98-water-blowing` runs the droplet with the
+blowing factor of MHB98 Eqs. 17–19), and (iii) a **paper-reproduction
 gate** on the M7 curve: IGLOO's rate parameter $\beta=(\rho_d\Pr_G/8\mu_G)\,|dD^2/dt|$
 (MHB98 Eq. 28) against $\beta_{M7}$ = the least-squares slope of the digitized M7 line
 ($\approx6.35\times10^{-3}$, itself guarded within ±20 % of the paper's stated

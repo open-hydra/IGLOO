@@ -67,8 +67,11 @@ documented with the A22 fix.
 Three gates, tightest first:
 1. **IGLOO-vs-kernel (tight).** IGLOO `d²(x)` vs the LK-corrected CEM rate law (written
    from the literature, not the code) RK4-integrated along the MEASURED `Tp(x)`; plus the
-   coupled-physics identity `K = (T_G − T_wb)·8k_g/(ρ_l L_v)` (Re=0) and the mass-source
-   telescoping audit. At `D₀=1.1 mm` the LK correction is small (`L_K/d≈2e-4`) but the
+   coupled-physics identity `K = f₂·(T_G − T_wb)·8k_g/(ρ_l L_v)` (Re=0; MHB98 eqs. 3, 17–19:
+   `f₂ = β/(e^β − 1)`, `β = ρ_l Pr K/(8μ_G)` with `blowing = LK`, `f₂ = 1` here), K and T_wb from the
+   last half of the rows, within **5e-4** (measured 4.4e-5; the tail form's own floor, a coupled RK4 of
+   the droplet, is 1.8e-5; a missing or doubled f₂ moves it by 3.1e-3, and with f₂ applied while
+   blowing is off the identity fails by 3.1e-3), and the mass-source telescoping audit. At `D₀=1.1 mm` the LK correction is small (`L_K/d≈2e-4`) but the
    kernel carries it — so it is *not* a VLE-discrimination case (unlike `lk-neq`).
 2. **Two-phase MASS CONSERVATION (A22 burnout deposit).** Every droplet here is consumed
    *inside* the domain, so all injected droplet mass must reach the gas:

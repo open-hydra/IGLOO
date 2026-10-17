@@ -34,6 +34,8 @@ ref-400
 ref-plain
 # body-evap-m2, body-evap-m4 and body-burn-m5 run their out-file = S layout into ref-S/ (tests/tools/body_source_check.py)
 ref-S
+# mhb98-water-blowing runs the droplet without blowing into ref-noblow/ (tests/evaporation/mhb98-water-blowing/check.py)
+ref-noblow
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/
