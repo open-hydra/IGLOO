@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (192 in a serial build: 149 e2e + 42 unit incl. `self_test`,
+One row per registered CTest entry (193 in a serial build: 150 e2e + 42 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 21 `mpi-*`
-rows in their own section, 213).
+rows in their own section, 214).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (38 of 84 e2e fixtures)
+## Shared box fixture (38 of 85 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,9 +39,9 @@ writes with its defaults.
 Thirty-eight fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other forty-six:
+once here, referenced as **"shared box"** below. The other forty-seven:
 
-- non-uniform gas (fourteen): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
+- non-uniform gas (fifteen): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
   (`axis-200` plus swirl on the near-axis parcel); `swirl-wedge`, `swirl-wedge-deposit` and
   `swirl-wedge-spin` (a 200×40-cell annular wedge from `tools/make_wedge_case.py`, analytic solid-body
@@ -50,8 +50,9 @@ once here, referenced as **"shared box"** below. The other forty-six:
   `tools/make_vortex_case.py`); `two-fam-bc-2blk-stretch-ord2` (the box as two 30×5×5 blocks of 1.667 mm and
   3.333 mm cells along x, T = 600 + 1000 x K, `make_box_case.py --stretch 2 --gradient 1000`),
   `chimera-2blk-shift-ord2` (`chimera-2blk` with block 2 shifted by half a cell and the same gradient,
-  `--shift 0.5 --gradient 1000`) and `periodic-2d-ord2` (`periodic-2d`'s one-layer box with a temperature wave
-  across the periodic pair, `--wave-y 100`);
+  `--shift 0.5 --gradient 1000`), `periodic-2d-ord2` (`periodic-2d`'s one-layer box with a temperature wave
+  across the periodic pair, `--wave-y 100`) and `rot-2blk` (the box as two blocks, block 2 rotated 180° about y,
+  T = 600 + 2000 z K, `--blocks 2 --rotate2 y --zgradient 2000`);
 - uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (seventeen):
   `pilch-erdman-e2e`, `reitz-diwakar-e2e`, `rd-evap-frozen`, `khrt-e2e`, `khrt-e2e-euler`, `khrt-stress`,
   `khrt-evap-frozen`, `khrt-evap-frozen-euler`, `khrt-shed-noexchange` and `khrt-varrho` on the 0.15 m box at
@@ -173,6 +174,7 @@ oracle possible.
 | **two-fam-bc** | — (drag-stokes's `[Stokes]` closed form, per family) | *per-family boundary file*: two-mat's case with a `bc.txt` carrying one copy of the inlet table per family in ATLAS's order (block, material, population; copy c = family c) — A = drag-stokes's line (krho 0.34, rp 5.945e-6), B half the loading and twice the radius (krho 0.17, rp 1.189e-5). T1 B's parcels on the Stokes closed form at d = 23.78 µm, τ = 1.745e-3 s (the imported oracle checks every row's diameter); T2 ṁ = krho/(1 − 0.51) · 1.2e-3 on every exit: 8.326531e-4 (A), 4.163265e-4 (B); T3 m_B/m_A = 2.711864 at injection; T4 ρ_p/n_p = 7.0410e-12 in `euler2.tec` (A's 2.596e-12 in `euler1.tec`); controls C1 A's closed form and identical injection stations, C2 25 exits each, C3 zero `wdot` slots and the Fx/E balance with each parcel's own ṁ. RED on a reader feeding copy 1 to both families: T1 `dp=1.1890e-05` on 25/25 parcels, T2 1.275000e-03 on every exit of both materials, T3 0.338983, T4 8.8012e-13 in 1500/1500 cells; C1–C3 green in both states | `drag-stokes`'s (symlinked) | FB `krho` streams; own `bc.txt` from the committed `make_fixture.py`: 2 × 1250 records, ATLAS headers `b i j k f code`, face 1 = 401, every other face 100 |
 | **two-fam-bc-2blk** | — (drag-stokes's `[Stokes]` closed form, per family; the one-block `two-fam-bc` run) | *two blocks, per-family boundary file*: two-fam-bc's case on the same box split into two blocks at x = 0.075 m, joined by a 101 connection whose line names the partner cell; `bc.txt` holds each block's face table once per family in ATLAS's order (block 1 A, block 1 B, block 2 A, block 2 B). T1–T4 and C1–C3 as `two-fam-bc` over both zones; X1 every parcel of both materials has rows on both sides of x = 0.075 and leaves at x = 0.15; X2 the one-block sibling, run by `check.py` into `ref-1blk/`: trajectories, exits and scatter equal as sorted multisets, `euler1`, `euler2` and `source` equal cell by cell to 1e-12 of the field scale (measured: bit-identical); C4 no stuck, no-progress or maxIter line; K1 the block-change line `block changes: 50 via the connected cell, 0 via the block sweep, 0 rim exits; stencil refreshed on a block change at a boundary entry: 0` (RED without the connected-cell step: no line, or `0 via the connected cell, 50 via the block sweep` with the step skipped). `mollify = off`: the mollifier at its default is gated by `two-fam-bc-2blk-mollify`. RED on a reader taking one copy per block: block 2 reads block 1's copy B, an inlet at x = 0.075 (A starts 50 parcels) and a connection on the outlet face; 0 exits, ctest timeout at 300 s | own two-zone `solfile.tec` (`make_box_case.py` with two blocks, via `make_fixture.py`) | FB `krho` streams on block 1's face 1; own `bc.txt` from the committed `make_fixture.py`: 2 blocks × 2 copies × 650 records, ATLAS headers `b i j k f code`, 101 partner lines in every copy |
 | **two-fam-bc-2blk-mollify** | — (the one-block `two-fam-bc` run) | *two blocks, field mollifier on*: `two-fam-bc-2blk`'s case with the mollifier at its default (8 passes). M1 the one-block run, by `check.py` into `ref-1blk/`: trajectories, exits and scatter equal as sorted multisets, `euler1`, `euler2` and `source` equal cell by cell to 1e-12 of the field scale (measured 1.5e-15; bit-identical under `-fp-model strict`); W1 the mollifier line in both logs and the one-block `source.tec` E moved against an unsmoothed run (`ref-1blk-raw/`) in at least half its cells (1500 of 1500), so a run without smoothing cannot pass M1; W2 25 exits per material at x = 0.15. RED with each block smoothed with zero flux at the 101 face: 400 of 1500 cells, columns 23–38, `E` 9.08e-4 of the field scale | `two-fam-bc-2blk`'s (`INPUT/` symlinked) | as `two-fam-bc-2blk` |
+| **rot-2blk** | — (the one-block box run) | *rotated block interface, ATLAS-written*: the box as two blocks, block 2 rotated 180° about y (i along −x, k along −z), its boundary file written by ATLAS BCB with the orientation `1 0 0 −1` on every interface record (R3 asserts it). R1 the one-block run, by `check.py` into `ref-1blk/`, through the rotated cell map (block 2's (i, j, k) = (61 − i, j, 6 − k)): trajectories equal as sorted multisets, exit records within one print unit, scatter markers per parcel (count, Y, Z, d, m), `euler1` and `source` cell by cell within ten times their measured floor (ρ_p 3.26e-8, T_p 1.88e-9, E 2.04e-11 of the field scale: the rotated vertex order decides the in/out test at a face; an unrotated two-block box matches to 2e-15); R2 the block-change line (25 via the connected cell); R4 no zero-flux warning; R5 25 exits at x = 0.15. RED with the smoothing halo taken at the own in-plane indices: T_p 2.04e-2, E 2.98e-5 of the field scale (320 cells); a search seeded with the exiting cell's indices is not observable (the partner block's sweep finds the cell) | own two-zone `solfile.tec` (`make_box_case.py --blocks 2 --rotate2 y --zgradient 2000`: T = 600 + 2000 z K) + `INPUT-1blk/`; `INPUT/drop-bc.txt` from ATLAS BCB on the deck `INPUT-atlas/` (`make_fixture.sh`) | FB `krho` streams on block 1's face 1 (κ_v=0.1, κ_t=0.5, d=11.89 µm); interface faces 101; `phase = drop`; gas-order 1, mollifier on (8 passes) |
 | **timing-report** | — (kind 8) | the `[IGLOO-timing]` report of `[IGLOO-General] timing = on`: one line per phase in a fixed order, finite and ≥ 0, one line per thread and per rank, the strided parcel counts, the allocated sizes (times never compared to a number; `INFO.md`) | as `vie-plait` (symlinked `INPUT/`) | as `vie-plait` |
 | **chimera-2blk** | — (the chimera record ATLAS writes, `io_output.f90::write_chimera`) | *two overlapping blocks, chimera faces*: drag-stokes's box as two blocks of 34×5×5 cells overlapping by 8 (block 1 cells 1–34, block 2 cells 27–60), face 2 of block 1 and face 1 of block 2 chimera faces (102) with ATLAS's payload (counts line; donor lines `block i j k weight`, one donor of weight 1 per layer), each block's table once per family (two populations of material A). E1 the routing line `chimera facelets: 50 (0 with an empty donor layer, 0 unresolved (code 100), 0 header-only 104)`; K2 the block-change line `block changes: 50 via the connected cell, 0 via the block sweep, 0 rim exits; stencil refreshed on a block change at a boundary entry: 0`; X1 the box as one block (generated and run by `check.py` into `ref-1blk/`): trajectory rows away from x = 0.065 and 0.085 and exits equal as sorted multisets; C1 50 exits, all at x = 0.15; C2 no stuck, no-progress or maxIter line. RED of K2: no block-change line without the connected-cell step, `0 via the connected cell, 50 via the block sweep` with the step skipped; of X1: a 102 exit sent to the exit branch (all 50 parcels leave at x = 0.085, 1250 rows differ). RED on a reader without the 102 record: pass 0 reads the counts line and the first donor line as a header, code 1, `bad BC cell line: record 27 ... Legacy-schema` (exit 1) | own two-zone `solfile.tec` (`make_box_case.py --blocks 2 --overlap 4 --families 2`) | FB `krho` streams on block 1's face 1 (family 1 krho 0.34, rp 5.945e-6; family 2 krho 0.17, rp 1.189e-5); own `bc.txt` and `phase.txt` (`A 2`) from the generator, `common/properties.dat` |
 | **chimera-2blk-rim** | — (the rim ATLAS leaves where an overset block does not cover a receiver face) | *partly covered chimera face*: `chimera-2blk` with block 2 one row shorter in y (4 rows); the facelets of block 1's face 2 in the uncovered row are written 100 (no donor). K3 the block-change line `block changes: 40 via the connected cell, 0 via the block sweep, 10 rim exits; stencil refreshed on a block change at a boundary entry: 0`; R1 10 exits at x = 0.085 in the uncovered row with `Af` = 1e-4 m², 40 at x = 0.15; E1 the routing line `chimera facelets: 40 (0 with an empty donor layer, 5 unresolved (code 100), 0 header-only 104)`; C2 no stuck line. RED without the connected-cell step and the rim count: no block-change line | own two-zone `solfile.tec` (`make_box_case.py --blocks 2 --overlap 4 --rim --families 2`) | as `chimera-2blk` |
@@ -332,9 +334,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-149 `e2e`-labelled + 42 `unit`-labelled + the optional `vortex-cloud-3way` = **192 CTest entries** in a
-serial build (+21 `mpi-*` under `USE_MPI`, 213), all green (counted from `tests/CMakeLists.txt`). The 149
-`e2e` entries are the 86 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+150 `e2e`-labelled + 42 `unit`-labelled + the optional `vortex-cloud-3way` = **193 CTest entries** in a
+serial build (+21 `mpi-*` under `USE_MPI`, 214), all green (counted from `tests/CMakeLists.txt`). The 150
+`e2e` entries are the 87 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the twelve `repeat-*` two-sweep gates, the forty-eight `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The
