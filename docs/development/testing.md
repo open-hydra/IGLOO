@@ -85,8 +85,8 @@ tests/
 ├── infrastructure/               # gas_reconstruction, ini_pipeline, properties_reader, rng_stream, axis_dispatch, graze_standoff, dual_clip, source_reduction, ghost_bc, bc_families, mollify_blocks, host_assoc;
 │                                 # db-injection/coupled-body/db-2daxi/axis-200/wedge-fold/planar-slab/wedge-axis-row/wedge-tiny/two-mat/inlet-402-403/two-fam-bc/two-fam-bc-2blk/two-fam-bc-2blk-mollify/rot-2blk/chimera-2blk/chimera-2blk-rim/two-fam-bc-2blk-stretch-ord2/chimera-2blk-shift-ord2/periodic-y/periodic-2d/periodic-2d-ord2/conn-103/bc-center-2grp/inj-pack/inj-dscell/inj-dsdegen/ini-comment-eq/solver-fail-consumed/solver-fail-consumed-m4/stuck-cell/wall-approach/varcp-tmin (e2e)
 │                                 # refusals/{p2t,zgr,lk-d2law,properties-*,bc-copies,bc-copy-order,chimera-*,*-token,phase-token-real,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre,comb-*,brk-*,sigma-*,bc-legacy,bc-empty-payload,body-accel} (setup-refusal gates)
-├── repeatability/                # two-sweep state-leak gates: drag-stokes/drag-stokes-dopri5/db-injection/two-mat/d2law/khrt/vie-plait/etab/tab/tab-dopri5/solid-box/evap-breakup
-└── mpi/                          # USE_MPI build only: drag-stokes/conv-nu/khrt/bc-center-2grp/two-mat/timing-report/consistency/consistency-two-mat/determinism/repeat-*/ (12)
+├── repeatability/                # two-sweep state-leak gates: drag-stokes/drag-stokes-dopri5/db-injection/two-mat/d2law/khrt/vie-plait/etab/tab/tab-dopri5/solid-box/evap-breakup/swirl-wedge
+└── mpi/                          # USE_MPI build only: drag-stokes/conv-nu/khrt/bc-center-2grp/two-mat/timing-report/consistency/consistency-two-mat/determinism/repeat-*/ (13)
 ```
 
 ### Categories
@@ -99,7 +99,7 @@ tests/
 | `combustion` | Beckstead $d^n$ Al-burn unit family; burn-box e2e |
 | `solidification` | Solidification unit family (supercooling, recalescence, plateau, melting); solid-box, solid-melt, solid-box-euler, solid-box-2mat, scatter-weight-solid e2e, the two-sweep solid-box and the eight solidification refusals |
 | `infrastructure` | Gas reconstruction, INI pipeline, property-table reader (three fixtures), RNG stream, axis dispatch, grazing stand-off, gas ghost ring, boundary-file families, dual-clip, source-reduction, multi-block mollifier and host-association unit families, `self_test` and `registry-docs`; injection, coupling, nozzle, wedge and slab, periodic, two-material, per-family boundary-file, two-block, chimera, INI-comment, wall-approach, varying-cp table and solver-failure e2e cases; the two-sweep db-injection and two-mat; seventeen setup-refusal gates (the other nineteen sit in their model's category) |
-| `repeatability` | Twelve e2e cases run twice through `setup_static` → `reset_state` → `solve` with the second sweep compared to the first (see `tests/repeatability/INFO.md`) |
+| `repeatability` | Thirteen e2e cases run twice through `setup_static` → `reset_state` → `solve` with the second sweep compared to the first (see `tests/repeatability/INFO.md`) |
 | `mpi` | The serial gates re-run under `mpiexec` with a rank-count witness, plus cross-rank-count consistency (see `tests/mpi/INFO.md`) |
 
 CTest labels combine category (`standard`/`evaporation`/…), kind (`unit`/`e2e`),
@@ -109,8 +109,8 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **215 tests** in a serial build (172 e2e + 42 unit, `self_test`,
-`registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 21 more
+Current gate: **216 tests** in a serial build (173 e2e + 42 unit, `self_test`,
+`registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 22 more
 `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.
 

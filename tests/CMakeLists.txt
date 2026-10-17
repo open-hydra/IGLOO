@@ -11,9 +11,9 @@
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
-#   repeatability/      two-sweep gates (twosweep driver): 12 cases
+#   repeatability/      two-sweep gates (twosweep driver): 13 cases
 #   mpi/                registered only under USE_MPI: 6 rank-count cases + 2 consistency + 1 determinism
-#                       + 12 two-sweep cases
+#                       + 13 two-sweep cases
 #
 # Run everything via ../test.sh (it builds this tree's IGLOO, which every e2e case runs, and publishes it to bin/).
 
@@ -324,6 +324,10 @@ igloo_twosweep_case(repeat-solid-box    repeatability/solid-box
 # repeat-evap-breakup: ODE model 4's droplet mass and number rate are re-seeded at injection every sweep.
 igloo_twosweep_case(repeat-evap-breakup repeatability/evap-breakup
                     "e2e;repeatability;evaporation;breakup" "")
+# repeat-swirl-wedge: the first twin on a wedge (Nk = 1, the sector fold): the setup-time wedge state survives a
+# solve, every DB parcel's azimuthal velocity is restored at injection; plus the gas-refresh cycle.
+igloo_twosweep_case(repeat-swirl-wedge  repeatability/swirl-wedge
+                    "e2e;repeatability;axisym" "INPUT/solfile.tec")
 # docs/user/registry.md is DocGen OUTPUT that is also TRACKED, so it can silently
 # disagree with the registry it documents (it did twice on 2026-07-30). Regenerate
 # into the build tree and diff. Kind 8 (contract meta-test): no physics, no figure.
@@ -1006,7 +1010,7 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
             TIMEOUT 900)
     endfunction()
     # every repeatability case at 2 ranks x 2 threads (children, RNG, evaporation, ord2 accumulator shape,
-    # two materials, the explicit solver, the gas-refresh cycle on drag-stokes and vie-plait)
+    # two materials, the explicit solver, the wedge, the gas-refresh cycle on drag-stokes, vie-plait and swirl-wedge)
     igloo_twosweep_case_mpi(mpi-repeat-drag-stokes        mpi/repeat-drag-stokes        2 2 "e2e;mpi;repeatability" "INPUT/solfile.tec")
     igloo_twosweep_case_mpi(mpi-repeat-drag-stokes-dopri5 mpi/repeat-drag-stokes-dopri5 2 2 "e2e;mpi;repeatability" "")
     igloo_twosweep_case_mpi(mpi-repeat-db-injection       mpi/repeat-db-injection       2 2 "e2e;mpi;repeatability" "")
@@ -1019,6 +1023,7 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
     igloo_twosweep_case_mpi(mpi-repeat-tab-dopri5         mpi/repeat-tab-dopri5         2 2 "e2e;mpi;repeatability" "")
     igloo_twosweep_case_mpi(mpi-repeat-solid-box          mpi/repeat-solid-box          2 2 "e2e;mpi;repeatability" "")
     igloo_twosweep_case_mpi(mpi-repeat-evap-breakup       mpi/repeat-evap-breakup       2 2 "e2e;mpi;repeatability" "")
+    igloo_twosweep_case_mpi(mpi-repeat-swirl-wedge        mpi/repeat-swirl-wedge        2 2 "e2e;mpi;repeatability" "INPUT/solfile.tec")
 endif()
 
 # A7 resolved 2026-07-15 as source-faithful (Shimada2006 eq.45 quoting NASA-SP-8039

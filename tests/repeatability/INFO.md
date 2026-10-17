@@ -29,6 +29,7 @@ over the same `OUTPUT/`.
 | `tab` | `breakup/tab-e2e` | TAB event breakup — the one RNG-consuming model |
 | `solid-box` | `solidification/solid-box` | the solidification phase and frozen fraction (ODE model 6), re-derived at injection every sweep. RED with the derivation skipped when a phase survives the previous sweep: sweep 1 starts solid, 25/25 exits and 1475/1500 trajectory rows differ, `T` at the plateau midpoint 1276 K instead of 2327 K |
 | `evap-breakup` | `evaporation/evap-breakup-box` | ODE model 4's droplet mass and number rate, re-seeded at injection every sweep. RED with the number rate seeded on the first sweep only: sweep 1 starts at the previous burnout's number rate (8.17× the injected) with the injected droplet mass — outloc 25/25 and trajectories 5378/5450 records differ, scatter 149280 vs 18273 records, `source.tec` max\|rel\| 603 |
+| `swirl-wedge` | `standard/swirl-wedge` | the first twin on a wedge (`Nk = 1`, the sector fold): the state set once at setup (the sector normals, the azimuth frame `refDir`) must survive a solve, and every DB parcel's azimuthal velocity must be restored at injection; plus the gas-refresh cycle. RED with `refDir` rotated by δ at the end of `solve` (a stand-in for any write to setup-time wedge state): sweep 1 differs from sweep 0 |
 
 ## Nothing is excluded any more
 
@@ -56,14 +57,14 @@ would pass every gate in this directory.
 
 ## Two modes
 
-- **steady** (all twelve) — gas held fixed; sweep 1 must reproduce sweep 0. `repeat-drag-stokes-dopri5` and
+- **steady** (all thirteen) — gas held fixed; sweep 1 must reproduce sweep 0. `repeat-drag-stokes-dopri5` and
   `repeat-tab-dopri5` (2026-09-17) are the odd ones out: they gate not a state leak but determinism on the
   DOPRI5 path (ledger O27 — `dopri5.f` kept the previous grid point in a COMMON block shared by every
   OpenMP thread, and `solout` reads `x − xold` for the scatter cloud AND for the TAB/ETAB oscillator advance).
   On the racy fork both were 3/3 RED at OMP 5 — the drag case in its scatter cloud only (377 vs 345 records),
   the TAB case in its physics (exits 22/25 different, trajectories 2855 vs 3783 records, scatter 3e4 vs 4.6e5);
   3/3 green on `fd9d178`.
-- **gas-cycle** (`drag-stokes`, `vie-plait`) — three sweeps through the `external_gas` hook:
+- **gas-cycle** (`drag-stokes`, `vie-plait`, `swirl-wedge`) — three sweeps through the `external_gas` hook:
   original field, then `U` doubled, then the original again. Sweep 1 **must differ**
   (proving the refresh reaches the solver at all) and sweep 2 **must match** sweep 0
   (proving it fully overwrites, leaving no residue). The second half is the load-bearing

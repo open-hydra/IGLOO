@@ -44,7 +44,7 @@ green, nothing decomposed. Without the witness this whole directory would be a v
 | `mpi-consistency` | 1 vs 4; 4 at 1 and 5 threads | the cross-rank-count and cross-thread-count gate (below) |
 | `mpi-consistency-two-mat` | 1 vs 4; 4 at 1 and 5 threads | the same gate (same `check.py`, symlinked) on the `nm=2` fixture |
 | `mpi-determinism` | 1, 3, 4 | the rank-order cross-rank sum: grid bytes at n = 3 and 4 independent of the collective algorithm (below) |
-| `mpi-repeat-<case>` (12) | 2 | every `repeatability/` case under `mpiexec`: the two-sweep harness (`setup_static`, then `reset_state` + `solve` + `writeout` per sweep) with the rank witness on every log, `check_twosweep.py` unchanged; the gas-refresh cycle on `drag-stokes` and `vie-plait` |
+| `mpi-repeat-<case>` (13) | 2 | every `repeatability/` case under `mpiexec`: the two-sweep harness (`setup_static`, then `reset_state` + `solve` + `writeout` per sweep) with the rank witness on every log, `check_twosweep.py` unchanged; the gas-refresh cycle on `drag-stokes`, `vie-plait` and `swirl-wedge` |
 
 Each variant directory **symlinks** its parent case's `INPUT/`, `input.ini` and `check.py`. The oracle
 is therefore the same inode as the serial case's — "the oracle passes unmodified" is not a claim to

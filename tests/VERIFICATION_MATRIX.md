@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (215 in a serial build: 172 e2e + 42 unit incl. `self_test`,
-`registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 21 `mpi-*`
-rows in their own section, 236).
+One row per registered CTest entry (216 in a serial build: 173 e2e + 42 unit incl. `self_test`,
+`registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 22 `mpi-*`
+rows in their own section, 238).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -262,6 +262,7 @@ oracle possible.
 | **repeat-tab-dopri5** | — (kind 8) | *two-sweep repeatability*, steady mode, `tab-e2e` on `ode-solver = H-dopri5` at OMP 5: the physically consequential half of ledger O27 — `solout` advances the TAB oscillator by `x − xold`, and DOPRI5's shared `XOLD` made breakup timing depend on the other threads' steps (3/3 RED on the racy fork: 22/25 exits differ, 2855 vs 3783 trajectory records; 3/3 green on `fd9d178`) | as `tab-e2e` | as `tab-e2e` |
 | **repeat-solid-box** | — (kind 8) | *two-sweep repeatability*, steady mode, `solid-box`: the solidification phase and frozen fraction are re-derived at injection every sweep. RED with the derivation skipped when a phase survives sweep 0: 25/25 exits and 1475/1500 trajectory rows differ, 1276 K instead of 2327 K at the plateau midpoint | as `solid-box` (INPUT symlinked) | as `solid-box` |
 | **repeat-evap-breakup** | — (kind 8) | *two-sweep repeatability*, steady mode, `evap-breakup-box`: model 4's droplet mass and number rate are re-seeded at injection every sweep. RED with the number rate seeded on the first sweep only (source max\|rel\| 603, scatter ×8.2) | as `evap-breakup-box` (INPUT symlinked) | as `evap-breakup-box` |
+| **repeat-swirl-wedge** | — (kind 8) | *two-sweep repeatability* on the axisymmetric wedge, steady mode and the gas-refresh cycle (U doubled in sweep 1, restored in sweep 2): the setup-time wedge state (sector normals, `refDir`) survives a solve and the DB parcels' azimuthal velocity is restored at injection. RED with `refDir` rotated by δ at the end of `solve`: sweep 1 differs | as `swirl-wedge` (INPUT symlinked) | as `swirl-wedge` |
 | **repeat-d2law** | — (kind 8) | *two-sweep repeatability*, steady mode (evaporation state + source accumulators, A28/A29) | as `d2law` | as `d2law` |
 | **repeat-khrt** | — (kind 8) | *two-sweep repeatability*, steady mode (241 children: the child-ID census and the growable shed lists) | as `khrt-e2e` | as `khrt-e2e` |
 | **repeat-vie-plait** | — (kind 8) | *two-sweep repeatability*, steady **and gas-cycle** (the ord2 dual refreshed through `external_gas`) | as `vie-plait` | as `vie-plait` |
@@ -326,7 +327,7 @@ box/BC. Sub-test IDs in parentheses.
 | **exe-per-tree** | — (kind 8, contract meta-test) | *build-tree contract*: `tools/check_exe_per_tree.py` reads the generated `CTestTestfile.cmake` and fails if a registered test names `<source>/bin/IGLOO` or `bin/DocGen` (the copies another tree's build replaces), if a test of `igloo_e2e_case`, `igloo_e2e_case_mpi` or `igloo_refusal_case` lacks `IGLOO_EXE` in its environment, or if a test script builds the path `bin/IGLOO` outside the default of an `IGLOO_EXE` read. On the shared layout it fails on 137 registrations (136 naming `bin/IGLOO`, `registry-docs` naming `bin/DocGen`), 133 helper registrations and 8 scripts |
 | **lint-test-inputs** | — (kind 8, contract meta-test) | *input lint*: `tools/lint_inputs.py` reads every `*.ini` under `tests/` once (a symlink through its target) and fails on a value list whose tokens are separated by anything but one blank — FiNeR counts a list's values as its blanks plus one (`vp = -1.0   -3.3` gives four values, and a get into four reals leaves two unset without an error) — and on any byte above 127. It fails on a value line `vp = 1.0  2.0`, on a single tab between values and on a comment line holding an em dash |
 
-## MPI build only (`USE_MPI=ON`, 21 entries)
+## MPI build only (`USE_MPI=ON`, 22 entries)
 
 Each directory symlinks its parent case's `INPUT/`, `input.ini` and `check.py` — the oracle is the
 same inode — and every case first asserts the solver printed `MPI ranks = <n>`: a serial binary
@@ -355,14 +356,15 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 | **mpi-repeat-tab-dopri5** | — (kind 8) | `repeat-tab-dopri5` under `mpiexec -n 2`: the two-sweep harness with the rank witness on every log, `check_twosweep.py` unchanged | as `repeat-tab-dopri5` | as `repeat-tab-dopri5` |
 | **mpi-repeat-solid-box** | — (kind 8) | `repeat-solid-box` under `mpiexec -n 2`: the two-sweep harness with the rank witness on every log, `check_twosweep.py` unchanged | as `repeat-solid-box` | as `repeat-solid-box` |
 | **mpi-repeat-evap-breakup** | — (kind 8) | `repeat-evap-breakup` under `mpiexec -n 2`: the two-sweep harness with the rank witness on every log, `check_twosweep.py` unchanged | as `repeat-evap-breakup` | as `repeat-evap-breakup` |
+| **mpi-repeat-swirl-wedge** | — (kind 8) | `repeat-swirl-wedge` under `mpiexec -n 2`: the two-sweep harness with the rank witness on every log, `check_twosweep.py` unchanged, the gas-refresh cycle included | as `repeat-swirl-wedge` | as `repeat-swirl-wedge` |
 
 ## Reconciliation
 
-172 `e2e`-labelled + 42 `unit`-labelled + the optional `vortex-cloud-3way` = **215 CTest entries** in a
-serial build (+21 `mpi-*` under `USE_MPI`, 236), all green (counted from `tests/CMakeLists.txt`). The 172
+173 `e2e`-labelled + 42 `unit`-labelled + the optional `vortex-cloud-3way` = **216 CTest entries** in a
+serial build (+22 `mpi-*` under `USE_MPI`, 238), all green (counted from `tests/CMakeLists.txt`). The 173
 `e2e` entries are the 98 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
-threads), the twelve `repeat-*` two-sweep gates, the fifty-nine `refuse-*` setup-refusal gates and `vv-order`
+threads), the thirteen `repeat-*` two-sweep gates, the fifty-nine `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The
 42 `unit` entries are 35 compiled unit tests, the property-table reader on its three fixtures
 (`test_properties_reader`, `-two-material`, `-atlas-water`), `self_test`, `registry-docs`, `exe-per-tree` and
