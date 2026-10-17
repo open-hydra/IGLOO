@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (208 in a serial build: 165 e2e + 42 unit incl. `self_test`,
+One row per registered CTest entry (209 in a serial build: 166 e2e + 42 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 21 `mpi-*`
-rows in their own section, 229).
+rows in their own section, 230).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (40 of 89 e2e fixtures)
+## Shared box fixture (40 of 90 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,9 +39,9 @@ writes with its defaults.
 Forty fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other forty-nine:
+once here, referenced as **"shared box"** below. The other fifty:
 
-- non-uniform gas (sixteen): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
+- non-uniform gas (seventeen): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
   (`axis-200` plus swirl on the near-axis parcel); `swirl-wedge`, `swirl-wedge-deposit`,
   `swirl-wedge-spin` and `swirl-wedge-ord1` (a 200×40-cell annular wedge from `tools/make_wedge_case.py`, analytic solid-body
@@ -51,8 +51,9 @@ once here, referenced as **"shared box"** below. The other forty-nine:
   3.333 mm cells along x, T = 600 + 1000 x K, `make_box_case.py --stretch 2 --gradient 1000`),
   `chimera-2blk-shift-ord2` (`chimera-2blk` with block 2 shifted by half a cell and the same gradient,
   `--shift 0.5 --gradient 1000`), `periodic-2d-ord2` (`periodic-2d`'s one-layer box with a temperature wave
-  across the periodic pair, `--wave-y 100`) and `rot-2blk` (the box as two blocks, block 2 rotated 180° about y,
-  T = 600 + 2000 z K, `--blocks 2 --rotate2 y --zgradient 2000`);
+  across the periodic pair, `--wave-y 100`) `rot-2blk` (the box as two blocks, block 2 rotated 180° about y,
+  T = 600 + 2000 z K, `--blocks 2 --rotate2 y --zgradient 2000`) and `body-force-z` (the box with
+  T = 600 + 2000 z K, `--zgradient 2000`);
 - uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (seventeen):
   `pilch-erdman-e2e`, `reitz-diwakar-e2e`, `rd-evap-frozen`, `khrt-e2e`, `khrt-e2e-euler`, `khrt-stress`,
   `khrt-evap-frozen`, `khrt-evap-frozen-euler`, `khrt-shed-noexchange` and `khrt-varrho` on the 0.15 m box at
@@ -101,6 +102,7 @@ oracle possible.
 | **temp-relax-varcp** | `[RM52]` (Nu = 2); the table's piecewise-linear h(T) | *closed form* — the enthalpy state dh/dt = K(T_g − T), K = 6·Nu·k_g/(ρ_p d²), on a varying-cp table from 250 K: on a segment of slope s the temperature relaxes exponentially over u_g·s/K, and the segments (the end ones extended) are marched from each parcel's first row. V1 every row with \|T − T_g\| > 1 K within the F12.6 truncation carried through the march (worst 0.013 of the tolerance), V2 every exit (0.014), V3 ΣE = Σṁ[h(T₀) − h(T_exit)] to 1e-6 of the gross (6.4e-9), V4 the guards and every parcel of the four groups. RED: refused at setup (exit 128); with the table extended down to 1 K the printed temperature stayed at T₀ on every row (1475 rows and 25 exits off, worst 237 K); the inversion that searched from index 1 put the 210 K group up to 1.87 K off | shared box (`solfile.tec` symlinked from `temp-relax`) | inlet-face 401; κ_v=1.0 (Re=0), κ_t by inlet row 0.35/0.5/1.25/1.25/1.4 (T_p0 = 210/300/750/750/840 K), d=16 µm; own `properties.dat` on 250..800 K, cp = 1000 + (T − 250), ρ_p = 2950 |
 | **temp-relax-varrho** | `[RM52]` (Nu = 2); the table's h(T) and ρ(T) | *reference by quadrature* — `temp-relax-varcp` with ρ = 2950 − 0.5(T − 250) on 250..800 K and its end values outside (where the 210 K and 840 K groups start): a model-1 parcel keeps its mass, so d(T) = (6m/(πρ(T)))^(1/3) and the heat flux follows it; `T(x)` inverts t(T) = ∫ s m / (Nu k_g π d(T)(T_g − T)) dT (Gauss-Legendre per table segment and on the stretch outside). V1 T rows (worst 0.033 of the tolerance), D1/D2 the printed d against d(T_ref) and d(T) (0.991/0.999, print precision), M the mass constant. RED while model 1 printed its injection diameter: 2950 violations, 16.0000 µm printed at 597 K where d(T) = 16.3633 µm; RED with the density continuing the table's end segments: 2370 violations, the 210 K and 840 K masses +0.678 % and −0.748 %; the temperature right | shared box (`solfile.tec` symlinked from `temp-relax`) | as `temp-relax-varcp` (`bc.txt` symlinked); own `properties.dat` |
 | **body-force** | analytic (body-accel model) | *closed form* — transverse terminal drift v(x)=v_∞(1−e^{−x/L}), v_∞=g_y·τ, L=u_g·τ (linear Stokes, `toll=1e-20`); `reference/drift.txt` | shared box + `body-accel=(0,−200,0)` m/s² | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; outlet + walls |
+| **body-force-z** | `[CGW78]` (Stokes) + `[RM52]` | *closed form + RK4 through the k-layers* — the drift along −z crosses k-faces: v_z and z on `body-force`'s closed forms; K1 every parcel reaching x = 0.15 crosses a k-face; K2 the bottom row leaves at z = 0 at the closed-form x (4.1e-7 m); K3 T on every row against an RK4 toward the temperature of the k-layer holding the closed-form path (switched at the k-face planes), tolerance the print floor plus K·\|ΔT\|·ε/\|v\| per crossing (ε = 1e-8 m, the step that ends a crossing segment: measured 4.39e-10 s past the face), worst 0.385. RED with the gas not refreshed after a crossing: 19.9 K on 20 of 20 crossing parcels; the k index of the crossing step is not observable (the ±1-box re-search heals it) | own `solfile.tec` (`make_box_case.py --kv 1.0 --zgradient 2000`: T = 600 + 2000 z K) + `body-accel=(0,0,−600)`, `out-time` | as `body-force` (`bc.txt` symlinked) |
 | **conv-nu** | `[RM52]` | *closed form* — Ranz–Marshall Nu=2+0.6 Re^{1/2}Pr^{1/3} at **constant** slip (parcel injected at body-force terminal velocity ⇒ Re, Nu fixed), T(x)=T_g+(T_a−T_g)e^{−(x−x_a)/L}, L=u_g·τ_T; `reference/nu_re.txt` | shared box + `body-accel=(0,−200,0)` | inlet-face 401 at terminal velocity: κ_v=1.00033, α=−0.02574 rad, κ_t=0.5, d=11.89 µm; outlet + walls |
 | **vie-plait** | `[Vie15]` | *closed form* (derived from ODE + IC, not the paper's typeset Eq. 5.4 which has a sin sign typo; scipy-validated to 1e-13) — anchored damped oscillator y(x)=1+e^{−t/2τ}[Y_a cos ωt+((V_a+Y_a/2τ)/ω)sin ωt], t=(x−x_a)/u_g0, ω=√(ε/τ−1/4τ²); recomputed in `check.py` | **NON-UNIFORM** box (first such e2e): x∈[0,6], y∈[0,2], z thin; 120×50×5; U=u_g0=0.2 uniform, **V=−ε(y−1)** (ε=1, compressive, linear in y), W=0. **`gas-order=2` required** (2nd-order rebuild; order 1 = staircase) | **assigned-position (DB)** injection: 6 parcels at x=0.125, z=0.025, y∈{0.5,0.7,0.9,1.1,1.3,1.5} (cell centres), up=0.2/vp=0 (U_p0=u_g0, V_p0=0); τ=5 s via ρ_p=1620 (local `properties.dat`), d=1 mm ⇒ St=5; outlet + walls (never hit) |
 | **swirl-wedge** | — (derived ODE oracle, cross-checked in-file) | *exact cylindrical ODE* of a Stokes parcel in the solid-body swirl `g = (U0, −Ωz, +Ωy)`: ṙ=v_r, θ̇=w/r, v̇_r=−v_r/τ+w²/r, ẇ=(Ωr−w)/τ−v_r w/r, RK4 from the exact injection state (step-halving < 1e-12; 6-state Cartesian form agrees < 1e-12); gates r, w_p, v_r and the unwrapped azimuth every row at **≈ 6× the F12.6 print floor** (3e-6/3e-6/8e-6/3e-6; measured 5e-7 with the exact 2.5D sampling `sampleGas2D`), in-sector every row, fold count = oracle sectors ± 1 (≥ 5); RED with the pre-E unrotated sampling (19–25×: it reproduced the W-plan §2 frame-error model to 3 %, max\|Δr\| 6.75e-5/5.80e-5/7.52e-5, outward bias `Δt_seg/2τ`), RED with the fold rotating position only (10–200× the first gate), RED on Ω = 0 (0 folds) | **NON-UNIFORM annular WEDGE** (`tools/make_wedge_case.py`): x∈[0,2], r∈[0.19,0.99], 200×40×1, k-planes at ∓0.5° (Nk=1 ⇒ mesh2D + axisym, delthe 1°); U=1, V=0, **W=Ω·y_c** with Ω=0.2 (linear ⇒ ord2 rebuild exact); ρ=1.2, T=300, μ=1.8e-5; `gas-order=2` required | DB, 3 parcels at x0=0.105 (θ=0): P1 r0=0.5 wp=Ωr0, P2 r0=0.5 wp=0, P3 r0=0.3 wp=2Ωr0; d=0.6 mm, ρ_p=1800 (local `properties.dat`) ⇒ τ=2 s, St=0.4; up=U (zero-slip clock); `bc.txt` f1/f2 400, f3/f4 301, f5/f6 200 — no inlet family |
@@ -350,9 +352,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-165 `e2e`-labelled + 42 `unit`-labelled + the optional `vortex-cloud-3way` = **208 CTest entries** in a
-serial build (+21 `mpi-*` under `USE_MPI`, 229), all green (counted from `tests/CMakeLists.txt`). The 165
-`e2e` entries are the 91 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+166 `e2e`-labelled + 42 `unit`-labelled + the optional `vortex-cloud-3way` = **209 CTest entries** in a
+serial build (+21 `mpi-*` under `USE_MPI`, 230), all green (counted from `tests/CMakeLists.txt`). The 166
+`e2e` entries are the 92 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the twelve `repeat-*` two-sweep gates, the fifty-nine `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The
