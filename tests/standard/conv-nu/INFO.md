@@ -28,3 +28,8 @@ points (markers) vs the **Nu(Re) convective** relaxation from `reference/nu_re.t
 ## Pass criterion
 F12.6 half-ULP truncation budget + integrator floor; window `|T_g − T| > 1 K`; ≥ N_GOOD particles.
 Conduction companion: [../temp-relax/INFO.md](../temp-relax/INFO.md).
+
+## The other laws on this state
+`nu_law_check.py` (in this directory) is the check of `conv-nu-jaxa2`, `conv-nu-jaxa3`, `conv-nu-jaxa4` and
+`conv-nu-kd`: the same constant-slip state (this `INPUT/`, symlinked) under JAXA2, JAXA3, JAXA4 and Kavanau-Drake,
+the oracle on the printed parcel time (`out-time = on`) with each law typed from its source.

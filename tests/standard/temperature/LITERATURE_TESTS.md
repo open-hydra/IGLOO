@@ -73,11 +73,11 @@ At Nu=2 ⇒ `tau_T = c_p rho_p d^2/(12 k_g)`, matching e2e temp-relax
 | selector | code Nu | true origin (confidence) |
 |---|---|---|
 | JAXA1 (1) | `2.5 Re^0.15 + 0.04 Re` | **UNIDENTIFIED** JAXA report; high-speed/rarefied fit, no conduction floor. UNVERIFIABLE — do not cite |
-| JAXA2 (2) | `2 + 0.37 Re^0.6 Pr^(1/3)` | NOT Whitaker (his is `2+(0.4Re^0.5+0.06Re^(2/3))Pr^0.4`), NOT Ranz-Marshall. Origin UNIDENTIFIED — UNVERIFIABLE |
-| JAXA3 (3) | `2 + 0.459 Re^0.55 Pr^(1/3)` | **Kavanau (1955) continuum limit** — same base as Kavanau-Drake, rarefaction off (inferred, high confidence via internal algebra) |
-| JAXA4 (4) | `[(2+0.645 Re^0.5 Pr^(1/3))^-1 + 3.42 Ma/(RePr)]^-1` | **Kavanau-Drake bridging, algebraically identical** to model 6 (proven below); base 0.645 Re^0.5 UNVERIFIED |
+| JAXA2 (2) | `2 + 0.37 Re^0.6 Pr^(1/3)` | **`[SP8039]` Table II, ref. 82**, printed `2 + 0.370 Re^0.6 Pr^⅓` = the code (`[Shim06]` eq. 46); checked by `test_heat_nu` HN4 and end to end by `conv-nu-jaxa2` |
+| JAXA3 (3) | `2 + 0.459 Re^0.55 Pr^(1/3)` | **`[SP8039]` Table II, ref. 42**, printed `2 + 0.459 Re^0.55 Pr^⅓` = the code (`[Shim06]` eq. 47) — the Kavanau continuum base of model 6, rarefaction off; checked by HN5 and `conv-nu-jaxa3` |
+| JAXA4 (4) | `[(2+0.654 Re^0.5 Pr^(1/3))^-1 + 3.42 Ma/(RePr)]^-1` | **`[Shim06]` eq. 50**, printed `[(2 + 0.654 Re^½ Pr^⅓)^−1 + 3.42 M/(Re Pr)]^−1` = the code; the Kavanau-Drake bridging of model 6 on a `0.654 Re^½` base. **Source conflict:** `[SP8039]` Table II's last row prints the same law with **Pr^½** (a glyph distinct from the ⅓ of refs. 82/42 on the same page); the code keeps Shimada's Pr^⅓, the boundary-layer exponent of every other law of the table (with Pr^½: −6.6e-3 of Nu at `conv-nu`'s state). Checked by HN6, the rarefaction identity HN8 and `conv-nu-jaxa4` |
 | Ranz-Marshall (5) | `2 + 0.6 Re^0.5 Pr^(1/3)` | **Ranz & Marshall 1952 `[RM52]`** — 0.6 CONFIRMED (textbook + evap review); valid 0<Re<200 |
-| Kavanau-Drake (6) | `(2+0.459 Re^0.55 Pr^0.33)/(1+3.42 Ma/(RePr)·Nu_0)` | **Kavanau 1955 continuum + Drake rarefaction**, the plasma-spray form; 0.459/0.55/3.42 INFERRED (literature-consensus, not primary-verified this session) |
+| Kavanau-Drake (6) | `(2+0.459 Re^0.55 Pr^0.33)/(1+3.42 Ma/(RePr)·Nu_0)` | **`[SP8039]` Table II, ref. 72** = `[Shim06]` eq. 49, both printing `Pr^0.33` = the code: Kavanau's continuum base, Drake's rarefaction term, explicit; checked by HN7 (the 0.33 pinned), HN8 and `conv-nu-kd` |
 
 Suggested REFERENCES.md additions (verify DOIs before citing):
 `[Kav55]` Kavanau, L.L., "Heat transfer from spheres to a rarefied gas in subsonic flow,"

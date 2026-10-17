@@ -83,7 +83,9 @@ $$
 $$
 
 where $\varepsilon = 10^{-20}$ and the base coefficient $0.654$ follows Shimada 2006
-eq. 50 / NASA SP-8039.  Compressibility-aware bridging form: the same
+eq. 50 / NASA SP-8039.  The two sources differ on the Prandtl exponent: Shimada prints
+$\mathrm{Pr}^{1/3}$, the last row of SP-8039's Table II $\mathrm{Pr}^{1/2}$; the code keeps
+$\mathrm{Pr}^{1/3}$, the exponent of every other law of the table.  Compressibility-aware bridging form: the same
 $1/\mathrm{Nu} = 1/\mathrm{Nu}_0 + 3.42\,\mathrm{Ma}/(\mathrm{Re}\,\mathrm{Pr})$ structure as
 Kavanau–Drake, on a different incompressible base $\mathrm{Nu}_0$.
 
@@ -160,5 +162,7 @@ comes from the evaporation model's own transfer law and does not read `heat`.
 
 Literature comparison for heat-transfer correlations: [../vv/literature.md](../vv/literature.md).
 The end-to-end conduction-limit and convective cases are
-[Temperature relaxation](../vv/temp-relax.md) and [`conv-nu`](../vv/e2e.md#conv-nu);
+[Temperature relaxation](../vv/temp-relax.md) and [`conv-nu`](../vv/e2e.md#conv-nu); JAXA2, JAXA3,
+JAXA4 and Kavanau–Drake run end to end at a slip Mach number of $5.2\times10^{-4}$ in `conv-nu-jaxa2`,
+`conv-nu-jaxa3`, `conv-nu-jaxa4` and `conv-nu-kd` (`tests/standard/`);
 `NoHeat` is gated by [`no-exchange`](../vv/e2e.md#no-exchange).
