@@ -22,7 +22,8 @@ byte-for-byte untouched). `test.sh` configures a **separate `build/verif/`**
 (`build/mpi/` with `USE_MPI=ON`) and builds it before every run (same source, RELEASE, in-tree
 `lib/` dependencies). The e2e cases and `registry-docs` run the tree's own `IGLOO` and `DocGen`
 (`<tree>/bin/`); `bin/IGLOO` and `bin/DocGen` are copies of the last tree built, which `test.sh`
-publishes after its build.
+publishes after its build. Under the Intel compilers every test executable is compiled with `-auto-scalar` (arrays
+static, as without OpenMP), so an internal procedure always addresses the main program's arrays (`infrastructure/host_assoc`).
 
 ## Layout
 
@@ -50,7 +51,7 @@ tests/
 ├── solidification/               # unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 ├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
 │   └── tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/   # e2e
-├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/
+├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/
 │   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ periodic-y/ periodic-2d/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ varcp-tmin/ psd-bare-token/   # e2e
 │   └── refusals/{p2t,zgr,lk-d2law,properties-*,bc-copies,bc-copy-order,chimera-*,*-token,phase-token-real,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre,psd-*}/   # setup-refusal gates
 ├── repeatability/                # two-sweep gates: drag-stokes/ drag-stokes-dopri5/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/ tab-dopri5/ solid-box/ evap-breakup/
@@ -99,11 +100,11 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 190/190 in a serial build (148 e2e + 41 unit, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, and the
+ctest 191/191 in a serial build (148 e2e + 42 unit, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 21 more `mpi-*` cases, 211 in all (the 21 `mpi-*` pass). The e2e entries are 85 solver cases, two further
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 21 more `mpi-*` cases, 212 in all (the 21 `mpi-*` pass). The e2e entries are 85 solver cases, two further
 oracles on `khrt-e2e`'s run, the twelve two-sweep gates, the forty-eight setup refusals and `vv-order` (two V&V
-figures independent of the record order; skipped without matplotlib); the unit entries are 34
+figures independent of the record order; skipped without matplotlib); the unit entries are 35
 compiled unit tests, the property-table reader on three fixtures, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs`. Evaporation with
 ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,
 `evap-breakup-box`, `d2law-brk-dormant`, `rd-evap-frozen`, `tab-evap-frozen`, `etab-evap-frozen`, `khrt-evap-frozen`,

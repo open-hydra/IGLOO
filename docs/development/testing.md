@@ -43,7 +43,9 @@ USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # rank-count gates, built in
 `test.sh` configures a **separate `build/verif/`** (`build/mpi/` when `USE_MPI=ON`) with
 `-DBUILD_VERIFICATION=ON` (default OFF, so the production build is unchanged) and builds it (same
 source, RELEASE, in-tree `lib/` dependencies). Each build tree links its own `IGLOO` and `DocGen` into
-`<tree>/bin/`, and the e2e cases and `registry-docs` of that tree run those files.
+`<tree>/bin/`, and the e2e cases and `registry-docs` of that tree run those files. Under the Intel
+compilers every test executable is compiled with `-auto-scalar` (arrays static, as without OpenMP), so an internal
+procedure always addresses the main program's arrays (`infrastructure/host_assoc`).
 
 !!! note "`bin/IGLOO` and `bin/DocGen` are copies of the last tree built"
     A build that relinks a tree publishes its executables to `bin/` by a copy and a rename, so a
@@ -80,7 +82,7 @@ tests/
 ├── breakup/                      # TAB, Pilch-Erdman, Reitz-Diwakar, ETAB, Reitz-KHRT unit families + tab/etab/pilch-erdman/reitz-diwakar/khrt e2e, khrt-e2e-euler, khrt-stress, rd/tab/etab/khrt-evap-frozen, khrt-evap-frozen-euler, khrt-shed-noexchange, tab/tab-evap-frozen/khrt-varrho
 ├── combustion/                   # Beckstead unit family + burn-box e2e
 ├── solidification/               # solidification unit family + solid-box/solid-melt/solid-box-euler/solid-box-2mat/scatter-weight-solid e2e
-├── infrastructure/               # gas_reconstruction, ini_pipeline, properties_reader, rng_stream, axis_dispatch, graze_standoff, dual_clip, source_reduction, ghost_bc, bc_families, mollify_blocks;
+├── infrastructure/               # gas_reconstruction, ini_pipeline, properties_reader, rng_stream, axis_dispatch, graze_standoff, dual_clip, source_reduction, ghost_bc, bc_families, mollify_blocks, host_assoc;
 │                                 # db-injection/coupled-body/db-2daxi/axis-200/wedge-fold/planar-slab/wedge-axis-row/wedge-tiny/two-mat/two-fam-bc/two-fam-bc-2blk/two-fam-bc-2blk-mollify/chimera-2blk/chimera-2blk-rim/two-fam-bc-2blk-stretch-ord2/chimera-2blk-shift-ord2/periodic-y/periodic-2d/bc-center-2grp/ini-comment-eq/solver-fail-consumed/solver-fail-consumed-m4/wall-approach/varcp-tmin (e2e)
 │                                 # refusals/{p2t,zgr,lk-d2law,properties-*,bc-copies,bc-copy-order,chimera-*,*-token,phase-token-real,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre} (setup-refusal gates)
 ├── repeatability/                # two-sweep state-leak gates: drag-stokes/drag-stokes-dopri5/db-injection/two-mat/d2law/khrt/vie-plait/etab/tab/tab-dopri5/solid-box/evap-breakup
@@ -96,7 +98,7 @@ tests/
 | `breakup` | TAB/ETAB, Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT unit families + TAB stochastic moments, and the evaporation-with-breakup unit family; five Weber-sweep e2e cases, two further oracles on khrt-e2e's run, its Eulerian twin khrt-e2e-euler and the khrt-stress load case; evaporation with breakup and the KH-shed source: evap-breakup-box, d2law-brk-dormant, rd-evap-frozen, tab-evap-frozen, etab-evap-frozen, khrt-evap-frozen, khrt-evap-frozen-euler and khrt-shed-noexchange; a density that varies with temperature: tab-varrho, tab-evap-frozen-varrho and khrt-varrho; the two-sweep khrt, etab, tab, tab-dopri5 and evap-breakup; the breakup-token and TAB-method refusals |
 | `combustion` | Beckstead $d^n$ Al-burn unit family; burn-box e2e |
 | `solidification` | Solidification unit family (supercooling, recalescence, plateau, melting); solid-box, solid-melt, solid-box-euler, solid-box-2mat, scatter-weight-solid e2e, the two-sweep solid-box and the eight solidification refusals |
-| `infrastructure` | Gas reconstruction, INI pipeline, property-table reader (three fixtures), RNG stream, axis dispatch, grazing stand-off, gas ghost ring, boundary-file families, dual-clip, source-reduction and multi-block mollifier unit families, `self_test` and `registry-docs`; injection, coupling, nozzle, wedge and slab, periodic, two-material, per-family boundary-file, two-block, chimera, INI-comment, wall-approach, varying-cp table and solver-failure e2e cases; the two-sweep db-injection and two-mat; seventeen setup-refusal gates (the other nineteen sit in their model's category) |
+| `infrastructure` | Gas reconstruction, INI pipeline, property-table reader (three fixtures), RNG stream, axis dispatch, grazing stand-off, gas ghost ring, boundary-file families, dual-clip, source-reduction, multi-block mollifier and host-association unit families, `self_test` and `registry-docs`; injection, coupling, nozzle, wedge and slab, periodic, two-material, per-family boundary-file, two-block, chimera, INI-comment, wall-approach, varying-cp table and solver-failure e2e cases; the two-sweep db-injection and two-mat; seventeen setup-refusal gates (the other nineteen sit in their model's category) |
 | `repeatability` | Twelve e2e cases run twice through `setup_static` → `reset_state` → `solve` with the second sweep compared to the first (see `tests/repeatability/INFO.md`) |
 | `mpi` | The serial gates re-run under `mpiexec` with a rank-count witness, plus cross-rank-count consistency (see `tests/mpi/INFO.md`) |
 
@@ -107,7 +109,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **190 tests** in a serial build (148 e2e + 41 unit, `self_test`,
+Current gate: **191 tests** in a serial build (148 e2e + 42 unit, `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 21 more
 `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.

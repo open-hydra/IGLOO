@@ -39,6 +39,22 @@ if(USE_OPENMP)
 endif()
 
 # ---------- helpers -----------------------------------------------------------
+# Intel compilers: every test executable keeps its arrays static (-auto-scalar, their storage model without OpenMP), so
+# an internal procedure never addresses a static copy of a main-program array (infrastructure/host_assoc).
+function(igloo_test_static_arrays)
+    if(NOT CMAKE_Fortran_COMPILER_ID MATCHES "^Intel")
+        return()
+    endif()
+    get_property(_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(_t IN LISTS _targets)
+        get_target_property(_type ${_t} TYPE)
+        if(_type STREQUAL "EXECUTABLE")
+            target_compile_options(${_t} PRIVATE -auto-scalar)
+        endif()
+    endforeach()
+endfunction()
+cmake_language(DEFER CALL igloo_test_static_arrays)
+
 # unit test: plain exe linked against verif_support, run from the build dir
 function(igloo_unit_test name srcdir labels)
     add_executable(${name} ${srcdir}/${name}.f90)
@@ -184,6 +200,7 @@ igloo_unit_test(test_source_reduction  infrastructure/source_reduction   "unit;i
 # smooths as the uncut grid (3D and 2D cuts, three blocks, 2 x 2 blocks, above the OpenMP threshold),
 # Sum(q V) holds over the blocks, and without an aligned link each block is smoothed on its own.
 igloo_unit_test(test_mollify_blocks    infrastructure/mollify_blocks     "unit;infrastructure;mollify;t1")
+igloo_unit_test(test_host_assoc        infrastructure/host_assoc         "unit;infrastructure;build;t1")
 
 # ---------- two-sweep repeatability harness -----------------------------------
 # Drives one pinned population through solve() TWICE. Every other case in the suite is
