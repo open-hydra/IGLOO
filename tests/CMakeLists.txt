@@ -12,7 +12,7 @@
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
 #   repeatability/      two-sweep gates (twosweep driver): 13 cases
-#   mpi/                registered only under USE_MPI: 6 rank-count cases + 2 consistency + 1 determinism
+#   mpi/                registered only under USE_MPI: 7 rank-count cases + 3 consistency + 1 determinism
 #                       + 13 two-sweep cases
 #
 # Run everything via ../test.sh (it builds this tree's IGLOO, which every e2e case runs, and publishes it to bin/).
@@ -963,6 +963,9 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
     igloo_e2e_case_mpi(mpi-two-mat        mpi/two-mat        4 2 "e2e;mpi;infrastructure")
     # the [IGLOO-timing] report at four ranks: the per-rank gather, one line and the strided parcel count per rank
     igloo_e2e_case_mpi(mpi-timing-report  mpi/timing-report  4 2 "e2e;mpi;infrastructure;timing")
+    # a tabulated injection law at four ranks: psd-table's Kolmogorov-Smirnov and Anderson-Darling oracle on the
+    # merged output (the size-distribution file loaded on every rank)
+    igloo_e2e_case_mpi(mpi-psd-table      mpi/psd-table      4 2 "e2e;mpi;injection")
     # n=1 vs n=4 of the same binary: witness, file layout, .dat multisets, .tec fields. Launches
     # mpiexec itself (khrt-e2e-threads precedent), so it is not an igloo_e2e_case_mpi.
     add_test(NAME mpi-consistency
@@ -981,6 +984,16 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mpi/consistency-two-mat")
     set_tests_properties(mpi-consistency-two-mat PROPERTIES
         LABELS "e2e;mpi;infrastructure;consistency"
+        ENVIRONMENT "OMP_NUM_THREADS=2;KMP_STACKSIZE=100M"
+        TIMEOUT 900)
+    # the same gate on psd-table's 20 000 parcels, whose diameters every rank draws at pin time from the tabulated
+    # law: a per-rank stream would pass the statistical oracle at every rank count and differ from the 1-rank run here
+    add_test(NAME mpi-consistency-psd
+        COMMAND python3 -B check.py "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}"
+                                   "$<TARGET_FILE:IGLOO>"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mpi/consistency-psd")
+    set_tests_properties(mpi-consistency-psd PROPERTIES
+        LABELS "e2e;mpi;injection;consistency"
         ENVIRONMENT "OMP_NUM_THREADS=2;KMP_STACKSIZE=100M"
         TIMEOUT 900)
     # the cross-rank sum in rank order: at n = 3 and 4 the grid fields are the same bytes with the library's

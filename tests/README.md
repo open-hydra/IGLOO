@@ -55,7 +55,7 @@ tests/
 │   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ periodic-y/ periodic-2d/ periodic-2d-ord2/ conn-103/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ varcp-tmin/ psd-bare-token/   # e2e
 │   └── refusals/{p2t,zgr,lk-d2law,properties-*,bc-copies,bc-copy-order,chimera-*,*-token,phase-token-real,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre,psd-*,comb-*,brk-*,sigma-*,bc-legacy,bc-empty-payload,body-accel}/   # setup-refusal gates
 ├── repeatability/                # two-sweep gates: drag-stokes/ drag-stokes-dopri5/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/ tab-dopri5/ solid-box/ evap-breakup/ swirl-wedge/
-└── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ bc-center-2grp/ two-mat/ timing-report/ consistency/ consistency-two-mat/ determinism/ repeat-*/ (13)
+└── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ bc-center-2grp/ two-mat/ timing-report/ psd-table/ consistency/ consistency-two-mat/ consistency-psd/ determinism/ repeat-*/ (13)
 ```
 
 Each unit family carries an `INFO.md` cataloguing its tests; `tools/aggregate_report.py`
@@ -102,7 +102,7 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ctest 217/217 in a serial build (173 e2e + 43 unit, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 22 more `mpi-*` cases, 239 in all (the 22 `mpi-*` pass). The e2e entries are 98 solver cases, two further
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 24 more `mpi-*` cases, 241 in all (the 24 `mpi-*` pass). The e2e entries are 98 solver cases, two further
 oracles on `khrt-e2e`'s run, the thirteen two-sweep gates, the fifty-nine setup refusals and `vv-order` (two V&V
 figures independent of the record order; skipped without matplotlib); the unit entries are 36
 compiled unit tests, the property-table reader on three fixtures, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs`. Evaporation with

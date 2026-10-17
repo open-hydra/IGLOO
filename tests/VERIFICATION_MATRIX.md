@@ -1,8 +1,8 @@
 # Verification matrix
 
 One row per registered CTest entry (217 in a serial build: 173 e2e + 43 unit incl. `self_test`,
-`registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 22 `mpi-*`
-rows in their own section, 239).
+`registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 24 `mpi-*`
+rows in their own section, 241).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -328,7 +328,7 @@ box/BC. Sub-test IDs in parentheses.
 | **exe-per-tree** | — (kind 8, contract meta-test) | *build-tree contract*: `tools/check_exe_per_tree.py` reads the generated `CTestTestfile.cmake` and fails if a registered test names `<source>/bin/IGLOO` or `bin/DocGen` (the copies another tree's build replaces), if a test of `igloo_e2e_case`, `igloo_e2e_case_mpi` or `igloo_refusal_case` lacks `IGLOO_EXE` in its environment, or if a test script builds the path `bin/IGLOO` outside the default of an `IGLOO_EXE` read. On the shared layout it fails on 137 registrations (136 naming `bin/IGLOO`, `registry-docs` naming `bin/DocGen`), 133 helper registrations and 8 scripts |
 | **lint-test-inputs** | — (kind 8, contract meta-test) | *input lint*: `tools/lint_inputs.py` reads every `*.ini` under `tests/` once (a symlink through its target) and fails on a value list whose tokens are separated by anything but one blank — FiNeR counts a list's values as its blanks plus one (`vp = -1.0   -3.3` gives four values, and a get into four reals leaves two unset without an error) — and on any byte above 127. It fails on a value line `vp = 1.0  2.0`, on a single tab between values and on a comment line holding an em dash |
 
-## MPI build only (`USE_MPI=ON`, 22 entries)
+## MPI build only (`USE_MPI=ON`, 24 entries)
 
 Each directory symlinks its parent case's `INPUT/`, `input.ini` and `check.py` — the oracle is the
 same inode — and every case first asserts the solver printed `MPI ranks = <n>`: a serial binary
@@ -343,6 +343,8 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 | **mpi-two-mat** | as `two-mat` | parent oracle at n=4 × 2 + rank witness; the suite's only `nm=2` case — six shards merged per sweep, two `sourceMass` slots, two euler families reduced across ranks | as parent | as parent |
 | **mpi-consistency** | — (kind 8) | n=1 vs n=4 of the SAME binary (`mpi/consistency/check.py` launches `mpiexec` itself): witness both ways, serial file layout (no `*.rank*.dat` survives, one `Zone` header per stream), `.dat` sorted multisets, `.tec` scale-relative ≤ 1e-12 | as `drag-stokes` | as `drag-stokes` |
 | **mpi-consistency-two-mat** | — (kind 8) | the same n=1 vs n=4 gate (`mpi/consistency/check.py`, symlinked) on the nm = 2 fixture: six `.dat` multisets and three `.tec` fields must agree across the rank count | as `two-mat` | as `two-mat` |
+| **mpi-consistency-psd** | `[Kol33]`, `[AD54]` (via the parent) | the same n=1 vs n=4 gate (`mpi/consistency/check.py`, symlinked) on `psd-table`'s 20 000 parcels of a tabulated size law, drawn at pin time on every rank: `.dat` multisets and `source.tec` across n = 1, 4, 4 × 1 and 4 × 5 threads; the integration criterion over all of a run's `.dat` files (one cell along x). RED with the seed offset by the rank: the trajectory multiset at every 4-rank arm (15 000 of 20 000 first rows) | as `psd-table` | as `psd-table` |
+| **mpi-psd-table** | `[Kol33]`, `[AD54]` | `psd-table`'s Kolmogorov-Smirnov and Anderson-Darling oracle (α = 1e-3) on the merged 4-rank output + rank witness: D_n 5.1e-3 < 1.4e-2, A² 0.46 < 5.97; green under the per-rank seed too (each rank's sample is a valid one), which is why `mpi-consistency-psd` exists | as `psd-table` | as `psd-table` |
 | **mpi-timing-report** | — (kind 8) | the `[IGLOO-timing]` report at n=4: the per-rank gather, one line and the strided parcel count per rank (`timing-report`'s `check.py`, symlinked) + rank witness | as `vie-plait` | as `vie-plait` |
 | **mpi-determinism** | — (kind 8) | the rank-order cross-rank sum: the 1672-parcel vortex cloud at n = 1, 3, 4 (one thread per rank); grid bytes at n = 3 and 4 independent of the MPI library's collective algorithm (`tests/mpi/INFO.md`) | as `vortex-cloud-st1` | as `vortex-cloud-st1` |
 | **mpi-repeat-drag-stokes** | — (kind 8) | `repeat-drag-stokes` under `mpiexec -n 2`: the two-sweep harness with the rank witness on every log, `check_twosweep.py` unchanged | as `repeat-drag-stokes` | as `repeat-drag-stokes` |
@@ -362,7 +364,7 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 ## Reconciliation
 
 173 `e2e`-labelled + 43 `unit`-labelled + the optional `vortex-cloud-3way` = **217 CTest entries** in a
-serial build (+22 `mpi-*` under `USE_MPI`, 239), all green (counted from `tests/CMakeLists.txt`). The 173
+serial build (+24 `mpi-*` under `USE_MPI`, 241), all green (counted from `tests/CMakeLists.txt`). The 173
 `e2e` entries are the 98 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the thirteen `repeat-*` two-sweep gates, the fifty-nine `refuse-*` setup-refusal gates and `vv-order`
