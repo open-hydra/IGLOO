@@ -5,7 +5,7 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ temp-relax-varcp/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
@@ -367,6 +367,12 @@ igloo_unit_test(test_temperature standard/temperature "unit;standard;heat;b;t3")
 igloo_unit_test(test_heat_nu     standard/temperature "unit;standard;heat;b;t5")
 
 igloo_e2e_case(drag-stokes standard/drag-stokes "e2e;standard;drag")
+# drag-morsi, drag-chang: drag-stokes's box with 100 um particles (Re 60 -> 22 across the box), drag = Morsi-Alexander
+# or Chang: every printed row against an RK4 quadrature of the slip ODE with the law typed in check.py (Chang =
+# Clift-Gauvin, [Shim06] eq. 18; Morsi-Alexander's coded table, a regression pin). RED: Morsi-Alexander's band-4
+# a2 46.5 -> 45.6 (3.9e-2 m/s), the law swapped to Schiller-Naumann (5.3e-2 and 1.3e-3 m/s against about 5e-7).
+igloo_e2e_case(drag-morsi  standard/drag-morsi  "e2e;standard;drag")
+igloo_e2e_case(drag-chang  standard/drag-chang  "e2e;standard;drag")
 igloo_e2e_case(temp-relax  standard/temp-relax  "e2e;standard;heat")
 # temp-relax-varcp: the enthalpy state on a varying-cp table from 250 K; heating and cooling below, inside and above it.
 igloo_e2e_case(temp-relax-varcp standard/temp-relax-varcp "e2e;standard;heat")

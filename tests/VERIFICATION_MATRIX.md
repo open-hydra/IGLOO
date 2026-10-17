@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (217 in a serial build: 173 e2e + 43 unit incl. `self_test`,
+One row per registered CTest entry (219 in a serial build: 175 e2e + 43 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 24 `mpi-*`
-rows in their own section, 241).
+rows in their own section, 243).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -98,6 +98,8 @@ oracle possible.
 | Case | Reference source | Source-data generation | Gas solfile | Condensed-phase BC |
 |---|---|---|---|---|
 | **drag-stokes** | `[CGW78]`,`[SN33]` (Stokes limit) | *closed form* — exact Stokes velocity relaxation x(u)=x_a−u_g·τ·ln[(u−u_g)/(u_a−u_g)]−τ(u−u_a), τ=ρ_p d²/18μ; precomputed to `reference/stokes.txt`, recomputed in `check.py` | shared box | inlet-face 401; κ_v=0.1 (90% axial slip), κ_t=1.0 (no thermal slip), d=11.89 µm, ρ_p=2950; outlet + walls |
+| **drag-morsi** | — (Morsi-Alexander 1972 not in hand: the coded coefficient table, a regression pin) | *quadrature* — RK4 (2×10⁵ steps) of the slip ODE du/dt = ¾(ρ_g/ρ_p d) C_D(Re)\|u_g−u\|(u_g−u) with the band-4 fit a1 + a2/Re + a3/Re² typed in `check.py`, compared on every printed row at its printed t: \|u−u_or\| ≤ 5×10⁻⁷ + \|du/dt\|·5×10⁻⁹·t + 10⁻⁹ (worst 0.974 of it: the F12.6 rounding; 1.1×10⁻⁹ beyond it); Re verified 60.0 → 22.2; v = w = 0, T = 600 K, d = 100 µm, 25 exits at x = 0.15. RED: the band-4 a2 46.5 → 45.6 (1475 rows, \|Δu\| 3.85×10⁻² m/s), the law swapped to Schiller-Naumann (1475 rows, 5.34×10⁻² m/s) | shared box (`solfile.tec` a symlink to `drag-stokes`'s); `make_box_case.py --rp 5.0e-5` `bc.txt` | inlet-face 401; κ_v=0.1, κ_t=1.0, d=100 µm, ρ_p=2950; `drag = Morsi-Alexander`, `out-time = on` |
+| **drag-chang** | `[Shim06]` eq. 18 (Chang = Clift-Gauvin, the drag law of the hydra JPL cases) | *quadrature* — `drag-morsi`'s `check.py` (symlinked) with C_D = 24/Re (1 + 0.15 Re^0.687 + 0.0175 Re/(1 + 4.25×10⁴ Re^−1.16)): every printed row within the same bound (worst 0.970, nothing beyond the rounding); Re verified 60.0 → 22.2. RED: the law swapped to Schiller-Naumann (+0.08 % in C_D at Re 60: 1475 rows, \|Δu\| 1.32×10⁻³ m/s, 2573× the bound), Chang's 0.42 → 0.43 (1475 rows, 3.2×10⁻⁵ m/s) | as `drag-morsi` (`INPUT/` symlinked) | as `drag-morsi`, `drag = Chang` |
 | **temp-relax** | `[RM52]` | *closed form* — lumped-capacitance Nu=2 relaxation T(x)=T_g+(T_p0−T_g)e^{−x/L}, L=u_g·ρ_p·c_p·d²/(12k_g); `reference/nu2.txt` | shared box | inlet-face 401; κ_v=1.0 (Re=0, drag off), κ_t=0.5 (T_p0=300 K, ΔT=300), d=11.89 µm; outlet + walls |
 | **temp-relax-varcp** | `[RM52]` (Nu = 2); the table's piecewise-linear h(T) | *closed form* — the enthalpy state dh/dt = K(T_g − T), K = 6·Nu·k_g/(ρ_p d²), on a varying-cp table from 250 K: on a segment of slope s the temperature relaxes exponentially over u_g·s/K, and the segments (the end ones extended) are marched from each parcel's first row. V1 every row with \|T − T_g\| > 1 K within the F12.6 truncation carried through the march (worst 0.013 of the tolerance), V2 every exit (0.014), V3 ΣE = Σṁ[h(T₀) − h(T_exit)] to 1e-6 of the gross (6.4e-9), V4 the guards and every parcel of the four groups. RED: refused at setup (exit 128); with the table extended down to 1 K the printed temperature stayed at T₀ on every row (1475 rows and 25 exits off, worst 237 K); the inversion that searched from index 1 put the 210 K group up to 1.87 K off | shared box (`solfile.tec` symlinked from `temp-relax`) | inlet-face 401; κ_v=1.0 (Re=0), κ_t by inlet row 0.35/0.5/1.25/1.25/1.4 (T_p0 = 210/300/750/750/840 K), d=16 µm; own `properties.dat` on 250..800 K, cp = 1000 + (T − 250), ρ_p = 2950 |
 | **temp-relax-varrho** | `[RM52]` (Nu = 2); the table's h(T) and ρ(T) | *reference by quadrature* — `temp-relax-varcp` with ρ = 2950 − 0.5(T − 250) on 250..800 K and its end values outside (where the 210 K and 840 K groups start): a model-1 parcel keeps its mass, so d(T) = (6m/(πρ(T)))^(1/3) and the heat flux follows it; `T(x)` inverts t(T) = ∫ s m / (Nu k_g π d(T)(T_g − T)) dT (Gauss-Legendre per table segment and on the stretch outside). V1 T rows (worst 0.033 of the tolerance), D1/D2 the printed d against d(T_ref) and d(T) (0.991/0.999, print precision), M the mass constant. RED while model 1 printed its injection diameter: 2950 violations, 16.0000 µm printed at 597 K where d(T) = 16.3633 µm; RED with the density continuing the table's end segments: 2370 violations, the 210 K and 840 K masses +0.678 % and −0.748 %; the temperature right | shared box (`solfile.tec` symlinked from `temp-relax`) | as `temp-relax-varcp` (`bc.txt` symlinked); own `properties.dat` |
@@ -283,7 +285,7 @@ box/BC. Sub-test IDs in parentheses.
 | Test | Reference source | Source-data generation |
 |---|---|---|
 | **test_drag** | `[CGW78]`,`[SN33]` | *closed form* exp relaxation (`exp_relax`, A1 Stokes); SDIRK4 tableau order (AO); *independent integration* `verif_oracle::rk4_ref` of Schiller–Naumann RHS (A3); zero-slip straight line (A4). Production path: `Lib_Drag::drag` via `rhsStandard`+SDIRK4 |
-| **test_drag_lit** | `[CGW78]`,`[SN33]` | *analytic formula @ swept Re* — production `Lib_Drag::drag` vs coded literature expressions: Stokes 24/Re (DL1), Chang≡Clift-Gauvin identity (DL2), Schiller-Naumann≡Wen-Yu low branch (DL3) |
+| **test_drag_lit** | `[CGW78]`,`[SN33]`,`[Shim06]`,`[SP8039]` | *analytic formula @ swept Re* — production `Lib_Drag::drag` vs coded literature expressions: Stokes 24/Re (DL1), Chang≡Clift-Gauvin identity (DL2), Schiller-Naumann≡Wen-Yu low branch (DL3); against the sources, 1e-14 relative: Newton 0.45 at Re 10³–10⁵ (DL4, `[Shim06]` eq. 13), Schlichting 24/Re (1 + 3Re/16) at Re 0.1, 1, 4 (DL5, eq. 14 and `[SP8039]` Table I), Carlson-Hoglund against eq. 19 with C_D0 = Wen-Yu (eq. 16) on Re 1–1000 × Ma 0.1–2 and its Ma = 0 limit (DL6), Morsi-Alexander one Re per band against the coded table (DL7, a regression pin), Chang and Clift-Gauvin against eq. 18 (DL8). RED (one line of `Lib_Drag.f90` each): Newton 0.44 (2.2e-2), 3Re/18 (4.8e-2), C-H with SP-8039's printed +0.427 (Inf), band-4 a2 45.6 (1.2e-2), Chang 0.43 (1.4e-3) |
 | **test_temperature** | `[RM52]` | *closed form* exp relaxation (`exp_relax`, Nu=2, B1); SDIRK4 order (BO); *independent integration* `rk4_ref` of the coupled velocity+temperature system under Ranz-Marshall (B2). Production `Lib_Heat::heat` via `rhsStandard` |
 | **test_heat_nu** | `[RM52]` | *analytic formula @ swept Re×Pr* — production `Lib_Heat::heat` Nu vs Ranz-Marshall 2+0.6 Re^{1/2}Pr^{1/3} table (HN1), Nu=2 conduction floor (HN2), Kavanau-Drake collapse (HN3) |
 | **test_evaporation** | `[RM52]`,`[Lef89]`, Abramzon-Sirignano 1989 | *analytic/algebraic* — production `Lib_Evaporation::evaporation` CEM/CEM-B vs independent Spalding chain psat→X_s→Y_s→B_M (EV1/EV3); convective ratio vs Ranz-Marshall Sh (EV2) |
@@ -363,9 +365,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-173 `e2e`-labelled + 43 `unit`-labelled + the optional `vortex-cloud-3way` = **217 CTest entries** in a
-serial build (+24 `mpi-*` under `USE_MPI`, 241), all green (counted from `tests/CMakeLists.txt`). The 173
-`e2e` entries are the 98 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+175 `e2e`-labelled + 43 `unit`-labelled + the optional `vortex-cloud-3way` = **219 CTest entries** in a
+serial build (+24 `mpi-*` under `USE_MPI`, 243), all green (counted from `tests/CMakeLists.txt`). The 175
+`e2e` entries are the 100 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the thirteen `repeat-*` two-sweep gates, the fifty-nine `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The

@@ -68,6 +68,19 @@ extension not yet built.
   DL2 Chang≡Clift-Gauvin identity (24·0.0175=0.42, 4.25e4=42500; forms differ
   only in toll placement, measured 2.7e-16); DL3 Schiller-Naumann≡Wen-Yu low
   branch (identical expression, machine-zero).
+- `test_drag_lit.f90`, against the sources (closed forms typed in the test, 1e-14 relative):
+
+  | id | law | source | points | measured | RED (one line of `Lib_Drag.f90`) |
+  |---|---|---|---|---|---|
+  | DL4 | Newton, C_D = 0.45 | `[Shim06]` eq. 13 | Re = 10³, 10⁴, 10⁵ | 0 | 0.44: 2.2e-2 |
+  | DL5 | Schlichting, 24/Re (1 + 3Re/16) | `[Shim06]` eq. 14, `[SP8039]` Table I | Re = 0.1, 1, 4 | 0 | 3Re/18: 4.8e-2 |
+  | DL6 | Carlson-Hoglund, eq. 19 with C_D0 = Wen-Yu (eq. 16); at Ma = 0 exactly Wen-Yu | `[Shim06]` eqs. 16, 19 | Re = 1, 10, 100, 1000 × Ma = 0.1, 0.5, 1, 2; Ma = 0 | 0, 0 | SP-8039's printed sign, +0.427/M^4.63: Inf |
+  | DL7 | Morsi-Alexander, a1 + a2/Re + a3/Re², one Re per band | the coded table (**regression pin**: Morsi and Alexander 1972 is not in hand) | Re = 0.05, 0.5, 5, 50, 500, 2000, 7500, 2×10⁴ | 1.3e-16 | band-4 a2 46.5 → 45.6: 1.2e-2 |
+  | DL8 | Chang and Clift-Gauvin, eq. 18 | `[Shim06]` eq. 18 | Re = 1, 10, 100, 1000 | 2.1e-16 | Chang's 0.42 → 0.43: 1.4e-3 (DL2 1.9e-2) |
+
+  The coded Morsi-Alexander fit jumps at its band edges (a property of the published fit, not gated): 8.3e-5
+  (Re 0.1), 4.0e-4 (1), 5.3e-5 (10), 1.2e-4 (100), 4.0e-3 (1000), 5.6e-4 (5000), 2.3e-2 (10⁴), relative. The
+  e2e cases `standard/drag-morsi` and `standard/drag-chang` hold the two laws along a slip relaxation.
 - `test_drag_probes.f90` (ctest `test_drag_probes`, ordinary gate — the bugs it transcribes are fixed, so it is a regression pin): XD1/XD2
   Crowe/Hermsen Cd=3.2e20/3.6e20 at Re=1e3,Ma=2 (exp-in-denominator, bug A1);
   XD3 Putnam 3.6% jump @Re=1000 (A5); XD4 Henderson blend-slope jump @Ma=1.75
