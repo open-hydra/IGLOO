@@ -319,35 +319,39 @@ contains
   end subroutine updatePart
 
 
-  !> Locates the geometry cell containing the particle: seed block first, then every other block.
+  !> Locates the geometry cell containing the particle: seed block first, then every other block; only
+  !  when no block holds it, the same search again with the bounding boxes widened by the cells'
+  !  containment tolerance (a point on the domain's outer face, a few ulps outside).
   logical function findParticle (self,block)
     use IGLOO_data_block, only: obj_block
     implicit none
     class(obj_particle), intent(inout) :: self
     class(obj_block),    intent(in)    :: block(nb)
-    integer  :: b, bseed, found(3)
+    integer  :: b, bseed, found(3), pass
     real(R8) :: p(3)
 
     findParticle = .false.
     p = self%stateVar(1:3)
     bseed = 0
+    if (.not.all(self%i==[0,0,0,0])) bseed = self%i(1)
 
-    !> Seed block
-    if (.not.all(self%i==[0,0,0,0])) then
-      bseed = self%i(1)
-      if (searchInBlock(block(bseed), p, self%i(2:4), self%exitFace, .false., &
-                        self%oldstate(1:3), self%oldstate(4:6), found)) then
-        self%i = [bseed,found]; self%wasin = .true.; self%lost = .false.; findParticle = .true.; return
+    do pass = 1, 2
+      !> Seed block
+      if (bseed > 0) then
+        if (searchInBlock(block(bseed), p, self%i(2:4), self%exitFace, .false., &
+                          self%oldstate(1:3), self%oldstate(4:6), found, pass == 2)) then
+          self%i = [bseed,found]; self%wasin = .true.; self%lost = .false.; findParticle = .true.; return
+        endif
       endif
-    endif
 
-    !> Fallback: every other block
-    do b = 1, nb
-      if (b == bseed) cycle
-      if (searchInBlock(block(b), p, [0,0,0], 0, .false., &
-                        self%oldstate(1:3), self%oldstate(4:6), found)) then
-        self%i = [b,found]; self%wasin = .true.; self%lost = .false.; findParticle = .true.; return
-      endif
+      !> Fallback: every other block
+      do b = 1, nb
+        if (b == bseed) cycle
+        if (searchInBlock(block(b), p, [0,0,0], 0, .false., &
+                          self%oldstate(1:3), self%oldstate(4:6), found, pass == 2)) then
+          self%i = [b,found]; self%wasin = .true.; self%lost = .false.; findParticle = .true.; return
+        endif
+      enddo
     enddo
 
   end function findParticle
@@ -373,7 +377,7 @@ contains
 
   !> Layered cell search on one block (geometry or gas dual): tier 0 the neighbour across `face`,
   !  tier 1 a +-1 box around `seed` plus a guided ray walk pold -> p, tier 2 a full sweep.
-  logical function searchInBlock(blk, p, seed, face, gasMesh, pold, vold, found)
+  logical function searchInBlock(blk, p, seed, face, gasMesh, pold, vold, found, widen)
     use IGLOO_variables,  only: mesh2D
     use IGLOO_data_block, only: obj_block
     use IGLOO_bcBox,      only: checkBoundary
@@ -385,18 +389,25 @@ contains
     logical,          intent(in)  :: gasMesh
     real(R8),         intent(in)  :: pold(3), vold(3)   !> ray endpoints for the guided walk
     integer,          intent(out) :: found(3)
-    real(R8) :: verts(3,8)
+    logical, optional, intent(in) :: widen   !> bounding boxes widened by the containment tolerance
+    real(R8) :: verts(3,8), bpad
+    logical  :: wide
     real(R8) :: org(3), dir(3), ipoint(3)
     integer  :: hi(3), nv, ci, ii, cj, jj, ck, kk, imin, imax, jmin, jmax, kmin, kmax
     integer  :: fx, mm, nn, step, maxStep
     logical  :: planar, interior, lhit
 
     searchInBlock = .false.
-    !> Block bbox early-out (z ignored when mesh2D).
-    if (p(1) < blk%bbox(1,1) .or. p(1) > blk%bbox(1,2) .or. &
-        p(2) < blk%bbox(2,1) .or. p(2) > blk%bbox(2,2)) return
+    wide = .false.
+    if (present(widen)) wide = widen
+    !> Block bbox early-out (z ignored when mesh2D); widened, by a bound on every cell's hexTol.
+    bpad = 0._R8
+    if (wide .and. all(abs(blk%bbox) < 0.5_R8*huge(1._R8))) &
+      bpad = max(1.e-12_R8*norm2(blk%bbox(:,2) - blk%bbox(:,1)), 64._R8*epsilon(1._R8)*maxval(abs(blk%bbox)))
+    if (p(1) < blk%bbox(1,1)-bpad .or. p(1) > blk%bbox(1,2)+bpad .or. &
+        p(2) < blk%bbox(2,1)-bpad .or. p(2) > blk%bbox(2,2)+bpad) return
     if (.not.mesh2D) then
-      if (p(3) < blk%bbox(3,1) .or. p(3) > blk%bbox(3,2)) return
+      if (p(3) < blk%bbox(3,1)-bpad .or. p(3) > blk%bbox(3,2)+bpad) return
     endif
     planar = gasMesh .and. mesh2D
     hi = [blk%Nx, blk%Ny, blk%Nz] + merge(1, 0, gasMesh)
@@ -462,15 +473,19 @@ contains
 
   contains
 
-    !> Point-in-cell test for (ci,cj,ck) with a bbox pre-check; records `found` on a hit.
+    !> Point-in-cell test for (ci,cj,ck) with a bbox pre-check (widened: by the cell's hexTol); records
+    !  `found` on a hit.
     logical function accept()
       implicit none
+      real(R8) :: pad
       accept = .false.
       call blk%getVertices([ci,cj,ck], verts(:,1:nv), planar)
-      if (p(1)<minval(verts(1,1:nv)) .or. p(1)>maxval(verts(1,1:nv)) .or. &
-          p(2)<minval(verts(2,1:nv)) .or. p(2)>maxval(verts(2,1:nv))) return
+      pad = 0._R8
+      if (wide .and. nv == 8) pad = hexTol(verts)
+      if (p(1)<minval(verts(1,1:nv))-pad .or. p(1)>maxval(verts(1,1:nv))+pad .or. &
+          p(2)<minval(verts(2,1:nv))-pad .or. p(2)>maxval(verts(2,1:nv))+pad) return
       if (.not.mesh2D) then
-        if (p(3)<minval(verts(3,1:nv)) .or. p(3)>maxval(verts(3,1:nv))) return
+        if (p(3)<minval(verts(3,1:nv))-pad .or. p(3)>maxval(verts(3,1:nv))+pad) return
       endif
       if (isPointInsideCell(p, verts(:,1:nv), mesh2D)) then
         found = [ci,cj,ck]

@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (243 in a serial build: 197 e2e + 45 unit incl. `self_test`,
+One row per registered CTest entry (245 in a serial build: 199 e2e + 45 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 24 `mpi-*`
-rows in their own section, 267).
+rows in their own section, 269).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,13 +30,13 @@ Columns:
 
 ---
 
-## Shared box fixture (58 of 115 e2e fixtures)
+## Shared box fixture (60 of 117 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
 writes with its defaults.
 
-Fifty-eight fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
+Sixty fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
 once here, referenced as **"shared box"** below. The other fifty-seven:
@@ -188,6 +188,8 @@ oracle possible.
 | **inj-pack** | — (inputs, conservation) | *placement contracts* — several parcels per inlet cell packed at ds = 0.27 cm (the 3D advancing front): J0 every pinned point off the face-cell edges and integrated to an exit, J1 the inlet plane, J2 the first rows of a cell at least R/2 apart and J2b at least R (the lattice; measured 2.699767e-3 m), J3 each cell's parcels sum to its flow (401: κ_ρ/(1−κ_ρ)·ρU·A, 402: gp·A) whatever N_inj (14–20). RED with 402's flow not divided among the cell's parcels: the five 402 cells carry 16–20 × their flow. At ds = 0.25 cm the run stops with a segmentation fault (a lattice point on the face's outer edge: the placement and the search disagree on it; `INFO.md`) | shared box (`solfile.tec` a symlink to `drag-stokes`'s); own `bc.txt` (`make_fixture.py`) | inlet rows 1–4 401, row 5 402 (gp 5.0, \|v\| 4 m/s, Tp 450 K); `ds = 0.27`; `out-time` |
 | **inj-dscell** | — (inputs, conservation) | *a cell's own spacing* — bc.txt column 9 (metres) overrides the global ds (cm): `inj-pack`'s J0–J3, and J5 at least two parcels in every cell of rows 1–2 (column 9 = 2.7e-3: 14–20), exactly one elsewhere (ds = 10 cm). RED with column 9 ignored: one parcel everywhere | shared box (`solfile.tec` symlinked); own `bc.txt` (`make_fixture.py`) | inlet-face 401; column 9 = 2.7e-3 on rows 1–2; `ds = 10`; `out-time` |
 | **inj-dsdegen** | — (inputs, conservation) | *the degeneracy floor* — no parcel from an inlet cell thinner than `ds-degen` along its face: `inj-pack`'s J0–J3 on graded rows, and J6 none from rows 1–2 (1.61 and 3.23 mm against 5 mm), one from every cell of rows 3–5. RED with the size test of `injViable` removed: rows 1–2 inject | own `solfile.tec` (`make_box_case.py --ygrade 2`: rows 1.61 … 25.8 mm), `drag-stokes`'s `bc.txt` | inlet-face 401; `ds = 10`, `ds-degen = 0.5`; `out-time` |
+| **inj-edge** | infrastructure (injection-cell contract) | *behavioral* — no reference curve. The 3D advancing front at `ds = 0.25` cm puts injection points on the inlet cells' edges, the edges of the inlet face included, where rounding leaves a point a few 1e-18 m outside the box. Asserts E1 every one of the run log's parcels leaves at x = 0.15, E2 no parcel reported in no cell, out of the domain at injection, stuck or without progress and an empty `run_err.txt`, E3 more parcels than inlet cells (472 of 25). RED without the rule: SIGSEGV (13 points outside every cell's bounding box, the parcel left with block 0), 5 exits; with the no-cell guard alone 13 parcels not integrated, 459 exits; with the own-cell rule but exact boxes the 13 lost at their first crossing | shared box (`INPUT/` symlinks `standard/drag-stokes/INPUT`) | `drag-stokes`' conditions with `ds = 0.25` (cm) in place of 10: inlet-face 401, κ_ρ=0.34, κ_v=0.1, d=11.89 µm; outlet + walls |
+| **inj-edge-payload** | infrastructure (injection-cell contract) | *behavioral* — every expectation from `INPUT/bc.txt`: P1 every parcel's first trajectory row moves at its own inlet row's κ_v·\|U\| (row 2 = y 1–2 cm, lattice points on its edges with rows 1 and 3, 1 m/s; rows 1 and 3, 2 m/s), P2 Σ exit ṁ = Σ κ_ρ/(1−κ_ρ) ρ U A over the inlet cells to 1e-5, W1 every exit at x = 0.15, W2 ≥1 row-2 parcel on a row edge (12). RED when the search locates an injected parcel: the 9 row-2 parcels on y = 2 cm start in row 3's cell (2 m/s), exit mass flow +2.778e-2; GREEN 112/112, 1.0e-7 | shared box (`INPUT/solfile.tec` symlinked from `standard/drag-stokes`) | own `bc.txt` (`make_bc.py` from drag-stokes's): rows m = 1 and 3 κ_ρ=0.68, κ_v=0.2; rows 2, 4, 5 κ_ρ=0.34, κ_v=0.1; row 2 a per-cell `ds` of 2.5 mm (column 9), the other cells one centred parcel (global `ds = 10` cm); 112 parcels |
 | **ini-comment-eq** | infrastructure (INI parser contract) | *behavioral* — no reference curve. `drag-stokes`' own `input.ini` with one `;` comment line carrying an `=` inserted inside `[IGLOO-General]`, right after `gas-file`; the oracle is the three keys that follow it. Asserts a clean stderr, `gas-order = 1` (no `Defaulting to 2nd order`), `out-file = S` by its **positive** log witness ` >> Output field: gas coupling source` (an absence-only check passes on a run that never read the file), `source.tec` written with no `euler1.tec`, and 25 exit rows. Pins that an in-section inline comment is inert, i.e. that the in-tree FiNeR and hydra's (`--include-finer`) parse the same file identically | shared box (`INPUT/` symlinks `standard/drag-stokes/INPUT`) | `drag-stokes`' conditions verbatim (inlet-face 401, κ_ρ=0.34, κ_v=0.1, d=11.89 µm, ρ_p=2950, Stokes drag, `gas-order = 1`, `out-file = S`) plus the single added comment line. Its **preamble** keeps seven `=`-bearing `;` lines: those precede the first `[`, so they are outside every section and inert under either parser — the trap is in-section only |
 | **solver-fail-consumed** | infrastructure (integration exit contract; O30 step 4b) | *behavioral* — no reference curve. A parcel deleted because `Run_ODESolver` returned `err < 0` must still hand its remaining mass to the gas for consumption models 2/5, as the non-finite exit beside it already does; otherwise the remnant leaves the mass balance. Asserts the branch actually fired (25 `Run_ODESolver err=` lines — a positive witness), that no parcel took the non-finite exit instead, 25 exit rows, and `Σ wdot` = `Σ npdot·m_inj` to 1e-5. **The only fixture that reaches that branch**: after the `rhsEvaporation` scrub even tc-hexadecane burns out cleanly | `evaporation/tc-hexadecane`'s case (`INPUT/` symlinked whole) | tc-hexadecane's conditions with the ODE tolerances at **1e-30**, below double-precision resolution, so SDIRK4 fails on the first step of every parcel. All 25 then die at injection carrying their FULL mass ⇒ the source total is all-or-nothing (RED 0.0 / GREEN the whole stream). The 100 % remnant is also what makes the cost of the contract visible |
 | **solver-fail-consumed-m4** | infrastructure (integration exit contract, model 4) | as `solver-fail-consumed` (its `check.py`) with `breakup=Reitz-Diawakar` added: the `err < 0` exit hands a model-4 parcel's remnant to the gas (resid 2.941e-7). RED unfixed: Σ`wdot` = 0, resid 1.0 | as `tc-hexadecane` | as `solver-fail-consumed` + `breakup=Reitz-Diawakar` (σ 0.072, μ_l 1e-3) |
@@ -390,9 +392,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-197 `e2e`-labelled + 45 `unit`-labelled + the optional `vortex-cloud-3way` = **243 CTest entries** in a
-serial build (+24 `mpi-*` under `USE_MPI`, 267), all green (counted from `tests/CMakeLists.txt`). The 197
-`e2e` entries are the 115 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+199 `e2e`-labelled + 45 `unit`-labelled + the optional `vortex-cloud-3way` = **245 CTest entries** in a
+serial build (+24 `mpi-*` under `USE_MPI`, 269), all green (counted from `tests/CMakeLists.txt`). The 199
+`e2e` entries are the 117 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the four `threads-*` thread-count gates, the thirteen `repeat-*` two-sweep gates, the sixty-two `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The

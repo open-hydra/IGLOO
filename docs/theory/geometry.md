@@ -111,7 +111,11 @@ the face index to directly compute the neighbour without a full scan.
 
 `part%findParticle(geoblock)` is called after boundary events (e.g. reflection) where
 `exitFace` may be stale.  It performs a broader containment search starting from the last
-known cell.
+known cell.  A block, and each cell in it, is tried only when the point lies in its bounding box. When
+no block holds the point, the search runs once more with every bounding box widened by the containment
+tolerance $\tau$ — a cell's own, a block's that of a cell spanning the block — so that a point of the domain
+boundary that rounding left a few ulps outside is found in its cell. The gas dual-cell search keeps the
+exact boxes.
 
 `part%advanceGasCell(gasblock)` is the gas-dual-mesh analogue, using `part%gasExitFace`.
 

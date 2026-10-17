@@ -19,6 +19,7 @@ contains
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
+                                nInjNoCell,                                &
                                 trajOn, scatOn, dNscat, sixOverPi, pi
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs
@@ -134,11 +135,20 @@ contains
       part%angle = 0._R8
       part%i     = part%iInj
       part%stateVar(1:3) = part%pInj
-      call part%updateCell(geoblock)
+      if (.not. injCellHolds()) call part%updateCell(geoblock)
 
       if (part%gone) then
         write(*,'(A,I4,A)')                                                         &
                 '[WARNING] Particle ',part%ID,' has been initialized out of domain!'
+        call flushScat()
+        return
+      endif
+      !> No cell holds the injection point: the parcel is not integrated (counted per sweep).
+      if (any(part%i < 1)) then
+        part%lost = .true.
+        part%gone = .true.
+        !$OMP ATOMIC
+        nInjNoCell = nInjNoCell + 1
         call flushScat()
         return
       endif
@@ -837,6 +847,19 @@ contains
       endif
       call gasblock(b)%gasProperties(gas,part%igas)
     end subroutine refreshCellEntry
+
+    !> A pinned parcel whose point lies in its injection cell by the test that pinned it (the 12-plane
+    !  test of the cell, also on a one-layer mesh) takes that cell, with no search.
+    logical function injCellHolds()
+      use IGLOO_RayFaceIntersection3D, only: isPointInsideHexahedron12
+      real(R8) :: v(3,8)
+      injCellHolds = .false.
+      if (any(part%iInj < 1)) return
+      call geoblock(part%iInj(1))%getVertices(part%iInj(2:4), v)
+      if (.not. isPointInsideHexahedron12(part%pInj, v)) return
+      part%i = part%iInj; part%wasin = .true.; part%lost = .false.
+      injCellHolds = .true.
+    end function injCellHolds
 
     !> True when the gas dual cell sits on a block boundary
     subroutine setAtGasBoundary()

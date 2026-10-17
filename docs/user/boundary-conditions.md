@@ -85,6 +85,8 @@ Injection faces (`bcdef` 401–403) are the only faces where particles enter the
 
 The `ds-degen` key sets a floor: injection cells whose tangential size is below this threshold are skipped (they are typically collapsing or degenerate boundary cells near edges).
 
+A parcel takes its loading, velocity and temperature columns from the cell it starts in: the injection cell that placed it whenever that cell's containment test holds its point, also on an edge two injection cells share, and otherwise the cell the search finds. A parcel whose injection point no cell holds is not integrated, and the run log counts such parcels once per sweep: `[WARNING] N parcel(s) whose injection point no cell holds: not integrated`.
+
 Per-cell injection properties stored in `bc.txt` columns (after the `bcdef` column) are:
 
 | Column | Quantity |

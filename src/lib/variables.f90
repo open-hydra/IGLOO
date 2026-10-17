@@ -34,6 +34,7 @@ module IGLOO_variables
   integer  :: nStencilRefresh = 0  !> per-sweep: gas stencils re-sought after a block change found at a gas-boundary entry
   !> per-sweep block changes: through the connected cell of a connected face, through the block sweep, rim exits
   integer  :: nConnHit = 0, nSweepHit = 0, nRimExit = 0
+  integer  :: nInjNoCell = 0  !> per-sweep: parcels whose injection point no cell holds (not integrated)
   integer  :: fsample, nb, nm, nfam, iprint, trajSample
   integer, allocatable :: nspecies(:)
   real(R8) :: ds, mdotMax, dtprint

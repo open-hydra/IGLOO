@@ -321,7 +321,7 @@ contains
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
                                 trajOn, scatOn, dNscat, trajSample, threshold, &
                                 probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
-                                nConnHit, nSweepHit, nRimExit, &
+                                nConnHit, nSweepHit, nRimExit, nInjNoCell, &
                                 unitSnap, snapOn, timeOn, tEnd
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
@@ -344,7 +344,7 @@ contains
     integer :: loopCounter, maxShedSeen
     !> Child-ID band of the current generation. No initializer here: it would imply SAVE.
     integer :: curBase, curCount, newBase, childLocal, childGlobal, pidx, idBase
-    integer :: foldStat(2)
+    integer :: foldStat(2), noCell(1)
     integer, allocatable :: nShedAll(:), shedOff(:)
     ! logical, allocatable :: famDone(:)
     real(R8), allocatable :: relTol(:), absTol(:), exch(:,:)
@@ -361,6 +361,7 @@ contains
     endif
     self%stateIsFresh = .false.
     nSectorFold = 0; nMultiFold = 0; nStencilRefresh = 0; nConnHit = 0; nSweepHit = 0; nRimExit = 0
+    nInjNoCell = 0
 
     sourceSwitch = self%srcSwitch
     eulerSwitch  = self%eulSwitch
@@ -729,6 +730,10 @@ contains
                                                  foldStat(1), ' (multi-sector: ', foldStat(2), ')'
     endif
     if (self%connFaces) call reportBlockChanges()
+    noCell = [nInjNoCell]
+    call mpi_allreduce_sum_i4_array(noCell, 1)
+    if (mpi_is_root .and. noCell(1) > 0) write(*,'(A,I0,A)') ' [WARNING] ', noCell(1), &
+      ' parcel(s) whose injection point no cell holds: not integrated'
     if (mpi_is_root) then
       if (snapOn) then
         write(*,'(A,ES16.8E2,A)') '  Stop condition : time-end = ', tEnd, ' s reached, or the particle left the domain'
