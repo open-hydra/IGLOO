@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (216 in a serial build: 173 e2e + 42 unit incl. `self_test`,
+One row per registered CTest entry (217 in a serial build: 173 e2e + 43 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 22 `mpi-*`
-rows in their own section, 238).
+rows in their own section, 239).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -315,6 +315,7 @@ box/BC. Sub-test IDs in parentheses.
 | **test_rng_stream** | — | *stream contract* of the per-parcel splitmix64 RNG (`Lib_Statistics::rngSeedFor`/`rngNext`): seed distinctness (8 families × 4000 IDs, 0 collisions), reproducibility, uniformity — the property no e2e gate can see (one shared seed reproduces perfectly and passes every e2e oracle) |
 | **test_psd_table** | `[Kol33]`,`[AD54]`,`[Ste74]`,`[MM04]` | *closed form* CDFs typed in the test (table6's hand knots, truncated Normal, LogNormal, Rosin-Rammler) against 10⁵ draws of the production `sampleDiameter` per law: Kolmogorov-Smirnov D_n < 6.165e-3 and A² < 5.969 at seed 42, seeds 43..61 printed (max D_n 4.8e-3, max A² 2.9, none above). Also the table knots to 1e-15, one load per token, the `INPUT/` fallback, a one-row Dirac that draws nothing. RED (one-line sampler changes): class-centre atoms D 0.175, number fractions D 0.702, next class D 0.350, last edge shortened D 0.050 / A² 202, Normal clipped D 0.022 / A² 201, LogNormal log-space σ D 0.593, Rosin-Rammler n +10 % D 0.025 / A² 199, untruncated Normal oracle D 0.023 / A² 184 |
 | **test_slot_order** | — | *layout contract* of the packed property slots: every per-material property gets a distinct value, `setupRHS` + `packAuxVars` pack it for models 2, 4, 5 and 6, and every read through the readers' own indices returns the property of that name — `ep(iMv..imuLiq)` of `IGLOO_Lib_Evaporation` (nep = 10, and `ind_Lv..ind_e5` naming the same slots) and `mp(imKb..imQc)` of `IGLOO_Lib_Combustion` (nmp = nmetal = 9; `h-fus`, `cp-solid` where `rhsSolidification` reads them). RED: `T-ign`/`h-fus` exchanged in the metal list (S3, S4), `Lv`/`cpv` written to each other's slot (S1, S2) |
+| **test_material_tokens** | — | *token contract* of the phase file's material line: `set_material_defaults`, `apply_material_key` and `finalize_material_models` on a material built in the test, exact equality. MT1 the fourteen defaults (from a material poisoned to −999 first), T-nuc = 0.8·T-melt; MT2 each of the fourteen real tokens alone sets its own field and leaves the other thirteen at their defaults; MT3 each of the six model words, every allowed value (15), sets its selector from the opposite preset and nothing else (`evapWord` for `evaporation`); MT4 T-nuc from `T-melt=2300`, an explicit T-nuc kept, combustion disabling evaporation in either order; MT5 the last of a repeated key wins. RED (one line of `Lib_INI.f90` each): `k-liq` read into `muLiq` (MT2, both fields), `nBurn` default 1.5 (29 checks), the T-nuc factor 0.9 (MT1, MT4), the evaporation disable removed (MT4) |
 | **test_axis_dispatch** | — | *dispatch equivalence*: bcdef-200 faces classified by GEOMETRY (azimuthal normal ⇒ wedge rotation, radial ⇒ axis reflection) for wedges built on i, j and k at all six face indices; pins equivalence with the retired `f==6` rule; the only coverage of `bcDef`'s fold branch (`axisymFold` re-sectors first, so no e2e case reaches it) |
 | **test_graze_standoff** | — | *contract pin*: the grazing standoff is an absolute length capped at a fraction of the cell (`grazeOffset`), checked across 12 decades of cell thickness |
 | **test_dual_clip** | — | *tiling invariant*: sum(dual cellVol) == domain volume plus the per-cell 1/2, 1/4, 1/8 boundary factors, in 2D and 3D; proven RED against the unclipped dual; the only gate on the 3D dual (no e2e case gates it) |
@@ -360,13 +361,13 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-173 `e2e`-labelled + 42 `unit`-labelled + the optional `vortex-cloud-3way` = **216 CTest entries** in a
-serial build (+22 `mpi-*` under `USE_MPI`, 238), all green (counted from `tests/CMakeLists.txt`). The 173
+173 `e2e`-labelled + 43 `unit`-labelled + the optional `vortex-cloud-3way` = **217 CTest entries** in a
+serial build (+22 `mpi-*` under `USE_MPI`, 239), all green (counted from `tests/CMakeLists.txt`). The 173
 `e2e` entries are the 98 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the thirteen `repeat-*` two-sweep gates, the fifty-nine `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The
-42 `unit` entries are 35 compiled unit tests, the property-table reader on its three fixtures
+43 `unit` entries are 36 compiled unit tests, the property-table reader on its three fixtures
 (`test_properties_reader`, `-two-material`, `-atlas-water`), `self_test`, `registry-docs`, `exe-per-tree` and
 `lint-test-inputs`. Unit
 families that emit a production-vs-reference overlay (`verif_dump` → `tools/plot_curves.py` →
