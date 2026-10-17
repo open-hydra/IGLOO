@@ -1,6 +1,6 @@
 module IGLOO_data_block
   use, intrinsic :: iso_fortran_env, only : R8 => real64
-  use IGLOO_Lib_Mollify, only: binomial_smooth, mollifyBlocks, cellLink, blockField
+  use IGLOO_Lib_Mollify, only: binomial_smooth, mollifyBlocks, cellLink, blockField, linkDonors
   implicit none
   private
   public :: fillGhostPartners
@@ -412,13 +412,15 @@ contains
   end subroutine mollifySource
 
   !> Mollify one family's eulerian densities over every block: each block on its own when no
-  !  aligned 101/201 link joins two cells (mollifyEuler), else across the links (mollifyBlocks).
-  subroutine mollifyEulerBlocks(eul, geo, links)
+  !  aligned 101/201 link or 102 link joins two cells (mollifyEuler), else across the links
+  !  (mollifyBlocks; donors are the 102 links' donor cells).
+  subroutine mollifyEulerBlocks(eul, geo, links, donors)
     use IGLOO_variables, only: mesh2D, mollifyPasses
     implicit none
     type(obj_eulerblock), intent(inout) :: eul(:)
     type(obj_block),      intent(in)    :: geo(:)
     type(cellLink),       intent(in)    :: links(:)
+    type(linkDonors),     intent(in)    :: donors
     type(blockField), allocatable :: fld(:), vol(:)
     integer :: ndim, b, c, iv
 
@@ -444,7 +446,7 @@ contains
         case (6);    fld(b)%q = eul(b)%np
         end select
       enddo
-      call mollifyBlocks(fld, vol, links, mollifyPasses, ndim)
+      call mollifyBlocks(fld, vol, links, mollifyPasses, ndim, donors)
       do b = 1, size(eul)
         select case (iv)
         case (1);    eul(b)%density = fld(b)%q
@@ -457,17 +459,22 @@ contains
   end subroutine mollifyEulerBlocks
 
   !> Mollify the source totals {mass, mom, en} over every block, as densities (/V, smoothed, *V):
-  !  each block on its own when no aligned 101/201 link joins two cells (mollifySource), else across
-  !  the links (mollifyBlocks).
-  subroutine mollifySourceBlocks(src, geo, links)
+  !  each block on its own when no aligned 101/201 link or 102 link joins two cells (mollifySource),
+  !  else across the links (mollifyBlocks; donors are the 102 links' donor cells). exchanged(iv, b):
+  !  what block b's 102 face cells took from the donor halo, per field (mass of each material, the
+  !  three momentum components, energy), in source units.
+  subroutine mollifySourceBlocks(src, geo, links, donors, exchanged)
     use IGLOO_variables, only: mesh2D, mollifyPasses, nm
     implicit none
     type(obj_sourceblock), intent(inout) :: src(:)
     type(obj_block),       intent(in)    :: geo(:)
     type(cellLink),        intent(in)    :: links(:)
+    type(linkDonors),      intent(in)    :: donors
+    real(R8),              intent(out)   :: exchanged(:,:)
     type(blockField), allocatable :: fld(:), vol(:)
     integer :: ndim, b, iv
 
+    exchanged = 0._R8
     if (mollifyPasses <= 0) return
     if (.not. any(links(:)%dir > 0)) then
       do b = 1, size(src)
@@ -493,7 +500,7 @@ contains
         endif
         end associate
       enddo
-      call mollifyBlocks(fld, vol, links, mollifyPasses, ndim)
+      call mollifyBlocks(fld, vol, links, mollifyPasses, ndim, donors, exchanged(iv,:))
       do b = 1, size(src)
         associate(V => geo(b)%cellVol)
         if (iv <= nm) then
@@ -1721,29 +1728,48 @@ contains
   !> Link table of the 101 and 201 face cells, one entry per cell: the partner cell and face of its
   !  connection. Refuses a partner outside the mesh, a connection that is not mutual (the partner
   !  face's record must carry the same code and name this cell and face) and, on a one-layer mesh, a
-  !  101 or 201 record on face 5 or 6.
-  subroutine buildInterfaceLinks(geo, links)
+  !  101 or 201 record on face 5 or 6. A 102 face cell with layer-1 donors is listed too, its donors
+  !  and weights appended to donors (an empty layer keeps zero flux).
+  subroutine buildInterfaceLinks(geo, links, donors)
     use IGLOO_variables, only: mesh2D
     implicit none
     type(obj_block),             intent(in)  :: geo(:)
     type(cellLink), allocatable, intent(out) :: links(:)
-    integer :: nl, l, b, f, m, n, i, j, k, pb, pi, pj, pk, pf, qm, qn, code
+    type(linkDonors),            intent(out) :: donors
+    integer :: nl, nd, l, t, b, f, m, n, i, j, k, pb, pi, pj, pk, pf, qm, qn, code
 
-    nl = 0
+    nl = 0; nd = 0
     do b = 1, size(geo)
       do f = 1, 6
-        if (allocated(geo(b)%face(f)%cell)) nl = nl + count(geo(b)%face(f)%cell(:,:)%bcdef == 101 .or. &
-                                                             geo(b)%face(f)%cell(:,:)%bcdef == 201)
+        if (.not. allocated(geo(b)%face(f)%cell)) cycle
+        nl = nl + count(geo(b)%face(f)%cell(:,:)%bcdef == 101 .or. geo(b)%face(f)%cell(:,:)%bcdef == 201)
+        nl = nl + count(geo(b)%face(f)%cell(:,:)%bcdef == 102 .and. geo(b)%face(f)%cell(:,:)%chimN(1) > 0)
+        nd = nd + sum(geo(b)%face(f)%cell(:,:)%chimN(1), mask=geo(b)%face(f)%cell(:,:)%bcdef == 102)
       enddo
     enddo
-    allocate(links(nl))
+    allocate(links(nl), donors%b(nd), donors%i(nd), donors%j(nd), donors%k(nd), donors%w(nd))
     if (nl == 0) return
 
-    l = 0
+    l = 0; t = 0
     do b = 1, size(geo)
       do f = 1, 6
         do n = 1, geo(b)%face(f)%Nn; do m = 1, geo(b)%face(f)%Nm
           code = geo(b)%face(f)%cell(m,n)%bcdef
+          if (code == 102) then
+            associate(c => geo(b)%face(f)%cell(m,n))
+            if (c%chimN(1) == 0) cycle
+            call geo(b)%fmn2ijk(f, m, n, i, j, k)
+            l = l + 1
+            links(l) = cellLink(b=b, f=f, i=i, j=j, k=k, dir=(f+1)/2, nd=c%chimN(1), d0=t)
+            donors%b(t+1:t+c%chimN(1)) = c%chimDonor(:,1)
+            donors%i(t+1:t+c%chimN(1)) = c%chimDonor(:,2)
+            donors%j(t+1:t+c%chimN(1)) = c%chimDonor(:,3)
+            donors%k(t+1:t+c%chimN(1)) = c%chimDonor(:,4)
+            donors%w(t+1:t+c%chimN(1)) = c%chimW
+            t = t + c%chimN(1)
+            end associate
+            cycle
+          endif
           if (code /= 101 .and. code /= 201) cycle
           if (mesh2D .and. f >= 5) error stop 'IGLOO: a 101/201 connection on face 5 or 6 of a one-layer (2D) mesh'
           call geo(b)%fmn2ijk(f, m, n, i, j, k)

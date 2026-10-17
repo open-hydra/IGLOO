@@ -699,7 +699,7 @@ Several members of this category have **no figure** and so no section below:
 `bc-center-2grp` (multi-group `bc_center` pinning), `axis-200` and `wedge-fold` (the
 axis face and the sector fold on the MOSE nozzle field), `two-mat` (two materials),
 `two-fam-bc` (one inlet table per family in `bc.txt`), `two-fam-bc-2blk` (the same on two blocks joined by
-a 101 connection), `two-fam-bc-2blk-mollify` (the same with the field mollifier on), `chimera-2blk` (two overlapping blocks joined by chimera faces), `varcp-tmin` (a varying-$c_p$ table that ends below the parcels' temperature) and the
+a 101 connection), `two-fam-bc-2blk-mollify` (the same with the field mollifier on), `chimera-2blk` (two overlapping blocks joined by chimera faces), `chimera-2blk-mollify` and `chimera-2blk-shift-mollify` (the same with the field mollifier on, the second with block 2 shifted by half a cell), `varcp-tmin` (a varying-$c_p$ table that ends below the parcels' temperature) and the
 `refusals/*` gates —
 behavioral cases with no reference curve, summarised in the table on the
 [Overview](index.md).  This page is organized around comparison figures;

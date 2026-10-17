@@ -6,7 +6,8 @@ by a dimension-split binomial smoother controlled by `mollify` and `mollify-pass
 entirely.
 
 The smoother is implemented in `src/lib/Lib_Mollify.f90::binomial_smooth` (one block) and
-`mollifyBlocks` (blocks joined by 101 connections, faces paired by periodic (201) connections), called
+`mollifyBlocks` (blocks joined by 101 connections, faces paired by periodic (201) connections, chimera (102)
+faces), called
 through `mollifyEulerBlocks` and
 `mollifySourceBlocks` in `src/lib/obj_block.f90`.
 
@@ -78,8 +79,23 @@ one warning line per such face pair. A translational periodic pair (`bcdef` 201)
 way: each face cell's partner is the cell its connection names on the paired face, in the same block
 or another, so the cells next to the two faces are neighbours, as in one unrolled period (periodicity
 is translational, so the momentum source needs no rotation across the face). Every other block face —
-walls, inlets, outlets and chimera faces — keeps zero flux. The conservation guard sums $q V$ over
-every block.
+walls, inlets and outlets — keeps zero flux. The conservation guard sums $q V$ over every block.
+
+A chimera face (`bcdef` 102) lies inside another block, whose cells there are a second copy of the
+overlap. Before each sweep along the face's index direction, each facelet with layer-1 donors takes a
+halo blended from them, $q_h = \sum_d w_d\,q_d$ and $V_h = \sum_d w_d\,V_d$ (ATLAS's volume weights, the
+donors' current values), and its cell takes the flux $\theta\,\min(V_c, V_h)\,(q_h - q_c)$; the donors
+are cells of their own block, smoothed there, and are not debited. Each block's total therefore changes
+by exactly what its chimera cells took, $F_{102}$ (summed link by link in a fixed order), and the guard
+checks $|\sum qV_\mathrm{after} - \sum qV_\mathrm{before} - F_{102}| \le 10^{-10} \sum |q|V$ ($F_{102} = 0$
+without chimera faces). For the source, each block's exchange is added to its mirrored totals (see
+[Boundary conditions](../user/boundary-conditions.md#chimera-faces-code-102)), so the sum over the blocks
+minus the mirrored totals is still the once-counted total. Where the overlap's cells coincide (one donor
+of weight 1 per facelet), the overlap's deposits mirrored into both blocks and the halo give each block
+the one-block smoothed field on its own cells; with misaligned cells (two donors of weight 1/2 at a
+half-cell shift) the halo is the average of the two donor cells and the result meets the one-block field
+only to the interpolation error of the halo and of the overlap map. A facelet with an empty layer 1 keeps
+zero flux.
 
 ---
 
@@ -122,7 +138,7 @@ conserved density numerators of each family before Favre averaging (`obj_eulerbl
 Each scalar field is divided by cell volume before smoothing and multiplied back out
 after, satisfying the $\sum q V$ conservation invariant.
 
-On a mesh without a 101 or 201 face each block is smoothed on its own (`mollifyEuler`,
+On a mesh without a 101 or 201 face or a chimera facelet with layer-1 donors each block is smoothed on its own (`mollifyEuler`,
 `mollifySource`), with an optional pre-allocated scratch buffer (`work`) reused across all 6
 (Euler) or $n_m+4$ (source) calls, avoiding repeated allocations in the inner loop.
 

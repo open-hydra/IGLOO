@@ -96,8 +96,10 @@ identity must not be routed through an approximate geometry.
 (102) faces the gas solver keeps a copy of the overlap in each block, so after the reduction (and
 before the smoothing) every cell adds the owner-only deposits of the cells of the other blocks whose
 centroids it contains (a centroid on its chimera face excepted): $S'(c') = S(c') + \sum_{c \to c'} S(c)$, amounts as they are. The mirrored
-part of block $b$, $M(b) = \sum_{c'} \big(S'(c') - S(c')\big)$, is reported per sweep, so the once-counted
-total is $\sum_b \sum_c S'(c) - \sum_b M(b)$, exactly (see [Boundary conditions](../user/boundary-conditions.md#chimera-faces-code-102)).
+part of block $b$, $M(b) = \sum_{c'} \big(S'(c') - S(c')\big)$, plus what the field mollifier's chimera halo
+then brings into the block ([Field mollification](mollification.md#block-interfaces-and-periodic-faces)), is
+reported per sweep, so the once-counted total is the sum of the final source over every block minus
+$\sum_b M(b)$, exactly (see [Boundary conditions](../user/boundary-conditions.md#chimera-faces-code-102)).
 
 ---
 

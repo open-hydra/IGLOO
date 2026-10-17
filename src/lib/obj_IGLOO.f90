@@ -6,20 +6,23 @@ module IGLOO_module
                               buildInterfaceLinks, reportNonAligned, mollifyEulerBlocks, mollifySourceBlocks, &
                               hasConnectedFaces, buildGhostLinks
   use IGLOO_data_phases, only: obj_material
-  use IGLOO_Lib_Mollify, only: cellLink
+  use IGLOO_Lib_Mollify, only: cellLink, linkDonors
   use IGLOO_overlap,     only: overlapMap, mirroredTotals
   implicit none
 
   type, public :: obj_IGLOO
     type(obj_block),       allocatable :: geoblock(:)
     type(obj_flowblock),   allocatable :: gasblock(:)
-    !> The 101 and 201 face cells and their partner cells, built once after the bc read.
+    !> The 101, 201 and 102 face cells and their partner cells or layer-1 donors, built once after the
+    !  bc read.
     type(cellLink),        allocatable :: links(:)
+    type(linkDonors) :: donors
     !> A face cell carries 101, 103, 201, 102 or 100: solve reports the block changes.
     logical :: connFaces = .false.
     !> Chimera faces only: each cell's covering cells in the other blocks and its coverage count.
     type(overlapMap) :: ovl
-    !> Chimera faces only: what the overlap mirror added to each block's source; valid as `source`.
+    !> Chimera faces only: what the overlap mirror and the smoothing's chimera halo added to each block's
+    !  source; valid as `source`.
     type(mirroredTotals),  allocatable :: mirrored(:)
     !> Valid only between a solve and the next reset_state (which deallocates them).
     type(obj_sourceblock), allocatable :: source(:)
@@ -137,7 +140,7 @@ contains
     endif
     call read_cdp_bc_file(IGLOO_phase_prefix,self%material,self%geoblock,self%gasblock)
     call tm_phase(TM_BLOCKS)
-    call buildInterfaceLinks(self%geoblock, self%links)
+    call buildInterfaceLinks(self%geoblock, self%links, self%donors)
     if (mpi_is_root) call reportNonAligned(self%links)
     self%connFaces = hasConnectedFaces(self%geoblock)
     if (hasChimeraFaces(self%geoblock)) then
@@ -344,7 +347,7 @@ contains
     integer :: foldStat(2)
     integer, allocatable :: nShedAll(:), shedOff(:)
     ! logical, allocatable :: famDone(:)
-    real(R8), allocatable :: relTol(:), absTol(:)
+    real(R8), allocatable :: relTol(:), absTol(:), exch(:,:)
     !> Scatter-cloud weight-quantum (dNscat) auto-sizing scratch.
     integer  :: c, nStreams, nValid
     real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp
@@ -677,8 +680,18 @@ contains
       do b = 1, nb
         call self%source(b)%finalize(self%geoblock(b))
       enddo
-      if (allocated(self%ovl%blk)) then
-        call mirrorSource(self%source, self%ovl, self%mirrored)
+      if (allocated(self%ovl%blk)) call mirrorSource(self%source, self%ovl, self%mirrored)
+      call tm_nest(TM_SMOOTH)
+      allocate(exch(nm + 4, nb))
+      call mollifySourceBlocks(self%source, self%geoblock, self%links, self%donors, exch)
+      call tm_unnest()
+      !> the chimera halo's exchange joins the mirrored totals: Sum over blocks - mirrored = once-counted
+      if (allocated(self%mirrored)) then
+        do b = 1, nb
+          self%mirrored(b)%mass = self%mirrored(b)%mass + exch(1:nm, b)
+          self%mirrored(b)%mom  = self%mirrored(b)%mom  + exch(nm+1:nm+3, b)
+          self%mirrored(b)%en   = self%mirrored(b)%en   + exch(nm+4, b)
+        enddo
         if (mpi_is_root) then
           do b = 1, nb
             write(*,'(A,I0,A,*(1X,ES23.15E3))') ' [IGLOO] chimera overlap: block ', b, &
@@ -687,9 +700,6 @@ contains
           enddo
         endif
       endif
-      call tm_nest(TM_SMOOTH)
-      call mollifySourceBlocks(self%source, self%geoblock, self%links)
-      call tm_unnest()
     endif
     if (eulerSwitch) then
       do m = 1, nm
@@ -700,7 +710,7 @@ contains
           enddo
           if (allocated(self%ovl%blk)) call mirrorEuler(self%euler(:, fam), self%geoblock, self%ovl)
           call tm_nest(TM_SMOOTH)
-          call mollifyEulerBlocks(self%euler(:, fam), self%geoblock, self%links)
+          call mollifyEulerBlocks(self%euler(:, fam), self%geoblock, self%links, self%donors)
           call tm_unnest()
           do b = 1, nb
             call self%euler(b, fam)%normalize(self%material(m)%hTab, self%material(m)%cpVariable)

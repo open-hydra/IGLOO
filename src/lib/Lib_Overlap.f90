@@ -21,7 +21,8 @@ module IGLOO_overlap
     type(overlapBlock), allocatable :: blk(:)
   end type overlapMap
 
-  !> What the mirror added to one block beyond its own deposits: mass per material, momentum, energy.
+  !> What one block received beyond its own deposits (the mirror, then the smoothing's chimera halo):
+  !  mass per material, momentum, energy.
   type, public :: mirroredTotals
     real(R8), allocatable :: mass(:)
     real(R8) :: mom(3) = 0._R8

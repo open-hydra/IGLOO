@@ -40,6 +40,8 @@ ref-noblow
 ref-raw
 ref-row
 ref-row-raw
+# chimera-2blk-shift-mollify runs the box shifted by half a cell into ref-shift/ (its check.py)
+ref-shift
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/

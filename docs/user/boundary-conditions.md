@@ -232,8 +232,9 @@ A particle deposits into the block it is tracked in; at the end of `solve`, afte
 reduced to the geometry cells and before the field mollifier, every cell adds the deposits the other
 blocks made in the cells mapped onto it, from a copy of the owner-only fields (so a deposit is mirrored
 once into each other covering block, never twice): source amounts as they are, eulerian densities
-scaled by the volume ratio, so the amount is preserved. Each sweep prints, per block, what the mirror
-added to its source,
+scaled by the volume ratio, so the amount is preserved. Each sweep prints, per block, what the overlap
+added to its source beyond its own deposits — the mirrored deposits and, with the field mollifier on, what
+its chimera face cells took from the donor halo (below) —
 
 ```
  [IGLOO] chimera overlap: block b mirrored source (mass, momentum, energy): ...
@@ -245,6 +246,17 @@ block minus the mirrored totals. A parent solver that sums its own copies of the
 cell by `1/ovl%blk(b)%n(c)`, the number of blocks that cover the centroid of cell `c` (cells numbered
 `i + (j−1)·Nx + (k−1)·Nx·Ny`). Verified by `chimera-2blk` (each block's fields equal the one-block run on
 its cells; the mirrored totals) and `test_mollify_blocks` (U-M).
+
+**Smoothing.** The field mollifier crosses a chimera face through a one-cell halo: each facelet with
+layer-1 donors takes their weighted value and volume, and its cell takes the interior-face flux against
+them; the donors are not debited, so each block's total changes by what its chimera cells took, and that
+exchange joins the block's mirrored totals (see [Field
+mollification](../theory/mollification.md#block-interfaces-and-periodic-faces)). Where the overlap's cells
+coincide, each block's smoothed fields equal the one-block ones on its cells; where they do not (two
+donors per facelet), only to the interpolation error of the halo and of the centroid map, which gives a
+centroid lying on an interior face of the other block to one of the two cells it touches. A facelet with an empty
+layer 1 keeps zero flux. Verified by `chimera-2blk-mollify`, `chimera-2blk-shift-mollify`,
+`test_mollify_blocks` (U-M (ii), (iii)) and `test_bc_families` (F6b).
 
 ---
 

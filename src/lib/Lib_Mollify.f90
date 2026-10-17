@@ -9,12 +9,20 @@ module IGLOO_Lib_Mollify
   public :: DEFAULT_MOLLIFY_PASSES
 
   !> A cell of block b on its 101 or 201 face f joined to cell (pi,pj,pk) of block pb on face pf; dir
-  !  is the index direction normal to both faces (0 when they are normal to different directions).
+  !  is the index direction normal to both faces (0 when they are normal to different directions). A
+  !  cell on a 102 face has nd > 0 donors, d0+1..d0+nd of the linkDonors list, and dir = (f+1)/2.
   type, public :: cellLink
     integer :: b = 0, f = 0, i = 0, j = 0, k = 0
     integer :: pb = 0, pf = 0, pi = 0, pj = 0, pk = 0
     integer :: dir = 0
+    integer :: nd = 0, d0 = 0
   end type cellLink
+
+  !> The donor cells (block, i, j, k) and volume weights of the 102 links, flat, in link order.
+  type, public :: linkDonors
+    integer,  allocatable :: b(:), i(:), j(:), k(:)
+    real(R8), allocatable :: w(:)
+  end type linkDonors
 
   !> One block's cell array, for mollifyBlocks.
   type, public :: blockField
@@ -139,29 +147,41 @@ contains
 
   !> binomial_smooth over several blocks at once: before every sweep direction of every pass a
   !  one-cell halo takes the partner's current value and volume on each aligned 101/201 face cell,
-  !  so the flux crosses the face as it crosses an interior face; the conservation guard sums every
-  !  block. Without an aligned link each block goes through binomial_smooth on its own.
-  subroutine mollifyBlocks(q, V, links, npass, ndim)
+  !  so the flux crosses the face as it crosses an interior face; on a 102 face cell the halo is the
+  !  donors' weighted value and volume, and only the receiver takes the flux (the donors are cells of
+  !  their own block). The conservation guard sums every block: its total changes by exactly what the
+  !  102 receivers took (exchanged(b): what block b's receivers took, in q*V units). Without an
+  !  aligned link each block goes through binomial_smooth on its own.
+  subroutine mollifyBlocks(q, V, links, npass, ndim, donors, exchanged)
     implicit none
     type(blockField), intent(inout) :: q(:)
     type(blockField), intent(in)    :: V(:)
     type(cellLink),   intent(in)    :: links(:)
     integer,          intent(in)    :: npass, ndim
+    type(linkDonors), intent(in),  optional :: donors
+    real(R8),         intent(out), optional :: exchanged(:)
     type(blockField),  allocatable :: w(:)
     type(faceLinkMap), allocatable :: fmap(:,:)
-    real(R8), allocatable :: hq(:), hv(:)
-    real(R8) :: s0, s1, denom
-    integer  :: nbk, b, f, l, p, d
+    real(R8), allocatable :: hq(:), hv(:), fl(:), fb(:)
+    logical,  allocatable :: chim(:)
+    real(R8) :: s0, s1, denom, f102
+    integer  :: nbk, b, f, l, p, d, t
     logical  :: inQ
 
+    if (present(exchanged)) exchanged = 0._R8
     if (npass <= 0) return
     nbk = size(q)
+    if (present(exchanged)) then
+      if (size(exchanged) /= nbk) error stop 'IGLOO_Lib_Mollify::mollifyBlocks: exchanged is not one value per block'
+    endif
     if (.not. any(links(:)%dir > 0)) then
       do b = 1, nbk
         call binomial_smooth(q(b)%q, V(b)%q, npass, ndim)
       enddo
       return
     endif
+    if (any(links(:)%nd > 0) .and. .not. present(donors)) &
+      error stop 'IGLOO_Lib_Mollify::mollifyBlocks: 102 links without their donor list'
 
     do b = 1, nbk
       if (any(V(b)%q <= tiny(1._R8))) error stop 'IGLOO_Lib_Mollify::mollifyBlocks: non-positive cell volume'
@@ -178,8 +198,9 @@ contains
         fmap(f,b)%l = 0
       enddo
     enddo
-    allocate(hq(size(links)), hv(size(links)))
-    hq = 0._R8; hv = 0._R8
+    allocate(hq(size(links)), hv(size(links)), fl(size(links)), chim(size(links)))
+    hq = 0._R8; hv = 0._R8; fl = 0._R8
+    chim = links(:)%nd > 0
     do l = 1, size(links)
       if (links(l)%dir == 0) cycle
       associate(lk => links(l))
@@ -188,7 +209,13 @@ contains
       case (3, 4); fmap(lk%f, lk%b)%l(lk%i, lk%k) = l
       case (5, 6); fmap(lk%f, lk%b)%l(lk%i, lk%j) = l
       end select
-      hv(l) = V(lk%pb)%q(lk%pi, lk%pj, lk%pk)
+      if (chim(l)) then
+        do t = lk%d0 + 1, lk%d0 + lk%nd
+          hv(l) = hv(l) + donors%w(t)*V(donors%b(t))%q(donors%i(t), donors%j(t), donors%k(t))
+        enddo
+      else
+        hv(l) = V(lk%pb)%q(lk%pi, lk%pj, lk%pk)
+      endif
       end associate
     enddo
 
@@ -201,12 +228,24 @@ contains
 
     !> ping-pong between q and w; inQ: the current state is in q
     inQ = .true.
+    f102 = 0._R8
+    allocate(fb(nbk))
+    fb = 0._R8
     do p = 1, npass
       do d = 1, merge(3, 2, ndim >= 3)
         do l = 1, size(links)
           if (links(l)%dir /= d) cycle
           associate(lk => links(l))
-          if (inQ) then
+          if (chim(l)) then
+            hq(l) = 0._R8
+            do t = lk%d0 + 1, lk%d0 + lk%nd
+              if (inQ) then
+                hq(l) = hq(l) + donors%w(t)*q(donors%b(t))%q(donors%i(t), donors%j(t), donors%k(t))
+              else
+                hq(l) = hq(l) + donors%w(t)*w(donors%b(t))%q(donors%i(t), donors%j(t), donors%k(t))
+              endif
+            enddo
+          elseif (inQ) then
             hq(l) = q(lk%pb)%q(lk%pi, lk%pj, lk%pk)
           else
             hq(l) = w(lk%pb)%q(lk%pi, lk%pj, lk%pk)
@@ -215,31 +254,39 @@ contains
         enddo
         do b = 1, nbk
           if (inQ) then
-            call sweepLinked(q(b)%q, w(b)%q, V(b)%q, d, fmap(:,b), hq, hv)
+            call sweepLinked(q(b)%q, w(b)%q, V(b)%q, d, fmap(:,b), hq, hv, chim, fl)
           else
-            call sweepLinked(w(b)%q, q(b)%q, V(b)%q, d, fmap(:,b), hq, hv)
+            call sweepLinked(w(b)%q, q(b)%q, V(b)%q, d, fmap(:,b), hq, hv, chim, fl)
           endif
+        enddo
+        !> what the 102 receivers took in this sweep, summed in link order
+        do l = 1, size(links)
+          if (.not. chim(l) .or. links(l)%dir /= d) cycle
+          f102 = f102 + fl(l)
+          fb(links(l)%b) = fb(links(l)%b) + fl(l)
         enddo
         inQ = .not. inQ
       enddo
     enddo
+    if (present(exchanged)) exchanged = fb
     if (.not. inQ) then
       do b = 1, nbk
         q(b)%q = w(b)%q
       enddo
     endif
 
-    !> Conservation guard over every block, relative to the L1 mass Sum(|q|*V).
+    !> Conservation guard over every block, relative to the L1 mass Sum(|q|*V): the total changes by
+    !  what the 102 receivers took (f102 = 0 without them).
     s1 = 0._R8; denom = 0._R8
     do b = 1, nbk
       s1    = s1    + sum(q(b)%q*V(b)%q)
       denom = denom + sum(abs(q(b)%q)*V(b)%q)
     enddo
     denom = max(denom, tiny(1._R8))
-    if (abs(s1 - s0)/denom > 1.e-10_R8) then
-      write(*,'(A,3ES23.15)') &
-        ' IGLOO_Lib_Mollify: Sum(q*V) over the blocks NOT conserved  s0,s1,reldrift =', &
-        s0, s1, abs(s1 - s0)/denom
+    if (abs(s1 - s0 - f102)/denom > 1.e-10_R8) then
+      write(*,'(A,4ES23.15)') &
+        ' IGLOO_Lib_Mollify: Sum(q*V) over the blocks NOT conserved  s0,s1,exchanged,reldrift =', &
+        s0, s1, f102, abs(s1 - s0 - f102)/denom
       error stop 'IGLOO_Lib_Mollify::mollifyBlocks conservation drift'
     endif
 
@@ -247,14 +294,17 @@ contains
 
 
   !> One sweep of binomial_smooth in direction d on one block, with the flux at a linked face cell
-  !  taken against the halo value hq and volume hv of its link.
-  subroutine sweepLinked(src, dst, V, d, fmap, hq, hv)
+  !  taken against the halo value hq and volume hv of its link; fl(l) gets the flux into the cell of
+  !  each 102 link (chim).
+  subroutine sweepLinked(src, dst, V, d, fmap, hq, hv, chim, fl)
     implicit none
-    real(R8),          intent(in)  :: src(:,:,:), V(:,:,:)
-    real(R8),          intent(out) :: dst(:,:,:)
-    integer,           intent(in)  :: d
-    type(faceLinkMap), intent(in)  :: fmap(6)
-    real(R8),          intent(in)  :: hq(:), hv(:)
+    real(R8),          intent(in)    :: src(:,:,:), V(:,:,:)
+    real(R8),          intent(out)   :: dst(:,:,:)
+    integer,           intent(in)    :: d
+    type(faceLinkMap), intent(in)    :: fmap(6)
+    real(R8),          intent(in)    :: hq(:), hv(:)
+    logical,           intent(in)    :: chim(:)
+    real(R8),          intent(inout) :: fl(:)
     real(R8) :: phiL, phiR
     integer  :: Nx, Ny, Nz, i, j, k, l
     logical  :: useOMP
@@ -273,13 +323,19 @@ contains
               phiR = theta*min(V(i,j,k),  V(i+1,j,k))*(src(i+1,j,k) - src(i,j,k))
             else
               l = fmap(2)%l(j,k)
-              if (l > 0) phiR = theta*min(V(i,j,k), hv(l))*(hq(l) - src(i,j,k))
+              if (l > 0) then
+                phiR = theta*min(V(i,j,k), hv(l))*(hq(l) - src(i,j,k))
+                if (chim(l)) fl(l) = phiR
+              endif
             endif
             if (i > 1) then
               phiL = theta*min(V(i-1,j,k),V(i,j,k)  )*(src(i,j,k)   - src(i-1,j,k))
             else
               l = fmap(1)%l(j,k)
-              if (l > 0) phiL = theta*min(hv(l), V(i,j,k))*(src(i,j,k) - hq(l))
+              if (l > 0) then
+                phiL = theta*min(hv(l), V(i,j,k))*(src(i,j,k) - hq(l))
+                if (chim(l)) fl(l) = -phiL
+              endif
             endif
             dst(i,j,k) = src(i,j,k) + phiR/V(i,j,k) - phiL/V(i,j,k)
           enddo
@@ -296,13 +352,19 @@ contains
               phiR = theta*min(V(i,j,k),  V(i,j+1,k))*(src(i,j+1,k) - src(i,j,k))
             else
               l = fmap(4)%l(i,k)
-              if (l > 0) phiR = theta*min(V(i,j,k), hv(l))*(hq(l) - src(i,j,k))
+              if (l > 0) then
+                phiR = theta*min(V(i,j,k), hv(l))*(hq(l) - src(i,j,k))
+                if (chim(l)) fl(l) = phiR
+              endif
             endif
             if (j > 1) then
               phiL = theta*min(V(i,j-1,k),V(i,j,k)  )*(src(i,j,k)   - src(i,j-1,k))
             else
               l = fmap(3)%l(i,k)
-              if (l > 0) phiL = theta*min(hv(l), V(i,j,k))*(src(i,j,k) - hq(l))
+              if (l > 0) then
+                phiL = theta*min(hv(l), V(i,j,k))*(src(i,j,k) - hq(l))
+                if (chim(l)) fl(l) = -phiL
+              endif
             endif
             dst(i,j,k) = src(i,j,k) + phiR/V(i,j,k) - phiL/V(i,j,k)
           enddo
@@ -319,13 +381,19 @@ contains
               phiR = theta*min(V(i,j,k),  V(i,j,k+1))*(src(i,j,k+1) - src(i,j,k))
             else
               l = fmap(6)%l(i,j)
-              if (l > 0) phiR = theta*min(V(i,j,k), hv(l))*(hq(l) - src(i,j,k))
+              if (l > 0) then
+                phiR = theta*min(V(i,j,k), hv(l))*(hq(l) - src(i,j,k))
+                if (chim(l)) fl(l) = phiR
+              endif
             endif
             if (k > 1) then
               phiL = theta*min(V(i,j,k-1),V(i,j,k)  )*(src(i,j,k)   - src(i,j,k-1))
             else
               l = fmap(5)%l(i,j)
-              if (l > 0) phiL = theta*min(hv(l), V(i,j,k))*(src(i,j,k) - hq(l))
+              if (l > 0) then
+                phiL = theta*min(hv(l), V(i,j,k))*(src(i,j,k) - hq(l))
+                if (chim(l)) fl(l) = -phiL
+              endif
             endif
             dst(i,j,k) = src(i,j,k) + phiR/V(i,j,k) - phiL/V(i,j,k)
           enddo

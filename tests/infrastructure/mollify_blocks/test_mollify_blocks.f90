@@ -1,6 +1,6 @@
 program test_mollify_blocks
     !
-    ! The field mollifier over several blocks joined by 101 links (mollifyBlocks).
+    ! The field mollifier over several blocks joined by 101, 201 and 102 links (mollifyBlocks).
     !
     ! A one-block grid with a random field q in [-1, 1] and random cell volumes V in [0.5, 1.5] is
     ! cut into blocks along whole index planes; every face cell on a cut is linked to the cell
@@ -37,9 +37,16 @@ program test_mollify_blocks
     !        amount moves as q V_source/V_target), the coverage count is 2 in the overlap and 1
     !        elsewhere, the mirrored totals equal the other copy's owner deposits and their sum equals
     !        Sum (n - 1) S over the owner-only fields, to 1e-14 of Sum |S|
+    !        (ii) the grid cut into two blocks that overlap by whole columns, each holding the grid's
+    !        values on its range (the mirror's result on coincident cells); block 1's face-2 cells and
+    !        block 2's face-1 cells are chimera (102) links with one donor of weight 1, the cell across
+    !        the face in the other block: each block equals the uncut grid smoothed by binomial_smooth
+    !        to 1e-13 of the field scale (3D, 2D, a one-column overlap, above the OpenMP threshold)
+    !        (iii) the guard's identity: each block's Sum(q V) changes by exactly what its 102 cells
+    !        took from the donor halo (mollifyBlocks' exchanged), to 1e-13 of Sum(|q| V)
     !
     use, intrinsic :: iso_fortran_env, only: real64
-    use IGLOO_Lib_Mollify, only: binomial_smooth, mollifyBlocks, cellLink, blockField
+    use IGLOO_Lib_Mollify, only: binomial_smooth, mollifyBlocks, cellLink, blockField, linkDonors
     implicit none
 
     integer, parameter :: NPASS = 8
@@ -66,10 +73,15 @@ program test_mollify_blocks
     call periodicCase('3D periodic y, x',  12,  7,  6, [6])
     call tieCase()
     call mirrorCase()
+    !                   label                Nx  Ny  Nz  overlap columns
+    call chimeraCase('3D',                   12,  9,  8,  5,  8)
+    call chimeraCase('2D',                   14, 11,  1,  6,  9)
+    call chimeraCase('3D one-column overlap', 10,  7,  6,  5,  5)
+    call chimeraCase('3D OpenMP',            80, 12, 12, 37, 44)
 
     if (nfail == 0) then
         print '(a)', ''
-        print '(a)', '[PASS] test_mollify_blocks: blocks joined by 101 and 201 links smooth as one block'
+        print '(a)', '[PASS] test_mollify_blocks: blocks joined by 101, 201 and 102 links smooth as one block'
     else
         print '(a)', ''
         print '(a,i0,a)', '[FAIL] test_mollify_blocks: ', nfail, ' assertion(s) failed'
@@ -449,6 +461,80 @@ contains
         nsrc = count(abs(gotM(:, 1) + gotM(:, 2) - sumNS) > 1.0e-14_real64*l1)
         call verdict('U-M (i) Sum of the mirrored totals = Sum (n - 1) S of the owner-only fields', nsrc == 0, nsrc)
     end subroutine mirrorCase
+
+    !> U-M (ii) + (iii): block 1 = columns 1..i1, block 2 = i0..nx of an nx x ny x nz grid, each with
+    !  the grid's values; block 1's face-2 cells take the halo of block 2's cell in column i1 + 1, block
+    !  2's face-1 cells that of block 1's cell in column i0 - 1 (one donor of weight 1 each).
+    subroutine chimeraCase(lab, nx, ny, nz, i0, i1)
+        character(*), intent(in) :: lab
+        integer,      intent(in) :: nx, ny, nz, i0, i1
+        real(real64), allocatable :: qg(:,:,:), vg(:,:,:), q1(:,:,:)
+        type(blockField) :: bq(2), bv(2)
+        type(cellLink),   allocatable :: links(:)
+        type(linkDonors) :: donors
+        real(real64) :: exch(2), s0(2), s1(2), l1, scale, worst, dev
+        integer :: lo(2), hi(2), b, j, k, n, nl, ndim, nbit
+
+        call randomGrid(nx, ny, nz, qg, vg)
+        ndim = merge(2, 3, nz == 1)
+        lo = [1, i0]; hi = [i1, nx]
+        nl = 2*ny*nz
+        allocate(links(nl), donors%b(nl), donors%i(nl), donors%j(nl), donors%k(nl), donors%w(nl))
+        n = 0
+        do k = 1, nz; do j = 1, ny
+            n = n + 1
+            links(n) = cellLink(b=1, f=2, i=i1, j=j, k=k, dir=1, nd=1, d0=n-1)
+            donors%b(n) = 2; donors%i(n) = i1 + 1 - i0 + 1; donors%j(n) = j; donors%k(n) = k
+            donors%w(n) = 1._real64
+            n = n + 1
+            links(n) = cellLink(b=2, f=1, i=1, j=j, k=k, dir=1, nd=1, d0=n-1)
+            donors%b(n) = 1; donors%i(n) = i0 - 1; donors%j(n) = j; donors%k(n) = k
+            donors%w(n) = 1._real64
+        enddo; enddo
+        do b = 1, 2
+            bq(b)%q = qg(lo(b):hi(b), :, :)
+            bv(b)%q = vg(lo(b):hi(b), :, :)
+            s0(b) = sum(bq(b)%q*bv(b)%q)
+        enddo
+        q1 = qg
+        call binomial_smooth(q1, vg, NPASS, ndim)
+        call mollifyBlocks(bq, bv, links, NPASS, ndim, donors, exch)
+
+        scale = maxval(abs(q1)); worst = 0._real64; nbit = 0; l1 = 0._real64; dev = 0._real64
+        do b = 1, 2
+            associate(r => q1(lo(b):hi(b), :, :))
+            worst = max(worst, maxval(abs(bq(b)%q - r))/scale)
+            nbit  = nbit + count(bq(b)%q /= r)
+            end associate
+            s1(b) = sum(bq(b)%q*bv(b)%q)
+            l1 = l1 + sum(abs(bq(b)%q)*bv(b)%q)
+        enddo
+        do b = 1, 2
+            dev = max(dev, abs(s1(b) - s0(b) - exch(b))/l1)
+        enddo
+        call verdict('U-M (ii) '//lab//': each block equals the uncut grid smoothed, worst '//es(worst)// &
+                     ' of the field scale ('//itoa(nbit)//' cells not bit-identical, '//itoa(nl)//' 102 links)', &
+                     worst <= TOL_CUT, nbit)
+        call verdict('U-M (iii) '//lab//': each block''s Sum(q V) changes by its 102 intake ('//es(exch(1))//', '// &
+                     es(exch(2))//'), worst '//es(dev)//' of Sum(|q| V)', dev <= TOL_SUM .and. all(exch /= 0._real64), &
+                     count(abs(s1 - s0 - exch) > TOL_SUM*l1))
+    end subroutine chimeraCase
+
+    function es(x) result(r)
+        real(real64), intent(in) :: x
+        character(:), allocatable :: r
+        character(16) :: buf
+        write(buf, '(es9.2)') x
+        r = trim(adjustl(buf))
+    end function es
+
+    function itoa(i) result(r)
+        integer, intent(in) :: i
+        character(:), allocatable :: r
+        character(16) :: buf
+        write(buf, '(i0)') i
+        r = trim(buf)
+    end function itoa
 
     subroutine verdict(lab, ok, nbad)
         character(*), intent(in) :: lab

@@ -202,8 +202,11 @@ def block_nodes(b, i0, ncx, ncy, sh, nx, ny, nz, stretch, rotated, ygrade):
 
 
 def write_solfile(path, blocks=1, tg=None, nx=NX, ny=NY, nz=NZ, overlap=0, shift=0.0, rim=False,
-                  stretch=1.0, gradient=None, zgradient=0.0, wave_y=0.0, rotate2=None, ug=None, ygrade=1.0):
+                  stretch=1.0, gradient=None, zgradient=0.0, wave_y=0.0, rotate2=None, ug=None, ygrade=1.0, xnodes=None):
+    """xnodes: the x of every node along x of a one-block box (nx + 1 values), in place of the uniform ones."""
     layout = block_layout(blocks, nx, ny, overlap, shift, rim)
+    if xnodes is not None and (blocks != 1 or len(xnodes) != nx + 1 or gradient or stretch != 1.0):
+        raise ValueError("xnodes: one block, nx + 1 values, no gradient or stretch")
     dx, dy, dz = LX / nx, LY / ny, LZ / nz
     with open(path, "w") as f:
         f.write(' TITLE="IGLOO verification: uniform-gas box"\n')
@@ -214,6 +217,8 @@ def write_solfile(path, blocks=1, tg=None, nx=NX, ny=NY, nz=NZ, overlap=0, shift
             ncell = ncx * ncy * nz
             rotated = rotate2 == "y" and b == 1
             xs, ys, zs = block_nodes(b, i0, ncx, ncy, sh, nx, ny, nz, stretch, rotated, ygrade)
+            if xnodes is not None:
+                xs = [xnodes[i0 + i] for i in range(ncx + 1)]
             f.write(f' Zone T="block: {b + 1}",I={I},J={J},K={K}\n')
             f.write(' ,DATAPACKING=BLOCK,  VARLOCATION=([4-21]=CELLCENTERED)\n')
             # nodal coords, BLOCK order: i fastest, then j, then k; block b starts at node i0
