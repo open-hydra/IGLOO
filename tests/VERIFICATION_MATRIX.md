@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (247 in a serial build: 201 e2e + 45 unit incl. `self_test`,
+One row per registered CTest entry (248 in a serial build: 202 e2e + 45 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 24 `mpi-*`
-rows in their own section, 271).
+rows in their own section, 272).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (62 of 119 e2e fixtures)
+## Shared box fixture (62 of 120 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,7 +39,7 @@ writes with its defaults.
 Sixty-two fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other fifty-seven:
+once here, referenced as **"shared box"** below. The other fifty-eight:
 
 - non-uniform gas (eighteen): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
@@ -54,11 +54,11 @@ once here, referenced as **"shared box"** below. The other fifty-seven:
   across the periodic pair, `--wave-y 100`) `rot-2blk` (the box as two blocks, block 2 rotated 180° about y,
   T = 600 + 2000 z K, `--blocks 2 --rotate2 y --zgradient 2000`) and `body-force-z` (the box with
   T = 600 + 2000 z K, `--zgradient 2000`);
-- uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (eighteen):
+- uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (nineteen):
   `pilch-erdman-e2e`, `reitz-diwakar-e2e`, `rd-evap-frozen`, `khrt-e2e`, `khrt-e2e-euler`, `khrt-stress`,
   `khrt-evap-frozen`, `khrt-evap-frozen-euler`, `khrt-evap-live`, `khrt-shed-noexchange` and `khrt-varrho` on the 0.15 m box at
   U=200 m/s, T=300 K (the Weber sweeps); `tab-e2e`, `tab-evap-frozen`, `tab-varrho`, `tab-evap-frozen-varrho`,
-  `etab-e2e` and `etab-evap-frozen` on a 0.6 m × 240-cell box at U=50 m/s, T=300 K (the TAB/ETAB onset);
+  `etab-e2e`, `etab-e2e-dopri5` and `etab-evap-frozen` on a 0.6 m × 240-cell box at U=50 m/s, T=300 K (the TAB/ETAB onset);
   `evap-breakup-box` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
   (`--t-gas --kt`);
 - uniform gas on another mesh (twenty-one): `mhb98-water`, `mhb98-water-psat` and `mhb98-water-blowing` (a `make_box_case.py`
@@ -160,6 +160,7 @@ oracle possible.
 | **threads-tab-e2e** | — (OMP invariance) | *cross-run invariant* — `tools/check_threads_case.py` runs `tab-e2e`'s input at OMP_NUM_THREADS 1, 2 and 5 in `tab-e2e/threads-omp<N>/` (`INPUT/` and `input.ini` symlinked): the thread witness (no `OpenMP threads` line at 1, the count at 2 and 5), every number finite, every `.dat` an exact sorted multiset, every `.tec` within 1e-12 of the field scale, `tab-e2e`'s `check.py` on the 1-thread run. The child sizes of the TAB resize are drawn inside the parallel region from each parcel's own stream. RED with the intrinsic `random_number` there (`RosinRammler` for `RosinRammlerS`): every `.dat` multiset and `source.tec` (1.1e-2 of the field scale at 2 threads, 4.7e-3 at 5) differ | as `tab-e2e` | as `tab-e2e` |
 | **vv-order** | — (kind 8, figure contract) | *record-order invariance of two V&V figures*: `tools/vv_order_check.py` copies `tab-e2e` and `burn-box` (after both ran: `FIXTURES_REQUIRED`, one `RESOURCE_LOCK` per case directory) twice, shuffles the records inside every zone of every `OUTPUT/*.dat` of one copy (fixed seed) and requires the `verify.py` SVGs of the two copies to be the same bytes; skipped (77) without matplotlib. It fails when `burn-box`'s plotted parcel is chosen in file order among equally sampled ones (22-25 of 3721 SVG lines differ) and when `tab-e2e` takes a parcel's rows unsorted | as `tab-e2e`, `burn-box` | as `tab-e2e`, `burn-box` |
 | **etab-e2e** | `[Tan97]`,`[Tan98]` (SAE 970050/980808) | *closed form* (Tier V) — onset (no-break `We_r<=5.75`) + first-breakup time (ORA87 oscillator, shared with tab-e2e) + the ETAB deterministic cascade product size `d_child/d_parent = exp(-(Kbr/ω)acos(1-1/WeCr))` (bag `k1(AWe We^4+1)`, strip `k2 sqrt(We)`, WeTrans=80); **radius-based** We; reference at the We AT BREAKUP, tol 1% (worst 0.03%) | box geometry stretched: 0.6×0.05×0.05 m, 240×5×5, **U=50 m/s** (`make_pe_case.py --we-convention rad`) | inlet-face 401: 25 cells, one diameter each (`We_r ∈ {3…105}` at slip=25), κ_v=0.5; `breakup=ETAB` (k1=k2=0.2222, WeCrit=12 internal, WeTrans=80, Comega=8, Cmu=5); water (ATLAS-GPB fixtures); outlet + walls |
+| **etab-e2e-dopri5** | `[Tan97]` eqs. 8–10 (the product kick), via `etab-e2e` | *sibling run* — `etab-e2e`'s oracles unmodified under `ode-solver = H-dopri5` (E), and the same input under `H-sdirk4` run by `check.py` into `ref-sdirk4/` (K): the same 15 kicked drops, each one's largest lateral speed √(V²+W²) equal within 1e-4 (about 20× the F12.6 quantum on 0.188 m/s; measured 3.2e-7). RED with the kick also written into the solver's state: E holds, K fails at ratio 1.99918–2.00099 on all 15 | as `etab-e2e` (`INPUT/` symlinked) | as `etab-e2e`, `ode-solver = H-dopri5` |
 | **khrt-e2e** | `[Reitz87]` (Atomisation & Spray Tech. 1987) | *closed form* (Tier V/P) — the continuous KH-stripping rate `dd/dt=(dStable-d)/tauKH`, dStable=2·B0·λ_KH, τ_KH=3.726·B1·r/(λ_KH·Ω_KH) with the Reitz-87 Λ/Ω correlations; **radius-based** We; initial-rate (same-window LSQ) at We_r>=340, tol 2% (worst 2e-4). `khrt-e2e-rt` = RT-shatter persistence gate (found+gated the A19 fix: 8 drops shatter discontinuously to the fragment scale and persist, mass-consistent) | shared 0.15 m box but **U=200 m/s** (`make_pe_case.py --we-convention rad`) | inlet-face 401: 25 cells, one diameter each (`We_r ∈ {30…1000}` at slip=100), κ_v=0.5; `breakup=Reitz-KHRT` (B0=0.61, B1=20, Ctau=1, CRT=0.1, mShedLim=0.03, WeLimit=6); water (ATLAS-GPB fixtures); outlet + walls |
 | **khrt-stress** | — (robustness stress; **no oracle**) | *behavioral* — the `khrt-e2e` fixture with `mShedLim=0.01` instead of 0.03, so parents shed ~66 deep instead of ~22 and the growable per-parent shed lists go through ~7 doublings. Asserts >=500 children, deepest parcel >=20 sheds, parcel mass-flow conserved to 1e-4 under heavy shedding, and that the `maxShed=1000` runaway guard did NOT fire. Deliberately not a validation case — cite `khrt-e2e` for KHRT physics, never this | shared `khrt-e2e` fixture (`INPUT/` is a **symlink** to `../khrt-e2e/INPUT`; moving either case breaks it) | as `khrt-e2e`, except `[IGLOO-Models] mShedLim = 0.01` |
 | **khrt-e2e-threads** | — (OMP invariance pin) | *cross-run invariant* — runs `khrt-e2e` at `OMP_NUM_THREADS` 1/2/4 and compares `trajectories-A.dat`/`outloc-A.dat` as **sorted multisets** plus the per-pass child counts. Sorting is deliberate: record order is OMP-nondeterministic by design, but a *torn* record (the `unitTraj`/`unitExit` writes are unsynchronised inside the parallel region) is not absorbed by a multiset compare, and nothing else in the suite would catch interleaving. Established green while the one-shed cap was still on, so a later red indicts the cap lift | shared `khrt-e2e` fixture and working directory (`RESOURCE_LOCK khrt_output`) | as `khrt-e2e` |
@@ -394,9 +395,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-201 `e2e`-labelled + 45 `unit`-labelled + the optional `vortex-cloud-3way` = **247 CTest entries** in a
-serial build (+24 `mpi-*` under `USE_MPI`, 271), all green (counted from `tests/CMakeLists.txt`). The 201
-`e2e` entries are the 119 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+202 `e2e`-labelled + 45 `unit`-labelled + the optional `vortex-cloud-3way` = **248 CTest entries** in a
+serial build (+24 `mpi-*` under `USE_MPI`, 272), all green (counted from `tests/CMakeLists.txt`). The 202
+`e2e` entries are the 120 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the four `threads-*` thread-count gates, the thirteen `repeat-*` two-sweep gates, the sixty-two `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The

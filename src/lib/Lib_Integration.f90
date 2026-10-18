@@ -710,6 +710,7 @@ contains
       real(R8) :: Vdif(3), vel, Re, Fdrag(3), Qdot, tp, acc(3), d, rho, sigma, mup, m, np
       real(R8) :: brkupState(max(nbrkst,1))
       real(R8) :: gOld, gEnd
+      real(R8) :: vEvt(3)   !> the velocity breakupEvent works on (Y stays the solver's)
       real(R8), parameter :: oneThird=0.3333333333333333_R8, sixOverPi=1.90985931710274403_R8
 
       IRTRN = 1
@@ -792,13 +793,13 @@ contains
         endif
         if (ind_sb1 > 0) brkupState(1:nbrkst) = stateLocal(ind_sb1:ind_sb2)
         !> Breakup event over the accepted-step interval (x-xold).
-        kickDV = Y(4:6)
+        vEvt = Y(4:6)
         call breakupEvent(eventLocal, neventvar, brkupState, nbrkst,    &
-                          sigma,mup,rho,gasState(1),vel,Re,t1,acc,y(4:6),x-xold, &
+                          sigma,mup,rho,gasState(1),vel,Re,t1,acc,vEvt,x-xold, &
                           mod_brkSelect, mod_bp,mod_bpMethod,mod_bpScale,        &
                           eventFlag,childState,addChildLocal,exitLoop,part%rngState,childDone)
-        !> Keep the ETAB kick as a delta; the abort below discards Y.
-        kickDV = Y(4:6) - kickDV
+        !> The ETAB kick as a delta, applied once by the segment finalize.
+        kickDV = vEvt - Y(4:6)
         kickPend = (mod_brkSelect == 5) .and. (maxval(abs(kickDV)) > 0._R8)
         if (ind_sb1 > 0) stateLocal(ind_sb1:ind_sb2) = brkupState(1:nbrkst)
       endif

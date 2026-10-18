@@ -203,8 +203,9 @@ r_\mathrm{child} = r\,\exp\!\left(-\frac{K_\mathrm{br}}{\omega}\,\arccos\!\left(
 $$
 
 and the product drops receive a velocity kick normal to the path,
-$v_\perp = A\,\dot x$ (Tanner 1997, eqs. 8–10), at a random azimuth.  The parcel count
-is rescaled to conserve mass; no child parcel is created.
+$v_\perp = A\,\dot x$ (Tanner 1997, eqs. 8–10), at a random azimuth.  The kick is
+added to the parcel velocity once, by the segment that ends at the event, whichever ODE solver
+integrates it.  The parcel count is rescaled to conserve mass; no child parcel is created.
 
 ---
 
