@@ -30,22 +30,22 @@ Columns:
 
 ---
 
-## Shared box fixture (56 of 108 e2e fixtures)
+## Shared box fixture (58 of 112 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
 writes with its defaults.
 
-Fifty-six fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
+Fifty-eight fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other fifty-two:
+once here, referenced as **"shared box"** below. The other fifty-four:
 
-- non-uniform gas (seventeen): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
+- non-uniform gas (eighteen): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
   (`axis-200` plus swirl on the near-axis parcel); `swirl-wedge`, `swirl-wedge-deposit`,
   `swirl-wedge-spin` and `swirl-wedge-ord1` (a 200×40-cell annular wedge from `tools/make_wedge_case.py`, analytic solid-body
-  swirl `W = Ωy`); `vie-plait` (120×50×5 cells, analytic `−ε(y−1)`, `tools/make_vie_case.py`); the four
+  swirl `W = Ωy`); `vie-plait` (120×50×5 cells, analytic `−ε(y−1)`, `tools/make_vie_case.py`) and `timing-report` (`vie-plait`'s `INPUT/`, symlinked); the four
   `vortex-cloud-st*` cases (a 96×96 planar square carrying a frozen solid-body vortex,
   `tools/make_vortex_case.py`); `two-fam-bc-2blk-stretch-ord2` (the box as two 30×5×5 blocks of 1.667 mm and
   3.333 mm cells along x, T = 600 + 1000 x K, `make_box_case.py --stretch 2 --gradient 1000`),
@@ -61,7 +61,7 @@ once here, referenced as **"shared box"** below. The other fifty-two:
   `etab-e2e` and `etab-evap-frozen` on a 0.6 m × 240-cell box at U=50 m/s, T=300 K (the TAB/ETAB onset);
   `evap-breakup-box` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
   (`--t-gas --kt`);
-- uniform gas on another mesh (eighteen): `mhb98-water`, `mhb98-water-psat` and `mhb98-water-blowing` (a `make_box_case.py`
+- uniform gas on another mesh (nineteen): `mhb98-water`, `mhb98-water-psat` and `mhb98-water-blowing` (a `make_box_case.py`
   variant lengthened to 0.17 m at the same Δx: water in air at T_G=298 K with a near-static
   U=1.9×10⁻⁴ m/s clock, the Miller-Harstad-Bellan Fig-2 conditions); `planar-slab` (a 20×20
   single-layer planar slab), `wall-approach` (a 100×20 single layer, the gas drifting toward the wall
@@ -73,7 +73,7 @@ once here, referenced as **"shared box"** below. The other fifty-two:
   --overlap 4`), `chimera-2blk-rim` (the same with block 2 one row shorter, `--rim`) and `periodic-2d` (a one-layer 60×25×1 box, `make_box_case.py --nz 1 --ny 25 --periodic-y`);
   `psd-table`, `psd-normal`, `psd-lognormal` and `psd-rosinrammler` (the box in one cell along x
   with a 200×100 inlet, `make_box_case.py --nx 1 --ny 200 --nz 100`); `stuck-cell` (the box with the gas at rest,
-  `make_box_case.py --ug 0`) and `inj-dsdegen` (the box with geometric rows along y, `--ygrade 2`).
+  `make_box_case.py --ug 0`), `solid-melt` (the box with the gas at 3000 K, `--tg 3000`) and `inj-dsdegen` (the box with geometric rows along y, `--ygrade 2`).
 
 `khrt-e2e-rt` and `khrt-e2e-threads` are further oracles on `khrt-e2e`'s run (the second at 1/2/4
 threads) and add no fixture, nor do the four `threads-*` gates (each runs its parent's inputs in private directories); `khrt-stress` differs from `khrt-e2e` only in `mShedLim`, and the twins
