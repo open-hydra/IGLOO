@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (245 in a serial build: 199 e2e + 45 unit incl. `self_test`,
+One row per registered CTest entry (247 in a serial build: 201 e2e + 45 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 24 `mpi-*`
-rows in their own section, 269).
+rows in their own section, 271).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,13 +30,13 @@ Columns:
 
 ---
 
-## Shared box fixture (60 of 117 e2e fixtures)
+## Shared box fixture (62 of 119 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
 writes with its defaults.
 
-Sixty fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
+Sixty-two fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
 once here, referenced as **"shared box"** below. The other fifty-seven:
@@ -194,6 +194,8 @@ oracle possible.
 | **solver-fail-consumed** | infrastructure (integration exit contract; O30 step 4b) | *behavioral* — no reference curve. A parcel deleted because `Run_ODESolver` returned `err < 0` must still hand its remaining mass to the gas for consumption models 2/5, as the non-finite exit beside it already does; otherwise the remnant leaves the mass balance. Asserts the branch actually fired (25 `Run_ODESolver err=` lines — a positive witness), that no parcel took the non-finite exit instead, 25 exit rows, `Σ wdot` = `Σ npdot·m_inj` to 1e-5, and every exit record's boundary code `bc` = 0 (ended inside the domain). **The only fixture that reaches that branch**: after the `rhsEvaporation` scrub even tc-hexadecane burns out cleanly | `evaporation/tc-hexadecane`'s case (`INPUT/` symlinked whole) | tc-hexadecane's conditions with the ODE tolerances at **1e-30**, below double-precision resolution, so SDIRK4 fails on the first step of every parcel. All 25 then die at injection carrying their FULL mass ⇒ the source total is all-or-nothing (RED 0.0 / GREEN the whole stream). The 100 % remnant is also what makes the cost of the contract visible |
 | **solver-fail-consumed-m4** | infrastructure (integration exit contract, model 4) | as `solver-fail-consumed` (its `check.py`) with `breakup=Reitz-Diawakar` added: the `err < 0` exit hands a model-4 parcel's remnant to the gas (resid 2.941e-7), every `bc` = 0. RED unfixed: Σ`wdot` = 0, resid 1.0 | as `tc-hexadecane` | as `solver-fail-consumed` + `breakup=Reitz-Diawakar` (σ 0.072, μ_l 1e-3) |
 | **stuck-cell** | — (guard) | *integration exit contract*: parcels at rest in a gas at rest (402 inlet with \|v\| = 0) never leave their cell; S1 one `stuck in cell` line per parcel (25, the IDs of the exit records), S2 25 exit records at the injection points, S3 no other guard (no net progress, inner loop, outer maxIter, non-finite), S4 the run ends normally. RED with the residency guard disabled: the zero-progress guard ends every parcel (S1, S3) | own `solfile.tec` (`make_box_case.py --ug 0`: the shared box's mesh, the gas at rest), own `bc.txt` (`make_fixture.py`) | inlet-face 402 at rest on every cell (gp 1.0, Tp 600 K); outlet + walls |
+| **sym-plane-skate** | — (guard, census control) | *integration exit contract at a symmetry plane*: twelve streams launched from z = 1e-4 m toward a 300 plane, 0.1 and 50 m/s at 1° and 10°, gas order 1; C1 no give-up guard and no solver failure (no `stuck in cell`, `no net progress`, `Run_ODESolver err=`, inner-loop or outer cap, non-finite line), the run ends normally; C2 twelve exits, all at x = 0.15; C3 the 50 m/s, 1° streams slide on the plane (grazing projection, z = 1e-6 m), the 50 m/s, 10° streams leave reflected (z = 5.9e-3 m), the 0.1 m/s streams stop short of it. RED: the plane made an exit, 6 of 12 leave at z = 0 (C2, C3); the residency guard at one segment, 12 `stuck in cell` (C1) | shared box (`solfile.tec` symlinked); own `bc.txt` (`make_box_case.py --sym-face 5 --no-inlet`) | no inlet: twelve `[IGLOO-BC]` assigned streams, d = 11.89 µm, ρ_p = 2950; face 5 symmetry (300), outlet + walls; Schiller-Naumann, SDIRK4 at the default tolerances, `out-time` |
+| **sym-plane-skate-ord2** | — (guard, census control) | `sym-plane-skate` at gas order 2 (its `check.py`, symlinked): the dual mesh's boundary row straddles the plane and reads the bc-aware ghost ring; the same exits and bands. RED: the plane made an exit (C2, C3) | as `sym-plane-skate` (`INPUT/` symlinked) | as `sym-plane-skate`, `gas-order = 2` |
 | **periodic-y** | infrastructure (translational periodic path) | *closed form* — body-force closed form folded **modulo L_y**; velocity unchanged across each wrap (transport = exact ±L_y translation), residual ~5e-7 m; **S-P** the source smoothed across the periodic pair: a `mollify = off` sibling smoothed by `check.py` (8 passes, periodic in y, zero flux in x and z) equals `source.tec` to 1e-12 of the field scale (measured 1.3e-14), on the case and on a sibling pair where only face 1's first row injects (the case's deposits are uniform in y to ~1e-6). RED with zero flux at the 201 faces: 2.5e-8 (case), 0.36 (first row) | shared box + `body-accel=(0,−8000,0)` (drives 2–3 y-wraps) | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; **faces 3/4 translational-periodic (bcdef 201)**; face2 outlet; faces 5/6 wall |
 | **periodic-2d** | infrastructure (translational periodic path, one-layer mesh) | *closed form* — `periodic-y`'s oracle unchanged (body-force closed form folded modulo L_y, velocity unchanged across each wrap, >= 2 wraps, every particle out at x = L_x) on a one-layer box whose 201 lines carry ATLAS's nine integers (block, i, j, k = 1, partner face, four orientation integers): the partner face is the fifth. RED on a reader taking four index integers on a one-layer mesh: the partner's k (1) read as its face, 18 of 25 parcels cycling to the outer iteration cap near the inlet, the run not ending in 300 s; S-P as `periodic-y`'s in 2D (measured 1.5e-14; RED 6.1e-8 on the case, 0.29 on the first-row pair) | own one-layer `solfile.tec` (`make_box_case.py --nz 1 --ny 25 --periodic-y --kv 1.0`, 60×25×1 cells) + `body-accel=(0,−8000,0)` | inlet-face 401 (25 cells); κ_v=1.0, κ_t=1.0, d=11.89 µm; **faces 3/4 201 with nine-integer lines**; every other face 400 |
 | **periodic-2d-ord2** | derived (`periodic-y`'s closed forms + `[RM52]`) | *RK4 along the closed-form path* — the periodic ghosts at gas-order 2: T(t) integrated along `periodic-y`'s closed-form path through the periodic extension of the cell-centre field (piecewise linear through the node lines, T(0) = T(N_y), T(N_y+1) = T(1)), steps split at the node lines, checked at half the steps (4.4e-10 K); every row with \|T − T_g\| > 1 K within δ_T + \|dT/dt\|·δ_t + 1e-6 K (worst 0.78 of it); `periodic-y`'s v and modular-y gates, ≥ 2 wraps on 20 of 25 parcels, 25 exits at x = 0.15; non-vacuity against the ring's linear fill (≥ 1.0e5 tol_T apart). RED with 201 dropped from the ghost links: 25 of 25 parcels off by 0.29–0.66 K; RED without the stencil refresh after the transport: every parcel stops at its first wrap | own one-layer `solfile.tec` (`make_box_case.py --nz 1 --ny 25 --periodic-y --kv 1.0 --kt 0.5 --wave-y 100`: T = 600 + 100 cos(2πy/L_y) at the cell centres) + `body-accel=(0,−8000,0)`, gas-order 2 | inlet-face 401 (25 cells); κ_v=1.0, κ_t=0.5, d=11.89 µm; **faces 3/4 201**; every other face 400 |
@@ -392,9 +394,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-199 `e2e`-labelled + 45 `unit`-labelled + the optional `vortex-cloud-3way` = **245 CTest entries** in a
-serial build (+24 `mpi-*` under `USE_MPI`, 269), all green (counted from `tests/CMakeLists.txt`). The 199
-`e2e` entries are the 117 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+201 `e2e`-labelled + 45 `unit`-labelled + the optional `vortex-cloud-3way` = **247 CTest entries** in a
+serial build (+24 `mpi-*` under `USE_MPI`, 271), all green (counted from `tests/CMakeLists.txt`). The 201
+`e2e` entries are the 119 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the four `threads-*` thread-count gates, the thirteen `repeat-*` two-sweep gates, the sixty-two `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The

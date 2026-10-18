@@ -40,6 +40,9 @@ Geometry / BCs:
     each G times the one below, Ly unchanged (row j of thickness Ly*(G-1)*G**(j-1)/(G**Ny-1)).
   - --mesh-only: only <out_dir>/mesh.tec, the nodes in ATLAS's mesh layout (the deck of an ATLAS BCB
     run), no gas file, no bc.txt.
+  - --sym-face F: face F (1-6, not the outlet face 2) written as a symmetry plane, code 300, header only
+    (bcDef reflects the parcel); --no-inlet: face 1 written 400, no inlet record (the parcels come from
+    [IGLOO-BC] assigned positions).
 
 Variable header is reused VERBATIM from the working nozzle solfile so the name-based
 gas import (allocation.f90 import_gas) maps identically. Vars 4-21 are cell-centered;
@@ -49,7 +52,7 @@ Usage:
     make_box_case.py <out_dir> [--kv KV] [--kt KT] [--rp RP] [--alpha A] [--blocks 2] [--tg TG]
                      [--nx NX] [--ny NY] [--nz NZ] [--overlap N [--shift S] [--rim]] [--families F]
                      [--stretch R] [--gradient G] [--zgradient G] [--wave-y A] [--rotate2 y]
-                     [--outlet-code C] [--ug U] [--ygrade G] [--mesh-only]
+                     [--outlet-code C] [--ug U] [--ygrade G] [--mesh-only] [--sym-face F] [--no-inlet]
         writes <out_dir>/solfile.tec and <out_dir>/bc.txt (and phase.txt with --families > 1)
         --kv : inlet velocity scaling  (v0 = kv*|u_g|; 1.0 => no drag slip, Re=0)
         --kt : inlet temperature scaling (Tp0 = kt*T_g; 1.0 => no thermal slip)
@@ -74,6 +77,8 @@ Usage:
         --ug : gas x-velocity [m/s] (default 10)
         --ygrade : thickness ratio of consecutive rows along y (default 1: uniform)
         --mesh-only : write mesh.tec (ATLAS's mesh layout) only
+        --sym-face : the face written as a symmetry plane (300), header only (default none)
+        --no-inlet : face 1 written 400 instead of the inlet (401)
         Defaults reproduce the drag-stokes case (kv=0.1, kt=1.0, rp=5.945e-6).
 """
 import argparse
@@ -136,6 +141,7 @@ BCDEF_PER   = 201                        # translational periodic: cell line + c
 BCDEF_CONN  = 101                        # block interface: cell line + partner line
 BCDEF_CHIM  = 102                        # chimera face: counts line + donor lines
 BCDEF_UNRES = 100                        # ATLAS's unresolved connection: header only
+BCDEF_SYM   = 300                        # symmetry plane: header only, bcDef reflects
 
 
 def block_layout(blocks, nx, ny, overlap=0, shift=0.0, rim=False):
@@ -276,7 +282,8 @@ def write_mesh(path, blocks=1, nx=NX, ny=NY, nz=NZ, rotate2=None, ygrade=1.0):
 
 
 def write_bc(path, kv, kt, rp, alpha=None, periodic_y=False, blocks=1, nx=NX, ny=NY, nz=NZ,
-             overlap=0, shift=0.0, rim=False, families=1, outlet_code=BCDEF_WALL, rotate2=None):
+             overlap=0, shift=0.0, rim=False, families=1, outlet_code=BCDEF_WALL, rotate2=None,
+             sym_face=None, no_inlet=False):
     # reader loop order (IO.f90 read_cdp_bc_file): b=1..nb, [family copies], f=1..6, n=1..nend(f),
     # m=1..mend(f). mend/nend per face: f1,2->(Ny,Nz); f3,4->(Nx,Nz); f5,6->(Nx,Ny), the block's.
     layout = block_layout(blocks, nx, ny, overlap, shift, rim)
@@ -296,9 +303,11 @@ def write_bc(path, kv, kt, rp, alpha=None, periodic_y=False, blocks=1, nx=NX, ny
                     inlet_data(kv, kt, rp, alpha)
                 for face in range(1, 7):
                     mend, nend = ranges[face]
-                    bcdef = BCDEF_INLET if face == 1 and not (rot and b == 2) else BCDEF_WALL
+                    bcdef = BCDEF_INLET if face == 1 and not (rot and b == 2) and not no_inlet else BCDEF_WALL
                     if periodic_y and face in (3, 4):
                         bcdef = BCDEF_PER
+                    if face == sym_face:
+                        bcdef = BCDEF_SYM
                     if blocks == 2 and (b, face) in conn_faces:
                         bcdef = BCDEF_CHIM if overlap else BCDEF_CONN
                     if (b, face) == outlet:
@@ -389,6 +398,9 @@ def main():
     p.add_argument("--ygrade", type=float, default=1.0,
                    help="each row along y this many times as thick as the one below (default 1)")
     p.add_argument("--mesh-only", action="store_true", help="write mesh.tec (ATLAS's mesh layout) only")
+    p.add_argument("--sym-face", type=int, choices=range(1, 7), default=None,
+                   help="face written as a symmetry plane (300), header only (default none)")
+    p.add_argument("--no-inlet", action="store_true", help="face 1 written 400 instead of the inlet (401)")
     a = p.parse_args()
     if a.law:
         global SIGMAP, LAW
@@ -411,6 +423,10 @@ def main():
         p.error("--outlet-code must be a 3-digit code whose record carries no payload line")
     if a.ygrade <= 0.0:
         p.error("--ygrade must be > 0")
+    if a.sym_face is not None and (a.blocks != 1 or a.sym_face == 2 or (a.periodic_y and a.sym_face in (3, 4))
+                                   or (a.sym_face == 1 and not a.no_inlet)):
+        p.error("--sym-face needs --blocks 1, a face other than the outlet (2), no --periodic-y on faces 3/4, "
+                "and --no-inlet for face 1")
     os.makedirs(a.out_dir, exist_ok=True)
     if a.mesh_only:
         if a.overlap or a.stretch != 1.0:
@@ -428,7 +444,7 @@ def main():
     n_inlet = write_bc(os.path.join(a.out_dir, "bc.txt"), a.kv, a.kt, a.rp, a.alpha,
                        periodic_y=a.periodic_y, blocks=a.blocks, nx=a.nx, ny=a.ny, nz=a.nz,
                        overlap=a.overlap, shift=a.shift, rim=a.rim, families=a.families,
-                       outlet_code=a.outlet_code, rotate2=a.rotate2)
+                       outlet_code=a.outlet_code, rotate2=a.rotate2, sym_face=a.sym_face, no_inlet=a.no_inlet)
     if a.families > 1:
         write_phase(os.path.join(a.out_dir, "phase.txt"), a.families)
     print(f"[ok] box solfile: I={I} J={J} K={K} nnode={nnode} ncell={ncell} "
@@ -440,14 +456,17 @@ def main():
           + ("faces 3/4 periodic (201), rest wall (400)" if a.periodic_y
              else "all other faces wall (400)")
           + (f"; outlet face {a.outlet_code}" if a.outlet_code != BCDEF_WALL else "")
-          + ("; block 2 rotated 180 degrees about y" if a.rotate2 else ""))
+          + ("; block 2 rotated 180 degrees about y" if a.rotate2 else "")
+          + (f"; face {a.sym_face} symmetry (300)" if a.sym_face is not None else "")
+          + ("; no inlet: face 1 wall (400)" if a.no_inlet else ""))
     if a.stretch != 1.0:
         dx1 = node_x(1, a.nx, a.stretch, LX / a.nx)
         print(f"     domain x[0,{LX}] y[0,{LY}] z[0,{LZ}]; dx={dx1*1e3:.4f}mm then {a.stretch*dx1*1e3:.4f}mm")
     else:
         print(f"     domain x[0,{LX}] y[0,{LY}] z[0,{LZ}]; dx={LX/a.nx*1e3:.2f}mm")
     ug = 10.0 if a.ug is None else a.ug
-    print(f"     inlet: kv={a.kv} (v0={a.kv*abs(ug):.3g} m/s)  kt={a.kt}  rp={a.rp} (d={2*a.rp*1e6:.3g} um)")
+    if not a.no_inlet:
+        print(f"     inlet: kv={a.kv} (v0={a.kv*abs(ug):.3g} m/s)  kt={a.kt}  rp={a.rp} (d={2*a.rp*1e6:.3g} um)")
 
 
 if __name__ == "__main__":
