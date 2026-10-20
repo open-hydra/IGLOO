@@ -67,6 +67,7 @@ contains
     character(len=SCATLEN) :: scatBuf(SCATCAP)
     integer  :: nScat, iScat
     integer  :: neq, nsp, ng, b, i, j, k, ngVert, iu, iw, it, iter, nCross, nE, nStall
+    integer  :: nRefl         ! gas order 1: segments of this cell that ended in a reflection
     real(R8) :: posPrev(3)    ! last outer-iter position, for the zero-progress guard
     logical  :: doLoop, IamOut, newGas, eventType, eventFlag, exitLoop, startedOut, burnedOut
     logical  :: sectorOut  !> wedge: the segment ended on a k-plane
@@ -191,6 +192,7 @@ contains
     !> TRAJECTORY INTEGRATION LOOP
     iter = 0; nCross=0; tprint = part%time + dtprint
     nStall = 0; posPrev = part%stateVar(1:3) - 1._R8
+    nRefl = 0
     !> Scatter accumulator, seeded with a per-ID golden-ratio phase offset.
     wAcc = dNscat * mod(real(part%ID,R8)*0.6180339887498949_R8, 1._R8)
     do while (part%time<tEnd.and.iter<maxIter)
@@ -351,7 +353,8 @@ contains
           call gasblock(b)%gasProperties(gas,part%igas)
         endif
         if (all(part%i==part%iold)) then; if (.not.foldOnly) part%Ncell = part%Ncell+1
-        elseif (IamOut) then;   nCross = nCross + 1;   part%Ncell = 0; endif
+          if (IamOut .and. .not.part%gone) nRefl = nRefl + 1   ! a reflection is not residency
+        elseif (IamOut) then;   nCross = nCross + 1;   part%Ncell = 0; nRefl = 0; endif
       endif
 
       !> Wedge safety net: fold a segment that ended past a k-plane together with an x-y crossing.
@@ -367,7 +370,7 @@ contains
         endif
       endif
 
-      if (part%Ncell>nMaxCell) then
+      if (part%Ncell-nRefl>nMaxCell) then
         write(*,'(A,I4,A,4I4,A)') '       ==> Particle ',part%ID,' stuck in cell:',part%iold
         part%gone=.true.
       endif
