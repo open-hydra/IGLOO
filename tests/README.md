@@ -44,7 +44,7 @@ tests/
 │   └── twosweep.f90              # the two-sweep repeatability driver
 ├── standard/                     # drag + heat
 │   ├── drag/  temperature/       #   unit families
-│   └── drag-stokes/ drag-stokes-dopri5/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/   # e2e
+│   └── drag-stokes/ drag-stokes-dopri5/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/   # e2e
 ├── evaporation/                  # unit families: (root)  interface-neq/  tc-analytic/  evap-breakup/
 │   └── d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ d2law-brk-dormant/     # e2e
 ├── combustion/                   # unit family (root) + burn-box/ burn-box-euler/ (e2e)
@@ -100,9 +100,9 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 254/254 in a serial build (207 e2e + 46 unit, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, and the
+ctest 255/255 in a serial build (208 e2e + 46 unit, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 24 more `mpi-*` cases, 278 in all (the 24 `mpi-*` pass). The e2e entries are 125 solver cases, two further
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 24 more `mpi-*` cases, 279 in all (the 24 `mpi-*` pass). The e2e entries are 126 solver cases, two further
 oracles on `khrt-e2e`'s run, the four thread-count gates, the thirteen two-sweep gates, the sixty-two setup refusals and `vv-order` (two V&V
 figures independent of the record order; skipped without matplotlib); the unit entries are 39
 compiled unit tests, the property-table reader on three fixtures, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs`. Evaporation with

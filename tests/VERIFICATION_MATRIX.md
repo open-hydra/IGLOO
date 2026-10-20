@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (254 in a serial build: 207 e2e + 46 unit incl. `self_test`,
+One row per registered CTest entry (255 in a serial build: 208 e2e + 46 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 24 `mpi-*`
-rows in their own section, 278).
+rows in their own section, 279).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (64 of 125 e2e fixtures)
+## Shared box fixture (64 of 126 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,13 +39,13 @@ writes with its defaults.
 Sixty-four fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other sixty-one:
+once here, referenced as **"shared box"** below. The other sixty-two:
 
-- non-uniform gas (nineteen): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
+- non-uniform gas (twenty): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
   (`axis-200` plus swirl on the near-axis parcel); `swirl-wedge`, `swirl-wedge-deposit`,
   `swirl-wedge-spin` and `swirl-wedge-ord1` (a 200×40-cell annular wedge from `tools/make_wedge_case.py`, analytic solid-body
-  swirl `W = Ωy`); `vie-plait` (120×50×5 cells, analytic `−ε(y−1)`, `tools/make_vie_case.py`) and `timing-report` (`vie-plait`'s `INPUT/`, symlinked); the four
+  swirl `W = Ωy`); `vie-plait` (120×50×5 cells, analytic `−ε(y−1)`, `tools/make_vie_case.py`), `vie-plait-dense` (its mesh and gas, an inlet-face `bc.txt`) and `timing-report` (`vie-plait`'s `INPUT/`, symlinked); the four
   `vortex-cloud-st*` cases (a 96×96 planar square carrying a frozen solid-body vortex,
   `tools/make_vortex_case.py`); `two-fam-bc-2blk-stretch-ord2` (the box as two 30×5×5 blocks of 1.667 mm and
   3.333 mm cells along x, T = 600 + 1000 x K, `make_box_case.py --stretch 2 --gradient 1000`),
@@ -115,6 +115,7 @@ oracle possible.
 | **conv-nu-jaxa4** | `[Shim06]` eq. 50 | *closed form* — as `conv-nu-jaxa2` under JAXA4, Nu = [(2+0.654 Re^{1/2}Pr^{1/3})^{−1}+3.42 Ma/(Re Pr)]^{−1} = 2.198900 (2.261743 at Ma = 0; SP-8039 Table II prints Pr^{1/2}, not followed) (worst 0.961); N1: the Ranz-Marshall and the Ma = 0 curves miss by 1.9e6 and 2.9e6 tolerances. RED: the Mach number withheld from `heat()`, 3.110 K (JAXA2/3 green); 0.654 → 0.645, 0.171 K | as `conv-nu-jaxa2` | as `conv-nu` |
 | **conv-nu-kd** | `[SP8039]` Table II, ref. 72 (= `[Shim06]` eq. 49) | *closed form* — as `conv-nu-jaxa2` under Kavanau-Drake, Nu = N₀/(1+3.42 (Ma/(Re Pr)) N₀), N₀ = 2+0.459 Re^{0.55}Pr^{0.33}: 2.111966 (2.169873 at Ma = 0) (worst 0.939); N1 6.1e6 and 2.8e6. RED: the Mach number withheld, 2.983 K; Pr^{0.33} → Pr^{1/3}, 1.02e-2 K (9.6e3 tolerances); 3.42 → 3.24, 0.155 K | as `conv-nu-jaxa2` | as `conv-nu` |
 | **vie-plait** | `[Vie15]` | *closed form* (derived from ODE + IC, not the paper's typeset Eq. 5.4 which has a sin sign typo; scipy-validated to 1e-13) — anchored damped oscillator y(x)=1+e^{−t/2τ}[Y_a cos ωt+((V_a+Y_a/2τ)/ω)sin ωt], t=(x−x_a)/u_g0, ω=√(ε/τ−1/4τ²); recomputed in `check.py` | **NON-UNIFORM** box (first such e2e): x∈[0,6], y∈[0,2], z thin; 120×50×5; U=u_g0=0.2 uniform, **V=−ε(y−1)** (ε=1, compressive, linear in y), W=0. **`gas-order=2` required** (2nd-order rebuild; order 1 = staircase) | **assigned-position (DB)** injection: 6 parcels at x=0.125, z=0.025, y∈{0.5,0.7,0.9,1.1,1.3,1.5} (cell centres), up=0.2/vp=0 (U_p0=u_g0, V_p0=0); τ=5 s via ρ_p=1620 (local `properties.dat`), d=1 mm ⇒ St=5; outlet + walls (never hit) |
+| **vie-plait-dense** | `[Vie15]` | *closed form* — `vie-plait`'s anchored oscillator and tolerance on every row of 250 strands (41 963 rows, worst 0.712); each strand starts at its cell's gas velocity (V_a = −εY_a), so the 80 with \|Y_a\| ≥ 0.70 swing past the opposite side face before x = 6: exactly the strands whose closed form reaches \|Y\| = 1 leave through a side face (every peak \|Y\| ≥ 0.023 from 1), the rest at the outlet, all with code 400; *conservation* — Σ over the cells of `source.tec` (extensive totals per cell) = Σ_p ṁ_p(v_first − v_last) per component and Σ_p ṁ_p(\|v_first\|² − \|v_last\|²)/2 for E, within the rows' print floor (E 1.779984E-03 vs 1.779982E-03 W, 0.22 of 8.1E-09; F_x ≡ 0, F_y cancels between mirror strands). RED: the source reduction to the geometry cells dropped (the smoother stops, exit 128, no `source.tec`); equal eighths instead of octant volumes (E −10.7 %, 2.3E+04 floors; F_x, F_y pass) | as `vie-plait` (`solfile.tec` and `properties.dat` symlinked) | inlet-face 401 on all 250 face cells (`make_vie_case.py --kv 1.0 --rp 5.0e-4`): κ_v=1 along the cell's gas velocity, κ_t=1, d=1 mm, `ds = 10` (one parcel per cell centre); side faces and outlet 400 |
 | **swirl-wedge** | — (derived ODE oracle, cross-checked in-file) | *exact cylindrical ODE* of a Stokes parcel in the solid-body swirl `g = (U0, −Ωz, +Ωy)`: ṙ=v_r, θ̇=w/r, v̇_r=−v_r/τ+w²/r, ẇ=(Ωr−w)/τ−v_r w/r, RK4 from the exact injection state (step-halving < 1e-12; 6-state Cartesian form agrees < 1e-12); gates r, w_p, v_r and the unwrapped azimuth every row at **≈ 6× the F12.6 print floor** (3e-6/3e-6/8e-6/3e-6; measured 5e-7 with the exact 2.5D sampling `sampleGas2D`), in-sector every row, fold count = oracle sectors ± 1 (≥ 5); RED with the pre-E unrotated sampling (19–25×: it reproduced the W-plan §2 frame-error model to 3 %, max\|Δr\| 6.75e-5/5.80e-5/7.52e-5, outward bias `Δt_seg/2τ`), RED with the fold rotating position only (10–200× the first gate), RED on Ω = 0 (0 folds) | **NON-UNIFORM annular WEDGE** (`tools/make_wedge_case.py`): x∈[0,2], r∈[0.19,0.99], 200×40×1, k-planes at ∓0.5° (Nk=1 ⇒ mesh2D + axisym, delthe 1°); U=1, V=0, **W=Ω·y_c** with Ω=0.2 (linear ⇒ ord2 rebuild exact); ρ=1.2, T=300, μ=1.8e-5; `gas-order=2` required | DB, 3 parcels at x0=0.105 (θ=0): P1 r0=0.5 wp=Ωr0, P2 r0=0.5 wp=0, P3 r0=0.3 wp=2Ωr0; d=0.6 mm, ρ_p=1800 (local `properties.dat`) ⇒ τ=2 s, St=0.4; up=U (zero-slip clock); `bc.txt` f1/f2 400, f3/f4 301, f5/f6 200 — no inlet family |
 | **swirl-wedge-deposit** | — (derived force-integral oracle) | *meridian-frame deposits* (W-plan Q7, O23 deposit half) on `swirl-wedge`'s run with `out-file = ALL`, `mollify = off`: per radial band (P3 alone at r 0.30–0.35, P1+P2 at 0.50–0.53) `ΣFy`/`ΣFz` vs the force on the gas `ṁ∫(v−g)/τ dt` along the exact trajectory in (r, θ) components (2 %; measured ≤ 0.22 %), `ΣFx = 0`, azimuthal signs (P3 +, P1+P2 −), `ΣE` vs the kinetic drop (2 %), per-cell `v_p`/`w_p` in the P3 band vs the path average over the dual window (1e-4; floor 9e-7 / 1.5e-5; 382 cells), locality r ∈ [0.28, 0.56], band mass `Σρ_pV = ṁT` (5e-3; measured 1.000127); the parent's G0–G6 rerun; RED on the Cartesian deposit (`ee4482a`: 325/382 cells, `v_p` misses `−w sin θ`, 9.9e-4) and on a meridian-COMPONENT difference (F_r sign flips, 247–294 %) | as `swirl-wedge` (symlinked INPUT) | as `swirl-wedge` |
 | **swirl-wedge-spin** | — (derived: Cartesian Stokes oracle + the solver's dual-to-geo rule) | *sector-edge segments* (O23 many-sector case) on the swirl-wedge fixture with ONE over-spun parcel (r0 0.2, up 0.05, wp 2: ~34 sectors per cell at injection): the run's `wedge sector folds: N (multi-sector: M)` witness — M = 0, N within 2 of the oracle sweep to the outer wall (79; a binary without the line fails); every row in-sector; `w_p`, `v_r`, `u` vs the 6-state Cartesian RK4 oracle at each row's closest approach in (x, r) (2e-5 = the F12.6 floor through the 20 m/s² acceleration; measured ≤ 7e-6); eulerian mass per geo cell `ρ_p V` vs the oracle residence per dual cell projected with `finalizeEUL`'s sub-quadrant volume weights (2 %, 97 cells ≥ 1 % of the peak; measured 4e-3), tiling total `Σρ_pV = ṁT_wall` (5e-3; 1.000044); RED on `fc6c5f4` (no witness; +33 % / −37 % on the injection column's first rows, mass total unchanged) | as `swirl-wedge` (symlinked INPUT) | DB, 1 parcel at (0.105, 0.2, 0), up 0.05, wp 2.0; `out-file = ALL`, `mollify = off` |
@@ -403,9 +404,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-207 `e2e`-labelled + 46 `unit`-labelled + the optional `vortex-cloud-3way` = **254 CTest entries** in a
-serial build (+24 `mpi-*` under `USE_MPI`, 278), all green (counted from `tests/CMakeLists.txt`). The 207
-`e2e` entries are the 125 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+208 `e2e`-labelled + 46 `unit`-labelled + the optional `vortex-cloud-3way` = **255 CTest entries** in a
+serial build (+24 `mpi-*` under `USE_MPI`, 279), all green (counted from `tests/CMakeLists.txt`). The 208
+`e2e` entries are the 126 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the four `threads-*` thread-count gates, the thirteen `repeat-*` two-sweep gates, the sixty-two `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The

@@ -77,7 +77,7 @@ tests/
 │   └── twosweep.f90              # the two-sweep repeatability driver
 ├── standard/                     # drag + heat
 │   ├── drag/  temperature/       #   unit families
-│   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/   # e2e cases
+│   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/   # e2e cases
 ├── evaporation/                  # unit families (root C, interface-neq, tc-analytic, evap-breakup) + d2law/d2law-line/d2law-varcp/lk-neq/cemb-box/asm-box/tc-box/tc-box-euler/tc-box-ord2-row/datum-abs/boiling-temperature-key/no-psat/scatter-weight-evap/tc-hexadecane/mhb98-water/mhb98-water-psat/mhb98-water-blowing/evap-breakup-box/d2law-brk-dormant e2e
 ├── breakup/                      # TAB, Pilch-Erdman, Reitz-Diwakar, ETAB, Reitz-KHRT unit families + tab/etab/pilch-erdman/reitz-diwakar/khrt e2e, etab-e2e-dopri5, khrt-e2e-euler, khrt-stress, rd/tab/etab/khrt-evap-frozen, khrt-evap-frozen-euler, khrt-evap-live, khrt-shed-noexchange, tab/tab-evap-frozen/khrt-varrho
 ├── combustion/                   # Beckstead unit family + burn-box e2e
@@ -93,7 +93,7 @@ tests/
 
 | Category | Contents |
 |----------|----------|
-| `standard` | Drag and temperature unit families and their two value pins; drag-stokes, drag-stokes-dopri5, temp-relax, temp-relax-varcp, temp-relax-varcp-euler, temp-relax-varrho, body-force, body-force-z, conv-nu, conv-nu-jaxa2, conv-nu-jaxa3, conv-nu-jaxa4, conv-nu-kd, vie-plait, swirl-wedge, swirl-wedge-deposit, swirl-wedge-spin, swirl-wedge-ord1, no-exchange, scatter-weight, out-dcell3, out-dtime, out-off, out-exit-row and the four vortex-cloud e2e cases; the two-sweep drag-stokes, drag-stokes-dopri5 and vie-plait; the drag, heat and phase-file token refusals |
+| `standard` | Drag and temperature unit families and their two value pins; drag-stokes, drag-stokes-dopri5, temp-relax, temp-relax-varcp, temp-relax-varcp-euler, temp-relax-varrho, body-force, body-force-z, conv-nu, conv-nu-jaxa2, conv-nu-jaxa3, conv-nu-jaxa4, conv-nu-kd, vie-plait, vie-plait-dense, swirl-wedge, swirl-wedge-deposit, swirl-wedge-spin, swirl-wedge-ord1, no-exchange, scatter-weight, out-dcell3, out-dtime, out-off, out-exit-row and the four vortex-cloud e2e cases; the two-sweep drag-stokes, drag-stokes-dopri5 and vie-plait; the drag, heat and phase-file token refusals |
 | `evaporation` | Evaporation, LK-interface, TC-analytical and evaporation-with-breakup unit families, the MHB98 decane kernel test, the evaporation value pin and the vapour-table unit test; d²-law, d²-law line, d²-law under a varying cp (d2law-varcp), lk-neq, CEM-B and Abramzon-Sirignano end to end (cemb-box, asm-box), tc-box, tc-box-euler, tc-box-ord2-row, datum-abs, boiling-temperature-key, no-psat, scatter-weight-evap, tc-hexadecane, mhb98-water, mhb98-water-psat, mhb98-water-blowing, solver-fail-consumed and the body-force accumulators of models 2 and 4 (body-evap-m2, body-evap-m4) e2e; evaporation with breakup: evap-breakup-box, d2law-brk-dormant, rd-evap-frozen, tab-evap-frozen, etab-evap-frozen, khrt-evap-frozen, khrt-evap-frozen-euler, khrt-evap-live and tab-evap-frozen-varrho; the two-sweep d2law and evap-breakup; seven evaporation refusals |
 | `breakup` | TAB/ETAB, Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT unit families + TAB stochastic moments, and the evaporation-with-breakup unit family; five Weber-sweep e2e cases, two further oracles on khrt-e2e's run, its Eulerian twin khrt-e2e-euler and the khrt-stress load case; evaporation with breakup and the KH-shed source: evap-breakup-box, d2law-brk-dormant, rd-evap-frozen, tab-evap-frozen, etab-evap-frozen, khrt-evap-frozen, khrt-evap-frozen-euler, khrt-evap-live and khrt-shed-noexchange; a density that varies with temperature: tab-varrho, tab-evap-frozen-varrho and khrt-varrho; the two-sweep khrt, etab, tab, tab-dopri5 and evap-breakup; the breakup-token and TAB-method refusals |
 | `combustion` | Beckstead $d^n$ Al-burn unit family; burn-box and body-burn-m5 (the body-force accumulators of model 5) e2e |
@@ -109,7 +109,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **254 tests** in a serial build (207 e2e + 46 unit, `self_test`,
+Current gate: **255 tests** in a serial build (208 e2e + 46 unit, `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 24 more
 `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.

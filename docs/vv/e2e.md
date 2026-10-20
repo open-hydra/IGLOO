@@ -744,6 +744,13 @@ staircase.
   {% include "vv/images/vie-plait.svg" ignore missing %}
 </figure>
 
+`vie-plait-dense` (no figure) samples the same field with 250 strands injected from the inlet face, one per inlet
+cell, each starting at its cell's gas velocity ($V_{p0} = -\epsilon(y_0-1)$): the same anchored closed form holds on
+every row of every strand (41 963 rows, worst 0.71 of the tolerance), the 80 strands whose oscillation reaches
+the side faces leave there and the rest at the outlet, as the closed form predicts.  It also checks the 3D
+gas-order-2 source field: the totals of `source.tec` equal the momentum and kinetic energy the strands hand to the
+gas, within the print floor of the rows.
+
 ### swirl-wedge
 
 A **swirling** carrier on an **axisymmetric wedge**: a generated
