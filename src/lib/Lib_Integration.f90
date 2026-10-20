@@ -141,6 +141,7 @@ contains
       if (part%gone) then
         write(*,'(A,I4,A)')                                                         &
                 '[WARNING] Particle ',part%ID,' has been initialized out of domain!'
+        call writeStartRecord()
         call flushScat()
         return
       endif
@@ -150,6 +151,7 @@ contains
         part%gone = .true.
         !$OMP ATOMIC
         nInjNoCell = nInjNoCell + 1
+        call writeStartRecord()
         call flushScat()
         return
       endif
@@ -412,6 +414,8 @@ contains
       call writeExitRow()
       part%time = 0._R8
     endif
+    !> Time end reached inside the domain: the record of where integration stopped.
+    if (.not. part%gone .and. part%time >= tEnd) call writeExitRow()
     !> Every exit path flushes the scatter buffer.
     call flushScat()
 
@@ -429,11 +433,13 @@ contains
 
 
     !> One exit record, written before the time reset; out-time appends the parcel time.
-    subroutine writeExitRow()
+    subroutine writeExitRow(started)
+      logical, intent(in), optional :: started   !> .false.: the parcel was never integrated
       real(R8) :: mdotOut
       !> Model 4: the stream's mass flow at exit; the other models: the injected or birth flow.
       mdotOut = part%mdot
       if (part%model == 4) mdotOut = part%npdot*part%m
+      if (present(started)) then; if (.not.started) mdotOut = part%mdot; endif
       if (timeOn) then
         write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,ES16.8E2,I5,E13.6E2)') part%stateVar(1:3), part%tp, &
               norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%time, part%exitCode, part%d
@@ -442,6 +448,17 @@ contains
               norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%exitCode, part%d
       endif
     end subroutine writeExitRow
+
+
+    !> The record of a parcel never integrated: its injection point, at rest, at t = 0, code 0.
+    subroutine writeStartRecord()
+      part%stateVar(1:3) = part%pInj
+      part%stateVar(4:6) = 0._R8
+      part%angle = 0._R8; part%Af = 0._R8; part%exitCode = 0
+      !> A boundary-face stream derives its temperature and flow at injection, which did not take place.
+      if (.not. all(part%iInj == [0,0,0,0])) then; part%tp = 0._R8; part%mdot = 0._R8; endif
+      call writeExitRow(started=.false.)
+    end subroutine writeStartRecord
 
 
     !> Emit the buffered scatter records in one write statement.

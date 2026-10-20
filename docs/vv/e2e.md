@@ -267,7 +267,7 @@ each row with $C(t)\,z_0$ at the row's own time.
 | Witness | Requirement |
 |---------|-------------|
 | Every time-stamped row and `snapshot-A.dat` record | $\lvert z - C(t) z_0\rvert \le 3\cdot10^{-6}$ m, $\lvert v - C'(t) z_0\rvert \le 3\cdot10^{-6}$ m/s |
-| Premise | 1672 parcels from their seed states; all in the snapshot at $t = \pi/2$; no exit; planar single-layer path |
+| Premise | 1672 parcels from their seed states; all in the snapshot at $t = \pi/2$; one exit record per parcel, code 0 (none left), at its snapshot state; planar single-layer path |
 | Oracle self-check | $C(0) = 1$, $C'(0) = i\Omega$, rotation and dilation monotone, RK4 agreement to $10^{-12}$ |
 
 **Result:** at every St the worst residual is the F12.6 print floor, $7.0\cdot10^{-7}$ m and
