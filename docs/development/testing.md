@@ -98,7 +98,7 @@ tests/
 | `breakup` | TAB/ETAB, Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT unit families + TAB stochastic moments, and the evaporation-with-breakup unit family; five Weber-sweep e2e cases, two further oracles on khrt-e2e's run, its Eulerian twin khrt-e2e-euler and the khrt-stress load case; evaporation with breakup and the KH-shed source: evap-breakup-box, d2law-brk-dormant, rd-evap-frozen, tab-evap-frozen, etab-evap-frozen, khrt-evap-frozen, khrt-evap-frozen-euler, khrt-evap-live and khrt-shed-noexchange; a density that varies with temperature: tab-varrho, tab-evap-frozen-varrho and khrt-varrho; the two-sweep khrt, etab, tab, tab-dopri5 and evap-breakup; the breakup-token and TAB-method refusals |
 | `combustion` | Beckstead $d^n$ Al-burn unit family; burn-box and body-burn-m5 (the body-force accumulators of model 5) e2e |
 | `solidification` | Solidification unit family (supercooling, recalescence, plateau, melting); solid-box, solid-melt, solid-box-euler, solid-box-2mat, scatter-weight-solid e2e, the two-sweep solid-box and the eight solidification refusals |
-| `infrastructure` | Gas reconstruction, INI pipeline, property-table reader (three fixtures), RNG stream, axis dispatch, grazing stand-off, gas ghost ring, boundary-file families, dual-clip, source-reduction, multi-block mollifier and host-association unit families, `self_test` and `registry-docs`; injection, coupling (the body-force accumulators of models 2, 4 and 5 among them), nozzle, wedge and slab, periodic, two-material, per-family boundary-file, two-block, chimera, INI-comment, wall-approach, varying-cp table, solver-failure and exit-record e2e cases; the two-sweep db-injection and two-mat; seventeen setup-refusal gates (the other nineteen sit in their model's category) |
+| `infrastructure` | Gas reconstruction, INI pipeline, property-table reader (three fixtures), RNG stream, axis dispatch, grazing stand-off, gas ghost ring, boundary-file families, dual-clip, source-reduction, multi-block mollifier, host-association and boundary-face fallback unit families, `self_test` and `registry-docs`; injection, coupling (the body-force accumulators of models 2, 4 and 5 among them), nozzle, wedge and slab, periodic, two-material, per-family boundary-file, two-block, chimera, INI-comment, wall-approach, varying-cp table, solver-failure and exit-record e2e cases; the two-sweep db-injection and two-mat; seventeen setup-refusal gates (the other nineteen sit in their model's category) |
 | `repeatability` | Thirteen e2e cases run twice through `setup_static` → `reset_state` → `solve` with the second sweep compared to the first (see `tests/repeatability/INFO.md`) |
 | `mpi` | The serial gates re-run under `mpiexec` with a rank-count witness, plus cross-rank-count consistency (see `tests/mpi/INFO.md`) |
 
@@ -109,7 +109,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **253 tests** in a serial build (207 e2e + 45 unit, `self_test`,
+Current gate: **254 tests** in a serial build (207 e2e + 46 unit, `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 24 more
 `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.
