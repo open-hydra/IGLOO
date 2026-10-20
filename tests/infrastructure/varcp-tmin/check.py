@@ -25,13 +25,13 @@ def drag_stokes_main():
     return mod.main()
 
 
-def column(path, ncol, icol):
-    """(ID, printed value of column icol) of every data row of ncol columns."""
+def column(path, ncol, icol, idcol=-1):
+    """(ID from column idcol, printed value of column icol) of every data row of ncol columns."""
     rows = []
     for line in open(path):
         c = line.split()
-        if len(c) == ncol and c[-1].isdigit():
-            rows.append((int(c[-1]), c[icol]))
+        if len(c) == ncol and c[idcol].isdigit():
+            rows.append((int(c[idcol]), c[icol]))
     return rows
 
 
@@ -40,7 +40,7 @@ def main():
     if drag_stokes_main() != 0:
         fails.append("the motion does not follow drag-stokes's Stokes closed form")
     try:
-        traj, exits = column(TRAJ, 10, 6), column(EXIT, 9, 3)
+        traj, exits = column(TRAJ, 10, 6), column(EXIT, 11, 3, 8)
         log = open(LOG, errors="replace").read()
     except FileNotFoundError as e:
         print(f"[FAIL] cannot read the outputs: {e}")

@@ -303,7 +303,7 @@ def main():
     try:
         for ln in open(OUTLOC).read().splitlines()[2:]:
             c = ln.split()
-            if len(c) == 9 and float(c[0]) > X_EXIT:
+            if len(c) == 11 and float(c[0]) > X_EXIT:
                 exits += 1
     except FileNotFoundError:
         print(f"[FAIL] {OUTLOC} not found")

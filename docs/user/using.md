@@ -49,7 +49,7 @@ my_case/
 │   └── properties.dat    ← thermodynamic property tables (Tecplot format: cp, rho, h vs T)
 └── OUTPUT/               ← created at run time
     ├── trajectories-<mat>.dat   ← per-cell-crossing state (X Y Z U V W T d_p m_p ID)
-    ├── outloc-<mat>.dat         ← exit location, speed, angle, area per particle
+    ├── outloc-<mat>.dat         ← exit location, speed, angle, area, boundary code, diameter per particle
     ├── scatter-<mat>.dat        ← number-density scatter cloud
     ├── snapshot-<mat>.dat       ← each particle's state at time-end (only when time-end is set)
     ├── source.tec               ← gas-coupling source terms on the mesh
@@ -114,7 +114,7 @@ Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). Rows ar
 
 ### Exit locations
 
-`OUTPUT/outloc-<mat>.dat` records, for every particle that exits the domain, its exit position, temperature, speed, impact angle, mass flow, face area, and particle ID (`X Y Z T |u_p| alpha mdot Af ID`), followed by the exit time `t` with `out-time = on`. The mass flow `mdot` depends on the ODE model: for models 1, 3 and 6, whose stream mass changes only at a breakup event, it is the flow the parcel carries at exit; for model 4 (evaporation with ODE breakup) it is the flow at exit `ṅ_p·m`, after evaporation and stripping (a drop consumed in the domain leaves with its remnant); for models 2 and 5, whose drops lose mass to evaporation or combustion, it is the injected flow (a breakup child's birth flow).
+`OUTPUT/outloc-<mat>.dat` records, for every particle that exits the domain, its exit position, temperature, speed, impact angle, mass flow, face area, and particle ID (`X Y Z T |u_p| alpha mdot Af ID`), followed by the exit time `t` with `out-time = on`, and then by the boundary code of the face the particle left through and its diameter at exit (`bc d_p`). `bc` is the face's code in the boundary file (`400`, `301`, `102`, `100`, …); it is `0` when the particle ended inside the domain (evaporated or burnt out, stuck in a cell or without progress, the outer iteration cap, an ODE-solver failure, a non-finite state, a failure on another MPI rank). The mass flow `mdot` depends on the ODE model: for models 1, 3 and 6, whose stream mass changes only at a breakup event, it is the flow the parcel carries at exit; for model 4 (evaporation with ODE breakup) it is the flow at exit `ṅ_p·m`, after evaporation and stripping (a drop consumed in the domain leaves with its remnant); for models 2 and 5, whose drops lose mass to evaporation or combustion, it is the injected flow (a breakup child's birth flow).
 
 ### Snapshot at an end time
 

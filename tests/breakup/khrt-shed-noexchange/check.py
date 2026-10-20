@@ -35,7 +35,7 @@ def main():
     kids = 0
     for line in open(OUTLOC):
         c = line.split()
-        if len(c) == 9 and c[0][0] in "0123456789-":
+        if len(c) == 11 and c[0][0] in "0123456789-":
             kids += int(c[8]) > N_INJECTED
     counts = [int(l.split("=")[-1]) for l in open(LOG) if "number of children" in l]
     capped = sum(1 for l in open(LOG) if "shed cap" in l)

@@ -50,8 +50,11 @@ TOL_CLONE  = 1.0e-9 # groups are bit-identical in practice; slack absorbs a form
 MIN_TRAJ   = 5      # a particle that dies at injection writes ~1 record
 
 
-def load_zoned(path, ncols):
-    """Return {zone_index: [row, ...]} for a Tecplot point file with one zone per group."""
+def load_zoned(path, ncols, idcol=None):
+    """Return {zone_index: [row, ...]} for a Tecplot point file with one zone per group; a row is the
+    columns before idcol (default the last) and the ID in it."""
+    if idcol is None:
+        idcol = ncols - 1
     zones = defaultdict(list)
     z = 0
     with open(path) as f:
@@ -67,7 +70,7 @@ def load_zoned(path, ncols):
             if len(c) != ncols or z == 0:
                 continue
             try:
-                zones[z].append([float(v) for v in c[:-1]] + [int(c[-1])])
+                zones[z].append([float(v) for v in c[:idcol]] + [int(c[idcol])])
             except ValueError:
                 continue
     return zones
@@ -159,7 +162,7 @@ def check_integration(exits, traj):
 
 def main():
     try:
-        exits = load_zoned(OUTLOC, 9)
+        exits = load_zoned(OUTLOC, 11, 8)
         traj = load_zoned(TRAJ, 10)
     except FileNotFoundError as e:
         print(f"[FAIL] {e.filename} not found -- did the solver run?")

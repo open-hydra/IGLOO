@@ -130,7 +130,7 @@ def main():
     if (tmin, tmax) != (TMIN, TMAX) or worst_tab > 1.0e-6:
         fails.append("the table is not make_table.py's (span %d..%d, h off by %.3e)" % (tmin, tmax, worst_tab))
     parts = {pid: sorted(rows) for pid, rows in d2.load_trajectories(TRAJ).items()}
-    exits = [l.split() for l in open(EXITS).read().splitlines()[2:] if len(l.split()) == 9]
+    exits = [l.split() for l in open(EXITS).read().splitlines()[2:] if len(l.split()) == 11]
     texit = [float(c[3]) for c in exits]
     ref = next(iter(parts.values()))
     spread = max(max(abs(a[6] - b[6]) for a, b in zip(ref, p)) for p in parts.values())

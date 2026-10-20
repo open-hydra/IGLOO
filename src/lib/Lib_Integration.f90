@@ -426,11 +426,11 @@ contains
       mdotOut = part%mdot
       if (part%model == 4) mdotOut = part%npdot*part%m
       if (timeOn) then
-        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), &
-                                                                  part%angle, mdotOut, part%Af, part%ID, part%time
+        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,ES16.8E2,I5,E13.6E2)') part%stateVar(1:3), part%tp, &
+              norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%time, part%exitCode, part%d
       else
-        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8)') part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), &
-                                                         part%angle, mdotOut, part%Af, part%ID
+        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,I5,E13.6E2)') part%stateVar(1:3), part%tp, &
+              norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%exitCode, part%d
       endif
     end subroutine writeExitRow
 

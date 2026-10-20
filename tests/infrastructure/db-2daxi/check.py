@@ -212,7 +212,7 @@ def main():
     try:
         for ln in open(OUTLOC).read().splitlines()[2:]:
             c = ln.split()
-            if len(c) == 9:
+            if len(c) == 11:
                 exits[int(c[8])] = float(c[0])
                 mdot[int(c[8])] = float(c[6])
     except FileNotFoundError:

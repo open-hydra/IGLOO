@@ -171,7 +171,7 @@ def check_exit_paths():
     H3 (below) is what pins the mass; these two pin the PATH."""
     n_nan  = _log_count("non-finite state")
     n_err  = _log_count("Run_ODESolver err=")
-    n_exit = sum(1 for l in open(OUTLOC).read().splitlines()[2:] if len(l.split()) == 9) \
+    n_exit = sum(1 for l in open(OUTLOC).read().splitlines()[2:] if len(l.split()) == 11) \
              if os.path.exists(OUTLOC) else -1
     checks = [
         (f"H1 no parcel ends on a non-finite state (was {NPART})", n_nan == 0),
@@ -203,7 +203,7 @@ def check_mass_balance():
     vals = " ".join(lines[lines.index(zone) + 1:]).split()
     src = sum(float(v) for v in vals[3 * nnod:3 * nnod + ncel])
     inj = sum(float(c[6]) for c in (l.split() for l in open(OUTLOC).read().splitlines()[2:])
-              if len(c) == 9)
+              if len(c) == 11)
     resid = abs(src - inj) / inj if inj > 0.0 else 1.0
     ok = inj > 0.0 and resid <= MASS_TOL
     print(f"[{'PASS' if ok else 'FAIL'}] H3 injected mass reaches the gas: "

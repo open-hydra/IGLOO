@@ -41,7 +41,7 @@ def main():
 
     tot, n = 0.0, 0
     for c in rows:
-        if len(c) == 9 and c[0][0] in "0123456789-":
+        if len(c) == 11 and c[0][0] in "0123456789-":
             try:
                 tot += float(c[6]); n += 1
             except ValueError:

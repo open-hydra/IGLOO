@@ -65,15 +65,17 @@ def fail(msg):
     return 1
 
 
-def read_rows(path, ncol):
+def read_rows(path, ncol, idcol=None):
+    if idcol is None:
+        idcol = ncol - 1
     out = {}
     for ln in open(path):
         t = ln.split()
         if len(t) != ncol:
             continue
         try:
-            pid = int(t[-1])
-            vals = [float(v) for v in t[:ncol - 1]]
+            pid = int(t[idcol])
+            vals = [float(v) for v in t[:idcol]]
         except ValueError:
             continue
         out.setdefault(pid, []).append(vals)
@@ -98,7 +100,7 @@ def main():
 
     try:
         traj = read_rows(TRAJ, 10)
-        out = read_rows(OUTLOC, 9)
+        out = read_rows(OUTLOC, 11, 8)
     except FileNotFoundError as e:
         return fail(f"{e.filename} not found -- did the solver run?")
 

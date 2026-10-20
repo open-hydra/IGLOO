@@ -34,7 +34,7 @@ def main():
     ex = []
     for ln in open("OUTPUT/outloc-A.dat"):
         t = ln.split()
-        if len(t) != 9:
+        if len(t) != 11:
             continue
         try:
             ex.append([float(v) for v in t[:8]])

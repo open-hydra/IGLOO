@@ -35,7 +35,7 @@ def injected_total():
     tot = 0.0
     for line in open(OUTLOC).read().splitlines()[2:]:
         c = line.split()
-        if len(c) == 9:
+        if len(c) == 11:
             tot += float(c[6])
     return tot
 
@@ -48,7 +48,8 @@ def main():
 
     n_err  = log_count("Run_ODESolver err=")
     n_nan  = log_count("non-finite state")
-    n_exit = sum(1 for l in open(OUTLOC).read().splitlines()[2:] if len(l.split()) == 9)
+    n_exit = sum(1 for l in open(OUTLOC).read().splitlines()[2:] if len(l.split()) == 11)
+    codes  = [int(l.split()[9]) for l in open(OUTLOC).read().splitlines()[2:] if len(l.split()) == 11]
 
     src, inj = source_total(), injected_total()
     resid = abs(src - inj) / inj if inj > 0.0 else 1.0
@@ -59,6 +60,8 @@ def main():
         (f"S3 {NPART} exit rows written",                                  n_exit == NPART),
         (f"S4 injected mass reaches the gas: resid {resid:.3e} <= {TOL:.0e}",
          inj > 0.0 and resid <= TOL),
+        (f"S5 every exit record's boundary code is 0 (ended inside the domain): {sorted(set(codes))}",
+         len(codes) == NPART and all(c == 0 for c in codes)),
     ]
     fail = 0
     for name, ok in checks:

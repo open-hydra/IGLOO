@@ -50,7 +50,7 @@ def euler_mass():
 
 def check_euler_mass():
     rows = [l.split() for l in open(OUTLOC)]
-    rows = [c for c in rows if len(c) == 10 and c[0][0] in "0123456789-"]
+    rows = [c for c in rows if len(c) == 12 and c[0][0] in "0123456789-"]
     ft = sum(float(c[6]) * float(c[9]) for c in rows)
     em = euler_mass()
     rel = abs(em - ft) / ft if ft > 0.0 else 1.0

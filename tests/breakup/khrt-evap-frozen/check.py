@@ -36,7 +36,7 @@ def check_exit_flows(kh):
     n_par = n_kid = 0
     for line in open(kh.OUTLOC):
         c = line.split()
-        if len(c) in (9, 10) and c[0][0] in "0123456789-":
+        if len(c) in (11, 12) and c[0][0] in "0123456789-":
             if int(c[8]) <= kh.N_INJECTED:
                 par += float(c[6]); n_par += 1
             else:

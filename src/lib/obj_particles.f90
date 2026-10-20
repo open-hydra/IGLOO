@@ -34,6 +34,7 @@ module IGLOO_particles
     real(R8)     :: brkupVar(3) !> variables (breakup model dependent)
     real(R8)     :: angle = 0._R8 !> exit angle (bcDef out)
     real(R8)     :: Af    = 0._R8 !> exit face area (bcDef out)
+    integer      :: exitCode = 0  !> boundary code of the exit face; 0 when the parcel ended inside the domain
     real(R8)     :: xi0(3)      !> cartesian coordinates xi-eta-zeta
     integer      :: i(4)        !> index-based position (b,i,j,k)
     integer      :: iold(4)     !> old index-based position (b,i,j,k)
@@ -550,6 +551,7 @@ contains
           call bcDef(blk%face(f)%cell(m,n),vertices,pold,vold,  &
                       intersectionPoint,f,p,v,self%time,iold,   &
                       self%angle,self%Af,found,self%gone,retry)
+          if (self%gone) self%exitCode = blk%face(f)%cell(m,n)%bcdef
           !> a rim: an unresolved connection (100) or a chimera face no donor holds the particle in
           if (self%gone .and. (blk%face(f)%cell(m,n)%bcdef == 100 .or. blk%face(f)%cell(m,n)%bcdef == 102)) then
             !$OMP ATOMIC

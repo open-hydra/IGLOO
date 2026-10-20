@@ -77,7 +77,7 @@ def main():
     else:
         print(f"P1 {len(first)} parcels, each at its own row's injection velocity PASS")
 
-    ex = list(rows("OUTPUT/outloc-A.dat", 9))
+    ex = list(rows("OUTPUT/outloc-A.dat", 11))
     tot, exp = sum(r[6] for r in ex), inlet_mass_flow()
     if abs(tot - exp) > 1.0e-5 * exp:
         rc |= fail(f"P2 exit mass flow {tot:.6e} kg/s against the inlet's {exp:.6e} ({(tot - exp) / exp:+.3e})")

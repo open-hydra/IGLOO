@@ -69,7 +69,7 @@ The last column is what the code does to the **gas** ghost ring under `gas-order
 | `401` | Inlet (krho) | Injection boundary; mass loading specified as a density ratio `krho` ∈ [0,1). Particle mass flow is $\dot{m}_p = \frac{k_\rho}{1-\sum k_\rho} (\dot{m}_\mathrm{gas} + \dot{m}_\mathrm{part})$. | Linear fill. |
 | `402` | Inlet (mass flux) | Injection boundary; particle mass flow specified as a flux $g_p$ [kg/(s·m²)]: $\dot{m}_p = g_p \cdot A_\mathrm{cell}$. | Linear fill. |
 | `403` | Inlet (mass flux variant) | Same as 402, used for a second injection family type. | Linear fill. |
-| All others | Wall / outflow | Particle is marked as exited (`gone = true`). Its exit position, speed, impact angle, and cell face area are recorded in `outloc-<mat>.dat`. | `301` — the code ATLAS writes for a dispersed phase at a `type = wall` patch, and therefore the one a gas-solid wall reaches IGLOO as — **mirrors**, exactly as 300. Every other code, `400` (the box generators' outlet/side tag) included, keeps the linear fill. |
+| All others | Wall / outflow | Particle is marked as exited (`gone = true`). Its exit position, speed, impact angle, cell face area and the face's code (`bc`) are recorded in `outloc-<mat>.dat`. | `301` — the code ATLAS writes for a dispersed phase at a `type = wall` patch, and therefore the one a gas-solid wall reaches IGLOO as — **mirrors**, exactly as 300. Every other code, `400` (the box generators' outlet/side tag) included, keeps the linear fill. |
 
 !!! note "Default is wall/outflow"
     Any `bcdef` code not listed above (e.g. 0, 404–407, 420) is treated as a wall or outflow: the particle is removed from the domain at the crossing point. Code `103` (a connection between blocks of different phases) and `104` (a chimera face between blocks of different phases) are header only in a dispersed-phase file, so a particle leaves the domain there.
@@ -275,7 +275,7 @@ index jump, the 201 transport, an exit).
 
 A particle that leaves the domain through a 100 facelet (ATLAS's unresolved connection: a connection or
 chimera facelet that found no partner) or through a 102 facelet whose donors and blocks do not hold it is
-a *rim exit*; its exit record is an ordinary one (position, `Af` of the facelet). When the bc file holds
+a *rim exit*; its exit record is an ordinary one (position, `Af` of the facelet, `bc` = 100 or 102). When the bc file holds
 any 101, 103, 201, 102 or 100 facelet, `solve` prints once per sweep, summed over the MPI ranks:
 
 ```

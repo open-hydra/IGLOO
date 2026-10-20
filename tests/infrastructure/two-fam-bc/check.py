@@ -126,7 +126,7 @@ def main():
         try:
             for ln in open(f"OUTPUT/outloc-{mat}.dat"):
                 t = ln.split()
-                if len(t) != 9:
+                if len(t) != 11:
                     continue
                 try:
                     exits[mat].append([float(x) for x in t[:8]] + [int(t[8])])

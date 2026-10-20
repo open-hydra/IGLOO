@@ -254,6 +254,7 @@ contains
           part%exitFace    = 0
           part%gasExitFace = 0
           part%Af          = 0._R8
+          part%exitCode    = 0
           part%gone  = .false.
           part%wasin = .false.
           part%Ncell = 0
@@ -402,9 +403,11 @@ contains
       endif
       open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
       if (timeOn) then
-        write(unitExit,'(1X,A)') 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","t"'
+        write(unitExit,'(1X,A)') 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","t",'// &
+                                 '"bc","d<sub>p</sub>"'
       else
-        write(unitExit,*) 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID"'
+        write(unitExit,'(1X,A)') 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID",'// &
+                                 '"bc","d<sub>p</sub>"'
       endif
       !> Parcels still in the domain at time-end, one record each.
       if (snapOn) then
@@ -606,7 +609,7 @@ contains
                 kid%xi0     = 0.5_R8
                 !> fresh trajectory bookkeeping
                 kid%Ncell = 0; kid%gone = .false.; kid%wasin = .false.; kid%angle = 0._R8
-                kid%lost  = .false.
+                kid%lost  = .false.; kid%exitCode = 0
                 !> parcel mass state: m from (rho, d), then the parcel flow mdot = npdot*m
                 call kid%computeMass(mat%rhoTab)
                 kid%m0   = kid%m

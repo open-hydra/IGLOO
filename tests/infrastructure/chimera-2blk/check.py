@@ -195,7 +195,7 @@ def exits(path):
         return out
     for ln in lines:
         t = ln.split()
-        if len(t) != 9:
+        if len(t) != 11:
             continue
         try:
             out.append([float(x) for x in t[:8]] + [int(t[8])])

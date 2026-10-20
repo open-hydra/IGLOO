@@ -55,6 +55,7 @@ removed from the `err < 0` branch, and would make this gate read exactly 0.
 | S2 | none took the non-finite exit (the other branch, gated in `tc-hexadecane` as H1) |
 | S3 | 25 exit rows in `OUTPUT/outloc-A.dat` |
 | S4 | `Σ wdot` over `source.tec` equals `Σ` outloc column 7 (`npdot·m_inj`) to `1e-5` |
+| S5 | every exit record's boundary code `bc` is 0: each parcel ended inside the domain, at injection |
 
 S1 is deliberately positive. An oracle that only asserted the mass balance would pass on a
 run where nothing failed at all, which is the whole point of the fixture.
@@ -69,6 +70,7 @@ run where nothing failed at all, which is the whole point of the fixture.
 `rc = 0` in both cases: the solver reports nothing wrong.
 
 ## Pass criterion
-All four gates PASS. Tolerance `1e-5` sits 34× above the measured floor (`2.941e-7`, the
+All five gates PASS. Tolerance `1e-5` sits 34× above the measured floor (`2.941e-7`, the
 `E13.6` source print; identical at `OMP_NUM_THREADS` 1, 2 and 5) and five orders below the
-RED signature. No tuning is involved — S1–S3 are exact integer counts.
+RED signature. No tuning is involved — S1–S3 are exact integer counts, S5 an exact code. S5 is RED on a writer without the
+`bc` column (no exit row of the new width).

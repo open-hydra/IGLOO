@@ -11,8 +11,9 @@ the connected family, so the run reports its block changes once per sweep.
 Gates
   C1  drag-stokes's closed form on every row (its oracle, imported and run on this output)
   C2  25 exits, every one at x = 0.15 with Af = dy dz = 1.000000E-04 m^2 (to the E13.6 print)
-  C3  the same input.ini on drag-stokes's INPUT/ (outlet 400), run by check.py into ref-400/: trajectories and
-      exits equal as sorted multisets, source.tec within 1e-12 of the field scale (compare_tec.py)
+  C3  the same input.ini on drag-stokes's INPUT/ (outlet 400), run by check.py into ref-400/: trajectories equal
+      as sorted multisets, the exits too apart from their boundary code (103 here, 400 there), source.tec within
+      1e-12 of the field scale (compare_tec.py)
   C4  run_out.txt holds the line 'block changes: 0 via the connected cell, 0 via the block sweep, 0 rim exits;
       stencil refreshed on a block change at a boundary entry: 0' exactly once (the witness that the record was
       read as 103: a 400 face prints none), and the sibling's holds no block-change line
@@ -44,6 +45,12 @@ def load(name, path):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def exits_but_bc(path):
+    """The exit records, by header name, as a sorted list of every value but the boundary code; the codes."""
+    rows = datcols.rows(path)
+    return sorted(tuple(v for k, v in r.items() if k != "bc") for r in rows), sorted({r["bc"] for r in rows})
 
 
 def fail(msg):
@@ -95,12 +102,16 @@ def main():
     if code != 0:
         return rc | fail(f"C3 the 400 sibling exited {code}")
     same = True
-    for f in ("trajectories-A.dat", "outloc-A.dat"):
-        la = sorted(open(os.path.join("OUTPUT", f)).read().split("\n"))
-        lb = sorted(open(os.path.join(ref, "OUTPUT", f)).read().split("\n"))
-        if la != lb:
-            same = False
-            rc |= fail(f"C3 {f} differs from the 400 run: {len(set(la) ^ set(lb))} distinct lines")
+    la = sorted(open(os.path.join("OUTPUT", "trajectories-A.dat")).read().split("\n"))
+    lb = sorted(open(os.path.join(ref, "OUTPUT", "trajectories-A.dat")).read().split("\n"))
+    if la != lb:
+        same = False
+        rc |= fail(f"C3 trajectories-A.dat differs from the 400 run: {len(set(la) ^ set(lb))} distinct lines")
+    (ea, ca), (eb, cb) = (exits_but_bc(os.path.join(d, "OUTPUT", "outloc-A.dat")) for d in (HERE, ref))
+    if ea != eb or ca != [103] or cb != [400]:
+        same = False
+        rc |= fail(f"C3 outloc-A.dat: {len(set(ea) ^ set(eb))} records differ from the 400 run apart from the "
+                   f"boundary code; codes {ca} here, {cb} there (expected [103], [400])")
     try:
         ok, worst, ndiff, nval = compare_tec(os.path.join("OUTPUT", "source.tec"),
                                              os.path.join(ref, "OUTPUT", "source.tec"))
@@ -113,8 +124,8 @@ def main():
         same = False
         rc |= fail("C3 the 400 run prints a block-change line")
     if same:
-        print("C3 the 400 run: trajectories and exits equal as sorted multisets, source.tec within 1e-12 "
-              f"(worst {worst:.1e}), no block-change line there PASS")
+        print("C3 the 400 run: trajectories equal as sorted multisets, exits too apart from their boundary code "
+              f"(103 here, 400 there), source.tec within 1e-12 (worst {worst:.1e}), no block-change line there PASS")
 
     print("\n[PASS] conn-103: a 103 face without a partner is an exit" if rc == 0
           else "\n[FAIL] conn-103 violation(s) -- see above.")
