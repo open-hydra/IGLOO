@@ -15,8 +15,8 @@ drifts (the companion `../d2law` case handles that by integrating the kernel alo
 *measured* `T_p` — run-conditioned). This case freezes `B_T` instead: particle
 `cp = 125000` (100× the d2law value, via a local ATLAS-GPB `properties.dat`).
 `cp_p` does not appear in `K` at all, but slows droplet heating 100× — measured drift
-is **0.76 K** over the full residence (`B_T` change ~0.4 %), while `d²` still loses
-39 % (strong signal). `κ_v=1` ⇒ Re=0 (stagnant film exact) and `x = u_g·t`.
+is **0.77 K** over the full residence (`B_T` change ~0.4 %), while `d²` still loses
+40 % (strong signal). `κ_v=1` ⇒ Re=0 (stagnant film exact) and `x = u_g·t`.
 
 ## What `check.py` gates
 Measured `d²(x)` (all 25 streams) against the **input-only** line
@@ -25,8 +25,8 @@ Measured `d²(x)` (all 25 streams) against the **input-only** line
 Tolerance budget (theory, not tuned): (a) monotone `K`-drift bound
 `rel_K = cp_g·ΔT_p^max/L_v/((1+B_T0)·ln(1+B_T0))` × the evaporated fraction (the
 measured `T_p` bounds the *budget*, never the reference); (b) E13.6 truncation
-`2·EPS_R·(d0²+d²)`; (c) a 5e-5 floor. Result: worst residual 2.97e-4 of `d0²` vs
-budget 6.95e-4 — ~2× headroom, 25/25 PASS.
+`2·EPS_R·(d0²+d²)`; (c) a 5e-5 floor. Result: worst residual 3.07e-4 of `d0²` vs
+budget 7.20e-4 — ~2× headroom, 25/25 PASS.
 
 ## Relation to the bug ledger
 The plan's expected finding here ("D-EVAP-1: d2law half-rate, Nu=1") is **already

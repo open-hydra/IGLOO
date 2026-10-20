@@ -388,6 +388,9 @@ contains
           .or.part%time>=tEnd) then
         if (trajOn) call writeTrajRow()
         tprint = tprint + dtprint
+      !> A parcel that left through a boundary face ends its trajectory at the exit, whatever the cadence.
+      elseif (trajOn .and. part%gone .and. part%exitCode /= 0) then
+        call writeTrajRow()
       endif
       !> time-end reached inside the domain: the parcel's state at the stop.
       if (snapOn .and. part%time>=tEnd .and. .not.part%gone) &

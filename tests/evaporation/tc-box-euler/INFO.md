@@ -56,18 +56,18 @@ is **not read by IGLOO**; do not "correct" the oracle to it), `d₀ = 20 µm` �
 `euler1.tec` is BLOCK-packed: 3·nn nodal values then 6·nc cell values in the order
 `rho_p u_p v_p w_p T_p n_p`, `i` fastest. A parcel's column is its first trajectory row's
 `(y,z)`; for cell `i` the bounding rows are at `x = (i−1)Δx` and `x = iΔx`. `print-dcell = 1`
-writes one row per cell **entry**, so the outlet layer `i = 60` has no `m_out` row and is
-skipped — **1475** of 1500 cells are checked and the count is asserted.
+writes one row per cell **entry** and the exit row at `x = 0.15`, so every cell has both bounding rows —
+all **1500** cells are checked and the count is asserted.
 
 | gate | assertion | RED (pre-fix) | GREEN |
 |---|---|---|---|
 | W1/W2 | both INI changes were read — the two log witnesses | present | present |
-| N | ≥ 1000 cells checked (non-vacuity) | 1475 | 1475 |
+| N | ≥ 1000 cells checked (non-vacuity) | 1475 | 1500 |
 | E3 | `abs(rho_p/n_p − (m_in+m_out)/2) / m̄ ≤ 1e-4` | **1.000** | 2.930e-05 |
 | E4 | `abs(u_p − 10)/10 ≤ 1e-11` | **5.003e+07** | 7.19e-14 |
 | E4 | `abs(v_p), abs(w_p) ≤ 1e-18` | 2.17e-14 | 4.34e-22 |
 | E5 | `T_p` inside `[T_in, T_out] ± 0.05 K` | **2.591e+10 K** | **0.0 exactly** |
-| E1 | `Σ rho_p·V / Σ npdot·∫m dt ∈ [0.5, 2]` (coarse conservation) | **0.0000** | 1.0148 |
+| E1 | `Σ rho_p·V / Σ npdot·∫m dt ∈ [0.5, 2]` (coarse conservation) | **0.0000** | 1.0000 |
 
 W1/W2 are **positive** witnesses. Without them a run that never read the INI would pass the
 absences, and `out-file`/`mollify` are exactly the two keys this fixture exists to set.

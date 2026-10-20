@@ -14,7 +14,7 @@ output, then requires `T = 600.000000` on every trajectory row and exit record, 
 
 ## Pass criterion
 Measured: 25/25 parcels on the Stokes closed form (worst 0.014 of the tolerance), `T = 600.000000` on
-1525/1525 rows (1500 trajectory rows, 25 exits).
+1550/1550 rows (1525 trajectory rows, 25 exits).
 
 ## Falsification
 - A varying cp refused unless its table starts at 1 K: the run stops at setup (exit 128).

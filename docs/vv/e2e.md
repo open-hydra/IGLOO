@@ -175,7 +175,7 @@ inlet cells enter at 210 K (below the table), 300 K, 750 K and 840 K (above it).
 | `source.tec` | $\sum E = \sum \dot m\,[h(T_0) - h(T_\mathrm{exit})]$ to $10^{-6}$ of the gross exchange |
 | Non-vacuity | every parcel of every group verified |
 
-**Result:** 25/25 parcels, the worst row at 0.013 of its tolerance, the energy to $6\cdot10^{-9}$ of
+**Result:** 25/25 parcels, the worst row at 0.014 of its tolerance, the energy to $6\cdot10^{-9}$ of
 the gross.  A temperature left at its injection value while the enthalpy evolves fails every row
 (worst 237 K off); an inversion that reads before the table's first row puts the 210 K group up to
 1.87 K off.
@@ -285,8 +285,8 @@ The Tier-V companion to `d2law`: instead of integrating the kernel along
 the measured $T_p$, this case realizes the textbook **analytic special case** and
 gates against a line built from the case inputs alone.  Production's `d2law` has no
 boiling clamp, so $B_T$ normally drifts; here the particle $c_p$ is raised 100×
-(a knob that does not enter $K$ at all) so the droplet heats only 0.76 K over the
-full residence while $d^2$ still loses 39 %.  With $B_T$ frozen at its injection
+(a knob that does not enter $K$ at all) so the droplet heats only 0.77 K over the
+full residence while $d^2$ still loses 40 %.  With $B_T$ frozen at its injection
 value, $d^2(x) = d_0^2 - K_0(x-x_a)/u_g$ with
 $K_0 = 8k_g\ln(1+B_{T0})/(c_{p,g}\rho_p)$ — Godsave/Spalding, zero run-conditioning.
 The tolerance is a theory budget (monotone $K$-drift bound from the measured $T_p$
@@ -420,11 +420,9 @@ kernel.
 Langmuir–Knudsen non-equilibrium interface (MHB98 model M2) on the CEM gas-side
 kernel: `check.py` RK4-integrates the LK-corrected kernel along the measured
 $T_p(x)$ and requires an LK-vs-VLE discrimination margin per particle, plus a
-mass-telescoping audit of the source deposit (with a last-slab tail extrapolation —
-trajectories end at the final crossing before the outlet while `wdot` deposits
-through the exit).
+mass-telescoping audit of the source deposit.
 
-**Result:** 25/25; telescoping residual $2\cdot10^{-4}$.
+**Result:** 25/25; telescoping residual $2\cdot10^{-6}$.
 
 <figure>
   {% include "vv/images/lk-neq.svg" ignore missing %}

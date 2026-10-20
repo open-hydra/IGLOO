@@ -139,7 +139,9 @@ def main():
         if ex is None:
             fails.append("E3 ID=%d: no exit record" % pid)
             continue
-        bounds = [(r["X"], r["t"], r["T"]) for r in rows] + [(ex["X"], ex["t"], ex["T"])]
+        bounds = [(r["X"], r["t"], r["T"]) for r in rows]
+        if rows[-1]["t"] < ex["t"]:          # the trajectory ends at the exit: its last row is the exit record
+            bounds.append((ex["X"], ex["t"], ex["T"]))
         for n in range(len(bounds) - 1):
             (xa, ta, Ta), (xb, tb, Tb) = bounds[n], bounds[n + 1]
             i = int(round(xa / DX)) + 1

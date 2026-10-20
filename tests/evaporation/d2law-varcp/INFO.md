@@ -27,7 +27,7 @@ T = T(h) through the table (linear between its nodes); every constant is a case 
   parcels share one history (asserted within 5e-5 K), so the exit flow is Σ_p ṅ m₀ − Σẇ (V1's audited mass source)
   at the exit records' T and u_g; within the T print and spread of the exit records and the sums' 15 digits.
 
-**Measured.** V1 worst 0.34 of its tolerance; V2 worst 0.67 (1.4e-5 K at the first row: the d print through the rate);
+**Measured.** V1 worst 0.32 of its tolerance; V2 worst 0.67 (1.4e-5 K at the first row: the d print through the rate);
 V3 1.6e-8 W (0.004 of its tolerance, 3e-12 of the gross 5.24·10³ W).
 
 **RED.**

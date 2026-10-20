@@ -44,6 +44,9 @@ ref-row-raw
 ref-shift
 # etab-e2e-dopri5 runs its H-sdirk4 sibling into ref-sdirk4/ (tests/breakup/etab-e2e-dopri5/check.py)
 ref-sdirk4
+# out-exit-row runs its gas-order and cadence siblings into ref-o1-*/ and ref-o2-*/ (tests/standard/out-exit-row/check.py)
+ref-o1-*
+ref-o2-*
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/

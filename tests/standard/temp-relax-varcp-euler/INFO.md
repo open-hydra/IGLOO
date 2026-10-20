@@ -14,7 +14,8 @@ d = 16 µm, four inlet groups at 210, 300, 750 and 840 K (below, inside and abov
 **Oracle** (`check.py`). T(t) is `temp-relax-varcp`'s closed form (its module: the table rebuilt from its recipe, the
 segments marched from the injection state). On a table segment of slope s, h(T(t)) is an exponential in t, so
 ∫h dt is exact segment by segment; the window [t_in, t_out] of each cell is read from the trajectory rows (the row
-entering the cell and the next one, the exit record for the last cell). T(h) is the check's own inverse of the
+entering the cell and the next one; the last cell's closes at the exit row, the exit record's position and time).
+T(h) is the check's own inverse of the
 piecewise-linear table, the end segments extended.
 
 **Gates.**

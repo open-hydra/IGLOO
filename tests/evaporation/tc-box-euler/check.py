@@ -43,7 +43,7 @@ TOL_MASS = 1.0e-4         # 3.4x the worst residual of the two-row mean
 TOL_U    = 1.0e-11        # 133x
 TOL_VW   = 1.0e-18        # 2300x
 TOL_T    = 0.05           # K of slack on the [T_in, T_out] band (observed excursion: 0)
-MIN_CELLS = 1000          # non-vacuity: 1475 are checkable (i=60 has no exit row)
+MIN_CELLS = 1000          # non-vacuity: 1500 are checkable
 
 
 def read_euler(path, nvar=6):
@@ -59,8 +59,8 @@ def read_euler(path, nvar=6):
 
 def load_columns():
     """Trajectory rows grouped into the (j,k) cell column each parcel rides.
-    print-dcell = 1 writes one row per geo-cell ENTRY: 60 rows at x = 0 .. 0.1475.
-    The exit at x = 0.15 goes to outloc-A.dat, so cell i=60 has no m_out row."""
+    print-dcell = 1 writes one row per geo-cell ENTRY (x = 0 .. 0.1475) and the exit row
+    at x = 0.15, so every cell has both bounding rows."""
     parts = {}
     for line in open(TRAJ):
         try:
@@ -102,7 +102,7 @@ def main():
                     continue
                 a, b = rows.get(round((i-1)*DX, 6)), rows.get(round(i*DX, 6))
                 if a is None or b is None:
-                    continue                            # outlet layer: no m_out row
+                    continue                            # a cell without both bounding rows
                 n += 1
                 mbar = 0.5*(a[8] + b[8])
                 d = abs(rho_p[idx]/n_p[idx] - mbar)/mbar
