@@ -36,7 +36,8 @@ Geometry / BCs:
     face 1 (x = Lx) is the outlet and its face 2 (x = Lx/2) the 101 connection, block 1's face-2 cell
     (m, n) partnering block 2's cell (Nx/2, m, Nz+1-n) and vice versa, orientation 1 0 0 -1.
   - --outlet-code C: the outlet face (x = Lx) written with code C, header only (default 400).
-  - --ug U: the gas x-velocity (default 10 m/s); --ygrade G: the rows along y of geometric thickness,
+  - --ug U: the gas x-velocity (default 10 m/s); --u2 U2: the gas x-velocity U2 in the cells whose centre
+    lies beyond x = Lx/2 (the --ug value before); --ygrade G: the rows along y of geometric thickness,
     each G times the one below, Ly unchanged (row j of thickness Ly*(G-1)*G**(j-1)/(G**Ny-1)).
   - --mesh-only: only <out_dir>/mesh.tec, the nodes in ATLAS's mesh layout (the deck of an ATLAS BCB
     run), no gas file, no bc.txt.
@@ -52,7 +53,8 @@ Usage:
     make_box_case.py <out_dir> [--kv KV] [--kt KT] [--rp RP] [--alpha A] [--blocks 2] [--tg TG]
                      [--nx NX] [--ny NY] [--nz NZ] [--overlap N [--shift S] [--rim]] [--families F]
                      [--stretch R] [--gradient G] [--zgradient G] [--wave-y A] [--rotate2 y]
-                     [--outlet-code C] [--ug U] [--ygrade G] [--mesh-only] [--sym-face F] [--no-inlet]
+                     [--outlet-code C] [--ug U] [--u2 U2] [--ygrade G] [--mesh-only] [--sym-face F]
+                     [--no-inlet]
         writes <out_dir>/solfile.tec and <out_dir>/bc.txt (and phase.txt with --families > 1)
         --kv : inlet velocity scaling  (v0 = kv*|u_g|; 1.0 => no drag slip, Re=0)
         --kt : inlet temperature scaling (Tp0 = kt*T_g; 1.0 => no thermal slip)
@@ -75,6 +77,7 @@ Usage:
         --rotate2 : y -- with --blocks 2, block 2 rotated 180 degrees about y (default: not rotated)
         --outlet-code : the code of the outlet face's records, header only (default 400)
         --ug : gas x-velocity [m/s] (default 10)
+        --u2 : gas x-velocity [m/s] in the cells beyond x = Lx/2 (default: --ug everywhere)
         --ygrade : thickness ratio of consecutive rows along y (default 1: uniform)
         --mesh-only : write mesh.tec (ATLAS's mesh layout) only
         --sym-face : the face written as a symmetry plane (300), header only (default none)
@@ -208,7 +211,8 @@ def block_nodes(b, i0, ncx, ncy, sh, nx, ny, nz, stretch, rotated, ygrade):
 
 
 def write_solfile(path, blocks=1, tg=None, nx=NX, ny=NY, nz=NZ, overlap=0, shift=0.0, rim=False,
-                  stretch=1.0, gradient=None, zgradient=0.0, wave_y=0.0, rotate2=None, ug=None, ygrade=1.0, xnodes=None):
+                  stretch=1.0, gradient=None, zgradient=0.0, wave_y=0.0, rotate2=None, ug=None, ygrade=1.0, xnodes=None,
+                  u2=None):
     """xnodes: the x of every node along x of a one-block box (nx + 1 values), in place of the uniform ones."""
     layout = block_layout(blocks, nx, ny, overlap, shift, rim)
     if xnodes is not None and (blocks != 1 or len(xnodes) != nx + 1 or gradient or stretch != 1.0):
@@ -241,6 +245,10 @@ def write_solfile(path, blocks=1, tg=None, nx=NX, ny=NY, nz=NZ, overlap=0, shift
                     val = tg
                 if name == "U" and ug is not None:
                     val = ug
+                if name == "U" and u2 is not None:
+                    row = [f"  {u2 if 0.5 * (xs[i] + xs[i + 1]) > 0.5 * LX else val:.15E}\n" for i in range(ncx)]
+                    f.writelines(row * (ncy * nz))
+                    continue
                 if name == "T" and (zgradient or wave_y or rotated):
                     buf = []
                     for k in range(nz):
@@ -395,6 +403,8 @@ def main():
     p.add_argument("--outlet-code", type=int, default=BCDEF_WALL,
                    help="code of the outlet face's records (x = Lx), header only (default 400)")
     p.add_argument("--ug", type=float, default=None, help="gas x-velocity [m/s] (default 10)")
+    p.add_argument("--u2", type=float, default=None,
+                   help="gas x-velocity [m/s] in the cells beyond x = Lx/2 (default: --ug everywhere)")
     p.add_argument("--ygrade", type=float, default=1.0,
                    help="each row along y this many times as thick as the one below (default 1)")
     p.add_argument("--mesh-only", action="store_true", help="write mesh.tec (ATLAS's mesh layout) only")
@@ -440,7 +450,7 @@ def main():
                                           nx=a.nx, ny=a.ny, nz=a.nz, overlap=a.overlap, shift=a.shift,
                                           rim=a.rim, stretch=a.stretch, gradient=a.gradient,
                                           zgradient=a.zgradient, wave_y=a.wave_y, rotate2=a.rotate2,
-                                          ug=a.ug, ygrade=a.ygrade)
+                                          ug=a.ug, ygrade=a.ygrade, u2=a.u2)
     n_inlet = write_bc(os.path.join(a.out_dir, "bc.txt"), a.kv, a.kt, a.rp, a.alpha,
                        periodic_y=a.periodic_y, blocks=a.blocks, nx=a.nx, ny=a.ny, nz=a.nz,
                        overlap=a.overlap, shift=a.shift, rim=a.rim, families=a.families,

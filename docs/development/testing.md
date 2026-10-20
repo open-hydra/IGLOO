@@ -83,7 +83,7 @@ tests/
 ├── combustion/                   # Beckstead unit family + burn-box e2e
 ├── solidification/               # solidification unit family + solid-box/solid-melt/solid-box-euler/solid-box-2mat/scatter-weight-solid e2e
 ├── infrastructure/               # gas_reconstruction, ini_pipeline, properties_reader, rng_stream, axis_dispatch, graze_standoff, dual_clip, source_reduction, ghost_bc, bc_families, mollify_blocks, host_assoc, containment;
-│                                 # db-injection/coupled-body/body-evap-m2/body-evap-m4/body-burn-m5/db-2daxi/axis-200/wedge-fold/planar-slab/wedge-axis-row/wedge-tiny/two-mat/inlet-402-403/two-fam-bc/two-fam-bc-2blk/two-fam-bc-2blk-mollify/rot-2blk/chimera-2blk/chimera-2blk-rim/two-fam-bc-2blk-stretch-ord2/chimera-2blk-shift-ord2/chimera-2blk-mollify/chimera-2blk-shift-mollify/periodic-y/periodic-2d/periodic-2d-ord2/conn-103/bc-center-2grp/inj-pack/inj-dscell/inj-dsdegen/ini-comment-eq/solver-fail-consumed/solver-fail-consumed-m4/stuck-cell/sym-plane-skate/sym-plane-skate-ord2/wall-approach/varcp-tmin/psd-bare-token/inj-edge/inj-edge-payload (e2e)
+│                                 # db-injection/coupled-body/body-evap-m2/body-evap-m4/body-burn-m5/db-2daxi/axis-200/wedge-fold/planar-slab/wedge-axis-row/wedge-tiny/two-mat/inlet-402-403/two-fam-bc/two-fam-bc-2blk/two-fam-bc-2blk-mollify/rot-2blk/chimera-2blk/chimera-2blk-rim/two-fam-bc-2blk-stretch-ord2/chimera-2blk-shift-ord2/chimera-2blk-mollify/chimera-2blk-shift-mollify/periodic-y/periodic-2d/periodic-2d-ord2/conn-103/bc-center-2grp/inj-pack/inj-dscell/inj-dsdegen/ini-comment-eq/solver-fail-consumed/solver-fail-consumed-m4/solver-fail-midway/stuck-cell/sym-plane-skate/sym-plane-skate-ord2/wall-approach/varcp-tmin/psd-bare-token/inj-edge/inj-edge-payload (e2e)
 │                                 # refusals/{p2t,zgr,lk-d2law,properties-*,vapour-*,bc-copies,bc-copy-order,chimera-*,*-token,phase-token-real,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre,comb-*,brk-*,sigma-*,bc-legacy,bc-empty-payload,body-accel} (setup-refusal gates)
 ├── repeatability/                # two-sweep state-leak gates: drag-stokes/drag-stokes-dopri5/db-injection/two-mat/d2law/khrt/vie-plait/etab/tab/tab-dopri5/solid-box/evap-breakup/swirl-wedge
 └── mpi/                          # USE_MPI build only: drag-stokes/conv-nu/khrt/bc-center-2grp/two-mat/timing-report/consistency/consistency-two-mat/determinism/repeat-*/ (13)
@@ -109,7 +109,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **248 tests** in a serial build (202 e2e + 45 unit, `self_test`,
+Current gate: **249 tests** in a serial build (203 e2e + 45 unit, `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 24 more
 `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.

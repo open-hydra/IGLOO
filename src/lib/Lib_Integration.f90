@@ -196,6 +196,9 @@ contains
     do while (part%time<tEnd.and.iter<maxIter)
       iter = iter+1
       call part%initializeCell(eulerSwitch)
+      !> Only the segment finalize sets these: a segment that never finalizes deposits nothing.
+      part%deltaL = 0._R8; part%Tstay = 0._R8
+      if (eulerSwitch) part%intE = 0._R8
       if (sourceSwitch) call part%computeSource(massIn,Pin,Ein)
       entryPos = part%stateVar(1:3)   ! cell-entry position (for the closed-form body-force work)
       i = part%i(2); j = part%i(3); k = part%i(4);
@@ -515,8 +518,9 @@ contains
         doLoop        = .false.
         !> Consumption models hand the remnant to the gas as on a clean burnout.
         if (mod_model==2 .or. mod_model==4 .or. mod_model==5) consumed = .true.
-        !> Sync d/m/tp from the reverted state.
+        !> Sync d/m/tp from the reverted state; the residence ends at the last good step.
         call part%updatePart(rhoTab,hTab,eulerSwitch)
+        part%Tstay = timeLocal - tStart
         return
       endif
       part%stateVar = y

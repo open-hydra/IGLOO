@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (248 in a serial build: 202 e2e + 45 unit incl. `self_test`,
+One row per registered CTest entry (249 in a serial build: 203 e2e + 45 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 24 `mpi-*`
-rows in their own section, 272).
+rows in their own section, 273).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (62 of 120 e2e fixtures)
+## Shared box fixture (62 of 121 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,9 +39,9 @@ writes with its defaults.
 Sixty-two fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other fifty-eight:
+once here, referenced as **"shared box"** below. The other fifty-nine:
 
-- non-uniform gas (eighteen): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
+- non-uniform gas (nineteen): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
   (`axis-200` plus swirl on the near-axis parcel); `swirl-wedge`, `swirl-wedge-deposit`,
   `swirl-wedge-spin` and `swirl-wedge-ord1` (a 200×40-cell annular wedge from `tools/make_wedge_case.py`, analytic solid-body
@@ -52,8 +52,9 @@ once here, referenced as **"shared box"** below. The other fifty-eight:
   `chimera-2blk-shift-ord2` (`chimera-2blk` with block 2 shifted by half a cell and the same gradient,
   `--shift 0.5 --gradient 1000`), `periodic-2d-ord2` (`periodic-2d`'s one-layer box with a temperature wave
   across the periodic pair, `--wave-y 100`) `rot-2blk` (the box as two blocks, block 2 rotated 180° about y,
-  T = 600 + 2000 z K, `--blocks 2 --rotate2 y --zgradient 2000`) and `body-force-z` (the box with
-  T = 600 + 2000 z K, `--zgradient 2000`);
+  T = 600 + 2000 z K, `--blocks 2 --rotate2 y --zgradient 2000`) `body-force-z` (the box with
+  T = 600 + 2000 z K, `--zgradient 2000`) and `solver-fail-midway` (the box with the gas at 5 m/s beyond
+  x = 0.075 m, `--kv 1.0 --u2 5 --rp 1.0e-6`);
 - uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (nineteen):
   `pilch-erdman-e2e`, `reitz-diwakar-e2e`, `rd-evap-frozen`, `khrt-e2e`, `khrt-e2e-euler`, `khrt-stress`,
   `khrt-evap-frozen`, `khrt-evap-frozen-euler`, `khrt-evap-live`, `khrt-shed-noexchange` and `khrt-varrho` on the 0.15 m box at
@@ -194,6 +195,7 @@ oracle possible.
 | **ini-comment-eq** | infrastructure (INI parser contract) | *behavioral* — no reference curve. `drag-stokes`' own `input.ini` with one `;` comment line carrying an `=` inserted inside `[IGLOO-General]`, right after `gas-file`; the oracle is the three keys that follow it. Asserts a clean stderr, `gas-order = 1` (no `Defaulting to 2nd order`), `out-file = S` by its **positive** log witness ` >> Output field: gas coupling source` (an absence-only check passes on a run that never read the file), `source.tec` written with no `euler1.tec`, and 25 exit rows. Pins that an in-section inline comment is inert, i.e. that the in-tree FiNeR and hydra's (`--include-finer`) parse the same file identically | shared box (`INPUT/` symlinks `standard/drag-stokes/INPUT`) | `drag-stokes`' conditions verbatim (inlet-face 401, κ_ρ=0.34, κ_v=0.1, d=11.89 µm, ρ_p=2950, Stokes drag, `gas-order = 1`, `out-file = S`) plus the single added comment line. Its **preamble** keeps seven `=`-bearing `;` lines: those precede the first `[`, so they are outside every section and inert under either parser — the trap is in-section only |
 | **solver-fail-consumed** | infrastructure (integration exit contract; O30 step 4b) | *behavioral* — no reference curve. A parcel deleted because `Run_ODESolver` returned `err < 0` must still hand its remaining mass to the gas for consumption models 2/5, as the non-finite exit beside it already does; otherwise the remnant leaves the mass balance. Asserts the branch actually fired (25 `Run_ODESolver err=` lines — a positive witness), that no parcel took the non-finite exit instead, 25 exit rows, `Σ wdot` = `Σ npdot·m_inj` to 1e-5, and every exit record's boundary code `bc` = 0 (ended inside the domain). **The only fixture that reaches that branch**: after the `rhsEvaporation` scrub even tc-hexadecane burns out cleanly | `evaporation/tc-hexadecane`'s case (`INPUT/` symlinked whole) | tc-hexadecane's conditions with the ODE tolerances at **1e-30**, below double-precision resolution, so SDIRK4 fails on the first step of every parcel. All 25 then die at injection carrying their FULL mass ⇒ the source total is all-or-nothing (RED 0.0 / GREEN the whole stream). The 100 % remnant is also what makes the cost of the contract visible |
 | **solver-fail-consumed-m4** | infrastructure (integration exit contract, model 4) | as `solver-fail-consumed` (its `check.py`) with `breakup=Reitz-Diawakar` added: the `err < 0` exit hands a model-4 parcel's remnant to the gas (resid 2.941e-7), every `bc` = 0. RED unfixed: Σ`wdot` = 0, resid 1.0 | as `tc-hexadecane` | as `solver-fail-consumed` + `breakup=Reitz-Diawakar` (σ 0.072, μ_l 1e-3) |
+| **solver-fail-midway** | infrastructure (integration exit contract, Eulerian deposit) | *conservation* — the Eulerian mass Σ ρ_p V_cell (V_cell from `euler1.tec`'s nodes) against the exit records' Σ ṁ t (model 1 deposits ṁ over the residence): F1 every parcel fails once in the first cell past a gas velocity jump, after finalized segments (25 `Run_ODESolver err=` lines, exits at 0.075 ≤ x < 0.0775 m, t > 0), F2 the balance within 1e-5 (the E13.6 `mdot` column: 8e-7; measured −2.9e-7), F3 the run ends normally. RED with the previous segment's moments left in place: +3.333e-2 (one cell of thirty) | own `solfile.tec` (`make_box_case.py --kv 1.0 --u2 5 --rp 1.0e-6`: U = 10 m/s up to x = 0.075 m, 5 m/s beyond) | inlet-face 401, κ_v = 1, d = 2 µm, ρ_p = 2950; Stokes; `max-steps-ode = 60`; `out-file = ALL`, `out-time`, `mollify = off` |
 | **stuck-cell** | — (guard) | *integration exit contract*: parcels at rest in a gas at rest (402 inlet with \|v\| = 0) never leave their cell; S1 one `stuck in cell` line per parcel (25, the IDs of the exit records), S2 25 exit records at the injection points, S3 no other guard (no net progress, inner loop, outer maxIter, non-finite), S4 the run ends normally. RED with the residency guard disabled: the zero-progress guard ends every parcel (S1, S3) | own `solfile.tec` (`make_box_case.py --ug 0`: the shared box's mesh, the gas at rest), own `bc.txt` (`make_fixture.py`) | inlet-face 402 at rest on every cell (gp 1.0, Tp 600 K); outlet + walls |
 | **sym-plane-skate** | — (guard, census control) | *integration exit contract at a symmetry plane*: twelve streams launched from z = 1e-4 m toward a 300 plane, 0.1 and 50 m/s at 1° and 10°, gas order 1; C1 no give-up guard and no solver failure (no `stuck in cell`, `no net progress`, `Run_ODESolver err=`, inner-loop or outer cap, non-finite line), the run ends normally; C2 twelve exits, all at x = 0.15; C3 the 50 m/s, 1° streams slide on the plane (grazing projection, z = 1e-6 m), the 50 m/s, 10° streams leave reflected (z = 5.9e-3 m), the 0.1 m/s streams stop short of it. RED: the plane made an exit, 6 of 12 leave at z = 0 (C2, C3); the residency guard at one segment, 12 `stuck in cell` (C1) | shared box (`solfile.tec` symlinked); own `bc.txt` (`make_box_case.py --sym-face 5 --no-inlet`) | no inlet: twelve `[IGLOO-BC]` assigned streams, d = 11.89 µm, ρ_p = 2950; face 5 symmetry (300), outlet + walls; Schiller-Naumann, SDIRK4 at the default tolerances, `out-time` |
 | **sym-plane-skate-ord2** | — (guard, census control) | `sym-plane-skate` at gas order 2 (its `check.py`, symlinked): the dual mesh's boundary row straddles the plane and reads the bc-aware ghost ring; the same exits and bands. RED: the plane made an exit (C2, C3) | as `sym-plane-skate` (`INPUT/` symlinked) | as `sym-plane-skate`, `gas-order = 2` |
@@ -395,9 +397,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-202 `e2e`-labelled + 45 `unit`-labelled + the optional `vortex-cloud-3way` = **248 CTest entries** in a
-serial build (+24 `mpi-*` under `USE_MPI`, 272), all green (counted from `tests/CMakeLists.txt`). The 202
-`e2e` entries are the 120 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+203 `e2e`-labelled + 45 `unit`-labelled + the optional `vortex-cloud-3way` = **249 CTest entries** in a
+serial build (+24 `mpi-*` under `USE_MPI`, 273), all green (counted from `tests/CMakeLists.txt`). The 203
+`e2e` entries are the 121 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the four `threads-*` thread-count gates, the thirteen `repeat-*` two-sweep gates, the sixty-two `refuse-*` setup-refusal gates and `vv-order`
 (the record-order independence of two V&V figures). The
