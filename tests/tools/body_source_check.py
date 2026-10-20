@@ -38,6 +38,7 @@ layouts of the accumulators):
       field equals 25 ndot time-end (the number rate never moved)
   B5  (a regression band, no oracle) the two runs' source.tec agree cell by cell within BAND of each variable's
       scale: the two layouts integrate one ODE under different error norms
+With IGLOO_REUSE_SIBLING=1 the ref-S/ a previous run left is read, not run again.
 """
 import math
 import os
@@ -144,6 +145,7 @@ def check_run(d, cfg, layout, g):
         parts.setdefault(r["ID"], []).append(r)
     for p in parts.values():
         p.sort(key=lambda r: r["t"])
+    parts = dict(sorted(parts.items()))  # ID order: the sums and the ties do not follow the record order
     ex_ok = sorted(r["ID"] for r in exits) == sorted(snap) and all(
         r["bc"] == 0 and all(r[k] == snap[r["ID"]][k] for k in ("X", "Y", "Z", "t")) for r in exits)
     g.check("W", ex_ok and len(exits) == N_PARCELS and len(parts) == N_PARCELS and len(snap) == N_PARCELS,
@@ -257,11 +259,16 @@ def check_run(d, cfg, layout, g):
 
 def main(cfg):
     here = os.getcwd()
-    igloo = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(here, "..", "..", "..", "bin", "IGLOO")))
-    rc = run_sibling(here, igloo)
-    if rc != 0:
-        print("[FAIL] the ref-S sibling run failed (exit %d)" % rc)
-        return 1
+    if os.environ.get("IGLOO_REUSE_SIBLING") == "1":  # read the ref-S/ a previous run left
+        if not os.path.isdir(os.path.join(here, "ref-S", "OUTPUT")):
+            print("[FAIL] IGLOO_REUSE_SIBLING=1 and no ref-S/OUTPUT to read")
+            return 1
+    else:
+        igloo = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(here, "..", "..", "..", "bin", "IGLOO")))
+        rc = run_sibling(here, igloo)
+        if rc != 0:
+            print("[FAIL] the ref-S sibling run failed (exit %d)" % rc)
+            return 1
     ga, gs = Gates("ALL"), Gates("ref-S")
     try:
         sa = check_run(here, cfg, "ALL", ga)

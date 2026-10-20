@@ -100,11 +100,11 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 256/256 in a serial build (209 e2e + 46 unit, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, and the
+ctest 257/257 in a serial build (210 e2e + 46 unit, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 24 more `mpi-*` cases, 280 in all (the 24 `mpi-*` pass). The e2e entries are 127 solver cases, two further
-oracles on `khrt-e2e`'s run, the four thread-count gates, the thirteen two-sweep gates, the sixty-two setup refusals and `vv-order` (two V&V
-figures independent of the record order; skipped without matplotlib); the unit entries are 39
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 24 more `mpi-*` cases, 281 in all (the 24 `mpi-*` pass). The e2e entries are 127 solver cases, two further
+oracles on `khrt-e2e`'s run, the four thread-count gates, the thirteen two-sweep gates, the sixty-two setup refusals, `vv-order` (nine V&V
+figures independent of the record order; skipped without matplotlib) and `check-order` (four gate printouts independent of it); the unit entries are 39
 compiled unit tests, the property-table reader on three fixtures, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs`. Evaporation with
 ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,
 `evap-breakup-box`, `d2law-brk-dormant`, `rd-evap-frozen`, `tab-evap-frozen`, `etab-evap-frozen`, `khrt-evap-frozen`,

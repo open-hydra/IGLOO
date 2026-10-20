@@ -70,8 +70,8 @@ def main():
     ur, xr = ref[:, 0], ref[:, 1]
 
     parts = load_trajectories(TRAJ)
-    best = max((rows for rows in parts.values() if len(rows) >= MIN_PTS),
-               key=len, default=None)
+    best = max((parts[k] for k in sorted(parts) if len(parts[k]) >= MIN_PTS),
+               key=len, default=None)  # a tie: the lowest ID
     if best is None:
         print("[verify] no sufficiently sampled particle to plot")
         return 0

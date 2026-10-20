@@ -50,7 +50,7 @@ def main():
     if not parts:
         print("[verify] no trajectory rows to plot")
         return 0
-    rows = sorted(max(parts.values(), key=len), key=lambda r: r[0])
+    rows = sorted(max((parts[k] for k in sorted(parts)), key=len), key=lambda r: r[0])  # a tie: the lowest ID
     xs, Ts = [r[0] for r in rows], [r[6] for r in rows]
     xr = np.linspace(0.0, check.LX, 1201)
     Tr = [closed_form(x) for x in xr]

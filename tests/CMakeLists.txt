@@ -640,19 +640,6 @@ igloo_e2e_case(tab-e2e breakup/tab-e2e "e2e;breakup;val;tab")
 # threads-tab-e2e: tab-e2e at 1, 2 and 5 threads -- the child sizes of the TAB resize are drawn inside the parallel
 # region, from each parcel's own stream. RED with the intrinsic random_number there (RosinRammler).
 igloo_threads_case(threads-tab-e2e breakup/tab-e2e "e2e;breakup;omp")
-# vv-order: the tab-e2e and burn-box figures (verify.py) are the same bytes whatever order an OpenMP run gives the
-# records of each zone of their .dat files; it reads those cases' fresh OUTPUT/, which both start by removing.
-set_tests_properties(tab-e2e PROPERTIES FIXTURES_SETUP vv_order_tab RESOURCE_LOCK tab_e2e_output)
-set_tests_properties(burn-box PROPERTIES FIXTURES_SETUP vv_order_burn RESOURCE_LOCK burn_box_output)
-add_test(NAME vv-order COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/vv_order_check.py
-    ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/vv-order breakup/tab-e2e combustion/burn-box)
-set_tests_properties(vv-order PROPERTIES
-    LABELS "e2e;infrastructure;vv"
-    FIXTURES_REQUIRED "vv_order_tab;vv_order_burn"
-    RESOURCE_LOCK "tab_e2e_output;burn_box_output"
-    SKIP_RETURN_CODE 77
-    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    TIMEOUT 300)
 # B-VAL-5 (2026-07-22): ETAB vs Tanner 97/98 — shared TAB oscillator (onset + t_bu) plus
 # the deterministic exponential-cascade product size across the bag/stripping branches.
 igloo_e2e_case(etab-e2e breakup/etab-e2e "e2e;breakup;val;etab")
@@ -1092,6 +1079,34 @@ igloo_e2e_case(sym-plane-bounce-ord2 infrastructure/sym-plane-bounce-ord2 "e2e;i
 # leaves one exit record, code 0 where the integration stopped inside. RED with no record for the time-end and
 # never-integrated stops: records for IDs 1-3 only.
 igloo_e2e_case(exit-census infrastructure/exit-census "e2e;infrastructure;io")
+
+# vv-order, check-order: the V&V figures (verify.py) and the printouts of the gates that pick parcels (check.py) are
+# the same whatever order an OpenMP run gives the records of each zone of the .dat files (vv_order_check.py). Both
+# read the cases' fresh OUTPUT/, which each case starts by removing: each case is a fixture, its output a lock.
+foreach(_c tab-e2e burn-box solid-box conv-nu temp-relax drag-stokes body-force coupled-body periodic-y
+        d2law-varcp body-evap-m2 body-evap-m4 body-burn-m5)
+    set_tests_properties(${_c} PROPERTIES FIXTURES_SETUP order_${_c} RESOURCE_LOCK ${_c}_output)
+endforeach()
+add_test(NAME vv-order COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/vv_order_check.py
+    ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/vv-order breakup/tab-e2e combustion/burn-box
+    solidification/solid-box standard/conv-nu standard/temp-relax standard/drag-stokes standard/body-force
+    infrastructure/coupled-body infrastructure/periodic-y)
+set_tests_properties(vv-order PROPERTIES
+    LABELS "e2e;infrastructure;vv"
+    FIXTURES_REQUIRED "order_tab-e2e;order_burn-box;order_solid-box;order_conv-nu;order_temp-relax;order_drag-stokes;order_body-force;order_coupled-body;order_periodic-y"
+    RESOURCE_LOCK "tab-e2e_output;burn-box_output;solid-box_output;conv-nu_output;temp-relax_output;drag-stokes_output;body-force_output;coupled-body_output;periodic-y_output"
+    SKIP_RETURN_CODE 77
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    TIMEOUT 900)
+add_test(NAME check-order COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/vv_order_check.py --printout
+    ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/check-order evaporation/d2law-varcp
+    infrastructure/body-evap-m2 infrastructure/body-evap-m4 infrastructure/body-burn-m5)
+set_tests_properties(check-order PROPERTIES
+    LABELS "e2e;infrastructure"
+    FIXTURES_REQUIRED "order_d2law-varcp;order_body-evap-m2;order_body-evap-m4;order_body-burn-m5"
+    RESOURCE_LOCK "d2law-varcp_output;body-evap-m2_output;body-evap-m4_output;body-burn-m5_output"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    TIMEOUT 900)
 
 # ---------- mpi (registered only in a USE_MPI build) ----------------------------
 # See mpi/INFO.md. Each dir symlinks its parent case's INPUT/, input.ini and check.py, so the fixture
