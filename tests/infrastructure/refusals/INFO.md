@@ -60,7 +60,7 @@ output written).
 | `refuse-solid-evap` | the valid line plus `[IGLOO-Models] evaporation = CEM` | `solidification=on is exclusive with evaporation` |
 | `refuse-solid-comb` | the valid line plus `combustion=Beckstead K-burn=4.5e-7` | `solidification=on with combustion is not supported` |
 | `refuse-solid-varcp` | the valid line plus an own 10-row `properties.dat` whose `Cp` column varies (the enthalpy its trapezoid sum, so the table itself is valid) | `solidification=on requires a constant-cp material` |
-| `refuse-solid-varrho` | the valid line plus an own 10-row `properties.dat` whose `Density` column varies | `solidification=on requires a constant-density material` |
+| `refuse-rho-solid` | the valid line plus `rho-solid=-1` | `IGLOO: rho-solid must be positive` |
 | `refuse-wedge-offcentre` | a generated wedge whose k-planes sit at 0 and +1° (`tools/make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`) | `IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)` — refused at mesh import (`allocation.f90`), not at the properties choke point |
 | `refuse-psd-missing` | own `INPUT/bc.txt` (`tools/make_box_case.py --law 0.0 tables/psd.dat`, shared by the six table cases below), no table | `IGLOO: size-distribution file not found` — after trying `tables/psd.dat` and `INPUT/psd.dat` (both printed) |
 | `refuse-psd-line-long` | own `bc.txt`: every inlet payload line padded to 600 characters with blanks between columns 7 and 8 | `IGLOO: bc.txt inlet payload line too long` — a line that fills the 512-character buffer |

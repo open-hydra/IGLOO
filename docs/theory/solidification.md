@@ -98,6 +98,34 @@ by a droplet is $m\,[h(\text{entry}) - h(\text{exit})]$.
 
 ---
 
+## Density and diameter
+
+The droplet's mass changes only at a breakup event; its volume is that of its liquid part
+at the liquid density $\rho_l$ plus that of its frozen fraction at the solid density
+$\rho_s$,
+
+$$
+d = \left(\frac{6\,m}{\pi}\left[\frac{1 - f}{\rho_l(T_p)} + \frac{f}{\rho_s}\right]\right)^{1/3}.
+$$
+
+$\rho_l$ is the material's `Density`, a constant or its column of `properties.dat` read at
+the droplet's temperature: under solidification the table is the liquid's.  $\rho_s$ is the
+`rho-solid` token; without it the frozen fraction takes $\rho_l$, so a constant density
+keeps one diameter in every phase and a table gives the table's value at the droplet's
+temperature in every phase.  With $\rho_s > \rho_l$ the recalescence shrinks the droplet in
+one step (from $f = 0$ to $f_0$), the plateau shrinks it continuously, and the solid keeps
+$d_s = (6m/(\pi\rho_s))^{1/3}$; a droplet injected solid has the injected diameter, its
+mass $\rho_s\,\pi d^3/6$.  The diameter enters the convective and radiative heat and the
+drag; the enthalpy is per unit mass and does not depend on it.  A TAB or ETAB droplet that
+breaks up while liquid freezes with the mass of its last breakup.
+
+hydra's Eulerian source branch (`getSourceTerms`, `IGLOO-iter = 2`) rebuilds the diameter
+from the particle and number densities at the liquid density: the Eulerian field carries no
+frozen fraction, so with `rho-solid` it sizes a frozen particle by $(\rho_s/\rho_l)^{1/3}$
+too large.
+
+---
+
 ## Event location
 
 The phase change is found after every accepted solver step: the event function of
@@ -136,8 +164,8 @@ TAB and ETAB act through events: their material stays model 6, and the breakup e
 applied only on a step taken in a liquid phase.  Pilch–Erdman, Reitz–Diwakar and
 Reitz-KHRT carry a rate equation for the number rate, and with solidification they make
 **model 7**: Z(1:6) position and velocity, Z(7) = $T_p$, Z(8) = $f$, Z(9) = $\dot n_p$,
-the droplet mass $m = \dot m/\dot n_p$ from the stream flow $\dot m$ and
-$d = (6m/(\pi\rho_p))^{1/3}$:
+the droplet mass $m = \dot m/\dot n_p$ from the stream flow $\dot m$ and $d$ from $m$ and
+$f$ ([Density and diameter](#density-and-diameter)):
 
 | phase | $dT_p/dt$ | $df/dt$ | $d\dot n_p/dt$ |
 | :--- | :--- | :--- | :--- |
@@ -169,10 +197,12 @@ All per material, as `key=value` tokens on the material line of the phase file
 | `cp-solid` | heat capacity of the solid (J/kg/K) | required > 0 |
 | `T-melt` | melting temperature (K) | 2327 |
 | `T-nuc` | nucleation temperature (K), below `T-melt` | 0.8 `T-melt` |
+| `rho-solid` | density of the solid (kg/m³), not negative | the liquid density |
 
-Setup refuses a solidifying material that also evaporates or burns, and
-one whose `properties.dat` has a varying `Cp` or `Density` column: the model
-integrates the temperature with constant properties.  Melting uses the same keys, and
+Setup refuses a solidifying material that also evaporates or burns, one with a negative
+`rho-solid`, and one whose `properties.dat` has a varying `Cp` column: the model
+integrates the temperature with a constant heat capacity.  A varying `Density` column is the
+liquid's ([Density and diameter](#density-and-diameter)).  Melting uses the same keys, and
 a breaking material takes its surface tension and viscosity as any other (see [Breakup](breakup.md)).
 
 For alumina the NIST-JANAF tables ([JANAF98], Al₂O₃ liquid and α-Al₂O₃) give
@@ -194,7 +224,8 @@ Unit family `tests/solidification/` (the jump in both branches, the plateau rate
 enthalpy continuity at every switch, three-regime RK4 histories of freezing and of
 melting against their piecewise closed forms, the landing inside the new phase, the
 event rule, corner cases, one production RHS call per phase, the layout of model 7 and its
-right-hand side against model 6 and a direct call of the breakup rate in every phase) and the e2e cases
+right-hand side against model 6 and a direct call of the breakup rate in every phase, the
+diameter of the liquid and frozen parts with `rho-solid` in the right-hand side) and the e2e cases
 `solid-box` (the three regimes against their closed forms, the event position, the
 energy deposit globally and per plateau cell, the frozen fraction of every row),
 `solid-melt` (a solid heated to melting: the solid, melting and liquid regimes against
@@ -204,6 +235,10 @@ Eulerian field), `solid-box-2mat` (a model-6 material followed by a model-1 one)
 `solid-box-rad` (the three regimes, the plateau rows and the energy deposit under radiation alone),
 `solid-brk-tab` and `solid-brk-khrt` (TAB and Reitz-KHRT on molten drops that freeze: breakup
 only while liquid, the size held from the nucleation on, KH children born liquid, every exit at
-the outlet, the exit flows, the energy balance, the Eulerian mass and the scatter rows) and
+the outlet, the exit flows, the energy balance, the Eulerian mass and the scatter rows),
+`solid-box-rhos` and `solid-box-varrho` (`rho-solid` and a liquid density table: the mass and
+the diameter of every row, the plateau and the cooling against their closed forms or an
+independent integration), `solid-brk-tab-rhos` (TAB with `rho-solid`: a frozen drop keeps the
+mass of its last breakup) and
 the two-sweep `repeatability/solid-box`, plus seven setup refusals.  See
 `tests/solidification/INFO.md`.

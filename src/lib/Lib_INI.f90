@@ -370,11 +370,12 @@ contains
     mat%hFus     = 0._R8
     mat%Tnuc     = 0._R8
     mat%cpSol    = 0._R8
+    mat%rhoSol   = 0._R8
   end subroutine set_material_defaults
 
 
   !> One key=value token from the material line of the phase file (written by ATLAS GPB from
-  !  [GPB-Phase*]): the seven model words call the assign_* selectors, the fourteen reals are read, a
+  !  [GPB-Phase*]): the seven model words call the assign_* selectors, the fifteen reals are read, a
   !  breakup constant is kept for apply_breakup_tokens; an unknown key or a non-numeric value stops the run.
   subroutine apply_material_key(imat, mat, key, value)
     use IGLOO_data_phases,     only: obj_material
@@ -411,6 +412,7 @@ contains
     case ('h-fus');     read(value,*,iostat=ios) mat%hFus
     case ('T-nuc');     read(value,*,iostat=ios) mat%Tnuc
     case ('cp-solid');  read(value,*,iostat=ios) mat%cpSol
+    case ('rho-solid'); read(value,*,iostat=ios) mat%rhoSol
     case default
       k = breakup_token(key)
       if (k == 0) then

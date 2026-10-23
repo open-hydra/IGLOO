@@ -8,9 +8,9 @@
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ rad-cool/ emissivity-cap/ rad-foreign-key/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
-#   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ (e2e)
+#   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-brk-tab-rhos/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ breakup-per-material/ pe-sigma-table/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel}
 #   repeatability/      two-sweep gates (twosweep driver): 13 cases
 #   mpi/                registered only under USE_MPI: 8 rank-count cases + 3 consistency + 1 determinism
 #                       + 13 two-sweep cases
@@ -633,6 +633,17 @@ igloo_e2e_case(solid-brk-tab solidification/solid-brk-tab "e2e;solidification;br
 # solid-brk-khrt: KH-RT on a solidifying material (ODE model 7): stripping and RT act on the liquid only, a KH
 # child is born in its parent's phase and reaches the outlet; flows, energy, the Eulerian mass and the scatter rows.
 igloo_e2e_case(solid-brk-khrt solidification/solid-brk-khrt "e2e;solidification;breakup;khrt;euler")
+# solid-box-rhos: solid-box with rho-solid: the drop keeps its mass and takes the diameter of its liquid part at the
+# liquid density and its frozen fraction at rho-solid; plateau, solid cooling, energy and scatter rows against the
+# closed forms.
+igloo_e2e_case(solid-box-rhos solidification/solid-box-rhos "e2e;solidification")
+# solid-box-varrho: solid-box on a varying density table: the drop takes the table's density at its own temperature
+# in every phase, at constant mass; the liquid and solid cooling against an independent integration.
+igloo_e2e_case(solid-box-varrho solidification/solid-box-varrho "e2e;solidification")
+# solid-brk-tab-rhos: solid-brk-tab with rho-solid: a frozen drop keeps the mass of its last breakup. RED when the
+# event finalize re-derives the mass from the diameter at the liquid density on every segment: a solid drop loses
+# 19.4 % of its mass per segment.
+igloo_e2e_case(solid-brk-tab-rhos solidification/solid-brk-tab-rhos "e2e;solidification;breakup;tab")
 
 # ---------- breakup: KHRT (unblocked 2026-07-07 by the A2 fix) -----------------
 igloo_unit_test(test_breakup_khrt breakup/reitz-khrt "unit;breakup;khrt;d;t7")
@@ -982,7 +993,7 @@ igloo_refusal_case(refuse-ode-solver       infrastructure/refusals/ode-solver
 igloo_refusal_case(refuse-boiling-temperature-both infrastructure/refusals/boiling-temperature-both
                    "give boiling-temperature or its alias Tboil, not both" "e2e;refusal;evaporation")
 # Solidification (ODE models 6 and 7): the latent heat and the solid heat capacity have no default, T-nuc must
-# lie below T-melt, no other phase model on the material, a constant-cp and constant-density table.
+# lie below T-melt, no other phase model on the material, a constant-cp table, rho-solid not negative.
 igloo_refusal_case(refuse-solid-hfus       infrastructure/refusals/solid-hfus
                    "solidification=on requires h-fus > 0"               "e2e;refusal;solidification")
 igloo_refusal_case(refuse-solid-cpsolid    infrastructure/refusals/solid-cpsolid
@@ -995,8 +1006,8 @@ igloo_refusal_case(refuse-solid-comb       infrastructure/refusals/solid-comb
                    "solidification=on with combustion is not supported" "e2e;refusal;solidification")
 igloo_refusal_case(refuse-solid-varcp      infrastructure/refusals/solid-varcp
                    "solidification=on requires a constant-cp material"  "e2e;refusal;solidification")
-igloo_refusal_case(refuse-solid-varrho     infrastructure/refusals/solid-varrho
-                   "solidification=on requires a constant-density material" "e2e;refusal;solidification")
+igloo_refusal_case(refuse-rho-solid        infrastructure/refusals/rho-solid
+                   "IGLOO: rho-solid must be positive"                  "e2e;refusal;solidification")
 # Wedge-layout contract: the fold band, the 2.5D gas sample and the meridian-frame deposits take
 # refDir as the sector CENTRE (k-planes at -+delthe/2, what MOSE/ATLAS write); a sector [0, delthe]
 # would run with everything rotated by delthe/2. Tiny generated wedge (make_wedge_case.py --theta0-deg 0.5).

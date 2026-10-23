@@ -30,7 +30,7 @@ contains
                        packEventVar, unpackEventVar,                           &
                        rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, &
                        rhsAlCombustion, rhsSolidification,                          &
-                       ind_d, ind_rho, ind_sig, ind_mup, ind_m,                     &
+                       ind_d, ind_rho, ind_sig, ind_mup, ind_m, ind_rs,             &
                        ind_sb1, ind_sb2, ind_sph,                                   &
                        ind_evd, ind_evn, ind_ev1, ind_ev2,                          &
                        nauxstate, neventvar, nbrkst,                                &
@@ -39,7 +39,7 @@ contains
     use oslo,              only: Run_ODESolver, no_jacobian
     use IGLOO_Lib_Breakup, only: nchild
     use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, eventCrossed, &
-                                        eventPassed, solidTransition, phUndercooled
+                                        eventPassed, solidTransition, solidDiameter, phUndercooled
     use IGLOO_Mod_MPI,     only: mpi_size_, region_fail, region_failed
     implicit none
     class(obj_particle),   intent(inout) :: part
@@ -179,6 +179,11 @@ contains
                part%stateVar(9) = part%npdot
       case(6,7); call solidPhaseAtInjection(part%tp, part%Tmelt, part%Tnuc, part%solidPhase, part%stateVar(8))
                  part%fSolid = part%stateVar(8)
+                 !> an injected frozen fraction at rho-solid: the mass of the injected diameter
+                 if (part%rhoSol > 0._R8 .and. part%fSolid > 0._R8) then
+                   part%m  = pi/6._R8*part%d**3._R8/((1._R8 - part%fSolid)/part%rho + part%fSolid/part%rhoSol)
+                   part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot; part%n0 = part%npdot
+                 endif
                  if (part%model == 7) part%stateVar(9) = part%npdot
       end select
       if (eulerSwitch)    part%stateVar(part%nOde+1:part%neq) = 0._R8
@@ -611,7 +616,9 @@ contains
             endif
             !> Resync the frozen per-droplet d and m in auxLocal after an event.
             if (ind_d > 0) auxLocal(ind_d) = part%d
-            if (ind_m > 0 .and. mod_model /= 3 .and. mod_model /= 7) then
+            !> A solidifying drop whose density varies (rho-solid, a table) changes mass only at a breakup event.
+            if (ind_m > 0 .and. mod_model /= 3 .and. mod_model /= 7 .and. &
+                (eventFlag .or. .not. mod_isSolid .or. (ind_rs == 0 .and. .not. mod_propFlags(2)))) then
               part%m          = rhoEvt * part%d**3 / sixOverPi
               auxLocal(ind_m) = part%m
             endif
@@ -838,8 +845,8 @@ contains
         case(2,4,5);  m = y(8)
         case default; m = auxLocal(ind_m)
         end select
-        !> Models 3, 7 derive d from the current ODE state.
-        if (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7) then
+        !> Models 3, 7 and a rho-solid material derive d from the current ODE state.
+        if (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7 .and. ind_rs == 0) then
           d = auxLocal(ind_d)
         else
           d = (sixOverPi*m/rho)**oneThird
@@ -896,6 +903,7 @@ contains
         case default; m = auxLocal(ind_m)
         end select
         if (ind_d > 0 .and. mod_model /= 7) then; d = auxLocal(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
+        if (ind_rs > 0) d = solidDiameter(m, y(8), rho, auxLocal(ind_rs))
         nScat = nScat + 1
         if (frozenOn) then
           fScat = 0._R8; if (mod_isSolid) fScat = y(8)

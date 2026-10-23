@@ -1,9 +1,10 @@
-!> Solidification and melting of a droplet with supercooling and recalescence (ODE model 6).
+!> Solidification and melting of a droplet with supercooling and recalescence (ODE models 6 and 7).
 module IGLOO_Lib_Solidification
     use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use IGLOO_variables, only: oneThird, sixOverPi
     implicit none
     private
-    public :: solidPhaseAtInjection, nucleationJump, plateauRate, hSolid
+    public :: solidPhaseAtInjection, nucleationJump, plateauRate, hSolid, solidDiameter
     public :: eventValue, eventFunction, eventCrossed, eventPassed, solidTransition
 
     !> Phases: liquid, undercooled liquid, freezing plateau at T-melt, solid.
@@ -70,6 +71,16 @@ contains
         end select
 
     end function hSolid
+
+    !> Diameter at constant mass m: the liquid part at density rl, the frozen fraction f at rs.
+    pure function solidDiameter(m, f, rl, rs) result(d)
+        implicit none
+        real(R8), intent(in) :: m, f, rl, rs
+        real(R8) :: d
+
+        d = (sixOverPi*m*((1._R8 - f)/rl + f/rs))**oneThird
+
+    end function solidDiameter
 
     !> Event function of threshold `which` (1 nucleation, 2 fully frozen, 3 re-melted, 4 melting); positive before it.
     pure function eventValue(which, T, f, Tnuc, Tmelt) result(g)

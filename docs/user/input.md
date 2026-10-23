@@ -40,7 +40,8 @@ Parameters not specified take their default values. Unknown sections are silentl
 IGLOO reads only the `[IGLOO-*]` sections above. The sections below are the *preprocessor's* input:
 whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase.txt`,
 `properties.dat`, `bc.txt`). The per-material model keys (`evaporation`, `combustion`, `solidification`,
-`breakup`, `alpha-e`, ...) and the breakup constants (`<tag>-<key>`, as `KHRT-B1`; table under
+`breakup`, `alpha-e`, ...), the solidification constants (`h-fus`, `cp-solid`, `T-melt`, `T-nuc`, `rho-solid`; see
+[Solidification](../theory/solidification.md#inputs)) and the breakup constants (`<tag>-<key>`, as `KHRT-B1`; table under
 [`[IGLOO-Models]`](#igloo-models)) are `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after
 `<name> <groups>` on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
 The `<groups>` summed over the material lines is the family count, and therefore the number of table
@@ -241,7 +242,7 @@ VARIABLES = "Temperature", "Cp", "Density", "Enthalpy", "Psat", "Lv", "Mv", "Cpv
 |---|---|---|
 | `Temperature` | K | first; the nodes |
 | `Cp` | J/(kg K) | required |
-| `Density` | kg/m³ | required |
+| `Density` | kg/m³ | required; the liquid's for a solidifying material (the solid's is its `rho-solid` token, when given) |
 | `Enthalpy` or `Enthalpy_abs` | J/kg | required, exactly one: `Enthalpy` is relative (`cp·T`, or the integral of cp), `Enthalpy_abs` includes the formation enthalpy (the datum, see below) |
 | `Psat` | Pa, absolute | optional: the saturation pressure of an evaporating material |
 | `Lv` | J/kg | optional, with `Psat`: the latent heat of vaporization |

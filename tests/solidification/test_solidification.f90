@@ -33,6 +33,10 @@ program test_solidification
     !        it rebuilds (1e-13), F(9) as a direct breakupOde in the liquid phases (1e-12), exactly 0 on
     !        the plateau and the solid where the direct call is not; the euler tail model 6's shifted by
     !        one slot plus Z(9); the KH-RT timer written back in the liquid phases only.
+    !   SG12 rho-solid: solidDiameter at f = 0, 0.3, 1 against d0 (1 - f + f rho_l/rho_s)^(1/3); setupRHS puts the
+    !        solid-density slot after the metal block (the emissivity after it); one production rhsSolidification
+    !        per phase with it, F(7) or F(8) at that diameter (1e-14); a material set up without rho-solid after
+    !        one with it has no such slot; with radiation, the solid's convective and radiative heat at that diameter.
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -90,6 +94,7 @@ program test_solidification
     call run_SG9(ok_all)
     call run_SG10(ok_all)
     call run_SG11(ok_all)
+    call run_SG12(ok_all)
 
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then
@@ -721,5 +726,98 @@ contains
         call flag('SG11f KH-RT timer written back in the liquid phases, kept on the plateau and the solid', &
                   'SG11f_timer', timerOk, ok)
     end subroutine run_SG11
+
+    subroutine run_SG12(ok)
+        !> rho-solid: the constant-mass diameter of the liquid and solid parts, alone and in the production RHS
+        use IGLOO_variables, only: ord2, mesh2D, eulerSwitch, bodyForce, bodyAccel, srcBodyForce, &
+                                   sourceSwitch, phaseChange, dragSelect, heatSelect
+        use IGLOO_particles, only: obj_particle
+        use IGLOO_Lib_Solidification, only: solidDiameter
+        use IGLOO_Lib_Heat, only: radiativeHeat
+        use Lib_RHS, only: setupRHS, packAuxVars, rhsSolidification, nauxvar, nauxstate, &
+                           ind_mb, ind_sph, ind_rs, ind_eps
+        logical, intent(inout) :: ok
+        real(R8), parameter :: RHOS = 4600._R8, UG = 10._R8, EPS = 0.5_R8, TOLR = 1.0e-14_R8
+        real(R8), parameter :: fs(3) = [0._R8, 0.3_R8, 1._R8], Tph(3) = [T0, TM, 1800._R8]
+        integer,  parameter :: phs(3) = [phLiquid, phPlateau, phSolid]
+        type(obj_particle) :: p
+        real(R8), allocatable :: aux(:), auxst(:)
+        real(R8) :: Z(13), F(13), gas(9), gasNodes(9,8), gasVert(3,8), noTab(1), dcf, q, ref, err, errA, errB
+        integer  :: nAux, nAux0, nAuxSt, nEvV, i, iF, iZ
+        logical  :: propFlags(7), layout
+        !> (a) d = d0 (1 - f + f rho_l/rho_s)^(1/3) for the drop of diameter d0 at rho_l
+        errA = 0._R8
+        do i = 1, 3
+            dcf  = D*(1._R8 - fs(i) + fs(i)*RHOP/RHOS)**(1._R8/3._R8)
+            errA = max(errA, abs(solidDiameter(M, fs(i), RHOP, RHOS) - dcf)/dcf)
+        end do
+        write(*,'(a,es10.3)') '  [INFO] SG12a worst relative error of solidDiameter at f = 0, 0.3, 1 = ', errA
+        ok = ok .and. assert_lt('SG12a solidDiameter: the liquid part at rho_l, the frozen fraction at rho_s', errA, TOLR)
+        call append_row('SG12a_diameter', 'd', errA, errA, 0._R8, 0._R8, TOLR, errA < TOLR)
+        !> (b) the slot, then one rhsSolidification per phase at zero slip (Re = 0, Nu = 2)
+        ord2 = .false.;  mesh2D = .false.;  eulerSwitch = .true.
+        bodyForce = .false.;  bodyAccel = 0._R8;  srcBodyForce = .false.
+        sourceSwitch = .false.;  phaseChange = .false.
+        dragSelect = 2;  heatSelect = 5              ! Stokes, Ranz-Marshall
+        propFlags = .false.;  noTab = 0._R8
+        call setupRHS(6, 0, 0, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV, solidDensity=.true.)
+        layout = ind_rs == ind_mb + nmetal .and. nAux == ind_rs .and. ind_eps == 0
+        call flag('SG12b setupRHS(model 6, rho-solid): the solid-density slot after the metal block', 'SG12b_layout', &
+                  layout, ok)
+        if (.not. layout) return
+        p%cp = CL;  p%rho = RHOP;  p%d = D;  p%m = M
+        p%Tmelt = TM;  p%hFus = HFUS;  p%Tnuc = TN;  p%cpSol = CS;  p%rhoSol = RHOS
+        allocate(aux(nauxvar), auxst(max(1, nauxstate)))
+        call packAuxVars(p, nauxvar, aux)
+        gas = [1.2_R8, UG, 0._R8, 0._R8, TG, 1.8e-5_R8, 1.4_R8, 287._R8, KG]
+        gasNodes = spread(gas, 2, 8);  gasVert = 0._R8
+        errB = 0._R8
+        do i = 1, 3
+            Z = 0._R8;  Z(4) = UG;  Z(7) = Tph(i);  Z(8) = fs(i)
+            auxst = 0._R8;  auxst(ind_sph) = real(phs(i), R8)
+            call rhsSolidification(13, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, &
+                                   gasNodes, gasVert, gas, 9, 8)
+            dcf = D*(1._R8 - fs(i) + fs(i)*RHOP/RHOS)**(1._R8/3._R8)
+            q   = NU*KG*PI*dcf*(TG - Tph(i))
+            select case (phs(i))
+            case (phPlateau); iF = 8;  iZ = 7;  ref = -q/(M*HFUS)
+            case (phSolid);   iF = 7;  iZ = 8;  ref = q/(M*CS)
+            case default;     iF = 7;  iZ = 8;  ref = q/(M*CL)
+            end select
+            err = abs(F(iF) - ref)/abs(ref)
+            if (F(iZ) /= 0._R8) err = huge(1._R8)
+            write(*,'(a,i0,a,es13.6,a,es13.6,a,es10.3)') '  [INFO] SG12c phase ', phs(i), ': F = ', F(iF), &
+                ', closed form ', ref, ', rel. ', err
+            errB = max(errB, err)
+        end do
+        ok = ok .and. assert_lt('SG12c rhsSolidification with rho-solid: F(7), F(8) at d(f), relative', errB, TOLR)
+        call append_row('SG12c_rhs', 'F', errB, errB, 0._R8, 0._R8, TOLR, errB < TOLR)
+        !> (c) a material without rho-solid after one with it; rho-solid with radiation
+        call setupRHS(6, 0, 0, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux0, nAuxSt, nEvV)
+        call flag('SG12d a material without rho-solid set up after one with it: no solid-density slot', 'SG12d_reset', &
+                  ind_rs == 0 .and. nAux0 == nAux - 1, ok)
+        call setupRHS(6, 0, 0, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV, &
+                      radiation=.true., solidDensity=.true.)
+        layout = ind_rs == ind_mb + nmetal .and. ind_eps == ind_rs + 1 .and. nAux == ind_eps
+        call flag('SG12e rho-solid with radiation: the solid density after the metal block, the emissivity last', &
+                  'SG12e_order', layout, ok)
+        if (.not. layout) return
+        !> (d) the solid's convective and radiative heat at its rho-solid diameter
+        p%emissivity = EPS
+        deallocate(aux);  allocate(aux(nauxvar))
+        call packAuxVars(p, nauxvar, aux)
+        Z = 0._R8;  Z(4) = UG;  Z(7) = Tph(3);  Z(8) = 1._R8
+        auxst = 0._R8;  auxst(ind_sph) = real(phSolid, R8)
+        call rhsSolidification(13, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, &
+                               gasNodes, gasVert, gas, 9, 8)
+        dcf = D*(RHOP/RHOS)**(1._R8/3._R8)
+        ref = (NU*KG*PI*dcf*(TG - Tph(3)) + radiativeHeat(EPS, dcf, TG, Tph(3)))/(M*CS)
+        err = abs(F(7) - ref)/abs(ref)
+        if (F(8) /= 0._R8) err = huge(1._R8)
+        write(*,'(a,es13.6,a,es13.6,a,es10.3)') '  [INFO] SG12f solid with radiation: F(7) = ', F(7), &
+            ', closed form ', ref, ', rel. ', err
+        ok = ok .and. assert_lt('SG12f rho-solid with radiation: convection and radiation at the solid diameter', err, TOLR)
+        call append_row('SG12f_rad', 'F', err, err, 0._R8, 0._R8, TOLR, err < TOLR)
+    end subroutine run_SG12
 
 end program test_solidification

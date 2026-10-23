@@ -331,15 +331,17 @@ melting plateau, liquid heating — against its closed form (SG7), the landing o
 inside the new phase (SG8), the event rule, a crossing ending strictly past its threshold
 from a start at or before it (SG9), the layout of model 7 under the three continuous-rate
 breakup models (SG10) and its right-hand side in every phase against model 6 and a direct call
-of the breakup rate (SG11).
+of the breakup rate (SG11), and the diameter of a drop that freezes at constant mass with
+`rho-solid`: its closed form, the slot that carries the solid density and the convective and
+radiative heat at that diameter in every phase (SG12).
 
 **Literature references.** `[JANAF98]` for the alumina melting point, heat of fusion and heat
 capacities quoted on the [Solidification](../theory/solidification.md) page; every gate is a
 closed form of its own inputs.
 
-**Gates.** `test_solidification` (SG0–SG11); e2e companions `solid-box`, `solid-melt`,
-`solid-box-euler`, `solid-box-2mat`, `scatter-weight-solid`, `solid-brk-tab`, `solid-brk-khrt` — see
-[End-to-End Cases](e2e.md).
+**Gates.** `test_solidification` (SG0–SG12); e2e companions `solid-box`, `solid-melt`,
+`solid-box-euler`, `solid-box-2mat`, `scatter-weight-solid`, `solid-brk-tab`, `solid-brk-khrt`,
+`solid-box-rhos`, `solid-box-varrho`, `solid-brk-tab-rhos` — see [End-to-End Cases](e2e.md).
 
 <figure>
   {% include "vv/images/unit-solidification-recalescence.svg" ignore missing %}

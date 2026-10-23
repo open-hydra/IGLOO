@@ -125,10 +125,11 @@ contains
       !> parsed-but-unimplemented selectors are rejected here
       if (material(i)%liqSelect   > 0) error stop '[ERROR] liquid-conduction=P2T parsed but not implemented yet'
       if (material(i)%boilSelect  > 0) error stop '[ERROR] boiling=ZGR parsed but not implemented yet'
-      !> Solidification validation: latent heat and solid cp given, nucleation below melting, no other phase model
+      !> Solidification validation: h-fus and cp-solid given, rho-solid not negative, T-nuc below T-melt, no other phase model
       if (material(i)%solidSelect > 0) then
         if (material(i)%hFus  <= 0._R8) error stop '[ERROR] solidification=on requires h-fus > 0 in [GPB-PhaseX]'
         if (material(i)%cpSol <= 0._R8) error stop '[ERROR] solidification=on requires cp-solid > 0 in [GPB-PhaseX]'
+        if (material(i)%rhoSol < 0._R8) error stop 'IGLOO: rho-solid must be positive'
         if (material(i)%Tnuc >= material(i)%Tmelt) error stop '[ERROR] solidification=on requires T-nuc < T-melt'
         if (material(i)%evapSelect > 0) &
           error stop '[ERROR] solidification=on is exclusive with evaporation (alumina does not evaporate)'
@@ -251,11 +252,9 @@ contains
       endif
       write(*,'(A,I0,A,ES12.4,A)') '  >> [material ', i, '] enthalpy datum '//trim(mat%hDatum)// &
                                    ' (hOff = ', mat%hOff, ' J/kg)'
-      !> solidification integrates T with constant cp and density
+      !> solidification integrates T with constant cp
       if (mat%solidSelect > 0 .and. mat%cpVariable) &
         error stop '[ERROR] solidification=on requires a constant-cp material (temperature state)'
-      if (mat%solidSelect > 0 .and. mat%rhoVariable) &
-        error stop '[ERROR] solidification=on requires a constant-density material'
 
       !> sigma and mu of a breaking material: a non-zero Sigma/Viscosity column or the [IGLOO-Properties] entry
       if (mat%brkupSelect > 0) then

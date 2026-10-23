@@ -16,7 +16,7 @@ module Lib_RHS
   public  :: ind_sxi, ind_sb1, ind_sb2, ind_sph
   public  :: ind_evd, ind_evn, ind_evm0, ind_ev1, ind_ev2, ind_evn0
   public  :: ind_e3, ind_e4, ind_e5, ind_mb, nmetal
-  public  :: ind_eps
+  public  :: ind_eps, ind_rs
   public  :: mod_model, mod_brkSelect, mod_evapSelect, mod_propFlags
   public  :: mod_liqSelect, mod_intfSelect, mod_boilSelect, mod_combSelect
   public  :: mod_bp, mod_bpMethod, mod_bpScale
@@ -45,6 +45,7 @@ module Lib_RHS
   integer :: ind_e3  = 0, ind_e4  = 0, ind_e5 = 0  !> alpha_e (LK interface); k_liq / mu_liq reserved for P2T
   integer :: ind_mb  = 0                            !> metal-block start (combustion), 0 = absent
   integer, parameter :: nmetal = 9                  !> metal parameter block, order = IGLOO_Lib_Combustion imKb..imQc
+  integer :: ind_rs  = 0                            !> rho-solid (solid density), 0 = absent
   integer :: ind_eps = 0                            !> emissivity (radiation), 0 = absent
   integer :: nauxvar = 0
 
@@ -109,14 +110,14 @@ contains
 
   !> Number of auxiliary variables (read-only in the RHS) per model, and their indices.
   subroutine computeNaux(model,brkSelect,evapSelect,combSelect, &
-                         propFlags,ord2,mesh2D,nAux,radiation)
+                         propFlags,ord2,mesh2D,nAux,radiation,solidDensity)
     integer, intent(in)  :: model, brkSelect, evapSelect, combSelect
     logical, intent(in)  :: ord2, mesh2D, propFlags(7)
     integer, intent(out) :: nAux
-    logical, intent(in), optional :: radiation
-    integer :: nBase, nBrk, nEvap, nComb, nRad, ind
+    logical, intent(in), optional :: radiation, solidDensity
+    integer :: nBase, nBrk, nEvap, nComb, nSol, nRad, ind
 
-    nBase = 0; nBrk = 0; nEvap = 0; nComb = 0; nRad = 0; ind = 1
+    nBase = 0; nBrk = 0; nEvap = 0; nComb = 0; nSol = 0; nRad = 0; ind = 1
 
     !> base
     if (.not.propFlags(1)) then
@@ -169,13 +170,20 @@ contains
       ind_mb = ind; ind = ind + nmetal
     endif
 
+    !> solid density (rho-solid) of a solidifying material
+    if (present(solidDensity)) then
+      if (solidDensity .and. mod_isSolid) then
+        nSol = 1; ind_rs = ind; ind = ind + 1
+      endif
+    endif
+
     !> radiation: the emissivity, after every other block
     if (present(radiation)) then
       if (radiation) then
         nRad = 1; ind_eps = ind; ind = ind + 1
       endif
     endif
-    nAux = nBase + nBrk + nEvap + nComb + nRad
+    nAux = nBase + nBrk + nEvap + nComb + nSol + nRad
 
   end subroutine computeNaux
 
@@ -235,7 +243,7 @@ contains
   !  called once per material/group, outside any parallel region.
   subroutine setupRHS(model, brkSelect, evapSelect, liqSelect, intfSelect, boilSelect, &
                       combSelect, propFlags, bp_in, &
-                      bpMethod_in, bpScale_in, nAux, nAuxSt, nEvV, radiation)
+                      bpMethod_in, bpScale_in, nAux, nAuxSt, nEvV, radiation, solidDensity)
     use IGLOO_variables, only: ord2, mesh2D
     !$ use omp_lib, only: omp_in_parallel
     integer,  intent(in) :: model, brkSelect, evapSelect
@@ -246,6 +254,7 @@ contains
     real(R8), intent(in) :: bpScale_in
     integer, intent(out) :: nAux, nAuxSt, nEvV
     logical, intent(in), optional :: radiation   !> the material radiates (emissivity > 0)
+    logical, intent(in), optional :: solidDensity !> the material sets rho-solid
     !> module-level state: materials are set up and integrated sequentially
     !$ if (omp_in_parallel()) error stop '[BUG] setupRHS called inside an OMP parallel region'
     mod_model = model
@@ -269,9 +278,9 @@ contains
     ind_sig=0; ind_mup=0
     ind_Mv=0;  ind_Lv=0; ind_Cv=0; ind_Le=0; ind_Yi=0
     ind_e1=0;  ind_e2=0;  ind_e3=0; ind_e4=0; ind_e5=0
-    ind_mb=0;  ind_eps=0
+    ind_mb=0;  ind_rs=0;  ind_eps=0
     !> Compute layouts
-    call computeNaux(model,brkSelect,evapSelect,combSelect,propFlags,ord2,mesh2D,nAux,radiation)
+    call computeNaux(model,brkSelect,evapSelect,combSelect,propFlags,ord2,mesh2D,nAux,radiation,solidDensity)
     call computeNauxState(model, brkSelect, propFlags, ord2, mesh2D, nAuxSt)
     call computeNeventVar(model, brkSelect, nEvV)
     nauxvar   = nAux
@@ -316,6 +325,8 @@ contains
       [particle%Kburn, particle%nBurn, particle%Xeff, particle%betaPart, &
        particle%xiCap, particle%Tign,  particle%hFus,  particle%cpSol,   &
        particle%qComb]
+    !> solid density
+    if (ind_rs > 0) aux(ind_rs) = particle%rhoSol
     !> radiation
     if (ind_eps > 0) aux(ind_eps) = particle%emissivity
   end subroutine packAuxVars
@@ -495,7 +506,7 @@ contains
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, toll, bodyForce, bodyAccel, oneThird, sixOverPi
     use IGLOO_Lib_Combustion,     only: imHf, imCps
-    use IGLOO_Lib_Solidification, only: plateauRate, phUndercooled, phPlateau, phSolid
+    use IGLOO_Lib_Solidification, only: plateauRate, solidDiameter, phUndercooled, phPlateau, phSolid
     use IGLOO_Lib_Breakup,        only: breakupOde
     use IGLOO_Lib_Properties,     only: tableValue, Tmin, Tmax
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -515,12 +526,14 @@ contains
     real(R8) :: rho, sigma, mup, brkupVar(2)
 
     F = 0._R8
-    if (mod_model == 7) then
-      if (mod_propFlags(2)) then; rho = tableValue(rhoTabM, Tmin, Tmax, Z(7)); else; rho = aux(ind_rho); endif
-      m = aux(ind_m)/Z(9)
+    if (mod_model == 7) then; m = aux(ind_m)/Z(9); else; m = aux(ind_m); endif
+    if (mod_propFlags(2)) then; rho = tableValue(rhoTabM, Tmin, Tmax, Z(7)); else; rho = aux(ind_rho); endif
+    !> the liquid at rho, the frozen fraction at rho-solid; one density otherwise
+    if (ind_rs > 0) then
+      d = solidDiameter(m, Z(8), rho, aux(ind_rs))
+    elseif (mod_model == 7 .or. mod_propFlags(2)) then
       d = (sixOverPi*m/rho)**oneThird
     else
-      m = aux(ind_m)
       d = aux(ind_d)
     endif
     ! 2nd order gas interpolation

@@ -6,7 +6,7 @@ module IGLOO_particles
   use IGLOO_Lib_Drag
   use IGLOO_Lib_Heat
   use IGLOO_Lib_Properties, only: tableValue, comp_TfromTab, Tmin, Tmax
-  use IGLOO_Lib_Solidification, only: hSolid
+  use IGLOO_Lib_Solidification, only: hSolid, solidDiameter
   use IGLOO_bcBox
   use IGLOO_data_block, only: obj_block, obj_flowblock, obj_bc_cell
   use IGLOO_RayFaceIntersection3D
@@ -114,6 +114,7 @@ module IGLOO_particles
     real(R8)     :: hFus       = 0._R8  !> heat of fusion [J/kg] (solidification)
     real(R8)     :: Tnuc       = 0._R8  !> nucleation temperature [K]; 0 => 0.8*Tmelt (solidification)
     real(R8)     :: cpSol      = 0._R8  !> solid specific heat [J/kg/K] (solidification)
+    real(R8)     :: rhoSol     = 0._R8  !> solid density [kg/m3]; 0 => the liquid density (solidification)
     real(R8)     :: qComb      = 0._R8  !> heat of combustion [J/kg]
     real(R8)     :: emissivity = 0._R8  !> grey-body surface emissivity; 0 = no radiation
   contains
@@ -312,7 +313,11 @@ contains
     end select
     if (self%model/=1 .or. self%varRho) then
       if (self%varRho) self%rho = tableValue(rhoTab, Tmin, Tmax, self%Tp)
-      self%d = (sixOverPi*self%m/self%rho)**oneThird
+      if (self%rhoSol > 0._R8) then
+        self%d = solidDiameter(self%m, self%fSolid, self%rho, self%rhoSol)
+      else
+        self%d = (sixOverPi*self%m/self%rho)**oneThird
+      endif
     endif
 
     if (eulerSwitch) then
