@@ -34,13 +34,20 @@ program test_source_reduction
     ! two differ by 5.1e-3 relative (1.1e-2 worst per cell) -- an assertion against cellVol
     ! there would be RED on the CORRECT code.
     !
+    ! U2 joins two boxes by a 101 face: a deposit in one block's interface dual cell is shared
+    ! between the blocks in proportion to their octant volumes, for the source and the euler field.
+    !
     use, intrinsic :: iso_fortran_env, only: real64
-    use IGLOO_data_block, only: obj_block, obj_sourceblock   ! PRODUCTION types
+    use IGLOO_data_block, only: obj_block, obj_sourceblock, obj_flowblock, obj_eulerblock, &   ! PRODUCTION types
+                                vertexClass, buildInterfaceLinks, combineInterfaceDual
+    use IGLOO_allocation, only: fill_dual_nodes, computeSkewFlag, assembleInterfaceDual
+    use IGLOO_Lib_Mollify, only: cellLink, linkDonors
     use IGLOO_variables,  only: ord2, mesh2D, nm, mollifyPasses
     implicit none
 
     real(real64), parameter :: H   = 0.25_real64     ! uniform spacing
     real(real64), parameter :: TOL = 1.0e-12_real64  ! post-fix residual measured at <= 2.2e-16
+    real(real64), parameter :: TOL14 = 1.0e-14_real64
     integer :: nfail
 
     nfail = 0
@@ -66,6 +73,9 @@ program test_source_reduction
     call runCase('S7 curvilinear all',      4, 3, 2, .false., .true. , 0, 0, 0)
     call runCase('S7 curvilinear interior', 4, 3, 2, .false., .true. , 2, 2, 2)
     call runCase('S7 curvilinear face',     4, 3, 2, .false., .true. , 2, 2, 1)
+
+    call s5_u2_two_block('U2 101 pair h_B = h_A    ', H)
+    call s5_u2_two_block('U2 101 pair h_B = 1.5 h_A', 1.5_real64*H)
 
     if (nfail == 0) then
         print '(a)', ''
@@ -158,6 +168,119 @@ contains
         call blk%compute_geometry
         call blk%precomputeMetric
     end subroutine buildGeo
+
+    !> Two boxes along x joined by 101 (A: 3 cells of H, B: 2 of hb), the setup pass, a unit deposit in
+    !  A's interface dual cell of vertex (3,1,1), the combine, then finalize and reduce per block.
+    subroutine s5_u2_two_block(label, hb)
+        character(*), intent(in) :: label
+        real(real64), intent(in) :: hb
+        integer, parameter :: NXA = 3, NXB = 2, NY = 3, NZ = 2
+        type(obj_block)       :: geo(2)
+        type(obj_flowblock)   :: gas(2)
+        type(obj_sourceblock) :: src(2)
+        type(obj_eulerblock)  :: eul(2,1)
+        type(cellLink), allocatable    :: links(:)
+        type(linkDonors)               :: donors
+        type(vertexClass), allocatable :: classes(:)
+        real(real64) :: share, vol, ms(2), qs(2), es(2), eu(4,2)
+        integer :: b, i, j, k, nmoved, d(3)
+
+        mesh2D = .false.
+        call buildBox(geo(1), gas(1), NXA, NY, NZ, 0.0_real64, H)
+        call buildBox(geo(2), gas(2), NXB, NY, NZ, NXA*H, hb)
+        call joinX(geo)
+        call buildInterfaceLinks(geo, links, donors)
+        call assembleInterfaceDual(geo, gas, links, classes, nmoved)
+
+        d = [NXA + 1, 2, 2]
+        do b = 1, 2
+            call src(b)%allocate(1, geo(b)%Nx + 1, NY + 1, NZ + 1)
+            src(b)%sourceMass = 0._real64; src(b)%sourceMom = 0._real64; src(b)%sourceEn = 0._real64
+            call eul(b,1)%allocate(geo(b)%Nx + 1, NY + 1, NZ + 1)
+            eul(b,1)%density = 0._real64; eul(b,1)%np = 0._real64
+            eul(b,1)%velocity = 0._real64; eul(b,1)%temperature = 0._real64
+        enddo
+        src(1)%sourceMass(1, d(1), d(2), d(3)) = 1._real64
+        src(1)%sourceMom (1, d(1), d(2), d(3)) = 2._real64
+        src(1)%sourceEn  (   d(1), d(2), d(3)) = 3._real64
+        !> euler accumulators hold the deposit over the dual cell's volume
+        vol = gas(1)%cellVol(d(1), d(2), d(3))
+        eul(1,1)%density    (d(1), d(2), d(3)) = 1._real64/vol
+        eul(1,1)%np         (d(1), d(2), d(3)) = 2._real64/vol
+        eul(1,1)%velocity(1, d(1), d(2), d(3)) = 3._real64/vol
+        eul(1,1)%temperature(d(1), d(2), d(3)) = 4._real64/vol
+
+        call combineInterfaceDual(src, eul, classes, gas)
+        do b = 1, 2
+            call src(b)%finalize(geo(b))
+            call eul(b,1)%reduce(geo(b))
+            ms(b) = sum(src(b)%sourceMass(1,:,:,:))
+            qs(b) = sum(src(b)%sourceMom(1,:,:,:))
+            es(b) = sum(src(b)%sourceEn)
+            eu(:,b) = 0._real64
+            do k = 1, NZ; do j = 1, NY; do i = 1, geo(b)%Nx
+                vol = sum(geo(b)%subVol(:, i, j, k))
+                eu(:,b) = eu(:,b) + vol*[eul(b,1)%density(i,j,k), eul(b,1)%np(i,j,k), &
+                                         eul(b,1)%velocity(1,i,j,k), eul(b,1)%temperature(i,j,k)]
+            enddo; enddo; enddo
+        enddo
+
+        share = H/(H + hb)
+        call assertRel(label//' : source mass of A == h_A/(h_A+h_B)', ms(1), share, TOL14)
+        call assertRel(label//' : source mass of B == h_B/(h_A+h_B)', ms(2), 1._real64 - share, TOL14)
+        call assertRel(label//' : mass  total of A + B == 1', ms(1) + ms(2), 1._real64, TOL14)
+        call assertRel(label//' : mom   total of A + B == 1', (qs(1) + qs(2))/2._real64, 1._real64, TOL14)
+        call assertRel(label//' : en    total of A + B == 1', (es(1) + es(2))/3._real64, 1._real64, TOL14)
+        print '(a,a,2es13.6)', '  [..] ', label//' : euler rho total of A, B', eu(1,1), eu(1,2)
+        call assertRel(label//' : euler rho   total of A + B == 1', eu(1,1) + eu(1,2), 1._real64, TOL14)
+        call assertRel(label//' : euler n     total of A + B == 1', (eu(2,1) + eu(2,2))/2._real64, 1._real64, TOL14)
+        call assertRel(label//' : euler rho u total of A + B == 1', (eu(3,1) + eu(3,2))/3._real64, 1._real64, TOL14)
+        call assertRel(label//' : euler rho e total of A + B == 1', (eu(4,1) + eu(4,2))/4._real64, 1._real64, TOL14)
+        do b = 1, 2
+            call geo(b)%freeBlock; call gas(b)%freeBlock
+        enddo
+    end subroutine s5_u2_two_block
+
+    !> A box of nx x ny x nz cells (x0 + i hx, j H, k H) and its gas dual, built as allocate_blocks does.
+    subroutine buildBox(blk, gas, nx, ny, nz, x0, hx)
+        type(obj_block),     intent(out) :: blk
+        type(obj_flowblock), intent(out) :: gas
+        integer,             intent(in)  :: nx, ny, nz
+        real(real64),        intent(in)  :: x0, hx
+        integer :: i, j, k
+        blk%Nx = nx; blk%Ny = ny; blk%Nz = nz
+        allocate(blk%node(3, 0:nx, 0:ny, 0:nz))
+        do k = 0, nz; do j = 0, ny; do i = 0, nx
+            blk%node(:, i, j, k) = [x0 + i*hx, j*H, k*H]
+        enddo; enddo; enddo
+        allocate(blk%center(3, 1:nx, 1:ny, 1:nz))
+        call blk%compute_geometry
+        call blk%precomputeDualWeights
+        call blk%precomputeMetric
+        gas%Nx = nx; gas%Ny = ny; gas%Nz = nz
+        allocate(gas%node(3, 0:nx+1, 0:ny+1, 0:nz+1))
+        call fill_dual_nodes(gas, blk, .false.)
+        call computeSkewFlag(gas, .false.)
+        call gas%precomputeDualMetric(.false., blk)
+        call blk%computeBBox
+        call gas%computeBBox
+    end subroutine buildBox
+
+    !> Block 1's face 2 joined to block 2's face 1 by 101, cell for cell.
+    subroutine joinX(geo)
+        type(obj_block), intent(inout) :: geo(2)
+        integer :: j, k
+        do k = 1, geo(1)%Nz; do j = 1, geo(1)%Ny
+            geo(1)%face(2)%cell(j,k)%bcdef          = 101
+            geo(1)%face(2)%cell(j,k)%connection     = [2, 1, j, k]
+            geo(1)%face(2)%cell(j,k)%connectionFace = 1
+            geo(1)%face(2)%cell(j,k)%orient         = [1, 0, 0, 1]
+            geo(2)%face(1)%cell(j,k)%bcdef          = 101
+            geo(2)%face(1)%cell(j,k)%connection     = [1, geo(1)%Nx, j, k]
+            geo(2)%face(1)%cell(j,k)%connectionFace = 2
+            geo(2)%face(1)%cell(j,k)%orient         = [1, 0, 0, 1]
+        enddo; enddo
+    end subroutine joinX
 
     !> Relative comparison; prints the measured value so a RED run reports the ratio.
     subroutine assertRel(what, got, want, tol)

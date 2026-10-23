@@ -45,6 +45,9 @@ program test_ghost_bc
     !   U10 2D, dx 0.3 | 0.6, 101       T quadratic     RED in-place: order-dependent  GREEN both block orders equal
     !   U11 2D+3D warped, dx 0.3 | 0.6  T, u linear     RED absolute Newton exit       GREEN exact (1e-12)
     !   G6u 2D, overlap, 102            T quadratic     RED own fill: -2 q h^2         GREEN within q h^2/4
+    !   U4  3D, dx 0.3 | 0.6, 101 pass  T, u linear     RED node not moved: 0.15 off   GREEN partner centre, bit for bit
+    !       (assembleInterfaceDual: each face ghost node at the partner cell's centre, its link snapped
+    !       to that node, weights 1 and 0, and fillGhostPartners hands it the partner's value)
     !
     ! A face of the ring provided by a parent solver (setGhostFace):
     !
@@ -62,8 +65,10 @@ program test_ghost_bc
     ! and after the fix and the gate could never go green.
     !
     use, intrinsic :: iso_fortran_env, only: real64
-    use IGLOO_data_block, only: obj_block, obj_flowblock, obj_bc_cell, fillGhostPartners, buildGhostLinks
-    use IGLOO_allocation, only: fill_dual_nodes
+    use IGLOO_data_block, only: obj_block, obj_flowblock, obj_bc_cell, fillGhostPartners, buildGhostLinks, &
+                                buildInterfaceLinks, vertexClass
+    use IGLOO_allocation, only: fill_dual_nodes, assembleInterfaceDual, computeSkewFlag
+    use IGLOO_Lib_Mollify, only: cellLink, linkDonors
     use IGLOO_variables,  only: ord2, mesh2D
     use Lib_Equations,    only: sampleGas2D, interp2ndOrder
     implicit none
@@ -90,6 +95,7 @@ program test_ghost_bc
     call u11_warped(.false.)
     call g6u_chimera
     call u5_parent_face
+    call u4_partner_node
 
     if (nfail == 0) then
         print '(a)', ''
@@ -431,6 +437,62 @@ contains
         call expectLE('U5 a provided 101 face: its edge nodes still interpolated, u |err|', eU, 1.0e-12_real64)
     end subroutine u5_parent_face
 
+    !> U4 -- the 101 pass on the 0.3 | 0.6 pair (setup order of setup_static): every face ghost node
+    !  of the interface is the partner cell's centre bit for bit, its link snaps to that dual node
+    !  (one weight 1, the rest 0) and the ghost holds the partner's value bit for bit.
+    subroutine u4_partner_node
+        type(obj_block)     :: geo(2)
+        type(obj_flowblock) :: sol(2)
+        type(cellLink), allocatable    :: links(:)
+        type(linkDonors)               :: donors
+        type(vertexClass), allocatable :: classes(:)
+        real(real64) :: dmax
+        integer :: b, j, k, l, nx, nmoved, nin, nmiss, npos, nface, nsnap, nval
+        fa = 300.0_real64; fb = 100.0_real64; fc = 40.0_real64; fd = 20.0_real64; fq = 0.0_real64
+        call buildPair(geo, sol, 4, 0.3_real64, 3, 0.6_real64, 3, 2, 0.0_real64, .false.)
+        do b = 1, 2
+            call geo(b)%precomputeDualWeights
+            call geo(b)%precomputeMetric
+            call computeSkewFlag(sol(b), .false.)
+            call sol(b)%precomputeDualMetric(.false., geo(b))
+            call geo(b)%computeBBox
+            call sol(b)%computeBBox
+        enddo
+        call buildInterfaceLinks(geo, links, donors)
+        call assembleInterfaceDual(geo, sol, links, classes, nmoved)
+        call buildGhostLinks(sol, geo, nin, nmiss)
+        call fillPair(geo, sol)
+        nx = sol(1)%Nx
+        dmax = 0.0_real64; npos = 0; nval = 0
+        do k = 1, sol(1)%Nz; do j = 1, sol(1)%Ny
+            dmax = max(dmax, norm2(sol(1)%node(:,nx+1,j,k) - geo(2)%center(:,1,j,k)), &
+                             norm2(sol(2)%node(:,0,j,k)    - geo(1)%center(:,nx,j,k)))
+            if (any(sol(1)%node(:,nx+1,j,k) /= geo(2)%center(:,1,j,k)))  npos = npos + 1
+            if (any(sol(2)%node(:,0,j,k)    /= geo(1)%center(:,nx,j,k))) npos = npos + 1
+            if (sol(1)%temperature(nx+1,j,k) /= sol(2)%temperature(1,j,k)) nval = nval + 1
+            if (sol(2)%temperature(0,j,k)    /= sol(1)%temperature(nx,j,k)) nval = nval + 1
+            if (any(sol(1)%velocity(:,nx+1,j,k) /= sol(2)%velocity(:,1,j,k))) nval = nval + 1
+            if (any(sol(2)%velocity(:,0,j,k)    /= sol(1)%velocity(:,nx,j,k))) nval = nval + 1
+        enddo; enddo
+        nface = 0; nsnap = 0
+        do b = 1, 2
+            do l = 1, size(sol(b)%glink)
+                if (sol(b)%glink(l)%edge) cycle
+                nface = nface + 1
+                if (count(sol(b)%glink(l)%w == 1.0_real64) /= 1 .or. count(sol(b)%glink(l)%w == 0.0_real64) /= 7) &
+                    nsnap = nsnap + 1
+            enddo
+        enddo
+        print '(a,es10.3)', '  [..] U4 face ghost node to partner centre, max distance = ', dmax
+        call expectEq('U4 face ghost nodes placed by the pass', real(nmoved, real64), &
+                      real(2*sol(1)%Ny*sol(1)%Nz, real64), 0.0_real64)
+        call expectLE('U4 face ghost nodes off the partner centre', real(npos, real64), 0.0_real64)
+        call expectEq('U4 face ghost links', real(nface, real64), real(2*sol(1)%Ny*sol(1)%Nz, real64), 0.0_real64)
+        call expectLE('U4 face ghost links not snapped to one node', real(nsnap, real64), 0.0_real64)
+        call expectLE('U4 face ghosts differing from the partner value (T, u)', real(nval, real64), 0.0_real64)
+        call freePair(geo, sol)
+    end subroutine u4_partner_node
+
 
   ! ------------------------------------------------------------------ fixture
 
@@ -628,9 +690,11 @@ contains
             geo(a)%face(2)%cell(j,k)%bcdef = 101
             geo(a)%face(2)%cell(j,k)%connection = [b, 1, j, k]
             geo(a)%face(2)%cell(j,k)%connectionFace = 1
+            geo(a)%face(2)%cell(j,k)%orient = [1, 0, 0, 1]
             geo(b)%face(1)%cell(j,k)%bcdef = 101
             geo(b)%face(1)%cell(j,k)%connection = [a, geo(a)%Nx, j, k]
             geo(b)%face(1)%cell(j,k)%connectionFace = 2
+            geo(b)%face(1)%cell(j,k)%orient = [1, 0, 0, 1]
         enddo; enddo
     end subroutine link101
 

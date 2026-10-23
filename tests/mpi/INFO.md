@@ -42,6 +42,7 @@ green, nothing decomposed. Without the witness this whole directory would be a v
 | `mpi-two-mat` | 4 | the suite's **only** `nm=2` case: six shards merged per sweep, two `sourceMass` slots, two euler families reduced |
 | `mpi-timing-report` | 4 | the `[IGLOO-timing]` report (`timing = on`): the per-rank gather, one line and the strided parcel count per rank |
 | `mpi-psd-table` | 4 | `psd-table`'s Kolmogorov-Smirnov and Anderson-Darling oracle on the merged output: the size-distribution file loaded and sampled on every rank |
+| `mpi-two-fam-bc-2blk-ord2-dual-np3` | 3 vs 1 | gas-order 2 across a 101 face (`two-fam-bc-2blk-ord2-dual`'s `INPUT/` and `input.ini`): the dual cells of the interface vertices are combined after the cross-rank sum. Its own `check.py` runs the same binary on one rank into `ref-serial/` and holds the 3-rank run to it: the file set, the `.dat` multisets, the `.tec` fields within 1e-12 of the scale, the routing line |
 | `mpi-consistency` | 1 vs 4; 4 at 1 and 5 threads | the cross-rank-count and cross-thread-count gate (below) |
 | `mpi-consistency-two-mat` | 1 vs 4; 4 at 1 and 5 threads | the same gate (same `check.py`, symlinked) on the `nm=2` fixture |
 | `mpi-consistency-psd` | 1 vs 4; 4 at 1 and 5 threads | the same gate on `psd-table`'s 20 000 parcels, whose diameters are drawn from a tabulated law (below) |

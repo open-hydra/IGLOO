@@ -6,6 +6,7 @@ module IGLOO_data_block
   public :: fillGhostPartners
   public :: buildInterfaceLinks, reportNonAligned, hasConnectedFaces, buildGhostLinks
   public :: mollifyEulerBlocks, mollifySourceBlocks
+  public :: combineInterfaceDual
 
   type, public :: obj_bc_cell
     real(R8),dimension(:,:),allocatable :: properties !> first index per group (family)
@@ -63,6 +64,17 @@ module IGLOO_data_block
     real(R8) :: w(8) = 0._R8
     logical  :: edge = .false.
   end type ghostLink
+
+  !> One flag per face cell (m,n) of a face.
+  type, public :: faceFlags
+    logical, allocatable :: f(:,:)
+  end type faceFlags
+
+  !> A geometric vertex shared across 101 faces: its dual cells and their summed octant volume.
+  type, public :: vertexClass
+    integer, allocatable :: m(:,:)  !> (4, members): block, i, j, k; ascending block, then index
+    real(R8) :: w = 0._R8           !> the members' dualW summed
+  end type vertexClass
 
   !> One face of the ghost ring as a parent solver provided it, over the face's interior range.
   type :: ghostFaceData
@@ -356,6 +368,65 @@ contains
     enddo
 
   end subroutine normalizeEUL
+
+  !> Each 101 vertex class's members take its source sum and its eulerian total over w (raw accumulators).
+  subroutine combineInterfaceDual(src, eul, classes, gas)
+    use IGLOO_variables, only: toll
+    implicit none
+    type(obj_sourceblock), intent(inout) :: src(:)
+    type(obj_eulerblock),  intent(inout) :: eul(:,:)
+    type(vertexClass),     intent(in)    :: classes(:)
+    type(obj_flowblock),   intent(in)    :: gas(:)
+    real(R8), allocatable :: sm(:)
+    real(R8) :: smom(3), sen, e(6), v
+    integer  :: c, n, b, i, j, k, fam
+
+    do c = 1, size(classes)
+      associate(cm => classes(c)%m)
+      b = cm(1,1)
+      if (allocated(src(b)%sourceMass)) then
+        allocate(sm(size(src(b)%sourceMass, 1)))
+        sm = 0._R8; smom = 0._R8; sen = 0._R8
+        do n = 1, size(cm, 2)
+          b = cm(1,n); i = cm(2,n); j = cm(3,n); k = cm(4,n)
+          sm   = sm   + src(b)%sourceMass(:, i, j, k)
+          smom = smom + src(b)%sourceMom (:, i, j, k)
+          sen  = sen  + src(b)%sourceEn  (   i, j, k)
+        enddo
+        do n = 1, size(cm, 2)
+          b = cm(1,n); i = cm(2,n); j = cm(3,n); k = cm(4,n)
+          src(b)%sourceMass(:, i, j, k) = sm
+          src(b)%sourceMom (:, i, j, k) = smom
+          src(b)%sourceEn  (   i, j, k) = sen
+        enddo
+        deallocate(sm)
+      endif
+      if (classes(c)%w > toll) then
+        do fam = 1, size(eul, 2)
+          if (.not. allocated(eul(cm(1,1), fam)%density)) cycle
+          e = 0._R8
+          do n = 1, size(cm, 2)
+            b = cm(1,n); i = cm(2,n); j = cm(3,n); k = cm(4,n)
+            v = gas(b)%cellVol(i, j, k)
+            e(1)   = e(1)   + v*eul(b, fam)%density(i, j, k)
+            e(2)   = e(2)   + v*eul(b, fam)%np(i, j, k)
+            e(3:5) = e(3:5) + v*eul(b, fam)%velocity(:, i, j, k)
+            e(6)   = e(6)   + v*eul(b, fam)%temperature(i, j, k)
+          enddo
+          e = e / classes(c)%w
+          do n = 1, size(cm, 2)
+            b = cm(1,n); i = cm(2,n); j = cm(3,n); k = cm(4,n)
+            eul(b, fam)%density(i, j, k)     = e(1)
+            eul(b, fam)%np(i, j, k)          = e(2)
+            eul(b, fam)%velocity(:, i, j, k) = e(3:5)
+            eul(b, fam)%temperature(i, j, k) = e(6)
+          enddo
+        enddo
+      endif
+      end associate
+    enddo
+
+  end subroutine combineInterfaceDual
 
   !> Mollify the eulerian conserved densities {rho, rho*v, rho*e, n} in place with the
   !  local binomial smoother.
@@ -1014,13 +1085,14 @@ contains
 
   !> Per-cell volumes of the ord2 dual mesh (1..N+1 per direction), clipped to the domain:
   !  3D hex volumes; 2D quad area times the slab thickness (uniform on a planar mesh,
-  !  cSlab*r on an axisymmetric wedge).
-  subroutine precomputeDualMetric(self, is2D, geoblock)
+  !  cSlab*r on an axisymmetric wedge). No clip normal to a face cell flagged in linked.
+  subroutine precomputeDualMetric(self, is2D, geoblock, linked)
     use IGLOO_variables, only: axisym, axisDir
     implicit none
     class(obj_block), intent(inout) :: self      !> dual (gas) block
     logical,          intent(in)    :: is2D
     class(obj_block), intent(in)    :: geoblock   !> for the slab thickness in 2D
+    type(faceFlags),  intent(in), optional :: linked(6)  !> the 101 face cells
     integer  :: i, j, k, i0, j0, ii, jj, in, jn, kn, nxe, nye, nze
     real(R8) :: vol, Tgeo, geoArea, v(3,4), d1(3), d2(3)
     real(R8) :: rad, num, den, cSlab, fi, fj, fk
@@ -1086,25 +1158,42 @@ contains
       in = min(max(i-1, 1), geoblock%Nx)
       jn = min(max(j-1, 1), geoblock%Ny)
       kn = merge(1, min(max(k-1, 1), geoblock%Nz), is2D)
-      if (i == 1)   fi = insideFrac(self%node(:,1,jn,kn), self%node(:,0,jn,kn),          &
+      if (i == 1 .and. .not. isLinked(1, jn, kn)) &
+                    fi = insideFrac(self%node(:,1,jn,kn), self%node(:,0,jn,kn),          &
                                     geoblock%face(1)%cell(jn,kn)%center)
-      if (i == nxe) fi = insideFrac(self%node(:,self%Nx,jn,kn),                          &
+      if (i == nxe .and. .not. isLinked(2, jn, kn)) &
+                    fi = insideFrac(self%node(:,self%Nx,jn,kn),                          &
                                     self%node(:,self%Nx+1,jn,kn),                        &
                                     geoblock%face(2)%cell(jn,kn)%center)
-      if (j == 1)   fj = insideFrac(self%node(:,in,1,kn), self%node(:,in,0,kn),          &
+      if (j == 1 .and. .not. isLinked(3, in, kn)) &
+                    fj = insideFrac(self%node(:,in,1,kn), self%node(:,in,0,kn),          &
                                     geoblock%face(3)%cell(in,kn)%center)
-      if (j == nye) fj = insideFrac(self%node(:,in,self%Ny,kn),                          &
+      if (j == nye .and. .not. isLinked(4, in, kn)) &
+                    fj = insideFrac(self%node(:,in,self%Ny,kn),                          &
                                     self%node(:,in,self%Ny+1,kn),                        &
                                     geoblock%face(4)%cell(in,kn)%center)
       if (.not. is2D) then
-        if (k == 1)   fk = insideFrac(self%node(:,in,jn,1), self%node(:,in,jn,0),        &
+        if (k == 1 .and. .not. isLinked(5, in, jn)) &
+                      fk = insideFrac(self%node(:,in,jn,1), self%node(:,in,jn,0),        &
                                       geoblock%face(5)%cell(in,jn)%center)
-        if (k == nze) fk = insideFrac(self%node(:,in,jn,self%Nz),                        &
+        if (k == nze .and. .not. isLinked(6, in, jn)) &
+                      fk = insideFrac(self%node(:,in,jn,self%Nz),                        &
                                       self%node(:,in,jn,self%Nz+1),                      &
                                       geoblock%face(6)%cell(in,jn)%center)
       endif
       self%cellVol(i, j, k) = self%cellVol(i, j, k) * fi * fj * fk
     enddo; enddo; enddo
+
+  contains
+
+    !> Face cell (m,n) of face f is flagged.
+    logical function isLinked(f, m, n)
+      integer, intent(in) :: f, m, n
+      isLinked = .false.
+      if (.not. present(linked)) return
+      if (.not. allocated(linked(f)%f)) return
+      isLinked = linked(f)%f(m, n)
+    end function isLinked
 
   end subroutine precomputeDualMetric
 

@@ -38,8 +38,14 @@ program test_dual_clip
     ! allocation.f90 does it, so the ghost placement under test is the shipped rule and not a
     ! restatement of it.
     !
+    ! U3 and U3n join two blocks by a 101 face and run the setup pass (assembleInterfaceDual): the
+    ! interface dual cell is not clipped and the vertex classes pair coincident vertices.
+    !
     use, intrinsic :: iso_fortran_env, only: real64
-    use IGLOO_data_block, only: obj_block           ! PRODUCTION type + precomputeDualMetric
+    use IGLOO_data_block, only: obj_block, obj_flowblock, obj_bc_cell, vertexClass, buildInterfaceLinks   ! PRODUCTION types
+    use IGLOO_allocation, only: fill_dual_nodes, computeSkewFlag, assembleInterfaceDual
+    use IGLOO_Lib_Mollify, only: cellLink, linkDonors
+    use IGLOO_variables,  only: ord2, mesh2D
     implicit none
 
     real(real64), parameter :: H = 0.25_real64      ! uniform spacing, all directions
@@ -51,6 +57,10 @@ program test_dual_clip
     call runCase('D2 3D  2x2x2', 2, 2, 2, .false.)
     call runCase('D3 2D  4x3',   4, 3, 1, .true. )
     call runCase('D4 2D  2x2',   2, 2, 1, .true. )
+
+    call s5_u3_two_block('U3 3D       ', .false.)
+    call s5_u3_two_block('U3 one layer', .true.)
+    call s5_u3_nonaligned
 
     if (nfail == 0) then
         print '(a)', ''
@@ -217,5 +227,160 @@ contains
             nfail = nfail + 1
         endif
     end subroutine check
+
+    !> U3 -- a box pair joined by 101 along x (h_B = 1.5 h_A), the setup pass, against the one-block
+    !  box on the same node lines: each interface dual cell is the one-block cell, the dual tiles once.
+    subroutine s5_u3_two_block(label, planar)
+        character(*), intent(in) :: label
+        logical,      intent(in) :: planar
+        integer, parameter :: NXA = 3, NXB = 2, NY = 3
+        type(obj_block)     :: geo(2), one
+        type(obj_flowblock) :: gas(2), gone
+        type(cellLink), allocatable    :: links(:)
+        type(linkDonors)               :: donors
+        type(vertexClass), allocatable :: classes(:)
+        real(real64) :: xa(0:NXA), xb(0:NXB), xo(0:NXA+NXB), eA, eB, sI, vo
+        integer :: i, j, k, nz, nk, nmoved
+        ord2 = .true.; mesh2D = planar
+        nz = merge(1, 2, planar); nk = merge(1, nz + 1, planar)
+        xa = [(i*H, i = 0, NXA)]
+        xb = [(NXA*H + i*1.5_real64*H, i = 0, NXB)]
+        xo(0:NXA) = xa; xo(NXA:NXA+NXB) = xb
+        call boxNodes(geo(1), xa, NY, nz); call finishBlock(geo(1), gas(1), planar)
+        call boxNodes(geo(2), xb, NY, nz); call finishBlock(geo(2), gas(2), planar)
+        call boxNodes(one, xo, NY, nz);    call finishBlock(one, gone, planar)
+        do k = 1, nz; do j = 1, NY
+            call link(geo(1)%face(2)%cell(j,k), [2, 1, j, k], 1, [1, 0, 0, 1])
+            call link(geo(2)%face(1)%cell(j,k), [1, NXA, j, k], 2, [1, 0, 0, 1])
+        enddo; enddo
+        call buildInterfaceLinks(geo, links, donors)
+        call assembleInterfaceDual(geo, gas, links, classes, nmoved)
+        eA = 0._real64; eB = 0._real64; sI = 0._real64
+        do k = 1, nk; do j = 1, NY + 1
+            vo = gone%cellVol(NXA+1, j, k)
+            eA = max(eA, abs(gas(1)%cellVol(NXA+1, j, k) - vo)/vo)
+            eB = max(eB, abs(gas(2)%cellVol(1, j, k) - vo)/vo)
+            sI = sI + gas(1)%cellVol(NXA+1, j, k)
+        enddo; enddo
+        call report(label//' : A interface dual cells vs the one-block cells, max rel', eA, 1.0e-14_real64)
+        call report(label//' : B interface dual cells vs the one-block cells, max rel', eB, 1.0e-14_real64)
+        call report(label//' : sum_A + sum_B - sum_interface vs sum one-block, rel', &
+                    abs(sum(gas(1)%cellVol) + sum(gas(2)%cellVol) - sI - sum(gone%cellVol))/sum(gone%cellVol), &
+                    1.0e-14_real64)
+    end subroutine s5_u3_two_block
+
+    !> U3n -- block A's face 4 (j-max) joined to block B's face 1 (i-min), B's i along +y and its j
+    !  along -x: every class holds two coincident vertices and the one-block box's assembled weight.
+    subroutine s5_u3_nonaligned
+        integer,      parameter :: NXA = 4, NYA = 2, NXB = 3, NZ = 2
+        real(real64), parameter :: HX = 0.25_real64, HYA = 0.3_real64, HYB = 0.45_real64, HZ = 0.25_real64
+        type(obj_block)     :: geo(2), one
+        type(obj_flowblock) :: gas(2), gone
+        type(cellLink), allocatable    :: links(:)
+        type(linkDonors)               :: donors
+        type(vertexClass), allocatable :: classes(:)
+        real(real64) :: dmax, ew, x0(3), lref
+        integer :: c, n, i, j, k, nmoved, nbad
+        ord2 = .true.; mesh2D = .false.
+        geo(1)%Nx = NXA; geo(1)%Ny = NYA; geo(1)%Nz = NZ
+        allocate(geo(1)%node(3, 0:NXA, 0:NYA, 0:NZ))
+        do k = 0, NZ; do j = 0, NYA; do i = 0, NXA
+            geo(1)%node(:, i, j, k) = [i*HX, j*HYA, k*HZ]
+        enddo; enddo; enddo
+        geo(2)%Nx = NXB; geo(2)%Ny = NXA; geo(2)%Nz = NZ
+        allocate(geo(2)%node(3, 0:NXB, 0:NXA, 0:NZ))
+        do k = 0, NZ; do j = 0, NXA; do i = 0, NXB
+            geo(2)%node(:, i, j, k) = [NXA*HX - j*HX, NYA*HYA + i*HYB, k*HZ]
+        enddo; enddo; enddo
+        one%Nx = NXA; one%Ny = NYA + NXB; one%Nz = NZ
+        allocate(one%node(3, 0:NXA, 0:NYA+NXB, 0:NZ))
+        do k = 0, NZ; do j = 0, NYA + NXB; do i = 0, NXA
+            one%node(:, i, j, k) = [i*HX, merge(j*HYA, NYA*HYA + (j - NYA)*HYB, j <= NYA), k*HZ]
+        enddo; enddo; enddo
+        call finishBlock(geo(1), gas(1), .false.)
+        call finishBlock(geo(2), gas(2), .false.)
+        call finishBlock(one, gone, .false.)
+        do k = 1, NZ; do i = 1, NXA
+            call link(geo(1)%face(4)%cell(i,k), [2, 1, NXA + 1 - i, k], 1, [-1, 0, 0, 1])
+            call link(geo(2)%face(1)%cell(NXA + 1 - i, k), [1, i, NYA, k], 4, [-1, 0, 0, 1])
+        enddo; enddo
+        call buildInterfaceLinks(geo, links, donors)
+        call assembleInterfaceDual(geo, gas, links, classes, nmoved)
+        lref = norm2(one%node(:, NXA, NYA+NXB, NZ) - one%node(:, 0, 0, 0))
+        nbad = 0; dmax = 0._real64; ew = 0._real64
+        do c = 1, size(classes)
+            if (size(classes(c)%m, 2) /= 2 .or. count(classes(c)%m(1,:) == 1) /= 1) nbad = nbad + 1
+            associate(m1 => classes(c)%m(:, 1))
+            x0 = geo(m1(1))%node(:, m1(2) - 1, m1(3) - 1, m1(4) - 1)
+            end associate
+            do n = 1, size(classes(c)%m, 2)
+                associate(mb => classes(c)%m(:, n))
+                dmax = max(dmax, norm2(geo(mb(1))%node(:, mb(2) - 1, mb(3) - 1, mb(4) - 1) - x0)/lref)
+                ew = max(ew, abs(geo(mb(1))%dualW(mb(2), mb(3), mb(4)) - classes(c)%w)/classes(c)%w)
+                if (mb(1) == 1) ew = max(ew, abs(classes(c)%w - one%dualW(mb(2), mb(3), mb(4)))/one%dualW(mb(2), mb(3), mb(4)))
+                end associate
+            enddo
+        enddo
+        call report('U3n vertex classes - (NXA+1)(NZ+1)', real(size(classes) - (NXA + 1)*(NZ + 1), real64), 0._real64)
+        call report('U3n classes not one vertex of A and one of B', real(nbad, real64), 0._real64)
+        call report('U3n class members apart, max distance / diagonal', dmax, 1.0e-14_real64)
+        call report('U3n class weights vs the one-block assembled weights, max rel', ew, 1.0e-14_real64)
+    end subroutine s5_u3_nonaligned
+
+    !> Box nodes on the x node line xn, spacing H in y and z.
+    subroutine boxNodes(blk, xn, ny, nz)
+        type(obj_block), intent(inout) :: blk
+        real(real64),    intent(in)    :: xn(0:)
+        integer,         intent(in)    :: ny, nz
+        integer :: i, j, k
+        blk%Nx = size(xn) - 1; blk%Ny = ny; blk%Nz = nz
+        allocate(blk%node(3, 0:blk%Nx, 0:ny, 0:nz))
+        do k = 0, nz; do j = 0, ny; do i = 0, blk%Nx
+            blk%node(:, i, j, k) = [xn(i), j*H, k*H]
+        enddo; enddo; enddo
+    end subroutine boxNodes
+
+    !> Geometry, dual weights and gas dual of a block whose nodes are set, as allocate_blocks builds them.
+    subroutine finishBlock(blk, gas, planar)
+        type(obj_block),     intent(inout) :: blk
+        type(obj_flowblock), intent(inout) :: gas
+        logical,             intent(in)    :: planar
+        allocate(blk%center(3, 1:blk%Nx, 1:blk%Ny, 1:blk%Nz))
+        call blk%compute_geometry
+        call blk%precomputeDualWeights
+        call blk%precomputeMetric
+        gas%Nx = blk%Nx; gas%Ny = blk%Ny; gas%Nz = blk%Nz
+        if (planar) then
+            allocate(gas%node(3, 0:blk%Nx+1, 0:blk%Ny+1, 1:1))
+        else
+            allocate(gas%node(3, 0:blk%Nx+1, 0:blk%Ny+1, 0:blk%Nz+1))
+        endif
+        call fill_dual_nodes(gas, blk, planar)
+        call computeSkewFlag(gas, planar)
+        call gas%precomputeDualMetric(planar, blk)
+        call blk%computeBBox
+        call gas%computeBBox
+    end subroutine finishBlock
+
+    !> A 101 record: partner cell [block, i, j, k], partner face, orientation.
+    subroutine link(cell, partner, pface, orient)
+        type(obj_bc_cell), intent(inout) :: cell
+        integer,           intent(in)    :: partner(4), pface, orient(4)
+        cell%bcdef = 101
+        cell%connection = partner
+        cell%connectionFace = pface
+        cell%orient = orient
+    end subroutine link
+
+    subroutine report(what, got, tol)
+        character(*), intent(in) :: what
+        real(real64), intent(in) :: got, tol
+        if (abs(got) <= tol) then
+            print '(a,a,es10.3)', '  [ok] ', what//' = ', got
+        else
+            print '(a,a,es10.3,a,es9.2)', '  [FAIL] ', what//' = ', got, ' expected |.| <= ', tol
+            nfail = nfail + 1
+        endif
+    end subroutine report
 
 end program test_dual_clip
