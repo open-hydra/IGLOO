@@ -81,19 +81,23 @@ output written).
 | `refuse-brk-mu` | `tab-e2e` without `mu` | `Breakup requires mu` |
 | `refuse-sigma-size` | `tab-e2e` with `Le = 1.0` added and `sigma = 0.072 0.072`, `mu = 1.0e-3 1.0e-3`: the vectors are read in the order psat, Mv, Lv, Tboil, cpv, Le, Yinf, sigma, mu and the first present (`Le`, one value) sets the length | `sigma: size mismatch with other property vectors` |
 | `refuse-sigma-nm` | `tab-e2e` with `sigma = 0.072 0.072`, `mu = 1.0e-3 1.0e-3` for its one material | `sigma: size /= number of materials` |
+| `refuse-sigma-both` | `pe-sigma-table` (`INPUT/` symlinked: its `Sigma` and `Viscosity` columns) with `[IGLOO-Properties] sigma = 0.072` | `IGLOO: sigma given both in [IGLOO-Properties] and as a properties.dat column` |
+| `refuse-sigma-column` | `pe-sigma-table`'s case with its own `properties.dat`, the `Sigma` column at −0.01 N/m on the 320 K row (`bc.txt`, `solfile.tec` symlinked to `pilch-erdman-e2e`'s) | `Sigma column: a value that is not positive` |
 | `refuse-bc-legacy` | own `INPUT/bc.txt`: `drag-stokes`'s with every code in the legacy single-digit schema (401 → 4, 400 → 1; `python3 make_bc_refusals.py`, run from this directory) | `IGLOO: bc.txt line is not six integers with a 3-digit code` |
 | `refuse-bc-empty-payload` | own `INPUT/bc.txt`: `drag-stokes`'s with the first inlet payload line empty (`make_bc_refusals.py`) | `IGLOO: bc.txt inlet payload line is empty` |
 | `refuse-body-accel` | `body-force` (`INPUT/` symlinked) with `body-accel = 0.0 -200.0` | `body-accel: expected 3 values (gx gy gz)` |
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All sixty-five exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All sixty-seven exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
 line) — neither is their payload. **The two vapour-column cases are RED**
 on a reader that does not know the `Lv`, `Mv`, `Cpv` columns: both stop at `Evaporation requires Mv` (exit 128,
-not their payload). **The ten size-distribution cases are
+not their payload). **The two `Sigma` cases are RED** on a reader that does not know the `Sigma` and
+`Viscosity` columns: `refuse-sigma-both` stops at `Breakup requires mu` (its only key is `sigma`),
+`refuse-sigma-column` at `Breakup requires sigma` (exit 128, not their payload). **The ten size-distribution cases are
 RED** on a reader that splits the inlet line with a list-directed read: a path ends at its slash (`tables`,
 `INPUT`), so nine of them stop at `unsupported distribution law` with exit 1 and no payload, and the
 600-character line is cut to 512 characters and run as a Dirac (exit 0, output written). The six table

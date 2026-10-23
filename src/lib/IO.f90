@@ -13,8 +13,9 @@ contains
 
   !> Read the phase file (one line per material: "<name> <groups> [key=value ...]", the tokens being
   !  the per-material models ATLAS GPB writes from [GPB-Phase*]) and properties.dat (columns named by
-  !  its VARIABLES line: cp, rho, h, an optional Psat and its pair's Lv, Mv, Cpv); breakup/evaporation
-  !  constants come from [IGLOO-Properties] (Lv, Mv, cpv from there or from their columns).
+  !  its VARIABLES line: cp, rho, h, an optional Psat and its pair's Lv, Mv, Cpv, optional Sigma and
+  !  Viscosity); breakup/evaporation constants come from [IGLOO-Properties] (Lv, Mv, cpv, sigma, mu from
+  !  there or from their columns).
   subroutine read_cdp_properties(prefix,material)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_variables,       only: nm, phaseChange, breakup_word, evaporation_word, &
@@ -24,7 +25,8 @@ contains
                                      read_variables_line, classify_table_tokens, scan_rows, &
                                      check_table_nodes, check_table_columns, validate_psat_column, &
                                      table_reason, psat_reason, VAP_OK, VAP_ABSENT, validate_vapour_columns, &
-                                     vapour_reason, tableValue
+                                     vapour_reason, tableValue, COL_OK, COL_ABSENT, validate_positive_column, &
+                                     column_reason
     use IGLOO_IO_INI,          only: ini_Mv, ini_Lv, ini_Tboil, ini_cpv, ini_Le, ini_Yinf, &
                                         ini_sigma, ini_mu, ini_emissivity, &
                                         set_material_defaults, apply_material_key, finalize_material_models, &
@@ -44,7 +46,7 @@ contains
     character(len=512)     :: tablefile
     character(len=tok_len) :: tokens(ntok_max)
     integer                :: ntok, icp, irho, ih, ips, code, Ni, i0
-    integer                :: ilv, imv, icpv
+    integer                :: ilv, imv, icpv, isig, imu
     integer                :: nzone, nsize, ndata, ntrail, badline, nannounced(nzone_max), nrows(nzone_max)
     logical                :: relative, found, exists
     real(R8)               :: ratio
@@ -151,7 +153,7 @@ contains
     if (.not. exists) call refuse_table(tablefile, 'no such file')
     call read_variables_line(tablefile, tokens, ntok, found)
     if (.not. found) call refuse_table(tablefile, 'no VARIABLES line')
-    call classify_table_tokens(tokens(1:ntok), icp, irho, ih, ips, relative, code, ilv, imv, icpv)
+    call classify_table_tokens(tokens(1:ntok), icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
     if (code /= TAB_OK) call refuse_table(tablefile, table_reason(code))
     !> "Enthalpy" = relative (cp*T, or the SP-database integral), "Enthalpy_abs" = formation enthalpy included
     hDatum = merge('relative', 'absolute', relative)
@@ -256,27 +258,43 @@ contains
       if (mat%solidSelect > 0 .and. mat%rhoVariable) &
         error stop '[ERROR] solidification=on requires a constant-density material'
 
-      !> sigma/mu (a breaking material)
+      !> sigma and mu of a breaking material: a non-zero Sigma/Viscosity column or the [IGLOO-Properties] entry
       if (mat%brkupSelect > 0) then
-        ! if (all((blk%vars(4,Tmin+1:Tmax,1,1)-blk%vars(4,Tmin:Tmax-1,1,1))==0._R8)) then
-        !   mat%sigma = blk%vars(4,Tmin,1,1)
-        ! else
-        !   mat%sigVariable = .true.
-        !   mat%sigTab(Tmin:Tmax) = blk%vars(4,:,1,1)
-        ! endif
-        ! if (all((blk%vars(5,Tmin+1:Tmax,1,1)-blk%vars(5,Tmin:Tmax-1,1,1))==0._R8)) then
-        !   mat%mup = blk%vars(5,Tmin,1,1)
-        ! else
-        !   mat%mupVariable = .true.
-        !   mat%mupTab(Tmin:Tmax) = blk%vars(5,:,1,1)
-        ! endif
-
-        !> constants from [IGLOO-Properties]
-        if (allocated(ini_sigma)) then; material(i)%sigma = ini_sigma(i)
-        else; error stop '[ERROR] Breakup requires sigma. Provide in [IGLOO-Properties]'
+        code = COL_ABSENT
+        if (isig > 0) code = validate_positive_column(blk%vars(isig,1:Ni,1,1))
+        if (code /= COL_OK .and. code /= COL_ABSENT) &
+          call refuse_table(tablefile, trim(zone_label(i, mat%matName))//'Sigma column: '//column_reason(code))
+        if (code == COL_OK) then
+          mat%sigVariable = .true.
+          allocate(mat%sigTab(Tmin:Tmax))
+          mat%sigTab(Tmin:Tmax) = blk%vars(isig,1:Ni,1,1)
+          write(*,'(A,I0,A,I0,A,I0,A)') '  >> [material ', i, '] sigma tabulated from properties.dat (', &
+                                        Tmin, '..', Tmax, ' K)'
+          if (allocated(ini_sigma)) then
+            if (ini_sigma(i) /= 0._R8) error stop 'IGLOO: sigma given both in [IGLOO-Properties] and as a properties.dat column'
+          endif
+        else
+          if (allocated(ini_sigma)) mat%sigma = ini_sigma(i)
+          if (.not. (mat%sigma > 0._R8)) &
+            error stop 'IGLOO: Breakup requires sigma > 0: a Sigma column in properties.dat or [IGLOO-Properties] sigma'
         endif
-        if (allocated(ini_mu)) then;    material(i)%mup = ini_mu(i)
-        else; error stop '[ERROR] Breakup requires mu. Provide in [IGLOO-Properties]'
+        code = COL_ABSENT
+        if (imu > 0) code = validate_positive_column(blk%vars(imu,1:Ni,1,1))
+        if (code /= COL_OK .and. code /= COL_ABSENT) &
+          call refuse_table(tablefile, trim(zone_label(i, mat%matName))//'Viscosity column: '//column_reason(code))
+        if (code == COL_OK) then
+          mat%mupVariable = .true.
+          allocate(mat%mupTab(Tmin:Tmax))
+          mat%mupTab(Tmin:Tmax) = blk%vars(imu,1:Ni,1,1)
+          write(*,'(A,I0,A,I0,A,I0,A)') '  >> [material ', i, '] mu tabulated from properties.dat (', &
+                                        Tmin, '..', Tmax, ' K)'
+          if (allocated(ini_mu)) then
+            if (ini_mu(i) /= 0._R8) error stop 'IGLOO: mu given both in [IGLOO-Properties] and as a properties.dat column'
+          endif
+        else
+          if (allocated(ini_mu)) mat%mup = ini_mu(i)
+          if (.not. (mat%mup > 0._R8)) &
+            error stop 'IGLOO: Breakup requires mu > 0: a Viscosity column in properties.dat or [IGLOO-Properties] mu'
         endif
       endif
 

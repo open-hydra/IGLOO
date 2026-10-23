@@ -35,6 +35,7 @@ module IGLOO_variables
   !> per-sweep block changes: through the connected cell of a connected face, through the block sweep, rim exits
   integer  :: nConnHit = 0, nSweepHit = 0, nRimExit = 0
   integer  :: nInjNoCell = 0  !> per-sweep: parcels whose injection point no cell holds (not integrated)
+  integer  :: nKHRTwarn = 0   !> per-sweep: KH-RT evaluations outside the model's hypotheses
   integer  :: fsample, nb, nm, nfam, iprint, trajSample
   integer, allocatable :: nspecies(:)
   real(R8) :: ds, mdotMax, dtprint

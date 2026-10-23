@@ -26,14 +26,17 @@ module IGLOO_Lib_Properties
   integer, parameter :: VAP_OK = 0, VAP_ABSENT = 1, VAP_NONFINITE = 2, VAP_PARTIAL = 3, VAP_NONPOSITIVE = 4, &
                         VAP_MV_VARIES = 5, VAP_WITHOUT_PSAT = 6, VAP_CC_MISMATCH = 7
 
+  !> Codes of the Sigma and Viscosity column checks; column_reason gives the text.
+  integer, parameter :: COL_OK = 0, COL_ABSENT = 1, COL_NONFINITE = 2, COL_PARTIAL = 3, COL_NONPOSITIVE = 4
+
   character(len=*), parameter :: grammar = &
     'expected: VARIABLES = "Temperature", "Cp", "Density", "Enthalpy" (or "Enthalpy_abs")'// &
-    '[, "Psat"[, "Lv"][, "Mv"][, "Cpv"]], '// &
+    '[, "Psat"[, "Lv"][, "Mv"][, "Cpv"]][, "Sigma"][, "Viscosity"], '// &
     'Temperature first and the others in any order, one zone per material, rows on consecutive integer kelvins'
 
 contains
 
-  !> Linear between the nodes, the end segments continued outside (enthalpy, sigma, mu); NaN at a non-finite T.
+  !> Linear between the nodes, the end segments continued outside (enthalpy); NaN at a non-finite T.
   pure function lookupTab(tab, T) result(val)
     implicit none
     real(8), intent(in) :: tab(Tmin:Tmax), T
@@ -83,7 +86,7 @@ contains
 
   end function comp_TfromTab
 
-  !> Linear between the nodes, the end value outside (density, psat); a NaN temperature returns NaN.
+  !> Linear between the nodes, the end value outside (density, psat, sigma, mu); a NaN temperature returns NaN.
   pure function tableValue(tab, lo, hi, T) result(v)
     integer,  intent(in) :: lo, hi
     real(R8), intent(in) :: tab(lo:hi), T
@@ -105,15 +108,15 @@ contains
 
 
   !> Maps the header names to column indices of vars (column 1 is Temperature, read as the mesh).
-  pure subroutine classify_table_tokens(tokens, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
+  pure subroutine classify_table_tokens(tokens, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
     character(len=*), intent(in)  :: tokens(:)
     integer,          intent(out) :: icp, irho, ih, ips, code
     logical,          intent(out) :: relative
-    integer,          intent(out) :: ilv, imv, icpv
+    integer,          intent(out) :: ilv, imv, icpv, isig, imu
     integer :: t
 
     icp = 0; irho = 0; ih = 0; ips = 0; relative = .true.
-    ilv = 0; imv = 0; icpv = 0
+    ilv = 0; imv = 0; icpv = 0; isig = 0; imu = 0
     code = TAB_NO_TEMPERATURE
     if (size(tokens) < 1) return
     if (tokens(1) /= 'Temperature' .and. tokens(1) /= 'temperature') return
@@ -143,6 +146,12 @@ contains
       case ('Cpv', 'cpv', 'CPV')
         if (icpv > 0) code = TAB_DUPLICATE
         icpv = t - 1
+      case ('Sigma', 'sigma', 'SIGMA')
+        if (isig > 0) code = TAB_DUPLICATE
+        isig = t - 1
+      case ('Viscosity', 'viscosity', 'VISCOSITY')
+        if (imu > 0) code = TAB_DUPLICATE
+        imu = t - 1
       end select
       if (code /= TAB_OK) return
     enddo
@@ -317,6 +326,34 @@ contains
     case default;            txt = 'unknown vapour column error'
     end select
   end function vapour_reason
+
+
+  !> A Sigma or Viscosity column: finite; all zero means absent; zero on every row or on none; positive.
+  pure function validate_positive_column(tab) result(code)
+    real(R8), intent(in) :: tab(:)
+    integer :: code
+    code = COL_NONFINITE
+    if (.not. all(ieee_is_finite(tab))) return
+    code = COL_ABSENT
+    if (all(tab == 0._R8)) return
+    code = COL_PARTIAL
+    if (any(tab == 0._R8)) return
+    code = COL_NONPOSITIVE
+    if (any(tab < 0._R8)) return
+    code = COL_OK
+  end function validate_positive_column
+
+
+  pure function column_reason(code) result(txt)
+    integer, intent(in) :: code
+    character(len=:), allocatable :: txt
+    select case (code)
+    case (COL_NONFINITE);   txt = 'a value that is not finite'
+    case (COL_PARTIAL);     txt = 'zero on some rows and not on others'
+    case (COL_NONPOSITIVE); txt = 'a value that is not positive'
+    case default;           txt = 'unknown column error'
+    end select
+  end function column_reason
 
 
   pure function table_reason(code) result(txt)

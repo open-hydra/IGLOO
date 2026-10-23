@@ -29,8 +29,11 @@ the name listed per model below, as in `TAB-Comega=10` or `KHRT-B1=40`), the `[I
 key of that name, or its default (in the [registry](../user/registry.md)). TAB and ETAB each
 take their own `Comega`, `Cmu` and `WeCrit` tokens; a token of a model the material does not
 run is accepted and unused. The liquid properties the models need — surface tension
-$\sigma$ and viscosity $\mu_p$ — come from `INPUT/properties.dat` or the
-`[IGLOO-Properties] sigma` / `mu` overrides, and are required only for a material that breaks.
+$\sigma$ and viscosity $\mu_p$ — are, per material, either the `Sigma` / `Viscosity` columns of
+`INPUT/properties.dat` at the droplet temperature (linear between the nodes, the end values
+outside the table) or the `[IGLOO-Properties] sigma` / `mu` constants, not both, and are
+required (> 0) only for a material that breaks (see
+[Property tables](../user/input.md#property-tables-inputpropertiesdat)).
 
 ---
 
@@ -149,6 +152,11 @@ Two discrete events ride on top of it in the `solout` callback:
   never enters the gas source: the parent's outgoing flux in the shed segment includes the
   child's birth flux, which the child deposits along its own path (see
   [Eulerian feedback](eulerian-feedback.md)).
+
+The solver checks the model's validity range, $\mathrm{Oh} \le 1$ and $\rho_g/\rho_p \le 0.1$, at
+every evaluation, and runs the model outside it too. It counts the evaluations that leave the
+range, over threads and ranks, and when the count N is not zero the sweep ends with one line,
+`[WARNING] Reitz-KHRT outside its hypotheses (Oh > 1 or rho_g/rho_p > 0.1) in N model evaluations`.
 
 ---
 

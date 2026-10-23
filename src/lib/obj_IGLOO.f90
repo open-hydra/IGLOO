@@ -327,7 +327,7 @@ contains
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
                                 trajOn, scatOn, dNscat, trajSample, threshold, &
                                 probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
-                                nConnHit, nSweepHit, nRimExit, nInjNoCell, &
+                                nConnHit, nSweepHit, nRimExit, nInjNoCell, nKHRTwarn, &
                                 unitSnap, snapOn, timeOn, tEnd
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
@@ -350,7 +350,7 @@ contains
     integer :: loopCounter, maxShedSeen
     !> Child-ID band of the current generation. No initializer here: it would imply SAVE.
     integer :: curBase, curCount, newBase, childLocal, childGlobal, pidx, idBase
-    integer :: foldStat(2), noCell(1)
+    integer :: foldStat(2), noCell(1), khrtWarn(1)
     integer, allocatable :: nShedAll(:), shedOff(:)
     ! logical, allocatable :: famDone(:)
     real(R8), allocatable :: relTol(:), absTol(:), exch(:,:)
@@ -367,7 +367,7 @@ contains
     endif
     self%stateIsFresh = .false.
     nSectorFold = 0; nMultiFold = 0; nStencilRefresh = 0; nConnHit = 0; nSweepHit = 0; nRimExit = 0
-    nInjNoCell = 0
+    nInjNoCell = 0; nKHRTwarn = 0
 
     sourceSwitch = self%srcSwitch
     eulerSwitch  = self%eulSwitch
@@ -744,6 +744,13 @@ contains
     call mpi_allreduce_sum_i4_array(noCell, 1)
     if (mpi_is_root .and. noCell(1) > 0) write(*,'(A,I0,A)') ' [WARNING] ', noCell(1), &
       ' parcel(s) whose injection point no cell holds: not integrated'
+    if (any(self%material(:)%brkupSelect == 3)) then
+      khrtWarn = [nKHRTwarn]
+      call mpi_allreduce_sum_i4_array(khrtWarn, 1)
+      if (mpi_is_root .and. khrtWarn(1) > 0) write(*,'(A,I0,A)') &
+        ' [WARNING] Reitz-KHRT outside its hypotheses (Oh > 1 or rho_g/rho_p > 0.1) in ', khrtWarn(1), &
+        ' model evaluations'
+    endif
     if (mpi_is_root) then
       if (snapOn) then
         write(*,'(A,ES16.8E2,A)') '  Stop condition : time-end = ', tEnd, ' s reached, or the particle left the domain'

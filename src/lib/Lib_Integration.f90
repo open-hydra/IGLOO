@@ -790,8 +790,8 @@ contains
       if (eventType) then
         if (mod_propFlags(1)) then; tp = comp_TfromTab(hTab,y(7)); else; tp = y(7);                 endif
         if (mod_propFlags(2)) then; rho   = tableValue(rhoTab, Tmin, Tmax, tp); else; rho   = auxLocal(ind_rho); endif
-        if (mod_propFlags(3)) then; sigma = lookupTab(sigTab, tp); else; sigma = auxLocal(ind_sig); endif
-        if (mod_propFlags(4)) then; mup   = lookupTab(mupTab, tp); else; mup   = auxLocal(ind_mup); endif
+        if (mod_propFlags(3)) then; sigma = tableValue(sigTab, Tmin, Tmax, tp); else; sigma = auxLocal(ind_sig); endif
+        if (mod_propFlags(4)) then; mup   = tableValue(mupTab, Tmin, Tmax, tp); else; mup   = auxLocal(ind_mup); endif
         select case(mod_model)
         case(3);      m = auxLocal(ind_m)/y(8)
         case(2,4,5);  m = y(8)

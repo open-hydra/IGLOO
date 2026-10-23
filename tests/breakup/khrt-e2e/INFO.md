@@ -18,7 +18,7 @@
 - `tools/make_pe_case.py --we-convention rad --u-gas 200` + 25-point radius-based sweep
   `We_r ∈ {30 … 1000}` (d 0.36–12 mm), slip = 100 m/s (`κ_v=0.5`), σ=0.072, μ_l=1e-3,
   water drops (ATLAS-GPB fixtures). Validity: Oh≈0.005<1 and ρg/ρp≈0.0012<0.1 (the KHRT
-  hypothesis holds; no `[WARNING] ReitzKHRT hypothesis falling`).
+  hypotheses hold; no `[WARNING] Reitz-KHRT outside its hypotheses` line).
 - **Weber convention:** radius-based (KHRT/Reitz and production `Lib_Breakup.f90:182`).
 
 ## KH-shed children (A23g/A23h **CLOSED** 2026-08-04, one-shed cap lifted)

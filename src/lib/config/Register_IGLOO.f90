@@ -145,9 +145,11 @@ contains
     call reg%add('IGLOO-Properties','Yinf',d_a(8,:),'0', &
       'Far-field vapour mass fraction; one value per material, overrides properties.dat','',.false.)
     call reg%add('IGLOO-Properties','sigma',d_a(9,:),'0', &
-      'Surface tension; one value per material, overrides properties.dat','',.false.)
+      'Surface tension of a breaking material; one value per material; a material whose properties.dat '// &
+      'carries the Sigma column takes it from there (give 0 here)','',.false.)
     call reg%add('IGLOO-Properties','mu',d_a(10,:),'0', &
-      'Particle dynamic viscosity; one value per material, overrides properties.dat','',.false.)
+      'Particle dynamic viscosity of a breaking material; one value per material; a material whose '// &
+      'properties.dat carries the Viscosity column takes it from there (give 0 here)','',.false.)
     call reg%add('IGLOO-Properties','emissivity',d_a(20,:),'0', &
       'Particle surface emissivity of the grey-body exchange with the gas temperature; one value per material; '// &
       '0 = off (default)','',.false.)

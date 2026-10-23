@@ -54,12 +54,12 @@ to overlook when counting coverage:
   gates (no `WILL_FAIL` property anywhere in the registry).
 - **8 — Contract and harness meta-tests** — `test_ini_pipeline` (the
   `input.ini` → module-variable round-trip through the production reader),
-  `test_properties_reader` (three entries: the `properties.dat` reader on tables that start
-  above 1 K, columns in any order, both enthalpy datums, a `Psat` column, and the file ATLAS
-  GPB writes; plus the table and `Psat` checks and the enthalpy-to-temperature inversion on synthetic input),
+  `test_properties_reader` (four entries: the `properties.dat` reader on tables that start
+  above 1 K, columns in any order, both enthalpy datums, a `Psat` column, the `Sigma` and
+  `Viscosity` columns of a breaking material, and the file ATLAS GPB writes; plus the table and `Psat` checks and the enthalpy-to-temperature inversion on synthetic input),
   `registry-docs` (the tracked parameter registry page equals DocGen's output),
   `test_host_assoc` (a test program's internal procedures address its arrays, not a static copy),
-  the sixty-five `refusals/*` cases (inputs the solver must refuse at setup with exit
+  the sixty-seven `refusals/*` cases (inputs the solver must refuse at setup with exit
   128 and nothing integrated), and `self_test` (which exercises the verification
   support library itself).  No physics, no curve, by design.
 
@@ -204,7 +204,7 @@ solver could only emulate with a no-drag production flag.  See
 | Evaporation | `evaporation()` function-level; d²-law, CEM, LK, TC; droplet energy F(7) | `test_evaporation`, `test_evap_probes` (XE1–XE3: d²-law/CEM Re = 0 ratio, $\dot m$ sign from the call sites, $\dot Q_G > 0$ for hot gas), `test_interface_lk`, `test_tc_analytic`, `test_mhb98_decane`, `test_evap_breakup` (model 4 at one state); d²-law/lk-neq/tc and evaporation-with-breakup e2e |
 | Gas reconstruction | `ord2` interpolation, E1–E5, E7, E8 sub-tests | `test_gas_reconstruction` |
 | INI pipeline | INI → module-variable round-trip, IP1–IP5 | `test_ini_pipeline`; `registry-docs` |
-| Property tables | `properties.dat` read by column name (PR1–PR3, PR6, PR7, PR9, PR10), its header, row, node, column and `Psat` checks (PR4, PR5, PR8, PR11–PR13), and the enthalpy-to-temperature inversion of a varying $c_p$ (PR14) | `test_properties_reader` (three working directories); five `refuse-properties-*` cases; `temp-relax-varcp` and `varcp-tmin` e2e |
+| Property tables | `properties.dat` read by column name (PR1–PR3, PR6, PR7, PR9, PR10), its header, row, node, column and `Psat` checks (PR4, PR5, PR8, PR11–PR13), and the enthalpy-to-temperature inversion of a varying $c_p$ (PR14) | `test_properties_reader` (four working directories); five `refuse-properties-*` cases and `refuse-sigma-column`; `temp-relax-varcp`, `varcp-tmin` and `pe-sigma-table` e2e |
 | Breakup (TAB/ETAB/RD/PE/KHRT) | All five models vs the primary papers (PE87, TAB-872089, Tanner 97/98, Reitz-87, RD-860469, Beale-Reitz-99) | 8 unit tests (including `test_tab_moments` and the ETAB child $v_\perp = A\dot{x}$ check ET4); seven Weber-sweep e2e cases (`tab-hf92` and `etab-hf92`, beside Hsiang & Faeth's correlations, among them) |
 | Injection size distributions | The injection laws (Dirac, truncated Normal, LogNormal, Rosin–Rammler) and size-distribution files (histogram reading), as mass-flow distributions | `test_psd_table` (T1–T5) + `psd-table`, `psd-normal`, `psd-lognormal`, `psd-rosinrammler`, `psd-bare-token` e2e + ten `refuse-psd-*` refusals |
 | Combustion | Beckstead $d^n$ Al burn law | `test_combustion` (CB1–CB4) + `burn-box` e2e |

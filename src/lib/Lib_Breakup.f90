@@ -198,7 +198,7 @@ contains
     !> Reitz KH-RT breakup rate: KH stripping toward dStable = 2 B0 lambda_KH, gated by the RT
     !  breakup time; told/tc carry the RT timer.
     function ReitzKHRT(dp,sigma,mup,rhop,npdot,rhog,vel,time,acc,vp,told,tc, bp) result(npdotDot)
-        use IGLOO_variables, only: pi, toll
+        use IGLOO_variables, only: pi, toll, nKHRTwarn
         implicit none
         real(R8), intent(in)    :: dp, sigma, mup, rhop, npdot, rhog, vel, time, acc(3), vp(3)
         real(R8), intent(inout) :: told, tc
@@ -215,7 +215,10 @@ contains
         !> Z = sqrt(We_l)/Re_l = mu_l/sqrt(rho_l sigma r); T = Z sqrt(We_g) (Reitz-87 Eqs 4-5)
         Oh  = mup/sqrt(rhop*sigma*radius)
         Tay = Oh*sqrt(WeGas)
-        if (Oh>1 .or. rhog/rhop>0.1_R8) write(*,*) ' [WARNING] ReitzKHRT hypothesis falling'
+        if (Oh>1 .or. rhog/rhop>0.1_R8) then
+            !$OMP ATOMIC
+            nKHRTwarn = nKHRTwarn + 1
+        endif
 
         omegaKH  = (0.34_R8 + 0.38_R8*WeGas**1.5_R8)/((1._R8 + Oh)*(1._R8 + 1.4_R8*Tay**0.6_R8)) &
                     *sqrt(sigma/(rhop*radius**3))   ! Reitz 1987 KH growth rate [1/s]
@@ -297,7 +300,7 @@ contains
     !  mass into a child parcel once it exceeds mShedLim of the parent drop mass.
     subroutine ReitzKHRTevent(dp,sigma,mup,rhop,npdot,rhog,vel,time,acc,vp,m0,told,tc,KHindex, &
                                bp, event,childState,addChild,exitLoop,childPending,n0)
-        use IGLOO_variables, only: pi, toll
+        use IGLOO_variables, only: pi, toll, nKHRTwarn
         implicit none
         real(R8), intent(in)    :: sigma, mup, rhop, rhog, vel, time, acc(3), vp(3)
         real(R8), intent(inout) :: dp, npdot, m0, told, tc, KHindex
@@ -320,7 +323,10 @@ contains
         !> Z/T per Reitz-87 Eqs 4-5
         Oh  = mup/sqrt(rhop*sigma*radius)
         Tay = Oh*sqrt(WeGas)
-        if (Oh>1 .or. rhog/rhop>0.1_R8) write(*,*) ' [WARNING] ReitzKHRT hypothesis falling'
+        if (Oh>1 .or. rhog/rhop>0.1_R8) then
+            !$OMP ATOMIC
+            nKHRTwarn = nKHRTwarn + 1
+        endif
 
         omegaKH  = (0.34_R8 + 0.38_R8*WeGas**1.5_R8)/((1._R8 + Oh)*(1._R8 + 1.4_R8*Tay**0.6_R8)) &
                     *sqrt(sigma/(rhop*radius**3))   ! Reitz 1987 KH growth rate [1/s]

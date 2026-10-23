@@ -678,8 +678,8 @@ contains
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
     else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
     if (mod_propFlags(2)) then; rho   = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho   = aux(ind_rho); endif
-    if (mod_propFlags(3)) then; sigma = lookupTab(sigTabM, tp); else; sigma = aux(ind_sig); endif
-    if (mod_propFlags(4)) then; mup   = lookupTab(mupTabM, tp); else; mup   = aux(ind_mup); endif
+    if (mod_propFlags(3)) then; sigma = tableValue(sigTabM, Tmin, Tmax, tp); else; sigma = aux(ind_sig); endif
+    if (mod_propFlags(4)) then; mup   = tableValue(mupTabM, Tmin, Tmax, tp); else; mup   = aux(ind_mup); endif
     m = aux(ind_m)/Z(8)
     d = (sixOverPi*m/rho)**oneThird
 
@@ -763,8 +763,8 @@ contains
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
     else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
     if (mod_propFlags(2)) then; rho   = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho   = aux(ind_rho); endif
-    if (mod_propFlags(3)) then; sigma = lookupTab(sigTabM, tp); else; sigma = aux(ind_sig); endif
-    if (mod_propFlags(4)) then; mup   = lookupTab(mupTabM, tp); else; mup   = aux(ind_mup); endif
+    if (mod_propFlags(3)) then; sigma = tableValue(sigTabM, Tmin, Tmax, tp); else; sigma = aux(ind_sig); endif
+    if (mod_propFlags(4)) then; mup   = tableValue(mupTabM, Tmin, Tmax, tp); else; mup   = aux(ind_mup); endif
     m = Z(8)
     d = (sixOverPi*m/rho)**oneThird
 
