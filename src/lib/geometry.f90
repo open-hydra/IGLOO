@@ -483,7 +483,8 @@ contains
 
         h = cross(ray%direction, edge2)
         a = dot_product(edge1, h)
-        if (abs(a)/(norm2(edge1)*norm2(h))<=toll) then
+        !> multiplied out: a ray along edge2 (h = 0) is parallel too
+        if (abs(a) <= toll*norm2(edge1)*norm2(h)) then
             intersectRayTriangle = .false.  ! Ray is parallel to the triangle
             return
         end if

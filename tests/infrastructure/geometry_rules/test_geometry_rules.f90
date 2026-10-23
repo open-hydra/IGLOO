@@ -1,9 +1,21 @@
 program test_geometry_rules
     !
+    ! The boundary search's face: the ray/face intersection and its fallback.
+    !
     ! closestFace, the boundary search's fallback when checkBoundary's forward and backward rays both miss the
     ! cell's faces: of the faces the containment test rejects the point through (beyond both triangle planes of
     ! the face by more than the cell's tolerance hexTol), the one with the smallest min(d1, d2); when no face
     ! rejects the point, the face with the smallest non-negative triangle distance.
+    !
+    ! The ray/face intersection the search tries first:
+    !
+    !   RT1  rays along a triangle's edge2 (the cross product of the direction and edge2 is zero), on both
+    !        sides of the triangle's plane and in it, for both windings and both senses: parallel, no hit;
+    !        controls, a ray along edge1 and one crossing the triangle (a hit at its distance)
+    !   RT2  intersectPolyhedron on a box along +-x, +-y, +-z, from the centre, an interior point, a face centre,
+    !        an edge midpoint, a corner and a point beyond a face within the tolerance (along that face): the
+    !        face the ray leaves through, at its distance, for every face hint 0..6, and the same face and point
+    !        for every hint
     !
     !   BF1  a box of edge h = 1e-2 m whose node 7 moves 1e-3 m along +i (the +i face warped, the +j wall
     !        planar); a point beyond the wall by 5e-4 m, beyond one +i triangle by 2.5e-4 m and inside the
@@ -23,7 +35,9 @@ program test_geometry_rules
     !        belongs to a face that does not reject the point
     !
     use, intrinsic :: iso_fortran_env, only: real64
-    use IGLOO_RayFaceIntersection3D, only: closestFace, isPointInsideHexahedron12, isInsideHex12Fast, precomputeHex12
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use IGLOO_RayFaceIntersection3D, only: closestFace, isPointInsideHexahedron12, isInsideHex12Fast, precomputeHex12, &
+                                           intersectRayTriangle, intersectPolyhedron, Ray_t, Triangle_t
     implicit none
 
     integer, parameter :: NP = 20000
@@ -45,6 +59,8 @@ program test_geometry_rules
     warp = box
     warp(1, 7) = H + DW
 
+    call parallelRays()
+    call hintIndependence()
     call config('BF1 warped +i face, beyond the +j wall', [H + 0.75_real64*DW, YJ, 0.5_real64*H], warp, 4, DIFFER)
     call config('BF2 box, in the +i band, beyond +j', [H + 1.e-15_real64, YJ, 0.5_real64*H], box, 4, DIFFER)
     call config('BF3 box, beyond +i and +j', [H + 2.e-4_real64, YJ, 0.5_real64*H], box, 2, CONTROL)
@@ -58,8 +74,9 @@ program test_geometry_rules
 
     if (nfail == 0) then
         print '(a)', ''
-        print '(a)', '[PASS] test_geometry_rules: the boundary search''s fallback returns the nearest face the '// &
-                     'containment test rejects the point through'
+        print '(a)', '[PASS] test_geometry_rules: a ray parallel to a face is no hit, the exit face does not depend '// &
+                     'on the face hint, and the fallback returns the nearest face the containment test rejects '// &
+                     'the point through'
     else
         print '(a)', ''
         print '(a,i0,a)', '[FAIL] test_geometry_rules: ', nfail, ' assertion(s) failed'
@@ -67,6 +84,118 @@ program test_geometry_rules
     endif
 
 contains
+
+    !> RT1: a triangle in the plane z = 0 with edge2 along +x (both windings); rays along +-x from z = -h/2, 0
+    !  and +h/2 cross no triangle; controls, a ray along edge1 (no hit) and one along -z (a hit at h/2).
+    subroutine parallelRays()
+        type(Ray_t)      :: ray
+        type(Triangle_t) :: tri
+        real(real64)     :: ip(3), dist, sy
+        integer          :: w, s, o, nhit, nray, nctl
+        logical          :: hit
+        nhit = 0; nray = 0; nctl = 0
+        do w = 1, 2
+            sy = real(3 - 2*w, real64)
+            tri%vertices(:, 1) = 0._real64
+            tri%vertices(:, 2) = [0._real64, sy*H, 0._real64]
+            tri%vertices(:, 3) = [H, 0._real64, 0._real64]
+            do s = 1, 2
+                ray%direction = [real(3 - 2*s, real64), 0._real64, 0._real64]
+                do o = -1, 1
+                    ray%origin = [merge(-0.5_real64*H, 1.5_real64*H, s == 1), 0.25_real64*sy*H, 0.5_real64*o*H]
+                    nray = nray + 1
+                    hit = intersectRayTriangle(ray, tri, ip, dist)
+                    if (hit) then
+                        nhit = nhit + 1
+                        print '(a,i0,a,i0,a,f5.1,a,es10.3,a,3es11.3,a)', '  [FAIL] RT1 winding ', w, ', sense ', &
+                            3 - 2*s, ', z = ', 0.5_real64*o, ' h: a hit at distance ', dist, ', point (', ip, ')'
+                    endif
+                enddo
+            enddo
+            ray%direction = [0._real64, sy, 0._real64]
+            ray%origin = [0.25_real64*H, -0.5_real64*sy*H, 0.5_real64*H]
+            if (.not. intersectRayTriangle(ray, tri, ip, dist)) nctl = nctl + 1
+            ray%direction = [0._real64, 0._real64, -1._real64]
+            ray%origin = [0.25_real64*H, 0.25_real64*sy*H, 0.5_real64*H]
+            if (intersectRayTriangle(ray, tri, ip, dist)) then
+                if (abs(dist - 0.5_real64*H) <= 1.e-12_real64*H) nctl = nctl + 1
+            endif
+        enddo
+        if (nhit == 0 .and. nctl == 4) then
+            print '(a,i0,a)', '  [ok]   RT1 ', nray, ' rays along edge2 (both sides of the plane and in it, both '// &
+                'windings and senses): no hit; controls: along edge1 no hit, across the triangle a hit at h/2'
+        else
+            print '(a,i0,a,i0,a,i0,a)', '  [FAIL] RT1 ', nhit, ' of ', nray, ' rays along edge2 hit the triangle; ', &
+                nctl, ' of 4 controls as expected'
+            nfail = nfail + 1
+        endif
+    end subroutine parallelRays
+
+    !> RT2: intersectPolyhedron on the box along +-x, +-y, +-z with the face hints 0..6, from the centre, an
+    !  interior point, the -j face centre, the midpoint of its -k edge, the corner at the origin and a point
+    !  1e-15 m beyond the -j face (inside by the tolerance; along x and z only, the directions parallel to that
+    !  face), the directions leaving the box at once skipped: the exit face (2*axis for +, 2*axis-1 for -) at
+    !  its distance, one face and point for every hint.
+    subroutine hintIndependence()
+        integer, parameter :: NO = 6
+        character(len=14), parameter :: ONAME(NO) = [character(len=14) :: 'centre', 'interior point', &
+                                                     '-j face centre', '-j,-k edge', 'corner', 'beyond -j face']
+        type(Ray_t)  :: ray
+        real(real64) :: ip(3), ip0(3), o(3, NO), dexp, dist
+        integer      :: io, ax, sg, hint, face, face0, fexp, nbad, ncall, nray
+        logical      :: hit, ok
+        o(:, 1) = 0.5_real64*H
+        o(:, 2) = [0.3_real64, 0.6_real64, 0.45_real64]*H
+        o(:, 3) = [0.5_real64*H, 0._real64, 0.5_real64*H]
+        o(:, 4) = [0.5_real64*H, 0._real64, 0._real64]
+        o(:, 5) = 0._real64
+        o(:, 6) = [0.5_real64*H, -1.e-15_real64, 0.5_real64*H]
+        nbad = 0; ncall = 0; nray = 0; face0 = -1; ip0 = 0._real64
+        do io = 1, NO
+            do ax = 1, 3
+                do sg = 1, 2
+                    if (sg == 2 .and. o(ax, io) <= 0._real64) cycle
+                    if (io == NO .and. ax == 2) cycle
+                    nray = nray + 1
+                    ray%origin = o(:, io)
+                    ray%direction = 0._real64
+                    ray%direction(ax) = real(3 - 2*sg, real64)
+                    fexp = 2*ax + 1 - sg
+                    dexp = merge(H - o(ax, io), o(ax, io), sg == 1)
+                    do hint = 0, 6
+                        face = hint
+                        ip = 0._real64
+                        call intersectPolyhedron(ray, box, ip, face, hit)
+                        ncall = ncall + 1
+                        dist = norm2(ip - ray%origin)
+                        if (hint == 0) then
+                            face0 = face; ip0 = ip
+                        endif
+                        ok = hit .and. face == fexp
+                        if (ok) ok = all(ieee_is_finite(ip))
+                        if (ok) ok = abs(dist - dexp) <= 1.e-12_real64*H
+                        if (ok) ok = face == face0 .and. all(ip == ip0)
+                        if (.not. ok) then
+                            nbad = nbad + 1
+                            if (nbad <= 8) print '(a,a,a,i2,a,i0,a,i0,a,l1,a,es10.3,a,i0,a,es10.3,a)', &
+                                '  [FAIL] RT2 ', trim(ONAME(io)), ', axis ', (3 - 2*sg)*ax, ', hint ', hint, &
+                                ': face ', face, ' (hit ', hit, ', distance ', dist, '; expected ', fexp, ' at ', &
+                                dexp, ')'
+                        endif
+                    enddo
+                enddo
+            enddo
+        enddo
+        if (nbad == 0) then
+            print '(a,i0,a,i0,a)', '  [ok]   RT2 ', ncall, ' calls (', nray, ' axis rays from the centre, an interior '// &
+                'point, a face, an edge, a corner and beyond a face, x hints 0..6): the exit face at its distance, '// &
+                'the same face and point for every hint'
+        else
+            print '(a,i0,a,i0,a)', '  [FAIL] RT2 ', nbad, ' of ', ncall, ' calls miss the exit face, its distance, '// &
+                'or the hint-0 face and point'
+            nfail = nfail + 1
+        endif
+    end subroutine hintIndependence
 
     !> One configuration: closestFace's face against the expected one, and the configuration itself on the
     !  containment rule's planes -- DIFFER: the nearest non-negative distance is on a face that does not reject p;

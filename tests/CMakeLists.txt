@@ -172,6 +172,9 @@ igloo_unit_test(test_axis_dispatch      infrastructure/axis_dispatch      "unit;
 # radially thin -- so grazeOffset caps it at a fraction of the cell. Pins the invariant across
 # 12 decades of cell thickness.
 igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;infrastructure;bc;t1")
+# The boundary search's face: a ray along a triangle edge, in its plane or off it, is no hit (RT1; RED with the ratio
+# form of the parallel test, 0/0: NaN and +Inf hits); intersectPolyhedron returns the exit face at its distance for
+# every face hint from points on a face, an edge and a corner of a box (RT2; RED: a face the ray runs along at NaN).
 # closestFace, the boundary search's fallback when both rays miss: the nearest face the containment test rejects the
 # point through, at a warped wall and in the tolerance band (BF1, BF2; RED when a face qualifies by one non-negative
 # triangle distance: the side face), controls and the fallback (BF3, BF4), 2e4 points on each of six cells (BF5).

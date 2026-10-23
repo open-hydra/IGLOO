@@ -144,7 +144,9 @@ finds the particle in another block.
 Full boundary condition documentation is at [../user/boundary-conditions.md](../user/boundary-conditions.md).
 
 The face a particle left its cell through is the face the ray from its previous position to its new one hits, or
-else the face the reversed ray from the new position hits (`checkBoundary`); when both rays miss, `closestFace`
+else the face the reversed ray from the new position hits (`checkBoundary`). A ray parallel to a face triangle, in
+its plane or along one of its edges, is no hit on it, so a particle on a face, an edge or a corner of its cell is
+not stopped by the faces it lies on. When both rays miss, `closestFace`
 returns in 3D, of the faces the containment test rejects the point through (beyond both triangle planes by more
 than $\tau$), the one whose nearer triangle plane is closest to the point, and when no face rejects it, the face
 with the smallest non-negative triangle distance (`test_geometry_rules`).

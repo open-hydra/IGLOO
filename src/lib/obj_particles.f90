@@ -448,6 +448,7 @@ contains
 
       !> Guided walk: ray-march pold -> p cell by cell, advancing the origin to each exit point.
         org = pold
+        fx = 0   !> no face hint on the walk's first boundary check
         ci = seed(1); cj = seed(2); ck = seed(3); if (mesh2D) ck = 1
         maxStep = hi(1) + hi(2) + hi(3) + 2
         do step = 1, maxStep
@@ -531,6 +532,7 @@ contains
                       ind  = [self%i   (1), self%igas   ]
     else;             iold = self%iold; ind = self%i; endif
     retry = .not.(all(iold==[0,0,0,0]))
+    f = 0   !> no face hint on the first boundary check
     prevTry(:,1) = iold
     prevTry(:,2) = iold
     p    = self%stateVar(1:3); v    = self%stateVar(4:6)
@@ -617,6 +619,7 @@ contains
     if (isPointInsideCell(p, verts, mesh2D)) return
     !> the crossing point of the step on the exit face
     ci = self%i(2); cj = self%i(3); ck = self%i(4)
+    f = 0   !> no face hint
     call checkBoundary(block(b), verts, p, self%oldstate(1:3), self%oldstate(4:6), ci, cj, ck, ipt, f, m, n, noB, hit)
     if (noB) return
     associate(cell => block(b)%face(f)%cell(m,n))
