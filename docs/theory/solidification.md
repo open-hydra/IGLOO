@@ -2,7 +2,8 @@
 
 A material carrying `solidification=on` on its line of the phase file (from
 `[GPB-Phase*] solidification = on` in the ATLAS input) is routed to the ODE family
-`model = 6` (`src/lib/Lib_RHS.f90::rhsSolidification`), whose closures live in
+`model = 6`, or `model = 7` when it also breaks up under a continuous-rate breakup model
+(`src/lib/Lib_RHS.f90::rhsSolidification` serves both), whose closures live in
 `src/lib/Lib_Solidification.f90`.  It models a molten droplet (alumina leaving a
 solid-rocket chamber is the case in view) that cools through its melting point,
 **supercools** to a nucleation temperature, freezes abruptly with an adiabatic
@@ -10,11 +11,13 @@ solid-rocket chamber is the case in view) that cools through its melting point,
 of the latent heat leaves by convection (and radiation, for a material with an emissivity),
 and then cools as a **solid**.  A solid heated
 to the melting point (in gas hotter than it) **melts** there on the same plateau and
-continues as a liquid.  The mass is constant: nothing evaporates.
+continues as a liquid.  Nothing evaporates: a drop's mass changes only by breakup,
+which acts on the liquid and keeps the stream mass ([Breakup on the liquid](#breakup-on-the-liquid)).
 
 The state is position/velocity in Z(1:6), the **temperature** at Z(7) and the
-**frozen mass fraction** $f \in [0,1]$ at Z(8); the phase (liquid, undercooled
-liquid, plateau, solid) is a per-particle integer carried beside the ODE state.
+**frozen mass fraction** $f \in [0,1]$ at Z(8), and for model 7 the number rate
+$\dot n_p$ at Z(9); the phase (liquid, undercooled liquid, plateau, solid) is a
+per-particle integer carried beside the ODE state.
 
 ---
 
@@ -118,6 +121,42 @@ and 1.
 
 ---
 
+## Breakup on the liquid
+
+A solidifying material may also break up (`breakup` on its material line or in
+`[IGLOO-Models]`, see [Breakup](breakup.md)).  Breakup acts while the drop is liquid, in
+the liquid and undercooled-liquid phases, and nowhere else: it stops at nucleation, stays
+off on the plateau (freezing or melting) and in the solid, and resumes only after a
+complete re-melt.  A threshold on the frozen fraction would change nothing below $f_0$:
+the recalescence takes the drop from $f = 0$ to $f_0$ in one event ($f_0 = 0.81$ for
+alumina at the default undercooling), and a threshold above $f_0$ would break a partly
+solid drop with the liquid's surface tension and viscosity.
+
+TAB and ETAB act through events: their material stays model 6, and the breakup event is
+applied only on a step taken in a liquid phase.  Pilch–Erdman, Reitz–Diwakar and
+Reitz-KHRT carry a rate equation for the number rate, and with solidification they make
+**model 7**: Z(1:6) position and velocity, Z(7) = $T_p$, Z(8) = $f$, Z(9) = $\dot n_p$,
+the droplet mass $m = \dot m/\dot n_p$ from the stream flow $\dot m$ and
+$d = (6m/(\pi\rho_p))^{1/3}$:
+
+| phase | $dT_p/dt$ | $df/dt$ | $d\dot n_p/dt$ |
+| :--- | :--- | :--- | :--- |
+| liquid, undercooled liquid | $\dot Q/(m\,c_l)$ | 0 | the breakup model's rate, as in model 3 |
+| plateau | 0 | $-\dot Q/(m\,h_\mathrm{fus})$ | 0 |
+| solid | $\dot Q/(m\,c_s)$ | 0 | 0 |
+
+The phase changes only at events, so the rate switches off and on at a step boundary,
+never inside a step.  The Eulerian moments are model 3's (the number rate a state).
+
+**State at the switches.**  At nucleation a TAB or ETAB oscillator is set to rest
+($y = \dot y = 0$: a frozen drop keeps no deformation).  The Reitz-KHRT shed reference and
+RT timer stay frozen with the drop; at a complete re-melt the RT timer restarts from the
+re-melt time, so the frozen interval never counts as RT growth time, and the mass
+stripped before freezing is carried to the next shed.  A KH child is born in its
+parent's phase (a liquid one, $f = 0$), never re-classified from its temperature.
+
+---
+
 ## Inputs
 
 All per material, as `key=value` tokens on the material line of the phase file
@@ -125,15 +164,16 @@ All per material, as `key=value` tokens on the material line of the phase file
 
 | Key | Meaning | Default |
 | :--- | :--- | :---: |
-| `solidification` | `on` switches the material to model 6 | `off` |
+| `solidification` | `on` switches the material to model 6 (model 7 under a continuous-rate breakup model) | `off` |
 | `h-fus` | heat of fusion (J/kg) | required > 0 |
 | `cp-solid` | heat capacity of the solid (J/kg/K) | required > 0 |
 | `T-melt` | melting temperature (K) | 2327 |
 | `T-nuc` | nucleation temperature (K), below `T-melt` | 0.8 `T-melt` |
 
-Setup refuses a solidifying material that also evaporates, burns or breaks up, and
+Setup refuses a solidifying material that also evaporates or burns, and
 one whose `properties.dat` has a varying `Cp` or `Density` column: the model
-integrates the temperature with constant properties.  Melting uses the same keys.
+integrates the temperature with constant properties.  Melting uses the same keys, and
+a breaking material takes its surface tension and viscosity as any other (see [Breakup](breakup.md)).
 
 For alumina the NIST-JANAF tables ([JANAF98], Al₂O₃ liquid and α-Al₂O₃) give
 $T_m = 2327$ K, $\Delta H_\mathrm{fus} = 111.1$ kJ/mol ($1.09$ MJ/kg), a liquid heat
@@ -141,7 +181,7 @@ capacity of 192.5 J/(mol K) ($1.89$ kJ/(kg K)) and a solid one of 138.9 J/(mol K
 ($1.36$ kJ/(kg K)) at the melting point.  The default `T-nuc` of 0.8 `T-melt` is a
 nominal supercooling; set it from data for the material.
 
-Euler feedback follows the constant-mass rules of model 1 (see
+Euler feedback follows the constant-mass rules of model 1 for model 6, and those of model 3 for model 7 (see
 [Eulerian Feedback](eulerian-feedback.md)).  The particle files of a solidifying
 material end every row with the frozen fraction `f`, from which a reader derives the
 phase ([Frozen fraction](../user/using.md#frozen-fraction)).
@@ -153,13 +193,17 @@ phase ([Frozen fraction](../user/using.md#frozen-fraction)).
 Unit family `tests/solidification/` (the jump in both branches, the plateau rate,
 enthalpy continuity at every switch, three-regime RK4 histories of freezing and of
 melting against their piecewise closed forms, the landing inside the new phase, the
-event rule, corner cases, one production RHS call per phase) and the e2e cases
+event rule, corner cases, one production RHS call per phase, the layout of model 7 and its
+right-hand side against model 6 and a direct call of the breakup rate in every phase) and the e2e cases
 `solid-box` (the three regimes against their closed forms, the event position, the
 energy deposit globally and per plateau cell, the frozen fraction of every row),
 `solid-melt` (a solid heated to melting: the solid, melting and liquid regimes against
 their closed forms, the event positions, the heat taken from the gas per plateau cell,
 the frozen fraction of every row), `solid-box-euler` (the
 Eulerian field), `solid-box-2mat` (a model-6 material followed by a model-1 one),
-`solid-box-rad` (the three regimes, the plateau rows and the energy deposit under radiation alone) and
-the two-sweep `repeatability/solid-box`, plus eight setup refusals.  See
+`solid-box-rad` (the three regimes, the plateau rows and the energy deposit under radiation alone),
+`solid-brk-tab` and `solid-brk-khrt` (TAB and Reitz-KHRT on molten drops that freeze: breakup
+only while liquid, the size held from the nucleation on, KH children born liquid, every exit at
+the outlet, the exit flows, the energy balance, the Eulerian mass and the scatter rows) and
+the two-sweep `repeatability/solid-box`, plus seven setup refusals.  See
 `tests/solidification/INFO.md`.

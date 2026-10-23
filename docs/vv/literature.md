@@ -320,7 +320,7 @@ $X_\mathrm{eff}^{1.0}$ is the paper's final correlation.
 
 ## Solidification — family SG (`tests/solidification`)
 
-Tests the closures of the solidification model (`Lib_Solidification.f90`, model 6): the
+Tests the closures of the solidification model (`Lib_Solidification.f90`, models 6 and 7): the
 recalescence jump in both branches (partial freeze back to $T_m$, whole freeze at the
 enthalpy-conserving temperature, SG1), the plateau rate and its heat balance (SG2), the
 continuity of the enthalpy at every phase switch, the melt included (SG3), a three-regime RK4
@@ -328,15 +328,18 @@ history with the events located by bisection against the piecewise closed form (
 corner cases (SG5), one production RHS evaluation per phase with the metal slots it must not
 read poisoned (SG6), the melting history of a solid in a gas hotter than $T_m$ — solid heating,
 melting plateau, liquid heating — against its closed form (SG7), the landing of a transition
-inside the new phase (SG8) and the event rule, a crossing ending strictly past its threshold
-from a start at or before it (SG9).
+inside the new phase (SG8), the event rule, a crossing ending strictly past its threshold
+from a start at or before it (SG9), the layout of model 7 under the three continuous-rate
+breakup models (SG10) and its right-hand side in every phase against model 6 and a direct call
+of the breakup rate (SG11).
 
 **Literature references.** `[JANAF98]` for the alumina melting point, heat of fusion and heat
 capacities quoted on the [Solidification](../theory/solidification.md) page; every gate is a
 closed form of its own inputs.
 
-**Gates.** `test_solidification` (SG0–SG9); e2e companions `solid-box`, `solid-melt`,
-`solid-box-euler`, `solid-box-2mat`, `scatter-weight-solid` — see [End-to-End Cases](e2e.md).
+**Gates.** `test_solidification` (SG0–SG11); e2e companions `solid-box`, `solid-melt`,
+`solid-box-euler`, `solid-box-2mat`, `scatter-weight-solid`, `solid-brk-tab`, `solid-brk-khrt` — see
+[End-to-End Cases](e2e.md).
 
 <figure>
   {% include "vv/images/unit-solidification-recalescence.svg" ignore missing %}

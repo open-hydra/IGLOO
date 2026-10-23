@@ -176,9 +176,9 @@ temperature`).
 **Where it enters.** $\dot Q_r$ is added to the heat of the energy equation of every ODE model
 ([Governing equations](governing-equations.md#energy-equation)), after the Stefan-blowing reduction,
 which does not scale it, and also where an evaporation model returns a heat rate of its own (ASM,
-TC).  Under model 6 it drives the temperature of the liquid and of the solid and, on the plateau, the
+TC).  Under models 6 and 7 it drives the temperature of the liquid and of the solid and, on the plateau, the
 frozen fraction ([Solidification](solidification.md)).  `heat = NoHeat` removes the Nusselt term
-only and leaves $\dot Q_r$ in place.  Where the gas is degenerate (zero viscosity), models 1 and 6
+only and leaves $\dot Q_r$ in place.  Where the gas is degenerate (zero viscosity), models 1, 6 and 7
 exchange no heat at all, radiation included.
 
 **The sink.** The partner of the exchange is the local gas: the particle radiates to, or absorbs

@@ -6,14 +6,20 @@ assigned by `assign_breakup` in `src/lib/Lib_Breakup.f90`.  They split into two 
 classes:
 
 - **Continuous-rate (ODE)**: add a $\dot{n}_p$ equation to the ODE system; active models set
-  `brkupEqOde = .true.` → model 3 or 4.  `breakupOde` is evaluated inside the RHS.
+  `brkupEqOde = .true.` → model 3, 4 or 7.  `breakupOde` is evaluated inside the RHS.
 - **Event-based (solout callback)**: modify parcel diameter/count at a discrete breakup
   event detected in the `solout` callback.  These set `brkupEvent = .true.` and run under
-  model 1 or 2; they do **not** set `brkupEqOde`.
+  model 1, 2 or 6; they do **not** set `brkupEqOde`.
 
 With evaporation on, an event model runs as model 2 and Reitz-KHRT as model 4: both keep the
 droplet mass as an ODE state, and an event writes its new diameter into it together with the
 rescaled number rate (and, for model 4, the number-rate state), at constant stream mass.
+
+On a solidifying material breakup acts on the liquid only, in the liquid and undercooled-liquid
+phases, and stops at nucleation: an event model keeps model 6 with its event applied only in
+those phases, and a continuous-rate model runs as model 7, whose number-rate equation is off from
+the nucleation to a complete re-melt; a KH child is born in its parent's phase (see
+[Solidification](solidification.md#breakup-on-the-liquid)).
 
 | Model | Keyword | `brkupEqOde` | `brkupEvent` | Spawns children |
 | :--- | :--- | :---: | :---: | :---: |

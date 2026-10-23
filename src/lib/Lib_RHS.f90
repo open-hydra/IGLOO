@@ -20,10 +20,12 @@ module Lib_RHS
   public  :: mod_model, mod_brkSelect, mod_evapSelect, mod_propFlags
   public  :: mod_liqSelect, mod_intfSelect, mod_boilSelect, mod_combSelect
   public  :: mod_bp, mod_bpMethod, mod_bpScale
+  public  :: mod_isSolid
   public  :: nauxvar, nauxstate, neventvar, nbrkst
 
   !> Per-material config, set once by setupRHS
-  integer :: mod_model      = 1         !> RHS model (1-6)
+  integer :: mod_model      = 1         !> RHS model (1-7)
+  logical :: mod_isSolid    = .false.   !> solidifying model (6 or 7)
   integer :: mod_brkSelect  = 0         !> breakup model selector
   integer :: mod_evapSelect = 0         !> evaporation gas-side selector
   integer :: mod_liqSelect  = 0         !> liquid-side: 0 ITC, 1 P2T (not implemented)
@@ -49,7 +51,7 @@ module Lib_RHS
   !> AuxState indices (set by computeNauxState)
   integer :: ind_sxi = 0                    !> xi0 start in auxState
   integer :: ind_sb1 = 0, ind_sb2 = 0       !> told/tc in auxState (KHRT breakupOde)
-  integer :: ind_sph = 0                    !> solidification phase in auxState (model 6)
+  integer :: ind_sph = 0                    !> solidification phase in auxState (models 6, 7)
   integer :: nauxstate = 0                   !> total auxState size
 
   !> EventVar indices (set by computeNeventVar)
@@ -68,7 +70,7 @@ contains
     logical, intent(in) :: phaseChange, brkupEqOde
     integer, intent(in) :: combSelect, solidSelect
     integer :: model
-    if     (solidSelect>0) then; model = 6 !> solidification
+    if     (solidSelect>0) then; model = merge(7, 6, brkupEqOde) !> solidification (7: with a breakup ODE)
     elseif (combSelect>0) then; model = 5  !> Al combustion
     elseif (brkupEqOde .and. &
             phaseChange) then; model = 4
@@ -87,6 +89,7 @@ contains
     case(2,3,5) ; neq = 8; if (eulerSwitch) neq = neq + 6
     case(4)     ; neq = 9; if (eulerSwitch) neq = neq + 7
     case(6)     ; neq = 8; if (eulerSwitch) neq = neq + 5
+    case(7)     ; neq = 9; if (eulerSwitch) neq = neq + 6
     case default; neq = 7; if (eulerSwitch) neq = neq + 5
     end select
     !> body-force accumulators (mass-evolving models): W at neq, J at neq-1 unless euler-on
@@ -125,7 +128,7 @@ contains
         nBase = nBase + 1; ind_d   = ind; ind = ind + 1    !> diameter (const mass+rho)
         nBase = nBase + 1; ind_rho = ind; ind = ind + 1    !> density  (const)
       endif
-    elseif (model==3) then
+    elseif (model==3 .or. model==7) then
       nBase = nBase + 1; ind_m = ind; ind = ind + 1        !> mdot trajectory
       if (.not.propFlags(2)) then
         nBase = nBase + 1; ind_d   = ind; ind = ind + 1    !> diameter (const mass+rho)
@@ -161,7 +164,7 @@ contains
     endif
 
     !> metal combustion or solidification: contiguous nmetal-slot block
-    if (combSelect > 0 .or. model == 6) then
+    if (combSelect > 0 .or. model == 6 .or. model == 7) then
       nComb = nComb + nmetal
       ind_mb = ind; ind = ind + nmetal
     endif
@@ -198,7 +201,7 @@ contains
       nAuxState = ind + 1
     end select
 
-    if (model == 6) then                                 !> solidification phase, read by the RHS
+    if (model == 6 .or. model == 7) then                 !> solidification phase, read by the RHS
       nAuxState = nAuxState + 1; ind_sph = nAuxState
     endif
 
@@ -246,6 +249,7 @@ contains
     !> module-level state: materials are set up and integrated sequentially
     !$ if (omp_in_parallel()) error stop '[BUG] setupRHS called inside an OMP parallel region'
     mod_model = model
+    mod_isSolid    = model == 6 .or. model == 7
     mod_brkSelect  = brkSelect
     mod_evapSelect = evapSelect
     mod_liqSelect  = liqSelect
@@ -286,7 +290,7 @@ contains
     !> base
     if (ind_cp  > 0) aux(ind_cp)  = particle%cp
     if (ind_m   > 0) then
-      if (mod_model==3) then; aux(ind_m) = particle%mdot
+      if (mod_model==3 .or. mod_model==7) then; aux(ind_m) = particle%mdot
       else;                   aux(ind_m) = particle%m; endif
     endif
     if (ind_d   > 0) aux(ind_d)   = particle%d
@@ -483,13 +487,17 @@ contains
   end subroutine rhsStandard
 
 
-  !> Model 6: constant mass, solidification; Z(7) = T, Z(8) = frozen fraction f, phase from auxst.
+  !> Models 6 and 7: solidification; Z(7) = T, Z(8) = frozen fraction f, phase from auxst.
+  !  Model 7 adds the breakup number rate Z(9), acting in the liquid phases only.
   subroutine rhsSolidification(neq, time, Z, F, aux,naux, auxst,nauxst, &
+                                rhoTabM, mupTabM, sigTabM,             &
                                 gasNodes,gasVert,gas,nsp,nNodes)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
-    use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, toll, bodyForce, bodyAccel
+    use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, toll, bodyForce, bodyAccel, oneThird, sixOverPi
     use IGLOO_Lib_Combustion,     only: imHf, imCps
-    use IGLOO_Lib_Solidification, only: plateauRate, phPlateau, phSolid
+    use IGLOO_Lib_Solidification, only: plateauRate, phUndercooled, phPlateau, phSolid
+    use IGLOO_Lib_Breakup,        only: breakupOde
+    use IGLOO_Lib_Properties,     only: tableValue, Tmin, Tmax
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
@@ -498,15 +506,23 @@ contains
     real(R8), intent(out)   :: F(neq)
     real(R8), intent(in)    :: aux(naux)
     real(R8), intent(inout) :: auxst(nauxst)
+    real(R8), intent(in)    :: rhoTabM(:), mupTabM(:), sigTabM(:)
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
     ! locals
     real(R8) :: normVel, slip, Vdif(3), Re, d, m, xi0_loc(3)
     real(R8) :: Fdrag(3), QdotW
+    real(R8) :: rho, sigma, mup, brkupVar(2)
 
     F = 0._R8
-    m = aux(ind_m)
-    d = aux(ind_d)
+    if (mod_model == 7) then
+      if (mod_propFlags(2)) then; rho = tableValue(rhoTabM, Tmin, Tmax, Z(7)); else; rho = aux(ind_rho); endif
+      m = aux(ind_m)/Z(9)
+      d = (sixOverPi*m/rho)**oneThird
+    else
+      m = aux(ind_m)
+      d = aux(ind_d)
+    endif
     ! 2nd order gas interpolation
     if (ord2) then
       if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
@@ -538,12 +554,31 @@ contains
     case (phSolid);   F(7) = QdotW/(m*aux(ind_mb+imCps-1))
     case default;     F(7) = QdotW/(m*aux(ind_cp))
     end select
+    !> model 7: the breakup number rate, liquid phases only (KH-RT timer read and written there)
+    if (mod_model == 7) then
+      if (nint(auxst(ind_sph)) <= phUndercooled) then
+        if (mod_propFlags(3)) then; sigma = tableValue(sigTabM, Tmin, Tmax, Z(7)); else; sigma = aux(ind_sig); endif
+        if (mod_propFlags(4)) then; mup   = tableValue(mupTabM, Tmin, Tmax, Z(7)); else; mup   = aux(ind_mup); endif
+        if (ind_sb1 > 0) then; brkupVar = auxst(ind_sb1:ind_sb2)
+        else;                  brkupVar = 0._R8; endif
+        F(9) = breakupOde(d, sigma, mup, rho, Z(9), gas(1), slip, Re, time, &
+                          Fdrag/m, Z(4:6), brkupVar, mod_brkSelect, mod_bp)
+        if (ind_sb1 > 0) auxst(ind_sb1:ind_sb2) = brkupVar
+      endif
+    endif
 
     if (eulerSwitch) then
       normVel  = norm2(Z(4:6))
-      F(9)     = normVel
-      F(10:12) = toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
-      F(13)    = Z(7) * normVel
+      if (mod_model == 7) then
+        F(10)    = normVel
+        F(11:13) = toMeridian(Z(4:6), Z(1:3)) * normVel
+        F(14)    = Z(7) * normVel
+        F(15)    = Z(9)
+      else
+        F(9)     = normVel
+        F(10:12) = toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
+        F(13)    = Z(7) * normVel
+      endif
     endif
 
     !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step

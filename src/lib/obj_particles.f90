@@ -79,8 +79,8 @@ module IGLOO_particles
     integer      :: combSelect  = 0    !> metal combustion: 0 off, 1 Beckstead
     integer      :: solidSelect = 0    !> solidification:   0 off, 1 supercool + recalescence
     integer      :: solidPhase  = 0    !> solidification phase: 0 liquid, 1 undercooled, 2 plateau, 3 solid
-    real(R8)     :: fSolid      = 0._R8 !> frozen mass fraction, copy of stateVar(8) (model 6)
-    integer      :: model       = 1    !> RHS model (1-6)
+    real(R8)     :: fSolid      = 0._R8 !> frozen mass fraction, copy of stateVar(8) (models 6, 7)
+    integer      :: model       = 1    !> RHS model (1-7)
     integer      :: neq         = 7    !> number of ODE equations
     integer      :: nOde        = 7    !> number of ODE state variables
     logical      :: bodyAccum = .false. !> body-force J/W accumulators present (only models 2,4,5 & srcBodyForce)
@@ -179,9 +179,9 @@ contains
     !  the T state (cp=const) needs cp*T + hOff (hOff = 0 for a relative table)
     enthalpy = self%stateVar(7)
     if (.not.self%varCp) enthalpy = self%cp*enthalpy + self%hOff
-    !> model 6: the latent heat of fusion is part of the enthalpy
-    if (self%model == 6) enthalpy = hSolid(self%stateVar(7), self%stateVar(8), self%solidPhase, self%cp, &
-                                           self%cpSol, self%hFus, self%Tmelt, self%hOff)
+    !> solidification: the latent heat of fusion is part of the enthalpy
+    if (self%solidSelect > 0) enthalpy = hSolid(self%stateVar(7), self%stateVar(8), self%solidPhase, self%cp, &
+                                                self%cpSol, self%hFus, self%Tmelt, self%hOff)
     select case (self%model)
     case (2,4,5); mdot_inst = self%npdot * self%m
     case default; mdot_inst = self%mdot
@@ -306,6 +306,9 @@ contains
     case(4); self%m     = self%stateVar(8)
              self%npdot = self%stateVar(9)
     case(6); self%fSolid = self%stateVar(8)
+    case(7); self%fSolid = self%stateVar(8)
+             self%npdot  = self%stateVar(9)
+             self%m      = self%mdot/self%npdot
     end select
     if (self%model/=1 .or. self%varRho) then
       if (self%varRho) self%rho = tableValue(rhoTab, Tmin, Tmax, self%Tp)

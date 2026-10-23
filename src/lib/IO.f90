@@ -133,7 +133,6 @@ contains
         if (material(i)%evapSelect > 0) &
           error stop '[ERROR] solidification=on is exclusive with evaporation (alumina does not evaporate)'
         if (material(i)%combSelect  > 0) error stop '[ERROR] solidification=on with combustion is not supported'
-        if (material(i)%brkupSelect > 0) error stop '[ERROR] solidification=on with breakup is not supported'
       endif
       !> Combustion validation: no breakup coupling, sane burn-law inputs
       if (material(i)%combSelect > 0) then

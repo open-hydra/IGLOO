@@ -59,7 +59,6 @@ output written).
 | `refuse-solid-tnuc` | the valid solidification line plus `T-nuc=2400` (above the 2327 K default `T-melt`) | `solidification=on requires T-nuc < T-melt` |
 | `refuse-solid-evap` | the valid line plus `[IGLOO-Models] evaporation = CEM` | `solidification=on is exclusive with evaporation` |
 | `refuse-solid-comb` | the valid line plus `combustion=Beckstead K-burn=4.5e-7` | `solidification=on with combustion is not supported` |
-| `refuse-solid-brk` | the valid line plus `[IGLOO-Models] breakup = TAB` | `solidification=on with breakup is not supported` |
 | `refuse-solid-varcp` | the valid line plus an own 10-row `properties.dat` whose `Cp` column varies (the enthalpy its trapezoid sum, so the table itself is valid) | `solidification=on requires a constant-cp material` |
 | `refuse-solid-varrho` | the valid line plus an own 10-row `properties.dat` whose `Density` column varies | `solidification=on requires a constant-density material` |
 | `refuse-wedge-offcentre` | a generated wedge whose k-planes sit at 0 and +1° (`tools/make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`) | `IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)` — refused at mesh import (`allocation.f90`), not at the properties choke point |
@@ -89,7 +88,7 @@ output written).
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All sixty-seven exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All sixty-six exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
@@ -112,7 +111,7 @@ pass, which never reads the orientation integers: both run to "Stop condition" w
 RED first**: the reader that took three columns by position ran each of them to "All particles out of
 domain" with exit 0 — the two-enthalpy header as an absolute datum with `hOff = 0`, the typed row with
 its enthalpy undefined (ORION keeps only the last row's read status), and the decreasing `Psat` column
-unread. **The eight solidification cases were
+unread. **The seven solidification cases were
 RED first**: the binary before the solidification model stopped each of them with `solidification=on parsed but
 not implemented yet`, not their payload. **The four INI-contract
 cases were RED first** (ledger O20/O21/O26, recorded on the pre-fix binary): `method = 3` ran to

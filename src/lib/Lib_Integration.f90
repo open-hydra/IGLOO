@@ -32,14 +32,14 @@ contains
                        rhsAlCombustion, rhsSolidification,                          &
                        ind_d, ind_rho, ind_sig, ind_mup, ind_m,                     &
                        ind_sb1, ind_sb2, ind_sph,                                   &
-                       ind_evd, ind_evn,                                            &
+                       ind_evd, ind_evn, ind_ev1, ind_ev2,                          &
                        nauxstate, neventvar, nbrkst,                                &
-                       mod_brkSelect, mod_propFlags, mod_model,                     &
+                       mod_brkSelect, mod_propFlags, mod_model, mod_isSolid,        &
                        mod_bp, mod_bpMethod, mod_bpScale
     use oslo,              only: Run_ODESolver, no_jacobian
     use IGLOO_Lib_Breakup, only: nchild
     use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, eventCrossed, &
-                                        eventPassed, solidTransition
+                                        eventPassed, solidTransition, phUndercooled
     use IGLOO_Mod_MPI,     only: mpi_size_, region_fail, region_failed
     implicit none
     class(obj_particle),   intent(inout) :: part
@@ -177,8 +177,9 @@ contains
       case(3); part%stateVar(8) = part%npdot
       case(4); part%stateVar(8) = part%m
                part%stateVar(9) = part%npdot
-      case(6); call solidPhaseAtInjection(part%tp, part%Tmelt, part%Tnuc, part%solidPhase, part%stateVar(8))
-               part%fSolid = part%stateVar(8)
+      case(6,7); call solidPhaseAtInjection(part%tp, part%Tmelt, part%Tnuc, part%solidPhase, part%stateVar(8))
+                 part%fSolid = part%stateVar(8)
+                 if (part%model == 7) part%stateVar(9) = part%npdot
       end select
       if (eulerSwitch)    part%stateVar(part%nOde+1:part%neq) = 0._R8
       if (part%bodyAccum) part%stateVar(part%neq-1 :part%neq) = 0._R8
@@ -494,7 +495,7 @@ contains
     subroutine ODEsystem()
       implicit none
       real(R8) :: dtNew, dtSafe
-      integer  :: phaseEv
+      integer  :: phaseEv, iNp
 
       deltat = safety*deltat
       newGas = .false.; IamOut = .false.; exitLoop = .false.; eventFlag = .false.; startedOut = .false.
@@ -504,8 +505,8 @@ contains
       eventType = part%brkupEvent
       addChildLocal = .false.; childState = 0._R8
       !> childDone is reset at integrate entry only, never per segment.
-      !> Model 6: a threshold the segment-start state has strictly passed is applied here.
-      if (mod_model == 6) call solidCatchUp()
+      !> Models 6, 7: a threshold the segment-start state has strictly passed is applied here.
+      if (mod_isSolid) call solidCatchUp()
       y = part%oldState
       timeLocal = part%time
       oldLocal  = y
@@ -529,6 +530,7 @@ contains
       case(4); nDL = 10; call Run_ODESolver(neq, t1, t2, y, rhs4, no_jacobian, 0, err, deltat, solout)
       case(5); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs5, no_jacobian, 0, err, deltat, solout)
       case(6); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs6, no_jacobian, 0, err, deltat, solout)
+      case(7); nDL = 10; call Run_ODESolver(neq, t1, t2, y, rhs6, no_jacobian, 0, err, deltat, solout)
       end select
       if (err < 0) then
         write(*,'(a,i0,a,i0,a,es12.4,a)')                                   &
@@ -588,6 +590,12 @@ contains
           phaseEv = nint(stateLocal(ind_sph))
           call solidTransition(whichEv, part%cp, part%cpSol, part%Tmelt, part%hFus, y(7), y(8), phaseEv)
           stateLocal(ind_sph) = real(phaseEv, R8)
+          !> Breakup state at the switch: a nucleated TAB/ETAB oscillator at rest, the KH-RT timer restarted at a re-melt.
+          if (whichEv == 1 .and. (mod_brkSelect == 4 .or. mod_brkSelect == 5) .and. allocated(eventLocal)) &
+            eventLocal(ind_ev1:ind_ev2) = 0._R8
+          if (whichEv == 3 .and. ind_sb1 > 0) then
+            stateLocal(ind_sb1) = t1; stateLocal(ind_sb2) = 0._R8
+          endif
           part%stateVar = y
           part%oldState = y
         endif
@@ -603,14 +611,15 @@ contains
             endif
             !> Resync the frozen per-droplet d and m in auxLocal after an event.
             if (ind_d > 0) auxLocal(ind_d) = part%d
-            if (ind_m > 0 .and. mod_model /= 3) then
+            if (ind_m > 0 .and. mod_model /= 3 .and. mod_model /= 7) then
               part%m          = rhoEvt * part%d**3 / sixOverPi
               auxLocal(ind_m) = part%m
             endif
-            !> Model 3: push the event's npdot into y(8) and re-derive mdot from (d, npdot).
-            if (eventFlag .and. mod_model == 3 .and. part%d > 0._R8 .and. ind_m > 0) then
-              part%stateVar(8) = part%npdot
-              part%oldState(8) = part%npdot
+            !> Models 3, 7: push the event's npdot into the number slot and re-derive mdot from (d, npdot).
+            if (eventFlag .and. (mod_model == 3 .or. mod_model == 7) .and. part%d > 0._R8 .and. ind_m > 0) then
+              iNp = 8; if (mod_model == 7) iNp = 9
+              part%stateVar(iNp) = part%npdot
+              part%oldState(iNp) = part%npdot
               part%mdot        = part%npdot * rhoEvt * part%d**3 / sixOverPi
               auxLocal(ind_m)  = part%mdot
             endif
@@ -648,6 +657,7 @@ contains
             shedRec%pos   = part%stateVar(1:3)
             shedRec%temp  = part%tp
             shedRec%time  = t1
+            shedRec%phase = part%solidPhase
             call shed%push(shedRec)
             !> the child's birth mass flow, in its computeMass/computeSource operation order
             shedM = shedRec%npdot * (pi/6._R8*part%rho*shedRec%diam**3._R8)
@@ -701,7 +711,7 @@ contains
 
     end subroutine ODEsystem
 
-    !> Model 6: apply the phase change whose threshold the segment-start state has strictly passed.
+    !> Models 6, 7: apply the phase change whose threshold the segment-start state has strictly passed.
     subroutine solidCatchUp()
       implicit none
       real(R8) :: g
@@ -712,9 +722,14 @@ contains
       call solidTransition(which, part%cp, part%cpSol, part%Tmelt, part%hFus, &
                            part%oldState(7), part%oldState(8), part%solidPhase)
       part%stateVar(7:8) = part%oldState(7:8)
+      !> Breakup state at the switch, as the segment finalize sets it.
+      if (which == 1 .and. (mod_brkSelect == 4 .or. mod_brkSelect == 5)) part%brkupVar(1:2) = 0._R8
+      if (which == 3 .and. mod_brkSelect == 3) then
+        part%brkupVar(1) = part%time; part%brkupVar(2) = 0._R8
+      endif
     end subroutine solidCatchUp
 
-    !> ODE right-hand sides for models 1-6, forwarding integrate's host-associated state.
+    !> ODE right-hand sides for models 1-7, forwarding integrate's host-associated state.
     subroutine rhs1(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
       call rhsStandard(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab, gas,gasVert,gasState, ng,ngVert)
@@ -739,7 +754,8 @@ contains
     end subroutine rhs5
     subroutine rhs6(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
-      call rhsSolidification(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, gas,gasVert,gasState, ng,ngVert)
+      call rhsSolidification(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, rhoTab,mupTab,sigTab, &
+                             gas,gasVert,gasState, ng,ngVert)
     end subroutine rhs6
 
 
@@ -758,6 +774,7 @@ contains
       real(R8) :: brkupState(max(nbrkst,1))
       real(R8) :: gOld, gEnd
       real(R8) :: vEvt(3)   !> the velocity breakupEvent works on (Y stays the solver's)
+      logical  :: brkOn     !> the breakup event acts on this step
       real(R8), parameter :: oneThird=0.3333333333333333_R8, sixOverPi=1.90985931710274403_R8
 
       IRTRN = 1
@@ -766,7 +783,7 @@ contains
       if (scatOn .and. dNscat>0._R8) then
         select case(mod_model)
         case(3);      np = y(8)            ! model 3: npdot is stateVar(8)
-        case(4);      np = y(9)            ! model 4: npdot is stateVar(9)
+        case(4,7);    np = y(9)            ! models 4, 7: npdot is stateVar(9)
         case default; np = part%npdot      ! models 1,2: npdot constant
         end select
         wAcc = wAcc + np*(x - xold)
@@ -794,7 +811,7 @@ contains
       endif
 
       !> Solidification: the step ends strictly past the phase's threshold from a start at or before it.
-      if (mod_model == 6) then
+      if (mod_isSolid) then
         call eventFunction(nint(stateLocal(ind_sph)), y(7), y(8), part%Tnuc, part%Tmelt, gEnd, whichEv)
         if (whichEv > 0) then
           gOld = eventValue(whichEv, oldLocal(7), oldLocal(8), part%Tnuc, part%Tmelt)
@@ -807,18 +824,22 @@ contains
 
       exitLoop = (norm2(y(1:3)-oldLocal(1:3))<eps).or.(deltat<dtMin).or.any(y/=y).or.(deltat /= deltat)
 
-      if (eventType) then
+      !> Breakup acts on the liquid only: the phase in force over the step gates the event.
+      brkOn = eventType
+      if (brkOn .and. mod_isSolid) brkOn = nint(stateLocal(ind_sph)) <= phUndercooled
+      if (brkOn) then
         if (mod_propFlags(1)) then; tp = comp_TfromTab(hTab,y(7)); else; tp = y(7);                 endif
         if (mod_propFlags(2)) then; rho   = tableValue(rhoTab, Tmin, Tmax, tp); else; rho   = auxLocal(ind_rho); endif
         if (mod_propFlags(3)) then; sigma = tableValue(sigTab, Tmin, Tmax, tp); else; sigma = auxLocal(ind_sig); endif
         if (mod_propFlags(4)) then; mup   = tableValue(mupTab, Tmin, Tmax, tp); else; mup   = auxLocal(ind_mup); endif
         select case(mod_model)
         case(3);      m = auxLocal(ind_m)/y(8)
+        case(7);      m = auxLocal(ind_m)/y(9)
         case(2,4,5);  m = y(8)
         case default; m = auxLocal(ind_m)
         end select
-        !> Model 3 derives d from the current ODE state.
-        if (ind_d > 0 .and. mod_model /= 3) then
+        !> Models 3, 7 derive d from the current ODE state.
+        if (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7) then
           d = auxLocal(ind_d)
         else
           d = (sixOverPi*m/rho)**oneThird
@@ -834,8 +855,8 @@ contains
         !> Refresh npdot from the ODE state alongside d.
         if (ind_evn > 0) then
           select case (mod_model)
-          case(3); eventLocal(ind_evn) = y(8)
-          case(4); eventLocal(ind_evn) = y(9)
+          case(3);   eventLocal(ind_evn) = y(8)
+          case(4,7); eventLocal(ind_evn) = y(9)
           end select
         endif
         if (ind_sb1 > 0) brkupState(1:nbrkst) = stateLocal(ind_sb1:ind_sb2)
@@ -870,13 +891,14 @@ contains
         if (mod_propFlags(2)) then; rho = tableValue(rhoTab, Tmin, Tmax, tp); else; rho = auxLocal(ind_rho); endif
         select case(mod_model)
         case(3);      m = auxLocal(ind_m)/y(8)
+        case(7);      m = auxLocal(ind_m)/y(9)
         case(2,4,5);  m = y(8)
         case default; m = auxLocal(ind_m)
         end select
-        if (ind_d > 0) then; d = auxLocal(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
+        if (ind_d > 0 .and. mod_model /= 7) then; d = auxLocal(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
         nScat = nScat + 1
         if (frozenOn) then
-          fScat = 0._R8; if (mod_model == 6) fScat = y(8)
+          fScat = 0._R8; if (mod_isSolid) fScat = y(8)
           write(scatBuf(nScat),'(7F12.6,2E13.6E2,I8,F10.6)') y(1:3), y(4:6), tp, d, m, part%ID, fScat
         else
           write(scatBuf(nScat),'(7F12.6,2E13.6E2,I8)') y(1:3), y(4:6), tp, d, m, part%ID
@@ -986,7 +1008,7 @@ contains
         np  = particle%intE(6)*factor
         rho = particle%intE(5)*factor
         factor = factor*particle%Tstay/particle%deltaL
-      case(3)
+      case(3,7)
         np  = particle%intE(5)            *factor
         rho = mdotSeg*particle%Tstay*factor
         factor = rho/particle%deltaL

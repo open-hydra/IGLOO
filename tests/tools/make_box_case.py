@@ -26,7 +26,8 @@ Geometry / BCs:
     block 2's last row in y, and block 1's face-2 facelets of that row, with no donor, are
     written 100 (ATLAS's unresolved connection, header only).
   - --families F: the face table written once per family (ATLAS's order, block-outermost),
-    family c with loading KRHO/c and radius c*rp, and a phase.txt of one material, F groups.
+    family c with loading KRHO/c and radius c*rp, and a phase.txt of one material, F groups;
+    --family-kt and --family-rp give family c its own kt and rp (F comma-separated values each).
   - --stretch R: the right half of the cells along x (block 2 with --blocks 2) R times as long as
     the left half, Lx unchanged; --gradient G: the gas temperature varies linearly along x,
     T = T_g + G*x at each cell centre (G in K/m); --zgradient G adds G*z, --wave-y A adds
@@ -54,7 +55,7 @@ Usage:
                      [--nx NX] [--ny NY] [--nz NZ] [--overlap N [--shift S] [--rim]] [--families F]
                      [--stretch R] [--gradient G] [--zgradient G] [--wave-y A] [--rotate2 y]
                      [--outlet-code C] [--ug U] [--u2 U2] [--ygrade G] [--mesh-only] [--sym-face F]
-                     [--no-inlet]
+                     [--no-inlet] [--family-kt KT1,KT2,...] [--family-rp RP1,RP2,...]
         writes <out_dir>/solfile.tec and <out_dir>/bc.txt (and phase.txt with --families > 1)
         --kv : inlet velocity scaling  (v0 = kv*|u_g|; 1.0 => no drag slip, Re=0)
         --kt : inlet temperature scaling (Tp0 = kt*T_g; 1.0 => no thermal slip)
@@ -72,6 +73,8 @@ Usage:
         --shift : block 2's offset along x in cells (with --overlap; default 0)
         --rim : block 2 one row shorter in y (with --overlap)
         --families : copies of the face table, one per family (default 1)
+        --family-kt, --family-rp : with --families F > 1, F comma-separated kt (rp) values, family c
+                  taking the c-th (default kt for every family, c*rp for family c)
         --stretch : the right half's cells R times the left half's along x (default 1)
         --gradient : gas temperature gradient along x [K/m] (default 0: uniform)
         --zgradient : gas temperature gradient along z [K/m] (default 0)
@@ -294,7 +297,7 @@ def write_mesh(path, blocks=1, nx=NX, ny=NY, nz=NZ, rotate2=None, ygrade=1.0):
 
 def write_bc(path, kv, kt, rp, alpha=None, periodic_y=False, blocks=1, nx=NX, ny=NY, nz=NZ,
              overlap=0, shift=0.0, rim=False, families=1, outlet_code=BCDEF_WALL, rotate2=None,
-             sym_face=None, no_inlet=False, beta=None):
+             sym_face=None, no_inlet=False, beta=None, family_kt=None, family_rp=None):
     # reader loop order (IO.f90 read_cdp_bc_file): b=1..nb, [family copies], f=1..6, n=1..nend(f),
     # m=1..mend(f). mend/nend per face: f1,2->(Ny,Nz); f3,4->(Nx,Nz); f5,6->(Nx,Ny), the block's.
     layout = block_layout(blocks, nx, ny, overlap, shift, rim)
@@ -310,7 +313,9 @@ def write_bc(path, kv, kt, rp, alpha=None, periodic_y=False, blocks=1, nx=NX, ny
                 # the payload of a chimera face cell depends on its row only (aligned in y, z)
                 donors = {g: chimera_donors(layout, b, g) for g in (1, 2)}
             for fam in range(1, families + 1):
-                data = inlet_data(kv, kt, rp * fam, alpha, KRHO / fam, beta) if families > 1 else \
+                ktf = family_kt[fam - 1] if family_kt else kt
+                rpf = family_rp[fam - 1] if family_rp else rp * fam
+                data = inlet_data(kv, ktf, rpf, alpha, KRHO / fam, beta) if families > 1 else \
                     inlet_data(kv, kt, rp, alpha, beta=beta)
                 for face in range(1, 7):
                     mend, nend = ranges[face]
@@ -416,7 +421,22 @@ def main():
     p.add_argument("--sym-face", type=int, choices=range(1, 7), default=None,
                    help="face written as a symmetry plane (300), header only (default none)")
     p.add_argument("--no-inlet", action="store_true", help="face 1 written 400 instead of the inlet (401)")
+    p.add_argument("--family-kt", default=None,
+                   help="with --families F > 1: F comma-separated kt values, one per family (default kt)")
+    p.add_argument("--family-rp", default=None,
+                   help="with --families F > 1: F comma-separated radii [m], one per family (default c*rp)")
     a = p.parse_args()
+    fam_kt, fam_rp = None, None
+    for opt, val in (("--family-kt", a.family_kt), ("--family-rp", a.family_rp)):
+        if val is None:
+            continue
+        vals = [float(v) for v in val.split(",")]
+        if a.families < 2 or len(vals) != a.families:
+            p.error(f"{opt} needs --families F > 1 and F comma-separated values")
+        if opt == "--family-kt":
+            fam_kt = vals
+        else:
+            fam_rp = vals
     if a.law:
         global SIGMAP, LAW
         SIGMAP, LAW = float(a.law[0]), a.law[1]
@@ -462,7 +482,7 @@ def main():
                        periodic_y=a.periodic_y, blocks=a.blocks, nx=a.nx, ny=a.ny, nz=a.nz,
                        overlap=a.overlap, shift=a.shift, rim=a.rim, families=a.families,
                        outlet_code=a.outlet_code, rotate2=a.rotate2, sym_face=a.sym_face, no_inlet=a.no_inlet,
-                       beta=a.beta)
+                       beta=a.beta, family_kt=fam_kt, family_rp=fam_rp)
     if a.families > 1:
         write_phase(os.path.join(a.out_dir, "phase.txt"), a.families)
     print(f"[ok] box solfile: I={I} J={J} K={K} nnode={nnode} ncell={ncell} "
@@ -485,6 +505,8 @@ def main():
     ug = 10.0 if a.ug is None else a.ug
     if not a.no_inlet:
         print(f"     inlet: kv={a.kv} (v0={a.kv*abs(ug):.3g} m/s)  kt={a.kt}  rp={a.rp} (d={2*a.rp*1e6:.3g} um)")
+        if fam_kt or fam_rp:
+            print(f"     per family: kt={fam_kt or a.kt}  rp={fam_rp or 'c*rp'}")
 
 
 if __name__ == "__main__":

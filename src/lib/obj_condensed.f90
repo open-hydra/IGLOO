@@ -11,6 +11,7 @@ module IGLOO_data_phases
     integer  :: ipos(4) = 0,      igas(3) = 0
     real(R8) :: pos(3)  = 0._R8,  vel(3)  = 0._R8
     real(R8) :: temp    = 0._R8,  diam    = 0._R8, npdot = 0._R8, time = 0._R8
+    integer  :: phase   = 0       !> the parent's solidification phase at the shed
   end type
 
   !> Growable shed list, one per parent index (reserve + double via move_alloc). Dummies take it
@@ -272,7 +273,7 @@ contains
       if (eulerSwitch) then
         select case(mdl)
         case(2,5);    call sizeTo(part%intE, 5)
-        case(3,4);    call sizeTo(part%intE, 6)
+        case(3,4,7);  call sizeTo(part%intE, 6)
         case default; call sizeTo(part%intE, 4)
         end select
       endif

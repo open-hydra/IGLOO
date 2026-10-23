@@ -484,7 +484,10 @@ contains
           write(*,'(A,I2,A)') '     >> ODE system (neq=', gr%particle(1)%neq, '):'
           if (gr%evapSelect/=0) write(*,*) '       - evaporation --> ', trim(gr%evapWord)
           if (gr%combSelect/=0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
-          if (gr%solidSelect/=0) write(*,*) '       - solidification --> supercooling + recalescence (model 6)'
+          if (gr%solidSelect/=0 .and. .not.gr%brkupEqOde) &
+            write(*,*) '       - solidification --> supercooling + recalescence (model 6)'
+          if (gr%solidSelect/=0 .and. gr%brkupEqOde) &
+            write(*,*) '       - solidification --> supercooling + recalescence (model 7)'
           if (gr%brkupEqOde   ) write(*,*) '       - breakup     --> ', trim(gr%brkupWord)
           if (gr%evapSelect==0 .and. gr%combSelect==0 .and. .not.gr%brkupEqOde) &
             write(*,*) '       - constant particle mass and size'
@@ -634,6 +637,9 @@ contains
                 case(2,5); kid%stateVar(8) = kid%m
                 case(3);   kid%stateVar(8) = kid%npdot
                 case(4);   kid%stateVar(8) = kid%m; kid%stateVar(9) = kid%npdot
+                !> model 7: the parent's phase carried, never re-derived from the temperature
+                case(7);   kid%solidPhase = src%phase; kid%fSolid = 0._R8
+                           kid%stateVar(8) = 0._R8; kid%stateVar(9) = kid%npdot
                 end select
                 if (eulerSwitch)    kid%stateVar(kid%nOde+1:kid%neq) = 0._R8
                 if (kid%bodyAccum)  kid%stateVar(kid%neq-1 :kid%neq) = 0._R8

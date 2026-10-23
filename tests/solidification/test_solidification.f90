@@ -1,6 +1,6 @@
 program test_solidification
     !
-    ! SG-family unit checks on IGLOO_Lib_Solidification, the closures of ODE model 6
+    ! SG-family unit checks on IGLOO_Lib_Solidification, the closures of ODE models 6 and 7
     ! (supercooling, adiabatic recalescence, freezing plateau at T-melt, solid cooling),
     ! called directly with an alumina-like particle.
     !
@@ -25,6 +25,14 @@ program test_solidification
     !        phase (T = T-melt on freezing, f = 1 on melting), enthalpy kept.
     !   SG9  event rule: a crossing ends strictly past the threshold from a start at or before it;
     !        the catch-up applies only a threshold strictly passed.
+    !   SG10 setupRHS(model 7) for Pilch-Erdman, Reitz-Diwakar and KH-RT: the stream flow, diameter,
+    !        density, sigma, mu, metal block and phase slot, the KH-RT timer; neq 9 (15 with the euler
+    !        moments); a solidifying material with a breakup ODE is model 7, without one model 6.
+    !   SG11 one production rhsSolidification of model 7 per phase and breakup model at a slip, Z(9)
+    !        off the injection rate: F(1:8) as model 6 on the m = mdot/Z(9) and d = (6m/(pi rho))^(1/3)
+    !        it rebuilds (1e-13), F(9) as a direct breakupOde in the liquid phases (1e-12), exactly 0 on
+    !        the plateau and the solid where the direct call is not; the euler tail model 6's shifted by
+    !        one slot plus Z(9); the KH-RT timer written back in the liquid phases only.
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -80,6 +88,8 @@ program test_solidification
     call run_SG7(ok_all)
     call run_SG8(ok_all)
     call run_SG9(ok_all)
+    call run_SG10(ok_all)
+    call run_SG11(ok_all)
 
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then
@@ -416,9 +426,10 @@ contains
         real(R8), parameter :: UG = 10._R8, Tph(0:3) = [T0, 2000._R8, TM, 1800._R8]
         type(obj_particle) :: p
         real(R8), allocatable :: aux(:), auxP(:), auxst(:)
-        real(R8) :: Z(13), F(13), FP(13), ref(13), gas(9), gasNodes(9,8), gasVert(3,8), q, err, errMax
+        real(R8) :: Z(13), F(13), FP(13), ref(13), gas(9), gasNodes(9,8), gasVert(3,8), q, err, errMax, noTab(1)
         integer  :: nAux, nAuxSt, nEvV, ph
         logical  :: propFlags(7), layout, same
+        noTab = 0._R8
         ord2 = .false.;  mesh2D = .false.;  eulerSwitch = .true.
         bodyForce = .false.;  bodyAccel = 0._R8;  srcBodyForce = .false.
         sourceSwitch = .false.;  phaseChange = .false.
@@ -440,8 +451,10 @@ contains
         do ph = phLiquid, phSolid
             Z = 0._R8;  Z(4) = UG;  Z(7) = Tph(ph);  Z(8) = merge(0.5_R8, merge(1._R8, 0._R8, ph == phSolid), ph == phPlateau)
             auxst = 0._R8;  auxst(ind_sph) = real(ph, R8)
-            call rhsSolidification(13, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), gasNodes, gasVert, gas, 9, 8)
-            call rhsSolidification(13, 0._R8, Z, FP, auxP, nauxvar, auxst, max(1, nauxstate), gasNodes, gasVert, gas, 9, 8)
+            call rhsSolidification(13, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, &
+                                   gasNodes, gasVert, gas, 9, 8)
+            call rhsSolidification(13, 0._R8, Z, FP, auxP, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, &
+                                   gasNodes, gasVert, gas, 9, 8)
             q   = NU*KG*PI*D*(TG - Tph(ph))
             ref = 0._R8
             ref(1) = UG
@@ -568,5 +581,145 @@ contains
         pass = .not.eventPassed(0._R8) .and. eventPassed(-1.e-300_R8) .and. .not.eventPassed(1.e-300_R8)
         call flag('SG9b eventPassed: only a threshold strictly passed is caught up', 'SG9b_passed', pass, ok)
     end subroutine run_SG9
+
+    !> the default constants of ODE breakup model b (1 Pilch-Erdman, 2 Reitz-Diwakar, 3 KH-RT)
+    pure function brkConstants(b) result(bp)
+        integer, intent(in) :: b
+        real(R8), allocatable :: bp(:)
+        select case (b)
+        case (1);     bp = [1._R8, 0.116_R8]
+        case (2);     bp = [6._R8, PI, 0.5_R8, 20._R8]
+        case default; bp = [0.61_R8, 20._R8, 1._R8, 0.1_R8, 0.03_R8, 6._R8]
+        end select
+    end function brkConstants
+
+    subroutine run_SG10(ok)
+        !> the model-7 layout per ODE breakup model, neq and the model selector
+        use IGLOO_variables, only: ord2, mesh2D
+        use Lib_RHS, only: setupRHS, computeNeq, determineModel, nauxvar, nauxstate, mod_isSolid, &
+                           ind_cp, ind_m, ind_d, ind_rho, ind_sig, ind_mup, ind_mb, ind_sph, ind_sb1, ind_sb2
+        logical, intent(inout) :: ok
+        integer :: b, nAux, nAuxSt, nEvV
+        logical :: propFlags(7), pass, all_ok
+        ord2 = .false.;  mesh2D = .false.
+        propFlags = .false.
+        all_ok = .true.
+        do b = 1, 3
+            call setupRHS(7, b, 0, 0, 0, 0, 0, propFlags, brkConstants(b), 0, 0._R8, nAux, nAuxSt, nEvV)
+            pass = mod_isSolid .and. nauxvar == 6 + nmetal .and. ind_cp > 0 .and. ind_m > 0 .and. ind_d > 0 &
+                   .and. ind_rho > 0 .and. ind_sig > 0 .and. ind_mup > 0 .and. ind_mb > 0 .and. ind_sph > 0 &
+                   .and. nauxstate == ind_sph
+            if (b == 3) then
+                pass = pass .and. ind_sb1 == 1 .and. ind_sb2 == 2 .and. ind_sph == 3 .and. nEvV == 4
+            else
+                pass = pass .and. ind_sb1 == 0 .and. ind_sph == 1 .and. nEvV == 0
+            end if
+            write(*,'(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0)') '  [INFO] SG10 breakup ', b, ': nAux ', nauxvar, &
+                ', nAuxState ', nauxstate, ', ind_sph ', ind_sph, ', ind_sb1 ', ind_sb1, ', nEventVar ', nEvV
+            all_ok = all_ok .and. pass
+        end do
+        call flag('SG10a setupRHS(model 7): flow, d, rho, sigma, mu, metal block, phase slot, KH-RT timer', &
+                  'SG10a_layout', all_ok, ok)
+        pass = computeNeq(7, .false., .false.) == 9 .and. computeNeq(7, .true., .false.) == 15 .and. &
+               determineModel(.false., .true., 0, 1) == 7 .and. determineModel(.false., .false., 0, 1) == 6
+        call flag('SG10b model 7: neq 9 (15 with the euler moments); solidification with a breakup ODE', &
+                  'SG10b_neq_model', pass, ok)
+    end subroutine run_SG10
+
+    subroutine run_SG11(ok)
+        !> model 7 per phase at a slip against model 6 on the rebuilt m, d and a direct breakupOde
+        use IGLOO_variables, only: ord2, mesh2D, eulerSwitch, bodyForce, bodyAccel, srcBodyForce, &
+                                   sourceSwitch, phaseChange, dragSelect, heatSelect, sixOverPi, oneThird
+        use IGLOO_particles,   only: obj_particle
+        use IGLOO_Lib_Breakup, only: breakupOde
+        use Lib_RHS, only: setupRHS, packAuxVars, rhsSolidification, nauxvar, nauxstate, ind_sph, ind_sb1, ind_sb2
+        logical, intent(inout) :: ok
+        real(R8), parameter :: UG = 120._R8, UP = 20._R8, SIG = 5.e-3_R8, MUP = 1.e-3_R8, MDOT = 1.e-3_R8
+        real(R8), parameter :: TIME = 5.e-6_R8, TOLD = 1.e-6_R8, TC = 2.e-6_R8
+        real(R8), parameter :: Tph(0:3) = [T0, 2000._R8, TM, 1800._R8], fph(0:3) = [0._R8, 0._R8, 0.5_R8, 1._R8]
+        real(R8), parameter :: TOL18 = 1.0e-13_R8, TOL9 = 1.0e-12_R8
+        type(obj_particle) :: p
+        real(R8), allocatable :: aux(:), auxst(:)
+        real(R8) :: Z7(15), F7(15), Z6(13), F6(13), gas(9), gasNodes(9,8), gasVert(3,8), noTab(1)
+        real(R8) :: np7, m7, d7, slip, Re, var(2), timer(2), rate, e16, e78, e9, w16, w78, w9
+        integer  :: b, ph, nAux, nAuxSt, nEvV
+        logical  :: propFlags(7), zeros, live, off, tail, timerOk
+        noTab = 0._R8
+        ord2 = .false.;  mesh2D = .false.;  eulerSwitch = .true.
+        bodyForce = .false.;  bodyAccel = 0._R8;  srcBodyForce = .false.
+        sourceSwitch = .false.;  phaseChange = .false.
+        dragSelect = 2;  heatSelect = 5              ! Stokes, Ranz-Marshall
+        propFlags = .false.
+        gas = [1.2_R8, UG, 0._R8, 0._R8, TG, 1.8e-5_R8, 1.4_R8, 287._R8, KG]
+        gasNodes = spread(gas, 2, 8);  gasVert = 0._R8
+        p%cp = CL;  p%rho = RHOP;  p%d = D;  p%m = M;  p%mdot = MDOT;  p%sigma = SIG;  p%mup = MUP
+        p%Tmelt = TM;  p%hFus = HFUS;  p%Tnuc = TN;  p%cpSol = CS
+        np7 = 1.5_R8*MDOT/M
+        m7  = MDOT/np7
+        d7  = (sixOverPi*m7/RHOP)**oneThird
+        w16 = 0._R8;  w78 = 0._R8;  w9 = 0._R8
+        zeros = .true.;  live = .true.;  off = .true.;  tail = .true.;  timerOk = .true.
+        write(*,'(a,es12.5,a,es12.5,a)') '  [INFO] SG11 d = ', d7, ' m rebuilt from Z(9), injection d = ', D, ' m'
+        do b = 1, 3
+            do ph = phLiquid, phSolid
+                !> model 7 on the injection aux (d = D, mdot) at Z(9) = 1.5 mdot/M
+                call setupRHS(7, b, 0, 0, 0, 0, 0, propFlags, brkConstants(b), 0, 0._R8, nAux, nAuxSt, nEvV)
+                allocate(aux(nauxvar), auxst(max(1, nauxstate)))
+                call packAuxVars(p, nauxvar, aux)
+                auxst = 0._R8;  auxst(ind_sph) = real(ph, R8)
+                if (ind_sb1 > 0) auxst(ind_sb1:ind_sb2) = [TOLD, TC]
+                Z7 = 0._R8;  Z7(4) = UP;  Z7(7) = Tph(ph);  Z7(8) = fph(ph);  Z7(9) = np7
+                call rhsSolidification(15, TIME, Z7, F7, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, &
+                                       noTab, gasNodes, gasVert, gas, 9, 8)
+                !> the direct breakup rate on the rebuilt d and the RHS's acceleration
+                slip = norm2(gas(2:4) - Z7(4:6))
+                Re   = gas(1)*slip*d7/gas(6)
+                var  = 0._R8;  if (b == 3) var = [TOLD, TC]
+                rate = breakupOde(d7, SIG, MUP, RHOP, np7, gas(1), slip, Re, TIME, F7(4:6), Z7(4:6), var, b, &
+                                  brkConstants(b))
+                timer = 0._R8;  if (b == 3) timer = auxst(ind_sb1:ind_sb2)
+                if (ph <= phUndercooled) then
+                    e9   = abs(F7(9) - rate)/abs(rate)
+                    live = live .and. F7(9) /= 0._R8 .and. rate /= 0._R8
+                    if (b == 3) timerOk = timerOk .and. all(timer == var) .and. timer(2) /= TC
+                else
+                    e9  = 0._R8
+                    off = off .and. F7(9) == 0._R8 .and. rate /= 0._R8
+                    if (b == 3) timerOk = timerOk .and. all(timer == [TOLD, TC])
+                end if
+                deallocate(aux, auxst)
+                !> model 6 on the rebuilt m, d
+                call setupRHS(6, 0, 0, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
+                allocate(aux(nauxvar), auxst(max(1, nauxstate)))
+                p%m = m7;  p%d = d7
+                call packAuxVars(p, nauxvar, aux)
+                p%m = M;   p%d = D
+                auxst = 0._R8;  auxst(ind_sph) = real(ph, R8)
+                Z6 = 0._R8;  Z6(1:8) = Z7(1:8)
+                call rhsSolidification(13, TIME, Z6, F6, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, &
+                                       noTab, gasNodes, gasVert, gas, 9, 8)
+                deallocate(aux, auxst)
+                e16 = maxval(abs(F7(1:6) - F6(1:6))/max(abs(F6(1:6)), tiny(1._R8)), mask=(F6(1:6) /= 0._R8))
+                e78 = maxval(abs(F7(7:8) - F6(7:8))/max(abs(F6(7:8)), tiny(1._R8)), mask=(F6(7:8) /= 0._R8))
+                zeros = zeros .and. all((F7(1:8) == 0._R8) .eqv. (F6(1:8) == 0._R8))
+                tail  = tail .and. all(F7(10:14) == F6(9:13)) .and. F7(15) == Z7(9)
+                w16 = max(w16, e16);  w78 = max(w78, e78);  w9 = max(w9, e9)
+                write(*,'(a,i0,a,i0,a,es13.6,a,es13.6,a,3es10.2)') '  [INFO] SG11 breakup ', b, ' phase ', ph, &
+                    ': F(9) = ', F7(9), ', direct = ', rate, ', rel. F(1:6) F(7:8) F(9) ', e16, e78, e9
+            end do
+        end do
+        ok = ok .and. assert_lt('SG11a model 7 F(1:6) = model 6 on the rebuilt m, d, relative', w16, TOL18)
+        call append_row('SG11a_kinematics', 'F', w16, w16, 0._R8, 0._R8, TOL18, w16 < TOL18)
+        ok = ok .and. assert_lt('SG11b model 7 F(7:8) = model 6 on the rebuilt m, d, relative', w78, TOL18)
+        call append_row('SG11b_heat', 'F', w78, w78, 0._R8, 0._R8, TOL18, w78 < TOL18)
+        call flag('SG11b zero components of F(1:8) as model 6', 'SG11b_zeros', zeros, ok)
+        ok = ok .and. assert_lt('SG11c F(9) = breakupOde in the liquid phases, relative', w9, TOL9)
+        call append_row('SG11c_rate', 'F9', w9, w9, 0._R8, 0._R8, TOL9, w9 < TOL9)
+        call flag('SG11c F(9) and the direct rate non-zero in the liquid phases', 'SG11c_live', live, ok)
+        call flag('SG11d F(9) exactly 0 on the plateau and the solid, the direct rate not', 'SG11d_frozen', off, ok)
+        call flag('SG11e euler tail: model 6 shifted by one slot, F(15) = Z(9)', 'SG11e_tail', tail, ok)
+        call flag('SG11f KH-RT timer written back in the liquid phases, kept on the plateau and the solid', &
+                  'SG11f_timer', timerOk, ok)
+    end subroutine run_SG11
 
 end program test_solidification
