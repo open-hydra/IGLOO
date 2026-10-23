@@ -228,7 +228,7 @@ so a spray reduces to independent single drops and every spray-level observable 
 
 | candidate | what it is | why rejected |
 |---|---|---|
-| Hsiang & Faeth, IJMF 18(5):635–652, 1992 | shock-tube secondary breakup, room temperature | no evaporation (usable for TAB/ETAB product size only) |
+| Hsiang & Faeth, IJMF 18(5):635–652, 1992 | shock-tube secondary breakup, room temperature | no evaporation (the TAB/ETAB product sizes against `[HF92]`/`[HF93]`: [tab-hf92](../breakup/tab-hf92/INFO.md), [etab-hf92](../breakup/etab-hf92/INFO.md)) |
 | Hiroyasu & Kadota, SAE 740715, 1974 | diesel spray drop-size distribution | measured distribution of a transient spray; no evaporation oracle |
 | Hiroyasu & Arai, SAE 900475, 1990 | diesel spray tip penetration | set by two-way entrainment |
 | Wu, Santavicca, Bracco & Coghe, AIAA J 22:1263–1270, 1984 | LDV in non-vaporizing dense diesel sprays | non-vaporizing, dense, two-way |

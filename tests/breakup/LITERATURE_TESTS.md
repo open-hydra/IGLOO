@@ -201,3 +201,19 @@ Confirmed: TAB closed-form is the right #1 (task's expected winner).
 - **KH shed and the gas source** (`[Reitz87]` product-parcel rule): the stripped mass leaves the parent as a
   child parcel born at the shed point, so the parent hands the child's birth flux on instead of depositing
   it. Gates: `khrt-e2e/check.py::check_source_budget`, [khrt-shed-noexchange](khrt-shed-noexchange/INFO.md).
+
+---
+
+## TAB and ETAB product sizes against Hsiang & Faeth
+
+`[HF92]` eq. [14] (SMD/d0 = 6.2 (ρ_L/ρ_G)^1/4 [μ_L/(ρ_L d0 u0)]^1/2 after bag, multimode and shear breakup, the
+standard deviation of its coefficient 20 %) and `[HF93]` (the root-normal size distribution with MMD/SMD = 1.2 in all
+three regimes once the core drop is removed; the size/velocity correlation eq. [13] at the end of breakup, t_b = 5 t*)
+correlate shock-tube drops; they are not closed forms of TAB or ETAB, so they are drawn, not gated.
+[tab-hf92](tab-hf92/INFO.md) and [etab-hf92](etab-hf92/INFO.md) run `[HF93]`'s water series (d0 = 1000 µm, We 15–600,
+the air and water of its Table 1) and gate the figure's preconditions only (every drop breaks, the cascade ends inside
+the box, every parcel is in it at t_b). TAB's SMD falls about as We^−0.87 against eq. [14]'s We^−1/4: 1.54× eq. [14]
+at We 15, inside its ±20 % at We 37.7–59.8, 6.5× below it at We 600; its MMD/SMD, 0.968–1.375 (mean 1.164), is
+the scatter of 25 to 33 draws about TAB's own (ln 2)^1/n Γ(1 − 1/n) = 1.149 (n = 3.5), not 1.2.
+ETAB's cascade gives one size per class (two where it ends at the onset We_r = 6), 3.3× eq. [14] at We 15 and 5.1×
+below it at We 600. Neither model has `[HF93]`'s core drop.
