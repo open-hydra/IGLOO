@@ -681,8 +681,8 @@ These cases target the **non-physics machinery** every run depends on: gas-field
 reconstruction, boundary-condition transport, injection modes, mesh topology, and
 the Eulerian feedback accumulators.  Their closures are already gated elsewhere
 (`vie-plait`, `swirl-wedge`, `swirl-wedge-deposit` and `swirl-wedge-spin` reuse Stokes drag, `periodic-y` and `coupled-body` reuse the
-`body-force` oracle), so what each figure *uniquely* pins is the feature path,
-not the physics.
+`body-force` oracle, `tab-hf92` and `etab-hf92` the closures of `tab-e2e` and
+`etab-e2e`), so what each figure *uniquely* pins is the feature path, not the physics.
 
 Oracle strength varies inside the category and is stated per case: `vie-plait`,
 `periodic-y` and `coupled-body` have full Tier-V closed forms (a folded-modulo
@@ -694,6 +694,9 @@ residence time onto the euler cells; `db-injection` and `db-2daxi` are **behavio
 the intended boundary) with no reference curve at all, because a real MOSE nozzle
 field has no analytic solution.  `db-2daxi` is deliberately md5-free: trajectory
 bytes drift by 1 ULP across compiler and configure generations.
+`tab-hf92` and `etab-hf92` gate their figures' preconditions (every drop breaks, the
+cascade ends inside the box, every parcel is in it at $t_b = 5t^*$); the figures draw
+Hsiang & Faeth's correlations beside the products, not gated.
 
 Several members of this category have **no figure** and so no section below:
 `bc-center-2grp` (multi-group `bc_center` pinning), `inj-edge` and `inj-edge-payload` (injection points on
@@ -892,4 +895,52 @@ $T_p(x)$ through the $\sim$300–3600 K gas field.
 
 <figure>
   {% include "vv/images/db-2daxi.svg" ignore missing %}
+</figure>
+
+### tab-hf92
+
+TAB's products beside Hsiang & Faeth's correlations, on their water series: drops of
+$d_0 = 1$ mm at the diameter-based $We$ 15–600 (25 inlet cells, one $We$ each), injected
+at their class's slip into air at 200 m/s and 297 K, with the papers' air and water
+properties, in a 1.2 m box whose lateral faces reflect (in a uniform gas parallel to
+them a reflection keeps the slip's magnitude).  The gates are the figure's
+preconditions: every drop breaks; the cascade ends in the first half of the box, the
+last row's $We_r$ below 6, and every parcel leaves through the outlet; every parcel is
+in the box at the breakup time $t_b = 5t^*$, $t^* = d_0(\rho_L/\rho_G)^{1/2}/u_0$.  The
+comparison is drawn, not gated: (a) `[HF92]` eq. [14] on its Fig. 10's axes with the
+±20 % of its coefficient, (b) SMD/$d_0$ against $We$, (c) MMD/SMD per class against the
+root-normal 1.2, (d) the size distribution on `[HF93]` Fig. 1's axes with the
+root-normal lines for MMD/SMD = 1.5, 1.2 and 1.1 drawn from their definition, (e) the
+products' relative velocity $u_b$ at $t_b$ against `[HF93]` eq. [13].
+
+**Result:** 714/714 parcels break.  TAB's SMD is 1.54× eq. [14] at $We = 15$, within
+its ±20 % at $We$ 37.7–59.8 and 6.5× below it at $We = 600$: it falls about as
+$We^{-0.87}$, eq. [14] as $We^{-1/4}$.  A class's Sauter radius is 0.736 of TAB's
+$r_s$: a parcel keeps its mass flow over a draw from the Rosin–Rammler number pdf whose
+Sauter radius is $r_s$.  MMD/SMD is 0.968–1.375 (mean 1.16), the scatter of 25 to 33
+draws about TAB's own $(\ln 2)^{1/n}\,\Gamma(1-1/n) = 1.149$ ($n = 3.5$), below the
+root-normal 1.2.  At $t_b$ the ratio of $u_0/u_b - 1$ to eq. [13] has the median 0.30
+at $We = 15$, 1.00 at $We = 239$ and 3.6 at $We = 600$.  Neither TAB nor ETAB has
+`[HF93]`'s core drop, which is not drawn.
+
+<figure>
+  {% include "vv/images/tab-hf92.svg" ignore missing %}
+</figure>
+
+### etab-hf92
+
+`tab-hf92` under ETAB: the same input, gates and figure, with panel (d) giving each
+parcel's $d$/SMD of its class, since ETAB's deterministic cascade gives one product
+size per class.  ETAB's kick drifts the products up to 12 mm sideways onto the
+reflecting faces (coded 400, they would let 46 of the 714 parcels out); a reflected
+parcel ends inside its class's size range or at most 4.7e-3 (relative) outside it.
+
+**Result:** 714/714 parcels break, one size per class except at $We = 441$, where the
+cascade ends at the onset $We_r = 6$ and splits the class in two.  ETAB's SMD is 3.3×
+eq. [14] at $We = 15$, within its ±20 % at $We$ 95, 111 and 150 and 5.1× below it at
+$We = 600$; at $t_b$ the ratio to eq. [13] is 0.19–0.27 up to $We = 111$ and 2.7 at
+$We = 600$.
+
+<figure>
+  {% include "vv/images/etab-hf92.svg" ignore missing %}
 </figure>
