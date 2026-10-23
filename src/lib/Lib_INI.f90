@@ -6,6 +6,7 @@ module IGLOO_IO_INI
   private
   public :: read_IGLOO_input
   public :: set_material_defaults, apply_material_key, finalize_material_models
+  public :: read_breakup_constants, apply_breakup_tokens
 
   type(file_ini) :: fini
   integer        :: error
@@ -211,7 +212,7 @@ contains
     use IGLOO_variables
     use IGLOO_Lib_Drag,        only: assign_drag
     use IGLOO_Lib_Heat,        only: assign_heat
-    use IGLOO_Lib_Breakup,     only: assign_breakup, bp, bpMethod, assign_scaleFactor
+    use IGLOO_Lib_Breakup,     only: assign_breakup, bp, bpMethod, bpScale
     use IGLOO_Lib_Evaporation, only: assign_evaporation, assign_liquid, assign_interface, &
                                      assign_boiling, assign_blowing
     implicit none
@@ -240,92 +241,112 @@ contains
     call fini%get(section_name='IGLOO-Models', option_name='blowing', val=blowing_word, error=error)
     if (error/=0) blowing_word = 'none'
     call assign_blowing(blowing_word, blowSelect)
-    !> Breakup model definition
+    !> Breakup model definition and its constants
     call fini%get(section_name='IGLOO-Models', option_name='breakup', val=breakup_word, error=error)
     if (error==0) then
-      brkupSwitch = .true.
       call assign_breakup(breakup_word,brkupSelect,brkupEqOde,brkupEvent,brkupHasChild)
-      if (allocated(bp)) deallocate(bp)
-      select case (brkupSelect)
-      case (1)
-        allocate(bp(2))
-        call fini%get(section_name='IGLOO-Models', option_name='Cd', val=bp(1), error=error)
-        if (error/=0) bp(1) = 1._R8
-        call fini%get(section_name='IGLOO-Models', option_name='B' , val=bp(2), error=error)
-        if (error/=0) bp(2) = 0.116_R8
-      case (2)
-        allocate(bp(4))
-        call fini%get(section_name='IGLOO-Models', option_name='WeBag' , val=bp(1), error=error)
-        if (error/=0) bp(1) = 6._R8
-        call fini%get(section_name='IGLOO-Models', option_name='Cb'    , val=bp(2), error=error)
-        if (error/=0) bp(2) = pi
-        call fini%get(section_name='IGLOO-Models', option_name='Cstrip', val=bp(3), error=error)
-        if (error/=0) bp(3) = 0.5_R8
-        call fini%get(section_name='IGLOO-Models', option_name='Cs'    , val=bp(4), error=error)
+      call read_breakup_constants(brkupSelect, bp, bpMethod, bpScale, .false.)
+    endif
+  end subroutine read_models
+
+
+  !> [IGLOO-Models] constants of breakup model sel, the reader's default for an absent key; quiet skips
+  !  the Reitz Cs note and the TAB method-default note.
+  subroutine read_breakup_constants(sel, bpOut, methodOut, scaleOut, quiet)
+    use IGLOO_variables,   only: pi
+    use IGLOO_Lib_Breakup, only: tabScale
+    implicit none
+    integer,               intent(in)  :: sel
+    real(R8), allocatable, intent(out) :: bpOut(:)
+    integer,               intent(out) :: methodOut
+    real(R8),              intent(out) :: scaleOut
+    logical,               intent(in)  :: quiet
+    integer :: ierr, ierrN
+
+    methodOut = 1;  scaleOut = 1._R8
+    select case (sel)
+    case (1)
+      allocate(bpOut(2))
+      call fini%get(section_name='IGLOO-Models', option_name='Cd', val=bpOut(1), error=ierr)
+      if (ierr/=0) bpOut(1) = 1._R8
+      call fini%get(section_name='IGLOO-Models', option_name='B' , val=bpOut(2), error=ierr)
+      if (ierr/=0) bpOut(2) = 0.116_R8
+    case (2)
+      allocate(bpOut(4))
+      call fini%get(section_name='IGLOO-Models', option_name='WeBag' , val=bpOut(1), error=ierr)
+      if (ierr/=0) bpOut(1) = 6._R8
+      call fini%get(section_name='IGLOO-Models', option_name='Cb'    , val=bpOut(2), error=ierr)
+      if (ierr/=0) bpOut(2) = pi
+      call fini%get(section_name='IGLOO-Models', option_name='Cstrip', val=bpOut(3), error=ierr)
+      if (ierr/=0) bpOut(3) = 0.5_R8
+      call fini%get(section_name='IGLOO-Models', option_name='Cs'    , val=bpOut(4), error=ierr)
+      if (.not. quiet) then
         write(*,*) ' >> Reitz models Cs constant can be chosen among the following values:'
         write(*,*) '     Cs=20.0   Reitz,Diawakar  - Structure of High-Pressure Fuel Sprays  (1987)'
         write(*,*) '     Cs=8.0    Ranger,Nicholls - Aerodinamic Shattering of Liquid Drops  (1969)'
         write(*,*) '     Cs=3^0.5  O''Rourke,Amsden - The TAB method for Numerical Calculation     '
         write(*,*) '                                  of Spray Droplet Breakup               (1987)'
-        if (error/=0) then
-          write(*,*) '    ... Assigning the default value: Cs = 20.0 ...'
-          bp(4) = 20._R8
+      endif
+      if (ierr/=0) then
+        if (.not. quiet) write(*,*) '    ... Assigning the default value: Cs = 20.0 ...'
+        bpOut(4) = 20._R8
+      endif
+    case (3)
+      allocate(bpOut(6))
+      call fini%get(section_name='IGLOO-Models', option_name='B0'      , val=bpOut(1), error=ierr)
+      if (ierr/=0) bpOut(1) = 0.61_R8
+      call fini%get(section_name='IGLOO-Models', option_name='B1'      , val=bpOut(2), error=ierr)
+      if (ierr/=0) bpOut(2) = 20._R8
+      call fini%get(section_name='IGLOO-Models', option_name='Ctau'    , val=bpOut(3), error=ierr)
+      if (ierr/=0) bpOut(3) = 1._R8
+      call fini%get(section_name='IGLOO-Models', option_name='CRT'     , val=bpOut(4), error=ierr)
+      if (ierr/=0) bpOut(4) = 0.1_R8
+      call fini%get(section_name='IGLOO-Models', option_name='mShedLim', val=bpOut(5), error=ierr)
+      if (ierr/=0) bpOut(5) = 0.03_R8
+      call fini%get(section_name='IGLOO-Models', option_name='WeLimit' , val=bpOut(6), error=ierr)
+      if (ierr/=0) bpOut(6) = 6._R8
+    case (4)
+      allocate(bpOut(4))
+      call fini%get(section_name='IGLOO-Models', option_name='Comega', val=bpOut(1), error=ierr)
+      if (ierr/=0) bpOut(1) = 8._R8
+      call fini%get(section_name='IGLOO-Models', option_name='Cmu'   , val=bpOut(2), error=ierr)
+      if (ierr/=0) bpOut(2) = 5._R8
+      call fini%get(section_name='IGLOO-Models', option_name='WeCrit', val=bpOut(3), error=ierr)
+      if (ierr/=0) bpOut(3) = 6._R8; bpOut(3) = 2_R8*bpOut(3)
+      !> the spread whatever the method, so a TAB-method=2 token over method = 1 finds it
+      call fini%get(section_name='IGLOO-Models', option_name='n'     , val=bpOut(4), error=ierrN)
+      if (ierrN/=0) bpOut(4) = 3.5_R8
+      call fini%get(section_name='IGLOO-Models', option_name='method', val=methodOut, error=ierr)
+      if (ierr==0) then
+        if (methodOut/=1 .and. methodOut/=2) then
+          write(*,'(A,I0,A)') ' [ERROR] [IGLOO-Models] method = ', methodOut, ' is not a TAB product-size method (1 or 2)'
+          error stop 'IGLOO: TAB method must be 1 or 2'
         endif
-      case (3)
-        allocate(bp(6))
-        call fini%get(section_name='IGLOO-Models', option_name='B0'      , val=bp(1), error=error)
-        if (error/=0) bp(1) = 0.61_R8
-        call fini%get(section_name='IGLOO-Models', option_name='B1'      , val=bp(2), error=error)
-        if (error/=0) bp(2) = 20._R8
-        call fini%get(section_name='IGLOO-Models', option_name='Ctau'    , val=bp(3), error=error)
-        if (error/=0) bp(3) = 1._R8
-        call fini%get(section_name='IGLOO-Models', option_name='CRT'     , val=bp(4), error=error)
-        if (error/=0) bp(4) = 0.1_R8
-        call fini%get(section_name='IGLOO-Models', option_name='mShedLim', val=bp(5), error=error)
-        if (error/=0) bp(5) = 0.03_R8
-        call fini%get(section_name='IGLOO-Models', option_name='WeLimit' , val=bp(6), error=error)
-        if (error/=0) bp(6) = 6._R8
-      case (4)
-        allocate(bp(4))
-        call fini%get(section_name='IGLOO-Models', option_name='Comega', val=bp(1), error=error)
-        if (error/=0) bp(1) = 8._R8
-        call fini%get(section_name='IGLOO-Models', option_name='Cmu'   , val=bp(2), error=error)
-        if (error/=0) bp(2) = 5._R8
-        call fini%get(section_name='IGLOO-Models', option_name='WeCrit', val=bp(3), error=error)
-        if (error/=0) bp(3) = 6._R8; bp(3) = 2_R8*bp(3)
-        call fini%get(section_name='IGLOO-Models', option_name='method', val=bpMethod, error=error)
-        if (error==0) then
-          if (bpMethod/=1 .and. bpMethod/=2) then
-            write(*,'(A,I0,A)') ' [ERROR] [IGLOO-Models] method = ', bpMethod, ' is not a TAB product-size method (1 or 2)'
-            error stop 'IGLOO: TAB method must be 1 or 2'
-          endif
-          if (bpMethod==2) then
-            call fini%get(section_name='IGLOO-Models', option_name='n', val=bp(4), error=error)
-            if (error/=0) bp(4) = 3.5_R8
-          endif
-        else; bpMethod = 2; bp(4) = 3.5_R8
+      else
+        methodOut = 2
+        if (.not. quiet .and. ierrN/=0) then
           write(*,*) ' >> TAB breakup model: defaulting to Rosin-Rammler distribution to choose the'
           write(*,*) '                        product droplets sizes (spread parameter n = 3.5)'
         endif
-        call assign_scaleFactor()
-      case (5)
-        allocate(bp(6))
-        !> defaults per Tanner (1998)
-        call fini%get(section_name='IGLOO-Models', option_name='k1'     , val=bp(1), error=error)
-        if (error/=0) bp(1) = 0.2222_R8
-        call fini%get(section_name='IGLOO-Models', option_name='k2'     , val=bp(2), error=error)
-        if (error/=0) bp(2) = 0.2222_R8
-        call fini%get(section_name='IGLOO-Models', option_name='WeCrit' , val=bp(3), error=error)
-        if (error/=0) bp(3) = 6._R8; bp(3) = 2_R8*bp(3)
-        call fini%get(section_name='IGLOO-Models', option_name='WeTrans', val=bp(4), error=error)
-        if (error/=0) bp(4) = 80._R8
-        call fini%get(section_name='IGLOO-Models', option_name='Comega' , val=bp(5), error=error)
-        if (error/=0) bp(5) = 8._R8
-        call fini%get(section_name='IGLOO-Models', option_name='Cmu'    , val=bp(6), error=error)
-        if (error/=0) bp(6) = 5._R8
-      end select
-    endif
-  end subroutine read_models
+      endif
+      scaleOut = tabScale(methodOut, bpOut(4))
+    case (5)
+      allocate(bpOut(6))
+      !> defaults per Tanner (1998)
+      call fini%get(section_name='IGLOO-Models', option_name='k1'     , val=bpOut(1), error=ierr)
+      if (ierr/=0) bpOut(1) = 0.2222_R8
+      call fini%get(section_name='IGLOO-Models', option_name='k2'     , val=bpOut(2), error=ierr)
+      if (ierr/=0) bpOut(2) = 0.2222_R8
+      call fini%get(section_name='IGLOO-Models', option_name='WeCrit' , val=bpOut(3), error=ierr)
+      if (ierr/=0) bpOut(3) = 6._R8; bpOut(3) = 2_R8*bpOut(3)
+      call fini%get(section_name='IGLOO-Models', option_name='WeTrans', val=bpOut(4), error=ierr)
+      if (ierr/=0) bpOut(4) = 80._R8
+      call fini%get(section_name='IGLOO-Models', option_name='Comega' , val=bpOut(5), error=ierr)
+      if (ierr/=0) bpOut(5) = 8._R8
+      call fini%get(section_name='IGLOO-Models', option_name='Cmu'    , val=bpOut(6), error=ierr)
+      if (ierr/=0) bpOut(6) = 5._R8
+    end select
+  end subroutine read_breakup_constants
 
 
   !> Per-material defaults for the phase-change properties, set before the material-line tokens are
@@ -353,17 +374,18 @@ contains
 
 
   !> One key=value token from the material line of the phase file (written by ATLAS GPB from
-  !  [GPB-Phase*]): the six model words call the assign_* selectors, the fourteen reals are read;
-  !  an unknown key or a non-numeric real stops the run.
+  !  [GPB-Phase*]): the seven model words call the assign_* selectors, the fourteen reals are read, a
+  !  breakup constant is kept for apply_breakup_tokens; an unknown key or a non-numeric value stops the run.
   subroutine apply_material_key(imat, mat, key, value)
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Evaporation, only: assign_evaporation, assign_liquid, assign_interface, &
                                      assign_boiling, assign_combustion, assign_solidification
+    use IGLOO_Lib_Breakup,     only: assign_breakup, breakup_token, BRKTOK_SLOT
     implicit none
     integer,            intent(in)    :: imat
     type(obj_material), intent(inout) :: mat
     character(len=*),   intent(in)    :: key, value
-    integer :: ios
+    integer :: ios, k
 
     ios = 0
     select case (trim(key))
@@ -373,6 +395,8 @@ contains
     case ('boiling');           call assign_boiling(value, mat%boilSelect)
     case ('combustion');        call assign_combustion(value, mat%combSelect)
     case ('solidification');    call assign_solidification(value, mat%solidSelect)
+    case ('breakup');           mat%brkupWord = value
+      call assign_breakup(value, mat%brkupSelect, mat%brkupEqOde, mat%brkupEvent, mat%brkupHasChild)
     case ('alpha-e');   read(value,*,iostat=ios) mat%alphaE
     case ('k-liq');     read(value,*,iostat=ios) mat%kLiq
     case ('mu-liq');    read(value,*,iostat=ios) mat%muLiq
@@ -388,9 +412,21 @@ contains
     case ('T-nuc');     read(value,*,iostat=ios) mat%Tnuc
     case ('cp-solid');  read(value,*,iostat=ios) mat%cpSol
     case default
-      write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': unknown key "'//trim(key)// &
-                          '" (value "'//trim(value)//'") on the material line'
-      error stop 'IGLOO: unknown per-material key in the phase file'
+      k = breakup_token(key)
+      if (k == 0) then
+        write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': unknown key "'//trim(key)// &
+                            '" (value "'//trim(value)//'") on the material line'
+        error stop 'IGLOO: unknown per-material key in the phase file'
+      endif
+      read(value,*,iostat=ios) mat%bpTok(k)
+      if (ios == 0) then
+        mat%bpGiven(k) = .true.
+        if (BRKTOK_SLOT(k) == 0 .and. mat%bpTok(k) /= 1._R8 .and. mat%bpTok(k) /= 2._R8) then
+          write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': '//trim(key)//'='//trim(value)// &
+                              ' is not a TAB product-size method (1 or 2)'
+          error stop 'IGLOO: TAB method must be 1 or 2'
+        endif
+      endif
     end select
     if (ios /= 0) then
       write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': '//trim(key)//'='//trim(value)// &
@@ -398,6 +434,50 @@ contains
       error stop 'IGLOO: non-numeric per-material value in the phase file'
     endif
   end subroutine apply_material_key
+
+
+  !> The material's breakup constant tokens of its own model over its constants (read_breakup_constants):
+  !  the two WeCrit doubled as their keys are, TAB-method into bpMethod, TAB's scale recomputed; a material
+  !  carrying a constant token logs its resolved set.
+  subroutine apply_breakup_tokens(imat, mat)
+    use IGLOO_data_phases, only: obj_material
+    use IGLOO_Lib_Breakup, only: NBRKTOK, BRKTOK, BRKTOK_MODEL, BRKTOK_SLOT, tabScale
+    implicit none
+    integer,            intent(in)    :: imat
+    type(obj_material), intent(inout) :: mat
+    character(len=512) :: line
+    character(len=16)  :: buf
+    real(R8) :: v
+    integer  :: k, j
+
+    do k = 1, NBRKTOK
+      if (.not. mat%bpGiven(k) .or. BRKTOK_MODEL(k) /= mat%brkupSelect) cycle
+      j = BRKTOK_SLOT(k)
+      if (j == 0) then
+        mat%bpMethod = nint(mat%bpTok(k))
+      elseif (index(BRKTOK(k), 'WeCrit') > 0) then
+        mat%bp(j) = 2._R8*mat%bpTok(k)
+      else
+        mat%bp(j) = mat%bpTok(k)
+      endif
+    enddo
+    if (mat%brkupSelect == 4) mat%bpScale = tabScale(mat%bpMethod, mat%bp(4))
+    if (.not. any(mat%bpGiven)) return
+    line = ''
+    do k = 1, NBRKTOK
+      if (BRKTOK_MODEL(k) /= mat%brkupSelect) cycle
+      j = BRKTOK_SLOT(k)
+      if (j == 0) then
+        write(buf,'(i0)') mat%bpMethod
+      else
+        v = mat%bp(j)
+        if (index(BRKTOK(k), 'WeCrit') > 0) v = 0.5_R8*v
+        write(buf,'(es10.3)') v
+      endif
+      line = trim(line)//' '//BRKTOK(k)(index(BRKTOK(k), '-')+1:len_trim(BRKTOK(k)))//'='//trim(adjustl(buf))
+    enddo
+    write(*,'(a,i0,a)') '  >> [material ', imat, '] breakup='//trim(mat%brkupWord)//' constants:'//trim(line)
+  end subroutine apply_breakup_tokens
 
 
   !> After the material-line tokens: T-nuc default, combustion/evaporation exclusivity, resolved-model log.

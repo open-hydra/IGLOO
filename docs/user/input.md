@@ -40,8 +40,9 @@ Parameters not specified take their default values. Unknown sections are silentl
 IGLOO reads only the `[IGLOO-*]` sections above. The sections below are the *preprocessor's* input:
 whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase.txt`,
 `properties.dat`, `bc.txt`). The per-material model keys (`evaporation`, `combustion`, `solidification`,
-`alpha-e`, ...) are `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after `<name> <groups>`
-on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
+`breakup`, `alpha-e`, ...) and the breakup constants (`<tag>-<key>`, as `KHRT-B1`; table under
+[`[IGLOO-Models]`](#igloo-models)) are `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after
+`<name> <groups>` on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
 The `<groups>` summed over the material lines is the family count, and therefore the number of table
 copies `bc.txt` may carry (one copy feeds every family; see [Several families](boundary-conditions.md#several-families)).
 
@@ -153,13 +154,26 @@ Selects physical model closures.
 | `evaporation` | string | absent | Evaporation model (`d2-law`, `CEM`, `CEM-B`, `ASM`, `TC`); when present, enables phase change |
 | `interface` | string | `VLE` | Surface state: `VLE` equilibrium or `LK` Langmuir–Knudsen non-equilibrium |
 | `blowing` | string | `none` | Stefan-blowing reduction of the convective heat: `none` or `LK` |
-| `breakup` | string | absent | Breakup model (`Pilch-Erdman`, `Reitz-Diawakar`, `Reitz-KHRT`, `TAB`, `ETAB`); when present, enables secondary breakup |
+| `breakup` | string | absent | Breakup model (`Pilch-Erdman`, `Reitz-Diawakar`, `Reitz-KHRT`, `TAB`, `ETAB`); when present, enables secondary breakup. The default of every material: a material's `breakup=<model>` token on its phase-file line overrides it |
 
-Breakup model–specific tuning constants (`B0`, `B1`, `Cs`, etc.) are also read from `[IGLOO-Models]` when a breakup model is active; see the [Parameter Registry](registry.md) for per-model keys. Unknown model tokens, and the reserved `evaporation = LEB`, are refused at setup.
+Each breaking material reads the constants of its own model: its `<tag>-<key>` token on the phase-file line, else
+the `[IGLOO-Models]` key of that name, else the default (see the [Parameter Registry](registry.md)). TAB and ETAB
+each take their own `Comega`, `Cmu` and `WeCrit` tokens:
+
+| `breakup=` | constant tokens |
+|---|---|
+| `Pilch-Erdman` | `PE-Cd`, `PE-B` |
+| `Reitz-Diawakar` | `RD-WeBag`, `RD-Cb`, `RD-Cstrip`, `RD-Cs` |
+| `Reitz-KHRT` | `KHRT-B0`, `KHRT-B1`, `KHRT-Ctau`, `KHRT-CRT`, `KHRT-mShedLim`, `KHRT-WeLimit` |
+| `TAB` | `TAB-Comega`, `TAB-Cmu`, `TAB-WeCrit`, `TAB-method` (1 or 2), `TAB-n` |
+| `ETAB` | `ETAB-k1`, `ETAB-k2`, `ETAB-WeCrit`, `ETAB-WeTrans`, `ETAB-Comega`, `ETAB-Cmu` |
+
+A token of a model the material does not run is accepted and unused; a material that carries a constant token
+logs its resolved set at setup. Unknown model tokens, and the reserved `evaporation = LEB`, are refused at setup.
 
 ### `[IGLOO-Properties]`
 
-Constant evaporation and breakup properties and the emissivity of the radiative exchange, one value per material in the order they appear in `INPUT/phase.txt`. The evaporation and breakup properties are required only when the corresponding model is active and the property is not already in `INPUT/properties.dat`.
+Constant evaporation and breakup properties and the emissivity of the radiative exchange, one value per material in the order they appear in `INPUT/phase.txt`. The evaporation properties are required only when evaporation is active and the property is not already in `INPUT/properties.dat`; `sigma` and `mu` only when a material breaks (the entry of a material that does not break is unused).
 
 | Key | Description |
 |-----|-------------|

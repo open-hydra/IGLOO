@@ -59,7 +59,7 @@ to overlook when counting coverage:
   GPB writes; plus the table and `Psat` checks and the enthalpy-to-temperature inversion on synthetic input),
   `registry-docs` (the tracked parameter registry page equals DocGen's output),
   `test_host_assoc` (a test program's internal procedures address its arrays, not a static copy),
-  the sixty-four `refusals/*` cases (inputs the solver must refuse at setup with exit
+  the sixty-five `refusals/*` cases (inputs the solver must refuse at setup with exit
   128 and nothing integrated), and `self_test` (which exercises the verification
   support library itself).  No physics, no curve, by design.
 

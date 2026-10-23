@@ -79,7 +79,9 @@ contains
     call reg%add('IGLOO-Models','boiling',d_s(13),'clamp', &
       'Boiling branch, global default (per-material override: key=value on the material line of the phase file, from [GPB-Phase*]); ZGR not implemented: refused at setup','clamp, ZGR',.false.)
     call reg%add('IGLOO-Models','breakup',d_s(9),'NoBreakup', &
-      'Breakup model','Pilch-Erdman, Reitz-Diawakar, Reitz-KHRT, TAB, ETAB',.false.)
+      'Breakup model, global default; a material overrides it with the `breakup=<model>` token of its '// &
+      'phase-file line, and each constant below with its `<tag>-<key>` token', &
+      'Pilch-Erdman, Reitz-Diawakar, Reitz-KHRT, TAB, ETAB',.false.)
     call reg%add('IGLOO-Models','Cd',d_r(3),'1.0', &
       'Pilch-Erdman: drag constant','',.false.)
     call reg%add('IGLOO-Models','B',d_r(4),'0.116', &
@@ -114,11 +116,11 @@ contains
       'TAB: product-size selection method (2 = Rosin-Rammler sampling)','1, 2',.false.)
     call reg%add('IGLOO-Models','n',d_r(18),'3.5', &
       'TAB: Rosin-Rammler spread parameter (method 2)','',.false.)
-    call reg%add('IGLOO-Models','k1',d_r(19),'0.2', &
+    call reg%add('IGLOO-Models','k1',d_r(19),'0.2222', &
       'ETAB: bag-regime rate constant','',.false.)
-    call reg%add('IGLOO-Models','k2',d_r(20),'0.2', &
+    call reg%add('IGLOO-Models','k2',d_r(20),'0.2222', &
       'ETAB: stripping-regime rate constant','',.false.)
-    call reg%add('IGLOO-Models','WeTrans',d_r(21),'100', &
+    call reg%add('IGLOO-Models','WeTrans',d_r(21),'80', &
       'ETAB: bag-to-stripping transition Weber number','',.false.)
 
     ! --- [IGLOO-Properties] --- one value per material; overrides properties.dat

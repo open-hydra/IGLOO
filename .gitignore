@@ -49,6 +49,8 @@ ref-o1-*
 ref-o2-*
 # mpi/two-fam-bc-2blk-ord2-dual-np3 runs the same binary on one rank into ref-serial/ (its check.py)
 ref-serial
+# breakup-per-material reruns its case once per material into ref-A/ .. ref-D/ (tests/breakup/breakup-per-material/check.py)
+ref-[ABCD]
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/

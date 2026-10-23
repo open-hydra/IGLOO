@@ -17,7 +17,7 @@ contains
   !  constants come from [IGLOO-Properties] (Lv, Mv, cpv from there or from their columns).
   subroutine read_cdp_properties(prefix,material)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
-    use IGLOO_variables,       only: nm, brkupSwitch, phaseChange, breakup_word, evaporation_word, &
+    use IGLOO_variables,       only: nm, phaseChange, breakup_word, evaporation_word, &
                                      liqSelect, intfSelect, boilSelect
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Properties,  only: Tmin, Tmax, ntok_max, tok_len, nzone_max, TAB_OK, PSAT_OK, PSAT_ABSENT, &
@@ -27,7 +27,8 @@ contains
                                      vapour_reason, tableValue
     use IGLOO_IO_INI,          only: ini_Mv, ini_Lv, ini_Tboil, ini_cpv, ini_Le, ini_Yinf, &
                                         ini_sigma, ini_mu, ini_emissivity, &
-                                        set_material_defaults, apply_material_key, finalize_material_models
+                                        set_material_defaults, apply_material_key, finalize_material_models, &
+                                        read_breakup_constants, apply_breakup_tokens
     use Lib_ORION_data
     use Lib_Tecplot
     use IGLOO_Lib_Breakup,     only: assign_breakup
@@ -36,7 +37,7 @@ contains
     character(len=32),  intent(in)  :: prefix
     type(obj_material), intent(out), allocatable :: material(:)
     integer            :: ios, unit, i, p, e
-    character(len=512) :: wholestring
+    character(len=4096) :: wholestring
     character(len=128) :: tok
     character(len=8)   :: hDatum
     type(orion_data)   :: orion
@@ -109,6 +110,12 @@ contains
         call apply_material_key(i, material(i), tok(1:e-1), tok(e+1:len_trim(tok)))
       enddo
       call finalize_material_models(i, material(i))
+      !> a breaking material's constants: [IGLOO-Models] (the reader's defaults), then its own tokens
+      if (material(i)%brkupSelect > 0) then
+        call read_breakup_constants(material(i)%brkupSelect, material(i)%bp, material(i)%bpMethod, &
+                                    material(i)%bpScale, .true.)
+        call apply_breakup_tokens(i, material(i))
+      endif
       if (material(i)%evapSelect > 0) phaseChange = .true.
       !> interface=LK requires a vapor-fraction-driven evaporation model
       if (material(i)%intfSelect == 1 .and. material(i)%evapSelect == 1) &
@@ -249,8 +256,8 @@ contains
       if (mat%solidSelect > 0 .and. mat%rhoVariable) &
         error stop '[ERROR] solidification=on requires a constant-density material'
 
-      !> sigma/mu (breakup)
-      if (brkupSwitch) then
+      !> sigma/mu (a breaking material)
+      if (mat%brkupSelect > 0) then
         ! if (all((blk%vars(4,Tmin+1:Tmax,1,1)-blk%vars(4,Tmin:Tmax-1,1,1))==0._R8)) then
         !   mat%sigma = blk%vars(4,Tmin,1,1)
         ! else

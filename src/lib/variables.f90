@@ -16,7 +16,7 @@ module IGLOO_variables
   integer  :: liqSelect=0, intfSelect=0, boilSelect=0
   integer  :: blowSelect=0            !> evaporative heat-transfer reduction f2: 0 none, 1 MHB98 eq.19
   logical  :: phaseChange=.false.
-  logical  :: brkupSwitch=.false., brkupEqOde=.false., brkupEvent=.false., brkupHasChild=.false.
+  logical  :: brkupEqOde=.false., brkupEvent=.false., brkupHasChild=.false.
   logical  :: eulerSwitch=.false.
   logical  :: sourceSwitch=.false.
   logical  :: dsSwitch=.false.        !> any inflow cell carries a per-cell ds>0 (from bc.txt col 9)

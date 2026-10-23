@@ -50,7 +50,7 @@ tests/
 ├── combustion/                   # unit family (root) + burn-box/ burn-box-euler/ (e2e)
 ├── solidification/               # unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ (e2e)
 ├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
-│   └── tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/   # e2e
+│   └── tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ breakup-per-material/   # e2e
 ├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ geometry_rules/
 │   └── db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ periodic-y/ periodic-2d/ periodic-2d-ord2/ conn-103/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/   # e2e
 │   └── refusals/{p2t,zgr,lk-d2law,properties-*,vapour-*,pure2d-*,bc-copies,bc-copy-order,chimera-*,periodic-not-mutual,ord2-*,*-token,phase-token-real,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre,psd-*,comb-*,brk-*,sigma-*,bc-legacy,bc-empty-payload,body-accel}/   # setup-refusal gates
@@ -100,10 +100,10 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 270/270 in a serial build (222 e2e + 47 unit, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, and the
+ctest 272/272 in a serial build (224 e2e + 47 unit, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 25 more `mpi-*` cases, 295 in all (the 25 `mpi-*` pass). The e2e entries are 137 solver cases, two further
-oracles on `khrt-e2e`'s run, the four thread-count gates, the thirteen two-sweep gates, the sixty-four setup refusals, `vv-order` (eleven V&V
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 25 more `mpi-*` cases, 297 in all (the 25 `mpi-*` pass). The e2e entries are 138 solver cases, two further
+oracles on `khrt-e2e`'s run, the four thread-count gates, the thirteen two-sweep gates, the sixty-five setup refusals, `vv-order` (eleven V&V
 figures independent of the record order; skipped without matplotlib) and `check-order` (four gate printouts independent of it); the unit entries are 40
 compiled unit tests, the property-table reader on three fixtures, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs`. Evaporation with
 ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,
@@ -121,6 +121,9 @@ across a block interface by `two-fam-bc-2blk-mollify` and `test_mollify_blocks`,
 tables that start above 1 K, is gated by `test_properties_reader` (PR14), `temp-relax-varcp` and `varcp-tmin`; a density
 that varies with temperature by `temp-relax-varrho` (the diameter at constant mass) and `tab-varrho`,
 `tab-evap-frozen-varrho` and `khrt-varrho` (the mass kept between breakup events and conserved across them).
+The breakup model and its constants per material (the phase file's `breakup=` and `<tag>-<key>` tokens over
+`[IGLOO-Models]`) are gated by `breakup-per-material`, `test_material_tokens` (MT6, MT7) and
+`refuse-breakup-token-material`.
 The injection size distributions — a size-distribution file and the Normal, LogNormal and Rosin-Rammler
 laws — are gated by `test_psd_table`, the four `psd-*` cases (Kolmogorov-Smirnov and Anderson-Darling on
 20 000 injected parcels), `psd-bare-token` (a table named without `.` or `/`) and the ten `refuse-psd-*`

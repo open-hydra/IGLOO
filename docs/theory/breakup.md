@@ -1,8 +1,9 @@
 # Breakup
 
-Five breakup models are available, selected by `[IGLOO-Models] breakup` in
-`input.ini` and assigned by `assign_breakup` in `src/lib/Lib_Breakup.f90`.  They split
-into two mechanistic classes:
+Five breakup models are available, selected per material — by the `breakup=<model>` token of
+the material's line in the phase file, else by `[IGLOO-Models] breakup` in `input.ini` — and
+assigned by `assign_breakup` in `src/lib/Lib_Breakup.f90`.  They split into two mechanistic
+classes:
 
 - **Continuous-rate (ODE)**: add a $\dot{n}_p$ equation to the ODE system; active models set
   `brkupEqOde = .true.` → model 3 or 4.  `breakupOde` is evaluated inside the RHS.
@@ -22,10 +23,14 @@ rescaled number rate (and, for model 4, the number-rate state), at constant stre
 | TAB | `TAB` | no | yes | no |
 | ETAB | `ETAB` | no | yes | no |
 
-Model constants are read from `[IGLOO-Models]` under the names listed per model below
-(defaults in the [registry](../user/registry.md)); the same set applies to every material.
-The liquid properties they need — surface tension $\sigma$ and viscosity $\mu_p$ — come
-from `INPUT/properties.dat` or the `[IGLOO-Properties] sigma` / `mu` overrides.
+Each constant of a material's model is, in order of precedence, the material's own
+`<tag>-<key>` token on its phase-file line (tags `PE`, `RD`, `KHRT`, `TAB`, `ETAB`; the key is
+the name listed per model below, as in `TAB-Comega=10` or `KHRT-B1=40`), the `[IGLOO-Models]`
+key of that name, or its default (in the [registry](../user/registry.md)). TAB and ETAB each
+take their own `Comega`, `Cmu` and `WeCrit` tokens; a token of a model the material does not
+run is accepted and unused. The liquid properties the models need — surface tension
+$\sigma$ and viscosity $\mu_p$ — come from `INPUT/properties.dat` or the
+`[IGLOO-Properties] sigma` / `mu` overrides, and are required only for a material that breaks.
 
 ---
 

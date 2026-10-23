@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (270 in a serial build: 222 e2e + 47 unit incl. `self_test`,
+One row per registered CTest entry (272 in a serial build: 224 e2e + 47 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 25 `mpi-*`
-rows in their own section, 295).
+rows in their own section, 297).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (69 of 137 e2e fixtures)
+## Shared box fixture (69 of 138 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,7 +39,7 @@ writes with its defaults.
 Sixty-nine fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other sixty-eight:
+once here, referenced as **"shared box"** below. The other sixty-nine:
 
 - non-uniform gas (twenty-four): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
@@ -58,11 +58,11 @@ once here, referenced as **"shared box"** below. The other sixty-eight:
   T = 600 + 2000 z K, `--blocks 2 --rotate2 y --zgradient 2000`) `body-force-z` (the box with
   T = 600 + 2000 z K, `--zgradient 2000`) and `solver-fail-midway` (the box with the gas at 5 m/s beyond
   x = 0.075 m, `--kv 1.0 --u2 5 --rp 1.0e-6`);
-- uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (twenty-one):
+- uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (twenty-two):
   `pilch-erdman-e2e`, `reitz-diwakar-e2e`, `rd-evap-frozen`, `khrt-e2e`, `khrt-e2e-euler`, `khrt-stress`,
   `khrt-evap-frozen`, `khrt-evap-frozen-euler`, `khrt-evap-live`, `khrt-shed-noexchange` and `khrt-varrho` on the 0.15 m box at
   U=200 m/s, T=300 K (the Weber sweeps); `tab-e2e`, `tab-evap-frozen`, `tab-varrho`, `tab-evap-frozen-varrho`,
-  `etab-e2e`, `etab-e2e-dopri5` and `etab-evap-frozen` on a 0.6 m × 240-cell box at U=50 m/s, T=300 K (the TAB/ETAB onset);
+  `etab-e2e`, `etab-e2e-dopri5`, `etab-evap-frozen` and `breakup-per-material` on a 0.6 m × 240-cell box at U=50 m/s, T=300 K (the TAB/ETAB onset);
   `evap-breakup-box` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
   (`--t-gas --kt`); `tab-hf92` and `etab-hf92` on a 1.2 m × 480-cell box at U=200 m/s, T=297 K in Hsiang & Faeth's air,
   one diameter with a slip per cell (`--d0 --rhog --mug`), the lateral faces reflecting (`--side-code 300`);
@@ -193,6 +193,7 @@ oracle possible.
 | **tab-varrho** | `[ORA87]` (the event's constant stream mass) | *invariant* — `tab-e2e` (model 1) with ρ = 1000 − 0.8(T − 270) on 1..1000 K and injection at 270 K: between breakup events the printed mass is constant to print precision (it changes only by ≥ 10 % at a breakup; the smallest measured is 89 %), and the printed d is (6m/(πρ(T)))^(1/3) on every row (worst 0.987 of the tolerance); 18 of 25 parcels break. RED while the segment-end resync took the injection density: 10664 violations, parcel 1's mass +12.75 % over 270 → 271.16 K | as `tab-e2e` | `tab-e2e`'s `bc.txt` with κ_t 0.9; own `properties.dat` |
 | **tab-evap-frozen-varrho** | `[ORA87]` | *invariant* — `tab-evap-frozen` (model 2, evaporation zero) with `tab-varrho`'s inputs: `tab-varrho`'s mass and diameter gates plus the source gate, every cell's `wdot` ≤ 1e-12 of the injected flow (measured 2.2e-18). RED while the event's mass took the previous segment end's density: max \|wdot\| 1.2e-9 of the flow | as `tab-e2e` | `tab-varrho`'s (INPUT symlinked) |
 | **khrt-varrho** | `[Reitz87]` | *conservation* — `khrt-e2e` (model 3) with `tab-varrho`'s density table and injection at 270 K: the exit mass-flow total at 1e-5 (measured 5.98e-7, the E13.6 floor), the source budgets (no mass; momentum and energy of the in/out flows) and `tab-varrho`'s diameter gate. RED while the event's stream mass flow took the previous segment end's density: +3.68e-4 | as `khrt-e2e` | `khrt-e2e`'s `bc.txt` with κ_t 0.9; `tab-varrho`'s `properties.dat` |
+| **breakup-per-material** | `[ORA87]`, `[Reitz87]` (the models; the gate is an input contract) | *sibling equality* — four water materials in `tab-e2e`'s box, each with its own breakup model and constants from the tokens of its phase-file line over `[IGLOO-Models]` (A: `TAB-Comega=10` before `breakup=TAB`; B: `breakup=Reitz-KHRT KHRT-B1=40` over `B1 = 30`; C: none, σ = μ = 0; D: `breakup=Reitz-KHRT` with an unused `TAB-Comega=10`); `check.py` reruns the case once per material with that material's model and constants given to all four in `[IGLOO-Models]` (`ref-A` … `ref-D`): trajectories and exits equal as sorted multisets, B's and D's children lines equal (68 and 94 children), C's 6025 rows at their injected d. Exact. RED on a reader without the tokens (setup stops at the first one); mutants: every group given material 1's breakup fields (B, C, D fail), a token applied whatever its model (D: KH off), the per-material read without `[IGLOO-Models]` (A, B), a token kept only for the model known as it is read (A) | as `tab-e2e` | `tab-e2e`'s `bc.txt` with κ_ρ 0.085 (the four families sum to 0.34); σ = 0.072, μ = 1e-3 for A, B, D |
 | **db-injection** | infrastructure (no paper; bug-B1 regression) | *behavioral* — no reference curve; asserts placement fidelity, `vInj` hand-off (u starts at u_p=1), Stokes relaxation, and domain exits | shared box | **assigned-position (DB)** injection: 5 parcels at explicit x=0.01, y=0.005…0.045, z=0.025, u_p=1.0 m/s, d=11.89 µm, ṁ=1e-4, T=300 K; outlet + walls |
 | **coupled-body** | analytic (euler+source+body) | *mixed* — body-force v(x) closed form (as body-force) **plus** source-deposit totals vs closed forms: the deposit must be the drag reaction only (body-gained momentum/energy stripped) | shared box + `body-accel=(0,−200,0)`; euler+source accumulators ON (default `out-file`) | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; outlet + walls |
 | **threads-coupled-body** | — (OMP invariance) | *cross-run invariant* — `tools/check_threads_case.py` runs `coupled-body`'s input at OMP_NUM_THREADS 1, 2 and 5 in `coupled-body/threads-omp<N>/` (`INPUT/` and `input.ini` symlinked): the thread witness (no `OpenMP threads` line at 1, the count at 2 and 5), every number finite, every `.dat` an exact sorted multiset, every `.tec` within 1e-12 of the field scale, `coupled-body`'s `check.py` on the 1-thread run. The Euler, source and body-force accumulators (two `.tec` fields). RED (as each thread gate) with the trajectory ID shifted by the thread count | as `coupled-body` | as `coupled-body` |
@@ -270,6 +271,7 @@ oracle possible.
 | **refuse-drag-token** | — (kind 8, refusal) | *setup refusal*: `drag = no-such-drag-law` → `IGLOO: unknown drag model` (ledger O26: was a plain `stop`, exit 0 — RED on the pre-fix binary) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-heat-token** | — (kind 8, refusal) | *setup refusal*: `heat = no-such-nusselt-law` → `IGLOO: unknown heat model` (O26) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-breakup-token** | — (kind 8, refusal) | *setup refusal*: `breakup = no-such-breakup-model` → `IGLOO: unknown breakup model` (O26) | as `drag-stokes` | as `drag-stokes` |
+| **refuse-breakup-token-material** | — (kind 8, refusal) | *setup refusal*: an unknown breakup model on a material line (`A 1 breakup=Foo`) → `IGLOO: unknown breakup model`; RED on a reader without the `breakup` token (it stops at `unknown per-material key in the phase file`) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-evaporation-token** | — (kind 8, refusal) | *setup refusal*: `evaporation = no-such-evaporation-model` → `IGLOO: unknown evaporation model` (O26) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-phase-token** | — (kind 8, refusal) | *setup refusal*: an unknown key on the phase file's material line (`A 1 no-such-key=1`) → `IGLOO: unknown per-material key in the phase file` | as `drag-stokes` | as `drag-stokes` |
 | **refuse-phase-token-real** | — (kind 8, refusal) | *setup refusal*: a non-numeric value for a numeric per-material key (`A 1 alpha-e=one`) → `IGLOO: non-numeric per-material value in the phase file` | as `drag-stokes` | as `drag-stokes` |
@@ -373,7 +375,7 @@ box/BC. Sub-test IDs in parentheses.
 | **test_rng_stream** | — | *stream contract* of the per-parcel splitmix64 RNG (`Lib_Statistics::rngSeedFor`/`rngNext`): seed distinctness (8 families × 4000 IDs, 0 collisions), reproducibility, uniformity — the property no e2e gate can see (one shared seed reproduces perfectly and passes every e2e oracle) |
 | **test_psd_table** | `[Kol33]`,`[AD54]`,`[Ste74]`,`[MM04]` | *closed form* CDFs typed in the test (table6's hand knots, truncated Normal, LogNormal, Rosin-Rammler) against 10⁵ draws of the production `sampleDiameter` per law: Kolmogorov-Smirnov D_n < 6.165e-3 and A² < 5.969 at seed 42, seeds 43..61 printed (max D_n 4.8e-3, max A² 2.9, none above). Also the table knots to 1e-15, one load per token, the `INPUT/` fallback, a one-row Dirac that draws nothing. RED (one-line sampler changes): class-centre atoms D 0.175, number fractions D 0.702, next class D 0.350, last edge shortened D 0.050 / A² 202, Normal clipped D 0.022 / A² 201, LogNormal log-space σ D 0.593, Rosin-Rammler n +10 % D 0.025 / A² 199, untruncated Normal oracle D 0.023 / A² 184 |
 | **test_slot_order** | — | *layout contract* of the packed property slots: every per-material property gets a distinct value, `setupRHS` + `packAuxVars` pack it for models 2, 4, 5 and 6, and every read through the readers' own indices returns the property of that name — `ep(iMv..imuLiq)` of `IGLOO_Lib_Evaporation` (nep = 10, and `ind_Lv..ind_e5` naming the same slots) and `mp(imKb..imQc)` of `IGLOO_Lib_Combustion` (nmp = nmetal = 9; `h-fus`, `cp-solid` where `rhsSolidification` reads them). RED: `T-ign`/`h-fus` exchanged in the metal list (S3, S4), `Lv`/`cpv` written to each other's slot (S1, S2) |
-| **test_material_tokens** | — | *token contract* of the phase file's material line: `set_material_defaults`, `apply_material_key` and `finalize_material_models` on a material built in the test, exact equality. MT1 the fourteen defaults (from a material poisoned to −999 first), T-nuc = 0.8·T-melt; MT2 each of the fourteen real tokens alone sets its own field and leaves the other thirteen at their defaults; MT3 each of the six model words, every allowed value (15), sets its selector from the opposite preset and nothing else (`evapWord` for `evaporation`); MT4 T-nuc from `T-melt=2300`, an explicit T-nuc kept, combustion disabling evaporation in either order; MT5 the last of a repeated key wins. RED (one line of `Lib_INI.f90` each): `k-liq` read into `muLiq` (MT2, both fields), `nBurn` default 1.5 (29 checks), the T-nuc factor 0.9 (MT1, MT4), the evaporation disable removed (MT4) |
+| **test_material_tokens** | — | *token contract* of the phase file's material line: `set_material_defaults`, `apply_material_key`, `finalize_material_models` and `apply_breakup_tokens` on a material built in the test, exact equality. MT1 the fourteen defaults (from a material poisoned to −999 first), T-nuc = 0.8·T-melt; MT2 each of the fourteen real tokens alone sets its own field and leaves the other thirteen at their defaults; MT3 each of the six model words, every allowed value (15), sets its selector from the opposite preset and nothing else (`evapWord` for `evaporation`); MT4 T-nuc from `T-melt=2300`, an explicit T-nuc kept, combustion disabling evaporation in either order; MT5 the last of a repeated key wins; MT6 each of the twenty-three breakup constant tokens alone on a material of each of the five models (constants poisoned, `bpMethod` 2): on its own model exactly its slot takes the literal (the two `WeCrit` doubled, `TAB-method` sets `bpMethod`), on the four others nothing moves, against the test's own token table; MT7 TAB's product-size scale Γ(1.5)/Γ(1.75) from `TAB-n=4` (≤ 1e-15), 1 with `TAB-method=1`. RED (one line of `Lib_INI.f90` each): `k-liq` read into `muLiq` (MT2, both fields), `nBurn` default 1.5 (29 checks), the T-nuc factor 0.9 (MT1, MT4), the evaporation disable removed (MT4), a breakup token applied whatever its model (MT6, all 23), a `WeCrit` token not doubled (MT6 `TAB-WeCrit`, `ETAB-WeCrit`), TAB's scale not recomputed (MT7, both) |
 | **test_axis_dispatch** | — | *dispatch equivalence*: bcdef-200 faces classified by GEOMETRY (azimuthal normal ⇒ wedge rotation, radial ⇒ axis reflection) for wedges built on i, j and k at all six face indices; pins equivalence with the retired `f==6` rule; the only coverage of `bcDef`'s fold branch (`axisymFold` re-sectors first, so no e2e case reaches it) |
 | **test_graze_standoff** | — | *contract pin*: the grazing standoff is an absolute length capped at a fraction of the cell (`grazeOffset`), checked across 12 decades of cell thickness |
 | **test_dual_clip** | — | *tiling invariant*: sum(dual cellVol) == domain volume plus the per-cell 1/2, 1/4, 1/8 boundary factors, in 2D and 3D; proven RED against the unclipped dual; the only gate on the 3D dual (no e2e case gates it) |
@@ -424,11 +426,11 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-222 `e2e`-labelled + 47 `unit`-labelled + the optional `vortex-cloud-3way` = **270 CTest entries** in a
-serial build (+25 `mpi-*` under `USE_MPI`, 295), all green (counted from `tests/CMakeLists.txt`). The 222
-`e2e` entries are the 137 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+224 `e2e`-labelled + 47 `unit`-labelled + the optional `vortex-cloud-3way` = **272 CTest entries** in a
+serial build (+25 `mpi-*` under `USE_MPI`, 297), all green (counted from `tests/CMakeLists.txt`). The 224
+`e2e` entries are the 138 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
-threads), the four `threads-*` thread-count gates, the thirteen `repeat-*` two-sweep gates, the sixty-four `refuse-*` setup-refusal gates, `vv-order`
+threads), the four `threads-*` thread-count gates, the thirteen `repeat-*` two-sweep gates, the sixty-five `refuse-*` setup-refusal gates, `vv-order`
 (the record-order independence of eleven V&V figures) and `check-order` (of four gate printouts). The
 47 `unit` entries are 40 compiled unit tests, the property-table reader on its three fixtures
 (`test_properties_reader`, `-two-material`, `-atlas-water`), `self_test`, `registry-docs`, `exe-per-tree` and

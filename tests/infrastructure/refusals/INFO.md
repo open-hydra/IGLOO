@@ -48,6 +48,7 @@ output written).
 | `refuse-evaporation-leb` | `evaporation = LEB` (parsed, declared not implemented) | `IGLOO: evaporation=LEB is not implemented` |
 | `refuse-phase-token` | own `INPUT/phase.txt` (`A 1 no-such-key=1`), drag-token's `bc.txt`/`solfile.tec` symlinked | `IGLOO: unknown per-material key in the phase file` |
 | `refuse-phase-token-real` | own `INPUT/phase.txt` (`A 1 alpha-e=one`) | `IGLOO: non-numeric per-material value in the phase file` |
+| `refuse-breakup-token-material` | own `INPUT/phase.txt` (`A 1 breakup=Foo`), drag-stokes's `bc.txt`/`solfile.tec` symlinked, no `breakup` key in `[IGLOO-Models]` | `IGLOO: unknown breakup model` |
 | `refuse-tab-method` | tab-e2e (`INPUT/` symlinked) with `method = 3` | `IGLOO: TAB method must be 1 or 2` |
 | `refuse-gas-order` | `gas-order = 3` | `IGLOO: gas-order must be 1 or 2` |
 | `refuse-out-file` | `out-file = nonsense` | `IGLOO: unknown out-file token` (accepted: E, S, E+S, ALL -- `ALL` is what hydra's MI2 cases write; `two-mat` runs it) |
@@ -86,7 +87,7 @@ output written).
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All sixty-four exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All sixty-five exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
@@ -132,6 +133,8 @@ its three families of A on copy 1's `krho` 0.34, i.e. `krhoTot` = 1.02 and ṁ =
 and `body-accel` are RED** on the solver with each of their error stops turned into a plain write: eight run on
 to "Stop condition" with exit 0 and write their output, and `sigma-size`, `sigma-nm` and `bc-legacy` end on a
 later stop with another payload (`mu: size mismatch`, `mu: size /= number of materials`, the record count).
+**`refuse-breakup-token-material` is RED** on a reader that knows no `breakup` token on a material line: it stops
+at `IGLOO: unknown per-material key in the phase file`, not its payload.
 
 **Not here.** A mixed-Nk mesh (`allocation.f90`, `af307dd`) needs a two-zone `solfile.tec`; exercised in a
 throwaway only. `refuse-dopri5` (the interim `H-dopri5` refusal of ledger O25) was dropped with the
