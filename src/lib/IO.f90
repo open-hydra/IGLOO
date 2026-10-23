@@ -26,7 +26,7 @@ contains
                                      table_reason, psat_reason, VAP_OK, VAP_ABSENT, validate_vapour_columns, &
                                      vapour_reason, tableValue
     use IGLOO_IO_INI,          only: ini_Mv, ini_Lv, ini_Tboil, ini_cpv, ini_Le, ini_Yinf, &
-                                        ini_sigma, ini_mu, &
+                                        ini_sigma, ini_mu, ini_emissivity, &
                                         set_material_defaults, apply_material_key, finalize_material_models
     use Lib_ORION_data
     use Lib_Tecplot
@@ -193,9 +193,27 @@ contains
     if (allocated(ini_Yinf))  then; if (size(ini_Yinf)  /= nm) error stop '[ERROR] [IGLOO-Properties] Yinf: size /= number of materials';  endif
     if (allocated(ini_sigma)) then; if (size(ini_sigma) /= nm) error stop '[ERROR] [IGLOO-Properties] sigma: size /= number of materials'; endif
     if (allocated(ini_mu))    then; if (size(ini_mu)    /= nm) error stop '[ERROR] [IGLOO-Properties] mu: size /= number of materials';    endif
+    if (allocated(ini_emissivity)) then
+      if (size(ini_emissivity) /= nm) error stop '[ERROR] [IGLOO-Properties] emissivity: size /= number of materials'
+    endif
 
     do i = 1, nm
       associate(blk => orion%block(i), mat => material(i))
+      !> grey-body emissivity: refused below 0, cut to 1 above it
+      if (allocated(ini_emissivity)) then
+        if (ini_emissivity(i) < 0._R8) then
+          write(*,'(A,I0,A,ES10.3)') ' [ERROR] [IGLOO-Properties] emissivity of material ', i, ' = ', ini_emissivity(i)
+          error stop 'IGLOO: [IGLOO-Properties] emissivity must not be negative'
+        endif
+        mat%emissivity = ini_emissivity(i)
+        if (mat%emissivity > 1._R8) then
+          write(*,'(A,I0,A,ES10.3,A)') '[WARNING] IGLOO: [IGLOO-Properties] emissivity above 1 cut to 1.0 for material ', &
+                                       i, ' (given ', mat%emissivity, ')'
+          mat%emissivity = 1._R8
+        endif
+        if (mat%emissivity > 0._R8) write(*,'(A,I0,A,ES10.3,A)') '  >> [material ', i, '] emissivity ', &
+                                      mat%emissivity, ': grey-body radiation with the gas temperature'
+      endif
       !> nodes on consecutive kelvins; finite positive cp and rho, h increasing and consistent with cp
       code = check_table_nodes(blk%mesh(1,1:Ni,1,1))
       if (code /= TAB_OK) call refuse_table(tablefile, trim(zone_label(i, mat%matName))//table_reason(code))

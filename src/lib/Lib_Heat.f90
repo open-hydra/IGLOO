@@ -1,10 +1,13 @@
-!> Nusselt-number correlations Nu(Re, Pr, Ma) selected by keyword.
+!> Nusselt-number correlations Nu(Re, Pr, Ma) selected by keyword; the grey-body radiative exchange.
 module IGLOO_Lib_Heat
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   implicit none
   private
   public :: assign_heat
   public :: heat
+  public :: radiativeHeat, sigmaSB
+
+  real(R8), parameter :: sigmaSB = 5.670374419e-8_R8  !> Stefan-Boltzmann constant [W/m^2/K^4] (CODATA)
 
 contains
 
@@ -143,5 +146,16 @@ contains
     Nu = Nu / (1._R8 + 3.42_R8*Ma/(Re*Pr+toll)*Nu)
 
   end function heat_Kavanau_Drake
+
+  !> Grey-body heat [W] a sphere of diameter d at Tp receives from gas at Tg: eps*sigma*pi*d^2*(Tg^4 - Tp^4).
+  pure function radiativeHeat(eps, d, Tg, Tp) result(Q)
+    use IGLOO_variables, only : pi
+    implicit none
+    real(R8), intent(in) :: eps, d, Tg, Tp
+    real(R8) :: Q
+
+    Q = eps*sigmaSB*pi*d*d*(Tg**4 - Tp**4)
+
+  end function radiativeHeat
 
 end module IGLOO_Lib_Heat

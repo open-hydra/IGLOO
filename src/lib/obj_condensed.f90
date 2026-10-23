@@ -62,6 +62,7 @@ module IGLOO_data_phases
     real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8
     real(R8) :: Tign = 0._R8, Tmelt = 2327._R8, hFus = 0._R8, Tnuc = 0._R8, cpSol = 0._R8
     real(R8) :: qComb = 0._R8
+    real(R8) :: emissivity = 0._R8   !> grey-body surface emissivity; 0 = no radiation
     integer  :: nactive = 0
     type(obj_particle), allocatable :: particle(:)
     type(shedList),     allocatable :: shed(:)   !> one growable shed list per parent index
@@ -109,6 +110,7 @@ module IGLOO_data_phases
     real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8
     real(R8) :: Tign = 0._R8, Tmelt = 2327._R8, hFus = 0._R8, Tnuc = 0._R8, cpSol = 0._R8
     real(R8) :: qComb = 0._R8
+    real(R8) :: emissivity = 0._R8   !> [IGLOO-Properties] emissivity; 0 = no radiation
     !> sub-objects
     type(obj_group), allocatable :: group(:)
     !> Thermodynamic tables (defined if variable properties)
@@ -203,6 +205,7 @@ contains
         gr%Tmelt = self%Tmelt; gr%hFus = self%hFus; gr%Tnuc = self%Tnuc; gr%cpSol = self%cpSol
         gr%qComb = self%qComb
       endif
+      gr%emissivity = self%emissivity
       end associate
     enddo
 
@@ -243,11 +246,11 @@ contains
     if (self%brkupSelect > 0) then
       call setupRHS(mdl, self%brkupSelect, self%evapSelect, self%liqSelect, self%intfSelect, &
                     self%boilSelect, self%combSelect, propFlags, &
-                    bp, bpMethod, bpScale, nAux, nAuxSt, nEvV)
+                    bp, bpMethod, bpScale, nAux, nAuxSt, nEvV, radiation=self%emissivity > 0._R8)
     else
       call setupRHS(mdl, self%brkupSelect, self%evapSelect, self%liqSelect, self%intfSelect, &
                     self%boilSelect, self%combSelect, propFlags, &
-                    bp_empty, 1, 1._R8, nAux, nAuxSt, nEvV)
+                    bp_empty, 1, 1._R8, nAux, nAuxSt, nEvV, radiation=self%emissivity > 0._R8)
     endif
 
     do i = start, end
@@ -361,6 +364,7 @@ contains
         part%Tmelt = self%Tmelt; part%hFus = self%hFus; part%Tnuc = self%Tnuc; part%cpSol = self%cpSol
         part%qComb = self%qComb
       endif
+      part%emissivity = self%emissivity
       end associate
     enddo
 

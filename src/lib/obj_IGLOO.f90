@@ -785,6 +785,8 @@ contains
     Nu = heat(Re,Pr,Ma,heatSelect)
     Fdrag = piOver8*Cd*d*Re*mug*vdiff
     Qdot  = Nu*kg*pi*d*(Tg-Tp)
+    if (self%material(mID)%emissivity > 0._R8) &
+      Qdot = Qdot + radiativeHeat(self%material(mID)%emissivity, d, Tg, Tp)
     Qdot  = Qdot + Fdrag(1)*vel(1)+Fdrag(2)*vel(2)+Fdrag(3)*vel(3)
     FdragQdot = [Fdrag, Qdot]*np
 
