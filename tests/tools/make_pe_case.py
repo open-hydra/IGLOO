@@ -10,6 +10,9 @@ With --d0 every cell injects the same diameter D and the Weber number varies thr
 the slip instead (a shock-tube series at fixed size): cell i gets u0_i =
 (We_i*sigma/(rhog*D))^1/2, kv_i = 1 - u0_i/U (diameter convention; 0 <= kv_i < 1).
 
+--side-code 300 codes the lateral faces 3-6 as reflecting planes (default 400: a parcel
+that reaches them leaves the box); the outlet face 2 stays 400.
+
 Defaults reproduce the B-VAL-1 Pilch-Erdman case byte-identically (dia-based We
 sweep 20..1000, U=200, 60x5x5 box, air rho 1.2, mu 1.8e-5). The TAB case (B-VAL-3) uses
 --we-convention rad --u-gas 50 --lx 0.6 --nx 240 and its own sweep across the ORA87 onset We_r=6.
@@ -30,7 +33,7 @@ PE_SWEEP = [20, 30, 40, 50, 60, 75, 90, 110, 130, 150, 175, 200, 230, 260,
 RHOG = 1.2                                # gas density default [kg/m3]
 MUG = 1.8e-5                              # gas viscosity default [Pa s]
 KRHO = 0.34                               # number-density factor
-BCDEF_INLET, BCDEF_WALL = 401, 400
+BCDEF_INLET, BCDEF_WALL, BCDEF_SYM = 401, 400, 300
 
 
 def gas_vars(u_gas, t_gas, rhog=RHOG, mug=MUG):
@@ -80,7 +83,7 @@ def write_solfile(path, lx, nx, u_gas, t_gas, title, rhog=RHOG, mug=MUG):
     return I, J, K, ncell
 
 
-def write_bc(path, sweep, sigma, kv, kt, u_gas, nx, convention, rhog=RHOG, d0=None):
+def write_bc(path, sweep, sigma, kv, kt, u_gas, nx, convention, rhog=RHOG, d0=None, side=BCDEF_WALL):
     slip = (1.0 - kv) * u_gas if d0 is None else None
     # face-1 inlet cells iterate m=1..NY, n=1..NZ -> 25 cells, one We each
     ranges = {1: (NY, NZ), 2: (NY, NZ), 3: (nx, NZ), 4: (nx, NZ), 5: (nx, NY), 6: (nx, NY)}
@@ -88,7 +91,7 @@ def write_bc(path, sweep, sigma, kv, kt, u_gas, nx, convention, rhog=RHOG, d0=No
     with open(path, "w") as f:
         for face in range(1, 7):
             mend, nend = ranges[face]
-            bcdef = BCDEF_INLET if face == 1 else BCDEF_WALL
+            bcdef = BCDEF_INLET if face == 1 else (BCDEF_WALL if face == 2 else side)
             for n in range(1, nend + 1):
                 for m in range(1, mend + 1):
                     f.write(f"   {1:6d}{face:6d}{m:6d}{n:6d}{1:6d}{bcdef:6d}\n")
@@ -122,6 +125,8 @@ def main():
     p.add_argument("--mug", type=float, default=MUG, help="gas viscosity [Pa s] (MIL and MIT)")
     p.add_argument("--lx", type=float, default=0.15)
     p.add_argument("--nx", type=int, default=60)
+    p.add_argument("--side-code", type=int, choices=(BCDEF_WALL, BCDEF_SYM), default=BCDEF_WALL,
+                   help="code of the lateral faces 3-6: 400 a parcel leaves, 300 a reflecting plane")
     p.add_argument("--title", default="IGLOO PE87 breakup sweep box")
     a = p.parse_args()
     sweep = [float(w) for w in a.we_sweep.split(",")] if a.we_sweep else PE_SWEEP
@@ -140,8 +145,9 @@ def main():
     I, J, K, ncell = write_solfile(os.path.join(a.out_dir, "solfile.tec"),
                                    a.lx, a.nx, a.u_gas, a.t_gas, a.title, a.rhog, a.mug)
     n, slip = write_bc(os.path.join(a.out_dir, "bc.txt"), sweep, a.sigma,
-                       kv, a.kt, a.u_gas, a.nx, a.we_convention, a.rhog, a.d0)
-    print(f"[ok] solfile I={I} J={J} K={K} ncell={ncell}; bc.txt {n} inlet drops")
+                       kv, a.kt, a.u_gas, a.nx, a.we_convention, a.rhog, a.d0, a.side_code)
+    print(f"[ok] solfile I={I} J={J} K={K} ncell={ncell}; bc.txt {n} inlet drops"
+          + ("; lateral faces 3-6 reflecting (300)" if a.side_code == BCDEF_SYM else ""))
     if a.d0 is None:
         d = [2.0 * we_to_rp(w, a.sigma, slip, a.we_convention, a.rhog) for w in (sweep[0], sweep[-1])]
         print(f"[ok] We sweep ({a.we_convention}) {sweep[0]:g}..{sweep[-1]:g} ({len(sweep)} pts), "
