@@ -56,6 +56,9 @@ contains
     call reg%add('IGLOO-General','timing',d_s(24),'off', &
       'Print [IGLOO-timing] lines after each output write: wall time per phase, parcel count and '// &
       'integration time per thread and per rank, rank imbalance, allocated array sizes','on, off',.false.)
+    call reg%add('IGLOO-General','plane-x',d_s(25),'-', &
+      'Planes normal to x at the listed positions [m], space-separated: planes-<mat>.dat holds one record per '// &
+      'crossing, with the stream''s state, flow, number rate, ID, parent ID and direction; absent = no file','',.false.)
 
     ! --- [IGLOO-Models] ---
     call reg%add('IGLOO-Models','drag',d_s(6),'-', &

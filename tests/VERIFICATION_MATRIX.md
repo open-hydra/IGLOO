@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (280 in a serial build: 231 e2e + 48 unit incl. `self_test`,
-`registry-docs`, `exe-per-tree` and `lint-test-inputs` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 25 `mpi-*`
-rows in their own section, 305).
+One row per registered CTest entry (283 in a serial build: 233 e2e + 49 unit incl. `self_test`,
+`registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 26 `mpi-*`
+rows in their own section, 309).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (74 of 144 e2e fixtures)
+## Shared box fixture (74 of 145 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,7 +39,7 @@ writes with its defaults.
 Seventy-four fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other seventy:
+once here, referenced as **"shared box"** below. The other seventy-one:
 
 - non-uniform gas (twenty-four): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
@@ -58,9 +58,9 @@ once here, referenced as **"shared box"** below. The other seventy:
   T = 600 + 2000 z K, `--blocks 2 --rotate2 y --zgradient 2000`) `body-force-z` (the box with
   T = 600 + 2000 z K, `--zgradient 2000`) and `solver-fail-midway` (the box with the gas at 5 m/s beyond
   x = 0.075 m, `--kv 1.0 --u2 5 --rp 1.0e-6`);
-- uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (twenty-three):
+- uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (twenty-four):
   `pilch-erdman-e2e`, `pe-sigma-table`, `reitz-diwakar-e2e`, `rd-evap-frozen`, `khrt-e2e`, `khrt-e2e-euler`, `khrt-stress`,
-  `khrt-evap-frozen`, `khrt-evap-frozen-euler`, `khrt-evap-live`, `khrt-shed-noexchange` and `khrt-varrho` on the 0.15 m box at
+  `khrt-evap-frozen`, `khrt-evap-frozen-euler`, `khrt-evap-live`, `khrt-shed-noexchange`, `khrt-varrho` and `khrt-plane` on the 0.15 m box at
   U=200 m/s, T=300 K (the Weber sweeps); `tab-e2e`, `tab-evap-frozen`, `tab-varrho`, `tab-evap-frozen-varrho`,
   `etab-e2e`, `etab-e2e-dopri5`, `etab-evap-frozen` and `breakup-per-material` on a 0.6 m × 240-cell box at U=50 m/s, T=300 K (the TAB/ETAB onset);
   `evap-breakup-box` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
@@ -200,6 +200,7 @@ oracle possible.
 | **tab-evap-frozen-varrho** | `[ORA87]` | *invariant* — `tab-evap-frozen` (model 2, evaporation zero) with `tab-varrho`'s inputs: `tab-varrho`'s mass and diameter gates plus the source gate, every cell's `wdot` ≤ 1e-12 of the injected flow (measured 2.2e-18). RED while the event's mass took the previous segment end's density: max \|wdot\| 1.2e-9 of the flow | as `tab-e2e` | `tab-varrho`'s (INPUT symlinked) |
 | **khrt-varrho** | `[Reitz87]` | *conservation* — `khrt-e2e` (model 3) with `tab-varrho`'s density table and injection at 270 K: the exit mass-flow total at 1e-5 (measured 5.98e-7, the E13.6 floor), the source budgets (no mass; momentum and energy of the in/out flows) and `tab-varrho`'s diameter gate. RED while the event's stream mass flow took the previous segment end's density: +3.68e-4 | as `khrt-e2e` | `khrt-e2e`'s `bc.txt` with κ_t 0.9; `tab-varrho`'s `properties.dat` |
 | **breakup-per-material** | `[ORA87]`, `[Reitz87]` (the models; the gate is an input contract) | *sibling equality* — four water materials in `tab-e2e`'s box, each with its own breakup model and constants from the tokens of its phase-file line over `[IGLOO-Models]` (A: `TAB-Comega=10` before `breakup=TAB`; B: `breakup=Reitz-KHRT KHRT-B1=40` over `B1 = 30`; C: none, σ = μ = 0; D: `breakup=Reitz-KHRT` with an unused `TAB-Comega=10`); `check.py` reruns the case once per material with that material's model and constants given to all four in `[IGLOO-Models]` (`ref-A` … `ref-D`): trajectories and exits equal as sorted multisets, B's and D's children lines equal (68 and 94 children), C's 6025 rows at their injected d. Exact. RED on a reader without the tokens (setup stops at the first one); mutants: every group given material 1's breakup fields (B, C, D fail), a token applied whatever its model (D: KH off), the per-material read without `[IGLOO-Models]` (A, B), a token kept only for the model known as it is read (A) | as `tab-e2e` | `tab-e2e`'s `bc.txt` with κ_ρ 0.085 (the four families sum to 0.34); σ = 0.072, μ = 1e-3 for A, B, D |
+| **khrt-plane** | `[Reitz87]` (the breakup model; the gate is the output) | *conservation + path consistency* — `khrt-e2e` with `plane-x = 0.03875 0.075 0.11125 0.15` (mid-cell, a cell face, mid-cell, the outlet face): P0 every record on a listed plane at its position (792); P1 on every plane the forward `mdot` minus the backward = the injected 17/55 kg/s (1e-8; 1.25e-9, 6.96e-10, 6.53e-10, 1.59e-10 over 119, 180, 227, 266 records); P2 each injected parcel once per plane, each child once per plane downstream of its birth (1330); P3 each child's parent another parcel on its (Y, Z) line (241); P4 each record between the two path rows bracketing its plane, m = ρπd³/6, `mdot` = `npdot`·m (792); P5 the outlet records against the exit records (266); P6 every child's first trajectory row its birth state on its parent's path, d below the parent's last row before the birth (241). RED: `plane-x` not read (no file); no check at the segment finalize (P1 1.00 at the face planes, P2, P5, P6); records for injected parcels only (P1 0.10–0.25); the birth row never written (P6 0 of 241); the model-3 d from the auxiliary d (P4 719 of 792) | as `khrt-e2e` (`INPUT/` symlinked) | as `khrt-e2e` |
 | **db-injection** | infrastructure (no paper; bug-B1 regression) | *behavioral* — no reference curve; asserts placement fidelity, `vInj` hand-off (u starts at u_p=1), Stokes relaxation, and domain exits | shared box | **assigned-position (DB)** injection: 5 parcels at explicit x=0.01, y=0.005…0.045, z=0.025, u_p=1.0 m/s, d=11.89 µm, ṁ=1e-4, T=300 K; outlet + walls |
 | **coupled-body** | analytic (euler+source+body) | *mixed* — body-force v(x) closed form (as body-force) **plus** source-deposit totals vs closed forms: the deposit must be the drag reaction only (body-gained momentum/energy stripped) | shared box + `body-accel=(0,−200,0)`; euler+source accumulators ON (default `out-file`) | inlet-face 401; κ_v=1.0, κ_t=1.0, d=11.89 µm; outlet + walls |
 | **threads-coupled-body** | — (OMP invariance) | *cross-run invariant* — `tools/check_threads_case.py` runs `coupled-body`'s input at OMP_NUM_THREADS 1, 2 and 5 in `coupled-body/threads-omp<N>/` (`INPUT/` and `input.ini` symlinked): the thread witness (no `OpenMP threads` line at 1, the count at 2 and 5), every number finite, every `.dat` an exact sorted multiset, every `.tec` within 1e-12 of the field scale, `coupled-body`'s `check.py` on the 1-thread run. The Euler, source and body-force accumulators (two `.tec` fields). RED (as each thread gate) with the trajectory ID shifted by the thread count | as `coupled-body` | as `coupled-body` |
@@ -318,6 +319,7 @@ oracle possible.
 | **refuse-bc-legacy** | — (kind 8, refusal) | *setup refusal*: a boundary file in the legacy single-digit schema (`refusals/make_bc_refusals.py`) → `IGLOO: bc.txt line is not six integers with a 3-digit code` | as `drag-stokes` | own `bc.txt` (401 → 4, 400 → 1) |
 | **refuse-bc-empty-payload** | — (kind 8, refusal) | *setup refusal*: the first inlet payload line empty (`refusals/make_bc_refusals.py`) → `IGLOO: bc.txt inlet payload line is empty` | as `drag-stokes` | own `bc.txt` |
 | **refuse-body-accel** | — (kind 8, refusal) | *setup refusal*: `body-accel = 0.0 -200.0` → `body-accel: expected 3 values (gx gy gz)` | as `body-force` | as `body-force` |
+| **refuse-plane-x** | — (kind 8, refusal) | *setup refusal*: `plane-x = abc` → `IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]` (RED on a solver that does not read the key: exit 0, three `.dat` files) | as `drag-stokes` | as `drag-stokes` |
 | **drag-stokes-dopri5** | `[Stokes]` (drag-stokes's oracle, symlinked) | `ode-solver = H-dopri5`, otherwise `drag-stokes` — the only exercise of the explicit solver. RED at OSlo `fb8255d` (ledger O25): every parcel died at injection (NMAX exceeded) because `dopri5.f:512` still called Hairer's eleven-argument `SOLOUT` and IGLOO's interrupt never reached DOPRI5; green since the fork's `fix/dopri5-solout` (six-argument call, silent label 79): 25/25, resid/tol 0.014 | as `drag-stokes` | as `drag-stokes` |
 | **khrt-e2e-rt** | `[Reitz87]` (as `khrt-e2e`) | *RT-shatter persistence gate* (`check_rt.py`) on `khrt-e2e`'s own run: the RT/shed event must fire, apply, and persist as a mass-consistent discontinuous shatter (found and gated A19; promoted from a `WILL_FAIL` sentinel 2026-07-23) | as `khrt-e2e` | as `khrt-e2e` |
 | **repeat-drag-stokes** | — (kind 8, harness contract) | *two-sweep repeatability* (`support/twosweep.f90` + `tools/check_twosweep.py`): sweep 1 ≡ sweep 0 — `.dat` sorted multisets identical, `.tec` ≤ 1e-12 scale-relative; **plus gas-cycle**: original field → `U` doubled → original, sweep 1 must differ, sweep 2 must match sweep 0 | as `drag-stokes` | as `drag-stokes` |
@@ -397,8 +399,9 @@ box/BC. Sub-test IDs in parentheses.
 | **registry-docs** | — (kind 8, contract meta-test) | *regeneration diff*: `DocGen` regenerates `docs/user/registry.md` into the build tree and `tools/check_registry.cmake` fails on any difference from the tracked file (they disagreed twice on 2026-07-30) |
 | **exe-per-tree** | — (kind 8, contract meta-test) | *build-tree contract*: `tools/check_exe_per_tree.py` reads the generated `CTestTestfile.cmake` and fails if a registered test names `<source>/bin/IGLOO` or `bin/DocGen` (the copies another tree's build replaces), if a test of `igloo_e2e_case`, `igloo_e2e_case_mpi` or `igloo_refusal_case` lacks `IGLOO_EXE` in its environment, or if a test script builds the path `bin/IGLOO` outside the default of an `IGLOO_EXE` read. On the shared layout it fails on 137 registrations (136 naming `bin/IGLOO`, `registry-docs` naming `bin/DocGen`), 133 helper registrations and 8 scripts |
 | **lint-test-inputs** | — (kind 8, contract meta-test) | *input lint*: `tools/lint_inputs.py` reads every `*.ini` under `tests/` once (a symlink through its target) and fails on a value list whose tokens are separated by anything but one blank — FiNeR counts a list's values as its blanks plus one (`vp = -1.0   -3.3` gives four values, and a get into four reals leaves two unset without an error) — and on any byte above 127. It fails on a value line `vp = 1.0  2.0`, on a single tab between values and on a comment line holding an em dash |
+| **psd-plane-tool** | — (kind 8, the planes file's size tool) | *closed form*: `tests/tools/test_psd_plane.py` runs `scripts/psd_plane.py` on a synthetic planes file (on plane 1 at r = 1 mm five forward classes d = 1…5 µm at number rates 5…1 and a forward and a backward 3 µm record of rate 3, a forward 5 µm record at r = 4 mm; a 1 µm record of rate 100 on plane 2) and holds the record counts, the number flow, D10, D32, D43, `dn50`, `dv10`, `dv50`, `dv90` (Hazen positions) and `dm` = `dv` at one density to their closed forms, within r = 2.5 mm net and forward only, and beyond r = 3 mm (1e-9 relative; 34 checks). RED: the volume weight with d² (`dv50` 3.000000 against 4.027668 µm; 24 of 34), the disc on \|Y\| alone (the r = 4 mm record enters), every plane read (the number flow 115 against 15), a sort on (d, w) (`dn50`, `dv10`; 32 of 34) |
 
-## MPI build only (`USE_MPI=ON`, 25 entries)
+## MPI build only (`USE_MPI=ON`, 26 entries)
 
 Each directory symlinks its parent case's `INPUT/`, `input.ini` and `check.py` — the oracle is the
 same inode — and every case first asserts the solver printed `MPI ranks = <n>`: a serial binary
@@ -409,6 +412,7 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 | **mpi-drag-stokes** | as `drag-stokes` | parent oracle at n=2 ranks × 2 threads + rank witness | as parent | as parent |
 | **mpi-conv-nu** | as `conv-nu` | parent oracle at n=4 × 2 + rank witness | as parent | as parent |
 | **mpi-khrt** | as `khrt-e2e` | parent oracle at n=4 × 2 + rank witness; 241 children — the only oracle that reads the child count out of the solver log | as parent | as parent |
+| **mpi-khrt-plane** | as `khrt-plane` | parent oracle at n=4 × 2 + rank witness, on the planes file merged from the four rank shards (every count and P1's four net flows equal the serial run's). RED with the planes stream left out of the merge: no merged file, four shards; rank 0's shard alone carries 7/25 of the flow (P1 0.72) | as parent | as parent |
 | **mpi-bc-center-2grp** | as `bc-center-2grp` | parent oracle at n=4 × 2 + rank witness; the suite's only `ngroups=2` case, hence the only exercise of the rank-file merge's per-zone loop | as parent | as parent |
 | **mpi-two-mat** | as `two-mat` | parent oracle at n=4 × 2 + rank witness; the suite's only `nm=2` case — six shards merged per sweep, two `sourceMass` slots, two euler families reduced across ranks | as parent | as parent |
 | **mpi-consistency** | — (kind 8) | n=1 vs n=4 of the SAME binary (`mpi/consistency/check.py` launches `mpiexec` itself): witness both ways, serial file layout (no `*.rank*.dat` survives, one `Zone` header per stream), `.dat` sorted multisets, `.tec` scale-relative ≤ 1e-12 | as `drag-stokes` | as `drag-stokes` |
@@ -434,15 +438,15 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-231 `e2e`-labelled + 48 `unit`-labelled + the optional `vortex-cloud-3way` = **280 CTest entries** in a
-serial build (+25 `mpi-*` under `USE_MPI`, 305), all green (counted from `tests/CMakeLists.txt`). The 231
-`e2e` entries are the 144 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+233 `e2e`-labelled + 49 `unit`-labelled + the optional `vortex-cloud-3way` = **283 CTest entries** in a
+serial build (+26 `mpi-*` under `USE_MPI`, 309), all green (counted from `tests/CMakeLists.txt`). The 233
+`e2e` entries are the 145 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
-threads), the four `threads-*` thread-count gates, the thirteen `repeat-*` two-sweep gates, the sixty-six `refuse-*` setup-refusal gates, `vv-order`
+threads), the four `threads-*` thread-count gates, the thirteen `repeat-*` two-sweep gates, the sixty-seven `refuse-*` setup-refusal gates, `vv-order`
 (the record-order independence of eleven V&V figures) and `check-order` (of four gate printouts). The
-48 `unit` entries are 40 compiled unit tests, the property-table reader on its four fixtures
-(`test_properties_reader`, `-two-material`, `-atlas-water`, `-sigma-mu`), `self_test`, `registry-docs`, `exe-per-tree` and
-`lint-test-inputs`. Unit
+49 `unit` entries are 40 compiled unit tests, the property-table reader on its four fixtures
+(`test_properties_reader`, `-two-material`, `-atlas-water`, `-sigma-mu`), `self_test`, `registry-docs`, `exe-per-tree`,
+`lint-test-inputs` and `psd-plane-tool`. Unit
 families that emit a production-vs-reference overlay (`verif_dump` → `tools/plot_curves.py` →
 `docs/vv/images/unit-*.svg`): drag, heat, evaporation-CEM, LK, TC, the MHB98 decane kernel,
 combustion, solidification, the five breakup models, and interp — 14 figures. `ini_pipeline` (config

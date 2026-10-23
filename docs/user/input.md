@@ -132,6 +132,7 @@ Controls the gas field source, output modes, and miscellaneous run-time options.
 | `print-dtime` | real | `−1` | Trajectory row interval [s]; `−1` disables time-based rows |
 | `time-end` | real | `−1` | Parcel end time [s]: every parcel still in the domain stops there, gets a last trajectory row at that time, and its state goes to `snapshot-<mat>.dat`; `≤ 0` or absent = off (integrate until the parcel leaves the domain) |
 | `out-time` | string | `off` | `on` appends the parcel time [s] as the last column of every trajectory and exit row |
+| `plane-x` | real list | — | Planes normal to x at the listed positions [m], space-separated (`plane-x = 0.001 0.18`): `planes-<mat>.dat` holds one record per crossing of each plane ([Plane crossings](using.md#plane-crossings)); absent = no file. A token that is not a finite number stops the run |
 | `mdot-max` | real | `0` | Maximum mass flow rate per particle [g/s]; used to auto-size injection spacing |
 | `out-traj` | string | `on` | Enable trajectory output (`off` to disable) |
 | `out-scatter` | string | `on` | Enable scatter-cloud output (`off` to disable) |

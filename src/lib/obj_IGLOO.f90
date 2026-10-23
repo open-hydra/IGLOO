@@ -245,6 +245,8 @@ contains
         do ip = 1, gr%nInjected
           associate(part => gr%particle(ip))
           part%ID = ip
+          part%parentID = 0
+          part%newborn  = .false.
           !> Re-seed the particle's RNG stream from (rng_seed, famID, ID).
           part%rngState = rngSeedFor(gr%famID, ip)
           part%d  = part%dInj
@@ -328,7 +330,7 @@ contains
                                 trajOn, scatOn, dNscat, trajSample, threshold, &
                                 probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
                                 nConnHit, nSweepHit, nRimExit, nInjNoCell, nKHRTwarn, &
-                                unitSnap, snapOn, timeOn, tEnd, frozenOn
+                                unitSnap, snapOn, timeOn, tEnd, frozenOn, unitPlane, planeOn
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
     use IGLOO_Lib_Properties, only: lookupTab   !> child hand-off (enthalpy slot)
@@ -418,6 +420,12 @@ contains
         write(unitExit,'(1X,A)') 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID",'// &
                                  '"bc","d<sub>p</sub>"'//trim(fHead)
       endif
+      !> One record per plane crossing.
+      if (planeOn) then
+        open(newunit=unitPlane,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'planes-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
+        write(unitPlane,'(1X,A)') 'variables="plane","X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","mdot","npdot",'// &
+                                  '"f","ID","parent","t","dir"'
+      endif
       !> Parcels still in the domain at time-end, one record each.
       if (snapOn) then
         open(newunit=unitSnap,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'snapshot-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
@@ -497,6 +505,7 @@ contains
         if (trajOn) write(unitTraj,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
         write(unitExit ,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
         if (snapOn) write(unitSnap,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
+        if (planeOn) write(unitPlane,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
 
         if (gr%brkupHasChild) then
           if (allocated(gr%shed)) deallocate(gr%shed)
@@ -614,6 +623,8 @@ contains
                 kid%d             = src%diam
                 kid%npdot         = src%npdot
                 kid%time          = src%time
+                kid%parentID      = src%parent
+                kid%newborn       = .true.
                 !> cell/gas locators inherited from the parent at the shed point
                 kid%i       = src%ipos
                 kid%igas    = src%igas
@@ -686,6 +697,7 @@ contains
       if (trajOn) close(unitTraj)
       if (scatOn) close(unitScat)
       if (snapOn) close(unitSnap)
+      if (planeOn) close(unitPlane)
       close(unitExit)
     enddo
 

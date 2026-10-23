@@ -57,6 +57,7 @@ module IGLOO_particles
     integer      :: Ninj      !> number of particle from the same cell
     integer      :: Ncell     !> number of integration loops in the same cell
     integer      :: ID        !> ID number
+    integer      :: parentID = 0   !> ID of the parcel that shed this one; 0 = injected
     integer      :: mID       !> material ID number
     integer      :: gID       !> group ID number
     integer      :: famID     !> family ID number
@@ -69,6 +70,7 @@ module IGLOO_particles
     logical      :: varSig    !> ODE system switch for sigma=sigma(T)
     logical      :: varPsat   !> ODE system switch for pSat=pSat(T)
     logical      :: brkupEvent=.false. !> flag active when breakup model is of type "event"
+    logical      :: newborn=.false.    !> a breakup child not yet integrated: its birth row is due
     !> ODE system configuration (set by assign_group2particle)
     integer      :: evapSelect  = 0    !> evaporation gas-side selector
     integer      :: brkupSelect = 0    !> breakup model selector

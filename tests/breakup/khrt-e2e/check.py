@@ -65,9 +65,9 @@ N_GOOD  = 12         # of the 14 swept drops with We_r >= 340
 
 # ---- A23h "shed children actually fly" gate ----
 N_INJECTED = 25      # inlet cells; IDs 1..25 are injected, higher IDs are KH-shed children
-MIN_TRAJ   = 4       # trajectory records a genuinely-integrated parcel must leave
+MIN_TRAJ   = 5       # trajectory records a genuinely-integrated parcel must leave: its birth row and four more
 MIN_TRAVEL = 1.0e-3  # x-distance it must cover between birth and exit (domain is 0.15 long)
-FRAC_FLEW  = 0.90    # fraction of children that must clear both bars (observed 240/241)
+FRAC_FLEW  = 0.90    # fraction of children that must clear both bars (observed 238/241)
 
 # ---- source budget: the gas receives the particle phase's net flux, a shed's included ----
 SRC        = "OUTPUT/source.tec"
@@ -145,10 +145,10 @@ def check_children_integrate():
         the parent index. The apparent "+25" mapping only held while every parent shed once.
 
     It is a POPULATION test, not a per-parcel one, because a parent may legitimately shed in
-    its final segment: that child is born at the boundary, exits immediately, and never lives
-    long enough for the periodic trajectory print to fire. Observed 240/241 children flying,
-    the one exception being exactly that case. Requiring 100 % would be flaky; requiring 90 %
-    still separates cleanly from the broken state, where the figure is 0 %.
+    its last cells: that child exits before the periodic trajectory print has fired four times
+    after its birth row. Observed 238/241 children flying, the three exceptions (IDs 200, 248,
+    231, 2 to 4 rows) born in the last three cells. Requiring 100 % would be flaky; requiring
+    90 % still separates cleanly from the broken state, where the figure is 0 %.
     """
     try:
         exits = [l.split() for l in open(OUTLOC)]

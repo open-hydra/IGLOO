@@ -85,10 +85,11 @@ output written).
 | `refuse-bc-legacy` | own `INPUT/bc.txt`: `drag-stokes`'s with every code in the legacy single-digit schema (401 → 4, 400 → 1; `python3 make_bc_refusals.py`, run from this directory) | `IGLOO: bc.txt line is not six integers with a 3-digit code` |
 | `refuse-bc-empty-payload` | own `INPUT/bc.txt`: `drag-stokes`'s with the first inlet payload line empty (`make_bc_refusals.py`) | `IGLOO: bc.txt inlet payload line is empty` |
 | `refuse-body-accel` | `body-force` (`INPUT/` symlinked) with `body-accel = 0.0 -200.0` | `body-accel: expected 3 values (gx gy gz)` |
+| `refuse-plane-x` | `INPUT/` symlinked; `plane-x = abc` | `IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]` |
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All sixty-six exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All sixty-seven exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
@@ -137,7 +138,9 @@ and `body-accel` are RED** on the solver with each of their error stops turned i
 to "Stop condition" with exit 0 and write their output, and `sigma-size`, `sigma-nm` and `bc-legacy` end on a
 later stop with another payload (`mu: size mismatch`, `mu: size /= number of materials`, the record count).
 **`refuse-breakup-token-material` is RED** on a reader that knows no `breakup` token on a material line: it stops
-at `IGLOO: unknown per-material key in the phase file`, not its payload.
+at `IGLOO: unknown per-material key in the phase file`, not its payload. **`refuse-plane-x` is RED** on a solver that
+does not read `plane-x` (an unknown `[IGLOO-General]` key is ignored): it runs to "Stop condition" with exit 0, no
+payload, and writes three `.dat` files.
 
 **Not here.** A mixed-Nk mesh (`allocation.f90`, `af307dd`) needs a two-zone `solfile.tec`; exercised in a
 throwaway only. `refuse-dopri5` (the interim `H-dopri5` refusal of ledger O25) was dropped with the

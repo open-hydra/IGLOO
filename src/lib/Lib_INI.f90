@@ -40,8 +40,9 @@ contains
 
 
   !> [IGLOO-General]: phase name, gas file and order, output switches, print cadences, mdot-max,
-  !  seed, mollification, body acceleration, probe IDs.
+  !  seed, mollification, body acceleration, probe IDs, planes.
   subroutine read_general(srcSwitch,eulSwitch,gasfile)
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use IGLOO_variables
     use IGLOO_Lib_Mollify, only: DEFAULT_MOLLIFY_PASSES
     use IGLOO_Mod_Timing,  only: timingOn
@@ -183,6 +184,27 @@ contains
     endif
     if (probeOn) write(*,'(a,i0,a)') '  >> PROBE MODE: integrating ', size(probeIDs), &
                                      ' selected particle ID(s) only [DEBUG]'
+
+    !> plane-x = x1 x2 ... [m]: planes normal to x whose crossings planes-<mat>.dat records; absent = no file.
+    planeOn = .false.
+    if (allocated(planeX)) deallocate(planeX)
+    if (fini%has_option(option_name='plane-x')) then
+      n = fini%count_values(section_name='IGLOO-General', option_name='plane-x')
+      if (n > 0) then
+        block
+          character(len=64) :: toks(n)
+          integer :: t, ios
+          call fini%get(section_name='IGLOO-General', option_name='plane-x', val=toks, error=error)
+          allocate(planeX(n))
+          do t = 1, n
+            read(toks(t), *, iostat=ios) planeX(t)
+            if (ios /= 0) error stop 'IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]'
+            if (.not. ieee_is_finite(planeX(t))) error stop 'IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]'
+          enddo
+          planeOn = .true.
+        end block
+      endif
+    endif
 
   contains
 

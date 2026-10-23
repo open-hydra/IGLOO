@@ -6,13 +6,13 @@ family 1 is molten, sheds KH children and breaks up by RT before it nucleates; f
 few microseconds of the injection and must shed nothing. KH stripping acts in the liquid only (phases 0 and
 1), so it changes a parcel's d up to its first frozen row k (the first row with phase >= 2) and never after;
 a child is born in its parent's phase -- here always the liquid above T_m -- and integrated from there (its
-first written row lies at the next face, already solid).
+birth row is liquid, its next row, at the next face, already solid).
 
 Gates
 -----
 K1  family 2 sheds no child (its group reports no "number of children"), family 1 does, and the children the
     log reports are the child IDs (> N_INJ) of family 1's exit records, one record each, every child with
-    trajectory rows
+    two trajectory rows at least (its birth row and a row it integrated to)
 K2  every row from a parcel's first frozen row on carries the d of that row, parents and children; every
     family-2 parcel's d has changed on that row (stripping in the liquid, before the nucleation)
 K3  every exit record ends at the outlet (code 400), and each family's exit flows (parents and children) sum
@@ -151,9 +151,10 @@ def main():
                      f"{len(kids[2])} (family 2)")
     if multi:
         fails.append(f"K1 {len(multi)} parcels with other than one exit record, first {multi[0]}")
-    no_rows = [pid for pid in kids[1] if (1, pid) not in traj]
-    if no_rows:
-        fails.append(f"K1 {len(no_rows)} of {len(kids[1])} children have no trajectory row, first ID={no_rows[0]}")
+    few_rows = [pid for pid in kids[1] if len(traj.get((1, pid), [])) < 2]
+    if few_rows:
+        fails.append(f"K1 {len(few_rows)} of {len(kids[1])} children with fewer than two trajectory rows, "
+                     f"first ID={few_rows[0]}")
 
     # K2: the frozen d, parents and children; family 2 stripped before its nucleation
     n2, on_k, _ = tab.check_frozen_d(traj, fails, "K2")

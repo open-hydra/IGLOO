@@ -20,7 +20,8 @@ contains
                                 bodyAccel, srcBodyForce, axisym,           &
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
                                 nInjNoCell,                                &
-                                trajOn, scatOn, dNscat, sixOverPi, pi
+                                trajOn, scatOn, dNscat, sixOverPi, pi,    &
+                                planeOn, planeX, unitPlane
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock
@@ -190,6 +191,11 @@ contains
       if (part%bodyAccum) part%stateVar(part%neq-1 :part%neq) = 0._R8
 
       if (trajOn) call writeTrajRow()
+    endif
+    !> A breakup child's first row: its birth state, before its first step.
+    if (part%newborn) then
+      if (trajOn) call writeTrajRow()
+      part%newborn = .false.
     endif
     !> Block index and cell-entry state for every entry (children enter with time /= 0).
     b = part%i(1)
@@ -487,6 +493,54 @@ contains
     end subroutine writeStartRecord
 
 
+    !> One planes record per plane the step (ta,ya)-(tb,yb) crosses: forward x_a < X <= x_b, backward x_a >= X > x_b.
+    subroutine emitPlanes(ta, ya, tb, yb)
+      use IGLOO_variables, only: oneThird
+      real(R8), intent(in) :: ta, tb, ya(:), yb(:)
+      real(R8) :: s, pos(2), vel(3), z7, tp, rho, m, d, np, mdotR, f, tc
+      integer  :: kp, idir
+      do kp = 1, size(planeX)
+        if (ya(1) < planeX(kp) .and. planeX(kp) <= yb(1)) then
+          idir = 1
+        elseif (ya(1) >= planeX(kp) .and. planeX(kp) > yb(1)) then
+          idir = -1
+        else
+          cycle
+        endif
+        s   = (planeX(kp) - ya(1))/(yb(1) - ya(1))
+        pos = ya(2:3) + s*(yb(2:3) - ya(2:3))
+        vel = ya(4:6) + s*(yb(4:6) - ya(4:6))
+        z7  = ya(7) + s*(yb(7) - ya(7))
+        tc  = ta + s*(tb - ta)
+        if (mod_propFlags(1)) then; tp = comp_TfromTab(hTab, z7); else; tp = z7; endif
+        if (mod_propFlags(2)) then; rho = tableValue(rhoTab, Tmin, Tmax, tp); else; rho = auxLocal(ind_rho); endif
+        !> The stream's number rate, droplet mass and mass flow at the crossing.
+        select case(mod_model)
+        case(3)
+          np = ya(8) + s*(yb(8) - ya(8)); m = mdotSeg/np; mdotR = mdotSeg
+        case(7)
+          np = ya(9) + s*(yb(9) - ya(9)); m = mdotSeg/np; mdotR = mdotSeg
+        case(2,5)
+          np = part%npdot; m = ya(8) + s*(yb(8) - ya(8)); mdotR = np*m
+        case(4)
+          np = ya(9) + s*(yb(9) - ya(9)); m = ya(8) + s*(yb(8) - ya(8)); mdotR = np*m
+        case default
+          np = part%npdot; m = auxLocal(ind_m); mdotR = part%mdot
+        end select
+        f = 0._R8
+        if (mod_isSolid) f = ya(8) + s*(yb(8) - ya(8))
+        if (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7 .and. ind_rs == 0) then
+          d = auxLocal(ind_d)
+        else
+          d = (sixOverPi*m/rho)**oneThird
+        endif
+        if (ind_rs > 0) d = solidDiameter(m, f, rho, auxLocal(ind_rs))
+        write(unit=unitPlane,fmt='(I3,7F12.6,2E13.6E2,2ES16.8E2,F10.6,2I10,ES16.8E2,I3)') kp, planeX(kp), pos, vel, tp, &
+              d, m, mdotR, np, f, part%ID, part%parentID, tc, idir
+      enddo
+    end subroutine emitPlanes
+
+
     !> Emit the buffered scatter records in one write statement.
     subroutine flushScat()
       if (nScat <= 0) return
@@ -592,6 +646,10 @@ contains
           y  = oldLocal + sEv*(y - oldLocal)
           t1 = timeLocal + sEv*(t1 - timeLocal)
           wAcc = wAccOld + sEv*(wAcc - wAccOld)
+        endif
+        !> Planes the finalized step crosses, before the phase jump and the breakup event.
+        if (planeOn) call emitPlanes(timeLocal, oldLocal, t1, y)
+        if (solidEv .and. .not.(IamOut .or. newGas .or. sectorOut)) then
           phaseEv = nint(stateLocal(ind_sph))
           call solidTransition(whichEv, part%cp, part%cpSol, part%Tmelt, part%hFus, y(7), y(8), phaseEv)
           stateLocal(ind_sph) = real(phaseEv, R8)
@@ -665,6 +723,7 @@ contains
             shedRec%temp  = part%tp
             shedRec%time  = t1
             shedRec%phase = part%solidPhase
+            shedRec%parent = part%ID
             call shed%push(shedRec)
             !> the child's birth mass flow, in its computeMass/computeSource operation order
             shedM = shedRec%npdot * (pi/6._R8*part%rho*shedRec%diam**3._R8)
@@ -886,6 +945,9 @@ contains
 
       !> Never latch a non-finite state as the last good one.
       if (any(y/=y)) return
+
+      !> Planes the accepted step crosses, emitted once as it is latched.
+      if (planeOn) call emitPlanes(timeLocal, oldLocal, x, y)
 
       timeLocal  = x
       oldLocal   = y

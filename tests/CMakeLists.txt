@@ -9,10 +9,10 @@
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-brk-tab-rhos/ (e2e)
-#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ breakup-per-material/ pe-sigma-table/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel}
+#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ breakup-per-material/ khrt-plane/ pe-sigma-table/
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x}
 #   repeatability/      two-sweep gates (twosweep driver): 13 cases
-#   mpi/                registered only under USE_MPI: 8 rank-count cases + 3 consistency + 1 determinism
+#   mpi/                registered only under USE_MPI: 9 rank-count cases + 3 consistency + 1 determinism
 #                       + 13 two-sweep cases
 #
 # Run everything via ../test.sh (it builds this tree's IGLOO, which every e2e case runs, and publishes it to bin/).
@@ -388,6 +388,10 @@ add_test(NAME lint-test-inputs COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/to
 set_tests_properties(lint-test-inputs PROPERTIES
     LABELS "unit;infrastructure;lint"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# psd-plane-tool: scripts/psd_plane.py on a synthetic planes file whose flows, mean diameters and quantiles are
+# known in closed form (forward and net crossings, a disc and an annulus, a second plane it must not read).
+add_test(NAME psd-plane-tool COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_psd_plane.py)
+set_tests_properties(psd-plane-tool PROPERTIES LABELS "unit;infrastructure;output;t9")
 # DB ("assigned position") injection — regression gate for bug B1 (fixed 2026-07-08):
 igloo_e2e_case(db-injection infrastructure/db-injection "e2e;infrastructure;injection")
 configure_file(infrastructure/ini_pipeline/input.ini ${CMAKE_CURRENT_BINARY_DIR}/input.ini COPYONLY)
@@ -760,6 +764,10 @@ igloo_e2e_case(khrt-varrho breakup/khrt-varrho "e2e;breakup;khrt")
 # to all four in [IGLOO-Models] and requires the same trajectories, exits and children counts. RED while the phase
 # file knows no breakup token.
 igloo_e2e_case(breakup-per-material breakup/breakup-per-material "e2e;breakup;infrastructure")
+# khrt-plane: khrt-e2e with four planes normal to x (mid-cell, a cell face, mid-cell, the outlet face): the net
+# flow through every plane is the injected flow, every record lies on its parcel's path and names its parent, and
+# every child's first trajectory row is its birth on its parent's path. RED while plane-x is not read.
+igloo_e2e_case(khrt-plane breakup/khrt-plane "e2e;breakup;khrt;output")
 
 # Thread-invariance of the KH-shed path (A23/S4-D1): the drain runs after an OMP region and
 # unitTraj/unitExit are written from inside it. Established green while the one-shed cap was
@@ -1064,6 +1072,8 @@ igloo_refusal_case(refuse-bc-empty-payload infrastructure/refusals/bc-empty-payl
                    "IGLOO: bc.txt inlet payload line is empty" "e2e;refusal;infrastructure;bc")
 igloo_refusal_case(refuse-body-accel       infrastructure/refusals/body-accel
                    "body-accel: expected 3 values (gx gy gz)" "e2e;refusal;standard")
+igloo_refusal_case(refuse-plane-x          infrastructure/refusals/plane-x
+                   "IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]" "e2e;refusal;infrastructure")
 # drag-stokes-dopri5: ode-solver = H-dopri5 on drag-stokes's own oracle -- the only exercise of the
 # explicit solver. RED at OSlo fb8255d (ledger O25: dopri5.f:512 called the eleven-argument SOLOUT,
 # IGLOO's interrupt never reached DOPRI5, every parcel lost at injection with exit 0); green since the
@@ -1197,6 +1207,8 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
     igloo_e2e_case_mpi(mpi-conv-nu        mpi/conv-nu        4 2 "e2e;mpi;standard")
     # children: 241 of them, and the only oracle that reads the child count out of the solver log
     igloo_e2e_case_mpi(mpi-khrt           mpi/khrt           4 2 "e2e;mpi;breakup")
+    # the planes file merged from four shards, and the birth rows of children born on their parent's rank
+    igloo_e2e_case_mpi(mpi-khrt-plane     mpi/khrt-plane     4 2 "e2e;mpi;breakup;output")
     # the suite's ONLY ngroups=2 case, so the only real exercise of the merge's per-zone loop
     igloo_e2e_case_mpi(mpi-bc-center-2grp mpi/bc-center-2grp 4 2 "e2e;mpi;infrastructure")
     # the suite's ONLY nm=2 case: six shards merged per sweep, two sourceMass slots, two euler families

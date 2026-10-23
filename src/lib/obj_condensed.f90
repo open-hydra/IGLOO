@@ -12,6 +12,7 @@ module IGLOO_data_phases
     real(R8) :: pos(3)  = 0._R8,  vel(3)  = 0._R8
     real(R8) :: temp    = 0._R8,  diam    = 0._R8, npdot = 0._R8, time = 0._R8
     integer  :: phase   = 0       !> the parent's solidification phase at the shed
+    integer  :: parent  = 0       !> the shedding parcel's ID
   end type
 
   !> Growable shed list, one per parent index (reserve + double via move_alloc). Dummies take it

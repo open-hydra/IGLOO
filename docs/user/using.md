@@ -52,6 +52,7 @@ my_case/
     ├── outloc-<mat>.dat         ← exit or stop location, speed, angle, area, boundary code, diameter per particle
     ├── scatter-<mat>.dat        ← number-density scatter cloud
     ├── snapshot-<mat>.dat       ← each particle's state at time-end (only when time-end is set)
+    ├── planes-<mat>.dat         ← one record per crossing of a plane normal to x (only when plane-x is set)
     ├── source.tec               ← gas-coupling source terms on the mesh
     └── euler<fam>.tec           ← equivalent Eulerian fields on the mesh, one per particle family
 ```
@@ -103,7 +104,7 @@ python3 check.py                          # oracle gate
 "X" "Y" "Z" "U" "V" "W" "T" "d_p" "m_p" "ID"
 ```
 
-Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). Rows are written every `print-dcell` cell crossings (default 1) and, when `print-dtime` is positive, also at the first segment end at or past each multiple of that interval (for time rows only, set `print-dcell` above the number of crossings). A parcel that leaves the domain through a boundary face also writes a row at its exit point, whatever the cadence, so its trajectory ends where its exit record is. With `out-time = on` every row carries the particle time [s] as an eleventh column, `"t"`. The rows of a solidifying material end with `"f"`.
+Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). Rows are written every `print-dcell` cell crossings (default 1) and, when `print-dtime` is positive, also at the first segment end at or past each multiple of that interval (for time rows only, set `print-dcell` above the number of crossings). A parcel that leaves the domain through a boundary face also writes a row at its exit point, whatever the cadence, so its trajectory ends where its exit record is. With `out-time = on` every row carries the particle time [s] as an eleventh column, `"t"`. The rows of a solidifying material end with `"f"`. A breakup child's first row is its birth state, written before its first step: its parent's position, velocity and temperature at the shed, and its own diameter and mass.
 
 !!! warning "Non-deterministic ordering"
     With OpenMP enabled, the row order within a zone is non-deterministic across runs (different thread scheduling). Verification scripts must sort by particle ID and position before comparing, not rely on byte-identical output.
@@ -119,6 +120,42 @@ Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). Rows ar
 ### Snapshot at an end time
 
 By default a particle is integrated until it leaves the domain. `time-end` [s] in `[IGLOO-General]` stops every particle at that time instead: a particle still inside gets a last trajectory row at `time-end` exactly, its state goes to `OUTPUT/snapshot-<mat>.dat`, one row per particle with the trajectory columns and the time (`X Y Z U V W T d_p m_p ID t`, then `f` for a solidifying material), and its exit record, code 0, has the same position, speed and time; a particle that leaves earlier writes its exit record as usual. The sources and the Eulerian fields then cover the interval from injection to `time-end`.
+
+### Plane crossings
+
+`plane-x = x1 x2 …` [m] in `[IGLOO-General]` lists planes normal to x (the axis of a wedge mesh). `OUTPUT/planes-<mat>.dat` then holds one record per crossing of a listed plane by a parcel, one zone per injection group:
+
+```
+"plane" "X" "Y" "Z" "U" "V" "W" "T" "d_p" "m_p" "mdot" "npdot" "f" "ID" "parent" "t" "dir"
+```
+
+| Column | Content |
+| :--- | :--- |
+| `plane` | the plane's index in the `plane-x` list (1, 2, …) |
+| `X` | the plane's position, as listed |
+| `Y Z`, `U V W`, `T` | the parcel's position, velocity and temperature at the crossing |
+| `d_p m_p` | the droplet diameter and mass |
+| `mdot` | the stream's mass flow [kg/s] |
+| `npdot` | the stream's number rate [1/s] |
+| `f` | the frozen fraction; 0 for a material that does not solidify (one layout for every material) |
+| `ID` | the parcel's ID |
+| `parent` | the ID of the parcel that shed it (a breakup child); 0 for an injected parcel |
+| `t` | the parcel time [s] at the crossing |
+| `dir` | +1 for a crossing toward +x, −1 for one back |
+
+Every step the integration keeps is checked against every plane: a step from $x_a$ to $x_b$ crosses the plane at $X$ forward when $x_a < X \le x_b$ and backward when $x_a \ge X > x_b$, and the record holds the state interpolated linearly between the step's ends at $X$. A plane on a cell face or on the outlet face is crossed by the step that ends on the face. A periodic transport or a fold at a wedge's side moves a parcel between steps: it crosses no plane.
+
+`mdot` and `npdot` follow the ODE model. For models 3 and 7 the number rate is an ODE state and `mdot` is the stream's flow over the step; for models 2, 4 and 5 `mdot = npdot·m_p`, with the number rate the stream's (2, 5) or the state (4); for models 1 and 6 both are the stream's. The forward records' `mdot` minus the backward ones' is the mass flow through the plane: a breakup child carries the flow its parent shed, and its `parent` names that parcel.
+
+Records are written from the OpenMP region, as trajectory rows are: their order within a zone is not deterministic. Under MPI each rank writes its own file and the merge leaves one `planes-<mat>.dat`, as for the other particle files.
+
+`scripts/psd_plane.py` prints the size statistics of one plane:
+
+```bash
+python3 scripts/psd_plane.py OUTPUT/planes-A.dat --plane 2 [--rmin R0] [--rmax R1] [--net]
+```
+
+Each record weighs $w_n$ = `npdot` (number flow), $w_v$ = `npdot`$\cdot\pi d^3/6$ (volume flow) and $w_m$ = `mdot` (mass flow). Only forward crossings count; `--net` adds the backward ones with their weights negated. $r = \sqrt{Y^2 + Z^2}$ selects a disc (`--rmax`) or an annulus (`--rmin` and `--rmax`), the bounds included. The tool prints the record counts, the three flows, the mean diameters $D_{10} = \sum w_n d/\sum w_n$, $D_{32} = \sum w_n d^3/\sum w_n d^2$ and $D_{43} = \sum w_n d^4/\sum w_n d^3$, and the 10, 50 and 90 % diameters of the number, volume and mass weightings (`dn10` … `dm90`; `dv50` is the volume median diameter): the records sorted by $d$ (equal diameters in file order), record $k$ at the Hazen position $p_k = (C_k - w_k/2)/W$ of its cumulative weight $C_k$ in the total $W$, $d$ linear between consecutive positions and held at the first and last record's value beyond them.
 
 ### Frozen fraction
 

@@ -61,6 +61,10 @@ module IGLOO_variables
   integer, allocatable :: probeIDs(:)
   logical  :: probeOn = .false.
 
+  !> [IGLOO-General] plane-x: positions [m] of the planes normal to x whose crossings planes-<mat>.dat records.
+  real(R8), allocatable :: planeX(:)
+  logical  :: planeOn = .false.
+
   !> General ode parameters
   character(len=100) :: ode_word
   real(R8) :: rtol, atol
@@ -75,7 +79,7 @@ module IGLOO_variables
   real(R8), parameter :: threshold = 1.0e29_R8
 
   !> Output files units
-  integer :: unitTraj, unitScat, unitExit, unitSnap
+  integer :: unitTraj, unitScat, unitExit, unitSnap, unitPlane
 
   !> [IGLOO-General] out-traj / out-scatter output switches (default on); dNscat is the
   !  per-material scatter weight quantum (droplets per point), auto-sized.
