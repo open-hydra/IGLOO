@@ -810,10 +810,11 @@ igloo_e2e_case(chimera-2blk infrastructure/chimera-2blk "e2e;infrastructure;bc;i
 # x = 0.085 with the facelet's area. RED without the connected-cell step and the rim count: no block-change line.
 igloo_e2e_case(chimera-2blk-rim infrastructure/chimera-2blk-rim "e2e;infrastructure;bc;chimera")
 # two-fam-bc-2blk-stretch-ord2: the box as two blocks of 1.667 mm | 3.333 mm cells joined by a 101 face, gas-order
-# 2, T linear in x: the face's ghost nodes interpolated from the other block's gas; check.py holds trajectory T,
-# source E and euler T_p away from the face to the same cells as one block. RED with the ghost ring copying the
-# partner centre: trajectory T 3.07e-2 K, E 9.8e-4 and T_p 2.8e-5 of the scale; with the gas sampler's Newton
-# stopped at an absolute 1e-5 m: 4.43e-4 K, 9.5e-6 and 2.9e-7 (5-9x the tolerances).
+# 2, T linear in x: the face plane's ghost nodes at the partner centres, the edge and corner nodes interpolated from
+# the other block's gas; check.py holds trajectory T, source E and euler T_p to the same cells as one block, cell by
+# cell outside the two face columns, by E's totals and T_p's mass-weighted means in them. RED without the interface
+# pass: the face columns' E totals +1.7e-3 / -8.6e-4 and T_p means up to 5.2e-4 (10-13x the tolerances); with the gas
+# sampler's Newton stopped at an absolute 1e-5 m: 3.67e-4 K, 2.0e-5 and 2.7e-7 outside them (4.6-18x).
 igloo_e2e_case(two-fam-bc-2blk-stretch-ord2 infrastructure/two-fam-bc-2blk-stretch-ord2 "e2e;infrastructure;bc;gas")
 # two-fam-bc-2blk-ord2-dual: the box as two blocks of 2 mm | 3 mm cells joined by a 101 face, gas-order 2, mollify
 # off, two families injected at alpha 0.5 and beta 0.3 rad (off the dual-node lines at the face): the dual cell of a

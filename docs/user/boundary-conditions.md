@@ -183,11 +183,17 @@ Velocity is unchanged. After the shift the integration continues from the partne
 
 Conformal connections (`bcdef` 101) are coincident interfaces between adjacent structured blocks. An extra data line in `bc.txt` gives, for each face cell, its partner cell and the orientation of the partner face: `[block, i, j, k, partner_face, d11, d12, d21, d22]`. On a one-layer (2D) mesh the line carries the same nine integers (`k` = 1, what ATLAS writes) or eight without `k`; IGLOO tells the two apart by the count, and any other count stops the run (`IGLOO: a 101/201 connection line is not 9 integers (8 on a one-layer mesh)`). The same line, and the same reading, belong to a periodic (201) face.
 
-**Setup.** IGLOO lists every 101 face cell with its partner cell and checks the pair: the partner block and cell must exist, the partner cell must lie on the partner face, and its 101 record on that face must name this cell and this face — otherwise the run stops (`IGLOO: a 101/201 connection names a block outside the mesh`, `... names a cell outside its block`, `... is not mutual: the partner cell does not name this cell`). On a one-layer (2D) mesh a 101 or 201 record on face 5 or 6 is refused.
+**Setup.** IGLOO lists every 101 face cell with its partner cell and checks the pair: the partner block and cell must exist, the partner cell must lie on the partner face, and its 101 record on that face must name this cell and this face — otherwise the run stops (`IGLOO: a 101/201 connection names a block outside the mesh`, `... names a cell outside its block`, `... is not mutual: the partner cell does not name this cell`). On a one-layer (2D) mesh a 101 or 201 record on face 5 or 6 is refused. With `gas-order = 2` the setup also maps the corners of every 101 face cell onto the partner cell's through the orientation integers, and stops the run when a corner does not map onto a corner of the partner cell or the two lie farther apart than a tenth of the shortest edge of the two cells (`IGLOO: 101 orientation disagrees with the partner cells`), or, on a one-layer mesh, when `d12` or `d21` is non-zero (`IGLOO: 101 orientation mixes the slab direction on a one-layer mesh`).
 
-**Particles.** When a step ends past the face, the cell search (`updateCell`) looks first in the partner cell the record names, and around it, starting from the point where the step crossed the face (see [Connected faces](#connected-faces-the-particle-search)); only if the partner block does not hold the point does it search the current block and then every other block. The containment tests are inclusive, so a conformal interface leaves no gap between the blocks. The index jump of `bcDef` (into the cell the record names) runs only when no block contains the point. With `gas-order = 2` the integration step ends at the block face, where a single block would not end it: the trajectory gains a row at the interface and scatter samples near it can move by a fraction of a step; the deposited fields are additive over the cut.
+**Particles.** When a step ends past the face, the cell search (`updateCell`) looks first in the partner cell the record names, and around it, starting from the point where the step crossed the face (see [Connected faces](#connected-faces-the-particle-search)); only if the partner block does not hold the point does it search the current block and then every other block. The containment tests are inclusive, so a conformal interface leaves no gap between the blocks. The index jump of `bcDef` (into the cell the record names) runs only when no block contains the point. With `gas-order = 2` the integration step ends at the block face, where a single block would not end it: the trajectory gains a row at the interface and scatter samples near it can move by a fraction of a step; the source and the eulerian densities are additive over the cut, the eulerian velocity and temperature move at second order in the step (see [Eulerian feedback](../theory/eulerian-feedback.md#source-fields)).
 
-**Fields.** The field mollifier smooths across the interface as across an interior face when both faces are normal to the same index direction; an interface whose two faces are normal to different index directions is smoothed with zero flux, and the setup names it with one warning line per face pair (see [Field mollification](../theory/mollification.md#block-interfaces-and-periodic-faces)). With `gas-order = 2` each block keeps its own dual mesh: at a 101 face the boundary dual cells of each block are clipped to the half inside it, the ghost nodes of the face hold the partner block's gas interpolated at the node (see [Connected faces: the gas ghost ring](#connected-faces-the-gas-ghost-ring)), and a deposit near the face is reduced to the geometry cells of the block that received it.
+**Fields.** The field mollifier smooths across the interface as across an interior face when both faces are normal to the same index direction; an interface whose two faces are normal to different index directions is smoothed with zero flux, and the setup names it with one warning line per face pair (see [Field mollification](../theory/mollification.md#block-interfaces-and-periodic-faces)). With `gas-order = 2` the two blocks share the dual cells of the face vertices: the ghost nodes of the face sit at the partner cells' centres and hold their gas (see [Connected faces: the gas ghost ring](#connected-faces-the-gas-ghost-ring)), the dual metric is not clipped normal to the face, and a deposit in the dual cell of a face vertex is summed over the blocks that hold the vertex and handed to each block by the octants on its side, so the fields beside the face are those of the same cells as one block (see [Eulerian feedback](../theory/eulerian-feedback.md#source-fields)). The setup prints
+
+```
+ [IGLOO] gas-order-2 dual across 101 faces: N vertex classes, M ghost nodes at partner centres
+```
+
+N the vertices of the 101 faces (the vertex columns on a one-layer mesh), each counted once over the blocks that hold it, and M the ghost nodes so placed, one per 101 face cell of every block.
 
 ---
 
@@ -303,8 +309,10 @@ It keeps the dual cell and the weights of its eight nodes (four on a one-layer m
 (bilinear) shape functions at the node, from the cell extents on a cell aligned with the axes and by
 Newton iterations to 1e-14 of the cell diagonal otherwise; a node within 1e-12 of the diagonal from a
 node of the connected block takes that node's value outright, so the ghost of a conformal interface
-between equal cells is the partner centre's value, bit for bit. A node no dual cell holds keeps its own
-fill. The setup prints
+between equal cells is the partner centre's value, bit for bit. At a 101 face the ghost nodes of the face
+plane sit at the partner centres whatever the cells (see [Block Connections](#block-connections-code-101))
+and take their values the same way; the edge and corner nodes, placed from them by the ring's own
+cascade, are located where they lie. A node no dual cell holds keeps its own fill. The setup prints
 
 ```
  [IGLOO] ghost nodes at connected faces: N interpolated, M not covered
@@ -331,5 +339,7 @@ side: the node interpolates the connected block's centres and, near its boundary
 linear fill, exact on a linear field. On a curved field the ghost is second order, like the fill it
 replaces: a node between two centres of the other block is off by at most $q h^2/4$ for a field
 $q x^2$ ($h$ the spacing there), against $2 q h^2$ for the block's own linear fill; at an interface
-between cells of $h$ and $2h$ the ghost of the fine side reads the coarse block's own fill and is off by
-$1.25\,q h^2$.
+between cells of $h$ and $2h$ whose ghost nodes stay where the block's own fill puts them (a 201, a 103
+with a partner cell) the ghost of the fine side reads the coarse block's own fill and is off by
+$1.25\,q h^2$. The ghost nodes of a 101 face plane are the partner centres and carry their values,
+with no interpolation error.

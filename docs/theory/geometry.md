@@ -131,7 +131,9 @@ interface leaves no gap. `bcDef`'s 101 branch, an index jump into the cell named
 only when no block contains the point. With
 `gas-order = 2` the ODE step ends at the block face, since the particle must change block there:
 the trajectory gains a row at the interface that a single block would not write, and scatter samples
-beside it can move; the deposits are additive over the cut step. The gas stencil is then sought in
+beside it can move; the source and the eulerian densities are additive over the cut step, the eulerian
+velocity and temperature move at second order in the step (see **Block interfaces** in
+[Eulerian feedback](eulerian-feedback.md#source-fields)). The gas stencil is then sought in
 the new block's own dual mesh, and so is it when the cell search at the entry of a boundary dual cell
 finds the particle in another block.
 
