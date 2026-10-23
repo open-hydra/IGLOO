@@ -328,7 +328,7 @@ contains
                                 trajOn, scatOn, dNscat, trajSample, threshold, &
                                 probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
                                 nConnHit, nSweepHit, nRimExit, nInjNoCell, nKHRTwarn, &
-                                unitSnap, snapOn, timeOn, tEnd
+                                unitSnap, snapOn, timeOn, tEnd, frozenOn
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
     use IGLOO_Lib_Properties, only: lookupTab   !> child hand-off (enthalpy slot)
@@ -358,6 +358,7 @@ contains
     integer  :: c, nStreams, nValid
     real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp
     type(obj_particle) :: ptmp   ! throwaway copy for the inject-only pre-pass
+    character(len=4) :: fHead    !> the frozen-fraction header entry, blank for a material that does not solidify
 
     !> Refuse to run on a stale particle state.
     if (.not. self%stateIsFresh) then
@@ -397,34 +398,37 @@ contains
 
     do m = 1, nm
       material: associate(mat => self%material(m))
+      !> A material of which a group solidifies ends every particle-file row with f.
+      frozenOn = any(mat%group(1:mat%ngroups)%solidSelect > 0)
+      fHead = ''; if (frozenOn) fHead = ',"f"'
       !> Per-material output files: <kind>-<material><sweeptag><ranksuffix>.dat (rank suffix empty at one rank).
       if (trajOn) then
         open(newunit=unitTraj,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'trajectories-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
         if (timeOn) then
-          write(unitTraj,'(1X,A)') 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'
+          write(unitTraj,'(1X,A)') 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)
         else
-          write(unitTraj,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'
+          write(unitTraj,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)
         endif
       endif
       open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
       if (timeOn) then
         write(unitExit,'(1X,A)') 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","t",'// &
-                                 '"bc","d<sub>p</sub>"'
+                                 '"bc","d<sub>p</sub>"'//trim(fHead)
       else
         write(unitExit,'(1X,A)') 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID",'// &
-                                 '"bc","d<sub>p</sub>"'
+                                 '"bc","d<sub>p</sub>"'//trim(fHead)
       endif
       !> Parcels still in the domain at time-end, one record each.
       if (snapOn) then
         open(newunit=unitSnap,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'snapshot-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
-        write(unitSnap,'(1X,A)') 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'
+        write(unitSnap,'(1X,A)') 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)
       endif
 
       !> Scatter cloud: one zone per material; auto-size the weight quantum dNscat to ~trajSample points per stream.
       dNscat = 0._R8
       if (scatOn) then
         open(newunit=unitScat,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'scatter-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
-        write(unitScat,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'
+        write(unitScat,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)
         write(unitScat,'(A,A,A)')'Zone T="Mat ',trim(mat%matName),' scatter"'
         !> Serial inject-only pre-pass over ALL particles (replicated on every rank so dNscat is
         !  identical everywhere): resolves each stream's npdot and injection speed.

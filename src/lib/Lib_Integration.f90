@@ -14,7 +14,7 @@ contains
                         hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, shed,noShed)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
-    use IGLOO_variables,  only: unitTraj,unitExit,unitScat,unitSnap,iprint,dtprint,tEnd,timeOn,snapOn, &
+    use IGLOO_variables,  only: unitTraj,unitExit,unitScat,unitSnap,iprint,dtprint,tEnd,timeOn,snapOn,frozenOn, &
                                 nb,toll,ord2,mesh2D,threshold,            &
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
@@ -63,7 +63,7 @@ contains
     real(R8) :: wAcc          ! scatter-cloud npdot-weight accumulator (host-associated into solout)
     real(R8) :: wAccOld       ! wAcc at the last latched state, restored when a cut step is integrated again
     !> Scatter-cloud output buffer, flushed by flushScat in one write. No initializer: it would imply SAVE.
-    integer, parameter :: SCATLEN = 128, SCATCAP = 4096
+    integer, parameter :: SCATLEN = 144, SCATCAP = 4096
     character(len=SCATLEN) :: scatBuf(SCATCAP)
     integer  :: nScat, iScat
     integer  :: neq, nsp, ng, b, i, j, k, ngVert, iu, iw, it, iter, nCross, nE, nStall
@@ -395,8 +395,15 @@ contains
         call writeTrajRow()
       endif
       !> time-end reached inside the domain: the parcel's state at the stop.
-      if (snapOn .and. part%time>=tEnd .and. .not.part%gone) &
-        write(unit=unitSnap,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, part%time
+      if (snapOn .and. part%time>=tEnd .and. .not.part%gone) then
+        if (frozenOn) then
+          write(unit=unitSnap,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2,F10.6)') part%stateVar(1:6), part%tp, part%d, part%m, &
+                                                                           part%ID, part%time, part%fSolid
+        else
+          write(unit=unitSnap,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, &
+                                                                    part%time
+        endif
+      endif
       if (region_failed()) part%gone = .true.   !> MPI: end every parcel in flight after a failure
       if (part%gone) then
         call writeExitRow()
@@ -421,11 +428,17 @@ contains
 
   contains
 
-    !> One trajectory row; out-time appends the parcel time.
+    !> One trajectory row; out-time appends the parcel time, a solidifying material the frozen fraction.
     subroutine writeTrajRow()
-      if (timeOn) then
+      if (timeOn .and. frozenOn) then
+        write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2,F10.6)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, &
+                                                                         part%time, part%fSolid
+      elseif (timeOn) then
         write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, &
                                                                   part%time
+      elseif (frozenOn) then
+        write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,F10.6)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, &
+                                                                part%fSolid
       else
         write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID
       endif
@@ -440,9 +453,16 @@ contains
       mdotOut = part%mdot
       if (part%model == 4) mdotOut = part%npdot*part%m
       if (present(started)) then; if (.not.started) mdotOut = part%mdot; endif
-      if (timeOn) then
+      if (timeOn .and. frozenOn) then
+        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,ES16.8E2,I5,E13.6E2,F10.6)') part%stateVar(1:3), part%tp, &
+              norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%time, part%exitCode, part%d, &
+              part%fSolid
+      elseif (timeOn) then
         write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,ES16.8E2,I5,E13.6E2)') part%stateVar(1:3), part%tp, &
               norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%time, part%exitCode, part%d
+      elseif (frozenOn) then
+        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,I5,E13.6E2,F10.6)') part%stateVar(1:3), part%tp, &
+              norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%exitCode, part%d, part%fSolid
       else
         write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,I5,E13.6E2)') part%stateVar(1:3), part%tp, &
               norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%exitCode, part%d
@@ -734,7 +754,7 @@ contains
       integer  :: NR, N
       real(R8) :: X, XOLD, Y(N)
       integer  :: IRTRN
-      real(R8) :: Vdif(3), vel, Re, Fdrag(3), Qdot, tp, acc(3), d, rho, sigma, mup, m, np
+      real(R8) :: Vdif(3), vel, Re, Fdrag(3), Qdot, tp, acc(3), d, rho, sigma, mup, m, np, fScat
       real(R8) :: brkupState(max(nbrkst,1))
       real(R8) :: gOld, gEnd
       real(R8) :: vEvt(3)   !> the velocity breakupEvent works on (Y stays the solver's)
@@ -855,7 +875,12 @@ contains
         end select
         if (ind_d > 0) then; d = auxLocal(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
         nScat = nScat + 1
-        write(scatBuf(nScat),'(7F12.6,2E13.6E2,I8)') y(1:3), y(4:6), tp, d, m, part%ID
+        if (frozenOn) then
+          fScat = 0._R8; if (mod_model == 6) fScat = y(8)
+          write(scatBuf(nScat),'(7F12.6,2E13.6E2,I8,F10.6)') y(1:3), y(4:6), tp, d, m, part%ID, fScat
+        else
+          write(scatBuf(nScat),'(7F12.6,2E13.6E2,I8)') y(1:3), y(4:6), tp, d, m, part%ID
+        endif
         if (nScat == SCATCAP) call flushScat()
         wAcc = wAcc - dNscat
       endif

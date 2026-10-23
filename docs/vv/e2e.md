@@ -359,7 +359,8 @@ $f_0 = c_l(T_m - T_n)/h_\mathrm{fus}$, hold a plateau at $T_m$ until $f = 1$, an
 solids.  Every regime is a closed form of the inputs in $x = u_g t$; the gates check the
 liquid and solid relaxations, the plateau rows and the first plateau row after the
 nucleation point, the global energy balance of the source field and the heat deposited in
-every plateau cell, $\dot n_p\,\pi d k_g \mathrm{Nu}(T_m - T_g)\,\Delta x/u_g$.  Its
+every plateau cell, $\dot n_p\,\pi d k_g \mathrm{Nu}(T_m - T_g)\,\Delta x/u_g$, and the
+frozen fraction $f$ written on every row, linear in $x$ on the plateau.  Its
 Eulerian twin `solid-box-euler` checks the equivalent-Eulerian field cell by cell.
 
 **Result:** 25/25 parcels in all three regimes; energy balance and plateau heat within the
@@ -379,7 +380,8 @@ liquids.  Every regime is a closed form of the inputs in $x = u_g t$; the gates 
 solid and liquid relaxations, the plateau rows between the melt and liquid points, the
 exit temperature against the closed form within the chord bound of the interpolated melt
 event, the global energy balance of the source field, the heat taken from the gas in every
-plateau cell, and that no parcel is lost or stalled at a phase boundary.
+plateau cell, the frozen fraction $f$ written on every row, and that no parcel is lost or
+stalled at a phase boundary.
 
 **Result:** 25/25 parcels in all three regimes; exit temperature within 1.2e-4 K of the
 closed form (2611.7044 K); energy balance and plateau heat within the $\dot m$ print

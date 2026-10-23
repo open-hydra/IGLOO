@@ -82,6 +82,8 @@ module IGLOO_variables
   logical  :: trajOn=.true., scatOn=.true.
   !> snapshot-<mat>.dat: each parcel's state at time-end (on when time-end is set).
   logical  :: snapOn=.false.
+  !> The current material's particle files end with the frozen fraction f (a group of it solidifies).
+  logical  :: frozenOn=.false.
   real(R8) :: dNscat=0._R8
 
 end module IGLOO_variables 

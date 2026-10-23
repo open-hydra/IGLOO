@@ -14,19 +14,25 @@ accumulated, and only the parcel's last step (cut at the exit face or at burnout
 emission) can leave a full quantum unwritten. A step that is cut at a cell face and integrated again
 must add its weight once; adding it twice raises N above floor(X).
 
-Measured inputs: OUTPUT/outloc-A.dat with out-time (mdot, t_exit per ID), the injection row of
-OUTPUT/trajectories-A.dat (m0 per ID, npdot = mdot/m0), OUTPUT/scatter-A.dat (N per ID) and the
-dNscat line of run_out.txt. Every printed value enters with its half-ULP, so floor(X) is taken over the
-whole interval X can span; dNscat's ES10.3 dominates it.
+Measured inputs, read by the names of each file's variables= header: OUTPUT/outloc-A.dat with
+out-time (mdot, t_exit per ID), the injection row of OUTPUT/trajectories-A.dat (m0 per ID,
+npdot = mdot/m0), OUTPUT/scatter-A.dat (N per ID) and the dNscat line of run_out.txt. Every printed
+value enters with its half-ULP, so floor(X) is taken over the whole interval X can span; dNscat's
+ES10.3 dominates it.
 
 Non-vacuous: every injected parcel exits with a positive residence time and writes markers, and the
 upper bound is attained by at least MIN_CEIL parcels, so a +1 bias on any of them fails, and so does a
 marker lost on every parcel.
 """
 import math
+import os
 import re
 import sys
 from collections import Counter
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
+import datcols                                  # noqa: E402
 
 PHI = 0.6180339887498949   # the accumulator's per-ID phase (Lib_Integration.f90, integrate)
 MIN_CEIL = 10              # parcels at N = floor(X) (measured 25 of 25 on both legs)
@@ -43,13 +49,9 @@ def half_ulp_es(text):
     return 0.5 * 10.0 ** (int(m.group(2)) - len(m.group(1)))
 
 
-def rows(path, ncol):
-    out = []
-    for line in open(path):
-        t = line.split()
-        if len(t) == ncol and t[0][0] in "0123456789-.":
-            out.append(t)
-    return out
+def es8(v):
+    """The ES16.8E2 text of an out-time value (a 9-digit decimal: the float holds it exactly)."""
+    return "%.8E" % v
 
 
 def main():
@@ -61,13 +63,13 @@ def main():
     dn = float(m.group(1)); dn_h = half_ulp_es(m.group(1))
     npart = sum(int(k) for k in re.findall(r"number of particles =\s*(\d+)", txt))
 
-    exits = {int(r[8]): (float(r[6]), r[9]) for r in rows("OUTPUT/outloc-A.dat", 12)}
+    exits = {r["ID"]: (r["mdot"], es8(r["t"])) for r in datcols.rows("OUTPUT/outloc-A.dat")}
     m0 = {}
-    for r in rows("OUTPUT/trajectories-A.dat", 11):
-        i, t = int(r[9]), float(r[10])
+    for r in datcols.rows("OUTPUT/trajectories-A.dat"):
+        i, t = r["ID"], r["t"]
         if i not in m0 or t < m0[i][0]:
-            m0[i] = (t, float(r[8]))
-    n = Counter(int(r[9]) for r in rows("OUTPUT/scatter-A.dat", 10))
+            m0[i] = (t, r["m<sub>p"])
+    n = Counter(r["ID"] for r in datcols.rows("OUTPUT/scatter-A.dat"))
 
     fails, ceil, excess = [], 0, []
     if npart == 0 or len(exits) != npart:

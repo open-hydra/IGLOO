@@ -50,8 +50,8 @@ at 1500 K in a 3000 K gas (`T_m` at `t_m = 9.41e-3 s`, molten at `2.28e-2 s`).
 
 | case | what it gates |
 |---|---|
-| [`solid-box`](solid-box/INFO.md) | the three regimes against their closed forms on the shared box, the event position, the energy deposit (global telescoping and the per-cell plateau heat) |
-| [`solid-melt`](solid-melt/INFO.md) | a solid heated to `T-melt` in a hotter gas: the solid, melting-plateau and liquid regimes against their closed forms, the event positions, the heat taken from the gas per plateau cell, no parcel lost at a phase boundary |
+| [`solid-box`](solid-box/INFO.md) | the three regimes against their closed forms on the shared box, the event position, the energy deposit (global telescoping and the per-cell plateau heat), the frozen fraction of every row |
+| [`solid-melt`](solid-melt/INFO.md) | a solid heated to `T-melt` in a hotter gas: the solid, melting-plateau and liquid regimes against their closed forms, the event positions, the heat taken from the gas per plateau cell, the frozen fraction of every row, no parcel lost at a phase boundary |
 | [`solid-box-euler`](solid-box-euler/INFO.md) | the equivalent-Eulerian field of model 6: coverage, `ρ_p/n_p = m`, `u_p`, `T_p` per cell |
 | [`solid-box-2mat`](solid-box-2mat/INFO.md) | a model-6 material followed by a model-1 one in one run |
 | [`solid-box-rad`](solid-box-rad/INFO.md) | the three regimes under radiation alone (`NoHeat`, `emissivity = 0.8`) against their closed forms, the plateau rows, the energy deposit |

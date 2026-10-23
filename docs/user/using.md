@@ -56,7 +56,7 @@ my_case/
     └── euler<fam>.tec           ← equivalent Eulerian fields on the mesh, one per particle family
 ```
 
-The material name `<mat>` comes from `INPUT/phase.txt` (first column). With a single material called `A`, files are named `trajectories-A.dat`, etc. Families are numbered across materials in phase-file order (one per material × injection group), so a single-group, single-material run writes `euler1.tec`. When `[IGLOO-General] phase` is set, every output name carries the `<phase>-` prefix.
+The material name `<mat>` comes from `INPUT/phase.txt` (first column). With a single material called `A`, files are named `trajectories-A.dat`, etc. Families are numbered across materials in phase-file order (one per material × injection group), so a single-group, single-material run writes `euler1.tec`. When `[IGLOO-General] phase` is set, every output name carries the `<phase>-` prefix. A material that solidifies ends every row of its four particle files (trajectories, exit records, scatter cloud, snapshot) with its frozen fraction `f` ([Frozen fraction](#frozen-fraction)).
 
 !!! warning
     IGLOO reads the gas mesh directly from the Tecplot solution file (`gas-file`). There is no separate mesh file; a `MESH/` directory in a case is not used by IGLOO.
@@ -103,7 +103,7 @@ python3 check.py                          # oracle gate
 "X" "Y" "Z" "U" "V" "W" "T" "d_p" "m_p" "ID"
 ```
 
-Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). Rows are written every `print-dcell` cell crossings (default 1) and, when `print-dtime` is positive, also at the first segment end at or past each multiple of that interval (for time rows only, set `print-dcell` above the number of crossings). A parcel that leaves the domain through a boundary face also writes a row at its exit point, whatever the cadence, so its trajectory ends where its exit record is. With `out-time = on` every row carries the particle time [s] as an eleventh column, `"t"`.
+Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). Rows are written every `print-dcell` cell crossings (default 1) and, when `print-dtime` is positive, also at the first segment end at or past each multiple of that interval (for time rows only, set `print-dcell` above the number of crossings). A parcel that leaves the domain through a boundary face also writes a row at its exit point, whatever the cadence, so its trajectory ends where its exit record is. With `out-time = on` every row carries the particle time [s] as an eleventh column, `"t"`. The rows of a solidifying material end with `"f"`.
 
 !!! warning "Non-deterministic ordering"
     With OpenMP enabled, the row order within a zone is non-deterministic across runs (different thread scheduling). Verification scripts must sort by particle ID and position before comparing, not rely on byte-identical output.
@@ -114,11 +114,24 @@ Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). Rows ar
 
 ### Exit locations
 
-`OUTPUT/outloc-<mat>.dat` holds one record per particle, written where its integration stopped: its position, temperature, speed, impact angle, mass flow, face area, and particle ID (`X Y Z T |u_p| alpha mdot Af ID`), followed by the time `t` with `out-time = on`, and then by the boundary code of the face the particle left through and its diameter (`bc d_p`). `bc` is the face's code in the boundary file (`400`, `301`, `102`, `100`, …); it is `0` when the integration stopped inside the domain (`time-end`, evaporated or burnt out, stuck in a cell or without progress, the outer iteration cap, an ODE-solver failure, a non-finite state, a failure on another MPI rank), and the record is then the particle's state at the stop. A particle that is never integrated, because no cell holds its injection point, records its injection point, speed 0 and t = 0; its temperature and mass flow are the stream's for an assigned-position stream and 0 for a stream injected from a boundary face. With `probe-ids` only the listed particles are integrated and recorded. The mass flow `mdot` depends on the ODE model: for models 1, 3 and 6, whose stream mass changes only at a breakup event, it is the flow the parcel carries at exit; for model 4 (evaporation with ODE breakup) it is the flow at exit `ṅ_p·m`, after evaporation and stripping (a drop consumed in the domain leaves with its remnant); for models 2 and 5, whose drops lose mass to evaporation or combustion, it is the injected flow (a breakup child's birth flow).
+`OUTPUT/outloc-<mat>.dat` holds one record per particle, written where its integration stopped: its position, temperature, speed, impact angle, mass flow, face area, and particle ID (`X Y Z T |u_p| alpha mdot Af ID`), followed by the time `t` with `out-time = on`, and then by the boundary code of the face the particle left through and its diameter (`bc d_p`), and by `f` for a solidifying material. `bc` is the face's code in the boundary file (`400`, `301`, `102`, `100`, …); it is `0` when the integration stopped inside the domain (`time-end`, evaporated or burnt out, stuck in a cell or without progress, the outer iteration cap, an ODE-solver failure, a non-finite state, a failure on another MPI rank), and the record is then the particle's state at the stop. A particle that is never integrated, because no cell holds its injection point, records its injection point, speed 0 and t = 0; its temperature and mass flow are the stream's for an assigned-position stream and 0 for a stream injected from a boundary face. With `probe-ids` only the listed particles are integrated and recorded. The mass flow `mdot` depends on the ODE model: for models 1, 3 and 6, whose stream mass changes only at a breakup event, it is the flow the parcel carries at exit; for model 4 (evaporation with ODE breakup) it is the flow at exit `ṅ_p·m`, after evaporation and stripping (a drop consumed in the domain leaves with its remnant); for models 2 and 5, whose drops lose mass to evaporation or combustion, it is the injected flow (a breakup child's birth flow).
 
 ### Snapshot at an end time
 
-By default a particle is integrated until it leaves the domain. `time-end` [s] in `[IGLOO-General]` stops every particle at that time instead: a particle still inside gets a last trajectory row at `time-end` exactly, its state goes to `OUTPUT/snapshot-<mat>.dat`, one row per particle with the trajectory columns and the time (`X Y Z U V W T d_p m_p ID t`), and its exit record, code 0, has the same position, speed and time; a particle that leaves earlier writes its exit record as usual. The sources and the Eulerian fields then cover the interval from injection to `time-end`.
+By default a particle is integrated until it leaves the domain. `time-end` [s] in `[IGLOO-General]` stops every particle at that time instead: a particle still inside gets a last trajectory row at `time-end` exactly, its state goes to `OUTPUT/snapshot-<mat>.dat`, one row per particle with the trajectory columns and the time (`X Y Z U V W T d_p m_p ID t`, then `f` for a solidifying material), and its exit record, code 0, has the same position, speed and time; a particle that leaves earlier writes its exit record as usual. The sources and the Eulerian fields then cover the interval from injection to `time-end`.
+
+### Frozen fraction
+
+A material that solidifies (`solidification=on` on its phase-file line) ends every row of its trajectory, exit, scatter and snapshot files with one more column, `"f"`: the parcel's frozen mass fraction at the row's state, 0 all liquid, 1 all solid, written with six decimals. A material that does not solidify writes no `f`. The files carry no phase column: the phase follows from `f`, the row's temperature `T` and the material's `T-melt` $T_m$:
+
+| Phase | Where |
+| :---: | :--- |
+| 3, solid | `f = 1` |
+| 2, freezing or melting plateau | `0 < f < 1` |
+| 1, undercooled liquid | `f = 0` and `T < T_m` |
+| 0, liquid | `f = 0` and `T ≥ T_m` |
+
+At six decimals the rule misreads only a plateau state within 5e-7 of `f = 0` or `f = 1`, which is the boundary state itself (all liquid or all solid at $T_m$). The test tools carry the rule as `solid_phase(f, T, Tmelt)` in `tests/tools/datcols.py`.
 
 ### Field output
 

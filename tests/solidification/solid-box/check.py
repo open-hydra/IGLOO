@@ -28,10 +28,19 @@ E4b every cell whose two faces lie inside (x_n, x_s) holds (mdot/m) Qdot(T_m) dx
     parcel crosses has E < 0
 E5  guards: u = u_g, v = w = 0, d and m constant, the mollify-off and model-6 witnesses, >= 20 parcels
     with >= 3 rows in each regime (non-vacuity)
+E6  the frozen fraction f (the f column): 0 on the liquid rows, 1 on the solid rows and on every exit
+    record; on the plateau rows 0 < f < 1 and f = f0 + s (x - x_n), s = Qdot(T_m)/(m h_fus u_g): f - s x
+    constant per parcel within the print budget, and equal to f0 - s x_n within the event-location bound;
+    on every row the phase datcols.solid_phase derives from (f, T) is the closed form's
 """
 import math
+import os
 import re
 import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
+import datcols                                  # noqa: E402
 
 TRAJ, EXIT, SRC, LOG = "OUTPUT/trajectories-A.dat", "OUTPUT/outloc-A.dat", "OUTPUT/source.tec", "run_out.txt"
 
@@ -54,12 +63,21 @@ X_N = L_L * math.log((T_0 - T_G) / (T_N - T_G))
 F_0 = C_L * (T_M - T_N) / H_FUS
 X_S = X_N + U_G * (1.0 - F_0) * RHO_P * D_P**2 * H_FUS / (6.0 * NU * K_G * (T_M - T_G))
 Q_PLAT = NU * K_G * math.pi * D_P * (T_M - T_G)    # W lost by one droplet on the plateau
+X_LM = L_L * math.log((T_0 - T_G) / (T_M - T_G))   # the liquid crosses T_m (phase 0 -> 1)
+S_PL = Q_PLAT / (M_P * H_FUS * U_G)                # plateau slope df/dx [1/m]
 
 # ---- error model -----------------------------------------------------------------------------
 HALF_ULP, INT_FLOOR = 0.5e-6, 1.0e-8           # F12.6 on X and T; integrator floor (tol 1e-11)
 TOL_E = 1.0e-5                                 # energy balances (source.tec E23.15, outloc mdot E13.6)
 TOL_U, TOL_VW, TOL_D, TOL_M = 1.0e-4, 1.0e-6, 1.0e-3, 1.0e-5
 MIN_ROWS, N_GOOD = 3, 20
+# E6: f printed F10.6 plus s times the F12.6 x; the nucleation crossing interpolated on a chord of one cell
+# transit h = dx/u_g is misplaced by at most h^2/(8 tau_l) in time, s u_g times that in f
+TOL_F_PRINT = HALF_ULP + S_PL * HALF_ULP
+TOL_F_EVENT = S_PL * DX**2 / (8.0 * L_L)
+X_BAND = DX**2 / (8.0 * L_L) + HALF_ULP           # rows this close to an event have no closed-form phase
+TRAJ_COLS = ("X", "Y", "Z", "U", "V", "W", "T", "d<sub>p", "m<sub>p")
+EXIT_COLS = ("X", "Y", "Z", "T", "|u<sub>p</sub>|", "<greek>a</greek>", "mdot", "Af")
 
 
 def h_liq(T):
@@ -78,20 +96,11 @@ def tol_T(T, L):
     return HALF_ULP * (2.0 + 2.0 * abs(T - T_G) / L) + INT_FLOOR
 
 
-def load_rows(path, ncol, idcol=None):
-    """{ID: [row, ...]}: rows of ncol values, the ID in column idcol (default the last), the columns before it."""
-    if idcol is None:
-        idcol = ncol - 1
+def load_rows(path, names):
+    """{ID: [row, ...]}: each row the columns named (by the file's variables= header), then the ID."""
     parts = {}
-    for line in open(path):
-        c = line.split()
-        if len(c) != ncol:
-            continue
-        try:
-            r = [float(v) for v in c[:idcol]] + [int(c[idcol])]
-        except ValueError:
-            continue
-        parts.setdefault(r[-1], []).append(r)
+    for r in datcols.rows(path):
+        parts.setdefault(r["ID"], []).append([float(r[n]) for n in names] + [r["ID"]])
     return parts
 
 
@@ -153,12 +162,74 @@ def check_regimes(traj):
     return fails, n_good, worst
 
 
+def phase_cf(x):
+    """The closed form's phase at x, None within X_BAND of an event."""
+    if min(abs(x - X_LM), abs(x - X_N), abs(x - X_S)) <= X_BAND:
+        return None
+    if x < X_N:
+        return 0 if x < X_LM else 1
+    return 2 if x < X_S else 3
+
+
+def check_frozen(ftraj, fexit):
+    """E6 on the (x, T, f) rows and exit records: (failures, verified parcels, worst spread, worst offset, rows)."""
+    fails, n_good, spread_w, off_w, n_rows = [], 0, (0.0, ""), (0.0, ""), {"liq": 0, "plat": 0, "sol": 0, "ph": 0}
+    ref = F_0 - S_PL * X_N
+    for pid in sorted(ftraj):
+        rows = sorted(ftraj[pid], key=lambda r: r[0])
+        bad = False
+        liq = [r for r in rows if r[0] < X_N - DX]
+        plat = [r for r in rows if abs(r[1] - T_M) <= HALF_ULP + INT_FLOOR]
+        sol = [r for r in rows if r[0] > X_S + DX]
+        for tag, reg, want in (("liquid", liq, 0.0), ("solid", sol, 1.0)):
+            off = [r for r in reg if r[2] != want]
+            if off:
+                fails.append(f"E6 ID={pid}: {len(off)} {tag} rows with f != {want:.0f}, first x={off[0][0]:.4f} "
+                             f"f={off[0][2]:.6f}")
+                bad = True
+        c = [r[2] - S_PL * r[0] for r in plat]
+        if any(not 0.0 < r[2] < 1.0 for r in plat):
+            fails.append(f"E6 ID={pid}: a plateau row with f outside (0, 1)")
+            bad = True
+        elif c:
+            sp = max(c) - min(c)
+            of = max(abs(v - ref) for v in c)
+            if sp > spread_w[0]:
+                spread_w = (sp, f"ID={pid}")
+            if of > off_w[0]:
+                off_w = (of, f"ID={pid}")
+            if sp > 2.0 * TOL_F_PRINT:
+                fails.append(f"E6 ID={pid}: f - s x spreads by {sp:.3e} over the plateau (> {2.0 * TOL_F_PRINT:.3e})")
+                bad = True
+            if of > TOL_F_EVENT + TOL_F_PRINT:
+                fails.append(f"E6 ID={pid}: f - s x off f0 - s x_n by {of:.3e} (> {TOL_F_EVENT + TOL_F_PRINT:.3e})")
+                bad = True
+        for x, T, f, _ in rows:
+            want = phase_cf(x)
+            if want is None:
+                continue
+            got = datcols.solid_phase(f, T, T_M)
+            n_rows["ph"] += 1
+            if got != want:
+                fails.append(f"E6 ID={pid} x={x:.4f}: phase {got} from (f={f:.6f}, T={T:.6f}), closed form {want}")
+                bad = True
+                break
+        ex = fexit.get(pid)
+        if not ex or any(r[2] != 1.0 for r in ex):
+            fails.append(f"E6 ID={pid}: exit record f = {ex[0][2] if ex else None}, not 1")
+            bad = True
+        n_rows["liq"] += len(liq); n_rows["plat"] += len(plat); n_rows["sol"] += len(sol)
+        if not bad and min(len(liq), len(plat), len(sol)) >= MIN_ROWS:
+            n_good += 1
+    return fails, n_good, spread_w, off_w, n_rows
+
+
 def main():
     try:
-        traj, exits = load_rows(TRAJ, 10), load_rows(EXIT, 11, 8)
+        traj, exits = load_rows(TRAJ, TRAJ_COLS), load_rows(EXIT, EXIT_COLS)
         wdot, _, _, _, E = read_source(SRC)
         log = open(LOG, errors="replace").read()
-    except (FileNotFoundError, StopIteration, ValueError) as e:
+    except (FileNotFoundError, StopIteration, ValueError, KeyError) as e:
         print(f"[FAIL] cannot read the outputs: {e}")
         return 1
     print(f"oracle: L_l={L_L:.5e} m  x_n={X_N:.6f}  f0={F_0:.5f}  x_s={X_S:.6f}  L_s={L_S:.5e} m  "
@@ -200,17 +271,37 @@ def main():
     if n_good < N_GOOD:
         fails.append(f"E5 non-vacuity: {n_good} parcels with >= {MIN_ROWS} rows in each regime (need >= {N_GOOD})")
 
+    # E6: the frozen fraction column
+    try:
+        ftraj, fexit = load_rows(TRAJ, ("X", "T", "f")), load_rows(EXIT, ("X", "T", "f"))
+    except KeyError as e:
+        ftraj = None
+        fails.append(f"E6 no {e} column in {TRAJ} / {EXIT}")
+    if ftraj is not None:
+        f_fails, f_good, spread_w, off_w, n_rows = check_frozen(ftraj, fexit)
+        fails += f_fails
+        if f_good < N_GOOD:
+            fails.append(f"E6 non-vacuity: {f_good} parcels with >= {MIN_ROWS} liquid, plateau and solid rows "
+                         f"(need >= {N_GOOD})")
+
     print(f"E1 worst liquid point: {worst['E1'][1]} (resid/tol {worst['E1'][0]:.3f})")
     print(f"E3 worst solid point:  {worst['E3'][1]} (resid/tol {worst['E3'][0]:.3f})")
     print(f"E4 sum(E) = {e4_sum:.9e} W, sum mdot*dh = {e4_ref:.9e} W, rel {e4:.3e}")
     print(f"E4b {e4b_n} plateau cells, worst rel {e4b_worst:.3e}; cells with E < 0: {len(neg)}")
     print(f"E5 {n_good} parcels verified in all three regimes (need >= {N_GOOD})")
+    if ftraj is not None:
+        print(f"E6 s={S_PL:.4f} /m, f0 - s x_n = {F_0 - S_PL * X_N:.6f}; {n_rows['plat']} plateau rows: worst spread "
+              f"of f - s x {spread_w[0]:.3e} ({spread_w[1]}, tol {2.0 * TOL_F_PRINT:.3e}), worst offset "
+              f"{off_w[0]:.3e} ({off_w[1]}, tol {TOL_F_EVENT + TOL_F_PRINT:.3e}); {n_rows['liq']} liquid rows f = 0, "
+              f"{n_rows['sol']} solid rows f = 1, {len(fexit)} exits; phase rule on {n_rows['ph']} rows; "
+              f"{f_good} parcels verified")
     for f in fails[:40]:
         print(f"[FAIL] {f}")
     if fails:
         print(f"\n[FAIL] {len(fails)} violation(s)")
         return 1
-    print("\n[PASS] liquid, plateau and solid regimes, the event position and the energy deposit match the closed forms.")
+    print("\n[PASS] liquid, plateau and solid regimes, the event position, the energy deposit and the frozen fraction "
+          "match the closed forms.")
     return 0
 
 

@@ -6,6 +6,7 @@ zones(path) returns one dict per Zone -- {"title": <Zone T= text>, "names": [<va
 float. A row whose width
 differs from its header's name count raises ValueError: a checker that reads columns by name sees a layout
 change in its header, never by guessing a width. rows(path) concatenates the rows of every zone.
+solid_phase(f, T, Tmelt) is the phase of a solidifying material's row: the files carry f, not the phase.
 
 >>> import os, tempfile
 >>> d = tempfile.mkdtemp()
@@ -85,6 +86,21 @@ def zones(path):
 def rows(path):
     """The rows of every zone of the file, in file order."""
     return [r for z in zones(path) for r in z["rows"]]
+
+
+def solid_phase(f, T, Tmelt):
+    """The phase of a solidifying material's row from its frozen fraction f and temperature T: 3 solid
+    (f = 1), 2 plateau (0 < f < 1), else 1 undercooled liquid (T < Tmelt) or 0 liquid (T >= Tmelt).
+
+    >>> [solid_phase(f, T, 2327.0) for f, T in ((0.0, 2400.0), (0.0, 2327.0), (0.0, 2000.0),
+    ...                                         (0.54369, 2327.0), (1.0, 2327.0), (1.0, 907.3))]
+    [0, 0, 1, 2, 3, 3]
+    """
+    if f >= 1.0:
+        return 3
+    if f > 0.0:
+        return 2
+    return 1 if T < Tmelt else 0
 
 
 if __name__ == "__main__":

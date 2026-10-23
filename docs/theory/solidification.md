@@ -142,8 +142,9 @@ capacity of 192.5 J/(mol K) ($1.89$ kJ/(kg K)) and a solid one of 138.9 J/(mol K
 nominal supercooling; set it from data for the material.
 
 Euler feedback follows the constant-mass rules of model 1 (see
-[Eulerian Feedback](eulerian-feedback.md)); the frozen fraction is not written to
-the output files.
+[Eulerian Feedback](eulerian-feedback.md)).  The particle files of a solidifying
+material end every row with the frozen fraction `f`, from which a reader derives the
+phase ([Frozen fraction](../user/using.md#frozen-fraction)).
 
 ---
 
@@ -154,9 +155,10 @@ enthalpy continuity at every switch, three-regime RK4 histories of freezing and 
 melting against their piecewise closed forms, the landing inside the new phase, the
 event rule, corner cases, one production RHS call per phase) and the e2e cases
 `solid-box` (the three regimes against their closed forms, the event position, the
-energy deposit globally and per plateau cell), `solid-melt` (a solid heated to
-melting: the solid, melting and liquid regimes against their closed forms, the event
-positions, the heat taken from the gas per plateau cell), `solid-box-euler` (the
+energy deposit globally and per plateau cell, the frozen fraction of every row),
+`solid-melt` (a solid heated to melting: the solid, melting and liquid regimes against
+their closed forms, the event positions, the heat taken from the gas per plateau cell,
+the frozen fraction of every row), `solid-box-euler` (the
 Eulerian field), `solid-box-2mat` (a model-6 material followed by a model-1 one),
 `solid-box-rad` (the three regimes, the plateau rows and the energy deposit under radiation alone) and
 the two-sweep `repeatability/solid-box`, plus eight setup refusals.  See
