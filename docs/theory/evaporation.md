@@ -317,7 +317,7 @@ f_2 = \frac{\beta}{e^{\beta} - 1}, \qquad
 $$
 
 (MHB98 eqs. 17–19).  The factor applies to the convective term only — never to the
-latent sink $\dot m L_v$ — and is **skipped** when the evaporation model already
+latent sink $\dot m L_v$ or the radiative exchange — and is **skipped** when the evaporation model already
 returns a blowing-corrected heat of its own (ASM's $1/B_T$, TC's $1/(e^{\chi}-1)$),
 so the two reductions cannot compound.  It is off by default because it changes every
 evaporating case; $f_2$ can reach $0.4$ for a hot-gas decane droplet.
@@ -330,12 +330,13 @@ With evaporation active, the temperature (or enthalpy) equation carries the late
 only:
 
 $$
-m\,c_{p,p}\,\frac{dT_p}{dt} = \dot Q + \dot m\,L_v
+m\,c_{p,p}\,\frac{dT_p}{dt} = \dot Q + \dot m\,L_v + \dot Q_r
 $$
 
-(MHB98 eq. 3; $\dot m < 0$), where $\dot Q$ is the convective heat from `interphase`,
-replaced by the model's own $\dot Q_\mathrm{evap}$ for ASM and TC and scaled by $f_2$
-when `blowing = LK`.  No sensible-enthalpy term for the departing vapour is carried.
+(MHB98 eq. 3 with the radiative exchange $\dot Q_r$ added; $\dot m < 0$), where $\dot Q$ is the
+convective heat from `interphase`, replaced by the model's own $\dot Q_\mathrm{evap}$ for ASM and TC
+and scaled by $f_2$ when `blowing = LK`, and $\dot Q_r$ the grey-body exchange of a material with an
+emissivity ([Radiation](heat.md#radiation); 0 by default, never scaled by $f_2$).  No sensible-enthalpy term for the departing vapour is carried.
 
 ---
 

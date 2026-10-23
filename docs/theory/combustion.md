@@ -57,7 +57,7 @@ user-supplied `K-burn` (units m^`n-burn`/s, defined at `X-eff = 1`).
 
 Below the ignition temperature `T-ign` (default 2350 K — the Al₂O₃-shell
 melting anchor) the particle is **inert**: $\dot m = 0$ exactly (bitwise), and
-only drag and convective heat act.  The gate is $T_p < T_\mathrm{ign}$, so a
+only drag, convective heat and the radiative exchange of a material with an emissivity act.  The gate is $T_p < T_\mathrm{ign}$, so a
 particle at exactly `T-ign` burns.
 
 ### Heat release
@@ -68,13 +68,15 @@ equation of `rhsAlCombustion` is
 
 $$
 \frac{dT_p}{dt} \;(\text{or } \tfrac{dh_p}{dt})
-= \frac{\dot{Q}_\mathrm{conv} + \beta_\mathrm{part}\, q_\mathrm{comb}\, |\dot m| \cdot c_p\text{-factor}}{m}
+= \frac{\dot{Q}_\mathrm{conv} + \dot{Q}_r + \beta_\mathrm{part}\, q_\mathrm{comb}\, |\dot m| \cdot c_p\text{-factor}}{m}
 $$
 
 where $\dot Q_\mathrm{conv}$ is the standard interphase convective term (which
 already carries the `cpFactor` unit convention: 1 for the enthalpy state,
-$1/c_p$ for the temperature state — see [Heat Transfer](heat.md)), and the
-release term is scaled by the same factor so both live in consistent units.
+$1/c_p$ for the temperature state — see [Heat Transfer](heat.md)), $\dot Q_r$ the grey-body
+exchange of a material with an emissivity, in the same convention
+([Radiation](heat.md#radiation); 0 by default), and the release term is scaled by the same factor
+so all three live in consistent units.
 
 !!! warning "beta-part sensitivity"
     The heat-partition fraction $\beta_\mathrm{part}$ (share of the reaction

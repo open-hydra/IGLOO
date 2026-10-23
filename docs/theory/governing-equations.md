@@ -78,6 +78,23 @@ the table by the line through $e(0) = 0$.  Since $e(T_\mathrm{min}) = T_\mathrm{
 that line has the slope $s_{T_\mathrm{min}}$: it is the first segment continued.  Above the table both
 solvers continue the last segment, so the two assign one temperature to one enthalpy.
 
+### Energy equation
+
+The heat a particle receives is the convective term of the kernel,
+$\dot Q_c = \mathrm{Nu}\,k_g\,\pi\,d\,(T_g - T_p)$ in watts (the $\dot Q$ above without
+$c_{p,\mathrm{factor}}$), plus the grey-body exchange $\dot Q_r = \varepsilon\,\sigma\,\pi\,d^2\,(T_g^4 - T_p^4)$
+of a material with an emissivity $\varepsilon$ ([Heat Transfer](heat.md#radiation); $\varepsilon = 0$,
+the default, removes it).  With $c = c_{p,\mathrm{factor}}$ the energy equation of each model reads:
+
+| Model | Energy equation |
+| :---: | :--- |
+| 1, 3 | $F(7) = (\dot Q_c + \dot Q_r)\,c/m$ |
+| 2, 4 | $F(7) = (f_2\,\dot Q_c + \dot Q_r + \dot m_\mathrm{evap}\,L_v)\,c/m$, with $f_2$ the Stefan-blowing factor (1 unless `blowing = LK`); under ASM and TC the model's own heat rate replaces $f_2\,\dot Q_c$ ([Evaporation](evaporation.md#droplet-energy-equation)) |
+| 5 | $F(7) = (\dot Q_c + \dot Q_r + \beta_\mathrm{part}\,q_\mathrm{comb}\,\lvert\dot m\rvert)\,c/m$ ([Combustion](combustion.md#heat-release)) |
+| 6 | $\dot Q = \dot Q_c + \dot Q_r$: liquid $F(7) = \dot Q/(m\,c_l)$, plateau $F(8) = -\dot Q/(m\,h_\mathrm{fus})$, solid $F(7) = \dot Q/(m\,c_s)$ ([Solidification](solidification.md)) |
+
+Where the gas viscosity vanishes (a degenerate gas), models 1 and 6 set $\dot Q_c = \dot Q_r = 0$.
+
 ---
 
 ## Model 1 — `rhsStandard`
@@ -93,7 +110,7 @@ $$
 $$
 
 $$
-\dot{T}_p = \frac{\dot{Q}}{m\,c_{p,p}}
+\dot{T}_p = \frac{\dot{Q}_c + \dot{Q}_r}{m\,c_{p,p}}
 $$
 
 No mass change; $\dot{n}_p$ is constant throughout the trajectory.  TAB and ETAB breakup events

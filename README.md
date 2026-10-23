@@ -15,7 +15,7 @@ IGLOO is an open-source Lagrangian particle solver written in modern Fortran. It
 
 ## Features
 
-- **Drag & heat transfer** — momentum and thermal coupling with the carrier gas through 13 literature drag laws (incompressible and compressible) and six Nusselt-number correlations.
+- **Drag & heat transfer** — momentum and thermal coupling with the carrier gas through 13 literature drag laws (incompressible and compressible), six Nusselt-number correlations and an optional grey-body radiative exchange.
 - **Evaporation** — opt-in phase change (d²-law, CEM, CEM-B, Abramzon–Sirignano, Tonini–Cossali) with equilibrium or Langmuir–Knudsen interface and coupled diameter/temperature evolution.
 - **Metal combustion** — Beckstead d^n aluminium burn law with ignition gate, heat release and burnout.
 - **Secondary breakup** — five breakup models (Pilch–Erdman, Reitz–Diwakar, Reitz-KHRT, TAB, ETAB) with KHRT child-particle generation; the particle array is compacted and grown on the fly.

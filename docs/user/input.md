@@ -31,7 +31,7 @@ Parameters not specified take their default values. Unknown sections are silentl
 |---------|-------------|
 | `[IGLOO-General]` | Gas file, output modes, trajectory sampling, mollification, body acceleration |
 | `[IGLOO-Models]` | Drag law, heat correlation, evaporation model, breakup model |
-| `[IGLOO-Properties]` | Constant scalar properties for evaporation/breakup (per material) |
+| `[IGLOO-Properties]` | Constant scalar properties for evaporation/breakup and the radiation emissivity (per material) |
 | `[IGLOO-BC]` | Injection spacing (`ds`) or explicit particle coordinates |
 | `[IGLOO-ODE]` | ODE solver selection, tolerances, step count |
 
@@ -159,7 +159,7 @@ Breakup model–specific tuning constants (`B0`, `B1`, `Cs`, etc.) are also read
 
 ### `[IGLOO-Properties]`
 
-Constant evaporation and breakup properties, one value per material in the order they appear in `INPUT/phase.txt`. Required only when the corresponding model is active and the property is not already in `INPUT/properties.dat`.
+Constant evaporation and breakup properties and the emissivity of the radiative exchange, one value per material in the order they appear in `INPUT/phase.txt`. The evaporation and breakup properties are required only when the corresponding model is active and the property is not already in `INPUT/properties.dat`.
 
 | Key | Description |
 |-----|-------------|
@@ -172,6 +172,9 @@ Constant evaporation and breakup properties, one value per material in the order
 | `Yinf` | Far-field vapor mass fraction |
 | `sigma` | Surface tension [N/m] (breakup) |
 | `mu` | Dynamic viscosity [Pa·s] (breakup) |
+| `emissivity` | Surface emissivity of the grey-body exchange with the gas temperature, $\varepsilon\,\sigma\,\pi d^2 (T_g^4 - T_p^4)$ (see [Radiation](../theory/heat.md#radiation)); default 0 = off; refused below 0, cut to 1.0 with a warning above 1 |
+
+IGLOO reads `emissivity` from `[IGLOO-Properties]` only. ICE models the same exchange through `[ICE-Physics] emissivity`: a hydra case that runs both condensed solvers sets the two keys together, with the same value for a material both phases carry; ICE's key alone leaves IGLOO's exchange off.
 
 ### `[IGLOO-BC]`
 

@@ -9,7 +9,8 @@ $$
 where $\mathrm{Nu}$ is selected by `assign_heat` in `src/lib/Lib_Heat.f90` via the keyword
 `[IGLOO-Models] heat` in `input.ini`.  The pure function `heat(Re, Pr, Ma, heatSelect)`
 dispatches to one of the six correlations below (or to the `NoHeat` switch, $\mathrm{Nu} = 0$), with
-$\mathrm{Pr} = \mu_g\,\gamma\,R_g / ((\gamma - 1)\,k_g)$ evaluated from the local gas state.
+$\mathrm{Pr} = \mu_g\,\gamma\,R_g / ((\gamma - 1)\,k_g)$ evaluated from the local gas state.  A
+material with an emissivity adds the grey-body exchange of [Radiation](#radiation) to this heat.
 
 The thermal relaxation time (Stokes limit, $\mathrm{Nu}=2$) is
 
@@ -137,10 +138,77 @@ $$
 
 Not a correlation: the switch that removes the convective heat flux, $\dot{Q} = 0$, so a
 parcel without other heat sources keeps its injection temperature.  It acts on this Nusselt
-term only.  The latent sink of an evaporation model and the heat release of a combustion
-model still apply, and while `evaporation = ASM` or `TC` is evaporating, the model's own
+term only.  The latent sink of an evaporation model, the heat release of a combustion
+model and the radiative exchange of [Radiation](#radiation) still apply, and while `evaporation = ASM` or `TC` is evaporating, the model's own
 gas-side heat rate replaces $\dot{Q}$ whatever `heat` is set to.  The evaporation mass rate
 comes from the evaporation model's own transfer law and does not read `heat`.
+
+---
+
+## Radiation
+
+```
+[IGLOO-Properties]
+emissivity = 0.8   ; one value per material
+```
+
+A material with an emissivity $\varepsilon > 0$ also exchanges heat with the gas by grey-body
+radiation, in watts:
+
+$$
+\dot{Q}_r = \varepsilon\,\sigma\,\pi\,d^2\,\bigl(T_g^4 - T_p^4\bigr), \qquad
+\sigma = 5.670374419\times10^{-8}\ \mathrm{W\,m^{-2}\,K^{-4}}
+$$
+
+(`radiativeHeat` in `src/lib/Lib_Heat.f90`; $\sigma$ is CODATA's Stefan–Boltzmann constant,
+`sigmaSB`).  $\pi d^2$ is the whole surface of the sphere, $d$ the particle diameter at the current
+state, $T_p$ its temperature and $T_g$ the gas temperature at the particle: the cell-centre value
+under `gas-order = 1`, the interpolated one under `gas-order = 2`
+([Gas-state interpolation](governing-equations.md#gas-state-interpolation)).
+
+**The emissivity** is `[IGLOO-Properties] emissivity`, one constant per material in the order of
+`INPUT/phase.txt` ([Input](../user/input.md#igloo-properties)).  The default 0 switches the exchange
+off: the material's right-hand side is then the one without the term.  A negative value is refused
+at setup; a value above 1 is cut to 1.0 with one warning per material.  Setup prints the value of
+every radiating material (`>> [material i] emissivity ...: grey-body radiation with the gas
+temperature`).
+
+**Where it enters.** $\dot Q_r$ is added to the heat of the energy equation of every ODE model
+([Governing equations](governing-equations.md#energy-equation)), after the Stefan-blowing reduction,
+which does not scale it, and also where an evaporation model returns a heat rate of its own (ASM,
+TC).  Under model 6 it drives the temperature of the liquid and of the solid and, on the plateau, the
+frozen fraction ([Solidification](solidification.md)).  `heat = NoHeat` removes the Nusselt term
+only and leaves $\dot Q_r$ in place.  Where the gas is degenerate (zero viscosity), models 1 and 6
+exchange no heat at all, radiation included.
+
+**The sink.** The partner of the exchange is the local gas: the particle radiates to, or absorbs
+from, surroundings at the gas temperature.  This is the optically thick limit, the radiation field
+in equilibrium with the local gas, fair inside a hot chamber or nozzle.  The gas source term books
+the change of the energy the particle stream carries through each cell
+([Eulerian feedback](eulerian-feedback.md#source-fields)), so what a particle radiates is deposited
+in the gas cell it crosses and the total energy is conserved.  In an optically thin plume the
+particles see surroundings colder than the gas, and this sink under-estimates the plume's radiative
+cooling.
+
+**Magnitude.** Against the conduction limit $\mathrm{Nu} = 2$ the ratio
+$\dot Q_r/\dot Q = \varepsilon\,\sigma\,d\,(T_g^4 - T_p^4)/\bigl(2\,k_g\,(T_g - T_p)\bigr)$ grows linearly
+with the diameter: for alumina at 2300 K in gas at 1500 K ($\varepsilon = 0.8$, $k_g = 0.2$ W/(m K))
+it is 1.1 % at 3.5 µm, 6.5 % at 20 µm and 32 % at 100 µm.
+
+**The Eulerian source branch.** `getSourceTerms` (`src/lib/obj_IGLOO.f90`), the function hydra's
+Eulerian coupling (`IGLOO-iter = 2`) calls for the drag and heat per unit volume of a cell's particle
+state ([Embedding in Hydra](../user/using.md#embedding-in-hydra)), adds the same term for each particle
+of the cell, with the diameter it rebuilds from the particle density and number density.  It takes
+the fourth power of the cell's mean particle temperature, not the mean of $T_p^4$; the latter is the
+larger, so a spread of temperatures within a cell makes this branch under-state the particles'
+emission.  The convective term, linear in $T_p$, has no such gap.
+
+**Coherence with ICE.** ICE's Eulerian condensed phase models the same exchange through
+`[ICE-Physics] emissivity`: over the whole sphere, with the same constant, the gas temperature as
+the sink and an emissivity above 1 cut to 1.  A case that runs both condensed solvers sets the two
+keys together, with the same value for a material both phases carry; neither solver compares them.
+Each solver reads its own section: an `[ICE-Physics] emissivity` in the same `input.ini` leaves
+IGLOO's exchange off.
 
 ---
 
@@ -165,4 +233,9 @@ The end-to-end conduction-limit and convective cases are
 [Temperature relaxation](../vv/temp-relax.md) and [`conv-nu`](../vv/e2e.md#conv-nu); JAXA2, JAXA3,
 JAXA4 and Kavanau–Drake run end to end at a slip Mach number of $5.2\times10^{-4}$ in `conv-nu-jaxa2`,
 `conv-nu-jaxa3`, `conv-nu-jaxa4` and `conv-nu-kd` (`tests/standard/`);
-`NoHeat` is gated by [`no-exchange`](../vv/e2e.md#no-exchange).
+`NoHeat` is gated by [`no-exchange`](../vv/e2e.md#no-exchange).  The radiative exchange is gated by
+`test_radiation` (the term, the right-hand side of every ODE model, the Eulerian source branch),
+`rad-cool` (a hot particle cooled by radiation alone, against the closed form in $x$),
+`emissivity-cap` (an emissivity above 1 cut to 1), `rad-foreign-key` (ICE's key leaves IGLOO's run
+unchanged) — all four in `tests/standard/` — and `tests/solidification/solid-box-rad` (the liquid,
+plateau and solid regimes under radiation alone); see the `INFO.md` of each case.

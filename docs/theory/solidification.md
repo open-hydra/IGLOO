@@ -7,7 +7,8 @@ A material carrying `solidification=on` on its line of the phase file (from
 solid-rocket chamber is the case in view) that cools through its melting point,
 **supercools** to a nucleation temperature, freezes abruptly with an adiabatic
 **recalescence** back to the melting point, holds a **plateau** there while the rest
-of the latent heat leaves by convection, and then cools as a **solid**.  A solid heated
+of the latent heat leaves by convection (and radiation, for a material with an emissivity),
+and then cools as a **solid**.  A solid heated
 to the melting point (in gas hotter than it) **melts** there on the same plateau and
 continues as a liquid.  The mass is constant: nothing evaporates.
 
@@ -19,8 +20,10 @@ liquid, plateau, solid) is a per-particle integer carried beside the ODE state.
 
 ## Phases and events
 
-With $\dot Q = \pi\, d\, k_g\, \mathrm{Nu}\,(T_g - T_p)$ the convective heat the droplet
-receives (the standard interphase term, see [Heat Transfer](heat.md)), $c_l$ the
+With $\dot Q = \pi\, d\, k_g\, \mathrm{Nu}\,(T_g - T_p) + \dot Q_r$ the heat the droplet
+receives (the standard interphase term, see [Heat Transfer](heat.md), plus the grey-body exchange
+$\dot Q_r = \varepsilon\,\sigma\,\pi\,d^2\,(T_g^4 - T_p^4)$ of a material with an emissivity,
+see [Radiation](heat.md#radiation), on the plateau as in the two other phases), $c_l$ the
 material's `cp` from `properties.dat` (the liquid), $c_s$ = `cp-solid`,
 $h_\mathrm{fus}$ = `h-fus`, $T_m$ = `T-melt` and $T_n$ = `T-nuc`:
 
@@ -154,6 +157,7 @@ event rule, corner cases, one production RHS call per phase) and the e2e cases
 energy deposit globally and per plateau cell), `solid-melt` (a solid heated to
 melting: the solid, melting and liquid regimes against their closed forms, the event
 positions, the heat taken from the gas per plateau cell), `solid-box-euler` (the
-Eulerian field), `solid-box-2mat` (a model-6 material followed by a model-1 one) and
+Eulerian field), `solid-box-2mat` (a model-6 material followed by a model-1 one),
+`solid-box-rad` (the three regimes, the plateau rows and the energy deposit under radiation alone) and
 the two-sweep `repeatability/solid-box`, plus eight setup refusals.  See
 `tests/solidification/INFO.md`.

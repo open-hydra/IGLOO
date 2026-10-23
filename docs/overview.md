@@ -36,7 +36,7 @@ IGLOO can also run standalone — without MOSE — when the gas field is provide
 | Feature | Details |
 |---------|---------|
 | **Drag** | 13 correlations: Stokes, Schlichting, Schiller–Naumann, Morsi–Alexander, Wen–Yu, Newton, Chang, Clift–Gauvin, Putnam (incompressible); Henderson, Crowe, Hermsen, Carlson–Hoglund (compressible) |
-| **Heat transfer** | Six Nusselt correlations: Ranz–Marshall, Kavanau–Drake, JAXA1–JAXA4 |
+| **Heat transfer** | Six Nusselt correlations: Ranz–Marshall, Kavanau–Drake, JAXA1–JAXA4; optional grey-body radiation with the gas temperature (per-material emissivity) |
 | **Evaporation** | d²-law, CEM, CEM-B, Abramzon–Sirignano and Tonini–Cossali mass transfer; equilibrium or Langmuir–Knudsen interface; optional Stefan-blowing heat reduction |
 | **Metal combustion** | Beckstead $d^n$ aluminium burn law with ignition gate, heat release and burnout |
 | **Secondary breakup** | Five models (Pilch–Erdman, Reitz–Diwakar, Reitz-KHRT, TAB, ETAB); KHRT child-particle generation with dynamic array compaction/growth |
