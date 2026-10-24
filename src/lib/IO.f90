@@ -131,8 +131,9 @@ contains
         error stop '[ERROR] liquid-conduction=P2T requires mu-liq > 0'
       if (material(i)%liqSelect > 0 .and. material(i)%brkupSelect > 0 .and. material(i)%muLiq > 0._R8) &
         error stop '[ERROR] liquid-conduction=P2T with breakup takes the breakup viscosity: remove mu-liq'
-      !> parsed-but-unimplemented selectors are rejected here
-      if (material(i)%boilSelect  > 0) error stop '[ERROR] boiling=ZGR parsed but not implemented yet'
+      !> boiling=ZGR: an evaporating material
+      if (material(i)%boilSelect > 0 .and. material(i)%evapSelect == 0) &
+        error stop '[ERROR] boiling=ZGR requires an evaporating material'
       !> Solidification validation: h-fus and cp-solid given, rho-solid not negative, T-nuc below T-melt, no other phase model
       if (material(i)%solidSelect > 0) then
         if (material(i)%hFus  <= 0._R8) error stop '[ERROR] solidification=on requires h-fus > 0 in [GPB-PhaseX]'

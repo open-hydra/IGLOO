@@ -31,7 +31,7 @@ module Lib_RHS
   integer :: mod_evapSelect = 0         !> evaporation gas-side selector
   integer :: mod_liqSelect  = 0         !> liquid-side: 0 ITC, 1 P2T (parabolic profile)
   integer :: mod_intfSelect = 0         !> interface:   0 VLE, 1 Langmuir-Knudsen
-  integer :: mod_boilSelect = 0         !> boiling:     0 clamp, 1 ZGR (not implemented)
+  integer :: mod_boilSelect = 0         !> boiling:     0 clamp, 1 ZGR (Zuo-Gomes-Rutland above the boiling point)
   integer :: mod_combSelect = 0         !> metal combustion: 0 off, 1 Beckstead
   logical :: mod_propFlags(7) = .false. !> [varCp, varRho, varSig, varMup, varPsat, varLv, varCpv]
   real(R8), allocatable :: mod_bp(:)    !> breakup params (copy of bp from IGLOO_Lib_Breakup)
@@ -628,8 +628,8 @@ contains
     real(R8) :: normVel, slip, mdot, Vdif(3), Re, cpFactor, tp, d, rho, m, psat, xi0_loc(3)
     real(R8) :: Fdrag(3), Qdot, Qdot_evap
     real(R8) :: ep(nep)
-    real(R8) :: ts, cl, mul, carry
-    logical  :: override
+    real(R8) :: ts, cl, mul, carry, TB, Nu
+    logical  :: override, boiling
     integer  :: p2tStat
 
     F = 0._R8
@@ -653,8 +653,16 @@ contains
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
 
-    !> the surface temperature: the parabolic profile's (P2T), else the mean temperature
-    if (mod_liqSelect == 1) then
+    !> the boiling regime (ZGR): the mean temperature at or above the boiling temperature at the local pressure
+    boiling = .false.
+    if (mod_boilSelect == 1) then
+      TB = boilingTemp(gas(1)*gas(8)*gas(5), aux, naux, psatTabM)
+      boiling = tp >= TB
+    endif
+    !> the surface temperature: the boiling temperature in the regime, the parabolic profile's (P2T), else the mean
+    if (boiling) then
+      ts = TB
+    elseif (mod_liqSelect == 1) then
       if (mod_propFlags(1)) then; cl = lookupTab(hTabM, tp + 0.5_R8) - lookupTab(hTabM, tp - 0.5_R8)
       else;                       cl = aux(ind_cp); endif
       !> one liquid viscosity: the breakup viscosity of a breaking material, else mu-liq
@@ -681,13 +689,16 @@ contains
     endif
     if (present(TsOut)) TsOut = ts
 
-    call interphase(gas, nsp, Vdif, slip, ts, d, Re, cpFactor, Fdrag, Qdot)
+    call interphase(gas, nsp, Vdif, slip, ts, d, Re, cpFactor, Fdrag, Qdot, NuOut=Nu)
     !> vapour data: the packed scalars, Lv and cpv at the surface temperature when tabulated
     ep = aux(ind_Mv:ind_Mv+nep-1)
     if (mod_propFlags(6)) ep(iLv)  = tableValue(LvTabM, Tmin, Tmax, ts)
     if (mod_propFlags(7)) ep(icpv) = tableValue(cpvTabM, Tmin, Tmax, ts)
     !> gas packs (5)=T,(6)=mu,(7)=gamma,(8)=R,(9)=k; signature is (rhog,Tg,gamma,Rg,mug,kg)
-    if (mod_propFlags(5)) then
+    if (boiling) then
+      call zgrAt(tp, TB, d, gas, nsp, Nu, ep(iLv), cpFactor, aux, naux, mdot, Qdot_evap)
+      override = .true.
+    elseif (mod_propFlags(5)) then
       psat = tableValue(psatTabM, Tmin, Tmax, ts)
       call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
                        ts, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
@@ -705,7 +716,7 @@ contains
     F(1:3) = Z(4:6)
     F(4:6) = Fdrag / m
     if (bodyForce) F(4:6) = F(4:6) + bodyAccel
-    if (mod_liqSelect == 1) then
+    if (mod_liqSelect == 1 .or. boiling) then
       !> m dh/dt = Q + mdot (Lv(Ts) + h(Ts) - h): the vapour leaves at the surface temperature
       if (mod_propFlags(1)) then; carry = lookupTab(hTabM, ts) - Z(7)
       else;                       carry = ts - tp; endif
@@ -846,8 +857,8 @@ contains
     real(R8) :: tp, d, rho, m, xi0_loc(3)
     real(R8) :: Fdrag(3), Qdot, Qdot_evap, acc(3), brkupVar(2)
     real(R8) :: ep(nep)
-    real(R8) :: ts, cl, carry
-    logical  :: override
+    real(R8) :: ts, cl, carry, TB, Nu
+    logical  :: override, boiling
     integer  :: p2tStat
 
     F = 0._R8
@@ -873,8 +884,17 @@ contains
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
 
-    !> the surface temperature: the parabolic profile's (P2T, the breakup viscosity as mu_l), else the mean temperature
-    if (mod_liqSelect == 1) then
+    !> the boiling regime (ZGR), as model 2
+    boiling = .false.
+    if (mod_boilSelect == 1) then
+      TB = boilingTemp(gas(1)*gas(8)*gas(5), aux, naux, psatTabM)
+      boiling = tp >= TB
+    endif
+    !> the surface temperature: the boiling temperature in the regime, the parabolic profile's (P2T, the breakup
+    !  viscosity as mu_l), else the mean temperature
+    if (boiling) then
+      ts = TB
+    elseif (mod_liqSelect == 1) then
       if (mod_propFlags(1)) then; cl = lookupTab(hTabM, tp + 0.5_R8) - lookupTab(hTabM, tp - 0.5_R8)
       else;                       cl = aux(ind_cp); endif
       call p2tSurface(tp, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mup, &
@@ -890,7 +910,7 @@ contains
     endif
     if (present(TsOut)) TsOut = ts
 
-    call interphase(gas, nsp, Vdif, slip, ts, d, Re, cpFactor, Fdrag, Qdot)
+    call interphase(gas, nsp, Vdif, slip, ts, d, Re, cpFactor, Fdrag, Qdot, NuOut=Nu)
     acc = Fdrag / m
 
     ! Breakup: npdot rate — brkupVar from auxState (told/tc for KHRT)
@@ -906,7 +926,10 @@ contains
     if (mod_propFlags(6)) ep(iLv)  = tableValue(LvTabM, Tmin, Tmax, ts)
     if (mod_propFlags(7)) ep(icpv) = tableValue(cpvTabM, Tmin, Tmax, ts)
     !> gas packs (5)=T,(6)=mu,(7)=gamma,(8)=R,(9)=k; signature is (rhog,Tg,gamma,Rg,mug,kg)
-    if (mod_propFlags(5)) then
+    if (boiling) then
+      call zgrAt(tp, TB, d, gas, nsp, Nu, ep(iLv), cpFactor, aux, naux, mdot_evap, Qdot_evap)
+      override = .true.
+    elseif (mod_propFlags(5)) then
       psat = tableValue(psatTabM, Tmin, Tmax, ts)
       call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
                        ts, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
@@ -928,7 +951,7 @@ contains
     F(1:3) = Z(4:6)
     F(4:6) = acc
     if (bodyForce) F(4:6) = F(4:6) + bodyAccel
-    if (mod_liqSelect == 1) then
+    if (mod_liqSelect == 1 .or. boiling) then
       !> as model 2; the carry goes with the evaporated mass, the breakup share stays at the mean state
       if (mod_propFlags(1)) then; carry = lookupTab(hTabM, ts) - Z(7)
       else;                       carry = ts - tp; endif
@@ -1094,6 +1117,39 @@ contains
     end function qnet
 
   end subroutine p2tSurface
+
+
+  !> The boiling temperature at the pressure p: the inverse of the material's Psat column, else of Clausius-Clapeyron.
+  pure function boilingTemp(p, aux, naux, psatTabM) result(TB)
+    use IGLOO_Lib_Evaporation, only: boilingTemperatureCC
+    use IGLOO_Lib_Properties,  only: inverseTableValue, Tmin, Tmax
+    implicit none
+    integer,  intent(in) :: naux
+    real(R8), intent(in) :: p, aux(naux), psatTabM(:)
+    real(R8) :: TB
+    if (mod_propFlags(5)) then
+      TB = inverseTableValue(psatTabM, Tmin, Tmax, p)
+    else
+      TB = boilingTemperatureCC(p, aux(ind_e1), aux(ind_e2))
+    endif
+  end function boilingTemp
+
+
+  !> ZGR at the state with the gas's c_p and conductivity; a P2T drop's flash fed by the parabolic conduction (k_l).
+  pure subroutine zgrAt(tbar, TB, d, gas, nsp, Nu, Lv, cpFactor, aux, naux, mdot, Qdot)
+    use IGLOO_Lib_Evaporation, only: zgrBoiling
+    implicit none
+    integer,  intent(in)  :: nsp, naux
+    real(R8), intent(in)  :: tbar, TB, d, gas(nsp), Nu, Lv, cpFactor, aux(naux)
+    real(R8), intent(out) :: mdot, Qdot
+    real(R8) :: cpg
+    cpg = gas(7)*gas(8)/(gas(7) - 1._R8)
+    if (mod_liqSelect == 1) then
+      call zgrBoiling(tbar, TB, d, gas(9), cpg, Nu, gas(5), Lv, cpFactor, mdot, Qdot, kCond=aux(ind_e4))
+    else
+      call zgrBoiling(tbar, TB, d, gas(9), cpg, Nu, gas(5), Lv, cpFactor, mdot, Qdot)
+    endif
+  end subroutine zgrAt
 
 
   !> Model 5: Beckstead d^n burn law; state layout as model 2 (Z(7)=T/h, Z(8)=mass).

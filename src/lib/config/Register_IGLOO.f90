@@ -70,7 +70,7 @@ contains
       'replace it with their own gas-side heat rate)', &
       'JAXA1, JAXA2, JAXA3, JAXA4, Ranz-Marshall, Kavanau-Drake, NoHeat',.true.)
     call reg%add('IGLOO-Models','evaporation',d_s(8),'NoEvaporation', &
-      'Evaporation model; presence enables phase change (LEB reserved, not implemented: hard error)','d2-law, CEM, CEM-B, ASM, TC',.false.)
+      'Evaporation model; presence enables phase change','d2-law, CEM, CEM-B, ASM, TC',.false.)
     call reg%add('IGLOO-Models','liquid-conduction',d_s(11),'ITC', &
       'Liquid-side conduction model, global default (per-material override: key=value on the material line of the phase file, from [GPB-Phase*]); P2T: parabolic temperature profile inside the droplet, needs k-liq and mu-liq on the material line; a breaking material takes the breakup viscosity instead of mu-liq','ITC, P2T',.false.)
     call reg%add('IGLOO-Models','interface',d_s(12),'VLE', &
@@ -80,7 +80,7 @@ contains
       '= Miller-Harstad-Bellan 1998 eq.19, f2=b/(exp(b)-1) with b their eq.17 evaporation '// &
       'parameter. Off by default: it changes every evaporating case','none, LK',.false.)
     call reg%add('IGLOO-Models','boiling',d_s(13),'clamp', &
-      'Boiling branch, global default (per-material override: key=value on the material line of the phase file, from [GPB-Phase*]); ZGR not implemented: refused at setup','clamp, ZGR',.false.)
+      'Boiling branch, global default (per-material override: key=value on the material line of the phase file, from [GPB-Phase*]); ZGR: Zuo-Gomes-Rutland boiling of a droplet above its boiling point at the local pressure (replaces the clamp there)','clamp, ZGR',.false.)
     call reg%add('IGLOO-Models','breakup',d_s(9),'NoBreakup', &
       'Breakup model, global default; a material overrides it with the `breakup=<model>` token of its '// &
       'phase-file line, and each constant below with its `<tag>-<key>` token', &

@@ -1,7 +1,7 @@
 # INFO — evaporation (family C)
 
 Verifies the evaporation mass ODE (and coupled heat) under the four production
-closures: d²-law=1, CEM=2, CEM-B=3, ASM=4, TC=5 (LEB is rejected at the choke point). Per plan OQ1 (resolved
+closures: d²-law=1, CEM=2, CEM-B=3, ASM=4, TC=5. Per plan OQ1 (resolved
 2026-06-13), all property-freeze flags are forced `.false.` ⇒ constant
 gas/liquid properties.
 
@@ -74,3 +74,10 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
   the breakup viscosity as the liquid one, radiation inside the balance — see [liquid-p2t/INFO.md](liquid-p2t/INFO.md).
 - `temp-relax-p2t` (e2e): temp-relax's drop with no mass transfer, τ = 1.2 τ_ITC and the trajectory's
   surface-temperature column — see [temp-relax-p2t/INFO.md](temp-relax-p2t/INFO.md).
+
+## Boiling of a superheated drop (`boiling = ZGR`)
+
+- `boiling-zgr/test_boiling_zgr.f90` (unit): the boiling branch, its heat-transfer coefficient, the boiling
+  temperature at the pressure and the adiabatic flash through models 2 and 4 — see [boiling-zgr/INFO.md](boiling-zgr/INFO.md).
+- `boiling-zgr-flash`, `boiling-zgr-hot`, `boiling-zgr-switch` (e2e): the flash at A = 0, the boiling in a hotter gas,
+  the switch into evaporation at the boiling point and the burnout — see their `INFO.md`.

@@ -10,10 +10,11 @@ program test_liquid_p2t
     !   (c)  chi(Pe_L) = 1.86 + 0.86 tanh(2.245 log10(Pe_L/30)) [AS89] eq. 39, 1 with no circulation
     !   (d)  CEM at Re 20: the surface balance G(Ts) = 0, and F(7) = (Q_g + mdot (Lv + c (Ts - Tbar)))/(m c) with Q_g and
     !        mdot from interphase and evaporation at Ts (the vapour leaves at the surface temperature); T and h states
-    !   (e)  a grid of states and gas-side models: every F finite, the widened brackets counted
+    !   (e)  a grid of states and gas-side models, with the boiling clamp and with ZGR: every F finite
     !   (f)  informational: chi at Tbar and at Ts, Ts - Tbar at (d)'s state
     !   (g)  model 4, Pilch-Erdman active, the breakup viscosity as mu_l: F(7) and the evaporated rate equal (d)'s
     !   (h)  model 2 with TAB (an event breakup model), the breakup viscosity as mu_l: F equals (d)'s
+    !   (i)  boiling = ZGR at A = 0: the surface at T_B and the flash fed by the parabolic conduction 10 pi kl d dT
     !   (j)  grey-body radiation inside the surface balance, through both right-hand sides
     !
     use, intrinsic :: iso_fortran_env, only: I4 => int32, R8 => real64
@@ -29,16 +30,17 @@ program test_liquid_p2t
     integer,  parameter :: TMIN_TAB = 1, TMAX_TAB = 2000
 
     !> the case run by rhs_at / prep, set by each leg
-    real(R8) :: cTg, cSlip, cTbar, cD, cRhol, cCl, cKl, cMul, cMup, cSig, cYinf, cEps, cNp
-    integer  :: cModel, cBrk, cEvap, cIntf, cBlow
+    real(R8) :: cTg, cSlip, cTbar, cD, cRhol, cCl, cKl, cMul, cMup, cSig, cYinf, cEps, cNp, cInvTb
+    integer  :: cModel, cBrk, cEvap, cIntf, cBlow, cBoil
+    character(len=16) :: cHeat
     logical  :: cH, cP2T
     real(R8) :: hTab(TMIN_TAB:TMAX_TAB), dtab(1)
 
     real(R8) :: F(9), Fi(9), Fd(9), Fh(9), ts, ts2, tsd, err, err2, ref, ref2, m, d, Re, zeta, K, chi, BM
     real(R8) :: Qg, md, G, Fdrag(3), BMs, chis, F7d, F8d
-    real(R8) :: Tgs(3), Tbs(4), ds(2), kls(2)
+    real(R8) :: Tgs(3), Tbs(4), ds(2), kls(2), dTi(4)
     logical  :: ok_all, pass
-    integer  :: exit_code, i, jg, jt, jd, jk, iv, nPts, nBad, nWide, nFail, stat
+    integer  :: exit_code, i, jg, jt, jd, jk, iv, nPts, nBad, nWide, nFail, stat, nZ, nReg
     integer  :: evs(7), ints(7), blows(7)
     character(len=8) :: names(7)
 
@@ -145,7 +147,36 @@ program test_liquid_p2t
         write(*,'(a,a,a,i0,a,i0,a,i0)') '  (e) ', names(iv), ': states ', nPts, ', widened brackets ', nWide, &
                                         ', failed solves ', nFail
     enddo
-    pass = (nBad == 0) .and. (nFail == 0)
+    write(*,'(a,i0,a,i0,a,i0,a,i0)') '  (e) clamp: ', nPts, ' states: non-finite F ', nBad, ', failed solves ', &
+                                     nFail, ', widened brackets ', nWide
+    nZ = 0; nReg = 0
+    do iv = 1, 7
+        do jg = 1, 3
+            do jt = 1, 4
+                do jd = 1, 2
+                    do jk = 1, 2
+                        call case_d()
+                        cEvap = evs(iv); cIntf = ints(iv); cBlow = blows(iv); cBoil = 1
+                        cTg = Tgs(jg); cTbar = Tbs(jt); cD = ds(jd); cKl = kls(jk)
+                        call rhs_at(F, ts)
+                        nZ = nZ + 1
+                        if (.not. all(ieee_is_finite(F(1:8))) .or. any(abs(F(1:8)) >= 1.e30_R8)) nBad = nBad + 1
+                        if (in_regime()) nReg = nReg + 1
+                    enddo
+                enddo
+            enddo
+        enddo
+    enddo
+    call case_d(); cBoil = 1; cHeat = 'NoHeat'; cTg = 300._R8; cTbar = Tboil + 5._R8
+    call rhs_at(F, ts)
+    nZ = nZ + 1
+    if (.not. all(ieee_is_finite(F(1:8))) .or. any(abs(F(1:8)) >= 1.e30_R8)) nBad = nBad + 1
+    if (in_regime()) nReg = nReg + 1
+    if (.not. in_regime()) nBad = nBad + 1
+    nPts = nPts + nZ
+    write(*,'(a,i0,a,i0,a)') '  (e) ZGR: ', nZ, ' states (', nReg, &
+                             ' in the boiling regime, the last with heat = NoHeat)'
+    pass = (nBad == 0) .and. (nFail == 0) .and. nReg > 0
     write(*,'(a,i0,a,i0,a,i0,a,i0)') '  (e) ', nPts, ' states: non-finite F ', nBad, ', failed solves ', nFail, &
                                      ', widened brackets ', nWide
     if (pass) then; write(*,'(a)') '  [PASS] (e) every F finite'; else; write(*,'(a)') '  [FAIL] (e) every F finite'; endif
@@ -181,6 +212,28 @@ program test_liquid_p2t
     pass = assert_lt("(h) model 2 with TAB: max |F - F(d)|/|F(d)|", err, 1.e-14_R8)
     ok_all = ok_all .and. pass
     call append_row('h_model2_tab', 'F1:8', err, err, 0._R8, 0._R8, 1.e-14_R8, pass)
+
+    ! --- (i) boiling = ZGR at A = 0: the surface at T_B, the flash fed by the parabolic conduction ------------------
+    call case_d(); cBoil = 1; cSlip = 0._R8; cTg = 600._R8; cRhol = 958._R8; cCl = 4186._R8; cKl = 0.6_R8
+    cInvTb = invtb_at(600._R8)
+    dTi = [30._R8, 10._R8, 1._R8, 0.2_R8]
+    err = 0._R8; err2 = 0._R8; pass = cInvTb == cInvTb
+    do i = 1, 4
+        cTbar = 600._R8 + dTi(i)
+        call rhs_at(F, ts)
+        call geom(m, d, Re)
+        ref  = -10._R8*PI*cKl*d*max(dTi(i), 0.5_R8)/Lv
+        ref2 = cCl/(Lv - cCl*dTi(i))
+        err  = max(err, abs(F(8)/ref - 1._R8))
+        err2 = max(err2, abs((F(8)/F(7))/m/ref2 - 1._R8))
+        pass = pass .and. ts == 600._R8
+        write(*,'(a,f5.1,a,es18.10,a,es18.10)') '  (i) dT', dTi(i), ' K: F(8) =', F(8), '  (F8/F7)/m =', (F(8)/F(7))/m
+    enddo
+    if (.not. pass) write(*,'(a)') '  [FAIL] (i) TsOut is not T_B = 600 K'
+    pass = assert_lt('(i) F(8)/(-10 pi kl d dT_f/Lv) - 1', err, 1.e-13_R8) .and. &
+           assert_lt('(i) (F(8)/F(7))/m / (c/(Lv - c dT)) - 1', err2, 1.e-13_R8) .and. pass
+    ok_all = ok_all .and. pass
+    call append_row('i_zgr_conduction_flash', 'F8,F8/F7', err, err2, 0._R8, 0._R8, 1.e-13_R8, pass)
 
     ! --- (j) radiation inside the surface balance -----------------------------------------------------------------
     call case_a(); cEps = 0.8_R8
@@ -218,6 +271,7 @@ contains
         cModel = 2; cBrk = 0; cEvap = 1; cIntf = 0; cBlow = 0; cH = .false.; cP2T = .true.
         cTg = 600._R8; cSlip = 0._R8; cTbar = 300._R8; cD = 11.89e-6_R8; cRhol = 2950._R8; cCl = 1250._R8
         cKl = 0.026_R8; cMul = 1.e-3_R8; cMup = 0._R8; cSig = 0._R8; cYinf = 1._R8; cEps = 0._R8; cNp = 1.e7_R8
+        cBoil = 0; cInvTb = 1._R8/Tboil; cHeat = 'Ranz-Marshall'
     end subroutine case_a
 
     !> (d)'s state: CEM, Tbar 320 K in an 800 K gas, slip 6 m/s (Re 20), d 50 um, rho 1000, c 4180, kl 0.6, mu_l 1e-3.
@@ -225,6 +279,7 @@ contains
         cModel = 2; cBrk = 0; cEvap = 2; cIntf = 0; cBlow = 0; cH = .false.; cP2T = .true.
         cTg = 800._R8; cSlip = 6._R8; cTbar = 320._R8; cD = 50.e-6_R8; cRhol = 1000._R8; cCl = 4180._R8
         cKl = 0.6_R8; cMul = 1.e-3_R8; cMup = 0._R8; cSig = 0._R8; cYinf = 0._R8; cEps = 0._R8; cNp = 1.e7_R8
+        cBoil = 0; cInvTb = 1._R8/Tboil; cHeat = 'Ranz-Marshall'
     end subroutine case_d
 
     !> The drop's mass, diameter (the right-hand side's formula) and Reynolds number.
@@ -257,7 +312,7 @@ contains
         sourceSwitch = .false.;  phaseChange = .true.;  blowSelect = cBlow
         Tmin = TMIN_TAB;  Tmax = TMAX_TAB
         call assign_drag('Stokes', dragSelect)
-        call assign_heat('Ranz-Marshall', heatSelect)
+        call assign_heat(trim(cHeat), heatSelect)
         propFlags = .false.;  propFlags(1) = cH
         select case (cBrk)
         case (1);    bp = [1.0_R8, 0.01_R8, 0._R8, 0._R8]           ! Pilch-Erdman [Cd, B]
@@ -266,20 +321,20 @@ contains
         case default; bp = 0._R8
         end select
         if (cBrk == 1) then
-            call setupRHS(cModel, cBrk, cEvap, merge(1, 0, cP2T), cIntf, 0, 0, propFlags, bp(1:2), 1, 1._R8, &
+            call setupRHS(cModel, cBrk, cEvap, merge(1, 0, cP2T), cIntf, cBoil, 0, propFlags, bp(1:2), 1, 1._R8, &
                           nAux, nAuxSt, nEvV, radiation=cEps > 0._R8)
         elseif (cBrk > 0) then
-            call setupRHS(cModel, cBrk, cEvap, merge(1, 0, cP2T), cIntf, 0, 0, propFlags, bp, 1, 1._R8, &
+            call setupRHS(cModel, cBrk, cEvap, merge(1, 0, cP2T), cIntf, cBoil, 0, propFlags, bp, 1, 1._R8, &
                           nAux, nAuxSt, nEvV, radiation=cEps > 0._R8)
         else
-            call setupRHS(cModel, cBrk, cEvap, merge(1, 0, cP2T), cIntf, 0, 0, propFlags, [real(R8)::], 0, 0._R8, &
+            call setupRHS(cModel, cBrk, cEvap, merge(1, 0, cP2T), cIntf, cBoil, 0, propFlags, [real(R8)::], 0, 0._R8, &
                           nAux, nAuxSt, nEvV, radiation=cEps > 0._R8)
         endif
 
         mm = cRhol*(PI/6._R8)*cD**3
         p%cp = cCl;  p%rho = cRhol;  p%d = cD;  p%m = mm;  p%sigma = cSig;  p%mup = cMup
         p%Mv = Mv;  p%Lv = Lv;  p%cpv = cpv;  p%Le = 1._R8;  p%Yinf = cYinf
-        p%LvMvOverRu = Lv*Mv/Ru;  p%invTboil = 1._R8/Tboil;  p%alphaE = 1._R8
+        p%LvMvOverRu = Lv*Mv/Ru;  p%invTboil = cInvTb;  p%alphaE = 1._R8
         p%kLiq = cKl;  p%muLiq = cMul;  p%emissivity = cEps
         allocate(aux(nauxvar), auxst(max(1,nauxstate)))
         auxst = 0._R8
@@ -381,6 +436,29 @@ contains
         enddo
         if (mm < 0._R8) T = -T   ! never: mm is the drop mass, kept as an argument for the record
     end function ts_radiation
+
+    !> The case's mean temperature at or above its boiling temperature at the gas pressure (Clausius-Clapeyron, typed).
+    logical function in_regime()
+        in_regime = cTbar >= 1._R8/(cInvTb - log(rho_g*Rg*cTg/101325._R8)/(Lv*Mv/Ru))
+    end function in_regime
+
+    !> invTboil giving boilingTemperatureCC = Tg exactly at the case's gas pressure (A = 0): ulp steps from the
+    !  analytic value; NaN when none does.
+    function invtb_at(Tg) result(x)
+        use, intrinsic :: ieee_arithmetic, only: ieee_next_after, ieee_value, ieee_quiet_nan
+        use IGLOO_Lib_Evaporation, only: boilingTemperatureCC, Patm
+        real(R8), intent(in) :: Tg
+        real(R8) :: x, pg, TBx
+        integer  :: it
+        pg = rho_g*Rg*Tg
+        x  = 1._R8/Tg + log(pg/Patm)/(Lv*Mv/Ru)
+        do it = 1, 100000
+            TBx = boilingTemperatureCC(pg, Lv*Mv/Ru, x)
+            if (TBx == Tg) return
+            if (TBx < Tg) then; x = ieee_next_after(x, -1._R8); else; x = ieee_next_after(x, 1._R8); endif
+        enddo
+        x = ieee_value(x, ieee_quiet_nan)
+    end function invtb_at
 
     !> max_i |a_i - b_i|/|b_i| over the non-zero b_i, and |a_i| where b_i = 0.
     function maxrel(a, b) result(e)

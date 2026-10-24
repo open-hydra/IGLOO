@@ -77,7 +77,7 @@ module IGLOO_particles
     !> Composable phase-change axes
     integer      :: liqSelect   = 0    !> liquid-side: 0 ITC, 1 P2T (parabolic profile)
     integer      :: intfSelect  = 0    !> interface:   0 VLE, 1 Langmuir-Knudsen
-    integer      :: boilSelect  = 0    !> boiling:     0 clamp, 1 ZGR (not yet implemented)
+    integer      :: boilSelect  = 0    !> boiling:     0 clamp, 1 ZGR (Zuo-Gomes-Rutland above the boiling point)
     integer      :: combSelect  = 0    !> metal combustion: 0 off, 1 Beckstead
     integer      :: solidSelect = 0    !> solidification:   0 off, 1 supercool + recalescence
     integer      :: solidPhase  = 0    !> solidification phase: 0 liquid, 1 undercooled, 2 plateau, 3 solid

@@ -293,8 +293,8 @@ contains
 
   end subroutine interp2ndOrder2D
 
-  !> Drag force and, when Qdot is present, convective heat rate on a particle from the sampled gas.
-  pure subroutine interphase(gas,nsp,vdiff,slip,temp,diam,Re,cpFactor, Fdrag,Qdot)
+  !> Drag force and, when Qdot is present, convective heat rate on a particle from the sampled gas (NuOut: its Nusselt number).
+  pure subroutine interphase(gas,nsp,vdiff,slip,temp,diam,Re,cpFactor, Fdrag,Qdot,NuOut)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_variables, only: pi, dragSelect, heatSelect
     use IGLOO_Lib_Drag
@@ -305,6 +305,7 @@ contains
     real(R8), intent(in)  :: vdiff(3), slip, temp, diam, Re, cpFactor
     real(R8), intent(out) :: Fdrag(3)
     real(R8), intent(out), optional :: Qdot
+    real(R8), intent(out), optional :: NuOut
     real(R8) :: Ma, Tr, Pr, Nu, Cd, gam, Rg, Tg, mug, kg, denomPr
     real(R8), parameter   :: piOver8=0.39269908169872415_R8
 
@@ -319,6 +320,7 @@ contains
       Pr = mug*gam*Rg/denomPr
       Nu = heat(Re,Pr,Ma,heatSelect)
       Qdot = Nu*kg*pi*diam*(Tg-temp)*cpFactor
+      if (present(NuOut)) NuOut = Nu
     endif
 
   end subroutine interphase

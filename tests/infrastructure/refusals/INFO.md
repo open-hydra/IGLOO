@@ -26,7 +26,7 @@ output written).
 | `refuse-p2t-muliq` | as `refuse-p2t-kliq` with its own `INPUT/phase.txt` (`A 1 k-liq=0.6`), the other three files symlinked | `liquid-conduction=P2T requires mu-liq > 0` |
 | `refuse-p2t-mu-two` | `breakup/khrt-evap-frozen` (Reitz-KHRT, `[IGLOO-Properties] mu = 1.0e-3`) + `liquid-conduction = P2T`, its own `INPUT/phase.txt` (`A 1 k-liq=0.6 mu-liq=1.0e-3`), `khrt-e2e`'s other three files symlinked: a breaking material has one liquid viscosity, the breakup one | `liquid-conduction=P2T with breakup takes the breakup viscosity` |
 | `refuse-p2t-mu-zero` | as `refuse-p2t-mu-two` with `A 1 k-liq=0.6` and `mu = 0.0` | `requires mu > 0` (`IGLOO: Breakup requires mu > 0: …`) |
-| `refuse-zgr` | `INPUT/` symlinked; `[IGLOO-Models] boiling = ZGR` | `boiling=ZGR parsed but not implemented` |
+| `refuse-zgr` | `INPUT/` symlinked; `[IGLOO-Models] boiling = ZGR` on a material that does not evaporate | `boiling=ZGR requires an evaporating material` |
 | `refuse-lk-d2law` | `INPUT/` symlinked; `evaporation = d2-law` + `interface = LK` (F1 guard fires before the `[IGLOO-Properties]` requirements) | `interface=LK needs evaporation in` |
 | `refuse-properties-zones` | own `INPUT/`: drag-stokes's `bc.txt`/`solfile.tec`, two-mat's `phase.txt` (A, B), the ONE-zone `common/properties.dat`; `input.ini` also carries two-mat's `[GPB-Phase2]` | `zone count /= number of materials` |
 | `refuse-properties-range` | as above with zone B cut to 3000 rows | `zones do not share one temperature range` |
@@ -49,7 +49,6 @@ output written).
 | `refuse-heat-token` | `heat = no-such-nusselt-law` | `IGLOO: unknown heat model` |
 | `refuse-breakup-token` | `breakup = no-such-breakup-model` | `IGLOO: unknown breakup model` |
 | `refuse-evaporation-token` | `evaporation = no-such-evaporation-model` | `IGLOO: unknown evaporation model` |
-| `refuse-evaporation-leb` | `evaporation = LEB` (parsed, declared not implemented) | `IGLOO: evaporation=LEB is not implemented` |
 | `refuse-phase-token` | own `INPUT/phase.txt` (`A 1 no-such-key=1`), drag-token's `bc.txt`/`solfile.tec` symlinked | `IGLOO: unknown per-material key in the phase file` |
 | `refuse-phase-token-real` | own `INPUT/phase.txt` (`A 1 alpha-e=one`) | `IGLOO: non-numeric per-material value in the phase file` |
 | `refuse-breakup-token-material` | own `INPUT/phase.txt` (`A 1 breakup=Foo`), drag-stokes's `bc.txt`/`solfile.tec` symlinked, no `breakup` key in `[IGLOO-Models]` | `IGLOO: unknown breakup model` |
@@ -93,7 +92,7 @@ output written).
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All seventy-one exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All seventy exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next

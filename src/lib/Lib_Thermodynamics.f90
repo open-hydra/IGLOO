@@ -106,6 +106,33 @@ contains
     v  = tab(i) + (tab(i+1) - tab(i))*(Tc - real(i, R8))
   end function tableValue
 
+  !> Inverse of tableValue on a non-decreasing column: the T at which the linear interpolant reaches y, by bisection on
+  !  the nodes; lo when y <= tab(lo), huge when y exceeds tab(hi) (no such T in the table's range).
+  pure function inverseTableValue(tab, lo, hi, y) result(T)
+    integer,  intent(in) :: lo, hi
+    real(R8), intent(in) :: tab(lo:hi), y
+    real(R8) :: T
+    integer  :: i, j, k
+    if (y /= y) then
+      T = y
+      return
+    endif
+    if (y <= tab(lo)) then
+      T = real(lo, R8)
+      return
+    endif
+    if (y > tab(hi)) then
+      T = huge(1._R8)
+      return
+    endif
+    i = lo; j = hi
+    do while (j - i > 1)
+      k = (i + j)/2
+      if (tab(k) < y) then; i = k; else; j = k; endif
+    enddo
+    T = real(i, R8) + (y - tab(i))/(tab(j) - tab(i))
+  end function inverseTableValue
+
 
   !> Maps the header names to column indices of vars (column 1 is Temperature, read as the mesh).
   pure subroutine classify_table_tokens(tokens, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)

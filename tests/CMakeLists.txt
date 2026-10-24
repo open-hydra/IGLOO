@@ -6,11 +6,11 @@
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ rad-cool/ emissivity-cap/ rad-foreign-key/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
-#   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/, liquid-p2t/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ d2law-brk-dormant/ temp-relax-p2t/ (e2e)
+#   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/, liquid-p2t/, boiling-zgr/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ d2law-brk-dormant/ temp-relax-p2t/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-brk-tab-rhos/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ breakup-per-material/ khrt-plane/ pe-sigma-table/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x}
 #   repeatability/      two-sweep gates (twosweep driver): 13 cases
 #   mpi/                registered only under USE_MPI: 9 rank-count cases + 3 consistency + 1 determinism
 #                       + 13 two-sweep cases
@@ -530,11 +530,23 @@ igloo_unit_test(test_vapour_tables evaporation "unit;evaporation;c;t8")
 # radiation inside the balance. It fails on a right-hand side that ignores liquid-conduction: F(7) is 6/5 of the
 # closed form.
 igloo_unit_test(test_liquid_p2t evaporation/liquid-p2t "unit;evaporation;p2t")
+# boiling = ZGR (Zuo-Gomes-Rutland above the boiling temperature at the local pressure): test_boiling_zgr calls the
+# boiling branch, the boiling heat-transfer coefficient and the boiling temperature at the pressure, and the right-hand
+# sides of models 2 and 4 at A = 0, against the heat-fed rate of the defining equation, the adiabatic flash
+# dm/dT = m c/(L_v - c dT) and the regime switch at T_B.
+igloo_unit_test(test_boiling_zgr evaporation/boiling-zgr "unit;evaporation;zgr")
 # temp-relax-p2t: temp-relax's drop (Re 0) on the evaporating right-hand side with no mass transfer (Yinf = 1) and
 # liquid-conduction = P2T, k_l = k_g: T(x) relaxes with 1.2 times the uniform drop's time constant, and the trajectory's
 # surface-temperature column holds (5 T + T_g)/6 on every row. It fails on a solver that refuses P2T at setup (no
 # output) and on a right-hand side that ignores it.
 igloo_e2e_case(temp-relax-p2t evaporation/temp-relax-p2t "e2e;evaporation;p2t")
+# boiling-zgr-flash, -hot, -switch: a superheated water drop at Re 0 under boiling = ZGR in the box gas (600 K, 2.07 bar)
+# against the boiling branch integrated with scipy (tools/zgr_oracle.py): the adiabatic flash (T_B = T_g: the identity
+# m (L_v - c (T - T_B)) constant and T(x)), the boiling in a gas 150 K above T_B (T(x), m(x)), and the switch at T_B into
+# the classical model to the burnout (u_g 1 m/s, d0 20 um). They fail on a solver that refuses boiling = ZGR at setup.
+igloo_e2e_case(boiling-zgr-flash evaporation/boiling-zgr-flash "e2e;evaporation;zgr")
+igloo_e2e_case(boiling-zgr-hot evaporation/boiling-zgr-hot "e2e;evaporation;zgr")
+igloo_e2e_case(boiling-zgr-switch evaporation/boiling-zgr-switch "e2e;evaporation;zgr")
 igloo_e2e_case(d2law evaporation/d2law "e2e;evaporation")
 # threads-d2law: d2law at 1, 2 and 5 threads (evaporating parcels, the mass source).
 igloo_threads_case(threads-d2law evaporation/d2law "e2e;evaporation;omp")
@@ -926,7 +938,7 @@ igloo_refusal_case(refuse-p2t-mu-two       infrastructure/refusals/p2t-mu-two
 igloo_refusal_case(refuse-p2t-mu-zero      infrastructure/refusals/p2t-mu-zero
                    "requires mu > 0"                                    "e2e;refusal;evaporation;breakup")
 igloo_refusal_case(refuse-zgr              infrastructure/refusals/zgr
-                   "boiling=ZGR parsed but not implemented"             "e2e;refusal;infrastructure")
+                   "boiling=ZGR requires an evaporating material"       "e2e;refusal;infrastructure")
 igloo_refusal_case(refuse-lk-d2law         infrastructure/refusals/lk-d2law
                    "interface=LK needs evaporation in"                  "e2e;refusal;evaporation")
 igloo_refusal_case(refuse-properties-zones infrastructure/refusals/properties-zones
@@ -995,8 +1007,6 @@ igloo_refusal_case(refuse-breakup-token     infrastructure/refusals/breakup-toke
                    "IGLOO: unknown breakup model"                       "e2e;refusal;breakup")
 igloo_refusal_case(refuse-evaporation-token infrastructure/refusals/evaporation-token
                    "IGLOO: unknown evaporation model"                   "e2e;refusal;evaporation")
-igloo_refusal_case(refuse-evaporation-leb   infrastructure/refusals/evaporation-leb
-                   "IGLOO: evaporation=LEB is not implemented"          "e2e;refusal;evaporation")
 # Material-line tokens of the phase file (key=value after "<name> <groups>", written by ATLAS GPB):
 # an unknown key and a non-numeric real must both stop the run at setup.
 igloo_refusal_case(refuse-phase-token       infrastructure/refusals/phase-token
