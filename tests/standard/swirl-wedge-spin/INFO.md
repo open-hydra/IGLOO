@@ -1,4 +1,4 @@
-# swirl-wedge-spin — sector-edge segments on the wedge (ledger O23, many-sector case)
+# swirl-wedge-spin — sector-edge segments on the wedge (the many-sector case)
 
 **Purpose.** The third wedge twin. `swirl-wedge` pins the parcel dynamics and
 `swirl-wedge-deposit` the deposits' frame; this one pins that an ODE segment on the
@@ -10,13 +10,13 @@ co-rotating speed: its azimuth advances at ~10 rad/s at injection, so inside its
 symlink), `out-file = ALL`, `mollify = off`. Registered `swirl-wedge-spin` (labels
 `e2e;standard;drag;gas;axisym;euler`); runtime ~2 s.
 
-**What was wrong.** Under `mesh2D` the point-in-cell test was azimuth-blind (a quad in
-x–y), so a k-plane crossing never ended a segment: the segment ran until the (x, y) quad
-was left, the fold at its end rotated back by nδ at once, and the whole segment's source
-and euler deposit went to the dual cell located by `(x, y = r cos θ)` at the segment
+**Why a segment ends at the sector edge.** Under `mesh2D` an azimuth-blind point-in-cell
+test (a quad in x–y) never ends a segment at a k-plane crossing: the segment runs until the
+(x, y) quad is left, the fold at its end rotates back by nδ at once, and the whole segment's
+source and euler deposit goes to the dual cell located by `(x, y = r cos θ)` at the segment
 start. For this parcel that cell sits a row inward of where it flies (true r 0.200 →
 0.234 over the first segment while the locator stays at y = 0.200), and 23 % of the
-segment's deposit landed there. **Fix (2026-09-18):** `isPointInsideCell` takes an
+segment's deposit lands there. `isPointInsideCell` therefore takes an
 optional `sectorOut` (two dot products against the k-plane normals, `IGLOO_variables::
 sectorNorm`, set at wedge detection); `solout` passes it, the interrupt fires like a
 face crossing, the refinement pins the segment to the plane with the exact distance
@@ -46,34 +46,33 @@ tiling sum of the adjacent sub-quadrants; `T_dual(n)` bins the fine path by near
 | S2 | per row `w_p`, `v_r`, `u` vs the oracle at closest approach (r is absorbed by the matching) | 2e-5 / 2e-5 / 3e-6 — the floor `a·Δx/\|v\| = 20·5e-7/2 = 5e-6` (measured 3.8e-6 / 7.0e-6 / 5.8e-7) |
 | S3 | mass per geo cell `ρ_p V` vs the projected oracle residence, every cell ≥ 1 % of the peak (97 cells; ≥ 30 required); `Σρ_pV = ṁ T_wall` | 2 % (measured 4.0e-3); 5e-3 (1.000044) |
 
-**Proven RED (2026-09-18, the pre-fix binary `fc6c5f4`, same INI).** S0: no witness line.
+**RED** (an azimuth-blind point-in-cell test, same INI). S0: no witness line.
 S3: 11 of 97 cells off — the injection column's first rows at **+33 %** (r = 0.20) and
 **−37 %** (r = 0.24): the first segment's mass sits a row inward. The mass total reads
-1.000044 on both binaries: the tiling invariant (`axis-200` E1, `swirl-wedge-deposit` D5)
-cannot see *where* the mass went, which is why this gate is per cell. S2 was already green
-there (3.8e-6 / 4.5e-6 / 5.5e-7): the trajectory was never the problem — O23 was where the
-sample was taken (closed by W-plan E) and where the deposit landed (closed here).
+1.000044 with and without the sector test: the tiling invariant (`axis-200` E1,
+`swirl-wedge-deposit` D5) cannot see *where* the mass went, which is why this gate is per
+cell. S2 is green there too (3.8e-6 / 4.5e-6 / 5.5e-7): the trajectory is right either way —
+where the gas is sampled is `swirl-wedge`'s gate, where the deposit lands this one's.
 
 **Floor.** One parcel, one thread: deterministic per binary.
 
-**Suite A/B of the fix** (`fc6c5f4` → this binary, full serial suite as sorted multisets):
-byte-inert everywhere except the three off-plane fixtures — `swirl-wedge` (trajectories
-identical; `source.tec` 3.4e-14 of scale; scatter cloud steps differ), `swirl-wedge-deposit`
-(`euler1.tec` ρ_p ≤ 3e-7, v_p/w_p ≤ 1e-7 of scale; `source.tec` 2.3e-13) and `wedge-fold`
-(ID 1 rows 349 → 337, `euler1.tec` ≤ 3.6e-6 of scale; gate green) — those parcels sweep
-≤ 0.115 of a sector per segment, so bounding the segment to the sector barely moves them.
-`db-2daxi` and `axis-200` (parcels on z = 0) are byte-identical: the sector test is inert
-on the meridian plane.
+**What the sector test moves** (with and without it, as sorted multisets): on `swirl-wedge`,
+trajectories identical, `source.tec` 3.4e-14 of scale, the scatter cloud's steps differ; on
+`swirl-wedge-deposit`, `euler1.tec` ρ_p ≤ 3e-7 and v_p/w_p ≤ 1e-7 of scale, `source.tec` 2.3e-13;
+on `wedge-fold`, ID 1 prints 337 rows (349 without the test) and `euler1.tec` moves ≤ 3.6e-6 of
+scale, gate green. Those parcels sweep ≤ 0.115 of a sector per segment, so bounding the segment
+to the sector barely moves them. `db-2daxi` and `axis-200` (parcels on z = 0) are byte-identical
+with and without it: the sector test is inert on the meridian plane.
 
 **Cost.** Two dot products per accepted ODE step on a wedge, and one segment restart per
 sector swept. The number of sectors a parcel sweeps is bounded by its total azimuth
 (≈ π for one pass by the axis, whatever its closest approach), so the segment count is
-≈ sweep/δ plus the cell crossings — 79 + 51 here; `wedge-fold`'s near-axis parcel went
-from 349 to 337 rows in the same wall time. If a case ever spends its runtime in sector
-restarts, the next step is capping `deltat` against the sector plane in `computeDeltat`.
+≈ sweep/δ plus the cell crossings — 79 + 51 here; `wedge-fold`'s near-axis parcel prints
+337 rows (349 without the test) in the same wall time.
 
 **Not pinned here.** The `ord1` path (`gas-order = 1`): the geo containment call passes
-`sectorOut` too, but no wedge case runs ord1. A parcel *injected* outside the sector is not
+`sectorOut` too; the one ord1 wedge case, `swirl-wedge-ord1`, runs `swirl-wedge`'s parcels
+(≤ 0.115 of a sector per segment), so no gate spins a parcel through several sectors at ord1. A parcel *injected* outside the sector is not
 re-sectored at injection (the location searches stay azimuth-blind on purpose — an
 off-sector point would match no cell); its first accepted step trips `sectorOut`, the
 refinement finds no plane ahead (`sectorDs` = 0, the interior /nStep fallback) and the
@@ -82,10 +81,10 @@ witness tells you an injection station was off-sector.
 
 **Tolerance.** `sectorOut` fires past `sectorTol` = 1e-12 m (not at the plane itself) and
 `sectorDs` aims at that offset boundary, so whenever it fires `nint(θ/δ)` is ±1 by
-construction — the strict form had a 1-ULP window where the dot product said "outside"
-and `atan2` said "inside" (a forced one-sector fold covered it in the first cut, `4d1b0c5`,
-untested by any fixture). Moving the boundary by 1e-12 shifts the SDIRK4 step sequence:
-`euler1.tec` moved ≤ 2.5e-7 of scale on the deposit twin and one `wedge-fold` row by
-1.7e-5 (near the axis, r = 4.5e-5); this fixture's fields by ≤ 1.4e-8. The witness line is
+construction — the strict form (firing at the plane itself) has a 1-ULP window where the
+dot product says "outside" and `atan2` says "inside". Moving the boundary by 1e-12 shifts the
+SDIRK4 step sequence: `euler1.tec` moves ≤ 2.5e-7 of scale on the deposit twin and one
+`wedge-fold` row by 1.7e-5 (near the axis, r = 4.5e-5); this fixture's fields by ≤ 1.4e-8. The witness line is
 printed only when something folded (an MI2 sweep on a wedge with every parcel on the
-meridian plane stays quiet); a run of this case without the line is an old binary.
+meridian plane stays quiet); a run of this case without the line comes from a binary
+without the sector test.

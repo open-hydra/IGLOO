@@ -5,14 +5,13 @@ Verifies the TAB (Taylor Analogy Breakup) model. **Not SDIRK-integrated** —
 in `solout` (event-based). This family is direct-call verification of
 `breakupEvent`, not integrator-driven.
 
-Schema: see verification-phase1-plan.md §2.5.
 Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
 
 ## Tests
 
 | id | mode | source | doi | locus | compared | settings_provenance | status |
 |---|---|---|---|---|---|---|---|
-| D1 | analytic | `[ORA87]` O'Rourke & Amsden 1987 | DOI:10.4271/872089 | TAB coefficients: `rdt = ½·Cmu·μ_l/(ρ_l r²)`, `ω² = Comega·σ/(ρ_l r³) − rdt²`, `WeCr = (r ρ_g v²/σ)/WeCrit`; default `bp = [Comega=8, Cmu=5, WeCrit=12, nSpread]`; O'Rourke–Amsden mapping `C_k=Comega`, `C_d=Cmu`, `WeCrit ≈ C_b C_k / C_F` | (a) `y(t)`, `ẏ(t)` vs independent reference damped-oscillator integrator (in `verif_oracle.f90`, **not** calling production `YupdateTAB`): `relL∞ < tol`; (b) trigger time of `y > 1` and asymptotic `y_∞` correct; (c) child-size distribution moments (mean, std) match hand-computed values with `rng_seed=42`; (d) subcritical We (`We < WeCrit`) ⇒ no breakup event fires | constant gas state spanning sub- / mid- / supercritical We; INI `bp` read in test driver and compared against [ORA87] defaults | **partial — GREEN** (`test_breakup_tab.f90`, ctest `breakup_tab`): (a) done twice — code vs analytic 3.6e-15 AND RK4-of-raw-ODE vs analytic 3.8e-15 (triangulation); (b) tb via event-flag bisection vs RK4 first `y=1` crossing, err 7.3e-10 s inside the damping-neglect bound; (d) rest-drop sweep flips exactly at `We_r=6=bp(3)/2`. (c) child-size moments: **DONE 2026-07-02** in `test_tab_moments.f90` (ctest `test_tab_moments`) — 20000 seeded from-rest events, sample E[r]/E[r²] vs an independent truncated-Rosin-Rammler oracle (own Simpson quadrature + bisection on the D32=rs condition; k=2.8333 energy balance re-derived), 5·CLT-se + fixed-point-stop tolerance, both within ~2σ; also gates child∈[2rMin,dp) and npdot·(d_old/d_new)³ per event. INI→bp pipeline: **DONE** in [../../infrastructure/ini_pipeline](../../infrastructure/ini_pipeline/INFO.md) (IP1 pins bp=[8,5,12,3.5], bpMethod=2, bpScale through the production reader) |
+| D1 | analytic | `[ORA87]` O'Rourke & Amsden 1987 | DOI:10.4271/872089 | TAB coefficients: `rdt = ½·Cmu·μ_l/(ρ_l r²)`, `ω² = Comega·σ/(ρ_l r³) − rdt²`, `WeCr = (r ρ_g v²/σ)/WeCrit`; default `bp = [Comega=8, Cmu=5, WeCrit=12, nSpread]`; O'Rourke–Amsden mapping `C_k=Comega`, `C_d=Cmu`, `WeCrit ≈ C_b C_k / C_F` | (a) `y(t)`, `ẏ(t)` vs independent reference damped-oscillator integrator (in `verif_oracle.f90`, **not** calling production `YupdateTAB`): `relL∞ < tol`; (b) trigger time of `y > 1` and asymptotic `y_∞` correct; (c) child-size distribution moments (mean, std) match hand-computed values, from a fixed-seed stream; (d) subcritical We (`We < WeCrit`) ⇒ no breakup event fires | constant gas state spanning sub- / mid- / supercritical We; the production `bp` at the [ORA87] defaults set in the test driver (the INI→`bp` reader: [ini_pipeline](../../infrastructure/ini_pipeline/INFO.md) IP1) | **GREEN** (`test_breakup_tab.f90`, ctest `test_breakup_tab`): (a) done twice — code vs analytic 3.6e-15 AND RK4-of-raw-ODE vs analytic 3.8e-15 (triangulation); (b) tb via event-flag bisection vs RK4 first `y=1` crossing, err 7.3e-10 s inside the damping-neglect bound; (d) rest-drop sweep flips exactly at `We_r=6=bp(3)/2`. (c) child-size moments: in `test_tab_moments.f90` (ctest `test_tab_moments`) — 20000 seeded from-rest events, sample E[r]/E[r²] vs an independent truncated-Rosin-Rammler oracle (own Simpson quadrature + bisection on the D32=rs condition; k=2.8333 energy balance re-derived), 5·CLT-se + fixed-point-stop tolerance, both within ~2σ; also gates child∈[2rMin,dp) and npdot·(d_old/d_new)³ per event. INI→bp pipeline: in [../../infrastructure/ini_pipeline](../../infrastructure/ini_pipeline/INFO.md) (IP1 pins bp=[8,5,12,3.5], bpMethod=2, bpScale through the production reader) |
 | TABM1 | analytic + stochastic | `[ORA87]` (the chi-square product size of the original paper) | DOI:10.4271/872089 | TAB resize method 1 (`Lib_Breakup.f90` TABmodel): the child radius is a chi-square variate with n = nint(k) degrees of freedom times rSize = r_s/(n + 4), so that the untruncated Sauter radius is r_s (E[X³]/E[X²] = n + 4 for χ²_n), rejected into [0.01 r_s, r) | sample E[r], E[r²] of 20 000 from-rest events through `breakupEvent` (`test_tab_moments.f90`, after the method-2 leg, same stream) against the χ²_n pdf x^(n/2−1) e^(−x/2)/(2^(n/2) Γ(n/2)) scaled by rSize and truncated to the same window, moments by the test's Simpson quadrature, n from the oracle's own k; 5 CLT standard errors + 1.5e-4 / 3e-4 relative; every child in the window, npdot·(d_old/d_new)³ per event | k = 2.8333 (n = 3, 0.33 from the half-integer), rSize = 5.042e-6 m, E[r] = 1.518e-5 m | **GREEN**: E[r] off by 1.64e-7 against 4.36e-7, E[r²] by 7.9e-12 against 2.4e-11. RED with rSize = r_s/(n + 2): E[r] off by 5.96e-6 (13.7× the tolerance, +39 %), E[r²] by 3.4e-10 (14×) |
 
 ## Notes
@@ -21,9 +20,8 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
   - `[ORA87] C_k = 8` ↔ IGLOO `Comega = 8`
   - `[ORA87] C_d = 5` ↔ IGLOO `Cmu = 5`
   - `[ORA87] WeCrit ≈ 12` ↔ IGLOO `WeCrit = 12`
-- The test **reads** `bp` from the production INI parser to confirm the
-  defaults — i.e. it verifies both the formulation **and** the value-pipeline
-  from INI to `YupdateTAB`.
-- Child size sampling is stochastic (ChiSquare / Rosin–Rammler); test fixes
-  `rng_seed = 42` for reproducibility. Moments (not realisations) are compared
-  to closed-form values.
+- The formulation is verified here, the value pipeline from the INI to `bp` by the
+  production reader in [ini_pipeline](../../infrastructure/ini_pipeline/INFO.md) (IP1).
+- Child size sampling is stochastic (ChiSquare / Rosin–Rammler); `test_tab_moments`
+  draws from its own fixed-seed stream (`tRng`, passed to `breakupEvent`) for
+  reproducibility. Moments (not realisations) are compared to closed-form values.

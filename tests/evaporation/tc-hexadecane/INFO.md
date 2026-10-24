@@ -1,4 +1,4 @@
-# INFO — evaporation/tc-hexadecane (E-VAL-3: TC2012 Fig. 11 reproduction, e2e, **GREEN**)
+# INFO — evaporation/tc-hexadecane (TC2012 Fig. 11 reproduction, e2e, **GREEN**)
 
 ## Reference
 - **[TC2012]** Tonini, S.; Cossali, G. E. *"An analytical model of liquid drop evaporation
@@ -12,14 +12,13 @@
 `tc-box` validates the TC Stefan-Fuchs rate for a synthetic **constant-density** heavy
 fuel. This case is a **real fuel with temperature-dependent liquid density**
 (`INPUT/properties.dat`, ρ_l 767→570 over 300→560 K, the paper's Table-1 anchors), so the
-drop **swells** as it heats before the D²-law evaporation — the hallmark of Fig. 11. It is
-the suite's **first variable-property case**, and building it surfaced two production bugs
-on the never-exercised T-dependent-property path:
-- **A20** — the variable-property tabs (`rhoTab`/`cpTab`/`hTab`) were declared allocatable
-  but never allocated; the first variable-density read segfaulted.
-- **A21** — `lookupTab` indexed the table with `idint(T)` and no bounds guard; SDIRK4's
+drop **swells** as it heats before the D²-law evaporation — the hallmark of Fig. 11. It runs
+the T-dependent-property path end to end, and two failures of that path stop it:
+- the variable-property tabs (`rhoTab`/`cpTab`/`hTab`) left unallocated: the first
+  variable-density read segfaults;
+- a `lookupTab` that indexes the table with `idint(T)` and no bounds guard: SDIRK4's
   Newton probes trial temperatures outside the tabulated range on stiff evaporation
-  transients, reading out of bounds. Fixed by clamping the index.
+  transients and reads out of bounds. The index is clamped.
 
 ## Case construction
 Same box + injection as `tc-box` (kv=1 ⇒ Re=0, Sh=2, coast at u_g ⇒ t=x/u_g; kt=0.5 ⇒
@@ -30,7 +29,7 @@ properties, all traceable to sources (`reference/PROVENANCE.md`):
   piecewise Clausius-Clapeyron through its six `(T, p/p_atm)` anchors
   (`tests/tools/make_psat_table.py`), read by the solver and by the oracle as the same column.
 - `Lv=2.2695e5` — Table 1's latent heat at the boiling point, the **energy sink only**
-  (`m c_p dT/dt = Q + ṁ Lv`); with the `Psat` column it no longer sets the saturation curve.
+  (`m c_p dT/dt = Q + ṁ Lv`); with the `Psat` column it does not set the saturation curve.
 - `cp_l=2800` (`properties.dat`, constant) — NIST/Chemeo n-hexadecane liquid `Cp` at the
   ~490 K operating point.
 - `Le=2.5`, `cpv=2300` — n-hexadecane vapour (not the air-default `Le=1`); kept physical.
@@ -48,7 +47,8 @@ production does, and matches the measured d²(x) (25/25 within 0.19 %, tol 2 %);
 **swelling** — measured max d²/d0² > 1.03 (a constant-density case can only shrink, so this
 proves ρ_l(Tp) is live); (3) **PC0** — the run reported `p_sat tabulated from properties.dat`;
 (4) **PC1** — the plateau (max T_p over the gated drops) within 1 K of the 0-D replica of the
-kernel, `zero_d.py` on this fixture: 492.63 K. Exercises A20 + A21.
+kernel, `zero_d.py` on this fixture: 492.63 K. Exercises the variable-property tabs and their
+bounds guard.
 
 ## IGLOO's kernel IS TC2012's present model (eq. 16), not Stefan-Fuchs
 Proven from the paper: IGLOO's TC transcendental `m̂ + (T̃s−1)·Le_v·(f(m̂/Le_v)−1) = rhs0`
@@ -86,7 +86,7 @@ swelling peak 1.088. What moves the plateau is the sink, not the curve's shape: 
 Clausius-Clapeyron line with `Lv = 2.58e5` agree to 0.07 % near 490 K (rows 4–6). `cp_l` moves the
 heat-frac, not the plateau; 2800 is the sourced value (see `reference/PROVENANCE.md`) and stays.
 
-**RED first** (each perturbation on the committed case, then restored):
+**RED** (each perturbation on the committed case, then restored):
 
 | | perturbation | PC0 | PC1 | rate (1) |
 |---|---|---|---|---|
@@ -108,47 +108,48 @@ axis (IGLOO's `D_v` is `Le`-set and differs from TC2012's n-hexadecane `D_v`, so
 492.6 K against the digitized ~493.7 K, swell peak 1.09. TC2012 uses *constant* gas-film
 properties (only `ρ_l` T-dependent), so a **constant** `cp_l` is the faithful choice.
 
-## Exit-path and mass-balance gates (O30, added 2026-09-22)
+## Exit-path and mass-balance gates
 
 `check.py` gates three more things after the physics rows. They are about **how the drops
 leave**, not about the rate law.
 
-Until the boiling-clamp work all 25 parcels ended on
+Without a finite scrub in `rhsEvaporation` all 25 parcels end on
 
     [WARNING] Particle   N non-finite state ==> reverting to last good step, marking gone
               last good m/m0 = 1.357E-03  (burnout fires at m = 1.000E-15 kg)
 
-— `mBurnTol` was never reached. The NaN was manufactured **inside `rhsEvaporation`**, not by
+— `mBurnTol` is never reached. The NaN is manufactured **inside `rhsEvaporation`**, not by
 the boiling clamp: on a Newton trial state with `m < 0` the RHS evaluates
-`d = (6m/(pi rho))^(1/3)`, which is NaN, and that poisons `Re`, `mdot` and `F(7:8)`. Unlike
-the other three RHS, `rhsEvaporation` carried no finite scrub, so the Inf/NaN slope rode
-until `solout` caught the state. This case was the suite's only instance.
+`d = (6m/(pi rho))^(1/3)`, which is NaN, and that poisons `Re`, `mdot` and `F(7:8)`; without
+the scrub the Inf/NaN slope rides until `solout` catches the state. Measured, this case is the
+suite's only instance.
 
 With the scrub the bad trial becomes a `1e30` slope, the step is rejected, `deltat` shrinks,
-and the drop reaches `mBurnTol` — a **clean burnout** through the normal branch. (The plan
-predicted the parcels would leave through the solver-failure exit instead; they do not. That
-branch is gated separately in [`infrastructure/solver-fail-consumed`](../../infrastructure/solver-fail-consumed/INFO.md),
-which had to force it with an unreachable ODE tolerance because nothing else reaches it.)
+and the drop reaches `mBurnTol` — a **clean burnout** through the normal branch, not through
+the solver-failure exit. That branch is gated separately in
+[`infrastructure/solver-fail-consumed`](../../infrastructure/solver-fail-consumed/INFO.md),
+which forces it with an unreachable ODE tolerance; its siblings `solver-fail-consumed-m4`
+(model 4) and `solver-fail-midway` (a step limit, mid-trajectory) are the branch's other cases.
 
-| gate | assertion | RED (pre-O30) | GREEN |
+| gate | assertion | RED without the scrub | GREEN |
 |---|---|---|---|
 | H1 | no parcel ends on a non-finite state | 25 | 0 |
 | H2a | no parcel ends on a solver failure | 0 | 0 |
 | H2b | all 25 parcels wrote an exit row | 25 | 25 |
 | H3 | `Σ wdot` = `Σ npdot·m_inj` within `1e-5` | 2.941e-7 (passes) | 2.941e-7 |
 
-The exit moved from `x = 0.070520` to `x = 0.070854` — the drops now evaporate a little
-further before they are removed — so the last trajectory row, the `outloc` row and the
-burnout cells of `source.tec` all changed. The physics rows are read well before burnout and
-are unaffected (25 drops gated, 0 rate violations, 0 non-swelling, before and after).
+The scrub moves the exit from `x = 0.070520` (the non-finite exit) to `x = 0.070854` — the
+drops evaporate a little further before they are removed — and with it the last trajectory
+row, the `outloc` row and the burnout cells of `source.tec`. The physics rows are read well
+before burnout and are the same either way (25 drops gated, 0 rate violations, 0 non-swelling).
 
-**H3 guards the consumption contract, not the scrub.** Both the old non-finite exit and the
-new burnout set `consumed`, so H3 reads the same on either side of the fix — H1 is the fix's
-witness. H3's own RED was measured on a throwaway build with `consumed` removed from the
+**H3 guards the consumption contract, not the scrub.** Both the non-finite exit and the
+burnout set `consumed`, so H3 reads the same with or without the scrub — H1 is the scrub's
+witness. H3's own RED, on a throwaway build with `consumed` removed from the
 burnout branch: resid **2.048e-4** against a floor of **2.941e-7** that is identical at
 `OMP_NUM_THREADS` 1, 2 and 5. The `1e-5` tolerance therefore sits 34x above the floor and 20x
 below the signature; **do not loosen it past ~5e-5** or it stops seeing the dropped remnant.
 
-## Tier-2 (spray-level) rejection
+## Spray-level rejection
 As for the other evaporation/breakup cases: dense-spray SMD / penetration is out of scope
 (steady one-way carrier gas, no entrainment, no atomizing nozzle).

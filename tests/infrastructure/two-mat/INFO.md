@@ -1,10 +1,8 @@
-# two-mat — the first case with more than one material (nm = 2)
+# two-mat — two materials (nm = 2) that differ only by density
 
-**Purpose.** Every `tests/**/INPUT/phase.txt` carried exactly one material line, so the
-per-material code had only ever executed at arity 1 — in every serial, repeatability and MPI
-gate (`plan-bucket/mpi-residuals.md` R2, coverage audit). This case runs `standard/drag-stokes`
-for two materials that differ only by density, so each material keeps a closed-form oracle.
-Paths that execute at arity 2 here for the first time: `obj_IGLOO%solve`'s material loop
+**Purpose.** The per-material code at arity 2, in the serial, repeatability and MPI gates.
+This case runs `standard/drag-stokes` for two materials that differ only by density, so each
+material keeps a closed-form oracle. Paths that execute at arity 2 here: `obj_IGLOO%solve`'s material loop
 (shard opens, dNscat pre-pass, per-group child-ID bands), the material index of `sourceMass`
 and its finalize/mollify, `nfam = 2` (`euler(:, famID)`, `euler1.tec`/`euler2.tec`), the
 per-material output files, `setupRHS`'s sequential per-material setup, `reset_state`'s per-material restore, and — under MPI — six
@@ -18,8 +16,7 @@ cell and the reader copies it to every family, so both materials inject the same
 τ = ρ_p d²/(18μ). The fan-out also sums krho into `krhoTot` for every family (0.68), so each
 parcel of either material carries ṁ = krho/(1 − krhoTot)·ṁ_gas = 0.34/0.32 · 1.2e-3 = 1.275e-3 kg/s
 (drag-stokes: 0.618e-3) — a 68 % condensed mixture; internally consistent, oracle-blind (Stokes
-relaxation is ṁ-independent), pinned by M7. `out-file` is omitted on purpose: the default enables both the source and
-the eulerian output (with a "not recognized or not given" warning — ledger O21), so
+relaxation is ṁ-independent), pinned by M7. `out-file = ALL` enables both the source and the eulerian output, so
 `source.tec` carries two `wdot` slots and one euler file per family is written.
 
 **Gates** (`check.py`; the Stokes oracle is *imported* from `standard/drag-stokes/check.py`
@@ -35,26 +32,27 @@ and re-parametrised per material — one oracle, not two copies):
 | M6 | 25 exits in `outloc-<mat>.dat` and a non-empty `scatter-<mat>.dat` for each material |
 | M7 | every exit record of either material carries ṁ = 1.275e-3 kg/s — the krho fan-out and `krhoTot` at arity 2 |
 
-**Falsification (2026-09-16, throwaways in the session scratchpad).** (1) `phase.txt` lines
-swapped (`B 1` / `A 1`): material "A" then integrates on zone 2's ρ = 1000 and M1 fails on every
-parcel (|x − x_pred| 4.9e-3..1.5e-2 vs tol 1e-6) — `properties.dat` zones are bound to `phase.txt`
-lines by **order**; the zone title is not read (ORION's points reader keeps no name), so a
-reordered file is a silent density swap that only a per-material oracle can see (ledger O24).
-The R2 plan expected the per-material files to swap and both oracles to pass — that presumed
-name-keyed properties, which the code does not have; the gate sees the swap as a failure instead.
-(2) One zone for two materials: used to SIGSEGV at `block(2)` with no message; `read_cdp_properties`
-now error-stops with the counts (this commit), and also refuses a zone whose row count or start
-temperature differs from zone 1's (zone 1 sets `Tmin/Tmax` for every zone — a shorter zone 2 was
-an unchecked out-of-bounds read; falsified with a 3000-row zone B). The plan's other falsification
-— delete a `[GPB-Phase2]` property — is inapplicable: IGLOO reads neither ρ nor cp from the INI. The four registrations are all green on the same
-fixture: `two-mat` (serial), `repeat-two-mat` (sweep 1 ≡ sweep 0 on six `.dat` and three
-`.tec`), `mpi-two-mat` (n = 4 × 2 threads, rank witness) and `mpi-consistency-two-mat`
-(n = 1 vs 4: six `.dat` multisets and three `.tec` fields identical).
+**Falsification.** (1) `phase.txt` lines swapped (`B 1` / `A 1`): material "A" then integrates
+on zone 2's ρ = 1000 and M1 fails on every parcel (|x − x_pred| 4.9e-3..1.5e-2 vs tol 1e-6) —
+`properties.dat` zones are bound to `phase.txt` lines by **order**; the zone title is not read
+(ORION's points reader keeps no name), so a reordered file is a silent density swap that only a
+per-material oracle can see. The properties are not name-keyed, so the per-material files do not
+swap with both oracles passing: the gate sees the swap as a failure.
+(2) One zone for two materials: `read_cdp_properties` error-stops with the counts (without that
+check the run SIGSEGVs at `block(2)` with no message), and also refuses a zone whose row count or
+start temperature differs from zone 1's (zone 1 sets `Tmin/Tmax` for every zone, so a shorter
+zone 2 is an out-of-bounds read; falsified with a 3000-row zone B); `refusals/properties-zones`
+and `refusals/properties-range` gate the two refusals. Deleting a `[GPB-Phase2]` property
+falsifies nothing: IGLOO reads neither ρ nor cp from the INI. The four registrations are all
+green on the same fixture: `two-mat` (serial), `repeat-two-mat` (sweep 1 ≡ sweep 0 on six
+`.dat` and three `.tec`), `mpi-two-mat` (n = 4 × 2 threads, rank witness) and
+`mpi-consistency-two-mat` (n = 1 vs 4: six `.dat` multisets and three `.tec` fields identical);
+`mpi-repeat-two-mat` (n = 2 × 2 threads, two sweeps) runs it too.
 
 **Measured.** Serial: 25 parcels per material, 1525 trajectory rows each, 244 (A) / 232 (B)
 scatter rows; A's rows differ from `drag-stokes`'s in U on 94 rows — 92 by 1 ULP of F12.6 and 2 by
 2 ULP (euler on → neq = 12 vs 7 changes the step sequence) — inside the oracle's theoretical
-tolerance. Byte-inert on the 62 pre-existing entries (A/B capture, floor-only).
+tolerance.
 
 **What it does not pin.** Both materials share one injection line (the file has one copy, which
 feeds every family); a per-family injection (different d or krho per family) is `two-fam-bc`'s
@@ -62,5 +60,5 @@ case — one copy of the inlet table per family, in ATLAS's order. The `[IGLOO-P
 vector-size checks (`size == nm`) are exercised only for the vectors present, i.e. none here
 (no evaporation/breakup). The famID-keyed RNG streams are *seeded* for both materials but never
 *consumed* here: no breakup and a Dirac diameter (bc.txt col 7 = 0) mean zero draws, so
-cross-material stream distinctness (R2's fifth bullet) is not observable on this fixture —
+cross-material stream distinctness is not observable on this fixture —
 `test_rng_stream` is the unit-level pin.

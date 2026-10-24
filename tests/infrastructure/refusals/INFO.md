@@ -1,11 +1,13 @@
-# refusals — setup-time refusals, gated (coverage audit G20)
+# refusals — setup-time refusals, gated
 
 **Purpose.** IGLOO refuses several inputs with an `error stop` at a single choke point in
-`read_cdp_properties` (`src/lib/IO.f90`) — models that are parsed and threaded through but whose
-physics is absent (ledger O3/O4), a misleading model combination (evaporation plan F1 guard), and
-a `properties.dat` that does not match `phase.txt` (ledger O24 residual, both checks added
-2026-09-16). None of these refusals had a test: a regression that turned a refusal into a silent
-default — the failure mode the choke point exists to prevent — would have passed the suite.
+`read_cdp_properties` (`src/lib/IO.f90`) — a model its material cannot carry (`liquid-conduction = P2T`
+on a material that does not evaporate or has no `k-liq` or `mu-liq`, `boiling = ZGR` on a material that
+does not evaporate), a misleading model combination
+(`interface = LK` with an evaporation model outside CEM, CEM-B, ASM, TC, where LK is inert), and
+a `properties.dat` that does not match `phase.txt` (zone count, temperature range). Without a
+test, a regression that turns a refusal into a silent default — the failure mode the choke
+point exists to prevent — passes the suite.
 
 **Harness.** `igloo_refusal_case(name dir "expected" labels)` in `tests/CMakeLists.txt` runs the
 solver and hands its exit code to `tools/check_refusal.py`, which requires ALL of: exit **exactly
@@ -27,7 +29,7 @@ output written).
 | `refuse-p2t-mu-two` | `breakup/khrt-evap-frozen` (Reitz-KHRT, `[IGLOO-Properties] mu = 1.0e-3`) + `liquid-conduction = P2T`, its own `INPUT/phase.txt` (`A 1 k-liq=0.6 mu-liq=1.0e-3`), `khrt-e2e`'s other three files symlinked: a breaking material has one liquid viscosity, the breakup one | `liquid-conduction=P2T with breakup takes the breakup viscosity` |
 | `refuse-p2t-mu-zero` | as `refuse-p2t-mu-two` with `A 1 k-liq=0.6` and `mu = 0.0` | `requires mu > 0` (`IGLOO: Breakup requires mu > 0: …`) |
 | `refuse-zgr` | `INPUT/` symlinked; `[IGLOO-Models] boiling = ZGR` on a material that does not evaporate | `boiling=ZGR requires an evaporating material` |
-| `refuse-lk-d2law` | `INPUT/` symlinked; `evaporation = d2-law` + `interface = LK` (F1 guard fires before the `[IGLOO-Properties]` requirements) | `interface=LK needs evaporation in` |
+| `refuse-lk-d2law` | `INPUT/` symlinked; `evaporation = d2-law` + `interface = LK` (the `interface = LK` guard fires before the `[IGLOO-Properties]` requirements) | `interface=LK needs evaporation in` |
 | `refuse-properties-zones` | own `INPUT/`: drag-stokes's `bc.txt`/`solfile.tec`, two-mat's `phase.txt` (A, B), the ONE-zone `common/properties.dat`; `input.ini` also carries two-mat's `[GPB-Phase2]` | `zone count /= number of materials` |
 | `refuse-properties-range` | as above with zone B cut to 3000 rows | `zones do not share one temperature range` |
 | `refuse-properties-two-enthalpy` | own 10-row `INPUT/properties.dat` whose header names `"Enthalpy"` and `"Enthalpy_abs"` | `the enthalpy datum is ambiguous` |
@@ -118,29 +120,28 @@ pass, which never reads the orientation integers: both run to "Stop condition" w
 **The three oxide-cap cases are RED** on a reader that does not know the `product` token: `refuse-cap-product`
 (whose line names no product) runs the burn law to "Stop condition" with exit 0 and writes its output, the other two
 stop at `unknown per-material key` (exit 128, not their payload); with its check taken out of `resolve_products`
-each of the three runs to "Stop condition" with exit 0. **The three `properties.dat` cases were
-RED first**: the reader that took three columns by position ran each of them to "All particles out of
+each of the three runs to "Stop condition" with exit 0. **The three `properties.dat` cases are
+RED** on a reader that takes three columns by position, which runs each of them to "All particles out of
 domain" with exit 0 — the two-enthalpy header as an absolute datum with `hOff = 0`, the typed row with
 its enthalpy undefined (ORION keeps only the last row's read status), and the decreasing `Psat` column
-unread. **The seven solidification cases were
-RED first**: the binary before the solidification model stopped each of them with `solidification=on parsed but
+unread. **The seven solidification cases are
+RED** on a solver without the solidification model, which stops each of them with `solidification=on parsed but
 not implemented yet`, not their payload. **The four INI-contract
-cases were RED first** (ledger O20/O21/O26, recorded on the pre-fix binary): `method = 3` ran to
-non-finite states with exit 0 and three output files; `gas-order = 3` silently ran as 2 (the warning was
-dead — the value was reassigned before the test); `out-file = nonsense` ran as both with a warning (and
-the registry default `E+S` parsed as `E`); `ode-solver = H-radau5` was a plain `stop`. (A fifteenth,
-`refuse-dopri5`, was the interim O25 refusal — dropped, see below.) **The five token cases were RED first** too (ledger O26): every model selector in `Lib_Drag`, `Lib_Heat`, `Lib_Breakup` and
-`Lib_Evaporation` printed its menu and executed a plain `stop` — exit 0, empty stderr, nothing a
-harness or an embedding parent can tell from success (recorded on the pre-fix binary in the session
-scratchpad); all twelve `stop`s became `error stop 'IGLOO: unknown …'`.
-**`refuse-wedge-offcentre` was RED first** too (2026-09-17, W-plan Q7): the fold band (`axisymFold`,
+cases are RED** on a reader without their checks: `method = 3` runs to
+non-finite states with exit 0 and three output files; `gas-order = 3` silently runs as 2 (a warning that
+cannot fire, the value being reassigned before the test); `out-file = nonsense` runs as both with a warning (and
+the registry default `E+S` parses as `E`); `ode-solver = H-radau5` is a plain `stop`. **The five token cases are RED** too on selectors that print their menu and execute a plain `stop` (every model selector in `Lib_Drag`, `Lib_Heat`, `Lib_Breakup` and
+`Lib_Evaporation`): exit 0, empty stderr, nothing a
+harness or an embedding parent can tell from success; every one of those selector stops is an `error stop`
+(eleven, each `'IGLOO: unknown …'`).
+**`refuse-wedge-offcentre` is RED** too on a solver without the centring check: the fold band (`axisymFold`,
 |θ| ≤ δ/2), the 2.5D gas sample (`sampleGas2D`) and the meridian-frame deposits (`toMeridian`) all take
 `refDir` as the sector *centre* — the MOSE/ATLAS layout, k-planes at ∓δ/2, which the production nozzle
-solution centres to exactly 0.0 — and on a [0, δ] sector the binary before the tripwire ran the case to
+solution centres to exactly 0.0 — and on a [0, δ] sector such a solver runs the case to
 "All particles out of domain" with exit 0, the gas and every deposit rotated by δ/2.
-**The two `bc.txt` cases were RED first** too, on a reader that consumed copy 1 only: `bc-copies` ran
+**The two `bc.txt` copy cases are RED** too, on a reader that consumes copy 1 only: `bc-copies` runs
 its three families of A on copy 1's `krho` 0.34, i.e. `krhoTot` = 1.02 and ṁ = 0.34/(1 − 1.02) · 1.2e-3 =
-−2.04e-2 kg/s per parcel — a negative mass flow, 75 exits, exit 0 — and `bc-copy-order` ran like
+−2.04e-2 kg/s per parcel — a negative mass flow, 75 exits, exit 0 — and `bc-copy-order` runs like
 `two-fam-bc` fed copy 1 for both families (exit 0, six output files).
 
 **The eleven cases of the phase file's burn-law and breakup checks, the property sizes, the two boundary files
@@ -152,7 +153,6 @@ at `IGLOO: unknown per-material key in the phase file`, not its payload. **`refu
 does not read `plane-x` (an unknown `[IGLOO-General]` key is ignored): it runs to "Stop condition" with exit 0, no
 payload, and writes three `.dat` files.
 
-**Not here.** A mixed-Nk mesh (`allocation.f90`, `af307dd`) needs a two-zone `solfile.tec`; exercised in a
-throwaway only. `refuse-dopri5` (the interim `H-dopri5` refusal of ledger O25) was dropped with the
-`Lib_INI.f90` refusal and the `DISABLED` flag on `standard/drag-stokes-dopri5` once the OSlo fork carried
-the SOLOUT fix (`fix/dopri5-solout`); that case is the gate now.
+**Not here.** The mixed-Nk refusal (`allocation.f90`, `IGLOO: mixed 2D/3D blocks are not supported`)
+needs a two-zone `solfile.tec`; it is verified on a scratch fixture only and has no case.
+`ode-solver = H-dopri5` is accepted: `standard/drag-stokes-dopri5` gates it.

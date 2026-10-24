@@ -37,10 +37,10 @@ green, nothing decomposed. Without the witness this whole directory would be a v
 |---|---|---|
 | `mpi-drag-stokes` | 2 | simplest path; closed-form oracle |
 | `mpi-conv-nu` | 4 | heat transfer, 4 ranks |
-| `mpi-khrt` | 4 | 241 children — the child-ID census, and the only oracle that reads the child count out of the solver log |
+| `mpi-khrt` | 4 | 241 children — the child-ID census; the oracle reads the child count out of the solver log |
 | `mpi-khrt-plane` | 4 | `khrt-plane`'s oracle on the merged planes file: a child is born, integrated and recorded on its parent's rank, the four planes shards are merged into one `planes-A.dat`. RED with the planes stream left out of the merge: no `planes-A.dat`, four shards; rank 0's shard alone carries 7/25 of the flow through every plane (P1 rel 0.72) |
-| `mpi-bc-center-2grp` | 4 | the suite's **only** `ngroups=2` case, so the only real exercise of the rank-file merge's per-zone loop |
-| `mpi-two-mat` | 4 | the suite's **only** `nm=2` case: six shards merged per sweep, two `sourceMass` slots, two euler families reduced |
+| `mpi-bc-center-2grp` | 4 | two groups (`ngroups=2`): the rank-file merge's per-zone loop, which `mpi-two-fam-bc-2blk-ord2-dual-np3` runs too |
+| `mpi-two-mat` | 4 | `nm=2`, as `mpi-consistency-two-mat` and `mpi-repeat-two-mat`: six shards merged per sweep, two `sourceMass` slots, two euler families reduced |
 | `mpi-timing-report` | 4 | the `[IGLOO-timing]` report (`timing = on`): the per-rank gather, one line and the strided parcel count per rank |
 | `mpi-psd-table` | 4 | `psd-table`'s Kolmogorov-Smirnov and Anderson-Darling oracle on the merged output: the size-distribution file loaded and sampled on every rank |
 | `mpi-two-fam-bc-2blk-ord2-dual-np3` | 3 vs 1 | gas-order 2 across a 101 face (`two-fam-bc-2blk-ord2-dual`'s `INPUT/` and `input.ini`): the dual cells of the interface vertices are combined after the cross-rank sum. Its own `check.py` runs the same binary on one rank into `ref-serial/` and holds the 3-rank run to it: the file set, the `.dat` multisets, the `.tec` fields within 1e-12 of the scale, the routing line |
@@ -59,7 +59,7 @@ lets the two run concurrently under `ctest -j`.
 
 ## Why `mpi-consistency` exists
 
-The four variant cases prove each case's own oracle still passes under `mpiexec`. That is necessary
+The variant cases prove each case's own oracle still passes under `mpiexec`. That is necessary
 and not sufficient: an oracle checks **physics**, and most of what MPI can break here is not physics.
 `mpi-consistency` runs the same binary at 1 and 4 ranks (the ctest thread count, 2), then at 4 ranks
 with 1 and with 5 threads per rank, and compares every run with the 1-rank run on four axes:
@@ -67,8 +67,8 @@ with 1 and with 5 threads per rank, and compares every run with the 1-rank run o
 1. **Witness** — the 4-rank run reports `MPI ranks = 4`; the 1-rank run must not print the banner at
    all (it prints only when decomposed, which is what keeps serial and `-n 1` byte-identical).
 2. **Layout** — no `.rank<r>.dat` shard survives, and total line count and `Zone` count match n=1.
-   This axis is load-bearing: duplicating the zone header per rank left a case's own `check.py`
-   **passing** (measured 2026-08-10, Phase 4 falsification).
+   This axis is load-bearing: a merge that duplicates the zone header per rank leaves a case's own
+   `check.py` **passing** (measured by falsification).
 3. **Particle streams** — `.dat` as an exact sorted **multiset**, no tolerance. Record order is
    nondeterministic by design: OMP writes as particles finish, and the merge emits rank-blocked data.
 4. **Grid fields** — `.tec` on **scale-relative** error via [`tools/compare_tec.py`](../tools/compare_tec.py),

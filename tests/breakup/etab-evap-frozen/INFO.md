@@ -20,7 +20,7 @@ roundoff of the injected flow (`|wdot| ≤ 1e-12` of it).
 | solver | outcome |
 |---|---|
 | model 2 dropped from the event write-back | 0 broken drops (need 18: 20 `FAIL[must break]`, 20 timing violations); kicked drops 11–25 seen unbroken (gate D2); `wdot` in [−776, 0] kg/s, **1.0e4** of the injected flow |
-| fixed | PASS: 20/20 broken, the `etab-e2e` numbers (15 of 20 kicked, cascade sizes within 1 %); max `\|wdot\|` **1.9e-18** of the injected flow |
+| this solver | PASS: 20/20 broken, the `etab-e2e` numbers (15 of 20 kicked, cascade sizes within 1 %); max `\|wdot\|` **1.9e-18** of the injected flow |
 
 ## Pass criterion
 Both gates PASS. The `1e-12` tolerance is roundoff of the flux scale (measured 1.9e-18).

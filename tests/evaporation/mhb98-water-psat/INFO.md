@@ -44,7 +44,7 @@ linear between the nodes, end values outside, as the solver reads them):
 | PC1 | wet-bulb at least 0.6 K below the Clausius-Clapeyron case's 282.33 K: **281.25 K** |
 | PC2 | the run reported `vapour data tabulated from properties.dat` |
 
-**RED first**, each on the committed case:
+**RED**, each on the committed case:
 
 | perturbation | PC0 | PC1 | PC2 | K ↔ wet-bulb | LK kernel |
 |---|---|---|---|---|---|

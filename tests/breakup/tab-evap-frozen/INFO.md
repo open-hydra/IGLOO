@@ -19,9 +19,9 @@ requires every cell of `source.tec`'s `wdot` to be roundoff of the injected flow
 ## Falsification (measured)
 | solver | outcome |
 |---|---|
-| unfixed (event size not written to the model-2 state) | 0 broken drops (need 14: 16 `FAIL[must break]`); `wdot` in [−3.1e15, 0] kg/s, **4.0e16** of the injected flow — the oscillator restarts on the unchanged drop and the number rate compounds at every event |
-| fixed except model 2 in the event write-back | identical to the unfixed row |
-| fixed | PASS: 16/16 inside the ORA87 bracket (the `tab-e2e` numbers); max `|wdot|` **1.8e-18** of the injected flow |
+| no event write-back to the model-2 state | 0 broken drops (need 14: 16 `FAIL[must break]`); `wdot` in [−3.1e15, 0] kg/s, **4.0e16** of the injected flow — the oscillator restarts on the unchanged drop and the number rate compounds at every event |
+| this solver with model 2 removed from the event write-back | identical to the row above |
+| this solver | PASS: 16/16 inside the ORA87 bracket (the `tab-e2e` numbers); max `|wdot|` **1.8e-18** of the injected flow |
 
 ## Pass criterion
 Both gates PASS. The `1e-12` tolerance is roundoff of the flux scale (measured 1.8e-18).

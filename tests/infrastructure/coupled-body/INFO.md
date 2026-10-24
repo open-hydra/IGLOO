@@ -1,10 +1,9 @@
 # coupled-body — euler + source + body-force combined output path
 
-**Purpose.** The 2026-07 accumulator merge shipped one untested switch combination:
-`eulerSwitch` AND `sourceSwitch` AND `bodyForce` together. This case closes it for
-model 1 (constant mass/size — the closed-form body-force correction branch of
-`Lib_Integration`; the J/W tail-slot branch of models 2/4/5 is exercised by the
-evaporation unit family and flagged in FINDINGS).
+**Purpose.** The switch combination `eulerSwitch` AND `sourceSwitch` AND `bodyForce`
+together, for model 1 (constant mass/size — the closed-form body-force correction branch of
+`Lib_Integration`). The J/W tail-slot branch is gated for models 2, 4 and 5 by `body-evap-m2`,
+`body-evap-m4` and `body-burn-m5`; model 8 takes it too and has no such case.
 
 **Setup.** Identical to `standard/body-force` (uniform box, Stokes drag, kV=kT=1,
 transverse `g_y = −200`), except `out-file` is ABSENT so `Lib_INI` defaults to

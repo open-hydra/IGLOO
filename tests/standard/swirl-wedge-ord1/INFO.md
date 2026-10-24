@@ -3,7 +3,7 @@
 **Purpose.** On an axisymmetric wedge the gas file holds the velocity in the meridian frame (θ = 0). At
 gas-order 2 the sampler rotates the interpolated velocity to the parcel's azimuth (`sampleGas2D`); at gas-order 1
 the cell's value is rotated by `meridianToAzimuth` (`Lib_Equations`). Every other axisymmetric fixture runs
-gas-order 2, so this branch ran in no gate.
+gas-order 2, so this case is the branch's one gate.
 
 **Fixture.** `swirl-wedge`'s (`INPUT/` symlinked): the annular wedge x ∈ [0, 2], r ∈ [0.19, 0.99] (200 × 40 × 1
 cells, δ = 1°), U = 1, V = 0, W = Ω·y_c with Ω = 0.2 rad/s and y_c = r̄_j cos(δ/2) the cell centre, uniform

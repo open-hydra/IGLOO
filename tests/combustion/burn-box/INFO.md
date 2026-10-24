@@ -1,4 +1,4 @@
-# INFO — combustion/burn-box (M1: Beckstead d^n aluminium burn, e2e)
+# INFO — combustion/burn-box (Beckstead d^n aluminium burn, e2e)
 
 ## Reference paper
 - **Title:** Correlating Aluminum Burning Times
@@ -9,7 +9,7 @@
 - **Tag:** `[Beck05]` (see [../../REFERENCES.md](../../REFERENCES.md))
 - **Reproduced:** the final burn-time correlation `t_b·X_eff·p^0.1·T0^0.2 = 0.00735·D^1.8`
   (X_eff **linear**). Beckstead's Fig. 1 is the experimental `t_b`-vs-`D` scatter across
-  many datasets — a **digitized overlay of Fig. 1 is pending** (see Notes / open question Q-C).
+  many datasets; it is **not digitized**, so no overlay of Fig. 1 is drawn.
 
 ## What it verifies
 Uniform-gas box, `kv=1 kt=1`, `T-ign < Tp0` ⇒ burning from injection. `check.py` builds an
@@ -26,8 +26,8 @@ plus an independent RK4 of the lumped heat-release energy balance (Nu=2 stagnant
 particle it overlays the **IGLOO output** (markers) against the **Beckstead correlation curve**
 from `reference/beckstead.txt` (line) for `d(x)` and the RK4 energy-balance oracle for `Tp(x)`.
 A match visualises that IGLOO integrates the published `d^1.8` law and the heat-release balance.
-The **experimental Fig. 1** overlay (`t_b` vs `D`) is the higher-fidelity paper comparison,
-deferred to Q-C.
+The **experimental Fig. 1** overlay (`t_b` vs `D`) would be the higher-fidelity paper
+comparison; Fig. 1 is not digitized.
 
 ## Pass criterion
 Truncation-budget tol on `d^n`; 0.1 K on `Tp`; 1% mass telescoping; ≥ 20 verified burners.

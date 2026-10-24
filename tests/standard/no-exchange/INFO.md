@@ -32,7 +32,7 @@ print, 1500/1500 cells exactly `0.0` in all five source fields.
 
 ## Discrimination
 - A binary without the tokens refuses the case at setup (`IGLOO: unknown drag model`, exit 128,
-  no output) — RED on `aba343c`.
+  no output).
 - Each switch alone (throwaway variants, same oracle): `drag = Stokes` + `NoHeat` keeps `T`
   exactly but relaxes `u` to 9.999961 (`Fx`, `E` non-zero in 1500/1500 cells); `NoDrag` +
   `heat = Ranz-Marshall` keeps `u` exactly (`Fx`, `Fy`, `Fz` exactly zero) but relaxes `T` to

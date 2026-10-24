@@ -19,9 +19,8 @@
     mdot = −2π·d·(kg/cp_g)·ln(1+BT),  BT = cp_g·(Tg−Tp)/Lv
     d(d²)/dt = −8·kg/(cp_g·rho_p)·ln(1+BT)     ⇒ K = 8·kg/(cp_g·rho_p)·ln(1+BT)
 
-integrated along the MEASURED `Tp(x)` (T coupled ⇒ no clean closed form). **NB (FINDINGS
-D-EVAP-1):** production `d2law` codes *half* this (Nu=1); the oracle uses the literature `8`
-so a half-rate code correctly FAILS. Scope: verifies the mass-rate LAW given the Tp history,
+integrated along the MEASURED `Tp(x)` (T coupled ⇒ no clean closed form). **NB:** the oracle
+uses the literature `8`, so a half-rate code (Nu=1) correctly FAILS. Scope: verifies the mass-rate LAW given the Tp history,
 not the temperature evolution.
 
 ## Comparison plot

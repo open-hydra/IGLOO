@@ -22,8 +22,8 @@ over the cell volume, must add up to `Σ_cells ρ_p V = Σ_p F_p t_p`.
 | solver | outcome |
 |---|---|
 | a breakup child keeping the default state count (7) | 241 children, 0 fly (all burn out at birth); `Σ wdot` = +0.0771 kg/s (their mass to the gas); children carry out 0 of the 0.0771 kg/s: exit flows 0.75× the injected flow; Eulerian mass 1.13× `Σ F t` |
-| the parent tree without the model-4 exit flow either | as above, plus the momentum and energy budgets 0.63 and 0.50 of their input flux; Eulerian mass 0.78× `Σ F t` |
-| fixed | PASS: the `khrt-evap-frozen` numbers (241 children, 238 fly; exit flows 6.9e-7 from the injected flow); Eulerian mass 4.082462e-4 kg, 7.9e-7 from `Σ F t` |
+| that, and the exit record without model 4's exit flow | as above, plus the momentum and energy budgets 0.63 and 0.50 of their input flux; Eulerian mass 0.78× `Σ F t` |
+| this solver | PASS: the `khrt-evap-frozen` numbers (241 children, 238 fly; exit flows 6.9e-7 from the injected flow); Eulerian mass 4.082462e-4 kg, 7.9e-7 from `Σ F t` |
 
 ## Pass criterion
 All oracles PASS. The Eulerian-mass tolerance `1e-5` is ~13× the measured 7.9e-7 (the E13.6 print of the exit

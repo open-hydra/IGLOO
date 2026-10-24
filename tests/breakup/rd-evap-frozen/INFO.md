@@ -14,9 +14,9 @@ the breakup share of the model-4 droplet-mass equation.
 ## Falsification (measured)
 | solver | outcome |
 |---|---|
-| unfixed (no breakup share in `F(8)`) | `d` printed = d0 on every row: measured rate 0 on 25/25 drops, 25 violations |
-| breakup share dropped, everything else fixed | the same, 25/25 violations |
-| fixed | PASS: 25/25 within 2 %, worst 8.33e-4 — the model-3 case's number |
+| no breakup share in `F(8)`, without the other model-4 terms | `d` printed = d0 on every row: measured rate 0 on 25/25 drops, 25 violations |
+| the breakup share alone dropped from `F(8)` | the same, 25/25 violations |
+| this solver | PASS: 25/25 within 2 %, worst 8.33e-4 — the model-3 case's number |
 
 ## Pass criterion
 `reitz-diwakar-e2e/check.py` unmodified (see [../reitz-diwakar-e2e/INFO.md](../reitz-diwakar-e2e/INFO.md)).

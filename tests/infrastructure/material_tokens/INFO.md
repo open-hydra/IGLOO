@@ -40,7 +40,7 @@ Breakup constants, `<tag>-<key>` with the `[IGLOO-Models]` key verbatim (slot = 
 
 An unknown key, a non-numeric value, an unknown word and a `TAB-method` other than 1 or 2 stop the run; the
 first three are gated end to end by the refusal cases (`refuse-phase-token`, `refuse-phase-token-real`,
-`refuse-evaporation-token`, `refuse-evaporation-leb`, `refuse-breakup-token-material`), the last stops with the
+`refuse-evaporation-token`, `refuse-breakup-token-material`), the last stops with the
 payload of `[IGLOO-Models] method`, which `refuse-tab-method` gates.
 
 ## Tests

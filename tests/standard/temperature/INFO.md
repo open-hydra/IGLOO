@@ -3,7 +3,6 @@
 Verifies the per-particle thermal ODE under various heat closures.
 Same L1/L2 dual mechanism as family A.
 
-Schema: see verification-phase1-plan.md §2.5.
 Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
 
 ## Tests
@@ -22,20 +21,19 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
 - B1 uses zero slip because IGLOO's heat module exposes no standalone "Nu=2"
   selector — `Nu=2` is realized via `Re=0` (gas velocity = particle velocity).
 - B2 keeps the full momentum→heat coupling (no frozen velocity) and verifies it
-  against an independent RK4 reimplementation of the same coupled system — a
-  Tier-2 oracle that shares no code with production (uses production's `Pr`
+  against an independent RK4 reimplementation of the same coupled system — an
+  oracle that shares no code with production (uses production's `Pr`
   definition `μγR/((γ−1)k)` to match the closure, not its implementation).
 - B3a–B3c step SDIRK4 one fixed step per driver call (`MODE_SDIRK_FIXEDSTEP`, nstep = 1, from the previous
   state), so the invariants are checked at every step, not only at the end.
-- Status (T3): B1/BO/B2 all PASS; clean `build_verif`, ctest green. No findings.
 
-## Unit tables (T5, 2026-07-02)
+## Unit tables
 
 - `test_heat_nu.f90` (ctest `test_heat_nu`, GREEN): HN1 RM Nu(Re,Pr) table vs
   [RM52] formula (18 pts, machine-zero); HN2 conduction floor Nu(Re=0)=2 exact
   for RM/JAXA2/JAXA3 (deliberately NOT JAXA4/KD — their sub-2 low-Re limit is
-  physical rarefaction); HN3 Kavanau-Drake Ma=0 collapse (transcription pin;
-  D-HEAT-2/3 stay open flags). HN4–HN8 pin the four other laws to their printed
+  physical rarefaction); HN3 Kavanau-Drake Ma=0 collapse (transcription pin).
+  HN4–HN8 pin the four other laws to their printed
   sources (production `heat()` against the forms typed in the test, with the
   printed exponents):
 
@@ -50,9 +48,9 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
   HN8's bound follows the conditioning: where 3.42 Ma/(Re Pr) ≪ 1/Nu the difference of the two reciprocals loses
   up to ≈ 5e3 in relative terms, so a relative tolerance would fail on correct code. The e2e twins of these
   legs are `conv-nu-jaxa2`, `-jaxa3`, `-jaxa4` and `-kd` (the laws through the solver's Re, Pr and Mach number).
-- `test_heat_probes.f90` (ctest `test_heat_probes`, ordinary gate — bug-transcription pin): XH1
-  JAXA1 missing +2 floor — Nu(Re=1e-6)=0.315 today. Flips the suite RED when
-  production is fixed, signalling promotion to the gate (bug A7).
+- `test_heat_probes.f90` (ctest `test_heat_probes`, ordinary gate — transcription pin): XH1
+  JAXA1 without a +2 floor, as published — Nu(Re=1e-6)=0.315. A +2 floor added
+  to JAXA1 turns it red.
 - `test_radiation.f90` (ctest `test_radiation`): the grey-body exchange `Q̇_r = ε σ π d² (T_g⁴ − T_p⁴)`
   against the form typed in the test (`σ = 5.670374419e-8`, CODATA) in quadruple precision; RU2 and RU4 at zero
   slip under `NoDrag` and `NoHeat`, so the radiative term is the only heat exchange:

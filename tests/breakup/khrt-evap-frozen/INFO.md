@@ -25,13 +25,13 @@ a KH shed takes from a parent's state, its child carries out (`5e-6`, the E13.6 
 ## Falsification (measured)
 | solver | outcome |
 |---|---|
-| unfixed | KH rate 0 on 14/14 drops (d never moves); no child (a shed needs the drop to shrink); 0 persisted RT shatters; Σ `wdot` = −0.470 kg/s (−1.5× the injected flow: the number rate grows at fixed droplet mass) |
+| no model-4 breakup terms (no breakup share in `F(8)`, events not written to the model-4 state) | KH rate 0 on 14/14 drops (d never moves); no child (a shed needs the drop to shrink); 0 persisted RT shatters; Σ `wdot` = −0.470 kg/s (−1.5× the injected flow: the number rate grows at fixed droplet mass) |
 | breakup share dropped from `F(8)` | KH rate RED 14/14; Σ `wdot` = −0.155 kg/s |
 | events not written to the model-4 state | KH rate PASS; 0 persisted RT shatters; Σ `wdot` = −0.0720 kg/s (a shed parent keeps its flow while its child carries the stripped mass); exit flows 1.23× the injected flow (parents 0.3091, children 0.0720 kg/s) |
 | a child's number rate doubled in its model-4 state | exit flows 1.25× the injected flow (children 0.1542 kg/s instead of 0.0771); Σ `wdot` = −0.0771 kg/s |
-| exit record printing the injected or birth flow (the output before model 4's exit flow) | exit flows 1.25× the injected flow; momentum and energy budgets 0.38 and 0.25 of their input flux |
+| exit record printing the injected or birth flow instead of model 4's exit flow | exit flows 1.25× the injected flow; momentum and energy budgets 0.38 and 0.25 of their input flux |
 | the parent deposits its shed child's birth flow | Σ `wdot` = **+0.0771** kg/s = 0.25 of the injected flow = the children's birth flow |
-| fixed | PASS: KH worst 2.18e-4, 241 children (238 fly), 137 persisted RT shatters, Σ `wdot` 7.7e-11 of the injected flow; exit flows: parents 0.2320, children 0.0771 kg/s, total 6.6e-7 from the injected flow; momentum 6.5e-7, energy 6.6e-7 |
+| this solver | PASS: KH worst 2.18e-4, 241 children (238 fly), 187 persisted RT shatters, Σ `wdot` 7.7e-11 of the injected flow; exit flows: parents 0.2320, children 0.0771 kg/s, total 6.6e-7 from the injected flow; momentum 6.5e-7, energy 6.6e-7 |
 
 ## Pass criterion
 All oracles PASS. The mass tolerance `1e-9` is ~13× the measured floor (7.7e-11): the product `n·m` of the

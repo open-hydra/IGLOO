@@ -1,4 +1,4 @@
-# INFO — properties_reader (T9)
+# INFO — properties_reader (the `properties.dat` reader)
 
 Pins the reader of `INPUT/<prefix>properties.dat` — `read_cdp_properties`, the PRODUCTION routine —
 on fixtures that no e2e case carries: a table that starts above 1 K, a `Psat` column, columns in
@@ -26,7 +26,7 @@ the working directory, and the four fixtures need different `[IGLOO-Properties]`
 | PR7 | `abs-` (`"Enthalpy_abs"`, constant cp) | absolute datum, `hOff = -2.0e6` J/kg, `h(280 K) = cp*T + hOff` |
 | PR9 | `nm-`, two zones | zone A tabulated (`psat(560 K) = 1 atm`, `psat(1 K) = 0` by underflow); zone B all zero → no table |
 | PR10 | `atlas-` | `H2O(L)` on `[280, 380]`, cp 4184, rho 997, absolute datum `hOff = -17112459.6`, psat(300 K) = `3.533623e+03` as written |
-| PR-V1 | `atlas-` | `Lv`, `Mv`, `Cpv` found by name: both tables built, `Mv = 18.015` from its column; `Lv` and `cpv` through `tableValue` at 250, 298.15, 300, 337.5, 373.15 and 400 K equal to the file's own rows read by the test (list-directed) by the same formula — exact on a node and outside the table, `4 ε` between nodes; the scalar `Lv` = `Lv(298.15 K)` |
+| PR-V1 | `atlas-` | `Lv`, `Mv`, `Cpv` located by name: both tables built, `Mv = 18.015` from its column; `Lv` and `cpv` through `tableValue` at 250, 298.15, 300, 337.5, 373.15 and 400 K equal to the file's own rows read by the test (list-directed) by the same formula — exact on a node and outside the table, `4 ε` between nodes; the scalar `Lv` = `Lv(298.15 K)` |
 | PR-S1 | `sm-`, two zones, T 270..370 | zone A's `Sigma = 0.036 + 1e-3 (T − 300)` and `Viscosity = 0.05 exp(−(T − 300)/10)`: both tables built on `[270, 370]`, bitwise equal to the file's rows read by the test (list-directed) at the 101 nodes; through `tableValue` the end nodes at 200 K and 400 K, NaN at a NaN temperature; zone B all zero: no tables, `sigma = 0.05` and `mu = 1e-3` from `[IGLOO-Properties]` |
 
 The checks behind the reader (`classify_table_tokens`, `scan_rows`, `check_table_nodes`,
@@ -43,25 +43,25 @@ synthetic input:
 | PR-V2 | `validate_vapour_columns` | every code once on columns beside PR4's Psat curve (`Lv·Mv/Ru` = its 5000 K slope): OK, all zero ABSENT, a NaN NONFINITE, `Cpv` zero on three rows PARTIAL, `Cpv` negative NONPOSITIVE, `Mv` not constant MV_VARIES, no Psat column WITHOUT_PSAT, `Lv` in kJ/kg CC_MISMATCH; with the `Mv` column absent the slope takes `MvKey` (18 accepted, 18/2.5 refused) |
 | PR-S2 | `validate_positive_column` | every code once, in precedence order: a positive column OK, all zero ABSENT, a NaN beside a zero and a negative value NONFINITE, a zero among non-zero rows beside a negative value PARTIAL, a negative value NONPOSITIVE |
 | PR5 | `check_table_nodes` | 1e-7 K off the nodes accepted; a uniform 0.4 K offset and a missing node refused; one row, a NaN, a node below 0 K |
-| PR8 | `classify_table_tokens` | the 4-column header; aliases in another order (`Psat` first, `enthalpy_abs`); both enthalpy names; a name twice; `Temperature` not first; no Cp / Density / enthalpy; `VISCOSITY` and `sigma` found by name (absent: 0); `Sigma` with `SIGMA`, `viscosity` with `Viscosity`: a name twice |
+| PR8 | `classify_table_tokens` | the 4-column header; aliases in another order (`Psat` first, `enthalpy_abs`); both enthalpy names; a name twice; `Temperature` not first; no Cp / Density / enthalpy; `VISCOSITY` and `sigma` located by name (absent: 0); `Sigma` with `SIGMA`, `viscosity` with `Viscosity`: a name twice |
 | PR11 | `check_table_columns` | `h = cp*T` relative; an offset absolute (accepted) and relative (refused); a row off `cp*T`; `h` not increasing; `rho = 0`; `cp < 0`; a NaN; a varying cp with `h` its trapezoid sum (accepted) and its right Riemann sum (refused) |
 | PR12 | `tableValue` | linear between the nodes; the end values outside; `tab(Tmax)` at `Tmax`; NaN for a NaN temperature |
 | PR13 | `scan_rows` | `scan-short.dat` (row 3 short: bad line 7), `scan-trail.dat` (text after the rows), `scan-count.dat` (`I=4` over 3 rows), `nm-properties.dat` (clean) |
 | PR14 | `comp_TfromTab` | the inverse of `lookupTab` on a 250..260 K table (`cp = 1000 + 10 (T − 250)`, `h` its trapezoid sum): every node exactly; between the nodes, below `Tmin` (the first segment extended) and above `Tmax` (the last one) within `4 ε (|h|/s + |T|)`; ICE's energy rule on the same table (`e = h − hOff`, the line from `e(0) = 0` below `Tmin`, the last segment above `Tmax`) gives the same `h` and `T`; a two-row 300..301 K table; a 1..5 K table below 1 K; NaN in, NaN out |
 | PR15 | `lookupTab` | NaN at `T` = +Inf, −Inf and NaN on `legacy-`'s enthalpy; the IEEE invalid flag, cleared before the NaN lookup, still clear after it (a classification raises no flag) |
 
-**RED first.** Against the reader that read three columns by position (the test compiles against it
+**RED.** Against a reader that reads three columns by position (the test compiles against it
 for PR1–PR10): `hexadecane` 10 assertions fail — `legacy-`'s constant cp read as varying (its
-constancy check indexed the rows by temperature, reading past the table's end for `Tmin > 1`), `abs-`
+constancy check indexes the rows by temperature, reading past the table's end for `Tmin > 1`), `abs-`
 the same and `hOff = 0`, no psat table from `psat-`, and `perm-` read `Psat` as Cp; `two-material` 1
 (zone A's Psat column never read); `atlas-water` 2 (rho read as varying through the same overrun, no
-psat table). PR4–PR13 test functions that did not exist; each is RED on one mutation of them:
+psat table). PR4–PR13 test functions that reader does not have; each is RED on one mutation of them:
 non-decreasing made strict (PR4 equal neighbours and constant), the node tolerance 0.5 K (PR5 0.4 K
 offset), both enthalpy names accepted (PR8), `tab(hi-1)` as the end value (PR12 outside and at
-`Tmax`), the relative-datum rule off (PR11), the row check off (PR13 short row). PR14 against the inversion that
-searched the table from index 1: 8 of its 9 legs fail (NaN in, NaN out holds on any code); for the tables that
+`Tmax`), the relative-datum rule off (PR11), the row check off (PR13 short row). PR14 against an inversion that
+searches the table from index 1: 8 of its 9 legs fail (NaN in, NaN out holds on any code); for the tables that
 start above 1 K it returns what precedes the table in memory (7 to 185 K in the measured run), so the failing
-set can vary between runs, and below 1 K it reads `h(0)` (0.4975 K for 0.5 K). PR15 against the lookup
+set can vary between runs, and below 1 K it reads `h(0)` (0.4975 K for 0.5 K). PR15 against a lookup
 that indexes by `idint(T)` with no finite check: 3 of its 4 legs fail — `idint` of ±Inf is −2147483648,
 clamped to `Tmin`, so ±Inf returns ±Inf, and the NaN lookup raises the invalid flag; NaN in, NaN out holds
 on any code.

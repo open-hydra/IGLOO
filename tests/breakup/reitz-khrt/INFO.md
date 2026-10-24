@@ -1,8 +1,7 @@
 # Reitz-KHRT (brkupSelect=3) — KH-path unit family
 
-T-KHRT, unblocked 2026-07-07 by the A2 production fix (`omegaKH` was missing the
-`sqrt` with `r³` inverted — dimensionally m⁶/s² (bug A2), and
-`breakup/LITERATURE_TESTS.md` §5).
+T-KHRT (`breakup/LITERATURE_TESTS.md` §5). KH2 and KH3 fail on a solver whose `omegaKH`
+lacks the `sqrt` with `r³` inverted (dimensionally m⁶/s²).
 
 Oracle: the Reitz 1987 KH linear-stability chain (dimensionless growth-rate and
 wavelength forms), assembled into the pure-KH `npdotDot` through the public
@@ -14,9 +13,13 @@ wavelength forms), assembled into the pure-KH `npdotDot` through the public
 | KH2 | moderate We (u=100 m/s, WeGas≈8.3, Re=1e4): code ≡ paper chain to 1e-12 |
 | KH3 | high We (u=300 m/s, WeGas≈75, Re=1e3): code ≡ paper chain to 1e-12 |
 
-Not covered here (deferred to a KHRT-specific pass, see LITERATURE_TESTS §5):
-Ω_RT/Λ_RT/RT-trigger, child-drop cubic, the commented-out KH mass-shed branch,
-and the `breakupEvent` (`ReitzKHRTevent`) path.
+Not covered by KH1–KH3 (see LITERATURE_TESTS §5): the RT block, the child-drop cubic, the
+commented-out KH mass-shed branch and the `breakupEvent` (`ReitzKHRTevent`) path.
+`test_khrt_interaction` covers the RT trigger and the event path: its four quadrants pin, at
+identical state, that the ODE's KH rate is exactly zero iff the event path takes the RT branch,
+that the RT branch lands the parcel on `λ_RT` (1e-12) and that the trigger sits at `τ_RT` (a pair
+astride it, ±1e-9), `λ_RT` and `τ_RT` as the test's own `rt_scales` computes them; its KS legs
+(below) pin the KH shed under evaporation. The RT child count `(dp/λ_RT)³` has no pointwise test.
 
 ## test_khrt_interaction — the KH shed under evaporation (KS legs)
 

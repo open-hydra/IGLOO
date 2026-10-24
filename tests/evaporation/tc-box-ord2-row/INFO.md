@@ -2,33 +2,32 @@
 
 ## Reference
 No literature reference: this is a conservation identity end to end. The evaporation physics
-is [`evaporation/tc-box`](../tc-box/INFO.md)'s and is gated there. See
-[BUGS.md](../../BUGS.md) §E row **O28**; the unit half is
+is [`evaporation/tc-box`](../tc-box/INFO.md)'s and is gated there. The unit half is
 [`infrastructure/source_reduction`](../../infrastructure/source_reduction/INFO.md).
 
-## Why it exists
+## What it guards
 Under `gas-order = 2` the source accumulators live on the **dual** mesh and
-`obj_sourceblock%finalize` reduces them to geo cells. Before O28 that reduction volume-
-**averaged** extensive rates, which hands each dual cell on with weight
+`obj_sourceblock%finalize` reduces them to geo cells with the octant weights
+`subVol/dualW`, a partition of unity over the geo cells that touch a dual cell. A reduction
+that volume-**averages** the extensive rates hands each dual cell on with weight
 `Σ_{c∋d} subVol/V_geo(c)` — 1 in the interior, but **½** on a face row, ¼ on an edge, ⅛ on
-a corner. Every boundary dual row therefore leaked most of its deposit, and hydra-MI2
+a corner: every boundary dual row leaks most of its deposit, and hydra-MI2
 consumes exactly this field.
 
-**Nothing in the suite could see it.** Every telescoping gate ran at `gas-order = 1`; the
-only ord2 source gate, `standard/swirl-wedge-deposit`, never enters a boundary row except
-the outlet and is blind by magnitude — measured, its band sums were **0.14 %** off before
-the fix, well inside its own 2 % tolerance.
+**What the ord2 source gate `standard/swirl-wedge-deposit` cannot see.** It never enters a
+boundary row except the outlet and is blind by magnitude — measured, its band sums are
+**0.14 %** off under the averaging reduction, well inside its own 2 % tolerance.
 
-This case is also the **only** gate on the *wiring*: `test_source_reduction` calls
+This case is also a gate on the *wiring*: `test_source_reduction` calls
 `precomputeDualWeights` itself, so it would stay green if the call vanished from
-`allocate_blocks`.
+`allocate_blocks`; this case would not, nor would the other gates on a gas-order-2 source field
+(`finalizeSRC` reads `dualW`).
 
 ## Fixture
 `INPUT/{solfile.tec,phase.txt,properties.dat}` symlink `../../tc-box/INPUT/`;
 `INPUT/bc.txt` is written by the committed `make_fixture.py` (`python3 make_fixture.py`,
-1250 lines, every face `bcdef = 400`). The shared `tests/tools/make_box_case.py` cannot be
-reused: its `write_bc` hardcodes `401` on face 1, and this case injects by coordinate
-instead of through an inlet face.
+1250 lines, every face `bcdef = 400`): this case injects by coordinate instead of through
+an inlet face.
 
 `input.ini` is tc-box's with four changes:
 
@@ -83,15 +82,15 @@ closure term vanishes — measured gap `0.000e+00`. It is kept as a guard in cas
 ever lands at the final dual face instead; there its error is second order on the plateau
 (< 1e-5). Under ord1 the exit row is printed too, so tc-box's own oracle also sums every cell.
 
-## Red–green evidence (2026-09-22, release build, sprop2)
+## Red–green evidence (release build, sprop2)
 
-| | `bin/IGLOO.pre-A` | with O28 |
+| | averaging reduction | this solver |
 |---|---|---|
 | `Σ wdot` | 4.336423e-04 kg/s | **8.699755e-04 kg/s** |
 | evaporated (oracle) | 8.699722e-04 kg/s | 8.699722e-04 kg/s |
 | **resid** | **5.015e-01** | **3.798e-06** |
 
-`rc = 0` in both cases: half the source silently vanished.
+`rc = 0` in both cases: under the averaging reduction half the source silently vanishes.
 
 ## Pass criterion
 All five PASS. Tolerance `1e-3` sits 263× above the measured floor (3.798e-06, identical at

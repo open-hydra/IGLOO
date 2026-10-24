@@ -1,11 +1,10 @@
 # periodic-y — translational periodic BC (bcdef 201)
 
-**Purpose.** First validation of the 201 periodic transport path
+**Purpose.** Validates the 201 periodic transport path
 (`obj_particles.updateCell → IGLOO_bcBox.periodicTransport`): the reader's
 connection/connectionFace parsing, the `T = partner_face_center −
 exit_face_center` translation, the velocity-unchanged contract, and the
-post-transport relocation. The path had shipped unexercised (no case had a
-periodic pair).
+post-transport relocation.
 
 **Setup.** `standard/body-force` decoupling (kV=kT=1, Stokes exact-linear drag)
 with `g_y = −8000` so every particle drifts ≈2.8 box heights across the domain;

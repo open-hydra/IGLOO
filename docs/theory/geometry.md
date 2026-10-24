@@ -97,8 +97,9 @@ $$
 When Möller-Trumbore fails to pin the crossed face (sub-1e-5 proximity at a triangle
 split), `din ≤ 0` and the fallback `deltat/nStep` is used.
 
-`part%computeDeltat(vert)` estimates the initial `deltat` from the cell bounding-box
-diagonal divided by the particle speed.
+`part%computeDeltat(vert)` estimates the initial `deltat` as the distance `computeDs` returns along
+the velocity (its absolute value, at least `eps`), divided by the particle speed; `dtMax` for a
+parcel at rest.
 
 ---
 

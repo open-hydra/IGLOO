@@ -28,7 +28,7 @@ All gates. Measured: V1 worst 0.033 of its tolerance (0.015 and 0.017 on the row
 ## Falsification
 - A model-1 parcel whose density varies printing its injection diameter: every row with a changed temperature
   fails D1 and D2 (2950 violations; 16.0000 µm printed at 597 K where `d(T)` = 16.3633 µm, 7.3·10³ tolerances).
-  V1 passes there: the solver's heat flux already used `d(T)`, only the printed diameter was stale.
+  V1 passes there: the heat flux uses `d(T)` either way, only the printed diameter is stale.
 - The density continuing the table's end segments outside it (2970 kg/m³ at 210 K, 2655 kg/m³ at 840 K): the 210 K
   and 840 K groups carry masses 0.678 % above and 0.748 % below the oracle's (M 8.6·10³ tolerances), and their
   diameters and temperatures follow (D1 792, D2 799, V1 1.5·10³ tolerances; 2370 violations).

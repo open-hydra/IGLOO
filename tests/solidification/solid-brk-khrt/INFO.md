@@ -30,7 +30,7 @@ solid. Family 2 strips from 30 to 29.927 µm in the 3 µs before its nucleation,
 ## RED (each measured by one mutation of the code)
 | mutation | what fails |
 |---|---|
-| the code before breakup was allowed on a solidifying material | setup refuses `solidification=on` with breakup, exit 128 |
+| a solver that refuses breakup on a solidifying material | setup refuses `solidification=on` with breakup, exit 128 |
 | the breakup event not gated by the phase | K2: the 25 family-2 parcels RT-shatter after their nucleation, the 25 family-1 parents write no frozen row; K3: those parents end with exit code 0, not at the outlet |
 | the KH stripping rate `F(9)` in every phase | K2: the 25 family-2 parcels keep stripping after their nucleation, about 1.2 % of `d` per row |
 | a child set up without model 7's state | 150 of the 175 children stop at their birth: K1 (no trajectory row) and K3 (exit code 0); the flow, energy and Eulerian balances still close |

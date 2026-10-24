@@ -1,28 +1,28 @@
 # wall-approach — the ord2 gas ghost ring must know its boundary conditions
 
-**Ledger row O29.** Gates that a parcel drifting toward a solid wall is stopped by the gas
-instead of pushed through it.
+Gates that a parcel drifting toward a solid wall is stopped by the gas instead of pushed
+through it.
 
 ## What it covers
 
 Under `gas-order = 2` the gas is sampled on a dual mesh whose boundary row straddles the
-domain face: half of the first dual cell lies outside, on a ring of ghost nodes. Until this
-gate existed, [fillGhostGradient](../../../src/lib/obj_block.f90#L1074) filled that ring by
-blind linear extrapolation, `2q1 − q2`, on **every** face regardless of what the face was.
+domain face: half of the first dual cell lies outside, on a ring of ghost nodes.
+[fillGhostGradient](../../../src/lib/obj_block.f90) refills that ring at the start of every
+`solve`, before any parcel reads it (`import_gas` rewrites only the interior): a linear
+extrapolation, `2q1 − q2`, on every face, then a bc-aware pass on the gas-solid planes
+(300/301); `fillGhostPartners` then fills the ghosts of connected faces.
 
-At a gas-solid plane that is wrong in the one way a parcel can feel: the sampled normal
-velocity in the boundary row becomes
+The linear fill alone is wrong at a gas-solid plane in the one way a parcel can feel: the
+sampled normal velocity in the boundary row becomes
 
     v_n = (v_ghost + v_1)/2 = (3 v_1 − v_2)/2 ,   not 0
 
-so the gas keeps pushing the parcel into a plane it cannot itself cross. A bc-aware fill had
-been written — `ghostState`, in the setup-time post-pass of `read_cdp_bc_file` — but
-`fillGhostGradient` overwrote its every index at the start of the first `solve`, before any
-parcel read it, and on sweeps ≥ 1 it never ran at all (`import_gas` rewrites only the
-interior). Measured: with the whole ord2 ghost ring poisoned to −9.9e30 at the end of setup,
-all 12 ord2 fixtures stayed byte-identical across 54 output files.
+so the gas keeps pushing the parcel into a plane it cannot itself cross. A bc-aware fill
+written only at setup is inert: the per-sweep fill overwrites every ghost index before any
+parcel reads it (measured: with the whole ord2 ghost ring poisoned to −9.9e30 at the end of
+setup, 12 ord2 fixtures stayed byte-identical across 54 output files).
 
-The fix mirrors the **interior partner's** normal component into the ghost,
+The bc-aware pass mirrors the **interior partner's** normal component into the ghost,
 
     v_g ← v_g − ((v_g + v_i)·n) n      ⇒   v_g·n = −v_i·n
 
@@ -43,11 +43,12 @@ T 350, γ 1.4, R 287, μ 2e-5, k 0.03`. Three 4 µm parcels are DB-injected at `
 key IGLOO never reads.
 
 `make_fixture.py` (committed, run once) writes both `INPUT/solfile.tec` and `INPUT/bc.txt`:
-nothing else in the tree writes a `bc.txt` with a wall on face 3 and an outlet on face 1
-(planar-slab's came from ATLAS via `retag_bc.py`, and `tools/make_box_case.py` hardcodes a 401
-inlet on face 1). The injection heights sit off every dual node plane (2.5 + 5k mm) and leave
-exit heights ≥ 4e-6 m — the 09-19 draft used 21/31/41 mm, where parcel 1 would have exited at
-~9e-9 m, 90× the ODE `atol` and below the `F12.6` print floor for some twenty rows.
+face 3 a 301 wall, faces 5/6 300, every other face 400 (no inlet: the parcels are DB-injected).
+`tools/make_box_case.py` cannot tag face 3 as a 301 wall (its face 3 is 400, 300 or 201), and
+planar-slab's `bc.txt` is ATLAS's, retagged by `retag_bc.py`. The injection heights sit off
+every dual node plane (2.5 + 5k mm) and leave exit heights ≥ 4e-6 m (at 21/31/41 mm parcel 1
+would exit at ~9e-9 m, 90× the ODE `atol` and below the `F12.6` print floor for some twenty
+rows).
 
 ## Oracle
 
@@ -69,10 +70,10 @@ sample is linear between the ghost `+V` and the first interior node `−V`, i.e.
 
 ## Verified
 
-**RED** on the frozen `bin/IGLOO.pre-B`: all three parcels reach the wall and are `gone` on
-contact, at `x = 0.370000 / 0.420000 / 0.470000` — the a-priori prediction
+**RED** on a solver whose ghost ring is the linear fill alone: all three parcels reach the
+wall and are `gone` on contact, at `x = 0.370000 / 0.420000 / 0.470000` — the a-priori prediction
 `x = 0.010 + 10 y_0` to six digits. W1 fires 3/3 and W4 at 25.5× the bound.
-**GREEN** after the fix: 0 hits, three outlet rows at `x = 0.5`, exit heights
+**GREEN** here: 0 hits, three outlet rows at `x = 0.5`, exit heights
 `4.0e-6 / 3.3e-5 / 2.6e-4 m`, decay residual 0.54/0.54/0.51 of the bound.
 
 The companion unit gate is [ghost_bc](../ghost_bc/test_ghost_bc.f90), which pins the faces,

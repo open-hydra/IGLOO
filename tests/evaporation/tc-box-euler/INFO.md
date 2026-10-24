@@ -3,35 +3,28 @@
 ## Reference
 No literature reference and no oracle curve: the evaporation physics is
 [`evaporation/tc-box`](../tc-box/INFO.md)'s and is gated there. This case gates the
-**equivalent-Eulerian deposit for ODE models 2 and 5** — see [BUGS.md](../../BUGS.md) §E
-row **O31**.
+**equivalent-Eulerian deposit for ODE models 2, 5 and 8**.
 
-## Why it exists
-`Lib_Integration::computeEulField` branches on the ODE model. For models 2 and 5 it
-deposited
+## What it guards
+`Lib_Integration::computeEulField` branches on the ODE model. For models 2, 5 and 8 it
+deposits
 
-    rho = particle%intE(5) * factor
+    rho = particle%npdot*particle%intE(5)*factor
 
 where `intE(5)` is `∫ m dt` for **one** droplet (`F(14) = m` in the model-2 and model-5
-RHS): units kg·s/m³, the number rate missing. The sibling branches are all consistent —
+RHS, `F(15) = m` in model 8's), so the number rate `npdot` makes it a density. The sibling branches agree —
 model 4's integrand is already `m·npdot` (`F(15) = mTraj`), and models 1 and 3 deposit
 `mdot·Tstay` with `mdot = npdot·m`. Even the body-force source correction multiplies the
 same slot by `npdot`.
 
-Because `finalizeEUL` normalizes velocity and temperature **by** `rho_p`, the missing factor
-does not merely scale the density: `u_p` and `T_p` come out multiplied by `npdot` (5.0e7
-here), and `rho_p/n_p` — the mean droplet mass — reads `1/npdot` of the truth.
+A deposit without the factor (`rho = particle%intE(5) * factor`, units kg·s/m³) does not
+merely scale the density: because `finalizeEUL` normalizes velocity and temperature **by**
+`rho_p`, `u_p` and `T_p` come out multiplied by `npdot` (5.0e7 here), and `rho_p/n_p` — the
+mean droplet mass — reads `1/npdot` of the truth.
 
-**It is a regression, not a design gap.** The deposit read
-`rho = particle%npdot*particle%intE(5)*factor` at `b2ed810` (2025-11-20) and lost the factor
-in `047b11e` (2026-03-24, "refactoring - phase 1") while the integrand stayed `F(14) = m`.
-Its parent `842c180` still carries the correct line. Those commits are reachable only on the
-local `archive/dima-*` branches — the public history is squashed at `c7195f1`, so `git blame`
-of the current line points at the squash. The fix restores the Nov-2025 line verbatim.
-
-**Nothing in the suite could see it.** Every Eulerian writer here is model 1 (no
-evaporation/combustion key), and every model-2/5 fixture writes `out-file = S`. The
-intersection was empty.
+**What a gate on this branch needs.** A model-1 Eulerian writer (no evaporation/combustion
+key) never enters the model-2/5/8 branch, and a model-2/5/8 fixture with `out-file = S` writes no
+Eulerian field: the case needs both.
 
 ## Fixture
 `INPUT/` is four per-file symlinks to `../../tc-box/INPUT/` (the `datum-abs` precedent);
@@ -59,7 +52,7 @@ is **not read by IGLOO**; do not "correct" the oracle to it), `d₀ = 20 µm` �
 writes one row per cell **entry** and the exit row at `x = 0.15`, so every cell has both bounding rows —
 all **1500** cells are checked and the count is asserted.
 
-| gate | assertion | RED (pre-fix) | GREEN |
+| gate | assertion | RED without `npdot` | GREEN |
 |---|---|---|---|
 | W1/W2 | both INI changes were read — the two log witnesses | present | present |
 | N | ≥ 1000 cells checked (non-vacuity) | 1475 | 1500 |
@@ -72,7 +65,7 @@ all **1500** cells are checked and the count is asserted.
 W1/W2 are **positive** witnesses. Without them a run that never read the INI would pass the
 absences, and `out-file`/`mollify` are exactly the two keys this fixture exists to set.
 
-E3 is the sharp gate: `rho_p/n_p` is an *intensive* quantity, so the defect's `1/npdot`
+E3 is the sharp gate: `rho_p/n_p` is an *intensive* quantity, so a missing factor's `1/npdot`
 shows as a deviation of ~1 whatever the cell — four decades above the bound. E1 is the
 independent extensive half, deliberately coarse (its 1.5 % offset is the trapezoid rule plus
 the uncounted exit segment, not a physics residual).
