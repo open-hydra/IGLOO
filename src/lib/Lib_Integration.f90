@@ -11,7 +11,7 @@ contains
   !> Integrate one particle from its current state to domain exit (or burnout) through the
   !  steady gas field, one cell segment at a time, depositing source and Eulerian moments.
   subroutine integrate(part,geoblock,gasblock,srcblock,eulblock,     &
-                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, shed,noShed)
+                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, shed,noShed,resid)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
     use IGLOO_variables,  only: unitTraj,unitExit,unitScat,unitSnap,iprint,dtprint,tEnd,timeOn,snapOn,frozenOn, &
@@ -21,7 +21,7 @@ contains
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
                                 nInjNoCell,                                &
                                 trajOn, scatOn, dNscat, sixOverPi, pi,    &
-                                planeOn, planeX, unitPlane
+                                planeOn, planeX, unitPlane, failAfter
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock
@@ -55,8 +55,13 @@ contains
     type(shedList),        intent(inout), optional :: shed
     !> True on the last generation pass: sheds are suppressed and the parent keeps the mass.
     logical,               intent(in),    optional :: noShed
+    !> This parent's burnout-residue list (a capped material with residue = on).
+    type(shedList),        intent(inout), optional :: resid
     !> local variables
     type(obj_shed) :: shedRec   !> staged child record, pushed once complete
+    type(obj_shed) :: resRec    !> the burnout residue's record
+    logical  :: resBorn         !> the parcel ended consumed with its cap: a residue is born
+    real(R8) :: mRes, hRes, vRes
     real(R8), allocatable :: gas(:,:), gasVert(:,:), gasState(:)
     real(R8) :: vert(3,8), t1, t2, tStart, deltat, tprint
     real(R8) :: Ein, Eout, Pin(3), Pout(3), massIn, massOut, vol
@@ -248,6 +253,9 @@ contains
         t1     = part%time
         call ODEsystem()
       enddo
+      !> A capped parcel consumed (burnout, solver failure, non-finite state) with a cap: its residue is born.
+      resBorn = .false.
+      if (present(resid) .and. consumed .and. part%model == 8) resBorn = part%stateVar(9) > 0._R8
             
       if (sourceSwitch) then
         call part%computeSource(massOut,Pout,Eout)
@@ -264,6 +272,15 @@ contains
           massOut = massOut + shedM
           Pout    = Pout    + shedM*shedV
           Eout    = Eout    + shedM*(hShed + 0.5_R8*vShed*vShed)
+        endif
+        !> A burnout residue takes its birth flux, the cap at the product's heat capacity and datum, from the books.
+        if (resBorn) then
+          mRes    = part%npdot*part%stateVar(9)
+          hRes    = part%cpRes*part%tp + part%hOffRes
+          vRes    = norm2(part%stateVar(4:6))
+          massOut = massOut + mRes
+          Pout    = Pout    + mRes*part%stateVar(4:6)
+          Eout    = Eout    + mRes*(hRes + 0.5_R8*vRes*vRes)
         endif
         !> Body-force source-reaction correction.
         if (srcBodyForce) then
@@ -421,6 +438,19 @@ contains
       endif
       if (region_failed()) part%gone = .true.   !> MPI: end every parcel in flight after a failure
       if (part%gone) then
+        !> The residue's record: the state its parent's exit record prints.
+        if (resBorn) then
+          resRec%pos    = part%stateVar(1:3)
+          resRec%vel    = part%stateVar(4:6)
+          resRec%temp   = part%tp
+          resRec%time   = part%time
+          resRec%ipos   = part%i
+          resRec%igas   = part%igas
+          resRec%mass   = part%stateVar(9)
+          resRec%npdot  = part%npdot
+          resRec%parent = part%ID
+          call resid%push(resRec)
+        endif
         call writeExitRow()
         part%time = 0._R8
         call flushScat()
@@ -630,6 +660,8 @@ contains
       case(7); nDL = 10; call Run_ODESolver(neq, t1, t2, y, rhs6, no_jacobian, 0, err, deltat, solout)
       case(8); nDL = 10; call Run_ODESolver(neq, t1, t2, y, rhs8, no_jacobian, 0, err, deltat, solout)
       end select
+      !> [IGLOO-ODE] fail-after: the cap model fails once its last accepted time reaches it.
+      if (failAfter > 0._R8 .and. mod_model == 8 .and. err >= 0 .and. timeLocal >= failAfter) err = -1
       if (err < 0) then
         write(*,'(a,i0,a,i0,a,es12.4,a)')                                   &
           '[IGLOO] Run_ODESolver err=',err,' part=',part%ID,                   &
@@ -638,6 +670,14 @@ contains
         part%gone = .true.
         !> Consumption models hand the remnant to the gas, as on the non-finite exit below.
         if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) consumed = .true.
+        !> Model 8: back to the last accepted step, the state its residue starts from.
+        if (mod_model == 8) then
+          part%stateVar = oldLocal
+          part%time     = timeLocal
+          part%oldState = oldLocal
+          call part%updatePart(rhoTab,hTab,eulerSwitch)
+          part%Tstay = timeLocal - tStart
+        endif
         return
       endif
       !> Burnout: the droplet was consumed on a still-good state; falls through to the normal finalize.

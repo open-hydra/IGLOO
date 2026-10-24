@@ -192,6 +192,9 @@ contains
       'ODE relative tolerance','',.false.)
     call reg%add('IGLOO-ODE','absolute-tol',d_r(25),'1e-10', &
       'ODE absolute tolerance','',.false.)
+    call reg%add('IGLOO-ODE','fail-after',d_r(27),'0', &
+      'A forced solver failure of the oxide-cap model (ODE model 8) once a parcel''s last accepted time reaches this '// &
+      'value [s]: the failure path of the burnout residue; 0 = off','',.false.)
 
   end subroutine Register_IGLOO_Params
 

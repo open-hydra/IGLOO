@@ -33,6 +33,9 @@ program test_solidification
     !        it rebuilds (1e-13), F(9) as a direct breakupOde in the liquid phases (1e-12), exactly 0 on
     !        the plateau and the solid where the direct call is not; the euler tail model 6's shifted by
     !        one slot plus Z(9); the KH-RT timer written back in the liquid phases only.
+    !   SB1  birthResidue: a burnout residue of a freezing product at its parent's temperature 2500, 2000, 1500 K is born
+    !        liquid, undercooled, undercooled with f = 0 (never solid at its own temperature); its mass, diameter,
+    !        number rate, flow and m0 for one residue per droplet and at d-residue (the mass flow kept).
     !   SG12 rho-solid: solidDiameter at f = 0, 0.3, 1 against d0 (1 - f + f rho_l/rho_s)^(1/3); setupRHS puts the
     !        solid-density slot after the metal block (the emissivity after it); one production rhsSolidification
     !        per phase with it, F(7) or F(8) at that diameter (1e-14); a material set up without rho-solid after
@@ -95,6 +98,7 @@ program test_solidification
     call run_SG10(ok_all)
     call run_SG11(ok_all)
     call run_SG12(ok_all)
+    call run_SB1(ok_all)
 
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then
@@ -819,5 +823,61 @@ contains
         ok = ok .and. assert_lt('SG12f rho-solid with radiation: convection and radiation at the solid diameter', err, TOLR)
         call append_row('SG12f_rad', 'F', err, err, 0._R8, 0._R8, TOLR, err < TOLR)
     end subroutine run_SG12
+
+    subroutine run_SB1(ok)
+        !> birthResidue on a freezing product (T-melt 2327, T-nuc 1861.6 K, rho 3950) from one parent record
+        use IGLOO_particles,   only: obj_particle
+        use IGLOO_data_phases, only: obj_shed, birthResidue
+        use IGLOO_variables,   only: pi, eulerSwitch
+        logical, intent(inout) :: ok
+        real(R8), parameter :: TBS(3) = [2500._R8, 2000._R8, 1500._R8], RRES = 3950._R8
+        real(R8), parameter :: MCAP = 1.575932e-11_R8, NPD = 1.482285e7_R8, DRES = 5.0e-6_R8
+        integer,  parameter :: PHEXP(3) = [phLiquid, phUndercooled, phUndercooled]
+        type(obj_particle) :: kid
+        type(obj_shed) :: rec
+        real(R8) :: m, d, np, dr
+        integer  :: i, k
+        logical  :: pass
+        eulerSwitch = .false.
+        pass = .true.
+        rec%pos = [0.07_R8, 0.005_R8, 0.015_R8];  rec%vel = [10._R8, 0._R8, 0._R8]
+        rec%time = 7.2e-3_R8;  rec%ipos = [1, 29, 1, 2];  rec%igas = [29, 1, 2]
+        rec%mass = MCAP;  rec%npdot = NPD;  rec%parent = 7
+        do k = 1, 2
+            dr = 0._R8;  if (k == 2) dr = DRES
+            do i = 1, 3
+                call fresh(kid)
+                rec%temp = TBS(i)
+                call birthResidue(kid, rec, 32, dr)
+                if (k == 1) then
+                    m = MCAP;  d = (6._R8*m/(pi*RRES))**(1._R8/3._R8);  np = NPD
+                else
+                    d = DRES;  m = pi/6._R8*RRES*DRES**3;  np = NPD*MCAP/m
+                end if
+                pass = pass .and. kid%solidPhase == PHEXP(i) .and. kid%stateVar(8) == 0._R8 .and. kid%fSolid == 0._R8
+                pass = pass .and. kid%m == m .and. kid%d == d .and. kid%npdot == np .and. kid%mdot == np*m &
+                            .and. kid%m0 == m .and. kid%npold == np
+                pass = pass .and. kid%stateVar(7) == TBS(i) .and. kid%tp == TBS(i) .and. kid%time == rec%time &
+                            .and. all(kid%stateVar(1:3) == rec%pos) .and. all(kid%stateVar(4:6) == rec%vel) &
+                            .and. all(kid%oldState == kid%stateVar)
+                pass = pass .and. kid%ID == 32 .and. kid%parentID == 7 .and. kid%newborn .and. all(kid%i == rec%ipos) &
+                            .and. all(kid%igas == rec%igas) .and. .not. kid%gone
+                write(*,'(a,i0,a,f7.1,a,i0,a,f4.1,a,es13.6,a,es13.6)') '  [INFO] SB1 rule ', k, ', T = ', TBS(i), &
+                    ' K: phase ', kid%solidPhase, ', f ', kid%stateVar(8), ', m ', kid%m, ', d ', kid%d
+            end do
+        end do
+        call flag('SB1 birthResidue: liquid / undercooled / undercooled with f = 0; m, d, npdot, mdot, m0 for both '// &
+                  'size rules', 'SB1_birth', pass, ok)
+    end subroutine run_SB1
+
+    !> SB1: a particle of the product's group as setup_particleODE and assign_group2particle leave it (model 6)
+    subroutine fresh(p)
+        use IGLOO_particles, only: obj_particle
+        type(obj_particle), intent(out) :: p
+        p%model = 6;  p%neq = 8;  p%nOde = 8;  p%bodyAccum = .false.
+        p%rho = 3950._R8;  p%Tmelt = 2327._R8;  p%Tnuc = 0.8_R8*2327._R8;  p%famID = 2
+        allocate(p%stateVar(8), p%oldState(8))
+        p%stateVar = -1._R8;  p%oldState = -2._R8
+    end subroutine fresh
 
 end program test_solidification

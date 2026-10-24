@@ -7,12 +7,12 @@
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ rad-cool/ emissivity-cap/ rad-foreign-key/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/, liquid-p2t/, boiling-zgr/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ d2law-brk-dormant/ temp-relax-p2t/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/ (e2e)
-#   combustion/         unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ (e2e)
+#   combustion/         unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-brk-tab-rhos/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ breakup-per-material/ khrt-plane/ pe-sigma-table/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x}
-#   repeatability/      two-sweep gates (twosweep driver): 13 cases
-#   mpi/                registered only under USE_MPI: 9 rank-count cases + 3 consistency + 1 determinism
+#   repeatability/      two-sweep gates (twosweep driver): 14 cases
+#   mpi/                registered only under USE_MPI: 9 rank-count cases + 4 consistency + 1 determinism
 #                       + 13 two-sweep cases
 #
 # Run everything via ../test.sh (it builds this tree's IGLOO, which every e2e case runs, and publishes it to bin/).
@@ -364,6 +364,9 @@ igloo_twosweep_case(repeat-evap-breakup repeatability/evap-breakup
 # solve, every DB parcel's azimuthal velocity is restored at injection; plus the gas-refresh cycle.
 igloo_twosweep_case(repeat-swirl-wedge  repeatability/swirl-wedge
                     "e2e;repeatability;axisym" "INPUT/solfile.tec")
+# repeat-burn-box-residue: the combustion product's group is emptied every sweep (its residues are born by the solve).
+igloo_twosweep_case(repeat-burn-box-residue repeatability/burn-box-residue
+                    "e2e;repeatability;combustion" "")
 # docs/user/registry.md is DocGen OUTPUT that is also TRACKED, so it can silently
 # disagree with the registry it documents (it did twice on 2026-07-30). Regenerate
 # into the build tree and diff. Kind 8 (contract meta-test): no physics, no figure.
@@ -639,6 +642,11 @@ igloo_e2e_case(burn-box-euler combustion/burn-box-euler "e2e;combustion;euler")
 # does not grow, on the burn law without the exposed-surface factor and the stretch, on the metal's heat capacity
 # for the whole parcel and on an eulerian tail weighted by the metal alone.
 igloo_e2e_case(burn-box-cap combustion/burn-box-cap "e2e;combustion;euler")
+# burn-box-residue: the burnout residue (residue=on, product OX freezing): one residue per parcel burned out inside the
+# box, born at its parent's exit record with the cap's mass; the mass and energy books with the birth flux withdrawn;
+# its nucleation and relaxation; siblings ref-dres/ (d-residue, two groups: the residue IDs' offset) and ref-fail/
+# ([IGLOO-ODE] fail-after: the residue born after a solver failure).
+igloo_e2e_case(burn-box-residue combustion/burn-box-residue "e2e;combustion;solidification")
 
 # ---------- solidification (ODE models 6 and 7: supercooling, recalescence, plateau, melting; breakup on the liquid) --------
 igloo_unit_test(test_solidification solidification "unit;solidification;t4")
@@ -1294,6 +1302,16 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
         LABELS "e2e;mpi;injection;consistency"
         ENVIRONMENT "OMP_NUM_THREADS=2;KMP_STACKSIZE=100M"
         TIMEOUT 900)
+    # the same gate on burn-box-residue: the residues live on the rank of their parent, so their IDs, rows and exit
+    # records and the product's banner count (25) must not depend on the decomposition (its check.py adds the banner)
+    add_test(NAME mpi-consistency-residue
+        COMMAND python3 -B check.py "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}"
+                                   "$<TARGET_FILE:IGLOO>"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mpi/consistency-residue")
+    set_tests_properties(mpi-consistency-residue PROPERTIES
+        LABELS "e2e;mpi;combustion;consistency"
+        ENVIRONMENT "OMP_NUM_THREADS=2;KMP_STACKSIZE=100M"
+        TIMEOUT 900)
     # the cross-rank sum in rank order: at n = 3 and 4 the grid fields are the same bytes with the library's
     # default collectives and with I_MPI_ADJUST_ALLREDUCE=8, and within 1e-12 of n = 1. Fixture: the
     # 1672-parcel vortex cloud (every cell fed by every rank); check.py sets one thread per rank itself.
@@ -1324,7 +1342,8 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
             ENVIRONMENT "OMP_NUM_THREADS=${nthreads};KMP_STACKSIZE=100M"
             TIMEOUT 900)
     endfunction()
-    # every repeatability case at 2 ranks x 2 threads (children, RNG, evaporation, ord2 accumulator shape,
+    # every repeatability case but burn-box-residue (its rank side is mpi-consistency-residue's) at 2 ranks x 2 threads
+    # (children, RNG, evaporation, ord2 accumulator shape,
     # two materials, the explicit solver, the wedge, the gas-refresh cycle on drag-stokes, vie-plait and swirl-wedge)
     igloo_twosweep_case_mpi(mpi-repeat-drag-stokes        mpi/repeat-drag-stokes        2 2 "e2e;mpi;repeatability" "INPUT/solfile.tec")
     igloo_twosweep_case_mpi(mpi-repeat-drag-stokes-dopri5 mpi/repeat-drag-stokes-dopri5 2 2 "e2e;mpi;repeatability" "")

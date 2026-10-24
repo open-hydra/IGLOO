@@ -428,6 +428,9 @@ contains
     do i = 1, nm
       associate(mat => material(i))
       if (mat%xiCap < 0._R8 .or. mat%xiCap > 1._R8) error stop '[ERROR] xi-cap must lie in [0, 1]'
+      if ((len_trim(mat%productName) > 0 .or. mat%resOn .or. mat%dRes > 0._R8) .and. &
+          .not. (mat%combSelect > 0 .and. mat%xiCap > 0._R8)) &
+        error stop '[ERROR] product, residue and d-residue require combustion=Beckstead and xi-cap > 0'
       if (mat%xiCap > 0._R8) then
         p = 0
         do j = 1, nm
@@ -452,6 +455,8 @@ contains
         write(*,'(a,i0,a,f9.6)') '  >> [material ', i, '] oxide cap on product '//trim(mat%productName)// &
                                  ': stretch c = ', mat%cStretch
       endif
+      if (mat%dRes < 0._R8 .or. (mat%dRes > 0._R8 .and. .not. mat%resOn)) &
+        error stop '[ERROR] d-residue must be >= 0, and > 0 only with residue=on'
       end associate
     enddo
 

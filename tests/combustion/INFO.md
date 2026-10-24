@@ -36,14 +36,19 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
 | CB9 | analytic | `[Gal21]` | 10.1016/j.combustflame.2021.01.039 | `lobeF` at ten f_ox against Gallier's exposed-surface factor at 2570 K (typed to 10 digits); decreasing over 1001 points | 3e-6 abs.; RED weight linear in f 1.4e-5, Gallier's densities dropped 5.3e-2 | 513 nodes uniform in the lobe angle | GREEN (9.5e-7) |
 | CB10 | analytic | `[Gal21]` | — | `capStretch(0.2, 1.8)` = ∫₀¹ ds/F = 1.397686 | 1e-5 rel.; RED c = ∫F ds: 0.457 | midpoint, 4096 cells | GREEN (9.2e-7) |
 | E-CAP | e2e box | `[Beck05]`, `[Gal21]` | — | `combustion/burn-box-cap/`: burn-box with `xi-cap=0.2 product=OX` on an absolute two-zone table; every trajectory row against an oracle on Gallier's exact lobe (RK4 of the burn law and the mixture heat balance), the eulerian ρ_p/n_p identity with the cap's mass, the mass telescoping (1 − ξν) of the metal burned | m, d 4e-6 rel.; T 0.1 K; E3 1e-4; telescoping 1e-5 | burn-box's `bc.txt`/`solfile.tec`; `out-file = ALL`, `mollify = off` | GREEN |
+| E-RES | e2e box | — (definitions) | — | `combustion/burn-box-residue/`: residue=on, product OX freezing; one residue per parcel burned out, born at its parent's exit record with the cap's mass; the mass and energy books with the birth flux withdrawn; nucleation and relaxation; siblings with d-residue and two groups (IDs 1–50) and with `[IGLOO-ODE] fail-after` (the residue after a solver failure) | m 3e-5, d 5e-6; books 1e-5; T the F12.6 budget | burn-box's `bc.txt`/`solfile.tec`, burn-box-cap's table; `out-file = S`, `out-time = on`, `mollify = off` | GREEN |
 
 ## Notes
 
 - **p/T0 dependence** of the Beckstead correlation (weak: p^0.1·T0^0.2) is folded
   into the user-supplied `K-burn`; only the X_eff weighting is applied in-code.
-- **Burnout is out of scope** (phase M2): the e2e case is sized so particles exit
-  at ~50% d^n loss. Near-burnout, unphysical trial states (m ≤ 0 ⇒ d = NaN) are
-  scrubbed to the 1e30 penalty like models 3/4.
+- **Burnout** fires at `m ≤ 1e-15 kg` (the metal's mass under model 8): `burn-box` and `burn-box-cap` are sized
+  so that the parcels exit at ~50 % d^n loss; `burn-box-residue` burns them out inside the box. Near burnout,
+  unphysical trial states (m ≤ 0 ⇒ d = NaN) are scrubbed to the 1e30 penalty like models 3/4.
+- **The burnout residue** (`residue=on`): the cap becomes a parcel of the product at burnout, at a solver failure
+  (the parcel reverts to its last accepted step) or at a non-finite state; with `residue=off` the cap goes to the
+  gas where the parcel is consumed; a parcel that leaves the domain carries its cap out. `d-residue` sizes the
+  residues, the mass flow kept.
 - **beta-part** (heat partition to the condensed phase) is weakly constrained in
   the literature — exposed as an input, default 0 (see docs/theory/combustion.md
   sensitivity note); the e2e uses 0.3 with a reduced q-comb for a tame ~140 K

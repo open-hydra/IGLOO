@@ -394,17 +394,19 @@ contains
     mat%cpSol    = 0._R8
     mat%rhoSol   = 0._R8
     mat%productName = ''
+    mat%resOn    = .false.
+    mat%dRes     = 0._R8
   end subroutine set_material_defaults
 
 
   !> One key=value token from the material line of the phase file (written by ATLAS GPB from
-  !  [GPB-Phase*]): the seven model words call the assign_* selectors, the fifteen reals are read, the
+  !  [GPB-Phase*]): the eight model words call the assign_* selectors, the sixteen reals are read, the
   !  product name is kept, a breakup constant is kept for apply_breakup_tokens; an unknown key or a
   !  non-numeric value stops the run.
   subroutine apply_material_key(imat, mat, key, value)
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Evaporation, only: assign_evaporation, assign_liquid, assign_interface, &
-                                     assign_boiling, assign_combustion, assign_solidification
+                                     assign_boiling, assign_combustion, assign_solidification, assign_residue
     use IGLOO_Lib_Breakup,     only: assign_breakup, breakup_token, BRKTOK_SLOT
     implicit none
     integer,            intent(in)    :: imat
@@ -420,6 +422,7 @@ contains
     case ('boiling');           call assign_boiling(value, mat%boilSelect)
     case ('combustion');        call assign_combustion(value, mat%combSelect)
     case ('solidification');    call assign_solidification(value, mat%solidSelect)
+    case ('residue');           call assign_residue(value, mat%resOn)
     case ('breakup');           mat%brkupWord = value
       call assign_breakup(value, mat%brkupSelect, mat%brkupEqOde, mat%brkupEvent, mat%brkupHasChild)
     case ('alpha-e');   read(value,*,iostat=ios) mat%alphaE
@@ -437,6 +440,7 @@ contains
     case ('T-nuc');     read(value,*,iostat=ios) mat%Tnuc
     case ('cp-solid');  read(value,*,iostat=ios) mat%cpSol
     case ('rho-solid'); read(value,*,iostat=ios) mat%rhoSol
+    case ('d-residue'); read(value,*,iostat=ios) mat%dRes
     case ('product')
       if (len_trim(value) > len(mat%productName)) then
         write(*,'(a,i0,a,i0,a)') ' [ERROR] phase file, material ', imat, ': product="'//trim(value)// &
@@ -531,8 +535,10 @@ contains
     write(*,'(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,es10.3)') '  >> [material ', imat, '] evap=', mat%evapSelect, &
       ' liq=', mat%liqSelect, ' intf=', mat%intfSelect, ' boil=', mat%boilSelect, ' comb=', mat%combSelect, &
       ' solid=', mat%solidSelect, ' alpha-e=', mat%alphaE
-    if (len_trim(mat%productName) > 0) write(*,'(a,i0,a,es10.3)') '  >> [material ', imat, &
+    if (len_trim(mat%productName) > 0 .and. .not. mat%resOn) write(*,'(a,i0,a,es10.3)') '  >> [material ', imat, &
       '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap
+    if (len_trim(mat%productName) > 0 .and. mat%resOn) write(*,'(a,i0,a,es10.3,a,es10.3)') '  >> [material ', imat, &
+      '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap, ' residue=on d-residue=', mat%dRes
   end subroutine finalize_material_models
 
 
@@ -781,9 +787,9 @@ contains
   end subroutine read_bc
 
 
-  !> [IGLOO-ODE]: solver name, maximum steps, tolerances.
+  !> [IGLOO-ODE]: solver name, maximum steps, tolerances, the forced failure of the oxide-cap model.
   subroutine read_ode()
-    use IGLOO_variables, only: ode_word, iopt, rtol, atol
+    use IGLOO_variables, only: ode_word, iopt, rtol, atol, failAfter
     implicit none
 
     iopt = 0
@@ -813,6 +819,9 @@ contains
 
     call fini%get(section_name='IGLOO-ODE', option_name='absolute-tol', val=atol, error=error)
     if (error/=0) atol=1d-10
+
+    call fini%get(section_name='IGLOO-ODE', option_name='fail-after', val=failAfter, error=error)
+    if (error/=0) failAfter = 0._R8
 
   end subroutine read_ode
 

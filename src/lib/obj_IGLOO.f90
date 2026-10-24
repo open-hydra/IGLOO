@@ -84,7 +84,7 @@ contains
     character(len=llen)  :: gasfile
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
     integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar, b, b2, nMoved
-    integer, allocatable :: npair(:,:)
+    integer, allocatable :: npair(:,:), resCount(:)
     character(len=2)     :: method
 
     if (self%staticDone) then
@@ -200,6 +200,18 @@ contains
       end associate
     enddo
     nfam = fam
+    !> The ID offset of each residue-on group's residues in its product: the parcels of the earlier groups naming it.
+    allocate(resCount(nm)); resCount = 0
+    do m = 1, nm
+      do g = 1, self%material(m)%ngroups
+        associate(gr => self%material(m)%group(g))
+        if (gr%resOn) then
+          gr%resBase = resCount(gr%prodID)
+          resCount(gr%prodID) = resCount(gr%prodID) + gr%nInjected
+        endif
+        end associate
+      enddo
+    enddo
     call tm_phase(TM_IDLE)
     self%staticDone = .true.
 
@@ -255,8 +267,9 @@ contains
         gr%nactive    = gr%nInjected
         if (size(gr%particle) /= gr%nInjected) &
           call resizeParticleArray(gr%particle, gr%nInjected)
-        !> Shed lists are re-allocated by solve.
-        if (allocated(gr%shed)) deallocate(gr%shed)
+        !> Shed and residue lists are re-allocated by solve.
+        if (allocated(gr%shed))  deallocate(gr%shed)
+        if (allocated(gr%resid)) deallocate(gr%resid)
 
         !> Restore each particle's injection state (same stochastic diameter draw every sweep).
         do ip = 1, gr%nInjected
@@ -360,12 +373,14 @@ contains
                                     TM_REDUCE, TM_FINALIZE, TM_SMOOTH
     use IGLOO_Mod_Footprint,  only: record_footprint
     use IGLOO_overlap,        only: mirrorSource, mirrorEuler
+    use IGLOO_Lib_Combustion, only: nuOx
     use oslo
     use omp_lib
     implicit none
     class(obj_IGLOO), intent(inout) :: self
     integer, parameter :: maxLoop=5
-    integer :: m, g, ip, iota, ch, e, start, nEnd, oldStart, oldEnd, newSize, b, fam
+    integer :: m, g, ip, iota, ch, e, start, nEnd, oldStart, oldEnd, newSize, b, fam, pass, m2, nShow
+    integer :: resGlobal(1)
     integer :: loopCounter, maxShedSeen
     !> Child-ID band of the current generation. No initializer here: it would imply SAVE.
     integer :: curBase, curCount, newBase, childLocal, childGlobal, pidx, idBase
@@ -375,7 +390,7 @@ contains
     real(R8), allocatable :: relTol(:), absTol(:), exch(:,:)
     !> Scatter-cloud weight-quantum (dNscat) auto-sizing scratch.
     integer  :: c, nStreams, nValid
-    real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp
+    real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp, rRes
     type(obj_particle) :: ptmp   ! throwaway copy for the inject-only pre-pass
     character(len=4) :: fHead    !> the frozen-fraction header entry, blank for a material that does not solidify
     character(len=10) :: tsHead  !> the trajectory file's surface-temperature entry, blank for a material without P2T
@@ -416,7 +431,10 @@ contains
     enddo
     Lref = norm2(xmax - xmin)
 
+    !> Two passes: every burning material before every combustion product, whatever the line order.
+    do pass = 1, 2
     do m = 1, nm
+      if (self%material(m)%isProduct .neqv. (pass == 2)) cycle
       material: associate(mat => self%material(m))
       !> A material of which a group solidifies ends every particle-file row with f.
       frozenOn = any(mat%group(1:mat%ngroups)%solidSelect > 0)
@@ -462,7 +480,32 @@ contains
         !> Serial inject-only pre-pass over ALL particles (replicated on every rank so dNscat is
         !  identical everywhere): resolves each stream's npdot and injection speed.
         Ndot = 0._R8; nStreams = 0; Vsum = 0._R8; nValid = 0
+        !> A product: its residue-on parents' streams at their injection state (its residues are rank-local).
+        if (mat%isProduct) then
+          do m2 = 1, nm
+            do g = 1, self%material(m2)%ngroups
+              associate(pgr => self%material(m2)%group(g))
+              if (.not. (pgr%resOn .and. pgr%prodID == m)) cycle
+              call pgr%setup_particleODE()
+              do ip = 1, pgr%nInjected
+                ptmp = pgr%particle(ip)
+                ptmp%d = ptmp%dInj
+                if (all(ptmp%iInj == [0,0,0,0])) ptmp%stateVar(4:6) = ptmp%vInj
+                call ptmp%resolveInjectionRate(self%geoblock, self%gasblock)
+                !> residues per parent droplet: one, or the cap's mass over a residue's at d-residue
+                rRes = 1._R8
+                if (pgr%dRes > 0._R8) rRes = pgr%xiCap*nuOx*ptmp%rho*ptmp%d**3/(pgr%rhoRes*pgr%dRes**3)
+                if (ptmp%npdot > 0._R8) Ndot = Ndot + ptmp%npdot*rRes
+                vsp = norm2(ptmp%stateVar(4:6))
+                if (vsp < threshold) then; Vsum = Vsum + vsp; nValid = nValid + 1; endif
+              enddo
+              nStreams = nStreams + pgr%nInjected
+              end associate
+            enddo
+          enddo
+        endif
         do g = 1, mat%ngroups
+          if (mat%isProduct) exit
           associate(gr => mat%group(g))
           call gr%setup_particleODE()
           do ip = 1, gr%nparticles
@@ -508,8 +551,16 @@ contains
         endif
         call setup_odesolver(N=gr%neq,solver=ode_word,RT=relTol,AT=absTol,iopt=iopt)
 
+        !> A product's residues live on the ranks of their parents: the banner counts them over every rank.
+        nShow = gr%nparticles
+        if (mat%isProduct) then
+          resGlobal = [gr%nparticles]
+          call mpi_allreduce_sum_i4_array(resGlobal, 1)
+          nShow = resGlobal(1)
+        endif
         if (mpi_is_root) then
-          write(*,'(A,I3,A,I6)')"     Group",g," => number of particles = ", gr%nparticles
+          write(*,'(A,I3,A,I6)')"     Group",g," => number of particles = ", nShow
+          if (mat%isProduct) write(*,'(A,I0,A)') '        - combustion product (residues: ', nShow, ')'
           write(*,'(A,I2,A)') '     >> ODE system (neq=', gr%neq, '):'
           if (gr%evapSelect/=0) write(*,*) '       - evaporation --> ', trim(gr%evapWord)
           if (gr%combSelect/=0 .and. gr%prodID == 0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
@@ -698,20 +749,40 @@ contains
           endif
           gr%nparticles = gr%nactive
         else
+          !> One residue list per parent, with room reserved outside the parallel region.
+          if (gr%resOn) then
+            if (allocated(gr%resid)) deallocate(gr%resid)
+            allocate(gr%resid(1:gr%nparticles))
+            do ip = 1, gr%nparticles
+              gr%resid(ip)%n = 0
+              call gr%resid(ip)%reserve(1)
+            enddo
+          endif
           call tm_phase(TM_LOOP)
           !$OMP PARALLEL DO SCHEDULE(DYNAMIC)
           do ip = 1,gr%nparticles
-            if (probeOn) then; if (.not.any(gr%particle(ip)%ID==probeIDs)) cycle; endif
-            !> MPI ownership filter.
-            if (.not. owns_particle(ip)) cycle
+            !> A product's residues live on their parents' rank: no probe or ownership filter.
+            if (.not. mat%isProduct) then
+              if (probeOn) then; if (.not.any(gr%particle(ip)%ID==probeIDs)) cycle; endif
+              !> MPI ownership filter.
+              if (.not. owns_particle(ip)) cycle
+            endif
             call tm_parcel_begin()
-            call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
-                            mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
-                            mat%LvTab,mat%cpvTab)
+            if (gr%resOn) then
+              call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
+                              mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
+                              mat%LvTab,mat%cpvTab, resid=gr%resid(ip))
+            else
+              call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
+                              mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
+                              mat%LvTab,mat%cpvTab)
+            endif
             call tm_parcel_end()
           enddo
           !$OMP END PARALLEL DO
           call region_fail_check()
+          !> The residues of this group's parcels join its product's group, on this rank.
+          if (gr%resOn) call drainResidues(self%material(gr%prodID)%group(1), gr)
           call tm_phase(TM_SOLVE)
         endif
         end associate group
@@ -722,6 +793,7 @@ contains
       if (snapOn) close(unitSnap)
       if (planeOn) close(unitPlane)
       close(unitExit)
+    enddo
     enddo
 
     !> Sum the partial grid sums across ranks, in rank order, before finalize, which is nonlinear.
@@ -906,6 +978,38 @@ contains
     write(*,*) ' ============================================================================= '
     write(*,*)
   end subroutine print_header
+
+
+  !> The residue records of a burning group's parcels become parcels of its product's group pg (rank-local): the
+  !  particle array grows, the new range is set up and each takes its birth state; ID = resBase + the parent's ID.
+  subroutine drainResidues(pg, gr)
+    use IGLOO_data_phases, only: obj_group, birthResidue
+    implicit none
+    type(obj_group), intent(inout) :: pg
+    type(obj_group), intent(inout) :: gr
+    integer :: ip, e, k, nNew, start, nEnd
+
+    nNew = 0
+    do ip = 1, gr%nparticles
+      nNew = nNew + gr%resid(ip)%n
+    enddo
+    if (nNew == 0) return
+    start = pg%nparticles + 1
+    nEnd  = pg%nparticles + nNew
+    if (nEnd > size(pg%particle)) call resizeParticleArray(pg%particle, max(2*size(pg%particle), nEnd))
+    call pg%setup_particleODE(start, nEnd)
+    call pg%assign_group2particle(start, nEnd)
+    k = start - 1
+    do ip = 1, gr%nparticles
+      do e = 1, gr%resid(ip)%n
+        k = k + 1
+        call birthResidue(pg%particle(k), gr%resid(ip)%item(e), gr%resBase + gr%resid(ip)%item(e)%parent, gr%dRes)
+      enddo
+    enddo
+    pg%nparticles = nEnd
+    pg%nactive    = nEnd
+
+  end subroutine drainResidues
 
 
   !> Resize a particle array to newCapacity, preserving the leading entries.
