@@ -4,7 +4,7 @@ program test_solidification
     ! (supercooling, adiabatic recalescence, freezing plateau at T-melt, solid cooling),
     ! called directly with an alumina-like particle.
     !
-    !   SG0  metal-slot pin: imHf/imCps = 7/8 of the nmp = nmetal = 9 block.
+    !   SG0  metal-slot pin: imHf/imCps = 7/8 of the nmp = nmetal = 12 block.
     !   SG1  nucleationJump: f0 = cl*(Tm-Tn)/hfus with T back to Tm; the whole-freeze branch
     !        (f0 >= 1) at the temperature that conserves the enthalpy.
     !   SG2  plateauRate: m*hfus*df/dt = -Qdot, sign and magnitude; RK4 lands on f = 1 at
@@ -126,8 +126,8 @@ contains
     subroutine run_SG0(ok)
         !> the two solidification slots of the metal block, and the block length on both sides
         logical, intent(inout) :: ok
-        call flag('SG0 metal slots imHf/imCps = 7/8, nmp = nmetal = 9', 'SG0_slots', &
-                  imHf == 7 .and. imCps == 8 .and. nmp == 9 .and. nmetal == 9, ok)
+        call flag('SG0 metal slots imHf/imCps = 7/8, nmp = nmetal = 12', 'SG0_slots', &
+                  imHf == 7 .and. imCps == 8 .and. nmp == 12 .and. nmetal == 12, ok)
     end subroutine run_SG0
 
     subroutine run_SG1(ok)

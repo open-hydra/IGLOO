@@ -393,12 +393,14 @@ contains
     mat%Tnuc     = 0._R8
     mat%cpSol    = 0._R8
     mat%rhoSol   = 0._R8
+    mat%productName = ''
   end subroutine set_material_defaults
 
 
   !> One key=value token from the material line of the phase file (written by ATLAS GPB from
-  !  [GPB-Phase*]): the seven model words call the assign_* selectors, the fifteen reals are read, a
-  !  breakup constant is kept for apply_breakup_tokens; an unknown key or a non-numeric value stops the run.
+  !  [GPB-Phase*]): the seven model words call the assign_* selectors, the fifteen reals are read, the
+  !  product name is kept, a breakup constant is kept for apply_breakup_tokens; an unknown key or a
+  !  non-numeric value stops the run.
   subroutine apply_material_key(imat, mat, key, value)
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Evaporation, only: assign_evaporation, assign_liquid, assign_interface, &
@@ -435,6 +437,13 @@ contains
     case ('T-nuc');     read(value,*,iostat=ios) mat%Tnuc
     case ('cp-solid');  read(value,*,iostat=ios) mat%cpSol
     case ('rho-solid'); read(value,*,iostat=ios) mat%rhoSol
+    case ('product')
+      if (len_trim(value) > len(mat%productName)) then
+        write(*,'(a,i0,a,i0,a)') ' [ERROR] phase file, material ', imat, ': product="'//trim(value)// &
+                                 '" is longer than a material name (', len(mat%productName), ' characters)'
+        error stop 'IGLOO: product name too long in the phase file'
+      endif
+      mat%productName = value
     case default
       k = breakup_token(key)
       if (k == 0) then
@@ -522,6 +531,8 @@ contains
     write(*,'(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,es10.3)') '  >> [material ', imat, '] evap=', mat%evapSelect, &
       ' liq=', mat%liqSelect, ' intf=', mat%intfSelect, ' boil=', mat%boilSelect, ' comb=', mat%combSelect, &
       ' solid=', mat%solidSelect, ' alpha-e=', mat%alphaE
+    if (len_trim(mat%productName) > 0) write(*,'(a,i0,a,es10.3)') '  >> [material ', imat, &
+      '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap
   end subroutine finalize_material_models
 
 

@@ -59,6 +59,7 @@ contains
     ntot = 0
     do i = 1, size(material)
       ntot = ntot + material(i)%ngroups
+      if (material(i)%isProduct) ntot = ntot + 1   !> a combustion product: one family, filled by its residues
     enddo
 
     allocate(geoblock(1:nb))

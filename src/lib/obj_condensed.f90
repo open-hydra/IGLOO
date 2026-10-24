@@ -70,6 +70,11 @@ module IGLOO_data_phases
     real(R8) :: qComb = 0._R8
     real(R8) :: rhoSol = 0._R8       !> solid density [kg/m3]; 0 = the liquid density
     real(R8) :: emissivity = 0._R8   !> grey-body surface emissivity; 0 = no radiation
+    !> The oxide cap: the combustion product (its material line, 0 = none), its density, heat capacity and datum,
+    !  the stretch c
+    character(len=20) :: productName = ''
+    integer  :: prodID = 0
+    real(R8) :: rhoRes = 0._R8, cpRes = 0._R8, hOffRes = 0._R8, cStretch = 1._R8
     integer  :: nactive = 0
     type(obj_particle), allocatable :: particle(:)
     type(shedList),     allocatable :: shed(:)   !> one growable shed list per parent index
@@ -124,6 +129,12 @@ module IGLOO_data_phases
     real(R8) :: qComb = 0._R8
     real(R8) :: rhoSol = 0._R8       !> rho-solid [kg/m3]; 0 = the liquid density
     real(R8) :: emissivity = 0._R8   !> [IGLOO-Properties] emissivity; 0 = no radiation
+    !> The oxide cap: the product's name and line (0 = none), its density, heat capacity and datum, the stretch c;
+    !  isProduct marks the 0-group line a capped material names
+    character(len=20) :: productName = ''
+    integer  :: prodID = 0
+    logical  :: isProduct = .false.
+    real(R8) :: rhoRes = 0._R8, cpRes = 0._R8, hOffRes = 0._R8, cStretch = 1._R8
     !> sub-objects
     type(obj_group), allocatable :: group(:)
     !> Thermodynamic tables (defined if variable properties)
@@ -223,6 +234,8 @@ contains
       endif
       if (self%solidSelect > 0) gr%rhoSol = self%rhoSol
       gr%emissivity = self%emissivity
+      gr%productName = self%productName; gr%prodID = self%prodID
+      gr%rhoRes = self%rhoRes; gr%cpRes = self%cpRes; gr%hOffRes = self%hOffRes; gr%cStretch = self%cStretch
       end associate
     enddo
 
@@ -249,7 +262,7 @@ contains
     endif
 
     mdotSwitch = (self%evapSelect > 0)
-    mdl = determineModel(mdotSwitch, self%brkupEqOde, self%combSelect, self%solidSelect)
+    mdl = determineModel(mdotSwitch, self%brkupEqOde, self%combSelect, self%solidSelect, cap=self%xiCap > 0._R8)
     self%neq  = computeNeq(mdl, eulerSwitch, srcBodyForce)
     !> Build fixed-size propFlags: [varCp, varRho, varSig, varMup, varPsat, varLv, varCpv]
     propFlags = [self%cpVariable, self%rhoVariable, .false., .false., .false., .false., .false.]
@@ -278,7 +291,7 @@ contains
       call sizeTo(part%oldState, self%neq)
       if (eulerSwitch) then
         select case(mdl)
-        case(2,5);    call sizeTo(part%intE, 5)
+        case(2,5,8);  call sizeTo(part%intE, 5)
         case(3,4,7);  call sizeTo(part%intE, 6)
         case default; call sizeTo(part%intE, 4)
         end select
@@ -286,7 +299,7 @@ contains
       part%model = mdl
       part%neq   = self%neq
       part%nOde  = computeNode(mdl)
-      part%bodyAccum   = srcBodyForce .and. (mdl==2 .or. mdl==4 .or. mdl==5)
+      part%bodyAccum   = srcBodyForce .and. (mdl==2 .or. mdl==4 .or. mdl==5 .or. mdl==8)
       part%evapSelect  = self%evapSelect
       part%brkupSelect = self%brkupSelect
       end associate
@@ -384,6 +397,7 @@ contains
       endif
       if (self%solidSelect > 0) part%rhoSol = self%rhoSol
       part%emissivity = self%emissivity
+      part%rhoRes = self%rhoRes; part%cpRes = self%cpRes; part%hOffRes = self%hOffRes; part%cStretch = self%cStretch
       end associate
     enddo
 

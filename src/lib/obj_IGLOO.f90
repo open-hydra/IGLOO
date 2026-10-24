@@ -169,6 +169,7 @@ contains
     fam = 0
     do m = 1, nm
       self%material(m)%mID = m
+      if (self%material(m)%isProduct) cycle
       allocate(self%material(m)%group(1:self%material(m)%ngroups))
       call self%material(m)%assign_material2group()
       do g = 1, self%material(m)%ngroups
@@ -181,6 +182,22 @@ contains
         gr%nInjected = gr%nparticles
         end associate
       enddo
+    enddo
+    !> Each combustion product: one group, never injected, after every injected family.
+    do m = 1, nm
+      if (.not. self%material(m)%isProduct) cycle
+      self%material(m)%ngroups = 1
+      allocate(self%material(m)%group(1:1))
+      call self%material(m)%assign_material2group()
+      fam = fam + 1
+      associate(gr => self%material(m)%group(1))
+      gr%gID       = 1
+      gr%famID     = fam
+      gr%nInjected = 0
+      gr%nparticles = 0
+      gr%nactive   = 0
+      allocate(gr%particle(0))
+      end associate
     enddo
     nfam = fam
     call tm_phase(TM_IDLE)
@@ -493,9 +510,11 @@ contains
 
         if (mpi_is_root) then
           write(*,'(A,I3,A,I6)')"     Group",g," => number of particles = ", gr%nparticles
-          write(*,'(A,I2,A)') '     >> ODE system (neq=', gr%particle(1)%neq, '):'
+          write(*,'(A,I2,A)') '     >> ODE system (neq=', gr%neq, '):'
           if (gr%evapSelect/=0) write(*,*) '       - evaporation --> ', trim(gr%evapWord)
-          if (gr%combSelect/=0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
+          if (gr%combSelect/=0 .and. gr%prodID == 0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
+          if (gr%combSelect/=0 .and. gr%prodID > 0) write(*,'(A)') '        - combustion  --> Beckstead d^n burn '// &
+            'law with an oxide cap (xi-cap, product '//trim(gr%productName)//')'
           if (gr%solidSelect/=0 .and. .not.gr%brkupEqOde) &
             write(*,*) '       - solidification --> supercooling + recalescence (model 6)'
           if (gr%solidSelect/=0 .and. gr%brkupEqOde) &

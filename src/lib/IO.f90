@@ -409,8 +409,53 @@ contains
       end associate 
     enddo
     close(unit)
+    call resolve_products(material)
 
   end subroutine read_cdp_properties
+
+
+  !> The combustion products: each capped material (xi-cap > 0) finds its product, a 0-group line of the phase
+  !  file, by name; the refusals; the cap takes the product's density, heat capacity and enthalpy datum, and the
+  !  stretch c of its xi-cap and n-burn on the lobe table.
+  subroutine resolve_products(material)
+    use IGLOO_variables,      only: nm
+    use IGLOO_data_phases,    only: obj_material
+    use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch
+    implicit none
+    type(obj_material), intent(inout) :: material(:)
+    integer :: i, j, p
+
+    do i = 1, nm
+      associate(mat => material(i))
+      if (mat%xiCap < 0._R8 .or. mat%xiCap > 1._R8) error stop '[ERROR] xi-cap must lie in [0, 1]'
+      if (mat%xiCap > 0._R8) then
+        p = 0
+        do j = 1, nm
+          if (len_trim(mat%productName) > 0 .and. trim(material(j)%matName) == trim(mat%productName)) p = j
+        enddo
+        if (p == 0) error stop '[ERROR] xi-cap > 0 requires product = a 0-group material of the phase file'
+        if (material(p)%ngroups /= 0) &
+          error stop '[ERROR] xi-cap > 0 requires product = a 0-group material of the phase file'
+        if (material(p)%combSelect > 0 .or. material(p)%evapSelect > 0 .or. material(p)%brkupSelect > 0) &
+          error stop '[ERROR] a combustion product cannot burn, evaporate or break up'
+        if (mat%cpVariable .or. mat%rhoVariable .or. material(p)%cpVariable .or. material(p)%rhoVariable) &
+          error stop '[ERROR] xi-cap > 0 requires a constant-cp, constant-density material and product'
+        if (mat%hDatum /= 'absolute') &
+          error stop '[ERROR] xi-cap > 0 requires the absolute enthalpy datum (an Enthalpy_abs column)'
+        mat%prodID = p
+        material(p)%isProduct = .true.
+        mat%rhoRes  = material(p)%rho
+        mat%cpRes   = material(p)%cp
+        mat%hOffRes = material(p)%hOff
+        call buildLobeTable()
+        mat%cStretch = capStretch(mat%xiCap, mat%nBurn)
+        write(*,'(a,i0,a,f9.6)') '  >> [material ', i, '] oxide cap on product '//trim(mat%productName)// &
+                                 ': stretch c = ', mat%cStretch
+      endif
+      end associate
+    enddo
+
+  end subroutine resolve_products
 
 
   !> Read bc.txt: pass 0 picks the layout -- one record per boundary face, fed to every family, or

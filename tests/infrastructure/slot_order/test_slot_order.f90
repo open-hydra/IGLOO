@@ -10,7 +10,9 @@ program test_slot_order
     !
     !   S1  model 2 (CEM): the ten ep slots; nep = 10; the slice inside aux; ind_Lv.. agree with ep
     !   S2  model 4 (CEM + Reitz-Diwakar): the same ep slots
-    !   S3  model 5 (Beckstead): the nine metal slots; nmp = nmetal = 9; the slice inside aux
+    !   S3  model 5 (Beckstead): the twelve metal slots; nmp = nmetal = 12; the slice inside aux; slots
+    !       1-9 the burn law's and solidification's, 10-12 the oxide cap's (product density, heat
+    !       capacity, stretch) appended last
     !   S4  model 6 (solidification): the same metal block, h-fus and cp-solid where its RHS reads them
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
@@ -19,7 +21,7 @@ program test_slot_order
                                      ind_Mv, ind_Lv, ind_Cv, ind_Le, ind_Yi, ind_e1, ind_e2, ind_e3, ind_e4, ind_e5
     use IGLOO_Lib_Evaporation, only: nep, iMv, iLv, icpv, iLe, iYinf, iLvMvOverRu, iinvTboil, &
                                      ialphaE, ikLiq, imuLiq
-    use IGLOO_Lib_Combustion,  only: nmp, imKb, imN, imXe, imBeta, imXi, imTig, imHf, imCps, imQc
+    use IGLOO_Lib_Combustion,  only: nmp, imKb, imN, imXe, imBeta, imXi, imTig, imHf, imCps, imQc, imRr, imCr, imCs
     implicit none
 
     type(obj_particle)    :: p
@@ -37,6 +39,7 @@ program test_slot_order
     p%muLiq = 110._R8
     p%Kburn = 201._R8;  p%nBurn = 202._R8;  p%Xeff = 203._R8;  p%betaPart = 204._R8
     p%xiCap = 205._R8;  p%Tign = 206._R8;  p%hFus = 207._R8;  p%cpSol = 208._R8;  p%qComb = 209._R8
+    p%rhoRes = 210._R8;  p%cpRes = 211._R8;  p%cStretch = 212._R8
 
     ! ---- S1, S2: the evaporation slice --------------------------------------------------------
     call setupRHS(2, 0, 2, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
@@ -50,7 +53,7 @@ program test_slot_order
     ! ---- S3, S4: the metal block ----------------------------------------------------------------
     call setupRHS(5, 0, 0, 0, 0, 0, 1, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
     call pack()
-    call check(nmp == nmetal .and. nmp == 9, 'S3 nmp = nmetal = 9 metal slots', nbad)
+    call check(nmp == nmetal .and. nmp == 12, 'S3 nmp = nmetal = 12 metal slots', nbad)
     call checkMetal('S3 model 5')
     call setupRHS(6, 0, 0, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
     call pack()
@@ -93,7 +96,7 @@ contains
         if (nbad > 0) write(*,'(A,10F7.1)') '        ep = ', ep
     end subroutine checkEvap
 
-    !> mp(name) = aux(ind_mb + name - 1) for the nine names; the slice lies inside aux.
+    !> mp(name) = aux(ind_mb + name - 1) for the twelve names; the slice lies inside aux.
     subroutine checkMetal(tag)
         character(len=*), intent(in) :: tag
         real(R8) :: mp(nmp)
@@ -105,7 +108,10 @@ contains
                    tag//': mp K-burn, n-burn, X-eff, beta-part, xi-cap, q-comb', nbad)
         call check(mp(imTig) == p%Tign .and. mp(imHf) == p%hFus .and. mp(imCps) == p%cpSol, &
                    tag//': mp T-ign, h-fus, cp-solid', nbad)
-        if (nbad > 0) write(*,'(A,9F7.1)') '        mp = ', mp
+        call check(imRr == 10 .and. imCr == 11 .and. imCs == 12 .and. mp(imRr) == p%rhoRes .and. &
+                   mp(imCr) == p%cpRes .and. mp(imCs) == p%cStretch, &
+                   tag//': mp the cap at slots 10-12: product density, heat capacity, stretch', nbad)
+        if (nbad > 0) write(*,'(A,12F7.1)') '        mp = ', mp
     end subroutine checkMetal
 
     subroutine check(cond, name, nbad)
