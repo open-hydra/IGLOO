@@ -323,13 +323,18 @@ the event path takes the RT branch, at identical state).
 Tests the Beckstead $d^n$ aluminium burn law (`Lib_Combustion.f90::becksteadRate`,
 model 5): closed-form mass evolution $m(t)$ with complex-step derivative checks
 (CB1/CB2), the bitwise ignition gate at $T_\mathrm{ign}$ (CB3), and the
-$X_\mathrm{eff}$-exponent discriminator calibrated at the paper anchor (CB4).
+$X_\mathrm{eff}$-exponent discriminator calibrated at the paper anchor (CB4); and the oxide cap
+(`rhsAlCap`, model 8): the cap's growth $\dot m_\mathrm{ox} = -\xi\nu\,\dot m_\mathrm{Al}$ (CB5), the burn
+rate on the metal's diameter times $F\,c$ at four cap fractions (CB6), $\nu$ from the molar masses (CB7),
+the mixture enthalpy of the gas source (CB8), the lobe table against Gallier's exposed-surface factor
+and its monotonicity (CB9), and the stretch $c$ (CB10).
 
 **Literature references.** `[Beck05]` (Beckstead 2005); the exponent
-$X_\mathrm{eff}^{1.0}$ is the paper's final correlation.
+$X_\mathrm{eff}^{1.0}$ is the paper's final correlation.  `[Gal21]` (Gallier et al. 2021) for the
+exposed-surface factor of an oxide lobe, its geometry and property laws.
 
-**Gates.** `test_combustion` (CB1–CB4); e2e companion `burn-box` — see
-[End-to-End Cases](e2e.md).
+**Gates.** `test_combustion` (CB1–CB10); e2e companions `burn-box`, `burn-box-cap`,
+`burn-box-residue` — see [End-to-End Cases](e2e.md).
 
 <figure>
   {% include "vv/images/unit-combustion-beckstead.svg" ignore missing %}
@@ -352,15 +357,18 @@ from a start at or before it (SG9), the layout of model 7 under the three contin
 breakup models (SG10) and its right-hand side in every phase against model 6 and a direct call
 of the breakup rate (SG11), and the diameter of a drop that freezes at constant mass with
 `rho-solid`: its closed form, the slot that carries the solid density and the convective and
-radiative heat at that diameter in every phase (SG12).
+radiative heat at that diameter in every phase (SG12); and the birth state of a burnout residue of
+a freezing combustion product — liquid at or above $T_m$, else undercooled with $f = 0$, its mass,
+diameter and number rate (SB1).
 
 **Literature references.** `[JANAF98]` for the alumina melting point, heat of fusion and heat
 capacities quoted on the [Solidification](../theory/solidification.md) page; every gate is a
 closed form of its own inputs.
 
-**Gates.** `test_solidification` (SG0–SG12); e2e companions `solid-box`, `solid-melt`,
+**Gates.** `test_solidification` (SG0–SG12, SB1); e2e companions `solid-box`, `solid-melt`,
 `solid-box-euler`, `solid-box-2mat`, `scatter-weight-solid`, `solid-brk-tab`, `solid-brk-khrt`,
-`solid-box-rhos`, `solid-box-varrho`, `solid-brk-tab-rhos` — see [End-to-End Cases](e2e.md).
+`solid-box-rhos`, `solid-box-varrho`, `solid-brk-tab-rhos`, `burn-box-residue` — see
+[End-to-End Cases](e2e.md).
 
 <figure>
   {% include "vv/images/unit-solidification-recalescence.svg" ignore missing %}

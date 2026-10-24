@@ -72,7 +72,8 @@ in the gas time loop; each sweep integrates every particle over the frozen field
 Called from `obj_IGLOO%solve` inside `!$OMP PARALLEL DO`. For each particle it:
 
 1. Selects the ODE RHS function via `Lib_RHS.f90::determineModel(phaseChange, brkupEqOde)`
-   (a material with `combustion = Beckstead` is routed to `rhsAlCombustion` instead):
+   (a material with `combustion = Beckstead` is routed to `rhsAlCombustion` instead, or to `rhsAlCap` with
+   `xi-cap > 0`):
 
    | `phaseChange` | `brkupEqOde` | RHS |
    |:---:|:---:|-----|

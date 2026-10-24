@@ -370,6 +370,34 @@ $X_\mathrm{eff}^{1.0}$ exponent is the paper's own.
   {% include "vv/images/burn-box.svg" ignore missing %}
 </figure>
 
+### burn-box-cap
+
+The oxide cap (model 8, [The oxide cap](../theory/combustion.md#the-oxide-cap-model-8)): burn-box's
+parcels with `xi-cap = 0.2` and the product `OX` (liquid alumina) on an absolute two-zone table.  The
+oracle integrates the cap's burn law and the mixture heat balance by RK4, with the exposed-surface factor
+from Gallier's exact lobe by bisection in the lobe angle, never from IGLOO's table, and the stretch
+$c = 1.397686$ on that factor.  The gates check every trajectory row's mass $m_\mathrm{Al} + m_\mathrm{ox}$,
+equal-volume diameter and temperature, the Eulerian $\rho_p/n_p$ against the rows' mass, and the
+source: $(1 - \xi\nu)$ of the metal burned, $\dot w = 0$ for the product.
+
+**Result:** 1525 rows: mass within 2.1e-6, diameter 1.9e-6 (the E13.6 print), temperature 2.8e-5 K;
+the mass source within 1.3e-6.
+
+### burn-box-residue
+
+The burnout residue ([The burnout residue](../theory/combustion.md#the-burnout-residue)): a faster burn
+law burns every capped parcel out inside the box, and each cap becomes a parcel of the freezing product
+`OX`.  The gates check one residue per parcel burned out, its birth row against its parent's exit
+record, its mass $\xi\nu(m_0 - 10^{-15}\,\mathrm{kg})$ and diameter, the mass and energy books with the
+birth flux withdrawn, and every row of its freezing (undercooled at birth, the nucleation jump, the
+relaxation to the gas) against the closed forms.  Two siblings run with the same executable: `d-residue`
+with the burning line in two groups (the IDs, the size, the number rate), and `[IGLOO-ODE] fail-after`,
+the residue born after a solver failure at the parcel's last accepted step.
+
+**Result:** 25/25 residues; mass 5.2e-6, books 8.5e-7 (mass) and 5.8e-7 (energy); the freezing rows within
+0.096 of their print budget; 50/50 residues with `d-residue`; after the forced failure every parent ends
+at or past `fail-after` and its residue's mass is the burn law's at that time (3.8e-6).
+
 ### solid-box
 
 Solidification (model 6): molten droplets injected at 2400 K into the 600 K box gas at

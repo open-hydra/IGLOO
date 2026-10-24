@@ -49,7 +49,7 @@ The oracle evaluates `F` from Gallier's lobe geometry at 2570 K by bisection in 
 
 At the outlet: `m/m₀ = 0.530926`, `d/d₀ = 0.771267`, `T = 704.805826 K`. The tolerances on `m` and `d` hold the
 E13.6 print of `m` and `d` (2.3e-6) with the cell-crossing tolerance; the oracle's `F` and IGLOO's 513-node table
-differ by at most 1.6e-6. Each parcel rides its own `(j, k)` column: the fields and the printout do not depend on
+differ by at most 1.7e-6. Each parcel rides its own `(j, k)` column: the fields and the printout do not depend on
 the thread count.
 
 ## RED (each one line of `rhsAlCap`)

@@ -10,7 +10,7 @@ call, with no inter-particle communication.
 ## Model selection
 
 `determineModel` in `src/lib/Lib_RHS.f90` maps two boolean flags to one of four RHS
-routines (plus the combustion family, model 5):
+routines (plus the combustion family, models 5 and 8):
 
 | `phaseChange` | `brkupEqOde` | Model | RHS | State dim |
 | :---: | :---: | :---: | :--- | :---: |
@@ -20,7 +20,8 @@ routines (plus the combustion family, model 5):
 | true | true | 4 | `rhsEvapBreakup` | 9 (+ 7 euler) |
 
 A material with `combustion = Beckstead` is routed to model 5 (`rhsAlCombustion`,
-model-2 layout) instead.  The euler extra equations (arc-length $\ell$ and the momentum,
+model-2 layout) instead, and with an oxide cap (`xi-cap > 0`) to model 8 (`rhsAlCap`, the cap's mass at
+index 9: 9 + 6 euler).  The euler extra equations (arc-length $\ell$ and the momentum,
 energy and mass moments) are appended only when `eulerSwitch = .true.`; they do not
 change the model index.  See [Governing equations](governing-equations.md) for the full
 state vector.
@@ -130,9 +131,9 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
 | :--- | :--- |
 | outer loop | a non-finite `deltat` estimate falls back to `tauFactor · taup` |
 | `solout::exitLoop` | `any(y /= y)` or `deltat /= deltat` interrupts the solver |
-| `ODEsystem` | a non-finite state after the solver returns is reverted to the last good accepted step and the particle marked `gone`; on this exit and on a solver failure (`err < 0`) a consuming droplet (models 2, 4, 5) hands its remnant to the gas |
+| `ODEsystem` | a non-finite state after the solver returns is reverted to the last good accepted step and the particle marked `gone`; on this exit and on a solver failure (`err < 0`) a consuming droplet (models 2, 4, 5, 8) hands its remnant to the gas; model 8 first reverts a solver failure to the last accepted step, and with `residue=on` its cap becomes a parcel of the product instead ([The burnout residue](combustion.md#the-burnout-residue)) |
 | `ODEsystem` | a `deltat` update outside `[dtMin, huge)` is a hard error |
-| RHS routines (models 2–7) | any non-finite RHS entry (unphysical Newton trial: $m \le 0$, $\dot n_p \le 0$) is replaced by a `1e30` penalty so SDIRK4 rejects the step |
+| RHS routines (models 2–8) | any non-finite RHS entry (unphysical Newton trial: $m \le 0$, $\dot n_p \le 0$) is replaced by a `1e30` penalty so SDIRK4 rejects the step |
 | models 6, 7 | no clamp or penalty on the frozen fraction $f$ within a phase: the solidification events own its crossings of 0 and 1; a transition lands inside the new phase (a freezing plateau at no more than `T-melt`, a melting solid at no more than $f = 1$) |
 
 !!! note "Stuck-particle detection"
