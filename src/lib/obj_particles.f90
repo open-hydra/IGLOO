@@ -75,7 +75,7 @@ module IGLOO_particles
     integer      :: evapSelect  = 0    !> evaporation gas-side selector
     integer      :: brkupSelect = 0    !> breakup model selector
     !> Composable phase-change axes
-    integer      :: liqSelect   = 0    !> liquid-side: 0 ITC, 1 P2T (not yet implemented)
+    integer      :: liqSelect   = 0    !> liquid-side: 0 ITC, 1 P2T (parabolic profile)
     integer      :: intfSelect  = 0    !> interface:   0 VLE, 1 Langmuir-Knudsen
     integer      :: boilSelect  = 0    !> boiling:     0 clamp, 1 ZGR (not yet implemented)
     integer      :: combSelect  = 0    !> metal combustion: 0 off, 1 Beckstead
@@ -104,8 +104,8 @@ module IGLOO_particles
     real(R8)     :: invTboil   = 0._R8
     !> Optional per-material properties; each is read only by the model that needs it.
     real(R8)     :: alphaE     = 1._R8  !> LK accommodation coefficient
-    real(R8)     :: kLiq       = 0._R8  !> liquid thermal conductivity [W/m/K] (reserved for P2T)
-    real(R8)     :: muLiq      = 0._R8  !> liquid viscosity [Pa s] (reserved for P2T)
+    real(R8)     :: kLiq       = 0._R8  !> liquid thermal conductivity [W/m/K] (P2T)
+    real(R8)     :: muLiq      = 0._R8  !> liquid viscosity [Pa s] (P2T, a material that does not break)
     real(R8)     :: Kburn      = 0._R8  !> Beckstead d^n rate constant
     real(R8)     :: nBurn      = 0._R8  !> Beckstead exponent
     real(R8)     :: Xeff       = 0._R8  !> effective oxidizer fraction

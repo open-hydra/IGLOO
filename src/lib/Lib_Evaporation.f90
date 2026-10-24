@@ -8,12 +8,13 @@ module IGLOO_Lib_Evaporation
     public :: assign_blowing, blowingFactor
     public :: assign_combustion, assign_solidification
     public :: evaporation
+    public :: chiETC
 
     !> Evaporation parameter array: contiguous layout (order mirrored by Lib_RHS ind_Mv..)
     integer(I4), parameter, public :: nep = 10
     integer(I4), parameter, public :: iMv=1, iLv=2, icpv=3, iLe=4
     integer(I4), parameter, public :: iYinf=5, iLvMvOverRu=6, iinvTboil=7
-    !> alphaE consumed by the Langmuir-Knudsen interface; liquid k / mu reserved for P2T.
+    !> alphaE consumed by the Langmuir-Knudsen interface; the liquid conductivity and viscosity by P2T.
     integer(I4), parameter, public :: ialphaE=8, ikLiq=9, imuLiq=10
 
     real(R8), parameter, public :: Ru   = 8314.46_R8  ! universal gas constant [J/(kmol·K)]
@@ -63,7 +64,7 @@ contains
 
     !> Composable phase-change axes: word -> selector mappers (0 = default behavior).
 
-    !> Liquid-side conduction: 0 ITC (infinite conductivity), 1 P2T parabolic (not implemented).
+    !> Liquid-side conduction: 0 ITC (infinite conductivity), 1 P2T (parabolic temperature profile).
     subroutine assign_liquid(word, liqSelect)
         implicit none
         character(len=*), intent(in)  :: word
@@ -176,7 +177,7 @@ contains
     !  model, optional LK interface.
     pure subroutine evaporation(rhog, Tg, gamma, Rg, mug, kg, &
                                  Tp, dp, Re, cpFactor, evapSelect, intfSelect, ep, &
-                                 mdot, Qdot_evap, override_Qdot, psatExt)
+                                 mdot, Qdot_evap, override_Qdot, psatExt, BMout)
         implicit none
         real(R8), intent(in)  :: rhog, Tg, gamma, Rg, mug, kg
         real(R8), intent(in)  :: Tp, dp, Re
@@ -186,11 +187,13 @@ contains
         real(R8), intent(out) :: mdot, Qdot_evap
         logical,  intent(out) :: override_Qdot
         real(R8), intent(in), optional :: psatExt   !> psat(Tp) from the properties table
+        real(R8), intent(out), optional :: BMout    !> the Spalding number of the surface state (before LK), 0 if none
         real(R8) :: cpg, p, Mg, Pr, Sc, Re05, psat, Xs, Ys, BM
 
         mdot = 0._R8
         Qdot_evap = 0._R8
         override_Qdot = .false.
+        if (present(BMout)) BMout = 0._R8
 
         !> Common gas properties (computed once)
         cpg  = gamma * Rg / (gamma - 1._R8)
@@ -217,6 +220,7 @@ contains
         if (Ys <= ep(iYinf)) return  ! no evaporation
         BM = (Ys - ep(iYinf)) / (1._R8 - Ys)
         if (BM <= 0._R8) return
+        if (present(BMout)) BMout = BM
 
         !> Re^0.5 (shared by Sh and Nu correlations)
         Re05 = sqrt(max(Re, 0._R8))
@@ -540,6 +544,22 @@ contains
         endif
 
     end function expm1S
+
+
+    !> Effective-conductivity factor chi(Pe_L) = 1.86 + 0.86 tanh(2.245 log10(Pe_L/30)) (Abramzon-Sirignano 1989 eq. 39);
+    !  1 with no internal circulation (Pe_L <= 1e-300).
+    pure function chiETC(PeL) result(chi)
+        implicit none
+        real(R8), intent(in) :: PeL
+        real(R8) :: chi
+
+        if (PeL <= 1.e-300_R8) then
+            chi = 1._R8
+        else
+            chi = 1.86_R8 + 0.86_R8*tanh(2.245_R8*log10(PeL/30._R8))
+        endif
+
+    end function chiETC
 
 
     !> Clausius-Clapeyron saturation pressure psat(T) = Patm exp(-LvMv/Ru (1/T - 1/Tboil)).

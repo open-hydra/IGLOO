@@ -189,19 +189,19 @@ contains
       end select
       if (eulerSwitch)    part%stateVar(part%nOde+1:part%neq) = 0._R8
       if (part%bodyAccum) part%stateVar(part%neq-1 :part%neq) = 0._R8
-
-      if (trajOn) call writeTrajRow()
-    endif
-    !> A breakup child's first row: its birth state, before its first step.
-    if (part%newborn) then
-      if (trajOn) call writeTrajRow()
-      part%newborn = .false.
     endif
     !> Block index and cell-entry state for every entry (children enter with time /= 0).
     b = part%i(1)
     call refreshCellEntry()
     !> Pack auxiliary variables once (constant throughout integration)
     call packAuxVars(part, nauxvar, auxLocal)
+    !> The injection row, then a breakup child's first row (its birth state, before its first step), on the
+    !  parcel's own aux and cell gas.
+    if (part%time==0._R8 .and. trajOn) call writeTrajRow()
+    if (part%newborn) then
+      if (trajOn) call writeTrajRow()
+      part%newborn = .false.
+    endif
 
     !> TRAJECTORY INTEGRATION LOOP
     iter = 0; nCross=0; tprint = part%time + dtprint
@@ -440,9 +440,19 @@ contains
 
   contains
 
-    !> One trajectory row; out-time appends the parcel time, a solidifying material the frozen fraction.
+    !> One trajectory row; out-time appends the parcel time, a solidifying material the frozen fraction,
+    !  a P2T material the surface temperature.
     subroutine writeTrajRow()
-      if (timeOn .and. frozenOn) then
+      real(R8) :: tsRow
+      if (part%liqSelect == 1) then
+        tsRow = surfaceTemp()
+        if (timeOn) then
+          write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2,F12.6)') part%stateVar(1:6), part%tp, part%d, part%m, &
+                                                                           part%ID, part%time, tsRow
+        else
+          write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,F12.6)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, tsRow
+        endif
+      elseif (timeOn .and. frozenOn) then
         write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2,F10.6)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, &
                                                                          part%time, part%fSolid
       elseif (timeOn) then
@@ -455,6 +465,26 @@ contains
         write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID
       endif
     end subroutine writeTrajRow
+
+
+    !> The surface temperature of a P2T parcel at its current state: its right-hand side on copies of the aux and gas
+    !  states (the right-hand side writes both).
+    function surfaceTemp() result(tsurf)
+      real(R8) :: tsurf
+      real(R8) :: Fs(part%neq), stS(max(1,nauxstate)), gasS(ng)
+      call packAuxState(part, nauxstate, stS)
+      gasS = gas(:,1)
+      select case (part%model)
+      case (2)
+        call rhsEvaporation(neq, part%time, part%stateVar, Fs, auxLocal,nauxvar, stS,nauxstate, &
+                            hTab,rhoTab,psatTab,LvTab,cpvTab, gas,gasVert,gasS, ng,ngVert, mupTabM=mupTab, TsOut=tsurf)
+      case (4)
+        call rhsEvapBreakup(neq, part%time, part%stateVar, Fs, auxLocal,nauxvar, stS,nauxstate, &
+                            hTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, gas,gasVert,gasS, ng,ngVert, TsOut=tsurf)
+      case default
+        tsurf = part%tp
+      end select
+    end function surfaceTemp
 
 
     !> One exit record, written before the time reset; out-time appends the parcel time.
@@ -803,7 +833,7 @@ contains
     subroutine rhs2(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
       call rhsEvaporation(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,psatTab,LvTab,cpvTab, &
-                          gas,gasVert,gasState, ng,ngVert)
+                          gas,gasVert,gasState, ng,ngVert, mupTabM=mupTab)
     end subroutine rhs2
     subroutine rhs3(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)

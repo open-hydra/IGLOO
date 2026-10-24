@@ -122,8 +122,16 @@ contains
       !> interface=LK requires a vapor-fraction-driven evaporation model
       if (material(i)%intfSelect == 1 .and. material(i)%evapSelect == 1) &
         error stop '[ERROR] interface=LK needs evaporation in {CEM,CEM-B,ASM,TC}; d2-law is BT-driven, LK inert'
+      !> liquid-conduction=P2T: an evaporating material, its liquid conductivity and one liquid viscosity
+      if (material(i)%liqSelect > 0 .and. material(i)%evapSelect == 0) &
+        error stop '[ERROR] liquid-conduction=P2T requires an evaporating material'
+      if (material(i)%liqSelect > 0 .and. .not. material(i)%kLiq > 0._R8) &
+        error stop '[ERROR] liquid-conduction=P2T requires k-liq > 0'
+      if (material(i)%liqSelect > 0 .and. material(i)%brkupSelect == 0 .and. .not. material(i)%muLiq > 0._R8) &
+        error stop '[ERROR] liquid-conduction=P2T requires mu-liq > 0'
+      if (material(i)%liqSelect > 0 .and. material(i)%brkupSelect > 0 .and. material(i)%muLiq > 0._R8) &
+        error stop '[ERROR] liquid-conduction=P2T with breakup takes the breakup viscosity: remove mu-liq'
       !> parsed-but-unimplemented selectors are rejected here
-      if (material(i)%liqSelect   > 0) error stop '[ERROR] liquid-conduction=P2T parsed but not implemented yet'
       if (material(i)%boilSelect  > 0) error stop '[ERROR] boiling=ZGR parsed but not implemented yet'
       !> Solidification validation: h-fus and cp-solid given, rho-solid not negative, T-nuc below T-melt, no other phase model
       if (material(i)%solidSelect > 0) then

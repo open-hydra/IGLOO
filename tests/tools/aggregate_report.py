@@ -27,7 +27,7 @@ FAMILY_DIRS = [
     "infrastructure/mollify_blocks", "infrastructure/host_assoc",
     "standard/drag", "standard/temperature",
     "evaporation", "evaporation/interface-neq", "evaporation/tc-analytic",
-    "evaporation/evap-breakup",
+    "evaporation/evap-breakup", "evaporation/liquid-p2t",
     "combustion",
     "solidification",
     "breakup/tab", "breakup/etab", "breakup/pilch-erdman",

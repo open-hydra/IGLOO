@@ -10,6 +10,7 @@ module Lib_RHS
   public  :: packEventVar, unpackEventVar
   public  :: rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, rhsAlCombustion
   public  :: rhsSolidification
+  public  :: p2tSurface
   public  :: ind_d, ind_rho, ind_sig, ind_mup
   public  :: ind_Mv, ind_Lv, ind_Cv
   public  :: ind_Le, ind_Yi, ind_e1, ind_e2, ind_cp, ind_m
@@ -28,7 +29,7 @@ module Lib_RHS
   logical :: mod_isSolid    = .false.   !> solidifying model (6 or 7)
   integer :: mod_brkSelect  = 0         !> breakup model selector
   integer :: mod_evapSelect = 0         !> evaporation gas-side selector
-  integer :: mod_liqSelect  = 0         !> liquid-side: 0 ITC, 1 P2T (not implemented)
+  integer :: mod_liqSelect  = 0         !> liquid-side: 0 ITC, 1 P2T (parabolic profile)
   integer :: mod_intfSelect = 0         !> interface:   0 VLE, 1 Langmuir-Knudsen
   integer :: mod_boilSelect = 0         !> boiling:     0 clamp, 1 ZGR (not implemented)
   integer :: mod_combSelect = 0         !> metal combustion: 0 off, 1 Beckstead
@@ -42,7 +43,7 @@ module Lib_RHS
   integer :: ind_sig = 0, ind_mup = 0
   integer :: ind_Mv  = 0, ind_Lv = 0, ind_Cv = 0
   integer :: ind_Le  = 0, ind_Yi  = 0, ind_e1 = 0, ind_e2  = 0
-  integer :: ind_e3  = 0, ind_e4  = 0, ind_e5 = 0  !> alpha_e (LK interface); k_liq / mu_liq reserved for P2T
+  integer :: ind_e3  = 0, ind_e4  = 0, ind_e5 = 0  !> alpha_e (LK interface); k_liq / mu_liq (P2T)
   integer :: ind_mb  = 0                            !> metal-block start (combustion), 0 = absent
   integer, parameter :: nmetal = 9                  !> metal parameter block, order = IGLOO_Lib_Combustion imKb..imQc
   integer :: ind_rs  = 0                            !> rho-solid (solid density), 0 = absent
@@ -160,8 +161,8 @@ contains
       ind_e1 = ind; ind = ind + 1                         !> LvMvOverRu → ep(6)
       ind_e2 = ind; ind = ind + 1                         !> invTboil → ep(7)
       ind_e3 = ind; ind = ind + 1                         !> alpha_e  → ep(8)
-      ind_e4 = ind; ind = ind + 1                         !> k_liq    → ep(9)  (reserved)
-      ind_e5 = ind; ind = ind + 1                         !> mu_liq   → ep(10) (reserved)
+      ind_e4 = ind; ind = ind + 1                         !> k_liq    → ep(9)  (P2T)
+      ind_e5 = ind; ind = ind + 1                         !> mu_liq   → ep(10) (P2T)
     endif
 
     !> metal combustion or solidification: contiguous nmetal-slot block
@@ -604,13 +605,13 @@ contains
   !> Model 2: variable mass via evaporation.
   subroutine rhsEvaporation(neq, time, Z, F, aux,naux, auxst,nauxst, &
                              hTabM, rhoTabM, psatTabM, LvTabM, cpvTabM, &
-                             gasNodes, gasVert,gas,nsp,nNodes)
+                             gasNodes, gasVert,gas,nsp,nNodes, mupTabM, TsOut)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
     use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor, iLv, icpv
     use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
     real(R8), intent(in)    :: time
@@ -621,11 +622,15 @@ contains
     real(R8), intent(in)    :: hTabM(:), rhoTabM(:), psatTabM(:), LvTabM(:), cpvTabM(:)
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
+    real(R8), intent(in),  optional :: mupTabM(:)   !> the breakup viscosity table (P2T of a breaking material)
+    real(R8), intent(out), optional :: TsOut        !> the surface temperature (the mean temperature under ITC)
     ! locals
     real(R8) :: normVel, slip, mdot, Vdif(3), Re, cpFactor, tp, d, rho, m, psat, xi0_loc(3)
     real(R8) :: Fdrag(3), Qdot, Qdot_evap
     real(R8) :: ep(nep)
+    real(R8) :: ts, cl, mul, carry
     logical  :: override
+    integer  :: p2tStat
 
     F = 0._R8
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
@@ -648,32 +653,67 @@ contains
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
 
-    call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot)
-    !> vapour data: the packed scalars, Lv and cpv at the droplet temperature when tabulated
+    !> the surface temperature: the parabolic profile's (P2T), else the mean temperature
+    if (mod_liqSelect == 1) then
+      if (mod_propFlags(1)) then; cl = lookupTab(hTabM, tp + 0.5_R8) - lookupTab(hTabM, tp - 0.5_R8)
+      else;                       cl = aux(ind_cp); endif
+      !> one liquid viscosity: the breakup viscosity of a breaking material, else mu-liq
+      if (mod_brkSelect > 0) then
+        if (mod_propFlags(4)) then
+          mul = ieee_value(1._R8, ieee_quiet_nan)
+          if (present(mupTabM)) mul = tableValue(mupTabM, Tmin, Tmax, tp)
+        else
+          mul = aux(ind_mup)
+        endif
+      else
+        mul = aux(ind_e5)
+      endif
+      call p2tSurface(tp, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mul, &
+                      psatTabM, LvTabM, cpvTabM, ts, p2tStat)
+      !> no surface root: the scrub's penalty, the step is rejected
+      if (p2tStat == 0) then
+        F = 1.e30_R8
+        if (present(TsOut)) TsOut = ts
+        return
+      endif
+    else
+      ts = tp
+    endif
+    if (present(TsOut)) TsOut = ts
+
+    call interphase(gas, nsp, Vdif, slip, ts, d, Re, cpFactor, Fdrag, Qdot)
+    !> vapour data: the packed scalars, Lv and cpv at the surface temperature when tabulated
     ep = aux(ind_Mv:ind_Mv+nep-1)
-    if (mod_propFlags(6)) ep(iLv)  = tableValue(LvTabM, Tmin, Tmax, tp)
-    if (mod_propFlags(7)) ep(icpv) = tableValue(cpvTabM, Tmin, Tmax, tp)
+    if (mod_propFlags(6)) ep(iLv)  = tableValue(LvTabM, Tmin, Tmax, ts)
+    if (mod_propFlags(7)) ep(icpv) = tableValue(cpvTabM, Tmin, Tmax, ts)
     !> gas packs (5)=T,(6)=mu,(7)=gamma,(8)=R,(9)=k; signature is (rhog,Tg,gamma,Rg,mug,kg)
     if (mod_propFlags(5)) then
-      psat = tableValue(psatTabM, Tmin, Tmax, tp)
+      psat = tableValue(psatTabM, Tmin, Tmax, ts)
       call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
-                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
+                       ts, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
                        mdot, Qdot_evap, override, psatExt=psat)
     else
       call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
-                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
+                       ts, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
                        mdot, Qdot_evap, override)
     endif
     if (override) Qdot = Qdot_evap
     !> Stefan-blowing reduction of the convective heat (MHB98 eq.19); skipped when the model returned its own Qdot
     if (blowSelect == 1 .and. .not.override) &
         Qdot = Qdot * blowingFactor(gas(7), gas(8), gas(6), gas(9), rho, d, m, mdot)
-    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), tp)*cpFactor
+    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), ts)*cpFactor
     F(1:3) = Z(4:6)
     F(4:6) = Fdrag / m
     if (bodyForce) F(4:6) = F(4:6) + bodyAccel
-    !> m*cp*dT/dt = Q + mdot*Lv (MHB98 eq.3): latent term only, no sensible-carry term
-    F(7)   = (Qdot + mdot*ep(iLv)*cpFactor) / m
+    if (mod_liqSelect == 1) then
+      !> m dh/dt = Q + mdot (Lv(Ts) + h(Ts) - h): the vapour leaves at the surface temperature
+      if (mod_propFlags(1)) then; carry = lookupTab(hTabM, ts) - Z(7)
+      else;                       carry = ts - tp; endif
+      F(7) = (Qdot + mdot*(ep(iLv)*cpFactor + carry)) / m
+    else
+      !> m*cp*dT/dt = Q + mdot*Lv (MHB98 eq.3): the vapour leaves at the mean temperature
+      F(7)   = (Qdot + mdot*ep(iLv)*cpFactor) / m
+    endif
     F(8)   = mdot
 
     if (eulerSwitch) then
@@ -781,7 +821,7 @@ contains
   !  State: Z(1:3)=pos, Z(4:6)=vel, Z(7)=T/h, Z(8)=mass, Z(9)=npdot.
   subroutine rhsEvapBreakup(neq, time, Z, F, aux,naux, auxst,nauxst,     &
                              hTabM, rhoTabM, mupTabM, sigTabM, psatTabM, LvTabM, cpvTabM, &
-                             gasNodes, gasVert,gas,nsp,nNodes)
+                             gasNodes, gasVert,gas,nsp,nNodes, TsOut)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
@@ -800,12 +840,15 @@ contains
     real(R8), intent(in)    :: mupTabM(:), sigTabM(:), psatTabM(:), LvTabM(:), cpvTabM(:)
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
+    real(R8), intent(out), optional :: TsOut   !> the surface temperature (the mean temperature under ITC)
     ! locals
     real(R8) :: normVel, slip, mdot, mdot_evap, Vdif(3), Re, mTraj, cpFactor, sigma, mup, psat
     real(R8) :: tp, d, rho, m, xi0_loc(3)
     real(R8) :: Fdrag(3), Qdot, Qdot_evap, acc(3), brkupVar(2)
     real(R8) :: ep(nep)
+    real(R8) :: ts, cl, carry
     logical  :: override
+    integer  :: p2tStat
 
     F = 0._R8
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
@@ -830,7 +873,24 @@ contains
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
 
-    call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot)
+    !> the surface temperature: the parabolic profile's (P2T, the breakup viscosity as mu_l), else the mean temperature
+    if (mod_liqSelect == 1) then
+      if (mod_propFlags(1)) then; cl = lookupTab(hTabM, tp + 0.5_R8) - lookupTab(hTabM, tp - 0.5_R8)
+      else;                       cl = aux(ind_cp); endif
+      call p2tSurface(tp, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mup, &
+                      psatTabM, LvTabM, cpvTabM, ts, p2tStat)
+      !> no surface root: the scrub's penalty, the step is rejected
+      if (p2tStat == 0) then
+        F = 1.e30_R8
+        if (present(TsOut)) TsOut = ts
+        return
+      endif
+    else
+      ts = tp
+    endif
+    if (present(TsOut)) TsOut = ts
+
+    call interphase(gas, nsp, Vdif, slip, ts, d, Re, cpFactor, Fdrag, Qdot)
     acc = Fdrag / m
 
     ! Breakup: npdot rate — brkupVar from auxState (told/tc for KHRT)
@@ -841,26 +901,26 @@ contains
     if (ind_sb1 > 0) auxst(ind_sb1:ind_sb2) = brkupVar
 
     ! Evaporation
-    !> vapour data: the packed scalars, Lv and cpv at the droplet temperature when tabulated
+    !> vapour data: the packed scalars, Lv and cpv at the surface temperature when tabulated
     ep = aux(ind_Mv:ind_Mv+nep-1)
-    if (mod_propFlags(6)) ep(iLv)  = tableValue(LvTabM, Tmin, Tmax, tp)
-    if (mod_propFlags(7)) ep(icpv) = tableValue(cpvTabM, Tmin, Tmax, tp)
+    if (mod_propFlags(6)) ep(iLv)  = tableValue(LvTabM, Tmin, Tmax, ts)
+    if (mod_propFlags(7)) ep(icpv) = tableValue(cpvTabM, Tmin, Tmax, ts)
     !> gas packs (5)=T,(6)=mu,(7)=gamma,(8)=R,(9)=k; signature is (rhog,Tg,gamma,Rg,mug,kg)
     if (mod_propFlags(5)) then
-      psat = tableValue(psatTabM, Tmin, Tmax, tp)
+      psat = tableValue(psatTabM, Tmin, Tmax, ts)
       call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
-                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
+                       ts, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
                        mdot_evap, Qdot_evap, override, psatExt=psat)
     else
       call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
-                       tp, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
+                       ts, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
                        mdot_evap, Qdot_evap, override)
     endif
     if (override) Qdot = Qdot_evap
     !> Stefan-blowing reduction of the convective heat (MHB98 eq.19); skipped when the model returned its own Qdot
     if (blowSelect == 1 .and. .not.override) &
         Qdot = Qdot * blowingFactor(gas(7), gas(8), gas(6), gas(9), rho, d, m, mdot_evap)
-    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), tp)*cpFactor
+    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), ts)*cpFactor
 
     !> per-droplet mass: evaporation plus the breakup share that keeps the stream mass
     mdot = mdot_evap - m*F(9)/Z(9)
@@ -868,8 +928,15 @@ contains
     F(1:3) = Z(4:6)
     F(4:6) = acc
     if (bodyForce) F(4:6) = F(4:6) + bodyAccel
-    !> Same latent-only form as model 2 (see rhsEvaporation): no sensible-carry term
-    F(7)   = (Qdot + mdot_evap*ep(iLv)*cpFactor) / m
+    if (mod_liqSelect == 1) then
+      !> as model 2; the carry goes with the evaporated mass, the breakup share stays at the mean state
+      if (mod_propFlags(1)) then; carry = lookupTab(hTabM, ts) - Z(7)
+      else;                       carry = ts - tp; endif
+      F(7) = (Qdot + mdot_evap*(ep(iLv)*cpFactor + carry)) / m
+    else
+      !> as model 2: the vapour leaves at the mean temperature
+      F(7)   = (Qdot + mdot_evap*ep(iLv)*cpFactor) / m
+    endif
     F(8)   = mdot
 
     if (eulerSwitch) then
@@ -893,6 +960,140 @@ contains
       where (.not. ieee_is_finite(F)) F = 1.e30_R8
     endif
   end subroutine rhsEvapBreakup
+
+
+  !> P2T surface temperature (parabolic profile inside the drop): the root of G(Ts) = Ts - tbar - Qnet(Ts)/K,
+  !  K = 10 pi keff d, keff = chi(Pe_L) kl once at tbar (Abramzon-Sirignano 1989 eqs. 25, 30, 32, 39), Qnet [W] the
+  !  gas-side, radiative and latent heats at Ts; Brent on an exact bracket. stat: 1 the root bracketed by tbar and the
+  !  first estimate, 2 after widening, 0 no bracket or no convergence (ts NaN).
+  subroutine p2tSurface(tbar, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mul, &
+                        psatTabM, LvTabM, cpvTabM, ts, stat)
+    use Lib_Equations,         only: interphase
+    use IGLOO_variables,       only: pi, blowSelect
+    use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor, iLv, icpv, chiETC
+    use IGLOO_Lib_Properties,  only: tableValue, Tmin, Tmax
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
+    implicit none
+    integer,  intent(in)  :: nsp, naux
+    real(R8), intent(in)  :: tbar, rho, d, m, gas(nsp), Vdif(3), slip, Re, aux(naux), cl, mul
+    real(R8), intent(in)  :: psatTabM(:), LvTabM(:), cpvTabM(:)
+    real(R8), intent(out) :: ts
+    integer,  intent(out) :: stat
+    integer,  parameter :: maxEval = 100
+    real(R8), parameter :: tol4 = 4._R8*epsilon(1._R8)
+    real(R8) :: kl, BM, Us, PeL, K, q0, tLo, t1, g0, g1
+    real(R8) :: a, b, c, fa, fb, fc, dd, e, s, p, q, r, tol1, xm
+    integer  :: nEval, sw
+
+    stat = 0
+    ts = ieee_value(ts, ieee_quiet_nan)
+    kl = aux(ind_e4)
+    q0 = qnet(tbar, BM)
+    if (.not. ieee_is_finite(q0)) return
+    if (q0 == 0._R8) then
+      ts = tbar; stat = 1; return
+    endif
+    !> keff at the mean state: the surface velocity of the internal circulation (A-S eqs. 30, 32), Pe_L = Re_L Pr_L
+    Us = 0._R8
+    if (Re > 0._R8) Us = (12.69_R8/32._R8)*slip*(gas(6)/mul)*Re**(1._R8/3._R8)/(1._R8 + BM)
+    PeL = Us*d*rho*cl/kl
+    K   = 10._R8*pi*chiETC(PeL)*kl*d
+    !> bracket: tbar and the first estimate T1 = tbar + Qnet(tbar)/K, widened to Tg (heating) or the low end (cooling)
+    tLo = max(1._R8, real(Tmin, R8) - 1._R8)
+    g0  = -q0/K
+    t1  = min(max(tbar + q0/K, tLo), max(gas(5), real(Tmax, R8)))
+    g1  = gfun(t1)
+    nEval = 2
+    if (ieee_is_finite(g1) .and. g0*g1 <= 0._R8) then
+      a = tbar; fa = g0; b = t1; fb = g1; sw = 1
+    else
+      sw = 2
+      if (ieee_is_finite(g1)) then; a = t1; fa = g1; else; a = tbar; fa = g0; endif
+      if (q0 > 0._R8) then
+        if (.not. gas(5) > tbar) return
+        b = gas(5)
+      else
+        b = tLo
+      endif
+      if (b == a) return
+      fb = gfun(b); nEval = nEval + 1
+      if (.not. ieee_is_finite(fb)) return
+      if (fa*fb > 0._R8) return
+    endif
+    !> Brent (zeroin): inverse quadratic / secant steps, bisection safeguard
+    c = a; fc = fa; dd = b - a; e = dd
+    do
+      if (abs(fc) < abs(fb)) then
+        a = b; b = c; c = a; fa = fb; fb = fc; fc = fa
+      endif
+      tol1 = 0.5_R8*tol4*abs(b)
+      xm   = 0.5_R8*(c - b)
+      if (abs(xm) <= tol1 .or. abs(fb) <= tol4*tbar) then
+        ts = b; stat = sw; return
+      endif
+      if (nEval >= maxEval) return
+      if (abs(e) >= tol1 .and. abs(fa) > abs(fb)) then
+        s = fb/fa
+        if (a == c) then
+          p = 2._R8*xm*s; q = 1._R8 - s
+        else
+          q = fa/fc; r = fb/fc
+          p = s*(2._R8*xm*q*(q - r) - (b - a)*(r - 1._R8))
+          q = (q - 1._R8)*(r - 1._R8)*(s - 1._R8)
+        endif
+        if (p > 0._R8) then; q = -q; else; p = -p; endif
+        s = e; e = dd
+        if (2._R8*p >= 3._R8*xm*q - abs(tol1*q) .or. p >= abs(0.5_R8*s*q)) then
+          dd = xm; e = dd
+        else
+          dd = p/q
+        endif
+      else
+        dd = xm; e = dd
+      endif
+      a = b; fa = fb
+      if (abs(dd) > tol1) then; b = b + dd; else; b = b + sign(tol1, xm); endif
+      fb = gfun(b); nEval = nEval + 1
+      if (.not. ieee_is_finite(fb)) return
+      if ((fb > 0._R8 .and. fc > 0._R8) .or. (fb < 0._R8 .and. fc < 0._R8)) then
+        c = a; fc = fa; dd = b - a; e = dd
+      endif
+    enddo
+
+  contains
+
+    !> The surface balance's residual [K].
+    function gfun(T) result(g)
+      real(R8), intent(in) :: T
+      real(R8) :: g
+      g = T - tbar - qnet(T)/K
+    end function gfun
+
+    !> The heat the liquid absorbs at the surface temperature T [W]; BMo, the Spalding number there.
+    function qnet(T, BMo) result(qn)
+      real(R8), intent(in) :: T
+      real(R8), intent(out), optional :: BMo
+      real(R8) :: qn, Fd(3), Qg, md, Qe, ps, epT(nep)
+      logical  :: ovr
+      call interphase(gas, nsp, Vdif, slip, T, d, Re, 1._R8, Fd, Qg)
+      epT = aux(ind_Mv:ind_Mv+nep-1)
+      if (mod_propFlags(6)) epT(iLv)  = tableValue(LvTabM, Tmin, Tmax, T)
+      if (mod_propFlags(7)) epT(icpv) = tableValue(cpvTabM, Tmin, Tmax, T)
+      if (mod_propFlags(5)) then
+        ps = tableValue(psatTabM, Tmin, Tmax, T)
+        call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), T, d, Re, 1._R8, &
+                         mod_evapSelect, mod_intfSelect, epT, md, Qe, ovr, psatExt=ps, BMout=BMo)
+      else
+        call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), T, d, Re, 1._R8, &
+                         mod_evapSelect, mod_intfSelect, epT, md, Qe, ovr, BMout=BMo)
+      endif
+      if (ovr) Qg = Qe
+      if (blowSelect == 1 .and. .not.ovr) Qg = Qg*blowingFactor(gas(7), gas(8), gas(6), gas(9), rho, d, m, md)
+      if (ind_eps > 0) Qg = Qg + radiativeHeat(aux(ind_eps), d, gas(5), T)
+      qn = Qg + md*epT(iLv)
+    end function qnet
+
+  end subroutine p2tSurface
 
 
   !> Model 5: Beckstead d^n burn law; state layout as model 2 (Z(7)=T/h, Z(8)=mass).

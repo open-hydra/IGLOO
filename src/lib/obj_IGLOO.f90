@@ -361,6 +361,7 @@ contains
     real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp
     type(obj_particle) :: ptmp   ! throwaway copy for the inject-only pre-pass
     character(len=4) :: fHead    !> the frozen-fraction header entry, blank for a material that does not solidify
+    character(len=10) :: tsHead  !> the trajectory file's surface-temperature entry, blank for a material without P2T
 
     !> Refuse to run on a stale particle state.
     if (.not. self%stateIsFresh) then
@@ -403,13 +404,16 @@ contains
       !> A material of which a group solidifies ends every particle-file row with f.
       frozenOn = any(mat%group(1:mat%ngroups)%solidSelect > 0)
       fHead = ''; if (frozenOn) fHead = ',"f"'
+      !> A P2T material's trajectory rows end with the surface temperature.
+      tsHead = ''; if (mat%liqSelect == 1) tsHead = ',"T<sub>s"'
       !> Per-material output files: <kind>-<material><sweeptag><ranksuffix>.dat (rank suffix empty at one rank).
       if (trajOn) then
         open(newunit=unitTraj,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'trajectories-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
         if (timeOn) then
-          write(unitTraj,'(1X,A)') 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)
+          write(unitTraj,'(1X,A)') 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)// &
+                                   trim(tsHead)
         else
-          write(unitTraj,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)
+          write(unitTraj,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)//trim(tsHead)
         endif
       endif
       open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')

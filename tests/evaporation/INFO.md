@@ -66,3 +66,11 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
 - `evap-breakup-box` (e2e): breakup then evaporation to burnout, the composed-rate oracle and the source
   closure — see [evap-breakup-box/INFO.md](evap-breakup-box/INFO.md).
 - `d2law-brk-dormant` (e2e): the d2law case under model 4 with the breakup rate exactly zero.
+
+## Heat conduction inside the drop (`liquid-conduction = P2T`)
+
+- `liquid-p2t/test_liquid_p2t.f90` (unit): the parabolic temperature profile through the right-hand sides of
+  models 2 and 4 — the closed form at Re = 0, the surface balance with the carry of the evaporated mass, χ(Pe_L),
+  the breakup viscosity as the liquid one, radiation inside the balance — see [liquid-p2t/INFO.md](liquid-p2t/INFO.md).
+- `temp-relax-p2t` (e2e): temp-relax's drop with no mass transfer, τ = 1.2 τ_ITC and the trajectory's
+  surface-temperature column — see [temp-relax-p2t/INFO.md](temp-relax-p2t/INFO.md).
