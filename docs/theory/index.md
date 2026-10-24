@@ -63,7 +63,8 @@ change the model index.
 -   :material-water-percent: **[Evaporation](evaporation.md)**
 
     d²-law, CEM, CEM-B, Abramzon-Sirignano and Tonini-Cossali mass-transfer models;
-    Langmuir-Knudsen interface and Stefan-blowing options.
+    Langmuir-Knudsen interface and Stefan-blowing options; the parabolic temperature profile
+    inside the droplet and the Zuo-Gomes-Rutland boiling branch.
 
 -   :material-fire: **[Metal combustion](combustion.md)**
 
