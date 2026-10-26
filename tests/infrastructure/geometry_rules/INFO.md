@@ -11,7 +11,9 @@ that is not a number, and the face found would depend on the hint. When both ray
 miss, the 3D search falls back on `closestFace` (`src/lib/geometry.f90`), which returns, of the faces the containment
 test rejects the point through (beyond both triangle planes of the face by more than the cell's tolerance `hexTol`,
 see [containment](../containment/INFO.md)), the one whose nearer triangle plane is closest to the point; when no face
-rejects the point, the face with the smallest non-negative triangle distance. The smallest non-negative distance of
+rejects the point, the face with the smallest non-negative triangle distance; when no triangle distance is
+non-negative (a point inside every triangle plane of the cell), the face whose triangle plane is nearest; for a
+non-finite point, 0. The smallest non-negative distance of
 either triangle alone can belong to a face that does not reject the point: beyond one triangle plane of a warped face
 and inside the other, or within the tolerance of a face plane, the point can be nearer that plane than the face that
 rejects it, and the boundary search would then apply that face's condition or step into the cell behind it.
@@ -28,6 +30,8 @@ rejects it, and the boundary search would then apply that face's condition or st
 | BF4 | the fallback: points no face rejects, beyond a +i triangle plane (the box's +i tolerance band, the warped cell's +i face): +i (2) | PASS |
 | BF5 | 2e4 points per cell, half in the cell's bounding box enlarged by 10 % and half within 4 tolerances of a corner triangle of a face, on six cells (a 2.5 mm box at the origin, a warped 1 mm cell, a thin twisted cell (1e-2 × 1e-2 × 1e-4 m), a rotated 1 cm box 100 m from the origin, BF1's cell, a 5° wedge cell whose −j face is a segment of the axis): on every point the containment test rejects (7971, 10731, 8940, 12429, 7452 and 11888), `closestFace` returns a rejecting face whose nearer triangle plane is within 1e-6 tolerances of the nearest. The oracle works on `precomputeHex12`'s planes and reproduces `isInsideHex12Fast`'s decision and crossed face on every point | PASS |
 | BF5 witness | on 2242 of the rejected points (2156 on the warped cell, 86 on BF1's cell) the smallest non-negative triangle distance belongs to a face that does not reject the point, so the sweep reaches the configurations BF1 and BF2 pin | PASS |
+| BF6 | 2e4 points per cell drawn uniformly in the bounding box of each of BF5's six cells, from a stream of their own after BF5's draws, kept when the containment test accepts them and every non-degenerate triangle distance is negative (20000, 4488, 16603, 4652, 18796 and 10025 kept; at least 1000 required): `closestFace` returns a face whose nearest non-degenerate triangle plane is within 1e-6 tolerances of the nearest of all (the wedge cell's degenerate −j face left out) | PASS |
+| BF6b | `closestFace` on a point whose x is NaN, on the box: 0 | PASS |
 
 ## RED
 
@@ -41,3 +45,7 @@ rejects it, and the boundary search would then apply that face's condition or st
   point is beyond is enough to pick a face): BF1 and BF2 return the +i face (2); BF5 fails on the warped cell
   (2156 of its 10731 rejected points) and on BF1's cell (86 of 7452). BF3, BF4 and the four other cells stay
   green: there the two rules pick the same face.
+- **No face for a point inside every triangle plane** (the nearest-plane fallback taken out): BF6 fails on every kept
+  point of all six cells; BF6b holds.
+- **The fallback's initial face 1 instead of 0**: BF6b returns 1; BF6 holds. Every path through `closestFace` assigns
+  its result, so BF6b pins that initial face: the result's entry assignment changed alone leaves every gate green.

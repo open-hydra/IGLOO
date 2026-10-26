@@ -180,7 +180,9 @@ igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;
 # every face hint from points on a face, an edge and a corner of a box (RT2; RED: a face the ray runs along at NaN).
 # closestFace, the boundary search's fallback when both rays miss: the nearest face the containment test rejects the
 # point through, at a warped wall and in the tolerance band (BF1, BF2; RED when a face qualifies by one non-negative
-# triangle distance: the side face), controls and the fallback (BF3, BF4), 2e4 points on each of six cells (BF5).
+# triangle distance: the side face), controls and the fallback (BF3, BF4), 2e4 points on each of six cells (BF5);
+# points inside every triangle plane get the face of the nearest plane, a NaN point 0 (BF6, BF6b; RED with that
+# fallback taken out: BF6 on every kept point; with its initial face 1: BF6b).
 igloo_unit_test(test_geometry_rules     infrastructure/geometry_rules     "unit;infrastructure;geometry;t1")
 # the ord2 gas ghost ring: a ring filled only by blind linear extrapolation on every face gives a
 # sampled normal velocity of (3v1 - v2)/2 instead of 0 at a gas-solid plane and drags a parcel in

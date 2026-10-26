@@ -224,7 +224,8 @@ contains
     end function isConcave
 
     !> Index of the cell face p lies beyond: the nearest face the containment test rejects p through (both triangle
-    !  distances above hexTol), else the face of the smallest non-negative triangle distance.
+    !  distances above hexTol), else the face of the smallest non-negative triangle distance, else the face of the
+    !  nearest triangle plane; 0 for a non-finite point.
     function closestFace(p,vertices) result(face)
         implicit none
         real(R8), intent(in) :: vertices(3,8)
@@ -232,14 +233,17 @@ contains
         integer              :: face
         real(R8) :: v(3,3), facePlane(3,2), vert(3,4)
         real(R8), parameter :: toll=1e-20
-        integer  :: f, t, vertstart, faceOut
+        integer  :: f, t, vertstart, faceOut, bestFace
         logical  :: isDegenerate
-        real(R8) :: minDist, oldminDist, distance(2), raw(2), eps, minOut
+        real(R8) :: minDist, oldminDist, distance(2), raw(2), eps, minOut, bestRaw
 
+        face = 0
         eps = hexTol(vertices)
         minOut = 1.e3_R8
         faceOut = 0
         oldminDist = 1.e3_R8
+        bestRaw = -huge(1._R8)
+        bestFace = 0
         do f = 1, 6
             vert(:,1) = vertices(:,guide(f,1))
             vert(:,2) = vertices(:,guide(f,2))
@@ -261,6 +265,10 @@ contains
                     endif
                 else
                     distance(t) = dot_product(facePlane(:,1), p - facePlane(:,2))
+                    if (distance(t) > bestRaw) then
+                        bestRaw = distance(t)
+                        bestFace = f
+                    endif
                 endif
                 raw(t) = distance(t)
                 if (distance(t) < 0._R8) distance(t) = 1.e3_R8
@@ -275,7 +283,11 @@ contains
                 oldminDist = minDist
             endif
         enddo
-        if (faceOut > 0) face = faceOut
+        if (faceOut > 0) then
+            face = faceOut
+        elseif (oldminDist >= 1.e3_R8) then
+            face = bestFace
+        endif
 
     end function closestFace
 
