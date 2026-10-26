@@ -421,6 +421,7 @@ contains
     use IGLOO_variables,      only: nm
     use IGLOO_data_phases,    only: obj_material
     use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch, capStretchX0
+    use IGLOO_Mod_MPI,        only: mpi_is_root
     implicit none
     type(obj_material), intent(inout) :: material(:)
     integer :: i, j, p
@@ -467,6 +468,12 @@ contains
       if (mat%dRes < 0._R8 .or. (mat%dRes > 0._R8 .and. .not. mat%resOn)) &
         error stop '[ERROR] d-residue must be >= 0, and > 0 only with residue=on'
       end associate
+    enddo
+    !> A 0-group line that no product= names is inert: the log names it (root rank).
+    do i = 1, nm
+      if (material(i)%ngroups /= 0 .or. material(i)%isProduct .or. .not. mpi_is_root) cycle
+      write(*,'(a,i0,a)') '  >> [material ', i, '] '//trim(material(i)%matName)// &
+                          ': 0 groups and no product= names it -- an inert material that injects nothing'
     enddo
 
   end subroutine resolve_products
