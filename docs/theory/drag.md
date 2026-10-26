@@ -76,7 +76,8 @@ $$
 C_d = a_1 + \frac{a_2}{\mathrm{Re} + \varepsilon} + \frac{a_3}{\mathrm{Re}^2 + \varepsilon}
 $$
 
-Eight Reynolds-number ranges; the $a_i$ coefficients as coded in `Lib_Drag.f90`:
+Eight Reynolds-number ranges; the $a_i$ are the coefficients of Morsi & Alexander's appendix (1972; their $K_3$,
+$K_1$, $K_2$):
 
 | Re range | $a_1$ | $a_2$ | $a_3$ |
 | :--- | ---: | ---: | ---: |
@@ -88,6 +89,9 @@ Eight Reynolds-number ranges; the $a_i$ coefficients as coded in `Lib_Drag.f90`:
 | $(1000,\,5000]$ | 0.357 | 148.62 | −4.75×10⁴ |
 | $(5000,\,10000]$ | 0.46 | −490.546 | 5.787×10⁵ |
 | $(10000,\,\infty)$ | 0.5191 | −1662.5 | 5.4167×10⁶ |
+
+The paper fits $0.1 < \mathrm{Re} < 5\times10^4$; IGLOO takes each band edge in the lower band and continues the
+last band above $5\times10^4$.
 
 ---
 

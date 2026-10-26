@@ -7,8 +7,8 @@ drag-stokes's box and gas (uniform: u_g = 10 m/s along +x, rho_g = 1.2 kg/m^3, m
 T_g: the slip Reynolds number falls from 60 to about 22 across the 0.15 m box. The case's drag law is typed here
 from its source, never taken from Lib_Drag:
   drag-chang  Chang = Clift-Gauvin, [Shim06] eq. 18: 24/Re (1 + 0.15 Re^0.687 + 0.0175 Re / (1 + 4.25e4 Re^-1.16))
-  drag-morsi  Morsi-Alexander, a1 + a2/Re + a3/Re^2 on eight Re bands: the coefficient table as IGLOO codes it (a
-              regression pin -- Morsi and Alexander 1972 is not in hand); the path stays in the band 10 < Re <= 100
+  drag-morsi  Morsi-Alexander, K1/Re + K2/Re^2 + K3 on eight Re bands, [MA72]'s appendix (printed p. 207); the path
+              stays in the band 10 < Re <= 100
 Oracle: the slip ODE du/dt = (3/4) (rho_g / (rho_p d)) C_D(Re) |u_g - u| (u_g - u), Re = rho_g |u_g - u| d / mu
 (uniform gas, no transverse slip: one scalar ODE), RK4 at 2e5 steps from u = 1 m/s at t = 0 to the last printed
 time, then a partial RK4 step from the grid point below each printed t.
@@ -34,7 +34,8 @@ N_PARCELS, MIN_ROWS, X_OUT = 25, 50, 0.15
 NSTEP = 200000
 HALF_U, REL_T, INT_FLOOR = 5.0e-7, 5.0e-9, 1.0e-9
 
-# Morsi-Alexander as coded: (upper Re of the band, (a1, a2, a3)); the last band is open
+# Morsi-Alexander, [MA72] appendix: (upper Re of the band, (a1, a2, a3) = (K3, K1, K2)); the last band continued
+# past the paper's 5e4
 MORSI = ((0.1, (0.0, 24.0, 0.0)), (1.0, (3.69, 22.73, 0.0903)), (10.0, (1.222, 29.1667, -3.8889)),
          (100.0, (0.6167, 46.5, -116.67)), (1000.0, (0.3644, 98.33, -2778.0)),
          (5000.0, (0.357, 148.62, -4.75e4)), (10000.0, (0.46, -490.546, 57.87e4)),
@@ -52,7 +53,7 @@ def cd_chang(re):
     return 24.0 / re * (1.0 + 0.15 * re ** 0.687 + 0.0175 * re / (1.0 + 4.25e4 * re ** -1.16))
 
 
-LAWS = {"drag-morsi": ("Morsi-Alexander (coded table)", cd_morsi),
+LAWS = {"drag-morsi": ("Morsi-Alexander, [MA72] appendix", cd_morsi),
         "drag-chang": ("Chang = Clift-Gauvin, [Shim06] eq. 18", cd_chang)}
 
 

@@ -73,7 +73,7 @@ sampled where the parcel was: both legs then miss the closed form by 3·10³ to 
   | DL4 | Newton, C_D = 0.45 | `[Shim06]` eq. 13 | Re = 10³, 10⁴, 10⁵ | 0 | 0.44: 2.2e-2 |
   | DL5 | Schlichting, 24/Re (1 + 3Re/16) | `[Shim06]` eq. 14, `[SP8039]` Table I | Re = 0.1, 1, 4 | 0 | 3Re/18: 4.8e-2 |
   | DL6 | Carlson-Hoglund, eq. 19 with C_D0 = Wen-Yu (eq. 16); at Ma = 0 exactly Wen-Yu | `[Shim06]` eqs. 16, 19 | Re = 1, 10, 100, 1000 × Ma = 0.1, 0.5, 1, 2; Ma = 0 | 0, 0 | SP-8039's printed sign, +0.427/M^4.63: Inf |
-  | DL7 | Morsi-Alexander, a1 + a2/Re + a3/Re², one Re per band | the coded table (**regression pin**: Morsi and Alexander 1972 is not in hand) | Re = 0.05, 0.5, 5, 50, 500, 2000, 7500, 2×10⁴ | 1.3e-16 | band-4 a2 46.5 → 45.6: 1.2e-2 |
+  | DL7 | Morsi-Alexander, a1 + a2/Re + a3/Re², one Re per band | `[MA72]` appendix (printed p. 207), K1/Re + K2/Re² + K3 | Re = 0.05, 0.5, 5, 50, 500, 2000, 7500, 2×10⁴ | 1.3e-16 | band-4 a2 46.5 → 45.6: 1.2e-2 |
   | DL8 | Chang and Clift-Gauvin, eq. 18 | `[Shim06]` eq. 18 | Re = 1, 10, 100, 1000 | 2.1e-16 | Chang's 0.42 → 0.43: 1.4e-3 (DL2 1.9e-2) |
 
   The coded Morsi-Alexander fit jumps at its band edges (a property of the published fit, not gated): 8.3e-5

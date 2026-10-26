@@ -47,7 +47,7 @@ correlation. High-Re: Newton inertial plateau `Cd ≈ 0.4–0.44`.
 | 6 | Wen–Yu | 24 ✓ | 0.43 | ⚠W plateau |
 | 7 | Putnam | 24 ✓ | 0.4392 | ⚠P plateau + C⁰ jump |
 | 8 | Clift–Gauvin | 24 ✓ | 0.42 | MATCHES |
-| 9 | Morsi–Alexander | 24 ✓ | 0.5191 | MATCHES |
+| 9 | Morsi–Alexander | 24 ✓ | 0.5191 | MATCHES (`[MA72]` appendix, all eight bands) |
 | 10 | Carlson–Hoglund | 24·(compress.) | Ma-dep | base=Wen-Yu (note) |
 | 11 | Henderson | subsonic branch | Ma-dep | ⚠H transonic blend |
 | 12 | Crowe | Wen-Yu base | **blows up ~1e20** | ⚠C severe |
@@ -114,8 +114,8 @@ or 0.4. 0.45 is within spread; flag as convention, not error. Confirm intended s
 ### Range caveats (not bugs, but test-relevant)
 - Schiller–Naumann (#4) has **no** Re>1000 cutoff in code; standard validity Re≲800–1000.
   A test must stay Re<1000 or it validates an out-of-range extrapolation.
-- Morsi–Alexander boundaries use mixed `≤`/`>`; at exact decade values (Re=0.1,1,10,…)
-  branch selection is well-defined (no gap/overlap) — verified by reading L298-314.
+- Morsi–Alexander boundaries: the paper's inequalities are strict on both sides of every edge; the code takes each
+  edge (Re=0.1,1,10,…,10⁴) in the lower band, so branch selection is well-defined (no gap/overlap).
 
 ---
 
@@ -181,7 +181,12 @@ Two oracle styles:
   0.024·(1+0.15·118.4)+0.42/(1+4.25e4·1000^-1.16)=0.483. tol 3% (curve-fit spread).
 - (U) cross-identity with Chang (§5). (R) relaxation Re<1000.
 
-### 9 Morsi–Alexander (piecewise a1+a2/Re+a3/Re²)  [Morsi & Alexander 1972]
+### 9 Morsi–Alexander (piecewise a1+a2/Re+a3/Re²)  [`[MA72]`]
+- **Source.** `[MA72]`'s appendix (printed p. 207) states the eight bands as C_d = K1/R_N + K2/R_N² + K3 (eq. 4,
+  p. 195); the code's (a1, a2, a3) are (K3, K1, K2) and equal the print in all eight bands. (K1, K2, K3):
+  (24.0, 0, 0) for R_N < 0.1; (22.73, 0.0903, 3.69) 0.1–1; (29.1667, −3.8889, 1.222) 1–10; (46.5, −116.67, 0.6167)
+  10–100; (98.33, −2778, 0.3644) 100–1000; (148.62, −4.75×10⁴, 0.357) 1000–5000; (−490.546, 57.87×10⁴, 0.46)
+  5000–10⁴; (−1662.5, 5.4167×10⁶, 0.5191) 10⁴–5×10⁴.
 - (U) **per-interval table** — one Cd(Re) point in each of the 8 bands with hand oracle:
   Re=0.05→24/0.05=480; Re=0.5→3.69+22.73/0.5+0.0903/0.25=3.69+45.46+0.361=49.51;
   Re=5→1.222+29.1667/5−3.8889/25=1.222+5.833−0.156=6.899;
@@ -190,7 +195,13 @@ Two oracle styles:
   Re=2000→0.357+148.62/2000−4.75e4/4e6=0.357+0.0743−0.0119=0.419;
   Re=7500→0.46−490.546/7500+5.787e5/5.625e7=0.46−0.0654+0.0103=0.405;
   Re=2e4→0.5191−1662.5/2e4+5.4167e6/4e8=0.5191−0.0831+0.0135=0.4495. tol 1e-6 (exact fit).
-- (U) continuity probe at each internal boundary (M&A intervals are ~continuous by design).
+- **Table 1** (p. 195: C_d experimental and calculated at 29 R_N from 0.1 to 5×10⁴) does not reproduce the
+  appendix at 13 of its 29 points beyond half a unit of its last printed digit (worst R_N 7000: 0.391 against
+  0.401732, 2.7 %; R_N 200: 0.771 against 0.786600, 2.0 %). The appendix is the paper's statement of the constants
+  (p. 195), so it is the pin; Table 1 is not an oracle.
+- **Range and edges.** The paper fits 0.1 < R_N < 5×10⁴ with strict inequalities on both sides of every edge; the
+  code takes each edge in the lower band (the fit jumps there by 5.3e-5 to 2.3e-2 relative, the largest at 10⁴; not
+  gated) and continues the last band past 5×10⁴ (C_d 0.488017 at 5×10⁴, 0.503017 at 10⁵, 0.517443 at 10⁶).
 
 ### 10 Carlson–Hoglund (Re,Ma)  [Carlson & Hoglund 1964, AIAA]
 - (U) incompressible recovery: Ma→0 ⇒ compressibility factor→? At Ma→0: `exp(-0.427/Ma^4.63)→0`
