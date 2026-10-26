@@ -37,6 +37,7 @@ tests/
 ├── tools/                        # make_box_case.py make_pe_case.py make_vie_case.py make_vortex_case.py make_wedge_case.py make_uniform_gas.py
 │                                 # make_psat_table.py proptab.py set_kv.py ks_ad.py
 │                                 # aggregate_report.py check_twosweep.py check_refusal.py check_threads_case.py compare_tec.py check_registry.cmake plot_curves.py mpi_scaling_smoke.sh
+├── bench/monolith/               # the timing harness for the monolith cluster (not a test; see its README.md)
 ├── support/                      # shared Fortran library (NOT a test family)
 │   ├── verif_norms.f90  verif_report.f90  verif_oracle.f90  verif_interp.f90  verif_dump.f90
 │   ├── verif_driver.f90          # the only module that touches IGLOO production

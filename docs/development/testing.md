@@ -66,6 +66,7 @@ tests/
 ├── vv_style.py                   # the single plot-style source for every SVG
 ├── common/                       # shared phase.txt and properties.dat + the MOSE nozzle solfile
 ├── tools/                        # make_box_case.py, make_vie_case.py, make_wedge_case.py, plot_curves.py, …
+├── bench/monolith/               # the timing harness for the monolith cluster (not a test; see its README.md)
 ├── support/                      # shared Fortran library (NOT a test family)
 │   ├── verif_norms.f90
 │   ├── verif_report.f90

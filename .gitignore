@@ -64,6 +64,9 @@ build_*/
 # by hand outside the build tree drops one wherever you happen to be.
 verif_*.csv
 
+# What tests/bench/monolith/sync-src-monolith.sh shipped (commits and dirty counts), written at each sync
+IGLOO-commit.txt
+
 # Test-case scratch artifacts (debug/gate runs)
 test/*/dbg*
 test/*/_reg_*
