@@ -31,7 +31,7 @@ ref-1blk-raw
 # conn-103 runs its 400 sibling into ref-400/ (tests/infrastructure/conn-103/check.py)
 ref-400
 # out-dcell3, out-off and rad-foreign-key run the plain drag-stokes case into ref-plain/ (their check.py);
-# foreign-keys and foreign-keys-db run their deck cut at [decoys] there
+# foreign-keys and foreign-keys-db run their deck cut at [decoys] there, zero-group-line the plain drag-stokes case
 ref-plain
 # body-evap-m2, body-evap-m4 and body-burn-m5 run their out-file = S layout into ref-S/ (tests/tools/body_source_check.py)
 ref-S

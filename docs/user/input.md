@@ -50,7 +50,9 @@ The `<groups>` summed over the material lines is the family count, and therefore
 copies `bc.txt` may carry (one copy feeds every family; see [Several families](boundary-conditions.md#several-families)).
 A line with 0 groups injects nothing and `bc.txt` carries no copy for it; named by `product=` on a burning line, it
 is that line's combustion product, with its own zone of `properties.dat` and one family after the injected ones
-([The burnout residue](../theory/combustion.md#the-burnout-residue)).
+([The burnout residue](../theory/combustion.md#the-burnout-residue)). Unnamed, it stays an inert material — it keeps
+its zone of `properties.dat`, its particle files hold only their headers — and the setup log names it:
+`>> [material <i>] <name>: 0 groups and no product= names it -- an inert material that injects nothing`.
 
 | Section | Role |
 |---------|------|
