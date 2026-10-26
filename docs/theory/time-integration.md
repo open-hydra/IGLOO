@@ -77,7 +77,8 @@ Each outer iteration covers one cell transit:
 
 - `safety = 0.99` — pre-scales `deltat` before each ODE call to avoid exact-boundary
   roundoff.
-- `err < 0` (solver failure, e.g. SDIRK4 B2 null-interval) → particle marked `gone`.
+- `err < 0` (solver failure, e.g. SDIRK4 B2 null-interval) → the particle reverts to its last accepted step, is
+  deposited up to it and is marked `gone`.
 - `exitLoop` is set true when the solver reaches XEND without an interrupt, or when the
   step is infinitesimally small (`dout < eps`), `deltat < dtMin = 1e-14`, or a NaN
   appears in `y`.
@@ -131,7 +132,7 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
 | :--- | :--- |
 | outer loop | a non-finite `deltat` estimate falls back to `tauFactor · taup` |
 | `solout::exitLoop` | `any(y /= y)` or `deltat /= deltat` interrupts the solver |
-| `ODEsystem` | a non-finite state after the solver returns is reverted to the last good accepted step and the particle marked `gone`; on this exit and on a solver failure (`err < 0`) a consuming droplet (models 2, 4, 5, 8) hands its remnant to the gas; model 8 first reverts a solver failure to the last accepted step, and with `residue=on` its cap becomes a parcel of the product instead ([The burnout residue](combustion.md#the-burnout-residue)) |
+| `ODEsystem` | a solver failure (`err < 0`) and a non-finite state after the solver returns are reverted to the last accepted step, for every model: the particle is deposited up to it and marked `gone`; on both exits a consuming droplet (models 2, 4, 5, 8) hands its remnant to the gas, and with `residue=on` the cap of model 8 becomes a parcel of the product instead, born from that state ([The burnout residue](combustion.md#the-burnout-residue)) |
 | `ODEsystem` | a `deltat` update outside `[dtMin, huge)` is a hard error |
 | RHS routines (models 2–8) | any non-finite RHS entry (unphysical Newton trial: $m \le 0$, $\dot n_p \le 0$) is replaced by a `1e30` penalty so SDIRK4 rejects the step |
 | models 6, 7 | no clamp or penalty on the frozen fraction $f$ within a phase: the solidification events own its crossings of 0 and 1; a transition lands inside the new phase (a freezing plateau at no more than `T-melt`, a melting solid at no more than $f = 1$) |
