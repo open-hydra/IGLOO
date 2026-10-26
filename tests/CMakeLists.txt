@@ -411,7 +411,7 @@ igloo_unit_test(test_radiation   standard/temperature "unit;standard;heat;radiat
 igloo_e2e_case(drag-stokes standard/drag-stokes "e2e;standard;drag")
 # drag-morsi, drag-chang: drag-stokes's box with 100 um particles (Re 60 -> 22 across the box), drag = Morsi-Alexander
 # or Chang: every printed row against an RK4 quadrature of the slip ODE with the law typed in check.py (Chang =
-# Clift-Gauvin, [Shim06] eq. 18; Morsi-Alexander's coded table, a regression pin). RED: Morsi-Alexander's band-4
+# Clift-Gauvin, [Shim06] eq. 18; Morsi-Alexander, [MA72]'s appendix). RED: Morsi-Alexander's band-4
 # a2 46.5 -> 45.6 (3.9e-2 m/s), the law swapped to Schiller-Naumann (5.3e-2 and 1.3e-3 m/s against about 5e-7).
 igloo_e2e_case(drag-morsi  standard/drag-morsi  "e2e;standard;drag")
 igloo_e2e_case(drag-chang  standard/drag-chang  "e2e;standard;drag")

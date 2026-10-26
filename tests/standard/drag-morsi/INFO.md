@@ -3,10 +3,10 @@
 ## Reference
 - **Chang:** the Clift-Gauvin correlation as Shimada et al. print it, `[Shim06]` eq. 18:
   `C_D = 24/Re (1 + 0.15 Re^0.687 + 0.0175 Re / (1 + 4.25e4 Re^-1.16))` — the drag law of every hydra JPL case.
-- **Morsi-Alexander:** `C_D = a1 + a2/Re + a3/Re²` on eight Re bands. Morsi and Alexander (1972) is not in hand:
-  the coefficients are the table IGLOO codes (`Lib_Drag.f90`), so `drag-morsi` is a **regression pin** of that
-  table along a trajectory, not a source check.
-- **Tags:** `[Shim06]` (see [../../REFERENCES.md](../../REFERENCES.md)).
+- **Morsi-Alexander:** `C_D = K1/Re + K2/Re² + K3` on eight Re bands, the constants of Morsi and Alexander's
+  appendix (`[MA72]`, printed p. 207); `check.py` types them as (a1, a2, a3) = (K3, K1, K2), and IGLOO's table
+  (`Lib_Drag.f90`) equals the appendix in all eight bands.
+- **Tags:** `[Shim06]`, `[MA72]` (see [../../REFERENCES.md](../../REFERENCES.md)).
 
 ## Fixture
 drag-stokes's box and uniform gas (`INPUT/solfile.tec` is drag-stokes's: ρ_g = 1.2 kg/m³, u_g = 10 m/s along +x,

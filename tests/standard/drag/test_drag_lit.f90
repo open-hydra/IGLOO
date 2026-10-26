@@ -13,8 +13,7 @@ program test_drag_lit
     !   DL5  Schlichting 24/Re (1 + 3Re/16) at Re 0.1, 1, 4 ([Shim06] eq. 14; [SP8039] Table I)
     !   DL6  Carlson-Hoglund against [Shim06] eq. 19 with C_D0 = Wen-Yu (eq. 16), Re 1..1000 x Ma 0.1..2;
     !        at Ma = 0 the compressibility factor is exactly 1 (Wen-Yu)
-    !   DL7  Morsi-Alexander, one Re per band, against the coefficient table as coded (a regression pin:
-    !        the 1972 paper is not in hand)
+    !   DL7  Morsi-Alexander, one Re per band, against [MA72]'s appendix (printed p. 207): K1/Re + K2/Re^2 + K3
     !   DL8  Chang and Clift-Gauvin against [Shim06] eq. 18 at Re 1..1000
     !   Closed forms typed here, 1e-14 relative.
     !
@@ -164,7 +163,7 @@ contains
     subroutine run_DL7(ok)
         logical, intent(inout) :: ok
         real(R8), parameter :: ReM(8) = [0.05_R8, 0.5_R8, 5._R8, 50._R8, 500._R8, 2000._R8, 7500._R8, 2.0e4_R8]
-        !> (a1, a2, a3) per band, as coded
+        !> (a1, a2, a3) = (K3, K1, K2) per band, [MA72] appendix
         real(R8), parameter :: A(3,8) = reshape([0._R8, 24._R8, 0._R8, &
             3.69_R8, 22.73_R8, 0.0903_R8,  1.222_R8, 29.1667_R8, -3.8889_R8,  0.6167_R8, 46.5_R8, -116.67_R8, &
             0.3644_R8, 98.33_R8, -2778._R8,  0.357_R8, 148.62_R8, -4.75e4_R8,  0.46_R8, -490.546_R8, 57.87e4_R8, &
@@ -178,7 +177,7 @@ contains
             err = max(err, abs(drag(ReM(i),0._R8,1.4_R8,1._R8,MORSI) - ref)/ref)
         end do
         tol = 1.0e-14_R8
-        pass = assert_lt('DL7 Morsi-Alexander, one Re per band (regression pin)', err, tol)
+        pass = assert_lt('DL7 Morsi-Alexander, one Re per band ([MA72] appendix)', err, tol)
         ok = ok .and. pass
         call append_row('DL7_morsi_alexander', 'Cd', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_DL7
