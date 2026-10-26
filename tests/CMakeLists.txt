@@ -429,7 +429,7 @@ igloo_e2e_case(body-force  standard/body-force  "e2e;standard;drag")
 igloo_e2e_case(body-force-z standard/body-force-z "e2e;standard;drag")
 igloo_e2e_case(conv-nu     standard/conv-nu     "e2e;standard;heat")
 # conv-nu-<law>: conv-nu's constant-slip state under JAXA2, JAXA3, JAXA4 and Kavanau-Drake (Ma = 5.2e-4 > 0): T on
-# the printed time against the exact exponential with the law as NASA-SP-8039 Table II / Shimada eq. 50 print it.
+# the printed time against the exact exponential with the law as NASA-SP-8039 Table II prints it.
 igloo_e2e_case(conv-nu-jaxa2 standard/conv-nu-jaxa2 "e2e;standard;heat")
 igloo_e2e_case(conv-nu-jaxa3 standard/conv-nu-jaxa3 "e2e;standard;heat")
 igloo_e2e_case(conv-nu-jaxa4 standard/conv-nu-jaxa4 "e2e;standard;heat")

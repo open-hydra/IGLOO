@@ -11,10 +11,10 @@ definitions, not its code). Nu is the law as its source prints it, typed here:
 
   JAXA2          2 + 0.370 Re^0.6 Pr^(1/3)                                          [SP8039] Table II, ref. 82
   JAXA3          2 + 0.459 Re^0.55 Pr^(1/3)                                         [SP8039] Table II, ref. 42
-  JAXA4          [(2 + 0.654 Re^(1/2) Pr^(1/3))^-1 + 3.42 Ma/(Re Pr)]^-1             [Shim06] eq. 50
+  JAXA4          [(2 + 0.654 Re^(1/2) Pr^(1/2))^-1 + 3.42 Ma/(Re Pr)]^-1             [SP8039] Table II, last row
   Kavanau-Drake  N0 / (1 + 3.42 (Ma/(Re Pr)) N0),  N0 = 2 + 0.459 Re^0.55 Pr^0.33    [SP8039] Table II, ref. 72
 
-(SP-8039's last row prints JAXA4 with Pr^(1/2); the code follows Shimada's eq. 50.) The rows are read by the names
+(Shimada 2006 eq. 50 prints JAXA4 with Pr^(1/3).) The rows are read by the names
 of their header; the clock is the printed parcel time (out-time = on, nine significant digits), not x/u_g, whose
 F12.6 print alone moves T by 3.3e-3 K at |T - T_g| = 100 K.
 
@@ -51,7 +51,7 @@ def nu_jaxa3(re, pr, ma):
 
 
 def nu_jaxa4(re, pr, ma):
-    return 1.0 / (1.0 / (2.0 + 0.654 * re ** 0.5 * pr ** THIRD) + 3.42 * ma / (re * pr))
+    return 1.0 / (1.0 / (2.0 + 0.654 * re ** 0.5 * pr ** 0.5) + 3.42 * ma / (re * pr))
 
 
 def nu_kd(re, pr, ma):

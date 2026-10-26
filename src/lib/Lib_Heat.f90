@@ -118,8 +118,8 @@ contains
     real(kind=R8) :: Nu
     real(R8), parameter :: toll=1e-20
 
-    !> 0.654 per Shimada2006 eq.50 / NASA-SP-8039
-    Nu  = ((2._R8+0.654_R8*Re**0.5_R8*Pr**(1._R8/3._R8))**(-1._I4) + 3.42_R8*Ma/(Re*Pr+toll))**(-1._I4)
+    !> SP-8039 Table II, the last row: 0.654 Re^(1/2) Pr^(1/2)
+    Nu  = ((2._R8+0.654_R8*Re**0.5_R8*Pr**0.5_R8)**(-1._I4) + 3.42_R8*Ma/(Re*Pr+toll))**(-1._I4)
 
   end function heat_JAXA_4
 

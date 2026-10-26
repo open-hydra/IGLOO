@@ -80,13 +80,11 @@ heat = JAXA4
 ```
 
 $$
-\mathrm{Nu} = \left[\frac{1}{2 + 0.654\,\mathrm{Re}^{0.5}\,\mathrm{Pr}^{1/3}} + \frac{3.42\,\mathrm{Ma}}{\mathrm{Re}\,\mathrm{Pr} + \varepsilon}\right]^{-1}
+\mathrm{Nu} = \left[\frac{1}{2 + 0.654\,\mathrm{Re}^{0.5}\,\mathrm{Pr}^{1/2}} + \frac{3.42\,\mathrm{Ma}}{\mathrm{Re}\,\mathrm{Pr} + \varepsilon}\right]^{-1}
 $$
 
-where $\varepsilon = 10^{-20}$ and the base coefficient $0.654$ follows Shimada 2006
-eq. 50 / NASA SP-8039.  The two sources differ on the Prandtl exponent: Shimada prints
-$\mathrm{Pr}^{1/3}$, the last row of SP-8039's Table II $\mathrm{Pr}^{1/2}$; the code keeps
-$\mathrm{Pr}^{1/3}$, the exponent of every other law of the table.  Compressibility-aware bridging form: the same
+where $\varepsilon = 10^{-20}$; the base $0.654$ and the exponent follow NASA SP-8039 Table II's last
+row; Shimada 2006 eq. 50 prints $\mathrm{Pr}^{1/3}$.  Compressibility-aware bridging form: the same
 $1/\mathrm{Nu} = 1/\mathrm{Nu}_0 + 3.42\,\mathrm{Ma}/(\mathrm{Re}\,\mathrm{Pr})$ structure as
 Kavanau–Drake, on a different incompressible base $\mathrm{Nu}_0$.
 
