@@ -45,6 +45,9 @@ Geometry / BCs:
   - --sym-face F: face F (1-6, not the outlet face 2) written as a symmetry plane, code 300, header only
     (bcDef reflects the parcel); --no-inlet: face 1 written 400, no inlet record (the parcels come from
     [IGLOO-BC] assigned positions).
+  - --periodic-y --periods P: the box P periods of Ly long along y, ny rows of thickness Ly/ny per period
+    (P*ny rows in all), the --wave-y wave repeated P times; the inlet face carries P*ny*nz cells and the
+    201 partner lines name rows P*ny and 1.
 
 Variable header is reused VERBATIM from the working nozzle solfile so the name-based
 gas import (allocation.f90 import_gas) maps identically. Vars 4-21 are cell-centered;
@@ -55,7 +58,7 @@ Usage:
                      [--nx NX] [--ny NY] [--nz NZ] [--overlap N [--shift S] [--rim]] [--families F]
                      [--stretch R] [--gradient G] [--zgradient G] [--wave-y A] [--rotate2 y]
                      [--outlet-code C] [--ug U] [--u2 U2] [--ygrade G] [--mesh-only] [--sym-face F]
-                     [--no-inlet] [--family-kt KT1,KT2,...] [--family-rp RP1,RP2,...]
+                     [--no-inlet] [--family-kt KT1,KT2,...] [--family-rp RP1,RP2,...] [--periods P]
         writes <out_dir>/solfile.tec and <out_dir>/bc.txt (and phase.txt with --families > 1)
         --kv : inlet velocity scaling  (v0 = kv*|u_g|; 1.0 => no drag slip, Re=0)
         --kt : inlet temperature scaling (Tp0 = kt*T_g; 1.0 => no thermal slip)
@@ -87,6 +90,8 @@ Usage:
         --mesh-only : write mesh.tec (ATLAS's mesh layout) only
         --sym-face : the face written as a symmetry plane (300), header only (default none)
         --no-inlet : face 1 written 400 instead of the inlet (401)
+        --periods : with --periodic-y, periods of Ly along y, ny rows each (default 1; P > 1 refuses --blocks 2,
+                  --overlap, --rotate2, --ygrade and --mesh-only)
         Defaults reproduce the drag-stokes case (kv=0.1, kt=1.0, rp=5.945e-6).
 """
 import argparse
@@ -198,9 +203,10 @@ def node_y(j, ny, ygrade, dy):
     return LY * (ygrade ** j - 1.0) / (ygrade ** ny - 1.0)
 
 
-def block_nodes(b, i0, ncx, ncy, sh, nx, ny, nz, stretch, rotated, ygrade):
-    """The node coordinates of block b along x, y and z (an axis-aligned box: one list per axis)."""
-    dx, dy, dz = LX / nx, LY / ny, LZ / nz
+def block_nodes(b, i0, ncx, ncy, sh, nx, ny, nz, stretch, rotated, ygrade, periods=1):
+    """The node coordinates of block b along x, y and z (an axis-aligned box: one list per axis);
+    ny rows over `periods` periods of LY."""
+    dx, dy, dz = LX / nx, LY / (ny // periods), LZ / nz
     xs = []
     for i in range(ncx + 1):
         if rotated:
@@ -218,12 +224,15 @@ def block_nodes(b, i0, ncx, ncy, sh, nx, ny, nz, stretch, rotated, ygrade):
 
 def write_solfile(path, blocks=1, tg=None, nx=NX, ny=NY, nz=NZ, overlap=0, shift=0.0, rim=False,
                   stretch=1.0, gradient=None, zgradient=0.0, wave_y=0.0, rotate2=None, ug=None, ygrade=1.0, xnodes=None,
-                  u2=None):
-    """xnodes: the x of every node along x of a one-block box (nx + 1 values), in place of the uniform ones."""
+                  u2=None, periods=1):
+    """xnodes: the x of every node along x of a one-block box (nx + 1 values), in place of the uniform ones;
+    periods: the ny rows span that many periods of LY."""
     layout = block_layout(blocks, nx, ny, overlap, shift, rim)
     if xnodes is not None and (blocks != 1 or len(xnodes) != nx + 1 or gradient or stretch != 1.0):
         raise ValueError("xnodes: one block, nx + 1 values, no gradient or stretch")
-    dx, dy, dz = LX / nx, LY / ny, LZ / nz
+    if periods < 1 or ny % periods:
+        raise ValueError("periods: >= 1 and a divisor of ny")
+    dx, dy, dz = LX / nx, LY / (ny // periods), LZ / nz
     with open(path, "w") as f:
         f.write(' TITLE="IGLOO verification: uniform-gas box"\n')
         f.write(VARLINE)
@@ -232,7 +241,7 @@ def write_solfile(path, blocks=1, tg=None, nx=NX, ny=NY, nz=NZ, overlap=0, shift
             nnode = I * J * K
             ncell = ncx * ncy * nz
             rotated = rotate2 == "y" and b == 1
-            xs, ys, zs = block_nodes(b, i0, ncx, ncy, sh, nx, ny, nz, stretch, rotated, ygrade)
+            xs, ys, zs = block_nodes(b, i0, ncx, ncy, sh, nx, ny, nz, stretch, rotated, ygrade, periods)
             if xnodes is not None:
                 xs = [xnodes[i0 + i] for i in range(ncx + 1)]
             f.write(f' Zone T="block: {b + 1}",I={I},J={J},K={K}\n')
@@ -425,6 +434,8 @@ def main():
                    help="with --families F > 1: F comma-separated kt values, one per family (default kt)")
     p.add_argument("--family-rp", default=None,
                    help="with --families F > 1: F comma-separated radii [m], one per family (default c*rp)")
+    p.add_argument("--periods", type=int, default=1,
+                   help="with --periodic-y: the box this many periods of Ly long, --ny rows each (default 1)")
     a = p.parse_args()
     fam_kt, fam_rp = None, None
     for opt, val in (("--family-kt", a.family_kt), ("--family-rp", a.family_rp)):
@@ -464,6 +475,12 @@ def main():
                                    or (a.sym_face == 1 and not a.no_inlet)):
         p.error("--sym-face needs --blocks 1, a face other than the outlet (2), no --periodic-y on faces 3/4, "
                 "and --no-inlet for face 1")
+    if a.periods < 1:
+        p.error("--periods must be >= 1")
+    if a.periods > 1 and (not a.periodic_y or a.blocks != 1 or a.overlap or a.rotate2 or a.ygrade != 1.0
+                          or a.mesh_only):
+        p.error("--periods P > 1 needs --periodic-y, and no --blocks 2, --overlap, --rotate2, --ygrade or --mesh-only")
+    nyt = a.ny * a.periods                   # rows along y over the whole box
     os.makedirs(a.out_dir, exist_ok=True)
     if a.mesh_only:
         if a.overlap or a.stretch != 1.0:
@@ -474,12 +491,12 @@ def main():
               + (", block 2 rotated about y" if a.rotate2 else ""))
         return
     I, J, K, nnode, ncell = write_solfile(os.path.join(a.out_dir, "solfile.tec"), a.blocks, a.tg,
-                                          nx=a.nx, ny=a.ny, nz=a.nz, overlap=a.overlap, shift=a.shift,
+                                          nx=a.nx, ny=nyt, nz=a.nz, overlap=a.overlap, shift=a.shift,
                                           rim=a.rim, stretch=a.stretch, gradient=a.gradient,
                                           zgradient=a.zgradient, wave_y=a.wave_y, rotate2=a.rotate2,
-                                          ug=a.ug, ygrade=a.ygrade, u2=a.u2)
+                                          ug=a.ug, ygrade=a.ygrade, u2=a.u2, periods=a.periods)
     n_inlet = write_bc(os.path.join(a.out_dir, "bc.txt"), a.kv, a.kt, a.rp, a.alpha,
-                       periodic_y=a.periodic_y, blocks=a.blocks, nx=a.nx, ny=a.ny, nz=a.nz,
+                       periodic_y=a.periodic_y, blocks=a.blocks, nx=a.nx, ny=nyt, nz=a.nz,
                        overlap=a.overlap, shift=a.shift, rim=a.rim, families=a.families,
                        outlet_code=a.outlet_code, rotate2=a.rotate2, sym_face=a.sym_face, no_inlet=a.no_inlet,
                        beta=a.beta, family_kt=fam_kt, family_rp=fam_rp)
@@ -497,11 +514,12 @@ def main():
           + ("; block 2 rotated 180 degrees about y" if a.rotate2 else "")
           + (f"; face {a.sym_face} symmetry (300)" if a.sym_face is not None else "")
           + ("; no inlet: face 1 wall (400)" if a.no_inlet else ""))
+    ly = a.periods * LY
     if a.stretch != 1.0:
         dx1 = node_x(1, a.nx, a.stretch, LX / a.nx)
-        print(f"     domain x[0,{LX}] y[0,{LY}] z[0,{LZ}]; dx={dx1*1e3:.4f}mm then {a.stretch*dx1*1e3:.4f}mm")
+        print(f"     domain x[0,{LX}] y[0,{ly}] z[0,{LZ}]; dx={dx1*1e3:.4f}mm then {a.stretch*dx1*1e3:.4f}mm")
     else:
-        print(f"     domain x[0,{LX}] y[0,{LY}] z[0,{LZ}]; dx={LX/a.nx*1e3:.2f}mm")
+        print(f"     domain x[0,{LX}] y[0,{ly}] z[0,{LZ}]; dx={LX/a.nx*1e3:.2f}mm")
     ug = 10.0 if a.ug is None else a.ug
     if not a.no_inlet:
         print(f"     inlet: kv={a.kv} (v0={a.kv*abs(ug):.3g} m/s)  kt={a.kt}  rp={a.rp} (d={2*a.rp*1e6:.3g} um)")
