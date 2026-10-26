@@ -39,6 +39,13 @@ contains
   end subroutine read_IGLOO_input
 
 
+  !> True when the option is set in this section (FiNeR's own presence test searches every section).
+  logical function inSection(section, option)
+    character(len=*), intent(in) :: section, option
+    inSection = fini%index(section_name=section, option_name=option) > 0
+  end function inSection
+
+
   !> [IGLOO-General]: phase name, gas file and order, output switches, print cadences, mdot-max,
   !  seed, mollification, body acceleration, probe IDs, planes.
   subroutine read_general(srcSwitch,eulSwitch,gasfile)
@@ -149,7 +156,7 @@ contains
       write(*,*) ' >> Field mollification OFF'
     endif
     !> body-accel = gx gy gz [m/s^2]: optional uniform body acceleration.
-    if (fini%has_option(option_name='body-accel')) then
+    if (inSection('IGLOO-General','body-accel')) then
       n = fini%count_values(section_name='IGLOO-General', option_name='body-accel')
       if (n /= 3) error stop '[ERROR] [IGLOO-General] body-accel: expected 3 values (gx gy gz) [m/s^2]'
       call fini%get(section_name='IGLOO-General', option_name='body-accel', val=bodyAccel, error=error)
@@ -159,7 +166,7 @@ contains
     srcBodyForce = sourceSwitch .and. bodyForce
 
     !> probe-ids: debug subset of particle IDs (IDs and a-b intervals); absent => all.
-    if (fini%has_option(option_name='probe-ids')) then
+    if (inSection('IGLOO-General','probe-ids')) then
       n = fini%count_values(section_name='IGLOO-General', option_name='probe-ids')
       if (n > 0) then
         block
@@ -188,22 +195,21 @@ contains
     !> plane-x = x1 x2 ... [m]: planes normal to x whose crossings planes-<mat>.dat records; absent = no file.
     planeOn = .false.
     if (allocated(planeX)) deallocate(planeX)
-    if (fini%has_option(option_name='plane-x')) then
+    if (inSection('IGLOO-General','plane-x')) then
       n = fini%count_values(section_name='IGLOO-General', option_name='plane-x')
-      if (n > 0) then
-        block
-          character(len=64) :: toks(n)
-          integer :: t, ios
-          call fini%get(section_name='IGLOO-General', option_name='plane-x', val=toks, error=error)
-          allocate(planeX(n))
-          do t = 1, n
-            read(toks(t), *, iostat=ios) planeX(t)
-            if (ios /= 0) error stop 'IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]'
-            if (.not. ieee_is_finite(planeX(t))) error stop 'IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]'
-          enddo
-          planeOn = .true.
-        end block
-      endif
+      if (n < 1) error stop 'IGLOO: [IGLOO-General] plane-x is empty'
+      block
+        character(len=64) :: toks(n)
+        integer :: t, ios
+        call fini%get(section_name='IGLOO-General', option_name='plane-x', val=toks, error=error)
+        allocate(planeX(n))
+        do t = 1, n
+          read(toks(t), *, iostat=ios) planeX(t)
+          if (ios /= 0) error stop 'IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]'
+          if (.not. ieee_is_finite(planeX(t))) error stop 'IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]'
+        enddo
+        planeOn = .true.
+      end block
     endif
 
   contains
@@ -555,21 +561,21 @@ contains
 
     nref = -1
 
-    if (fini%has_option(option_name='psat')) then
+    if (inSection('IGLOO-Properties','psat')) then
       n = fini%count_values(section_name='IGLOO-Properties', option_name='psat')
       if (nref < 0) nref = n
       if (n /= nref) error stop '[ERROR] [IGLOO-Properties] psat: size mismatch with other property vectors'
       allocate(ini_psat(n))
       call fini%get(section_name='IGLOO-Properties', option_name='psat', val=ini_psat, error=error)
     endif
-    if (fini%has_option(option_name='Mv')) then
+    if (inSection('IGLOO-Properties','Mv')) then
       n = fini%count_values(section_name='IGLOO-Properties', option_name='Mv')
       if (nref < 0) nref = n
       if (n /= nref) error stop '[ERROR] [IGLOO-Properties] Mv: size mismatch with other property vectors'
       allocate(ini_Mv(n))
       call fini%get(section_name='IGLOO-Properties', option_name='Mv', val=ini_Mv, error=error)
     endif
-    if (fini%has_option(option_name='Lv')) then
+    if (inSection('IGLOO-Properties','Lv')) then
       n = fini%count_values(section_name='IGLOO-Properties', option_name='Lv')
       if (nref < 0) nref = n
       if (n /= nref) error stop '[ERROR] [IGLOO-Properties] Lv: size mismatch with other property vectors'
@@ -577,8 +583,8 @@ contains
       call fini%get(section_name='IGLOO-Properties', option_name='Lv', val=ini_Lv, error=error)
     endif
     !> boiling-temperature or its alias Tboil (the names ICE reads too); both given is refused
-    hasBT = fini%index(section_name='IGLOO-Properties', option_name='boiling-temperature') > 0
-    hasTB = fini%index(section_name='IGLOO-Properties', option_name='Tboil') > 0
+    hasBT = inSection('IGLOO-Properties','boiling-temperature')
+    hasTB = inSection('IGLOO-Properties','Tboil')
     if (hasBT .and. hasTB) error stop '[ERROR] [IGLOO-Properties] give boiling-temperature or its alias Tboil, not both'
     if (hasBT .or. hasTB) then
       if (hasBT) then; keyTB = 'boiling-temperature'; else; keyTB = 'Tboil'; endif
@@ -588,35 +594,35 @@ contains
       allocate(ini_Tboil(n))
       call fini%get(section_name='IGLOO-Properties', option_name=keyTB, val=ini_Tboil, error=error)
     endif
-    if (fini%has_option(option_name='cpv')) then
+    if (inSection('IGLOO-Properties','cpv')) then
       n = fini%count_values(section_name='IGLOO-Properties', option_name='cpv')
       if (nref < 0) nref = n
       if (n /= nref) error stop '[ERROR] [IGLOO-Properties] cpv: size mismatch with other property vectors'
       allocate(ini_cpv(n))
       call fini%get(section_name='IGLOO-Properties', option_name='cpv', val=ini_cpv, error=error)
     endif
-    if (fini%has_option(option_name='Le')) then
+    if (inSection('IGLOO-Properties','Le')) then
       n = fini%count_values(section_name='IGLOO-Properties', option_name='Le')
       if (nref < 0) nref = n
       if (n /= nref) error stop '[ERROR] [IGLOO-Properties] Le: size mismatch with other property vectors'
       allocate(ini_Le(n))
       call fini%get(section_name='IGLOO-Properties', option_name='Le', val=ini_Le, error=error)
     endif
-    if (fini%has_option(option_name='Yinf')) then
+    if (inSection('IGLOO-Properties','Yinf')) then
       n = fini%count_values(section_name='IGLOO-Properties', option_name='Yinf')
       if (nref < 0) nref = n
       if (n /= nref) error stop '[ERROR] [IGLOO-Properties] Yinf: size mismatch with other property vectors'
       allocate(ini_Yinf(n))
       call fini%get(section_name='IGLOO-Properties', option_name='Yinf', val=ini_Yinf, error=error)
     endif
-    if (fini%has_option(option_name='sigma')) then
+    if (inSection('IGLOO-Properties','sigma')) then
       n = fini%count_values(section_name='IGLOO-Properties', option_name='sigma')
       if (nref < 0) nref = n
       if (n /= nref) error stop '[ERROR] [IGLOO-Properties] sigma: size mismatch with other property vectors'
       allocate(ini_sigma(n))
       call fini%get(section_name='IGLOO-Properties', option_name='sigma', val=ini_sigma, error=error)
     endif
-    if (fini%has_option(option_name='mu')) then
+    if (inSection('IGLOO-Properties','mu')) then
       n = fini%count_values(section_name='IGLOO-Properties', option_name='mu')
       if (nref < 0) nref = n
       if (n /= nref) error stop '[ERROR] [IGLOO-Properties] mu: size mismatch with other property vectors'
@@ -624,7 +630,7 @@ contains
       call fini%get(section_name='IGLOO-Properties', option_name='mu', val=ini_mu, error=error)
     endif
     !> emissivity: present in this section only (a coupled case carries ICE's [ICE-Physics] emissivity)
-    if (fini%index(section_name='IGLOO-Properties', option_name='emissivity') > 0) then
+    if (inSection('IGLOO-Properties','emissivity')) then
       n = fini%count_values(section_name='IGLOO-Properties', option_name='emissivity')
       if (nref < 0) nref = n
       if (n /= nref) error stop '[ERROR] [IGLOO-Properties] emissivity: size mismatch with other property vectors'
@@ -658,14 +664,14 @@ contains
 
     !> DB method: explicit particle positions (x, y, z) listed in [IGLOO-BC].
     method = 'DB'
-    if (fini%has_option(option_name='x').or. &
-        fini%has_option(option_name='y').or. &
-        fini%has_option(option_name='z')) then
-      if (fini%has_option(option_name='x')) then; xSize = fini%count_values(section_name='IGLOO-BC', option_name='x')
+    if (inSection('IGLOO-BC','x').or. &
+        inSection('IGLOO-BC','y').or. &
+        inSection('IGLOO-BC','z')) then
+      if (inSection('IGLOO-BC','x')) then; xSize = fini%count_values(section_name='IGLOO-BC', option_name='x')
         else; xSize = 0; endif
-      if (fini%has_option(option_name='y')) then; ySize = fini%count_values(section_name='IGLOO-BC', option_name='y')
+      if (inSection('IGLOO-BC','y')) then; ySize = fini%count_values(section_name='IGLOO-BC', option_name='y')
         else; ySize = 0; endif
-      if (fini%has_option(option_name='z')) then; zSize = fini%count_values(section_name='IGLOO-BC', option_name='z')
+      if (inSection('IGLOO-BC','z')) then; zSize = fini%count_values(section_name='IGLOO-BC', option_name='z')
         else; zSize = 0; endif
       condition = .true.
       if     (xSize>1) then
@@ -699,7 +705,7 @@ contains
           pos0(i,:) = [x(i), y(i), z(i)]
         enddo
 
-        if (.not.fini%has_option(option_name='mdot')) then
+        if (.not.inSection('IGLOO-BC','mdot')) then
           write(*,*) ' Define the mdot and diameter values associated to each particle'
           write(*,*) '  as two array of the same size of x, y (and eventually z)'
           error stop ( '[ERROR] Particles initialized via (x,y,z): specify mdot = ...' )
@@ -711,7 +717,7 @@ contains
                                       mdot(:) = fixVal; endif
         if (error/=0) error stop ( '[ERROR] Particles initialized via (x,y,z): specify mdot = ...' )
 
-        if (.not.fini%has_option(option_name='diam')) then
+        if (.not.inSection('IGLOO-BC','diam')) then
           write(*,*) ' Define the mdot and diameter values associated to each particle'
           write(*,*) '  as two array of the same size of x, y (and eventually z)'
           error stop ( '[ERROR] Particles initialized via (x,y,z): specify diam = ...' )
@@ -727,7 +733,7 @@ contains
         allocate(vel0 (1:maxSize,1:3))
         vel0 = 10._R8 * threshold 
 
-        if (fini%has_option(option_name='temp0')) then
+        if (inSection('IGLOO-BC','temp0')) then
           xSize = fini%count_values(section_name='IGLOO-BC', option_name='temp0')
           if     (xSize==maxSize) then; call fini%get(section_name='IGLOO-BC', option_name='temp0', val=temp0  , error=error)
           elseif (xSize==1)       then; call fini%get(section_name='IGLOO-BC', option_name='temp0', val=fixVal, error=error)
@@ -737,14 +743,14 @@ contains
           temp0(:) = 0._R8
         endif
 
-        if (fini%has_option(option_name='up').or. &
-            fini%has_option(option_name='vp').or. &
-            fini%has_option(option_name='wp')) then
-          if (fini%has_option(option_name='up')) then; xSize = fini%count_values(section_name='IGLOO-BC', option_name='up')
+        if (inSection('IGLOO-BC','up').or. &
+            inSection('IGLOO-BC','vp').or. &
+            inSection('IGLOO-BC','wp')) then
+          if (inSection('IGLOO-BC','up')) then; xSize = fini%count_values(section_name='IGLOO-BC', option_name='up')
             else; xSize = 0; endif
-          if (fini%has_option(option_name='vp')) then; ySize = fini%count_values(section_name='IGLOO-BC', option_name='vp')
+          if (inSection('IGLOO-BC','vp')) then; ySize = fini%count_values(section_name='IGLOO-BC', option_name='vp')
             else; ySize = 0; endif
-          if (fini%has_option(option_name='wp')) then; zSize = fini%count_values(section_name='IGLOO-BC', option_name='wp')
+          if (inSection('IGLOO-BC','wp')) then; zSize = fini%count_values(section_name='IGLOO-BC', option_name='wp')
             else; zSize = 0; endif
           condition = .true.
           if     (xSize>1) then
