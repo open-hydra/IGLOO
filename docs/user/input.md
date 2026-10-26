@@ -43,7 +43,7 @@ whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase
 `breakup`, `alpha-e`, ...), the solidification constants (`h-fus`, `cp-solid`, `T-melt`, `T-nuc`, `rho-solid`; see
 [Solidification](../theory/solidification.md#inputs)), the breakup constants (`<tag>-<key>`, as `KHRT-B1`; table under
 [`[IGLOO-Models]`](#igloo-models)) and the combustion constants (`K-burn`, `n-burn`, `X-eff`, `T-ign`, `beta-part`,
-`q-comb`, `xi-cap`, `product`, `residue`, `d-residue`; see [Metal Combustion](../theory/combustion.md#inputs)) are
+`q-comb`, `xi-cap`, `xi-ox0`, `product`, `residue`, `d-residue`; see [Metal Combustion](../theory/combustion.md#inputs)) are
 `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after
 `<name> <groups>` on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
 The `<groups>` summed over the material lines is the family count, and therefore the number of table

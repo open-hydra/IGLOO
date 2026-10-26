@@ -84,6 +84,8 @@ output written).
 | `refuse-cap-product` | own `INPUT/phase.txt`: `burn-box`'s line with `xi-cap=0.2` and no `product`; `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `xi-cap > 0 requires product = a 0-group material of the phase file` |
 | `refuse-cap-varcp` | `combustion/burn-box-cap`'s `phase.txt` (symlinked) and its own ten-row two-zone table, the `OX` zone's `Cp` rising 0.01 J/(kg·K) per K (the enthalpy its integral, so the table itself is valid; `burn-box-cap/make_table.py varcp`) | `xi-cap > 0 requires a constant-cp, constant-density material and product` |
 | `refuse-cap-relative` | as above with a relative ten-row table (an `Enthalpy` column, `make_table.py relative`) | `xi-cap > 0 requires the absolute enthalpy datum (an Enthalpy_abs column)` |
+| `refuse-ox0-range` | own `INPUT/phase.txt`: `combustion/burn-box-ox0`'s two lines with `xi-ox0=1.0` (a particle without metal); `burn-box`'s `bc.txt`/`solfile.tec`, `burn-box-cap`'s table; `refusals/cap-product`'s settings | `xi-ox0 must lie in [0, 1)` |
+| `refuse-ox0-nocap` | own `INPUT/phase.txt`: `burn-box`'s line with `xi-ox0=0.1` (no `xi-cap`, no product line); `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `refusals/cap-product`'s settings | `xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0` |
 | `refuse-brk-sigma` | `tab-e2e` (`INPUT/` symlinked) without `[IGLOO-Properties] sigma` | `Breakup requires sigma` |
 | `refuse-brk-mu` | `tab-e2e` without `mu` | `Breakup requires mu` |
 | `refuse-sigma-size` | `tab-e2e` with `Le = 1.0` added and `sigma = 0.072 0.072`, `mu = 1.0e-3 1.0e-3`: the vectors are read in the order psat, Mv, Lv, Tboil, cpv, Le, Yinf, sigma, mu and the first present (`Le`, one value) sets the length | `sigma: size mismatch with other property vectors` |
@@ -97,7 +99,7 @@ output written).
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All seventy-three exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All seventy-five exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
@@ -120,7 +122,11 @@ pass, which never reads the orientation integers: both run to "Stop condition" w
 **The three oxide-cap cases are RED** on a reader that does not know the `product` token: `refuse-cap-product`
 (whose line names no product) runs the burn law to "Stop condition" with exit 0 and writes its output, the other two
 stop at `unknown per-material key` (exit 128, not their payload); with its check taken out of `resolve_products`
-each of the three runs to "Stop condition" with exit 0. **The three `properties.dat` cases are
+each of the three runs to "Stop condition" with exit 0. **The two oxide-fraction cases are RED** on a reader
+that does not know the `xi-ox0` token, which stops both at `unknown per-material key` (exit 128, not their
+payload); with its check taken out of `resolve_products`, `refuse-ox0-nocap` runs the burn law to "Stop
+condition" with exit 0 and writes its output, and so does `refuse-ox0-range`, its stretch printed as 0.
+**The three `properties.dat` cases are
 RED** on a reader that takes three columns by position, which runs each of them to "All particles out of
 domain" with exit 0 — the two-enthalpy header as an absolute datum with `hOff = 0`, the typed row with
 its enthalpy undefined (ORION keeps only the last row's read status), and the decreasing `Psat` column
