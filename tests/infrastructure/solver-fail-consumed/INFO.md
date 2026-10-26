@@ -22,8 +22,9 @@ mass) would read that as a coupling bug it cannot distinguish from a real one.
 
 **`tc-hexadecane` does not reach the `err < 0` branch**: its boiling parcels burn out cleanly
 through the normal branch (the `rhsEvaporation` scrub; without it they take the *non-finite*
-exit). The branch's coverage is this case and its siblings `solver-fail-consumed-m4` (model 4)
-and `solver-fail-midway` (a failure mid-trajectory, model 1).
+exit). The branch's coverage is this case and its siblings `solver-fail-consumed-m4` (model 4),
+`solver-fail-midway` (a failure mid-trajectory, model 1) and `solver-fail-refine` (a failure on a
+refinement call, model 1).
 
 ## Fixture
 `INPUT/` symlinks `evaporation/tc-hexadecane/INPUT` whole. `input.ini` is tc-hexadecane's

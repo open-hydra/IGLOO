@@ -228,7 +228,7 @@ contains
     do while (part%time<tEnd.and.iter<maxIter)
       iter = iter+1
       call part%initializeCell(eulerSwitch)
-      !> Only the segment finalize sets these: a segment that never finalizes deposits nothing.
+      !> Set by the segment finalize or a revert to the last accepted step: a segment that ends neither way deposits nothing.
       part%deltaL = 0._R8; part%Tstay = 0._R8
       if (eulerSwitch) part%intE = 0._R8
       if (sourceSwitch) call part%computeSource(massIn,Pin,Ein)
@@ -678,14 +678,12 @@ contains
         part%gone = .true.
         !> Consumption models hand the remnant to the gas, as on the non-finite exit below.
         if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) consumed = .true.
-        !> Model 8: back to the last accepted step, the state its residue starts from.
-        if (mod_model == 8) then
-          part%stateVar = oldLocal
-          part%time     = timeLocal
-          part%oldState = oldLocal
-          call part%updatePart(rhoTab,hTab,eulerSwitch)
-          part%Tstay = timeLocal - tStart
-        endif
+        !> Back to the last accepted step: the exit record and the deposits carry that progress.
+        part%stateVar = oldLocal
+        part%time     = timeLocal
+        part%oldState = oldLocal
+        call part%updatePart(rhoTab,hTab,eulerSwitch)
+        part%Tstay = timeLocal - tStart
         return
       endif
       !> Burnout: the droplet was consumed on a still-good state; falls through to the normal finalize.
