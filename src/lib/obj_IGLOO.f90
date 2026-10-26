@@ -494,7 +494,13 @@ contains
                 call ptmp%resolveInjectionRate(self%geoblock, self%gasblock)
                 !> residues per parent droplet: one, or the cap's mass over a residue's at d-residue
                 rRes = 1._R8
-                if (pgr%dRes > 0._R8) rRes = pgr%xiCap*nuOx*ptmp%rho*ptmp%d**3/(pgr%rhoRes*pgr%dRes**3)
+                if (pgr%xiOx0 > 0._R8) then
+                  !> the cap at burnout with its initial oxide, m_p0 (x0 + xi nu (1 - x0)), over a residue's
+                  if (pgr%dRes > 0._R8) rRes = (pgr%xiOx0 + pgr%xiCap*nuOx*(1._R8 - pgr%xiOx0))*ptmp%d**3 / &
+                    (((1._R8 - pgr%xiOx0)/ptmp%rho + pgr%xiOx0/pgr%rhoRes)*pgr%rhoRes*pgr%dRes**3)
+                else
+                  if (pgr%dRes > 0._R8) rRes = pgr%xiCap*nuOx*ptmp%rho*ptmp%d**3/(pgr%rhoRes*pgr%dRes**3)
+                endif
                 if (ptmp%npdot > 0._R8) Ndot = Ndot + ptmp%npdot*rRes
                 vsp = norm2(ptmp%stateVar(4:6))
                 if (vsp < threshold) then; Vsum = Vsum + vsp; nValid = nValid + 1; endif

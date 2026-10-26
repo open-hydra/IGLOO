@@ -111,6 +111,7 @@ module IGLOO_particles
     real(R8)     :: Xeff       = 0._R8  !> effective oxidizer fraction
     real(R8)     :: betaPart   = 0._R8  !> heat-partition fraction of q-comb to the particle
     real(R8)     :: xiCap      = 0._R8  !> oxide-cap fraction: the oxide formed by the burn retained on the drop
+    real(R8)     :: xiOx0      = 0._R8  !> oxide mass fraction of the injected particle (model 8)
     real(R8)     :: Tign       = 0._R8  !> ignition temperature [K]
     real(R8)     :: Tmelt      = 2327._R8 !> melt temperature [K], default alumina (solidification)
     real(R8)     :: hFus       = 0._R8  !> heat of fusion [J/kg] (solidification)
@@ -138,6 +139,7 @@ module IGLOO_particles
     procedure, pass(self) :: initializePart
     !> self properties computing
     procedure, pass(self) :: computeMass
+    procedure, pass(self) :: capInjMass
     procedure, pass(self) :: computeSource
     procedure, pass(self) :: resolveInjectionRate
   end type obj_particle
@@ -156,6 +158,17 @@ contains
   end subroutine computeMass
 
 
+  !> The whole particle's mass at its diameter: metal and initial cap at the equal volume.
+  pure function capInjMass(self) result(m)
+    implicit none
+    class(obj_particle), intent(in) :: self
+    real(R8) :: m
+
+    m = pi/6._R8*self%d**3._R8/((1._R8 - self%xiOx0)/self%rho + self%xiOx0/self%rhoRes)
+
+  end function capInjMass
+
+
   !> Number rate npdot = mdot/m of this stream without the geometric cell search (run on a
   !  throwaway copy); BC streams take mdot from their BC cell via initializePart.
   subroutine resolveInjectionRate(self, block, gasblock)
@@ -169,7 +182,11 @@ contains
       call self%initializePart(block, gasblock)   ! mdot (and v,tp) from the BC cell; no search
     endif
     if (self%rho > 0._R8 .and. self%d > 0._R8) then
-      self%npdot = self%mdot / (pi/6._R8 * self%rho * self%d**3)
+      if (self%model == 8 .and. self%xiOx0 > 0._R8) then
+        self%npdot = self%mdot / self%capInjMass()
+      else
+        self%npdot = self%mdot / (pi/6._R8 * self%rho * self%d**3)
+      endif
     else
       self%npdot = 0._R8                            ! varRho (rho unset here) / degenerate => skip
     endif

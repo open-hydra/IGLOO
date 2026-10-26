@@ -5,7 +5,7 @@ module IGLOO_Lib_Combustion
     implicit none
     private
     public :: becksteadRate
-    public :: buildLobeTable, lobeF, capStretch
+    public :: buildLobeTable, lobeF, capStretch, capStretchX0
 
     !> Metal parameter slots; the order is mirrored by Lib_RHS ind_mb../nmetal.
     integer(I4), parameter, public :: nmp = 12
@@ -156,5 +156,25 @@ contains
         c = c/real(NSTRETCH, R8)
 
     end function capStretch
+
+    !> The stretch with an initial cap: c = (d_Al0/d_p0)^n int_0^1 ds/F(f_ox(s)), so t_b = d_p0^n/K_eff.
+    pure function capStretchX0(xi, n, x0, rhoAl, rhoRes) result(c)
+        implicit none
+        real(R8), intent(in) :: xi, n, x0, rhoAl, rhoRes
+        real(R8) :: c, s, x, fox, r0
+        integer  :: k
+
+        r0 = x0/(1._R8 - x0)
+        c  = 0._R8
+        do k = 0, NSTRETCH - 1
+            s   = (real(k, R8) + 0.5_R8)/real(NSTRETCH, R8)
+            x   = s**(3._R8/n)
+            fox = (r0 + xi*nuOx*(1._R8 - x))/(x + r0 + xi*nuOx*(1._R8 - x))
+            c   = c + 1._R8/lobeF(fox)
+        enddo
+        c = c/real(NSTRETCH, R8)
+        c = c*((1._R8 - x0)/rhoAl/((1._R8 - x0)/rhoAl + x0/rhoRes))**(n/3._R8)
+
+    end function capStretchX0
 
 end module IGLOO_Lib_Combustion

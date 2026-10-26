@@ -420,7 +420,7 @@ contains
   subroutine resolve_products(material)
     use IGLOO_variables,      only: nm
     use IGLOO_data_phases,    only: obj_material
-    use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch
+    use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch, capStretchX0
     implicit none
     type(obj_material), intent(inout) :: material(:)
     integer :: i, j, p
@@ -428,6 +428,9 @@ contains
     do i = 1, nm
       associate(mat => material(i))
       if (mat%xiCap < 0._R8 .or. mat%xiCap > 1._R8) error stop '[ERROR] xi-cap must lie in [0, 1]'
+      if (mat%xiOx0 < 0._R8 .or. mat%xiOx0 >= 1._R8) error stop '[ERROR] xi-ox0 must lie in [0, 1)'
+      if (mat%xiOx0 > 0._R8 .and. .not. (mat%combSelect > 0 .and. mat%xiCap > 0._R8)) &
+        error stop '[ERROR] xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0'
       if ((len_trim(mat%productName) > 0 .or. mat%resOn .or. mat%dRes > 0._R8) .and. &
           .not. (mat%combSelect > 0 .and. mat%xiCap > 0._R8)) &
         error stop '[ERROR] product, residue and d-residue require combustion=Beckstead and xi-cap > 0'
@@ -451,9 +454,15 @@ contains
         mat%cpRes   = material(p)%cp
         mat%hOffRes = material(p)%hOff
         call buildLobeTable()
-        mat%cStretch = capStretch(mat%xiCap, mat%nBurn)
-        write(*,'(a,i0,a,f9.6)') '  >> [material ', i, '] oxide cap on product '//trim(mat%productName)// &
-                                 ': stretch c = ', mat%cStretch
+        if (mat%xiOx0 > 0._R8) then
+          mat%cStretch = capStretchX0(mat%xiCap, mat%nBurn, mat%xiOx0, mat%rho, mat%rhoRes)
+          write(*,'(a,i0,a,f9.6,a,f6.4)') '  >> [material ', i, '] oxide cap on product '//trim(mat%productName)// &
+                                          ': stretch c = ', mat%cStretch, ' from xi-ox0 = ', mat%xiOx0
+        else
+          mat%cStretch = capStretch(mat%xiCap, mat%nBurn)
+          write(*,'(a,i0,a,f9.6)') '  >> [material ', i, '] oxide cap on product '//trim(mat%productName)// &
+                                   ': stretch c = ', mat%cStretch
+        endif
       endif
       if (mat%dRes < 0._R8 .or. (mat%dRes > 0._R8 .and. .not. mat%resOn)) &
         error stop '[ERROR] d-residue must be >= 0, and > 0 only with residue=on'

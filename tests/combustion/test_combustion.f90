@@ -22,10 +22,11 @@ program test_combustion
     !   CB9  lobeF at ten points of f_ox against Gallier's exposed-surface factor at 2570 K,
     !        typed here, and decreasing over 1001 points. [Gal21]
     !   CB10 capStretch(0.2, 1.8) = int_0^1 ds/F, the stretch that keeps Beckstead's burn time.
+    !   CB11 capStretchX0(0.2, 1.8, 0.1): the stretch with an initial cap.
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_Lib_Combustion, only: becksteadRate, nmp, imKb, imN, imXe, imBeta, &
-                                    imTig, imQc, aXeff, nuOx, buildLobeTable, lobeF, capStretch
+                                    imTig, imQc, aXeff, nuOx, buildLobeTable, lobeF, capStretch, capStretchX0
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
     use verif_dump,   only: dump_curve
@@ -62,6 +63,7 @@ program test_combustion
     call run_CB8(ok_all)
     call run_CB9(ok_all)
     call run_CB10(ok_all)
+    call run_CB11(ok_all)
 
     call dump_CB2()
     call dump_CB3()
@@ -349,6 +351,19 @@ contains
         ok = ok .and. pass
         call append_row('CB10_stretch', 'c', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_CB10
+
+    subroutine run_CB11(ok)
+        !> the stretch with an initial cap (x0 = 0.1, rho_Al 2950, rho_res 3950) against (d_Al0/d_p0)^n int_0^1 ds/F
+        logical, intent(inout) :: ok
+        real(R8) :: c, err, tol
+        logical  :: pass
+        c = capStretchX0(0.2_R8, 1.8_R8, 0.1_R8, 2950._R8, 3950._R8)
+        err = abs(c - 1.388383_R8)/1.388383_R8
+        tol = 1.0e-5_R8
+        pass = assert_lt('CB11 capStretchX0(0.2, 1.8, 0.1) vs 1.388383, relative', err, tol)
+        ok = ok .and. pass
+        call append_row('CB11_stretch_x0', 'c', err, err, 0._R8, 0._R8, tol, pass)
+    end subroutine run_CB11
 
     !> Beckstead (2005) burn-time correlation at p=1 atm, T0=300 K, SI seconds out
     pure function tb_corr(aC, d_um, xeff_) result(t_s)
