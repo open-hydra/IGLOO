@@ -96,13 +96,14 @@ output written).
 | `refuse-bc-empty-payload` | own `INPUT/bc.txt`: `drag-stokes`'s with the first inlet payload line empty (`make_bc_refusals.py`) | `IGLOO: bc.txt inlet payload line is empty` |
 | `refuse-body-accel` | `body-force` (`INPUT/` symlinked) with `body-accel = 0.0 -200.0` | `body-accel: expected 3 values (gx gy gz)` |
 | `refuse-plane-x` | `INPUT/` symlinked; `plane-x = abc` | `IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]` |
+| `refuse-plane-x-empty` | `INPUT/` symlinked; `plane-x =` with nothing after the `=` | `IGLOO: [IGLOO-General] plane-x is empty` |
 | `refuse-krho-sum` | own `INPUT/phase.txt` `A 3` (three families of drag-stokes's material); drag-stokes's one-copy `bc.txt` and `solfile.tec`, `common/properties.dat`: the one copy feeds `krho` 0.34 to every family, a sum of 1.02 on each of the 25 inlet cells | `IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1` — refused in `read_cdp_bc_file` after the file is read, the cell, its sum and its smallest `krho` printed first |
 | `refuse-krho-negative` | own `INPUT/bc.txt`: `drag-stokes`'s with every inlet `krho` negated (`make_bc_refusals.py`) | the same payload (smallest `krho` −0.34) |
 | `refuse-gas-no-density` | own `INPUT/solfile.tec`: a 2×2×2 box (`tools/make_box_case.py --nx 2 --ny 2 --nz 2`) whose density variable `"Roi( 1 )"` is renamed `"Q( 1 )"` (`python3 make_gas_refusals.py`, run from this directory); drag-stokes's `phase.txt`, `properties.dat` and `bc.txt` symlinked (the stop comes before the boundary file is read) | `IGLOO: the gas file has no density variable (Roi(s) or rho(s))` — refused at the gas import (`allocation.f90` `import_gas`), the block named first |
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All seventy-eight exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All seventy-nine exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
@@ -166,7 +167,8 @@ later stop with another payload (`mu: size mismatch`, `mu: size /= number of mat
 **`refuse-breakup-token-material` is RED** on a reader that knows no `breakup` token on a material line: it stops
 at `IGLOO: unknown per-material key in the phase file`, not its payload. **`refuse-plane-x` is RED** on a solver that
 does not read `plane-x` (an unknown `[IGLOO-General]` key is ignored): it runs to "Stop condition" with exit 0, no
-payload, and writes three `.dat` files.
+payload, and writes three `.dat` files. **`refuse-plane-x-empty` is RED** on a reader that skips a `plane-x` of no
+value: it runs to "Stop condition" with exit 0 and writes three `.dat` files and no planes file.
 
 **Not here.** The mixed-Nk refusal (`allocation.f90`, `IGLOO: mixed 2D/3D blocks are not supported`)
 needs a two-zone `solfile.tec`; it is verified on a scratch fixture only and has no case.

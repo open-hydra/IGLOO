@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (305 in a serial build: 253 e2e + 51 unit incl. `self_test`,
+One row per registered CTest entry (308 in a serial build: 256 e2e + 51 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 27 `mpi-*`
-rows in their own section, 332).
+rows in their own section, 335).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,13 +30,13 @@ Columns:
 
 ---
 
-## Shared box fixture (80 of 153 e2e fixtures)
+## Shared box fixture (82 of 155 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
 writes with its defaults.
 
-Eighty fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
+Eighty-two fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
 once here, referenced as **"shared box"** below. The other seventy-three:
@@ -222,6 +222,8 @@ oracle possible.
 | **inj-dsdegen** | — (inputs, conservation) | *the degeneracy floor* — no parcel from an inlet cell thinner than `ds-degen` along its face: `inj-pack`'s J0–J3 on graded rows, and J6 none from rows 1–2 (1.61 and 3.23 mm against 5 mm), one from every cell of rows 3–5. RED with the size test of `injViable` removed: rows 1–2 inject | own `solfile.tec` (`make_box_case.py --ygrade 2`: rows 1.61 … 25.8 mm), `drag-stokes`'s `bc.txt` | inlet-face 401; `ds = 10`, `ds-degen = 0.5`; `out-time` |
 | **inj-edge** | infrastructure (injection-cell contract) | *behavioral* — no reference curve. The 3D advancing front at `ds = 0.25` cm puts injection points on the inlet cells' edges, the edges of the inlet face included, where rounding leaves a point a few 1e-18 m outside the box. Asserts E1 every one of the run log's parcels leaves at x = 0.15, E2 no parcel reported in no cell, out of the domain at injection, stuck or without progress and an empty `run_err.txt`, E3 more parcels than inlet cells (472 of 25). RED without the rule: SIGSEGV (13 points outside every cell's bounding box, the parcel left with block 0), 5 exits; with the no-cell guard alone 13 parcels not integrated, 459 exits; with the own-cell rule but exact boxes the 13 lost at their first crossing | shared box (`INPUT/` symlinks `standard/drag-stokes/INPUT`) | `drag-stokes`' conditions with `ds = 0.25` (cm) in place of 10: inlet-face 401, κ_ρ=0.34, κ_v=0.1, d=11.89 µm; outlet + walls |
 | **inj-edge-payload** | infrastructure (injection-cell contract) | *behavioral* — every expectation from `INPUT/bc.txt`: P1 every parcel's first trajectory row moves at its own inlet row's κ_v·\|U\| (row 2 = y 1–2 cm, lattice points on its edges with rows 1 and 3, 1 m/s; rows 1 and 3, 2 m/s), P2 Σ exit ṁ = Σ κ_ρ/(1−κ_ρ) ρ U A over the inlet cells to 1e-5, W1 every exit at x = 0.15, W2 ≥1 row-2 parcel on a row edge (12). RED when the search locates an injected parcel: the 9 row-2 parcels on y = 2 cm start in row 3's cell (2 m/s), exit mass flow +2.778e-2; GREEN 112/112, 1.0e-7 | shared box (`INPUT/solfile.tec` symlinked from `standard/drag-stokes`) | own `bc.txt` (`make_bc.py` from drag-stokes's): rows m = 1 and 3 κ_ρ=0.68, κ_v=0.2; rows 2, 4, 5 κ_ρ=0.34, κ_v=0.1; row 2 a per-cell `ds` of 2.5 mm (column 9), the other cells one centred parcel (global `ds = 10` cm); 112 parcels |
+| **foreign-keys** | — (input contract: each solver reads its own sections) | *plain run* — `drag-stokes`'s deck plus a last `[decoys]` section holding every key IGLOO tests for presence on the boundary-injection path (`body-accel`, `probe-ids`, `plane-x`; `psat`, `Mv`, `Lv`, `cpv`, `Le`, `Yinf`, `sigma`, `mu`; `x`, `y`, `z`), each with a valid value: K1 the stop condition, K2 the same `.dat` files equal to the run of the deck cut at `[decoys]` (by `check.py` into `ref-plain/`) as sorted multisets of lines, K3 `source.tec` within 1e-12 of the field scale (measured 0), K4 `run_out.txt` equal as a sorted multiset. RED with the presence tests by option name alone, in any section: setup stops at `body-accel: expected 3 values` (exit 128); one class at a time `mu: size /= number of materials`, `x` → `specify mdot`, `plane-x` → `plane-x is empty`; `probe-ids` reads nothing (structural witness: no `has_option` in `src/lib`) | shared box (`INPUT/` symlinks `standard/drag-stokes/INPUT`) | as `drag-stokes` |
+| **foreign-keys-db** | — (input contract: each solver reads its own sections) | *plain run* — `db-injection`'s deck with `[IGLOO-BC]` holding the positions, `diam` and `mdot`, and a last `[decoys]` section holding the optional DB keys `temp0`, `up`, `vp`, `wp`: K1–K4 as `foreign-keys` (`check.py` its symlink). RED with the presence tests by option name alone: setup stops at `wrong length of temperature array` (exit 128); `up` alone starts the parcels at rest instead of at the gas velocity (K2 575, 88, 10 lines in one run only; K3 8.2e-4) | shared box (`INPUT/` symlinks `db-injection/INPUT`) | **assigned-position** (DB), five parcels as `db-injection`, at the gas velocity and temperature |
 | **ini-comment-eq** | infrastructure (INI parser contract) | *behavioral* — no reference curve. `drag-stokes`' own `input.ini` with one `;` comment line carrying an `=` inserted inside `[IGLOO-General]`, right after `gas-file`; the oracle is the three keys that follow it. Asserts a clean stderr, `gas-order = 1` (no `Defaulting to 2nd order`), `out-file = S` by its **positive** log witness ` >> Output field: gas coupling source` (an absence-only check passes on a run that never read the file), `source.tec` written with no `euler1.tec`, and 25 exit rows. Pins that an in-section inline comment is inert, i.e. that the in-tree FiNeR and hydra's (`--include-finer`) parse the same file identically | shared box (`INPUT/` symlinks `standard/drag-stokes/INPUT`) | `drag-stokes`' conditions verbatim (inlet-face 401, κ_ρ=0.34, κ_v=0.1, d=11.89 µm, ρ_p=2950, Stokes drag, `gas-order = 1`, `out-file = S`) plus the single added comment line. Its **preamble** keeps seven `=`-bearing `;` lines: those precede the first `[`, so they are outside every section and inert under either parser — the trap is in-section only |
 | **solver-fail-consumed** | infrastructure (integration exit contract) | *behavioral* — no reference curve. A parcel deleted because `Run_ODESolver` returns `err < 0` must still hand its remaining mass to the gas for consumption models 2/4/5/8, as the non-finite exit beside it does; otherwise the remnant leaves the mass balance. Asserts the branch actually fired (25 `Run_ODESolver err=` lines — a positive witness), that no parcel took the non-finite exit instead, 25 exit rows, `Σ wdot` = `Σ npdot·m_inj` to 1e-5, and every exit record's boundary code `bc` = 0 (ended inside the domain). **The case forces that branch** (`solver-fail-consumed-m4` and `solver-fail-midway` force the same exit under models 4 and 1): with the `rhsEvaporation` scrub, tc-hexadecane itself burns out cleanly | `evaporation/tc-hexadecane`'s case (`INPUT/` symlinked whole) | tc-hexadecane's conditions with the ODE tolerances at **1e-30**, below double-precision resolution, so SDIRK4 fails on the first step of every parcel. All 25 then die at injection carrying their FULL mass ⇒ the source total is all-or-nothing (RED 0.0 / GREEN the whole stream). The 100 % remnant is also what makes the cost of the contract visible |
 | **solver-fail-consumed-m4** | infrastructure (integration exit contract, model 4) | as `solver-fail-consumed` (its `check.py`) with `breakup=Reitz-Diawakar` added: the `err < 0` exit hands a model-4 parcel's remnant to the gas (resid 2.941e-7), every `bc` = 0. RED with model 4 not a consumption model on that exit: Σ`wdot` = 0, resid 1.0 | as `tc-hexadecane` | as `solver-fail-consumed` + `breakup=Reitz-Diawakar` (σ 0.072, μ_l 1e-3) |
@@ -336,6 +338,7 @@ oracle possible.
 | **refuse-bc-empty-payload** | — (kind 8, refusal) | *setup refusal*: the first inlet payload line empty (`refusals/make_bc_refusals.py`) → `IGLOO: bc.txt inlet payload line is empty` | as `drag-stokes` | own `bc.txt` |
 | **refuse-body-accel** | — (kind 8, refusal) | *setup refusal*: `body-accel = 0.0 -200.0` → `body-accel: expected 3 values (gx gy gz)` | as `body-force` | as `body-force` |
 | **refuse-plane-x** | — (kind 8, refusal) | *setup refusal*: `plane-x = abc` → `IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]` (RED on a solver that does not read the key: exit 0, three `.dat` files) | as `drag-stokes` | as `drag-stokes` |
+| **refuse-plane-x-empty** | — (kind 8, refusal) | *setup refusal*: `plane-x =` with no value → `IGLOO: [IGLOO-General] plane-x is empty` (RED on a reader that skips a key of no value: exit 0, three `.dat` files, no planes file) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-krho-sum** | — (kind 8, refusal) | *setup refusal*: three families (`A 3`) on drag-stokes's one-copy `bc.txt`, `krho` 0.34 each, a sum of 1.02 per inlet cell → `IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1`, the cell, its sum and its smallest `krho` printed first (RED on a reader without the check: exit 0, ṁ = 0.34/(1 − 1.02) · 1.2e-3 = −2.04e-2 kg/s per parcel, three `.dat` files) | as `drag-stokes` | `phase.txt` `A 3`; drag-stokes's `bc.txt` |
 | **refuse-krho-negative** | — (kind 8, refusal) | *setup refusal*: every inlet `krho` negated (`refusals/make_bc_refusals.py`) → the same payload (RED on a reader without the check: exit 0, ṁ = −0.34/1.34 · 1.2e-3 = −3.04e-4 kg/s per parcel, three `.dat` files) | as `drag-stokes` | own `bc.txt` (`krho` −0.34) |
 | **refuse-gas-no-density** | — (kind 8, refusal) | *setup refusal*: a gas file whose density variable is renamed (`refusals/make_gas_refusals.py`) → `IGLOO: the gas file has no density variable (Roi(s) or rho(s))` at the gas import (RED on an import that ends on a bare `error stop 1`: exit 1, no payload) | own `solfile.tec`: a 2×2×2 box, `"Roi( 1 )"` renamed `"Q( 1 )"` | as `drag-stokes` |
@@ -461,11 +464,11 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-253 `e2e`-labelled + 51 `unit`-labelled + the optional `vortex-cloud-3way` = **305 CTest entries** in a
-serial build (+27 `mpi-*` under `USE_MPI`, 332), all green (counted from `tests/CMakeLists.txt`). The 253
-`e2e` entries are the 153 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+256 `e2e`-labelled + 51 `unit`-labelled + the optional `vortex-cloud-3way` = **308 CTest entries** in a
+serial build (+27 `mpi-*` under `USE_MPI`, 335), all green (counted from `tests/CMakeLists.txt`). The 256
+`e2e` entries are the 155 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
-threads), the four `threads-*` thread-count gates, the fourteen `repeat-*` two-sweep gates, the seventy-eight `refuse-*` setup-refusal gates, `vv-order`
+threads), the four `threads-*` thread-count gates, the fourteen `repeat-*` two-sweep gates, the seventy-nine `refuse-*` setup-refusal gates, `vv-order`
 (the record-order independence of eleven V&V figures) and `check-order` (of four gate printouts). The
 51 `unit` entries are 42 compiled unit tests, the property-table reader on its four fixtures
 (`test_properties_reader`, `-two-material`, `-atlas-water`, `-sigma-mu`), `self_test`, `registry-docs`, `exe-per-tree`,
