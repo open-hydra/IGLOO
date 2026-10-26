@@ -75,7 +75,7 @@ At Nu=2 ⇒ `tau_T = c_p rho_p d^2/(12 k_g)`, matching e2e temp-relax
 | JAXA1 (1) | `2.5 Re^0.15 + 0.04 Re` | **UNIDENTIFIED** JAXA report; high-speed/rarefied fit, no conduction floor. UNVERIFIABLE — do not cite |
 | JAXA2 (2) | `2 + 0.37 Re^0.6 Pr^(1/3)` | **`[SP8039]` Table II, ref. 82**, printed `2 + 0.370 Re^0.6 Pr^⅓` = the code (`[Shim06]` eq. 46); checked by `test_heat_nu` HN4 and end to end by `conv-nu-jaxa2` |
 | JAXA3 (3) | `2 + 0.459 Re^0.55 Pr^(1/3)` | **`[SP8039]` Table II, ref. 42**, printed `2 + 0.459 Re^0.55 Pr^⅓` = the code (`[Shim06]` eq. 47) — the Kavanau continuum base of model 6, rarefaction off; checked by HN5 and `conv-nu-jaxa3` |
-| JAXA4 (4) | `[(2+0.654 Re^0.5 Pr^(1/3))^-1 + 3.42 Ma/(RePr)]^-1` | **`[Shim06]` eq. 50**, printed `[(2 + 0.654 Re^½ Pr^⅓)^−1 + 3.42 M/(Re Pr)]^−1` = the code; the Kavanau-Drake bridging of model 6 on a `0.654 Re^½` base. **Source conflict:** `[SP8039]` Table II's last row prints the same law with **Pr^½** (a glyph distinct from the ⅓ of refs. 82/42 on the same page); the code keeps Shimada's Pr^⅓, the boundary-layer exponent of every other law of the table (with Pr^½: −6.6e-3 of Nu at `conv-nu`'s state). Checked by HN6, the rarefaction identity HN8 and `conv-nu-jaxa4` |
+| JAXA4 (4) | `[(2+0.654 Re^0.5 Pr^0.5)^-1 + 3.42 Ma/(RePr)]^-1` | **`[SP8039]` Table II, the last row** (p. 26), printed `[(2 + 0.654 Re^½ Pr^½)^−1 + 3.42 M/(Re Pr)]^−1` = the code; the Kavanau-Drake bridging of model 6 on a `0.654 Re^½ Pr^½` base. **Two prints:** `[Shim06]` eq. 50, which cites SP-8039, prints the same law with **Pr^⅓**, the exponent of refs. 82/42 (whose ⅓ is a glyph distinct from the ½ of the last row on the same page); the code takes SP-8039's Pr^½ (with Pr^⅓: +6.7e-3 of Nu at `conv-nu`'s state). Checked by HN6, the rarefaction identity HN8 and `conv-nu-jaxa4` |
 | Ranz-Marshall (5) | `2 + 0.6 Re^0.5 Pr^(1/3)` | **Ranz & Marshall 1952 `[RM52]`** — 0.6 CONFIRMED (textbook + evap review); valid 0<Re<200 |
 | Kavanau-Drake (6) | `(2+0.459 Re^0.55 Pr^0.33)/(1+3.42 Ma/(RePr)·Nu_0)` | **`[SP8039]` Table II, ref. 72** = `[Shim06]` eq. 49, both printing `Pr^0.33` = the code: Kavanau's continuum base, Drake's rarefaction term, explicit; checked by HN7 (the 0.33 pinned), HN8 and `conv-nu-kd` |
 
@@ -90,7 +90,7 @@ Suggested REFERENCES.md additions (verify DOIs before citing):
 **S1 — JAXA4 ≡ Kavanau-Drake bridging (algebraically identical).** Re-derived:
 JAXA4 `Nu = [Nu_0^-1 + k]^-1 = Nu_0/(1+k·Nu_0)` with `k=3.42 Ma/(RePr)`; Kavanau-Drake
 [#L134](../../../src/lib/Lib_Heat.f90#L134) `Nu = Nu_0/(1+k·Nu_0)` — **same functional form**,
-differing ONLY in the continuum base (`0.645 Re^0.5 Pr^(1/3)` vs `0.459 Re^0.55 Pr^0.33`).
+differing ONLY in the continuum base (`0.654 Re^0.5 Pr^0.5` vs `0.459 Re^0.55 Pr^0.33`).
 Both are **explicit** (single eval, continuum `Nu_0` in the denominator). *The brief called KD
 "implicit"; as coded it is explicit.* ⚠ open question: does the source bridging put the **total**
 Nu or the **continuum** Nu in the denominator? Code uses continuum — flag for owner.
@@ -147,9 +147,10 @@ not RM). **Test degrades to REGRESSION only** (no independent oracle) + the Nu=2
 ODE consistency. State explicitly it is not literature-verified.
 
 ### Model 4 — JAXA4 (heatSelect=4)
-Bridging ≡ KD (S1), base `2+0.645 Re^0.5 Pr^(1/3)`. Continuum-corner Nu→2 only at Kn→0 (caveat above).
-Base 0.645 UNVERIFIED. **Test:** same two-regime plan as KD; the bridging algebra (S1) is the
-source-free part; the 0.645 base is regression-only.
+Bridging ≡ KD (S1), base `2+0.654 Re^0.5 Pr^0.5`. Continuum-corner Nu→2 only at Kn→0 (caveat above).
+The base 0.654 is the one `[SP8039]` Table II's last row and `[Shim06]` eq. 50 both print; the exponent Pr^½ is
+SP-8039's (Shimada prints Pr^⅓, D-HEAT-4). **Test:** HN6 pins the law to SP-8039's print on Re × Pr × Ma, HN8 the
+bridging algebra (S1, source-free), `conv-nu-jaxa4` the law end to end.
 
 ### Model 1 — JAXA1 (heatSelect=1)
 `Nu=2.5 Re^0.15 + 0.04 Re`. **No +2 conduction floor ⇒ Nu(Re→0)=0.** Ma-free, so no rarefaction
@@ -180,9 +181,10 @@ S1: code puts the **continuum** Nu_0 in the bridging denominator (explicit). If 
 is truly implicit (`Nu=Nu_0/(1+k·Nu)`, total Nu), values differ at finite Kn. Flag, do not fix
 blind — resolve against Kavanau/Drake original once available.
 
-### D-HEAT-4 — JAXA4 base coefficient 0.645 unverified (INFERRED)
-`0.645 Re^0.5` base has no confirmed provenance (not RM 0.6, not Frössling 0.552, not Kavanau
-0.459/0.55). Regression-only until the JAXA report is located. Do not cite.
+### D-HEAT-4 — JAXA4's Prandtl exponent: the two sources print different ones
+`[SP8039]` Table II's last row prints `[(2 + 0.654 Re^½ Pr^½)^−1 + 3.42 M/(Re Pr)]^−1`; `[Shim06]` eq. 50, which
+cites SP-8039, prints the same base 0.654 with Pr^⅓. The code takes SP-8039's Pr^½, which gives a Nu up to 12 %
+below Pr^⅓'s for gases (Pr 0.42–0.8, Re ≤ 1000, Ma = 0); HN6 and `conv-nu-jaxa4` pin it to that print.
 
 ---
 
