@@ -299,7 +299,7 @@ contains
       nspecies(ib) = s
       if (s == 0) then
         write(*,'(A,I0)') ' [IGLOO::import_gas] no gas density variable (Roi(s)/rho(s)) in block ', ib
-        error stop 1
+        error stop 'IGLOO: the gas file has no density variable (Roi(s) or rho(s))'
       endif
       if (.not.all(bound) .or. .not.gasConstantRead) then
         write(*,'(A,I0,A)') ' [WARNING] import_gas block ', ib, ': unbound gas variable(s):'

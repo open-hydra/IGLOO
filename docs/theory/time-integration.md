@@ -138,11 +138,13 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
 | models 6, 7 | no clamp or penalty on the frozen fraction $f$ within a phase: the solidification events own its crossings of 0 and 1; a transition lands inside the new phase (a freezing plateau at no more than `T-melt`, a melting solid at no more than $f = 1$) |
 
 !!! note "Stuck-particle detection"
-    A particle that stays in the same cell for more than `nMaxCell = 10` outer
-    iterations without a crossing (a segment that ends in a reflection at a boundary face
-    is not counted), or makes no net displacement for `nMaxStall = 100`
-    iterations, is flagged `gone` with a diagnostic message; a particle that reaches
-    `maxIter` is flagged `gone` with its exit record written.
+    Four guards end a particle's integration. A particle that stays in the same cell for more
+    than `nMaxCell = 10` outer iterations without a crossing (a segment that ends in a reflection
+    at a boundary face is not counted) is flagged `gone` with a diagnostic message. A particle
+    that makes no net displacement for more than `nMaxStall = 100` iterations is flagged `gone`
+    with a diagnostic message. A segment whose solver loop runs more than `maxInnerIter = 10`
+    times flags the particle `gone` with a warning, and that segment deposits nothing. A particle
+    that reaches `maxIter = 500000` outer iterations is flagged `gone` with its exit record written.
 
 ---
 

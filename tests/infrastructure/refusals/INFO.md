@@ -98,10 +98,11 @@ output written).
 | `refuse-plane-x` | `INPUT/` symlinked; `plane-x = abc` | `IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]` |
 | `refuse-krho-sum` | own `INPUT/phase.txt` `A 3` (three families of drag-stokes's material); drag-stokes's one-copy `bc.txt` and `solfile.tec`, `common/properties.dat`: the one copy feeds `krho` 0.34 to every family, a sum of 1.02 on each of the 25 inlet cells | `IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1` — refused in `read_cdp_bc_file` after the file is read, the cell, its sum and its smallest `krho` printed first |
 | `refuse-krho-negative` | own `INPUT/bc.txt`: `drag-stokes`'s with every inlet `krho` negated (`make_bc_refusals.py`) | the same payload (smallest `krho` −0.34) |
+| `refuse-gas-no-density` | own `INPUT/solfile.tec`: a 2×2×2 box (`tools/make_box_case.py --nx 2 --ny 2 --nz 2`) whose density variable `"Roi( 1 )"` is renamed `"Q( 1 )"` (`python3 make_gas_refusals.py`, run from this directory); drag-stokes's `phase.txt`, `properties.dat` and `bc.txt` symlinked (the stop comes before the boundary file is read) | `IGLOO: the gas file has no density variable (Roi(s) or rho(s))` — refused at the gas import (`allocation.f90` `import_gas`), the block named first |
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All seventy-seven exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All seventy-eight exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
@@ -155,7 +156,8 @@ families (exit 0, six output files). **The two 401-loading cases are RED** on a 
 to "Stop condition" with exit 0 and write their output, each parcel of `refuse-krho-sum` at ṁ = 0.34/(1 − 1.02) ·
 1.2e-3 = −2.04e-2 kg/s and of `refuse-krho-negative` at −0.34/1.34 · 1.2e-3 = −3.04e-4 kg/s; with the sum clause
 alone taken out `refuse-krho-sum` runs so and `refuse-krho-negative` is still refused, with the negative clause
-alone the other way round.
+alone the other way round. **`refuse-gas-no-density` is RED** on a gas import that ends on a bare `error stop 1`:
+exit 1, not 128, and no payload in stderr (the stop code `1` alone).
 
 **The eleven cases of the phase file's burn-law and breakup checks, the property sizes, the two boundary files
 and `body-accel` are RED** on the solver with each of their error stops turned into a plain write: eight run on
