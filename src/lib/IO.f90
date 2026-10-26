@@ -497,6 +497,7 @@ contains
     integer            :: i_g, j_g, k_g
     real(R8)           :: propBuffer(nPropDP)
     real(R8)           :: vertices(3, 8)
+    real(R8)           :: kmin
     character(len=256) :: tok(nPropDP)
     character(len=512) :: lineString
     integer            :: ipos, lawc
@@ -736,6 +737,27 @@ contains
       end associate blkDef
     enddo
     close(u)
+
+    !> A 401 cell's flow divides by 1 - krhoTot: every krho >= 0 and their sum below 1, or refuse.
+    do b = 1, size(geoblock)
+      blkKrho: associate(blk => geoblock(b))
+      mend(1:2) = blk%Ny; nend(1:2) = blk%Nz
+      mend(3:4) = blk%Nx; nend(3:4) = blk%Nz
+      mend(5:6) = blk%Nx; nend(5:6) = blk%Ny
+      do f = 1, 6; do n = 1, nend(f); do m = 1, mend(f)
+        associate(cell => blk%face(f)%cell(m,n))
+        if (cell%bcdef == 401) then
+          kmin = minval(cell%properties(1:totFam, 1))
+          if (cell%krhoTot >= 1._R8 .or. kmin < 0._R8) then
+            write(*,'(A,I0,A,I0,A,I0,A,I0,A,ES13.6,A,ES13.6)') ' [IGLOO::read_cdp_bc_file] 401 inlet, block ', b, &
+              ' face ', f, ' cell (', m, ',', n, '): krho sum ', cell%krhoTot, ', smallest krho ', kmin
+            error stop 'IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1'
+          endif
+        endif
+        end associate
+      enddo; enddo; enddo
+      end associate blkKrho
+    enddo
 
     call checkChimera(geoblock)
 

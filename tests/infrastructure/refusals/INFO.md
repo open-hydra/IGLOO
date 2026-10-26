@@ -96,10 +96,12 @@ output written).
 | `refuse-bc-empty-payload` | own `INPUT/bc.txt`: `drag-stokes`'s with the first inlet payload line empty (`make_bc_refusals.py`) | `IGLOO: bc.txt inlet payload line is empty` |
 | `refuse-body-accel` | `body-force` (`INPUT/` symlinked) with `body-accel = 0.0 -200.0` | `body-accel: expected 3 values (gx gy gz)` |
 | `refuse-plane-x` | `INPUT/` symlinked; `plane-x = abc` | `IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]` |
+| `refuse-krho-sum` | own `INPUT/phase.txt` `A 3` (three families of drag-stokes's material); drag-stokes's one-copy `bc.txt` and `solfile.tec`, `common/properties.dat`: the one copy feeds `krho` 0.34 to every family, a sum of 1.02 on each of the 25 inlet cells | `IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1` — refused in `read_cdp_bc_file` after the file is read, the cell, its sum and its smallest `krho` printed first |
+| `refuse-krho-negative` | own `INPUT/bc.txt`: `drag-stokes`'s with every inlet `krho` negated (`make_bc_refusals.py`) | the same payload (smallest `krho` −0.34) |
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All seventy-five exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All seventy-seven exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
@@ -145,10 +147,15 @@ harness or an embedding parent can tell from success; every one of those selecto
 `refDir` as the sector *centre* — the MOSE/ATLAS layout, k-planes at ∓δ/2, which the production nozzle
 solution centres to exactly 0.0 — and on a [0, δ] sector such a solver runs the case to
 "All particles out of domain" with exit 0, the gas and every deposit rotated by δ/2.
-**The two `bc.txt` copy cases are RED** too, on a reader that consumes copy 1 only: `bc-copies` runs
-its three families of A on copy 1's `krho` 0.34, i.e. `krhoTot` = 1.02 and ṁ = 0.34/(1 − 1.02) · 1.2e-3 =
-−2.04e-2 kg/s per parcel — a negative mass flow, 75 exits, exit 0 — and `bc-copy-order` runs like
-`two-fam-bc` fed copy 1 for both families (exit 0, six output files).
+**The two `bc.txt` copy cases are RED** too, on a reader that consumes copy 1 only: `bc-copies` feeds
+its three families of A copy 1's `krho` 0.34, i.e. `krhoTot` = 1.02, and stops at the 401 inlet refusal (exit
+128, not its payload) — without that refusal ṁ = 0.34/(1 − 1.02) · 1.2e-3 = −2.04e-2 kg/s per parcel, a
+negative mass flow, 75 exits, exit 0 — and `bc-copy-order` runs like `two-fam-bc` fed copy 1 for both
+families (exit 0, six output files). **The two 401-loading cases are RED** on a reader without the check: both run
+to "Stop condition" with exit 0 and write their output, each parcel of `refuse-krho-sum` at ṁ = 0.34/(1 − 1.02) ·
+1.2e-3 = −2.04e-2 kg/s and of `refuse-krho-negative` at −0.34/1.34 · 1.2e-3 = −3.04e-4 kg/s; with the sum clause
+alone taken out `refuse-krho-sum` runs so and `refuse-krho-negative` is still refused, with the negative clause
+alone the other way round.
 
 **The eleven cases of the phase file's burn-law and breakup checks, the property sizes, the two boundary files
 and `body-accel` are RED** on the solver with each of their error stops turned into a plain write: eight run on

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Writes the two boundary-file refusal fixtures from drag-stokes's bc.txt:
+"""Writes the three boundary-file refusal fixtures from drag-stokes's bc.txt:
 
   bc-legacy/INPUT/bc.txt         every record's code in the legacy single-digit schema (401 -> 4, 400 -> 1);
-  bc-empty-payload/INPUT/bc.txt  the first inlet record's payload line left empty.
+  bc-empty-payload/INPUT/bc.txt  the first inlet record's payload line left empty;
+  krho-negative/INPUT/bc.txt     every inlet record's krho (the payload's first token) negated.
 
 Run from tests/infrastructure/refusals/; the output is committed."""
 import os
@@ -33,6 +34,18 @@ def empty_payload(lines):
     return out, done
 
 
+def negative_krho(lines):
+    out, n = [], 0
+    for i, ln in enumerate(lines):
+        if i > 0 and lines[i - 1].split()[-1:] == ["401"] and len(lines[i - 1].split()) == 6:
+            k = ln.index(ln.split()[0])
+            assert k > 0 and float(ln.split()[0]) > 0.0
+            ln = ln[:k - 1] + "-" + ln[k:]
+            n += 1
+        out.append(ln)
+    return out, n
+
+
 def main():
     src = open(SRC).readlines()
     lg, n = legacy(src)
@@ -44,6 +57,11 @@ def main():
     os.makedirs(os.path.join("bc-empty-payload", "INPUT"), exist_ok=True)
     open(os.path.join("bc-empty-payload", "INPUT", "bc.txt"), "w").writelines(ep)
     print("bc-empty-payload/INPUT/bc.txt: the first inlet payload line emptied")
+    nk, n = negative_krho(src)
+    assert n > 0
+    os.makedirs(os.path.join("krho-negative", "INPUT"), exist_ok=True)
+    open(os.path.join("krho-negative", "INPUT", "bc.txt"), "w").writelines(nk)
+    print(f"krho-negative/INPUT/bc.txt: {n} inlet krho values negated")
 
 
 if __name__ == "__main__":
