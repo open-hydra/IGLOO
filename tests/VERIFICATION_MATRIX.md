@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (304 in a serial build: 252 e2e + 51 unit incl. `self_test`,
+One row per registered CTest entry (305 in a serial build: 253 e2e + 51 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 27 `mpi-*`
-rows in their own section, 331).
+rows in their own section, 332).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -338,6 +338,7 @@ oracle possible.
 | **refuse-plane-x** | — (kind 8, refusal) | *setup refusal*: `plane-x = abc` → `IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]` (RED on a solver that does not read the key: exit 0, three `.dat` files) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-krho-sum** | — (kind 8, refusal) | *setup refusal*: three families (`A 3`) on drag-stokes's one-copy `bc.txt`, `krho` 0.34 each, a sum of 1.02 per inlet cell → `IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1`, the cell, its sum and its smallest `krho` printed first (RED on a reader without the check: exit 0, ṁ = 0.34/(1 − 1.02) · 1.2e-3 = −2.04e-2 kg/s per parcel, three `.dat` files) | as `drag-stokes` | `phase.txt` `A 3`; drag-stokes's `bc.txt` |
 | **refuse-krho-negative** | — (kind 8, refusal) | *setup refusal*: every inlet `krho` negated (`refusals/make_bc_refusals.py`) → the same payload (RED on a reader without the check: exit 0, ṁ = −0.34/1.34 · 1.2e-3 = −3.04e-4 kg/s per parcel, three `.dat` files) | as `drag-stokes` | own `bc.txt` (`krho` −0.34) |
+| **refuse-gas-no-density** | — (kind 8, refusal) | *setup refusal*: a gas file whose density variable is renamed (`refusals/make_gas_refusals.py`) → `IGLOO: the gas file has no density variable (Roi(s) or rho(s))` at the gas import (RED on an import that ends on a bare `error stop 1`: exit 1, no payload) | own `solfile.tec`: a 2×2×2 box, `"Roi( 1 )"` renamed `"Q( 1 )"` | as `drag-stokes` |
 | **drag-stokes-dopri5** | `[Stokes]` (drag-stokes's oracle, symlinked) | `ode-solver = H-dopri5`, otherwise `drag-stokes` (`etab-e2e-dopri5` and the `*-dopri5` repeatability twins run the explicit solver too). RED on a DOPRI5 whose per-step call keeps Hairer's eleven-argument `SOLOUT`: IGLOO's interrupt never reaches DOPRI5 and every parcel dies at injection (NMAX exceeded); green with the six-argument call `SOLOUT(NACCPT+1,XOLDS,X,Y,N,IRTRN)` and a silent label 79: 25/25, resid/tol 0.014 | as `drag-stokes` | as `drag-stokes` |
 | **khrt-e2e-rt** | `[Reitz87]` (as `khrt-e2e`) | *RT-shatter persistence gate* (`check_rt.py`) on `khrt-e2e`'s own run: the RT/shed event must fire, apply, and persist as a mass-consistent discontinuous shatter (RED on an RT/shed event whose npdot never reaches the model-3 ODE state y(8), so the event reverts) | as `khrt-e2e` | as `khrt-e2e` |
 | **repeat-drag-stokes** | — (kind 8, harness contract) | *two-sweep repeatability* (`support/twosweep.f90` + `tools/check_twosweep.py`): sweep 1 ≡ sweep 0 — `.dat` sorted multisets identical, `.tec` ≤ 1e-12 scale-relative; **plus gas-cycle**: original field → `U` doubled → original, sweep 1 must differ, sweep 2 must match sweep 0 | as `drag-stokes` | as `drag-stokes` |
@@ -460,11 +461,11 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-252 `e2e`-labelled + 51 `unit`-labelled + the optional `vortex-cloud-3way` = **304 CTest entries** in a
-serial build (+27 `mpi-*` under `USE_MPI`, 331), all green (counted from `tests/CMakeLists.txt`). The 252
+253 `e2e`-labelled + 51 `unit`-labelled + the optional `vortex-cloud-3way` = **305 CTest entries** in a
+serial build (+27 `mpi-*` under `USE_MPI`, 332), all green (counted from `tests/CMakeLists.txt`). The 253
 `e2e` entries are the 153 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
-threads), the four `threads-*` thread-count gates, the fourteen `repeat-*` two-sweep gates, the seventy-seven `refuse-*` setup-refusal gates, `vv-order`
+threads), the four `threads-*` thread-count gates, the fourteen `repeat-*` two-sweep gates, the seventy-eight `refuse-*` setup-refusal gates, `vv-order`
 (the record-order independence of eleven V&V figures) and `check-order` (of four gate printouts). The
 51 `unit` entries are 42 compiled unit tests, the property-table reader on its four fixtures
 (`test_properties_reader`, `-two-material`, `-atlas-water`, `-sigma-mu`), `self_test`, `registry-docs`, `exe-per-tree`,
