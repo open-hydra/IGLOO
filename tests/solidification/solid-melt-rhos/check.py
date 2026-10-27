@@ -36,6 +36,9 @@ S6  the frozen fraction: 1 on the solid rows, 0 on the liquid rows and the exits
     x - x(f_row) one constant per parcel within twice the print budget (the F12.6 half-ULP of x plus that of f over
     the smallest slope |df/dx|), within the event-location bound dx^2/(8 L_s) plus that budget of zero; on every row
     the phase datcols.solid_phase derives from (f, T) is the closed form's
+S7  the scatter cloud's weight quantum: the logged dNscat = Ndot (L_ref/V_ref)/(100 x 25), Ndot = sum over the exit
+    records of mdot/m_0 (the frozen injection's mass), L_ref the box diagonal, V_ref the injection speed u_g, within
+    the ES10.3 half-ULP and the exit records' E13.6 prints; the scatter file holds rows of every parcel
 """
 import importlib.util
 import math
@@ -54,7 +57,9 @@ def load(name, path):
 
 sm = load("solid_melt_check", os.path.join(HERE, "..", "solid-melt", "check.py"))
 datcols = sm.datcols
-TRAJ, EXIT, SRC, LOG = sm.TRAJ, sm.EXIT, sm.SRC, sm.LOG
+import scatter_rate                                 # noqa: E402  (tools/ is on the path solid-melt's check set)
+TRAJ, EXIT, SRC, LOG, SCAT = sm.TRAJ, sm.EXIT, sm.SRC, sm.LOG, "OUTPUT/scatter-A.dat"
+L_REF = math.sqrt(sm.LX ** 2 + (sm.NY * sm.DY) ** 2 + (sm.NZ * sm.DZ) ** 2)   # the box diagonal
 
 # ---- known inputs (SI) beyond solid-melt's --------------------------------------------------
 RHO_S, RHO_L, D_0 = 3660.0, sm.RHO_P, sm.D_P       # phase-file token rho-solid; common/properties.dat; bc.txt
@@ -298,6 +303,21 @@ def main():
     if any(w != 0.0 for w in wdot):
         fails.append("S4 wdot /= 0: a constant-mass material exchanges no mass")
 
+    # S7: the scatter cloud's weight quantum at the frozen injection's mass
+    s7_got = scatter_rate.logged(log)
+    s7_want = scatter_rate.expected(math.fsum(r["mdot"] / M_0 for v in exits.values() for r in v), L_REF, sm.U_G,
+                                    len(traj))
+    s7_tol = scatter_rate.half_ulp(s7_want) + 1.0e-6 * s7_want
+    try:
+        s7_ids = {r["ID"] for r in datcols.rows(SCAT)}
+    except (FileNotFoundError, ValueError, KeyError):
+        s7_ids = set()
+    if s7_got is None or abs(s7_got - s7_want) > s7_tol:
+        fails.append(f"S7 the logged dNscat {s7_got} against Ndot tau_ref/(100 x {len(traj)}) = {s7_want:.4e} "
+                     f"(tol {s7_tol:.1e})")
+    if s7_ids != set(exits):
+        fails.append(f"S7 the scatter file holds rows of {len(s7_ids)} parcels, the run {len(exits)}")
+
     print(f"S1 worst solid point:  {worst['S1'][1]} (resid/tol {worst['S1'][0]:.3f})")
     print(f"S3 worst liquid point: {worst['S3'][1]} (resid/tol {worst['S3'][0]:.3f}); exit worst |T - {T_EXIT:.4f}| "
           f"= {s3_worst:.3e} K (tol {TOL_EXIT:.3e} K)")
@@ -309,7 +329,9 @@ def main():
           f"of x - x(f) {spread_w[0]:.3e} m ({spread_w[1]}, tol {2.0 * TOL_X_PRINT:.3e}), worst |x - x(f)| "
           f"{off_w[0]:.3e} m ({off_w[1]}, tol {TOL_X_EVENT + TOL_X_PRINT:.3e}); {n_sol} solid rows f = 1, {n_liq} "
           f"liquid rows f = 0; phase rule on {n_ph} rows")
-    for gate in ("S1", "S2", "S3", "S4", "S5", "S6"):
+    print(f"S7 dNscat logged {s7_got} against {s7_want:.4e} (the frozen injection's mass); the scatter file holds rows "
+          f"of {len(s7_ids)} parcels")
+    for gate in ("S1", "S2", "S3", "S4", "S5", "S6", "S7"):
         mine = [f for f in fails if f.split()[0] == gate]
         for f in mine[:3]:
             print(f"[FAIL] {f}")

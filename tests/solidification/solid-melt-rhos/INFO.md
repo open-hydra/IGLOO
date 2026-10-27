@@ -22,7 +22,10 @@ h_fus)`: the melt takes 6.0470 ms, to `x_l = 0.111240 m`, and the diameter grows
 | S5 | 25 parcels exit through face 2, each record `d = d_l`, `f = 0`; no `stuck in cell`, `no net progress`, `Inner loop` or `above T-melt` line; `u = u_g`, `v = w = 0`; `m` of every row the injected `m_0`; `d` of every row `(6 m_0 (a + b f)/π)^{1/3}`; the mollify-off and model-6 witnesses; ≥ 20 parcels with ≥ 3 rows per regime | E13.6 half-ULP of `m`; that of `d` plus `\|∂ln d/∂f\|` × the F10.6 half-ULP of `f` | `m` 0.620 of its half-ULP; 1525 rows, `d` worst 0.940 of tol; 25 parcels |
 | S6 | an RK4 (4000 steps) of `df/dt = −C (a + b f)^{1/3}` from `f = 1` over the closed-form duration lands on `f = 0`; `f = 1` on the solid rows, `f = 0` on the liquid rows; on the plateau `0 < f < 1` and `x − x(f_row)` one constant per parcel, within the event-location bound of zero; the phase `solid_phase(f, T, T_m)` of every row the closed form's | 1e-12; spread twice the print budget (1.06e-6 m), offset `dx²/(8 L_s)` plus it (1.29e-5 m) | `f = −2.5e-15`; 600 plateau rows, spread 6.3e-8 m, offset 5.3e-7 m; the phase on 1525 rows |
 
+| S7 | the scatter cloud's weight quantum: the logged `dNscat` = `Ṅ (L_ref/V_ref)/(100 × 25)`, `Ṅ` = Σ over the exit records of `ṁ/m_0` (the frozen injection's mass), `L_ref` the box diagonal, `V_ref` the injection speed; the scatter file holds rows of every parcel | the ES10.3 half-ULP plus the E13.6 prints of `ṁ` | 1.981E+03 against 1.9812e3; 25 parcels |
+
 ## Falsification (a mutation of the code, measured)
 | mutation | what fails |
 |---|---|
+| the scatter sizing at the liquid density (the injected diameter at `ρ_l`, not the frozen injection's mass) | S7: `dNscat` 2.458E+03 against 1.9812e3, the ratio `ρ_s/ρ_l` = 1.2407 |
 | the frozen injection's mass at the liquid density (the mass of the injected diameter at `ρ_l`, the frozen drop then 27.919 µm) | S1 on 25 of 25 parcels (8.77 K at the first row, 388 × tol: the solid relaxes over 0.054863 m); S5 (`m` 2.0·10⁵ half-ULPs off `m_0`, `d` 30 µm on the liquid rows); S2; S3 (the exit 84.5 K off); S4 (the plateau cells 0.17); S6 (`x − x(f)` 1.5e-2 m) |
