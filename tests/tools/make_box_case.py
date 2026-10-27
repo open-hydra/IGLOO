@@ -48,6 +48,9 @@ Geometry / BCs:
   - --periodic-y --periods P: the box P periods of Ly long along y, ny rows of thickness Ly/ny per period
     (P*ny rows in all), the --wave-y wave repeated P times; the inlet face carries P*ny*nz cells and the
     201 partner lines name rows P*ny and 1.
+  - --rp-sweep R1,...,RN: one radius per inlet cell of face 1, in the reader's loop order (n = 1..nz outer,
+    m = 1..ny inner), N the number of inlet cells; refused with --families > 1, --blocks 2, --no-inlet and
+    --family-rp.
 
 Variable header is reused VERBATIM from the working nozzle solfile so the name-based
 gas import (allocation.f90 import_gas) maps identically. Vars 4-21 are cell-centered;
@@ -59,6 +62,7 @@ Usage:
                      [--stretch R] [--gradient G] [--zgradient G] [--wave-y A] [--rotate2 y]
                      [--outlet-code C] [--ug U] [--u2 U2] [--ygrade G] [--mesh-only] [--sym-face F]
                      [--no-inlet] [--family-kt KT1,KT2,...] [--family-rp RP1,RP2,...] [--periods P]
+                     [--rp-sweep R1,R2,...]
         writes <out_dir>/solfile.tec and <out_dir>/bc.txt (and phase.txt with --families > 1)
         --kv : inlet velocity scaling  (v0 = kv*|u_g|; 1.0 => no drag slip, Re=0)
         --kt : inlet temperature scaling (Tp0 = kt*T_g; 1.0 => no thermal slip)
@@ -92,6 +96,8 @@ Usage:
         --no-inlet : face 1 written 400 instead of the inlet (401)
         --periods : with --periodic-y, periods of Ly along y, ny rows each (default 1; P > 1 refuses --blocks 2,
                   --overlap, --rotate2, --ygrade and --mesh-only)
+        --rp-sweep : one radius [m] per inlet cell, comma-separated, n outer and m inner (default: --rp for every
+                  cell; refuses --families > 1, --blocks 2, --no-inlet and --family-rp)
         Defaults reproduce the drag-stokes case (kv=0.1, kt=1.0, rp=5.945e-6).
 """
 import argparse
@@ -306,9 +312,13 @@ def write_mesh(path, blocks=1, nx=NX, ny=NY, nz=NZ, rotate2=None, ygrade=1.0):
 
 def write_bc(path, kv, kt, rp, alpha=None, periodic_y=False, blocks=1, nx=NX, ny=NY, nz=NZ,
              overlap=0, shift=0.0, rim=False, families=1, outlet_code=BCDEF_WALL, rotate2=None,
-             sym_face=None, no_inlet=False, beta=None, family_kt=None, family_rp=None):
+             sym_face=None, no_inlet=False, beta=None, family_kt=None, family_rp=None, rp_sweep=None):
     # reader loop order (IO.f90 read_cdp_bc_file): b=1..nb, [family copies], f=1..6, n=1..nend(f),
     # m=1..mend(f). mend/nend per face: f1,2->(Ny,Nz); f3,4->(Nx,Nz); f5,6->(Nx,Ny), the block's.
+    # rp_sweep: one radius per face-1 inlet cell, cell (m, n) taking rp_sweep[(n-1)*ny + m-1].
+    if rp_sweep is not None and (families != 1 or blocks != 1 or no_inlet or family_rp
+                                 or len(rp_sweep) != ny * nz):
+        raise ValueError("rp_sweep: one block, one family, an inlet, no family_rp and ny*nz radii")
     layout = block_layout(blocks, nx, ny, overlap, shift, rim)
     rot = rotate2 == "y"
     conn_faces = ((1, 2), (2, 2)) if rot else ((1, 2), (2, 1))
@@ -346,7 +356,10 @@ def write_bc(path, kv, kt, rp, alpha=None, periodic_y=False, blocks=1, nx=NX, ny
                             # identity comes from loop position), so they are cosmetic.
                             f.write(f"   {b:6d}{face:6d}{m:6d}{n:6d}{1:6d}{code:6d}\n")
                             if code == BCDEF_INLET:
-                                f.write(data)
+                                if rp_sweep is None:
+                                    f.write(data)
+                                else:
+                                    f.write(inlet_data(kv, kt, rp_sweep[(n - 1) * mend + m - 1], alpha, beta=beta))
                                 if fam == 1:
                                     n_inlet += 1
                             elif code == BCDEF_PER:
@@ -436,6 +449,8 @@ def main():
                    help="with --families F > 1: F comma-separated radii [m], one per family (default c*rp)")
     p.add_argument("--periods", type=int, default=1,
                    help="with --periodic-y: the box this many periods of Ly long, --ny rows each (default 1)")
+    p.add_argument("--rp-sweep", default=None,
+                   help="one radius [m] per inlet cell, comma-separated, n outer and m inner (default: --rp)")
     a = p.parse_args()
     fam_kt, fam_rp = None, None
     for opt, val in (("--family-kt", a.family_kt), ("--family-rp", a.family_rp)):
@@ -481,6 +496,16 @@ def main():
                           or a.mesh_only):
         p.error("--periods P > 1 needs --periodic-y, and no --blocks 2, --overlap, --rotate2, --ygrade or --mesh-only")
     nyt = a.ny * a.periods                   # rows along y over the whole box
+    rp_sweep = None
+    if a.rp_sweep is not None:
+        try:
+            rp_sweep = [float(v) for v in a.rp_sweep.split(",")]
+        except ValueError:
+            p.error("--rp-sweep takes comma-separated radii [m]")
+        if a.families > 1 or a.blocks != 1 or a.no_inlet or a.family_rp is not None:
+            p.error("--rp-sweep refuses --families > 1, --blocks 2, --no-inlet and --family-rp")
+        if len(rp_sweep) != nyt * a.nz or min(rp_sweep) <= 0.0:
+            p.error(f"--rp-sweep needs one radius > 0 per inlet cell: {nyt * a.nz} values")
     os.makedirs(a.out_dir, exist_ok=True)
     if a.mesh_only:
         if a.overlap or a.stretch != 1.0:
@@ -499,7 +524,7 @@ def main():
                        periodic_y=a.periodic_y, blocks=a.blocks, nx=a.nx, ny=nyt, nz=a.nz,
                        overlap=a.overlap, shift=a.shift, rim=a.rim, families=a.families,
                        outlet_code=a.outlet_code, rotate2=a.rotate2, sym_face=a.sym_face, no_inlet=a.no_inlet,
-                       beta=a.beta, family_kt=fam_kt, family_rp=fam_rp)
+                       beta=a.beta, family_kt=fam_kt, family_rp=fam_rp, rp_sweep=rp_sweep)
     if a.families > 1:
         write_phase(os.path.join(a.out_dir, "phase.txt"), a.families)
     print(f"[ok] box solfile: I={I} J={J} K={K} nnode={nnode} ncell={ncell} "
@@ -522,7 +547,11 @@ def main():
         print(f"     domain x[0,{LX}] y[0,{ly}] z[0,{LZ}]; dx={LX/a.nx*1e3:.2f}mm")
     ug = 10.0 if a.ug is None else a.ug
     if not a.no_inlet:
-        print(f"     inlet: kv={a.kv} (v0={a.kv*abs(ug):.3g} m/s)  kt={a.kt}  rp={a.rp} (d={2*a.rp*1e6:.3g} um)")
+        if rp_sweep:
+            print(f"     inlet: kv={a.kv} (v0={a.kv*abs(ug):.3g} m/s)  kt={a.kt}  rp-sweep: {len(rp_sweep)} radii, "
+                  f"{rp_sweep[0]} ... {rp_sweep[-1]} m, one per inlet cell (n outer, m inner)")
+        else:
+            print(f"     inlet: kv={a.kv} (v0={a.kv*abs(ug):.3g} m/s)  kt={a.kt}  rp={a.rp} (d={2*a.rp*1e6:.3g} um)")
         if fam_kt or fam_rp:
             print(f"     per family: kt={fam_kt or a.kt}  rp={fam_rp or 'c*rp'}")
 

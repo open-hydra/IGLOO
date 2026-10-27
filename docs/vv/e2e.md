@@ -50,8 +50,8 @@ knobs are the main isolation switches used to decouple heat and momentum in the
 connection or by overlapping chimera faces, block 2 rotated about y, stretched cells
 along x, rows graded along y, translational periodic y faces, the outlet face's code,
 the gas temperature and x-velocity, linear temperature gradients along x and z and a
-cosine wave along y, the size law, and the families.  The defaults reproduce the
-`drag-stokes` box.
+cosine wave along y, the size law, one radius per inlet cell (`--rp-sweep`), and the families.  The
+defaults reproduce the `drag-stokes` box.
 
 ---
 
