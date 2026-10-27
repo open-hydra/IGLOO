@@ -7,7 +7,7 @@
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-stokes-dopri5/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ rad-cool/ emissivity-cap/ rad-foreign-key/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/, liquid-p2t/, boiling-zgr/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ evap-breakup-box-varcp/ d2law-brk-dormant/ temp-relax-p2t/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/ (e2e)
-#   combustion/         unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ burn-box-ox0/ (e2e)
+#   combustion/         unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ burn-box-ox0/ beckstead-air/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-melt-rhos/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-brk-tab-rhos/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ khrt-varcp/ breakup-per-material/ khrt-plane/ pe-sigma-table/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,krho-{sum,negative},gas-no-density}
@@ -662,6 +662,10 @@ igloo_e2e_case(burn-box-residue combustion/burn-box-residue "e2e;combustion;soli
 # with the cap grown from its initial oxide and the stretch re-evaluated from it; the burnout inside Beckstead's time
 # of the injected diameter; the residue's mass and flow, the mass and energy books, the scatter quanta.
 igloo_e2e_case(burn-box-ox0 combustion/burn-box-ox0 "e2e;combustion")
+# beckstead-air: burnout times of 25 aluminium particles, 10-1000 um, in air at 1 atm and 300 K against Beckstead's
+# Eq. 7 (K_eff coded from the paper); the 183 markers of his Fig. 1 drawn beside them, not gated. RED on K-burn x 1.01,
+# on the X_eff exponent 1.1, on T-ign above the injection temperature, on a heat release and on a slip.
+igloo_e2e_case(beckstead-air combustion/beckstead-air "e2e;combustion;val")
 
 # ---------- solidification (ODE models 6 and 7: supercooling, recalescence, plateau, melting; breakup on the liquid) --------
 igloo_unit_test(test_solidification solidification "unit;solidification;t4")
@@ -1291,18 +1295,18 @@ igloo_e2e_case(exit-census infrastructure/exit-census "e2e;infrastructure;io")
 # the same whatever order an OpenMP run gives the records of each zone of the .dat files (vv_order_check.py). Both
 # read the cases' fresh OUTPUT/, which each case starts by removing: each case is a fixture, its output a lock.
 foreach(_c tab-e2e burn-box solid-box conv-nu temp-relax drag-stokes body-force coupled-body periodic-y
-        tab-hf92 etab-hf92 mhb98-water d2law-varcp body-evap-m2 body-evap-m4 body-burn-m5)
+        tab-hf92 etab-hf92 mhb98-water beckstead-air d2law-varcp body-evap-m2 body-evap-m4 body-burn-m5)
     set_tests_properties(${_c} PROPERTIES FIXTURES_SETUP order_${_c} RESOURCE_LOCK ${_c}_output)
 endforeach()
 add_test(NAME vv-order COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/vv_order_check.py
     ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/vv-order breakup/tab-e2e combustion/burn-box
     solidification/solid-box standard/conv-nu standard/temp-relax standard/drag-stokes standard/body-force
     infrastructure/coupled-body infrastructure/periodic-y breakup/tab-hf92 breakup/etab-hf92
-    evaporation/mhb98-water)
+    evaporation/mhb98-water combustion/beckstead-air)
 set_tests_properties(vv-order PROPERTIES
     LABELS "e2e;infrastructure;vv"
-    FIXTURES_REQUIRED "order_tab-e2e;order_burn-box;order_solid-box;order_conv-nu;order_temp-relax;order_drag-stokes;order_body-force;order_coupled-body;order_periodic-y;order_tab-hf92;order_etab-hf92;order_mhb98-water"
-    RESOURCE_LOCK "tab-e2e_output;burn-box_output;solid-box_output;conv-nu_output;temp-relax_output;drag-stokes_output;body-force_output;coupled-body_output;periodic-y_output;tab-hf92_output;etab-hf92_output;mhb98-water_output"
+    FIXTURES_REQUIRED "order_tab-e2e;order_burn-box;order_solid-box;order_conv-nu;order_temp-relax;order_drag-stokes;order_body-force;order_coupled-body;order_periodic-y;order_tab-hf92;order_etab-hf92;order_mhb98-water;order_beckstead-air"
+    RESOURCE_LOCK "tab-e2e_output;burn-box_output;solid-box_output;conv-nu_output;temp-relax_output;drag-stokes_output;body-force_output;coupled-body_output;periodic-y_output;tab-hf92_output;etab-hf92_output;mhb98-water_output;beckstead-air_output"
     SKIP_RETURN_CODE 77
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     TIMEOUT 900)
