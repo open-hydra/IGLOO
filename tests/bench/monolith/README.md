@@ -16,8 +16,12 @@ the ranks, per-thread and per-rank parcel-loop accounting, the rank imbalance an
 - **One curve per job, on the node set of that job**, and every efficiency against the 1x1 point of the same
   workload in the same job: the all-core clock differs from node to node by a few per cent.
 - **Repetitions.** Every repetition is scored; the point's `IOK` line carries the median, the minimum and the
-  standard deviation of `wall_s`, `sweep_s`, `loop_s` and `reduce_s`, then every field of the fastest repetition.
-  Compare medians; the A/A twin (a second snapshot of the same binary) measures the noise.
+  standard deviation of `wall_s`, `life_s`, `launch_s`, `sweep_s`, `loop_s` and `reduce_s`, then every field of
+  the fastest repetition. Compare medians; the A/A twin (a second snapshot of the same binary) measures the noise.
+- **The launcher apart.** Each rank runs under `igloo-stamp.sh`, which stamps its start and its end: `launch_s` is
+  `mpirun`'s start to the first rank's start, `life_s` the first start to the last end, `teardown_s` the last end
+  to `mpirun`'s return. The launcher's cost does not depend on the slots, so wall-clock efficiencies are taken on
+  `life_s` and `launch_s` is listed apart.
 - **Wall-clock only.** One busy core runs at a higher clock than eighty busy ones, so a wall-clock efficiency against
   the 1-core anchor also contains the chip's frequency scaling; IGLOO reads no cycle counter.
 - **What ran where.** Each launch exports `I_MPI_DEBUG=4` and `OMP_DISPLAY_AFFINITY=TRUE`; the rank table and the
@@ -54,7 +58,8 @@ point of the box is left out. `IGLOO_BOX_CELLS="NX NY NZ"` sizes the box otherwi
 | `IGLOO_PERF_LOCAL` | local, required by `fetch-results.sh` | the local directory that receives one directory per fetched job |
 | `IGLOO_PERF_PARTITION` | local | the partition of the build job (default `free`) |
 | `IGLOO_PERF_BIN` | jobs | the binary a job snapshots (default `$IGLOO_PERF_ROOT/bin/IGLOO-hyb`) |
-| `IGLOO_REPS` | jobs | repetitions of the matrix (default 5) and placement jobs (default 2) |
+| `IGLOO_REPS` | jobs | repetitions of the matrix (default 5; the box's job 3) and placement jobs (default 2) |
+| `IGLOO_LAUNCH_RES_OPTIONS` | jobs | handed to `mpirun` as glibc's `RES_OPTIONS` (unset by default; "Launch cost" below) |
 | `IGLOO_OUTPUT=shm` | per point | `OUTPUT/` on `/dev/shm` |
 | `IGLOO_WRAP` | per point | a wrapper of the binary, e.g. `numactl --interleave=all` |
 | `IGLOO_INI_SET` | per point | `"key=value ..."` set in `[IGLOO-General]` of the run's `input.ini` |
@@ -76,18 +81,26 @@ tests/bench/monolith/sync-src-monolith.sh --local /tmp/rehearsal     # the same 
 ssh $IGLOO_PERF_REMOTE "bash -lc 'cd $IGLOO_PERF_ROOT && sbatch --output=$IGLOO_PERF_ROOT/logs/%x-%j.out \
     --export=ALL,IGLOO_PERF_ROOT=$IGLOO_PERF_ROOT scripts/igloo-smoke.slurm'"
 
+# the matrix: one job per workload, each its own curve on its own node (the same submit line for each script)
+ssh $IGLOO_PERF_REMOTE "bash -lc 'cd $IGLOO_PERF_ROOT && sbatch --output=$IGLOO_PERF_ROOT/logs/%x-%j.out \
+    --export=ALL,IGLOO_PERF_ROOT=$IGLOO_PERF_ROOT scripts/igloo-final-box-4fam.slurm'"
+
 # back here
 tests/bench/monolith/fetch-results.sh <jobid>
 python3 tests/bench/monolith/collect.py $IGLOO_PERF_LOCAL/<jobid>/igloo-smoke-<jobid>.out > smoke.tsv
-python3 tests/bench/monolith/analyze.py $IGLOO_PERF_LOCAL/<jobid>/igloo-final-<jobid>.out scaling.tsv
+python3 tests/bench/monolith/analyze.py $IGLOO_PERF_LOCAL/<jobid>/igloo-final-box-4fam-<jobid>.out scaling.tsv
 ```
 
 | job | content |
 |---|---|
 | `igloo-smoke.slurm` | the workloads built, each run once at 4 x 20 with its checks (1 node, 1 h) |
-| `igloo-final.slurm` | per workload the 1x1 anchor, every split of 4, 8, 16 and 32 slots and the 80-slot splits; the A/A twin; `khrt-stress` with `OUTPUT/` on tmpfs and with the scatter cloud off |
-| `igloo-omp.slurm` | thread placement: inside one socket, spread over the sockets, interleaved pages, the hybrid controls |
-| `igloo-numa.slurm` | page placement at 1 x 80 and 1 x 40, plain and interleaved, beside 4 x 20 |
+| `igloo-final-khrt-stress.slurm` | the 1x1 anchor, every split of 4, 8, 16 and 32 slots, the 80-slot splits, the A/A twin; `OUTPUT/` on tmpfs; the scatter cloud off (5 repetitions, 2 h) |
+| `igloo-final-vie-plait-dense.slurm` | the same curve and twin (5 repetitions, 2 h) |
+| `igloo-final-box-4fam.slurm` | the same curve without 80 x 1, the twin at 4 x 20 (3 repetitions, 20 h) |
+| `igloo-omp.slurm` | thread placement: inside one socket, spread over the sockets, interleaved pages, the hybrid controls (11 h) |
+| `igloo-numa.slurm` | page placement at 1 x 80 and 1 x 40, plain and interleaved, beside 4 x 20 (2 h) |
+
+The limits are about 1.3 to 1.5 times the cost measured by the smoke job.
 
 Points are tagged `<workload>-<R>x<T>[-<variant>]`; `analyze.py` refers each to its workload's `-1x1` point.
 
@@ -95,13 +108,24 @@ Points are tagged `<workload>-<R>x<T>[-<variant>]`; `analyze.py` refers each to 
 
 | line | content |
 |---|---|
-| `JOB=`, `START`, `WORKDIR`, `BINARY`, `COMMIT`, `CPU`, `WORKLOAD` | provenance: job, node, the binary's md5 and commit, the node's CPU model and flag digest, the workloads |
+| `JOB=`, `START`, `WORKDIR`, `BINARY`, `COMMIT`, `CPU`, `LAUNCH`, `WORKLOAD` | provenance: job, node, the binary's md5 and commit, the node's CPU model and flag digest, the launcher's resolver option, the workloads |
 | `IMAKE` | the workloads' build: exit code and seconds |
 | `IPIN` | the Intel MPI pin domain of the repetition (`omp`, or one mask per rank) |
 | `IAFF`, `IOCC` | placement at launch, occupancy at 30 s |
 | `IREP`, `IFAIL` | one per repetition: every field, or the reason it was not scored |
 | `IOK` | one per point: the statistics over the repetitions, then the fastest repetition's fields |
 | `ICHECK` | the exit codes of `check_finite.py` and of the workload's `check.py` on the last repetition |
+
+## Launch cost
+
+Intel MPI's launcher (`mpiexec.hydra`) looks up local names (`localhost` and its address) before it starts the
+first rank. On a cluster whose first nameserver in `/etc/resolv.conf` does not answer, each lookup waits one
+resolver timeout before the next nameserver answers: measured, four lookups of 5 s each, the same with every
+workload and with `hostname` in place of IGLOO, and not removed by the topology library, the host list, the
+bootstrap or the fabric. `IGLOO_LAUNCH_RES_OPTIONS="timeout:1 attempts:1"` hands glibc's `RES_OPTIONS` to `mpirun`
+alone: in one measurement it cut the start-up before the first rank from 21.4 s to 5.2 s, with `sweep_s` and the
+placement unchanged. It is unset by default; every job prints its value (`LAUNCH`). `life_s` excludes the
+start-up either way.
 
 ## Traps
 

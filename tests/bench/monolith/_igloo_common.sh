@@ -14,6 +14,7 @@ CASE=${IGLOO_PERF_CASE:-$ROOT/case}
 BIN0=${IGLOO_PERF_BIN:-$ROOT/bin/IGLOO-hyb}
 BIN=$BIN0
 BIN_AA=$BIN0
+STAMP=$ROOT/scripts/igloo-stamp.sh
 
 # Job set-up: limits, pinning defaults, the binary snapshot and its twin, the provenance lines.
 igloo_setup () {
@@ -22,8 +23,9 @@ igloo_setup () {
   export I_MPI_PIN_RESPECT_CPUSET=1 I_MPI_PIN_DOMAIN=omp
   export OMP_PROC_BIND=close OMP_PLACES=cores
   [ -x "$BIN0" ] || { echo "IFAIL setup reason=no-binary ($BIN0)"; return 1; }
+  [ -f "$STAMP" ] || { echo "IFAIL setup reason=no-stamp-wrapper ($STAMP)"; return 1; }
   LOGS=$W/logs/$SLURM_JOB_ID
-  mkdir -p "$LOGS" "$W/work"
+  mkdir -p "$LOGS" "$W/work/$SLURM_JOB_ID"
   cd "$W" || return 1
   # The job runs its own copy: a rebuild of $BIN0 during the job cannot splice two binaries into one curve.
   # The copy keeps the basename IGLOO, which the memory sampler and the occupancy check match (ps -C IGLOO).
@@ -39,6 +41,7 @@ igloo_setup () {
        "cores/socket $(lscpu | sed -n 's/^Core(s) per socket: *//p') | threads/core $(lscpu | sed -n 's/^Thread(s) per core: *//p') |" \
        "NUMA $(lscpu | sed -n 's/^NUMA node(s): *//p') | flags-md5 $(lscpu | grep '^Flags' | md5sum | cut -c1-12)"
   free -g | head -2
+  echo "LAUNCH RES_OPTIONS=${IGLOO_LAUNCH_RES_OPTIONS:-unset} (IGLOO_LAUNCH_RES_OPTIONS; mpirun only)"
   igloo_workloads
 }
 
@@ -286,9 +289,20 @@ print(" ".join("%s=%s" % kv for kv in f.items()))
 PY
 }
 
+# igloo_stamps <dir> <t0 ns> <t1 ns>: from igloo-stamp.sh's files, the launch (t0 to the first rank start), the
+# ranks' lifetime (first start to last end), the teardown (last end to t1) and the number of ranks stamped.
+igloo_stamps () {
+  cat "$1"/rank.* 2>/dev/null | awk -v t0="$2" -v t1="$3" '
+    $1=="start" { n++; if (s == "" || $2 < s) s = $2 }
+    $1=="end"   { if (e == "" || $2 > e) e = $2 }
+    END {
+      if (n == 0 || e == "") { printf "launch_s= life_s= teardown_s= stamped=%d", n + 0; exit }
+      printf "launch_s=%.3f life_s=%.3f teardown_s=%.3f stamped=%d", s - t0 / 1e9, e - s, t1 / 1e9 - e, n }'
+}
+
 # igloo_summary <reps file> <reps asked>: the IOK line of a point from its IREP lines -- the median, minimum and
-# standard deviation of wall_s, sweep_s, loop_s and reduce_s, then every field of the fastest repetition (its
-# rep= field names it).
+# standard deviation of wall_s, life_s, launch_s, sweep_s, loop_s and reduce_s, then every field of the fastest
+# repetition (its rep= field names it).
 igloo_summary () {
   python3 - "$1" "$2" <<'PY'
 import re, statistics, sys
@@ -309,7 +323,7 @@ def fx(v):
 
 best = min(reps, key=lambda d: fx(d.get("wall_s")))
 stat = []
-for k in ("wall_s", "sweep_s", "loop_s", "reduce_s"):
+for k in ("wall_s", "life_s", "launch_s", "sweep_s", "loop_s", "reduce_s"):
     v = [fx(d[k]) for d in reps if d.get(k)]
     if not v:
         continue
@@ -324,9 +338,10 @@ PY
 
 # igloo_run <tag> <workload> <ranks> <threads> <ppn> [core-mask|NONE] [reps] [check|finite|none]
 # One IPIN, IAFF and IREP (or IFAIL) line per repetition, one IOK line per point, one ICHECK line when asked.
-# Tags are <workload>-<R>x<T>[-<variant>]. Environment: IGLOO_WRAP wraps the binary (numactl --interleave=all);
-# IGLOO_OUTPUT=shm puts OUTPUT/ on /dev/shm; IGLOO_INI_SET="key=value ..." edits [IGLOO-General] of the run's
-# input.ini; IGLOO_AA=1 runs the twin snapshot (the A/A pair).
+# Tags are <workload>-<R>x<T>[-<variant>]. Each rank runs under igloo-stamp.sh (launch_s, life_s, teardown_s).
+# Environment: IGLOO_WRAP wraps the binary (numactl --interleave=all); IGLOO_OUTPUT=shm puts OUTPUT/ on /dev/shm;
+# IGLOO_INI_SET="key=value ..." edits [IGLOO-General] of the run's input.ini; IGLOO_AA=1 runs the twin snapshot
+# (the A/A pair); IGLOO_LAUNCH_RES_OPTIONS is handed to mpirun as RES_OPTIONS (README.md, "Launch cost").
 igloo_run () {
   local tag=$1 wl=$2 R=$3 T=$4 ppn=$5 mc reps chk
   if [ $# -ge 6 ]; then
@@ -336,11 +351,12 @@ igloo_run () {
   local bin=$BIN; [ -n "${IGLOO_AA:-}" ] && bin=$BIN_AA
   [ -f "$CASE/$wl/md5.txt" ] || { echo "IFAIL tag=$tag reason=workload-not-built"; return 1; }
   local wlmd5; wlmd5=$(md5sum < "$CASE/$wl/md5.txt" | cut -c1-12)
-  local repfile=$W/work/$tag.reps
+  local repfile=$W/work/$SLURM_JOB_ID/$tag.reps
   : > "$repfile"
-  local rep D C shm rc t0 t1 wall nstop nrep nwit rsspid mpid opid kept=""
+  local rep D C shm rc t0 t1 wall stamps nstop nrep nwit rsspid mpid opid kept=""
+  local -a lenv
   for rep in $(seq 1 "$reps"); do
-    D=$W/work/$tag-r$rep
+    D=$W/work/$SLURM_JOB_ID/$tag-r$rep
     igloo_casedir "$D" "$wl" || return 1
     C=$CASEDIR
     shm=""
@@ -377,9 +393,12 @@ igloo_run () {
     echo "IPIN tag=$tag rep=$rep I_MPI_PIN_DOMAIN=$I_MPI_PIN_DOMAIN"
     igloo_wait_clear
 
+    lenv=(I_MPI_DEBUG=4 OMP_DISPLAY_AFFINITY=TRUE "IGLOO_STAMPS=$D/stamps")
+    [ -n "${IGLOO_LAUNCH_RES_OPTIONS:-}" ] && lenv+=("RES_OPTIONS=$IGLOO_LAUNCH_RES_OPTIONS")
+    mkdir -p "$D/stamps"
     t0=$(date +%s%N)
-    I_MPI_DEBUG=4 OMP_DISPLAY_AFFINITY=TRUE \
-      mpirun -n "$R" -ppn "$ppn" ${IGLOO_WRAP:-} "$bin" > run_out.txt 2> run_err.txt < /dev/null &
+    env "${lenv[@]}" mpirun -n "$R" -ppn "$ppn" bash "$STAMP" ${IGLOO_WRAP:-} "$bin" \
+      > run_out.txt 2> run_err.txt < /dev/null &
     mpid=$!
     ( sleep 30; kill -0 $mpid 2>/dev/null && igloo_occupancy "$tag" ) &
     opid=$!
@@ -388,6 +407,7 @@ igloo_run () {
     kill $opid 2>/dev/null; wait $opid 2>/dev/null
     kill $rsspid 2>/dev/null; wait $rsspid 2>/dev/null
     wall=$(( (t1 - t0) / 1000000 )); wall=$(printf '%d.%03d' $((wall / 1000)) $((wall % 1000)))
+    stamps=$(igloo_stamps "$D/stamps" "$t0" "$t1")
     local rss_rank rss_node
     rss_rank=$(awk '{printf "%.3f", $1/1048576}' rss.txt 2>/dev/null); rss_rank=${rss_rank:-0.000}
     rss_node=$(awk '{printf "%.3f", $2/1048576}' rss.txt 2>/dev/null); rss_node=${rss_node:-0.000}
@@ -403,12 +423,13 @@ igloo_run () {
     aff=$(echo "$parsed" | sed -n 1p); fields=$(echo "$parsed" | sed -n 2p)
     echo "$aff"
     if [ "$rc" -ne 0 ] || [ "$nstop" -eq 0 ] || [ "$nrep" -eq 0 ] || [ "$nwit" -eq 0 ]; then
-      echo "IFAIL tag=$tag rep=$rep rc=$rc stop=$nstop report=$nrep rank_witness=$nwit wall_s=$wall -- log $LOGS/$tag-r$rep.log"
+      echo "IFAIL tag=$tag rep=$rep rc=$rc stop=$nstop report=$nrep rank_witness=$nwit wall_s=$wall $stamps" \
+           "-- log $LOGS/$tag-r$rep.log"
       tail -12 run_out.txt | sed 's/^/  | /'; tail -6 run_err.txt | sed 's/^/  ! /'
       cd "$W"; rm -rf "$D"; igloo_rmshm "$shm"
       continue
     fi
-    echo "IREP tag=$tag workload=$wl ranks=$R threads=$T ppn=$ppn rep=$rep rc=$rc wall_s=$wall" \
+    echo "IREP tag=$tag workload=$wl ranks=$R threads=$T ppn=$ppn rep=$rep rc=$rc wall_s=$wall $stamps" \
          "rss_rank_gb=$rss_rank rss_node_gb=$rss_node wl_md5=$wlmd5 $fields" | tee -a "$repfile"
     cd "$W"
     if [ "$rep" -lt "$reps" ] || [ "$chk" = none ]; then
@@ -437,4 +458,31 @@ igloo_run () {
     fi
   fi
   return 0
+}
+
+# igloo_matrix <workload> <reps> <check|finite>: one workload's scaling curve on the job's node -- the 1x1 anchor
+# (with the workload's checks), every split of 4, 8, 16 and 32 slots spread over the sockets, the 80-slot splits
+# on Intel MPI's omp domains (the box without 80 x 1: 80 ranks at the finalize peak exceed the node's memory), and
+# the A/A twin at 1x1 (not the box) and 4x20.
+igloo_matrix () {
+  local wl=$1 reps=$2 chk=$3 N R Tn RT
+  echo "=== $wl: the 1x1 anchor ==="
+  igloo_run "$wl-1x1" "$wl" 1 1 1 "$(igloo_spread 1)" "$reps" "$chk"
+  echo "=== $wl: every split of 4, 8, 16 and 32 slots, spread over the sockets ==="
+  for N in 4 8 16 32; do
+    for R in 1 2 4 8 16 32; do
+      [ "$R" -le "$N" ] || continue
+      Tn=$(( N / R ))
+      igloo_run "$wl-${R}x${Tn}" "$wl" "$R" "$Tn" "$R" "$(igloo_spread "$N")" "$reps"
+    done
+  done
+  echo "=== $wl: the 80-slot splits ==="
+  for RT in 1x80 4x20 8x10 16x5 20x4 40x2 80x1; do
+    [ "$wl" = box-4fam ] && [ "$RT" = 80x1 ] && continue
+    R=${RT%x*}; Tn=${RT#*x}
+    igloo_run "$wl-$RT" "$wl" "$R" "$Tn" "$R" NONE "$reps"
+  done
+  echo "=== $wl: the A/A twin, a second snapshot of the same binary ==="
+  [ "$wl" = box-4fam ] || IGLOO_AA=1 igloo_run "$wl-1x1-aa" "$wl" 1 1 1 "$(igloo_spread 1)" "$reps"
+  IGLOO_AA=1 igloo_run "$wl-4x20-aa" "$wl" 4 20 4 NONE "$reps"
 }

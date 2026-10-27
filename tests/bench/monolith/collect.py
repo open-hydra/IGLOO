@@ -13,8 +13,10 @@ import re
 import sys
 
 HEAD = ["tag", "workload", "ranks", "threads", "ppn", "reps", "nok", "rep"]
-STATS = ["%s_%s" % (k, s) for k in ("wall_s", "sweep_s", "loop_s", "reduce_s") for s in ("med", "min", "sd")]
-BEST = ["wall_s", "setup_s", "sweep_s", "loop_s", "reduce_s", "finalize_s", "smoothing_s", "writeout_s",
+STATS = ["%s_%s" % (k, s) for k in ("wall_s", "life_s", "launch_s", "sweep_s", "loop_s", "reduce_s")
+         for s in ("med", "min", "sd")]
+BEST = ["wall_s", "launch_s", "life_s", "teardown_s", "stamped",
+        "setup_s", "sweep_s", "loop_s", "reduce_s", "finalize_s", "smoothing_s", "writeout_s",
         "parcel_loop_max_s", "busy_maxmean_max", "imbalance", "parcels", "particles", "children",
         "sz_gas", "sz_geo", "sz_acc", "sz_mib", "rss_rank_gb", "rss_node_gb",
         "mpi_ranks", "hdr_ranks", "hdr_threads", "reports", "wl_md5"]
@@ -36,6 +38,9 @@ DEFS = """\
 #   rep                the fastest scored repetition: every column below *_med/*_min/*_sd comes from it
 #   <q>_med/_min/_sd   median, minimum and standard deviation over the scored repetitions (sd empty for one)
 #   wall_s             launch to exit of mpirun, the harness's clock [s]
+#   launch_s           mpirun's start to the first rank's start (the launcher's cost) [s]
+#   life_s             the first rank's start to the last rank's end (the launch-free wall time) [s]
+#   teardown_s         the last rank's end to mpirun's return [s]; stamped: ranks that left start/end stamps
 #   setup_s, sweep_s   rank 0's five setup phases and nine sweep phases of the [IGLOO-timing] report [s]
 #   loop_s ... writeout_s   rank 0's parcel-loop, reduce, finalize, smoothing and writeout+merge phases [s]
 #   parcel_loop_max_s  the slowest rank's parcel loop [s]; busy_maxmean_max the worst rank's thread busy max/mean

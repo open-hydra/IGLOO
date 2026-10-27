@@ -6,14 +6,16 @@
 Points are tagged <workload>-<R>x<T>[-<variant>]; the anchor is <workload>-1x1 (else the first <workload>-1x1-*
 point). For N = R x T slots:
 
-  eff_wall  = (T(1)/N) / T(N)  on wall_s (launch to exit), from the medians and from the minima
+  eff_life  = (T(1)/N) / T(N)  on life_s, the ranks' lifetime (the wall time without the launcher's start-up),
+              from the medians and from the minima
   eff_sweep = the same on sweep_s, the report's nine sweep phases: the set-up does not scale and is listed apart
 
-Wall-clock efficiencies charge the code for the chip's frequency scaling as well (one busy core runs faster than
-eighty); no cycle counter is read. Also listed: the parcel loop's, the reduction's and the output's shares of the
-sweep, the rank imbalance and the worst thread busy max/mean, the allocated values per rank (the sizes line, the
-memory table of docs/development/parallelization.md) beside the sampled resident set. Points whose tag does not
-follow the rule are listed in a trailing group, unscored.
+launch_s, the launcher's start-up before the first rank starts, is listed apart too: it does not depend on the
+slots. Wall-clock efficiencies also contain the chip's frequency scaling (one busy core runs faster than eighty).
+Also listed: the parcel loop's, the reduction's and the output's shares of the sweep, the rank imbalance and the
+worst thread busy max/mean, the allocated values per rank (the sizes line, the memory table of
+docs/development/parallelization.md) beside the sampled resident set. Points whose tag does not follow the rule
+are listed in a trailing group, unscored.
 """
 import collections
 import re
@@ -63,29 +65,31 @@ def main():
         else:
             other.append(d)
 
-    cols = ["workload", "tag", "ranks", "threads", "slots", "wall_med_s", "wall_min_s", "wall_sd_s",
-            "eff_wall_med", "eff_wall_min", "sweep_med_s", "eff_sweep_med", "setup_s",
-            "loop_share", "reduce_share", "writeout_share", "imbalance", "busy_maxmean_max",
+    cols = ["workload", "tag", "ranks", "threads", "slots", "life_med_s", "life_min_s", "life_sd_s",
+            "eff_life_med", "eff_life_min", "launch_med_s", "wall_med_s", "sweep_med_s", "eff_sweep_med",
+            "setup_s", "loop_share", "reduce_share", "writeout_share", "imbalance", "busy_maxmean_max",
             "sz_mib", "rss_rank_gb", "rss_over_sz", "rss_node_gb", "anchor"]
     out = open(dest, "w")
     out.write("# IGLOO scaling, job %s, node %s, binary md5 %s\n# commit %s\n" % (job, node, binary, commit))
-    out.write("# eff_* = (T(1)/N)/T(N) against the workload's 1x1 point of this job; shares are of sweep_s\n")
+    out.write("# eff_* = (T(1)/N)/T(N) against the workload's 1x1 point of this job; life_s = the ranks' "
+              "lifetime; shares are of sweep_s\n")
     out.write("\t".join(cols) + "\n")
 
     def emit(wl, d, anchor):
         R, T = int(d.get("ranks", 0)), int(d.get("threads", 0))
         N = R * T
-        wmed, wmin, sw = num(d, "wall_s_med"), num(d, "wall_s_min"), num(d, "sweep_s_med")
-        a_wmed = num(anchor, "wall_s_med") if anchor else None
-        a_wmin = num(anchor, "wall_s_min") if anchor else None
+        lmed, lmin, sw = num(d, "life_s_med"), num(d, "life_s_min"), num(d, "sweep_s_med")
+        a_lmed = num(anchor, "life_s_med") if anchor else None
+        a_lmin = num(anchor, "life_s_min") if anchor else None
         a_sw = num(anchor, "sweep_s_med") if anchor else None
-        ew = ratio(ratio(a_wmed, N), wmed)
-        ewm = ratio(ratio(a_wmin, N), wmin)
+        el = ratio(ratio(a_lmed, N), lmed)
+        elm = ratio(ratio(a_lmin, N), lmin)
         es = ratio(ratio(a_sw, N), sw)
         bsw = num(d, "sweep_s")
         sz, rss = num(d, "sz_mib"), num(d, "rss_rank_gb")
-        vals = [wl, d.get("tag", ""), str(R), str(T), str(N), fmt(wmed, "%.4f"), fmt(wmin, "%.4f"),
-                fmt(num(d, "wall_s_sd"), "%.4f"), fmt(ew, "%.3f"), fmt(ewm, "%.3f"), fmt(sw, "%.4f"),
+        vals = [wl, d.get("tag", ""), str(R), str(T), str(N), fmt(lmed, "%.4f"), fmt(lmin, "%.4f"),
+                fmt(num(d, "life_s_sd"), "%.4f"), fmt(el, "%.3f"), fmt(elm, "%.3f"),
+                fmt(num(d, "launch_s_med"), "%.3f"), fmt(num(d, "wall_s_med"), "%.4f"), fmt(sw, "%.4f"),
                 fmt(es, "%.3f"), fmt(num(d, "setup_s"), "%.3f"),
                 fmt(ratio(num(d, "loop_s"), bsw), "%.3f"), fmt(ratio(num(d, "reduce_s"), bsw), "%.3f"),
                 fmt(ratio(num(d, "writeout_s"), bsw), "%.3f"), fmt(num(d, "imbalance"), "%.3f"),
@@ -93,12 +97,12 @@ def main():
                 fmt(ratio(rss, None if sz is None else sz / 1024.0), "%.2f"), fmt(num(d, "rss_node_gb"), "%.2f"),
                 anchor.get("tag", "") if anchor else ""]
         out.write("\t".join(vals) + "\n")
-        print("%-34s %5d %10s %10s %7s %7s %10s %7s %9s %6s %6s %6s" % (
-            d.get("tag", ""), N, vals[5], vals[6], vals[8], vals[9], vals[10], vals[11], vals[12],
-            vals[13], vals[14], vals[16]))
+        print("%-34s %5d %10s %10s %7s %7s %8s %10s %7s %9s %6s %6s %6s" % (
+            d.get("tag", ""), N, vals[5], vals[6], vals[8], vals[9], vals[10], vals[12], vals[13], vals[14],
+            vals[15], vals[16], vals[18]))
 
-    hdr = "%-34s %5s %10s %10s %7s %7s %10s %7s %9s %6s %6s %6s" % (
-        "tag", "slots", "wall_med", "wall_min", "eff_w", "eff_wm", "sweep_med", "eff_s", "setup_s",
+    hdr = "%-34s %5s %10s %10s %7s %7s %8s %10s %7s %9s %6s %6s %6s" % (
+        "tag", "slots", "life_med", "life_min", "eff_l", "eff_lm", "launch", "sweep_med", "eff_s", "setup_s",
         "loop", "reduce", "imbal")
     for wl, pts in groups.items():
         anchor = next((d for d in pts if d["tag"] == wl + "-1x1"), None) or \

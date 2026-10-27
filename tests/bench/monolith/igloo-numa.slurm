@@ -5,7 +5,7 @@
 #SBATCH --ntasks-per-node=80
 #SBATCH --exclusive
 #SBATCH --mem=0
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 #
 # Page placement per workload: one rank of 80 and of 40 threads over the sockets, pages where the first touch left
 # them (plain) and interleaved (inter), beside the four-rank layout; IGLOO_REPS repetitions (default 2). No anchor:
