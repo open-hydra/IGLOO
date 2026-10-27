@@ -9,17 +9,17 @@ IGLOO runs CEM+LK = the uniform-temperature Langmuir-Knudsen model = MHB98's M7 
 finite-conductivity variant; the two are superimposed in Fig. 2, so only M7 was digitized).
 Two panels vs the NORMALIZED D^2-law lifetime t/t_life, t_life = D0^2/K (K = LSQ slope,
 extrapolated to D^2->0; NOT the last sample -- the water drop exits the box at d^2/d0^2~0.14):
-  (a) d^2/d0^2 : IGLOO, its LK kernel (check.py's oracle), and the digitized M7 model line.
+  (a) d^2/d0^2 : IGLOO, its LK kernel (check.py's oracle), the digitized M7 model line and the
+      Ranz & Marshall circles (reference/mhb98_fig2_exp_d2.csv, re-digitized from the figure).
       Normalized (each by its own D0^2 and lifetime) because the paper's caption D0=1.1 mm
       (D0^2=1.21) disagrees with its own plot, whose M7 line starts at D0^2~1.10 (the axis even
       tops at 1.2). Since beta (Eq.28) is D0-INDEPENDENT and matches to ~1%, the two normalized
-      d^2-law lines COINCIDE -- the honest presentation of an already-matching physics. beta is
-      annotated in-panel (beta_IGLOO=6.44e-3 vs beta_M7=6.51e-3).
-  (b) T_d [K]  : IGLOO wet-bulb history and the digitized M7 temperature line (same t/t_life).
-
-The older eyeball Ranz-Marshall overlay (reference/mhb98_fig2.csv) is intentionally NOT
-plotted: it reads systematically high (start 1.21, beta_exp~7.4e-3) whereas in the figure the
-experimental points sit on M7 (~6.5e-3). A proper experiment re-digitization is a follow-up.
+      d^2-law lines COINCIDE -- the honest presentation of an already-matching physics. The
+      circles are normalized by the M7 line's own D0^2 and lifetime (the paper's axes: they keep
+      their place relative to M7; the first circle is at 77 s). beta is annotated in-panel
+      (beta_IGLOO=6.30e-3, beta_M7=6.35e-3, beta_exp=6.48e-3 from the circles' LSQ slope).
+  (b) T_d [K]  : IGLOO wet-bulb history and the digitized M7 temperature line (same t/t_life);
+      Fig. 2(b) has no experimental points.
 """
 import argparse
 import os
@@ -32,6 +32,7 @@ CASE = os.path.basename(HERE)
 TRAJ = os.path.join(HERE, "OUTPUT", "trajectories-A.dat")
 REF_M7_D2 = os.path.join(HERE, "reference", "mhb98_fig2_M7_d2.csv")
 REF_M7_TD = os.path.join(HERE, "reference", "mhb98_fig2_M7_Td.csv")
+REF_EXP = os.path.join(HERE, "reference", "mhb98_fig2_exp_d2.csv")
 
 try:
     sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
@@ -88,12 +89,14 @@ def main():
     pid, t, d2_ig, d2_kn, Tp = got
     tm7, ym7 = check.load_xy(REF_M7_D2)              # t[s], D^2[mm^2]
     ttd, ytd = check.load_xy(REF_M7_TD)              # t[s], Td[K]
+    tex, yex = check.load_xy(REF_EXP)                # t[s], D^2[mm^2]: the experiment
 
     # beta (Eq.28, D0-independent) -- the quantitative match, annotated in panel (a).
     K_ig = lsq_slope(t, d2_ig)                       # mm^2/s (IGLOO absolute D^2 units)
     K_m7 = lsq_slope(tm7, ym7) if tm7 else float("nan")
     beta_ig = check.BETA_COEF * K_ig * 1e-6
     beta_m7 = check.BETA_COEF * K_m7 * 1e-6 if tm7 else float("nan")
+    beta_ex = check.BETA_COEF * lsq_slope(tex, yex) * 1e-6 if tex else float("nan")
 
     # Normalized D^2-law lifetime: t_life = D0^2 / K (extrapolate D^2->0), NOT the last
     # sample -- the water drop EXITS the box at d^2/d0^2~0.14, so t[-1] is not the lifetime.
@@ -105,6 +108,9 @@ def main():
     tn_m7 = [tt / life_m7 for tt in tm7] if tm7 else []
     d2n_m7 = [v / d0sq_m7 for v in ym7] if tm7 else []
     tn_td = [tt / life_m7 for tt in ttd] if ttd else []
+    # The circles on the paper's axes: normalized by the M7 line's D0^2 and lifetime.
+    tn_ex = [tt / life_m7 for tt in tex] if tex and tm7 else []
+    d2n_ex = [v / d0sq_m7 for v in yex] if tex and tm7 else []
 
     fig, ax = plt.subplots(1, 2, figsize=(9.8, 4.0))
 
@@ -115,6 +121,9 @@ def main():
     if tm7:
         ax[0].plot(tn_m7, d2n_m7, "s-", color="C2", ms=3.0, mfc="none", lw=1.0,
                    label="MHB98 M7 (digitized)")
+    if tn_ex:
+        ax[0].plot(tn_ex, d2n_ex, "o", color="k", ms=4,
+                   label="Ranz & Marshall (1952),\nMHB98 Fig. 2 (digitized)")
     ax[0].set_xlabel(r"$t/t_\mathrm{life}$"); ax[0].set_ylabel("$d^2/d_0^2$")
     ax[0].set_title("water $d^2$-law (normalized)")
     ax[0].grid(True, alpha=0.25)
@@ -122,8 +131,11 @@ def main():
     ax[0].text(0.04, 0.06,
                r"$\beta_{\mathrm{IGLOO}}=%.2f\times10^{-3}$" % (beta_ig*1e3) + "\n" +
                r"$\beta_{\mathrm{M7}}=%.2f\times10^{-3}$ (Eq.28, %.1f%%)"
-               % (beta_m7*1e3, rel_beta),
+               % (beta_m7*1e3, rel_beta) + "\n" +
+               r"$\beta_{\mathrm{exp}}=%.2f\times10^{-3}$" % (beta_ex*1e3),
                transform=ax[0].transAxes, va="bottom", ha="left")
+    # Headroom above the d^2 line: the legend covers none of the circles.
+    ax[0].set_ylim(-0.04, 1.3); ax[0].set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
     ax[0].legend(loc="upper right")
 
     ax[1].plot(tn_ig, Tp, "-", color="C3", lw=1.6, label="IGLOO")
@@ -139,7 +151,7 @@ def main():
     fig.tight_layout()
     out = os.path.join(HERE, "OUTPUT", f"{CASE}.svg")
     fig.savefig(out, bbox_inches="tight", transparent=True)
-    print(f"[verify] wrote {out}  (beta_IGLOO={beta_ig:.3e}, beta_M7={beta_m7:.3e})")
+    print(f"[verify] wrote {out}  (beta_IGLOO={beta_ig:.3e}, beta_M7={beta_m7:.3e}, beta_exp={beta_ex:.3e})")
     if args.plot:
         plt.show()
     return 0

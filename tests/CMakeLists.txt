@@ -1291,17 +1291,18 @@ igloo_e2e_case(exit-census infrastructure/exit-census "e2e;infrastructure;io")
 # the same whatever order an OpenMP run gives the records of each zone of the .dat files (vv_order_check.py). Both
 # read the cases' fresh OUTPUT/, which each case starts by removing: each case is a fixture, its output a lock.
 foreach(_c tab-e2e burn-box solid-box conv-nu temp-relax drag-stokes body-force coupled-body periodic-y
-        tab-hf92 etab-hf92 d2law-varcp body-evap-m2 body-evap-m4 body-burn-m5)
+        tab-hf92 etab-hf92 mhb98-water d2law-varcp body-evap-m2 body-evap-m4 body-burn-m5)
     set_tests_properties(${_c} PROPERTIES FIXTURES_SETUP order_${_c} RESOURCE_LOCK ${_c}_output)
 endforeach()
 add_test(NAME vv-order COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/vv_order_check.py
     ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/vv-order breakup/tab-e2e combustion/burn-box
     solidification/solid-box standard/conv-nu standard/temp-relax standard/drag-stokes standard/body-force
-    infrastructure/coupled-body infrastructure/periodic-y breakup/tab-hf92 breakup/etab-hf92)
+    infrastructure/coupled-body infrastructure/periodic-y breakup/tab-hf92 breakup/etab-hf92
+    evaporation/mhb98-water)
 set_tests_properties(vv-order PROPERTIES
     LABELS "e2e;infrastructure;vv"
-    FIXTURES_REQUIRED "order_tab-e2e;order_burn-box;order_solid-box;order_conv-nu;order_temp-relax;order_drag-stokes;order_body-force;order_coupled-body;order_periodic-y;order_tab-hf92;order_etab-hf92"
-    RESOURCE_LOCK "tab-e2e_output;burn-box_output;solid-box_output;conv-nu_output;temp-relax_output;drag-stokes_output;body-force_output;coupled-body_output;periodic-y_output;tab-hf92_output;etab-hf92_output"
+    FIXTURES_REQUIRED "order_tab-e2e;order_burn-box;order_solid-box;order_conv-nu;order_temp-relax;order_drag-stokes;order_body-force;order_coupled-body;order_periodic-y;order_tab-hf92;order_etab-hf92;order_mhb98-water"
+    RESOURCE_LOCK "tab-e2e_output;burn-box_output;solid-box_output;conv-nu_output;temp-relax_output;drag-stokes_output;body-force_output;coupled-body_output;periodic-y_output;tab-hf92_output;etab-hf92_output;mhb98-water_output"
     SKIP_RETURN_CODE 77
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     TIMEOUT 900)

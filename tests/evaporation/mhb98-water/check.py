@@ -30,14 +30,13 @@ Tier-P paper-reproduction gate (the E-VAL-2 point), now built on the DIGITIZED M
 line (reference/mhb98_fig2_M7_*.csv, WebPlotDigitizer). IGLOO runs CEM+LK = the uniform-
 temperature Langmuir-Knudsen model = MHB98's M7. Two panels:
   (a) IGLOO's integrated beta = (rho_d Pr / 8 mu_G)*|dD^2/dt| (Eq.28) vs beta_M7 = the LSQ
-      slope of the digitized M7 D^2(t), *10%. beta_M7 ~ 6.5e-3, consistent with the paper's
+      slope of the digitized M7 D^2(t), *10%. beta_M7 ~ 6.35e-3, consistent with the paper's
       stated ~6e-3 for all M1-M8 at Re_d=0 (p.1038, kept as a guard + missing-file fallback).
   (b) IGLOO wet-bulb vs the M7 temperature plateau (Fig.2b), *0.5 K.
-IGLOO lands on M7 (beta 6.44 vs 6.51e-3, ~1%) -- it reproduces MHB98's own model, not just
-our re-coded kernel. NOTE the older eyeball experiment overlay (reference/mhb98_fig2.csv,
-start 1.21, beta_exp~7.4e-3) reads systematically high; in the figure the exp points sit on
-M7 (~6.5e-3), so the earlier "~13% below experiment" is largely an eyeball-digitization
-artifact -- confirming needs a proper exp re-digitization (follow-up), not gated here.
+IGLOO lands on M7 (beta 6.295 vs 6.35e-3, 0.8%) -- it reproduces MHB98's own model, not just
+our re-coded kernel. The experiment (reference/mhb98_fig2_exp_d2.csv: the Ranz & Marshall
+circles of Fig. 2(a), re-digitized from the page image, beta_exp = 6.48e-3) is drawn by
+verify.py, not gated here.
 """
 import math
 import os
