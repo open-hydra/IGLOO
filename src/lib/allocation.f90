@@ -470,8 +470,8 @@ contains
   end subroutine computeSkewFlag
 
 
-  !> The gas-order-2 dual across 101 faces, built once after the bc read; classes unallocated without a 101 link.
-  subroutine assembleInterfaceDual(geo, gas, links, classes, nmoved)
+  !> The gas-order-2 dual across 101 or 201 faces, built once after the bc read; classes unallocated without such a link.
+  subroutine assembleInterfaceDual(geo, gas, links, classes, nmoved, label)
     use IGLOO_variables,   only: mesh2D
     use IGLOO_data_block,  only: obj_block, obj_flowblock, vertexClass, faceFlags
     use IGLOO_Lib_Mollify, only: cellLink
@@ -481,29 +481,45 @@ contains
     type(cellLink),      intent(in)    :: links(:)
     type(vertexClass), allocatable, intent(out) :: classes(:)
     integer,             intent(out)   :: nmoved
+    character(*),        intent(out), optional :: label  !> the codes joined: 101, 201 or 101 and 201
     type(idMap),  allocatable :: id(:)
     type(faceFlags) :: flags(6)
-    logical,  allocatable :: is101(:)
-    integer,  allocatable :: parent(:), nmem(:), cls(:), fill(:), gidx(:,:)
-    real(R8), allocatable :: gpos(:,:)
-    integer  :: l, c, a, bb, ap, bp, nc, nn, ncls, b, f, m, n, i, j, k, r, ng, v(3,4), vp(3,4)
+    logical,  allocatable :: isDual(:)
+    integer,  allocatable :: parent(:), nmem(:), cls(:), fill(:), gidx(:,:), lcode(:)
+    real(R8), allocatable :: gpos(:,:), tr(:,:)
+    integer  :: l, c, a, bb, ap, bp, nc, nn, ncls, b, f, m, n, i, j, k, r, ng, pm, pn, v(3,4), vp(3,4)
     real(R8) :: h, x(3,4), xp(3,4), w
 
     nmoved = 0
-    allocate(is101(size(links)))
+    if (present(label)) label = ''
+    allocate(isDual(size(links)), lcode(size(links)), tr(3, size(links)))
     do l = 1, size(links)
-      is101(l) = .false.
+      isDual(l) = .false.; lcode(l) = 0; tr(:, l) = 0._R8
       if (links(l)%pb < 1) cycle
       call geo(links(l)%b)%ijk2fmn(links(l)%i, links(l)%j, links(l)%k, links(l)%f, m, n)
-      if (m > 0) is101(l) = geo(links(l)%b)%face(links(l)%f)%cell(m,n)%bcdef == 101
+      if (m <= 0) cycle
+      lcode(l) = geo(links(l)%b)%face(links(l)%f)%cell(m,n)%bcdef
+      isDual(l) = lcode(l) == 101 .or. lcode(l) == 201
+      if (lcode(l) /= 201) cycle
+      !> the periodic offset t: partner face-cell centre minus own face-cell centre (0 for 101)
+      call geo(links(l)%pb)%ijk2fmn(links(l)%pi, links(l)%pj, links(l)%pk, links(l)%pf, pm, pn)
+      tr(:, l) = geo(links(l)%pb)%face(links(l)%pf)%cell(pm,pn)%center - geo(links(l)%b)%face(links(l)%f)%cell(m,n)%center
+      if (mesh2D) tr(3, l) = 0._R8
     enddo
-    if (.not. any(is101)) return
+    if (.not. any(isDual)) return
+    if (present(label)) then
+      if (any(isDual .and. lcode == 101) .and. any(isDual .and. lcode == 201)) then
+        label = '101 and 201'
+      else
+        label = merge('101', '201', any(isDual .and. lcode == 101))
+      endif
+    endif
 
-    !> (0) vertex classes: the face cell's corners joined to the partner's through orient
+    !> (0) vertex classes: the face cell's corners joined to the partner's through orient, modulo t
     nc = merge(2, 4, mesh2D)
-    allocate(parent(2*nc*count(is101)), id(size(geo)))
+    allocate(parent(2*nc*count(isDual)), id(size(geo)))
     do l = 1, size(links)
-      if (.not. is101(l)) cycle
+      if (.not. isDual(l)) cycle
       do r = 1, 2
         b = merge(links(l)%b, links(l)%pb, r == 1)
         if (allocated(id(b)%q)) cycle
@@ -513,19 +529,23 @@ contains
     enddo
     nn = 0
     do l = 1, size(links)
-      if (.not. is101(l)) cycle
+      if (.not. isDual(l)) cycle
       associate(lk => links(l))
       call geo(lk%b)%ijk2fmn(lk%i, lk%j, lk%k, lk%f, m, n)
       associate(o => geo(lk%b)%face(lk%f)%cell(m,n)%orient)
-      if (mesh2D .and. (o(2) /= 0 .or. o(3) /= 0)) &
+      if (mesh2D .and. (o(2) /= 0 .or. o(3) /= 0)) then
+        if (lcode(l) == 201) error stop 'IGLOO: 201 orientation mixes the slab direction on a one-layer mesh'
         error stop 'IGLOO: 101 orientation mixes the slab direction on a one-layer mesh'
+      endif
       do c = 1, nc
         a = mod(c - 1, 2); bb = (c - 1)/2
         ap = 1 + o(1)*(2*a - 1) + o(3)*(2*bb - 1)
         bp = 1 + o(2)*(2*a - 1) + o(4)*(2*bb - 1)
         if (mesh2D) bp = 0
-        if ((ap /= 0 .and. ap /= 2) .or. (bp /= 0 .and. bp /= 2)) &
+        if ((ap /= 0 .and. ap /= 2) .or. (bp /= 0 .and. bp /= 2)) then
+          if (lcode(l) == 201) error stop 'IGLOO: 201 orientation disagrees with the partner cells'
           error stop 'IGLOO: 101 orientation disagrees with the partner cells'
+        endif
         v(:, c)  = faceVertex(lk%f,  lk%i,  lk%j,  lk%k,  a,      bb)
         vp(:, c) = faceVertex(lk%pf, lk%pi, lk%pj, lk%pk, ap/2, bp/2)
         x(:, c)  = geo(lk%b )%node(:, v(1,c),  v(2,c),  v(3,c))
@@ -534,9 +554,12 @@ contains
       end associate
       h = min(edgeMin(x, nc), edgeMin(xp, nc))
       do c = 1, nc
-        if (mesh2D) then; w = norm2(x(1:2,c) - xp(1:2,c))
-        else;             w = norm2(x(:,c) - xp(:,c)); endif
-        if (w > 0.1_R8*h) error stop 'IGLOO: 101 orientation disagrees with the partner cells'
+        if (mesh2D) then; w = norm2(x(1:2,c) + tr(1:2,l) - xp(1:2,c))
+        else;             w = norm2(x(:,c) + tr(:,l) - xp(:,c)); endif
+        if (w > 0.1_R8*h) then
+          if (lcode(l) == 201) error stop 'IGLOO: 201 orientation disagrees with the partner cells'
+          error stop 'IGLOO: 101 orientation disagrees with the partner cells'
+        endif
         call join(nodeId(lk%b, v(:,c)), nodeId(lk%pb, vp(:,c)))
       enddo
       end associate
@@ -573,18 +596,18 @@ contains
       enddo; enddo; enddo
     enddo
 
-    !> (a) + (b): face ghosts at the partner centres, the ring redone, no clip normal to a 101 face
+    !> (a) + (b): face ghosts at the partner centres less t, the ring redone, no clip normal to a 101 or 201 face
     do b = 1, size(geo)
-      ng = count(is101 .and. links(:)%b == b)
+      ng = count(isDual .and. links(:)%b == b)
       if (ng == 0) cycle
       allocate(gidx(3, ng), gpos(3, ng))
       ng = 0
       do l = 1, size(links)
-        if (.not. is101(l) .or. links(l)%b /= b) cycle
+        if (.not. isDual(l) .or. links(l)%b /= b) cycle
         ng = ng + 1
         f = links(l)%f
         gidx(:, ng) = faceGhost(f, links(l)%i, links(l)%j, links(l)%k, gas(b)%Nx, gas(b)%Ny, gas(b)%Nz)
-        gpos(:, ng) = geo(links(l)%pb)%center(:, links(l)%pi, links(l)%pj, links(l)%pk)
+        gpos(:, ng) = geo(links(l)%pb)%center(:, links(l)%pi, links(l)%pj, links(l)%pk) - tr(:, l)
         if (.not. allocated(flags(f)%f)) then
           allocate(flags(f)%f(size(geo(b)%face(f)%cell, 1), size(geo(b)%face(f)%cell, 2)))
           flags(f)%f = .false.

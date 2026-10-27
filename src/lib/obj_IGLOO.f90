@@ -17,7 +17,7 @@ module IGLOO_module
     !  bc read.
     type(cellLink),        allocatable :: links(:)
     type(linkDonors) :: donors
-    !> Gas-order 2 with a 101 face: the vertex classes of the dual across those faces, built once.
+    !> Gas-order 2 with a 101 or 201 face: the vertex classes of the dual across those faces, built once.
     type(vertexClass),     allocatable :: classes(:)
     !> A face cell carries 101, 103, 201, 102 or 100: solve reports the block changes.
     logical :: connFaces = .false.
@@ -84,6 +84,7 @@ contains
     character(len=llen)  :: gasfile
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
     integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar, b, b2, nMoved
+    character(len=16)    :: dualCodes
     integer, allocatable :: npair(:,:), resCount(:)
     character(len=2)     :: method
 
@@ -155,9 +156,9 @@ contains
       endif
     endif
     if (ord2) then
-      call assembleInterfaceDual(self%geoblock, self%gasblock, self%links, self%classes, nMoved)
-      if (mpi_is_root .and. nMoved > 0) write(*,'(A,2(I0,A))') ' [IGLOO] gas-order-2 dual across 101 faces: ', &
-        size(self%classes), ' vertex classes, ', nMoved, ' ghost nodes at partner centres'
+      call assembleInterfaceDual(self%geoblock, self%gasblock, self%links, self%classes, nMoved, dualCodes)
+      if (mpi_is_root .and. nMoved > 0) write(*,'(A,2(I0,A))') ' [IGLOO] gas-order-2 dual across ' &
+        //trim(dualCodes)//' faces: ', size(self%classes), ' vertex classes, ', nMoved, ' ghost nodes at partner centres'
       call buildGhostLinks(self%gasblock, self%geoblock, nGhostIn, nGhostMiss, nGhostFar)
       if (mpi_is_root .and. nGhostIn + nGhostMiss > 0) write(*,'(A,2(I0,A))') &
         ' [IGLOO] ghost nodes at connected faces: ', nGhostIn, ' interpolated, ', nGhostMiss, ' not covered'

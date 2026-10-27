@@ -47,6 +47,8 @@ output written).
 | `refuse-periodic-not-mutual` | own `INPUT/` (`python3 make_periodic.py`, run from this directory): a box with faces 3/4 a periodic pair (`tools/make_box_case.py --nx 8 --ny 2 --nz 2 --periodic-y`) whose face-4 records are all header-only 400, so no face-3 facelet's partner names it back | `IGLOO: a 101/201 connection is not mutual: the partner cell does not name this cell` — refused when the field mollifier's link table is built |
 | `refuse-ord2-orient` | own `INPUT/` (`python3 make_ord2.py`, run from this directory): a box of two blocks joined by 101 faces (`tools/make_box_case.py --nx 8 --ny 2 --nz 2 --blocks 2`) at `gas-order = 2`, block 1's first 101 record carrying the orientation `-1 0 0 1`: the face corners it names lie one cell from the partner's | `IGLOO: 101 orientation disagrees with the partner cells` — refused when the dual cells of the interface vertices are joined (`allocation.f90`) |
 | `refuse-ord2-slab` | the same generator on a one-layer box (`--nz 1`), that record carrying `1 1 0 1` (d12 = 1) | `IGLOO: 101 orientation mixes the slab direction on a one-layer mesh` |
+| `refuse-ord2-periodic-orient` | own `INPUT/` (`python3 make_ord2.py`): a one-block box whose faces 3/4 are a periodic pair (`tools/make_box_case.py --nx 8 --ny 2 --nz 2 --periodic-y`) at `gas-order = 2`, block 1's first 201 record (face 3) carrying `-1 0 0 1`: the face corners it names lie one cell from the partner's, modulo the periodic offset | `IGLOO: 201 orientation disagrees with the partner cells` — refused when the dual cells of the periodic face's vertices are joined (`allocation.f90`) |
+| `refuse-ord2-periodic-slab` | the same box on one layer (`--nz 1`), that record carrying `1 1 0 1` (d12 = 1) | `IGLOO: 201 orientation mixes the slab direction on a one-layer mesh` |
 | `refuse-drag-token` | `drag = no-such-drag-law` | `IGLOO: unknown drag model` |
 | `refuse-heat-token` | `heat = no-such-nusselt-law` | `IGLOO: unknown heat model` |
 | `refuse-breakup-token` | `breakup = no-such-breakup-model` | `IGLOO: unknown breakup model` |
@@ -103,7 +105,7 @@ output written).
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All seventy-nine exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All eighty-one exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
@@ -123,6 +125,8 @@ to "Stop condition" with exit 0 and writes its output. **`refuse-periodic-not-mu
 table of 101 records only, which never looks at the 201 faces: the run integrates to "Stop condition" with
 exit 0 and writes its output. **The two gas-order-2 interface cases are RED** on the solver without the interface
 pass, which never reads the orientation integers: both run to "Stop condition" with exit 0 and write their output.
+**The two gas-order-2 periodic cases are RED** on the interface pass of 101 faces alone, which never reads a 201
+record's orientation integers: both run to "Stop condition" with exit 0 and write their output.
 **The three oxide-cap cases are RED** on a reader that does not know the `product` token: `refuse-cap-product`
 (whose line names no product) runs the burn law to "Stop condition" with exit 0 and writes its output, the other two
 stop at `unknown per-material key` (exit 128, not their payload); with its check taken out of `resolve_products`

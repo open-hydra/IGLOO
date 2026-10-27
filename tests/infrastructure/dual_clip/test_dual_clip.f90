@@ -39,7 +39,9 @@ program test_dual_clip
     ! restatement of it.
     !
     ! U3 and U3n join two blocks by a 101 face and run the setup pass (assembleInterfaceDual): the
-    ! interface dual cell is not clipped and the vertex classes pair coincident vertices.
+    ! interface dual cell is not clipped and the vertex classes pair coincident vertices. U3p joins a
+    ! box's faces 3/4 by 201 and runs the same pass: each seam dual cell is the cell of the box
+    ! unrolled over two periods, its vertices paired across the period.
     !
     use, intrinsic :: iso_fortran_env, only: real64
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_bc_cell, vertexClass, buildInterfaceLinks   ! PRODUCTION types
@@ -61,6 +63,8 @@ program test_dual_clip
     call s5_u3_two_block('U3 3D       ', .false.)
     call s5_u3_two_block('U3 one layer', .true.)
     call s5_u3_nonaligned
+    call p201_u3_periodic('U3p 3D       ', .false.)
+    call p201_u3_periodic('U3p one layer', .true.)
 
     if (nfail == 0) then
         print '(a)', ''
@@ -327,16 +331,99 @@ contains
         call report('U3n class weights vs the one-block assembled weights, max rel', ew, 1.0e-14_real64)
     end subroutine s5_u3_nonaligned
 
-    !> Box nodes on the x node line xn, spacing H in y and z.
-    subroutine boxNodes(blk, xn, ny, nz)
+    !> U3p -- one box whose faces 3/4 are a 201 pair (rows of 0.2, 0.3, 0.3 along y), the setup pass, against the
+    !  box unrolled over two periods: each seam dual cell is the unrolled box's interior cell at y = Ly.
+    subroutine p201_u3_periodic(label, planar)
+        character(*), intent(in) :: label
+        logical,      intent(in) :: planar
+        integer,      parameter :: NX = 3, NY = 3
+        real(real64), parameter :: LY = 0.8_real64
+        type(obj_block)     :: geo(1), ref
+        type(obj_flowblock) :: gas(1), gref
+        type(cellLink), allocatable    :: links(:)
+        type(linkDonors)               :: donors
+        type(vertexClass), allocatable :: classes(:)
+        real(real64) :: xn(0:NX), yn(0:NY), yr(0:2*NY), ty(3), eb, ec, ed, vr, vol, dom
+        integer :: i, k, c, n, nz, nk, nd, nc, nbad, nmoved
+        ord2 = .true.; mesh2D = planar
+        nz = merge(1, 2, planar); nk = merge(1, nz + 1, planar); nd = merge(2, 3, planar)
+        xn = [(i*H, i = 0, NX)]
+        yn = [0._real64, 0.2_real64, 0.5_real64, LY]
+        yr(0:NY) = yn; yr(NY+1:2*NY) = LY + yn(1:NY)
+        call boxNodes(geo(1), xn, NY, nz, yn); call finishBlock(geo(1), gas(1), planar)
+        call boxNodes(ref, xn, 2*NY, nz, yr);  call finishBlock(ref, gref, planar)
+        do k = 1, nz; do i = 1, NX
+            call link(geo(1)%face(3)%cell(i,k), [1, i, NY, k], 4, [1, 0, 0, 1], 201)
+            call link(geo(1)%face(4)%cell(i,k), [1, i, 1, k], 3, [1, 0, 0, 1], 201)
+        enddo; enddo
+        call buildInterfaceLinks(geo, links, donors)
+        call assembleInterfaceDual(geo, gas, links, classes, nmoved)
+        !> (a) one class per seam vertex: dual rows 1 and NY+1 of block 1, the same i and k
+        nc = 0
+        if (allocated(classes)) nc = size(classes)
+        nbad = 0
+        do c = 1, nc
+            associate(m => classes(c)%m)
+            if (size(m, 2) /= 2) then
+                nbad = nbad + 1
+            else if (any(m(1,:) /= 1) .or. m(2,1) /= m(2,2) .or. m(4,1) /= m(4,2) .or. &
+                     minval(m(3,:)) /= 1 .or. maxval(m(3,:)) /= NY + 1) then
+                nbad = nbad + 1
+            endif
+            end associate
+        enddo
+        call report(label//' : (a) vertex classes - (NX+1)(NZ+1)', real(nc - (NX + 1)*nk, real64), 0._real64)
+        call report(label//' : (a) classes not rows 1 and NY+1 of one vertex column', real(nbad, real64), 0._real64)
+        !> (b) the face ghosts at the partner centres brought back across the period
+        ty = [0._real64, LY, 0._real64]
+        eb = 0._real64
+        do k = 1, nz; do i = 1, NX
+            eb = max(eb, norm2(gas(1)%node(1:nd, i, 0, k) - geo(1)%center(1:nd, i, NY, k) + ty(1:nd))/H, &
+                         norm2(gas(1)%node(1:nd, i, NY + 1, k) - geo(1)%center(1:nd, i, 1, k) - ty(1:nd))/H)
+        enddo; enddo
+        call report(label//' : (b) face ghosts vs the partner centres -+ Ly, max / H', eb, 1.0e-14_real64)
+        !> (c) the seam dual cells off the x/z boundaries unclipped: the unrolled box's cells at y = Ly
+        ec = 0._real64
+        do k = merge(1, 2, planar), merge(1, nz, planar); do i = 2, NX
+            vr = gref%cellVol(i, NY + 1, k)
+            ec = max(ec, abs(gas(1)%cellVol(i, 1, k) - vr)/vr, abs(gas(1)%cellVol(i, NY + 1, k) - vr)/vr)
+        enddo; enddo
+        call report(label//' : (c) seam dual cells vs the unrolled cells at y = Ly, max rel', ec, 1.0e-14_real64)
+        !> (d) every class's weight and its members' dualW: the unrolled box's dualW at y = Ly
+        ed = 0._real64
+        do c = 1, nc
+            vr = ref%dualW(classes(c)%m(2, 1), NY + 1, classes(c)%m(4, 1))
+            ed = max(ed, abs(classes(c)%w - vr)/vr)
+            do n = 1, size(classes(c)%m, 2)
+                associate(mb => classes(c)%m(:, n))
+                ed = max(ed, abs(geo(1)%dualW(mb(2), mb(3), mb(4)) - vr)/vr)
+                end associate
+            enddo
+        enddo
+        call report(label//' : (d) class weights vs the unrolled weights at y = Ly, max rel', ed, 1.0e-14_real64)
+        !> (e) the dual tiles one period once its seam row NY+1 (a second copy of row 1's cells) is left out
+        vol = sum(gas(1)%cellVol)
+        do k = 1, nk; do i = 1, NX + 1
+            vol = vol - gas(1)%cellVol(i, NY + 1, k)
+        enddo; enddo
+        dom = NX*H*LY*merge(H, nz*H, planar)
+        call report(label//' : (e) sum - seam row NY+1 vs Lx*Ly*Lz, rel', (vol - dom)/dom, 1.0e-14_real64)
+    end subroutine p201_u3_periodic
+
+    !> Box nodes on the x node line xn, spacing H in y (or the y node line yn) and z.
+    subroutine boxNodes(blk, xn, ny, nz, yn)
         type(obj_block), intent(inout) :: blk
         real(real64),    intent(in)    :: xn(0:)
         integer,         intent(in)    :: ny, nz
+        real(real64),    intent(in), optional :: yn(0:)
         integer :: i, j, k
+        real(real64) :: y
         blk%Nx = size(xn) - 1; blk%Ny = ny; blk%Nz = nz
         allocate(blk%node(3, 0:blk%Nx, 0:ny, 0:nz))
         do k = 0, nz; do j = 0, ny; do i = 0, blk%Nx
-            blk%node(:, i, j, k) = [xn(i), j*H, k*H]
+            y = j*H
+            if (present(yn)) y = yn(j)
+            blk%node(:, i, j, k) = [xn(i), y, k*H]
         enddo; enddo; enddo
     end subroutine boxNodes
 
@@ -362,11 +449,13 @@ contains
         call gas%computeBBox
     end subroutine finishBlock
 
-    !> A 101 record: partner cell [block, i, j, k], partner face, orientation.
-    subroutine link(cell, partner, pface, orient)
+    !> A 101 record (or one of the given code): partner cell [block, i, j, k], partner face, orientation.
+    subroutine link(cell, partner, pface, orient, code)
         type(obj_bc_cell), intent(inout) :: cell
         integer,           intent(in)    :: partner(4), pface, orient(4)
+        integer,           intent(in), optional :: code
         cell%bcdef = 101
+        if (present(code)) cell%bcdef = code
         cell%connection = partner
         cell%connectionFace = pface
         cell%orient = orient
