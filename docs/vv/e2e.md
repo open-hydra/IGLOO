@@ -424,11 +424,14 @@ solids.  Every regime is a closed form of the inputs in $x = u_g t$; the gates c
 liquid and solid relaxations, the plateau rows and the first plateau row after the
 nucleation point, the global energy balance of the source field and the heat deposited in
 every plateau cell, $\dot n_p\,\pi d k_g \mathrm{Nu}(T_m - T_g)\,\Delta x/u_g$, and the
-frozen fraction $f$ written on every row, linear in $x$ on the plateau.  Its
-Eulerian twin `solid-box-euler` checks the equivalent-Eulerian field cell by cell.
+frozen fraction $f$ written on every row, linear in $x$ on the plateau.  Ten planes 200 µm
+to 20 µm before the nucleation point and three on the plateau check the plane records of the
+step that ends at the nucleation: before it on the liquid exponential with $f = 0$, after it
+at $T_m$ on the plateau's $f$.  Its Eulerian twin `solid-box-euler` checks the
+equivalent-Eulerian field cell by cell.
 
 **Result:** 25/25 parcels in all three regimes; energy balance and plateau heat within the
-$\dot m$ print floor (3e-7).
+$\dot m$ print floor (3e-7); 325 plane records within 0.026 of their tolerance.
 
 <figure>
   {% include "vv/images/solid-box.svg" ignore missing %}
@@ -450,6 +453,23 @@ stalled at a phase boundary.
 **Result:** 25/25 parcels in all three regimes; exit temperature within 1.2e-4 K of the
 closed form (2611.7044 K); energy balance and plateau heat within the $\dot m$ print
 floor (3e-7).
+
+### solid-melt-rhos
+
+`solid-melt` with a solid density `rho-solid` = 3660 kg/m³ against the liquid's 2950: the particles enter frozen at
+the injected 30 µm, so their mass is that of a 30 µm sphere at the solid density, $m_0 = \rho_s\pi d_0^3/6$, and it
+stays constant while the volume is the liquid part at $\rho_l$ plus the frozen fraction at $\rho_s$,
+$d = \left(6m_0(a + bf)/\pi\right)^{1/3}$, $a = 1/\rho_l$, $b = 1/\rho_s - 1/\rho_l$.  The solid relaxes over
+$L_s = u_g c_s\rho_s d_0^2/(12 k_g) = 0.063346$ m to $T_m$ at $x_m = 0.050770$ m; on the plateau
+$m_0 h_\mathrm{fus}\,df/dt = -\pi d(f) k_g\mathrm{Nu}(T_g - T_m)$ integrates to
+$(a + bf)^{2/3} = (a + b)^{2/3} + Kt$, so the diameter grows to the liquid 32.236 µm at $x_l = 0.111240$ m, which
+relaxes to the exit at 2509.1425 K.  The gates retype `solid-melt`'s to these closed forms, check the mass and the
+diameter of every row, the plateau's $x - x(f)$ per parcel, the heat taken from the gas in every plateau cell, and
+the scatter cloud's weight quantum at the frozen injection's mass.
+
+**Result:** 25/25 parcels in all three regimes; exit within 8.8e-4 K of 2509.1425 K; the plateau's $x - x(f)$ within
+5.3e-7 m; the plateau cells within 3.2e-6.  The frozen injection's mass taken at the liquid density moves the solid
+by 8.8 K at its first row (388 tolerances) and the exit by 84.5 K.
 
 ### boiling-zgr-flash
 
@@ -616,6 +636,31 @@ state and `solver-fail-consumed-m4` the solver-failure exit.
 **Result:** composed rate within $1.4\cdot10^{-4}$ of the measured diameter over the breakup
 window (tolerance $2\cdot10^{-3}$), the d²-law integral within half its budget after it,
 source closure $5\cdot10^{-16}$, 25 burnouts at $x=0.544$ m.
+
+### khrt-varcp
+
+A varying $c_p$ under KHRT breakup (model 3): `khrt-e2e`'s case with $c_p = 4182 + 10\,(T - 270)$ J/(kg K) on a
+table (the enthalpy its trapezoid sum) and drops injected at 270 K into the 300 K, 200 m/s gas.  The particle state
+is the enthalpy, $\mathrm{d}h/\mathrm{d}t = 6 k_g\mathrm{Nu}(T_g - T)/(\rho_p d^2)$ with Ranz–Marshall's Nu, the
+temperature comes back through the table, and a KH shed hands its child the parent's enthalpy.  Along every run of
+rows at one diameter the check integrates $h$ by RK4 with the Schiller–Naumann velocity between rows and compares
+the temperature of every row within its print budget; across every interval in which the diameter changes (an RT
+event, a shed, the stripping) it brackets the temperature between the marches at the interval's extreme diameters
+and slips.  The energy handed to the gas must telescope at the table's enthalpy.
+
+**Result:** 8373 rows, the worst at 0.915 of its tolerance; 1977 intervals inside their brackets; the energy within
+0.27 of its print budget.  The shed's enthalpy at $c_p T$ breaks the energy balance by $10^5$ tolerances; the heat
+rate with a temperature-state factor leaves every row 14 K off.
+
+### evap-breakup-box-varcp
+
+The same for model 4, whose right-hand side carries its own copy of the enthalpy-state lines: `evap-breakup-box`
+with $c_p = 1250 + (T - 300)$ J/(kg K) on a table.  The latent term enters
+$\mathrm{d}h/\mathrm{d}t = (Q + \dot m L_v)/m$ with no heat-capacity factor; the check integrates it along the
+measured diameter on every run of rows on one Reitz–Diwakar branch and brackets the branch switch.
+
+**Result:** 4450 rows, the worst at 0.802 of its tolerance; the mass audit and the energy deposit closed.  The latent
+term with a temperature-state factor puts the rows up to 61 K off and lets the drops leave the box.
 
 ---
 
@@ -1014,6 +1059,17 @@ $T_p(x)$ through the $\sim$300–3600 K gas field.
 <figure>
   {% include "vv/images/db-2daxi.svg" ignore missing %}
 </figure>
+
+### plane-back
+
+Plane-crossing records in both directions: drag-stokes's parcel is thrown at 10 m/s (a 402 inlet) into the box's gas
+at rest under a body acceleration of 1000 m/s² toward the inlet, so $u' = -u/\tau - g$; it turns at 9.2745 mm and
+leaves through the inlet face at 11.285 ms.  Three planes (mid-cell, on a cell face, mid-cell) are each crossed
+forward and then backward: two records per parcel and plane, `dir` +1 then −1, the flows through each plane
+cancelling, each record bracketed by its leg's trajectory rows, the rows themselves on the closed form.
+
+**Result:** 150 records, the rows within 0.74 of their print budget, the net flow through each plane zero.  Without the
+backward branch of the crossing rule each plane keeps one record per parcel and the whole flow passes it.
 
 ### tab-hf92
 
