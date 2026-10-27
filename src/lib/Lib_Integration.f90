@@ -41,7 +41,8 @@ contains
     use IGLOO_Lib_Breakup, only: nchild
     use IGLOO_Lib_Combustion, only: imRr
     use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, eventCrossed, &
-                                        eventPassed, solidTransition, solidDiameter, phUndercooled
+                                        eventPassed, solidTransition, solidDiameter, phUndercooled, &
+                                        breakupStateAtSwitch
     use IGLOO_Mod_MPI,     only: mpi_size_, region_fail, region_failed
     implicit none
     class(obj_particle),   intent(inout) :: part
@@ -738,12 +739,11 @@ contains
           phaseEv = nint(stateLocal(ind_sph))
           call solidTransition(whichEv, part%cp, part%cpSol, part%Tmelt, part%hFus, y(7), y(8), phaseEv)
           stateLocal(ind_sph) = real(phaseEv, R8)
-          !> Breakup state at the switch: a nucleated TAB/ETAB oscillator at rest, the KH-RT timer restarted at a re-melt.
-          if (whichEv == 1 .and. (mod_brkSelect == 4 .or. mod_brkSelect == 5) .and. allocated(eventLocal)) &
-            eventLocal(ind_ev1:ind_ev2) = 0._R8
-          if (whichEv == 3 .and. ind_sb1 > 0) then
-            stateLocal(ind_sb1) = t1; stateLocal(ind_sb2) = 0._R8
-          endif
+          !> Breakup state at the switch: the TAB/ETAB oscillator, the KH-RT timer.
+          if ((mod_brkSelect == 4 .or. mod_brkSelect == 5) .and. allocated(eventLocal)) &
+            eventLocal(ind_ev1:ind_ev2) = breakupStateAtSwitch(whichEv, mod_brkSelect, t1, eventLocal(ind_ev1:ind_ev2))
+          if (ind_sb1 > 0) &
+            stateLocal(ind_sb1:ind_sb2) = breakupStateAtSwitch(whichEv, mod_brkSelect, t1, stateLocal(ind_sb1:ind_sb2))
           part%stateVar = y
           part%oldState = y
         endif
@@ -874,10 +874,7 @@ contains
                            part%oldState(7), part%oldState(8), part%solidPhase)
       part%stateVar(7:8) = part%oldState(7:8)
       !> Breakup state at the switch, as the segment finalize sets it.
-      if (which == 1 .and. (mod_brkSelect == 4 .or. mod_brkSelect == 5)) part%brkupVar(1:2) = 0._R8
-      if (which == 3 .and. mod_brkSelect == 3) then
-        part%brkupVar(1) = part%time; part%brkupVar(2) = 0._R8
-      endif
+      part%brkupVar(1:2) = breakupStateAtSwitch(which, mod_brkSelect, part%time, part%brkupVar(1:2))
     end subroutine solidCatchUp
 
     !> ODE right-hand sides for models 1-8, forwarding integrate's host-associated state.
