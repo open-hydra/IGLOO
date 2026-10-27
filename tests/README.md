@@ -100,9 +100,9 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 316/316 in a serial build (264 e2e + 51 unit, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` among the latter, and the
+ctest 317/317 in a serial build (265 e2e + 51 unit, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 28 more `mpi-*` cases, 344 in all (the 28 `mpi-*` pass). The e2e entries are 160 solver cases, two further
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 28 more `mpi-*` cases, 345 in all (the 28 `mpi-*` pass). The e2e entries are 161 solver cases, two further
 oracles on `khrt-e2e`'s run, the four thread-count gates, the fifteen two-sweep gates, the eighty-one setup refusals, `vv-order` (eleven V&V
 figures independent of the record order; skipped without matplotlib) and `check-order` (four gate printouts independent of it); the unit entries are 42
 compiled unit tests, the property-table reader on four fixtures, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool`. Evaporation with
