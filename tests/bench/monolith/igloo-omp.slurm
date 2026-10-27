@@ -5,7 +5,7 @@
 #SBATCH --ntasks-per-node=80
 #SBATCH --exclusive
 #SBATCH --mem=0
-#SBATCH --time=05:00:00
+#SBATCH --time=11:00:00
 #
 # Thread placement per workload: one rank inside one socket (NUMA-free), the same thread counts spread over the
 # sockets (the cost of remote pages), one rank of 40 and 80 threads plain and with the pages interleaved, and the
