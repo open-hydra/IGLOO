@@ -1,0 +1,40 @@
+# MHB98 Fig. 2(a) -- EXPERIMENT (Ranz & Marshall 1952b, the filled circles), water droplet, D^2 [mm^2] vs t [s].
+# Source: Miller, Harstad, Bellan, Int. J. Multiphase Flow 24(6), 1998, Fig. 2(a) (journal p. 1038; PDF page 14),
+#   DOI 10.1016/S0301-9322(98)00028-7. Conditions: water, Td0 = 282 K, TG = 298 K, Re_d = 0, P = 1 atm.
+# Method [S]: the figure is the page's only image, a 2318x4326 CCITT bilevel stencil placed at 1000 ppi
+#   (`pdfimages -f 14 -l 14 -png`, read at native resolution, no resampling). Axes calibrated by least squares on
+#   23 x ticks (40 s pitch) and 27 y ticks (0.04 mm^2 pitch) located as ink runs inside the frame:
+#   max residual 0.67 s and 0.0009 mm^2. Circle centres: fixed-radius
+#   Hough transform on the ink boundary (R = 31.3 px, the isolated disc's inscribed radius), kept where the
+#   vote fraction >= 0.30, local maximum within 14 px, and the ink a filled disc (distance transform >= 0.85 R);
+#   the legend disc excluded. The point set is the same for vote thresholds 0.15-0.45 and separations 14-20 px.
+# Precision per point: t +-0.9 s, D^2 +-0.0012 mm^2 (calibration residual (+) 1 px centroid).
+# Not resolved: the overlapping circles at t ~ 695-730 s give 3 centres; two weaker sub-peaks there (vote 0.29
+#   and 0.32, 14 and 19 px from resolved centres) cannot be told from the line bundle and are not listed.
+# Calibration check, independent of this file: the model-line bundle centre at 14 marker-free columns
+#   lies +0.0050 mm^2 (rms 0.0050) from the WebPlotDigitizer M7 export (mhb98_fig2_M7_d2.csv).
+# Fig. 2(b) has no experimental points (its legend lists M1-M8 only).
+# t_s   D2_mm2
+77.42  0.9975
+97.75  0.9529
+172.27  0.8638
+201.06  0.8265
+222.51  0.7907
+262.03  0.7215
+285.18  0.6881
+325.26  0.6427
+351.23  0.6053
+386.80  0.5687
+415.03  0.5155
+445.51  0.4812
+472.61  0.4486
+491.24  0.4065
+522.29  0.3659
+553.34  0.3285
+583.83  0.2919
+604.72  0.2927
+634.64  0.2132
+676.42  0.1607
+697.30  0.1416
+711.42  0.1114
+727.79  0.0931
