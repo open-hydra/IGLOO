@@ -804,9 +804,12 @@ $t_\mathrm{life}=D_0^2/K$ from the LSQ slope, extrapolated to $D^2\!\to\!0$ rath
 the last sample, at $d^2/d_0^2\approx0.012$).  This sidesteps the paper's own inconsistency (its caption says
 $D_0=1.1$ mm $\Rightarrow D_0^2=1.21$, but its plot's M7 line starts at $D_0^2\approx1.10$ and
 the axis tops at 1.2); since $\beta$ (Eq. 28) is $D_0$-independent and matches to $<$1 %, the
-two normalized $d^2$-law lines **coincide**.  The experimental points are not overlaid: in the
-figure the experimental circles sit on M7 ($\approx6.5\times10^{-3}$), and an eyeball
-digitization of them is not reliable enough to plot.
+two normalized $d^2$-law lines **coincide**.  Panel (a) also draws the Ranz–Marshall
+experiment: the 23 circles of Fig. 2(a), re-digitized from the 1000-ppi page image (axes
+calibrated on 23 and 27 ticks, centres by a Hough transform; $t$ ±0.9 s, $D^2$ ±1.2e-3 mm²) and
+normalized by the M7 line's own $D_0^2$ and lifetime, so they keep their place relative to M7.
+Their slope gives $\beta_\mathrm{exp}\approx6.5\times10^{-3}$ (6.48e-3, 2.0 % steeper than M7);
+IGLOO's $\beta$ lies 3 % below it (2.8 %).  Not gated: the experiment is drawn.
 Note Fig. 2 is a weak discriminator (all eight models coincide inside 0.47 K, and a direct
 pixel measurement of the figure shows IGLOO's 282.33 K lands *on* one of the plotted curves).
 The strong one is Fig. 4 decane ($T_G=1000$ K), which spans ~200 K across the same eight
