@@ -15,13 +15,14 @@ here at two ranks (`mpi-repeat-<case>`, see [../mpi/INFO.md](../mpi/INFO.md)).
 
 Each case is a thin directory: `INPUT` is a **symlink** to the parent e2e case's INPUT
 (as `breakup/khrt-stress` does) and `input.ini` is a copy (on `two-mat`, `drag-stokes-dopri5` and
-`burn-box-residue` a symlink to the parent's). They are deliberately
+`burn-box-residue` a symlink to the parent's; on `drag-stokes-time-end` the parent's plus `time-end`). They are deliberately
 *not* run inside the parent case's directory — under `ctest -j` the two tests would race
 over the same `OUTPUT/`.
 
 | case | parent | what it catches |
 |---|---|---|
 | `drag-stokes` | `standard/drag-stokes` | nothing — model 1, constant `d`, no children: on none of the leak paths. **Regression gate**, plus the gas-refresh cycle. |
+| `drag-stokes-time-end` | `standard/drag-stokes` | the exit code of a parcel that ends a sweep inside the domain: `time-end = 12e-3` stops the parcels inside the box in the original gas (time-end records, code 0) and lets them leave through the outlet (code 400) in the gas cycle's middle sweep, so the cycle's sweeps end inside, at the outlet, inside. The gate fails on a `reset_state` that keeps the exit code: sweep 2's 25 time-end records print code 400 (`outloc-A: sweep2 (field restored) vs sweep0: 25 vs 25 records; 25 only in first, 25 only in second`); `repeat-drag-stokes`, whose parcels leave every sweep, passes on that solver |
 | `db-injection` | `infrastructure/db-injection` | assigned/DB streams losing `tp` and `mdot` |
 | `two-mat` | `infrastructure/two-mat` | the per-material state at `nm = 2` (materials `A` and `B`, `out-file = ALL`): sweep 1 ≡ sweep 0 on six `.dat` multisets and three `.tec` fields (`euler1`, `euler2`, `source`) |
 | `d2law` | `evaporation/d2law` | evaporation destroying `d` |
@@ -60,7 +61,7 @@ would pass every gate in this directory.
 
 ## Two modes
 
-- **steady** (all fourteen) — gas held fixed; sweep 1 must reproduce sweep 0. `repeat-drag-stokes-dopri5` and
+- **steady** (all fifteen) — gas held fixed; sweep 1 must reproduce sweep 0. `repeat-drag-stokes-dopri5` and
   `repeat-tab-dopri5` are the odd ones out: they gate not a state leak but determinism on the DOPRI5 path
   (`solout` reads `x − xold` for the scatter cloud AND for the TAB/ETAB oscillator advance, and `dopri5.f`
   keeps the previous grid point in the COMMON block `/CONDO5/`). RED on a DOPRI5 whose `/CONDO5/` is shared
@@ -68,7 +69,7 @@ would pass every gate in this directory.
   the TAB case in its physics (exits 22/25 different, trajectories 2855 vs 3783 records, scatter 3e4 vs 4.6e5);
   3/3 green with `/CONDO5/` `THREADPRIVATE` and `solout` handed a local copy of `XOLD`, as in `lib/OSLO`'s
   `dopri5.f`.
-- **gas-cycle** (`drag-stokes`, `vie-plait`, `swirl-wedge`) — three sweeps through the `external_gas` hook:
+- **gas-cycle** (`drag-stokes`, `drag-stokes-time-end`, `vie-plait`, `swirl-wedge`) — three sweeps through the `external_gas` hook:
   original field, then `U` doubled, then the original again. Sweep 1 **must differ**
   (proving the refresh reaches the solver at all) and sweep 2 **must match** sweep 0
   (proving it fully overwrites, leaving no residue). The second half is the load-bearing

@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (312 in a serial build: 260 e2e + 51 unit incl. `self_test`,
-`registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 27 `mpi-*`
-rows in their own section, 339).
+One row per registered CTest entry (313 in a serial build: 261 e2e + 51 unit incl. `self_test`,
+`registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 28 `mpi-*`
+rows in their own section, 341).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -350,6 +350,7 @@ oracle possible.
 | **drag-stokes-dopri5** | `[Stokes]` (drag-stokes's oracle, symlinked) | `ode-solver = H-dopri5`, otherwise `drag-stokes` (`etab-e2e-dopri5` and the `*-dopri5` repeatability twins run the explicit solver too). RED on a DOPRI5 whose per-step call keeps Hairer's eleven-argument `SOLOUT`: IGLOO's interrupt never reaches DOPRI5 and every parcel dies at injection (NMAX exceeded); green with the six-argument call `SOLOUT(NACCPT+1,XOLDS,X,Y,N,IRTRN)` and a silent label 79: 25/25, resid/tol 0.014 | as `drag-stokes` | as `drag-stokes` |
 | **khrt-e2e-rt** | `[Reitz87]` (as `khrt-e2e`) | *RT-shatter persistence gate* (`check_rt.py`) on `khrt-e2e`'s own run: the RT/shed event must fire, apply, and persist as a mass-consistent discontinuous shatter (RED on an RT/shed event whose npdot never reaches the model-3 ODE state y(8), so the event reverts) | as `khrt-e2e` | as `khrt-e2e` |
 | **repeat-drag-stokes** | — (kind 8, harness contract) | *two-sweep repeatability* (`support/twosweep.f90` + `tools/check_twosweep.py`): sweep 1 ≡ sweep 0 — `.dat` sorted multisets identical, `.tec` ≤ 1e-12 scale-relative; **plus gas-cycle**: original field → `U` doubled → original, sweep 1 must differ, sweep 2 must match sweep 0 | as `drag-stokes` | as `drag-stokes` |
+| **repeat-drag-stokes-time-end** | — (kind 8) | *two-sweep repeatability*, steady **and gas-cycle**, `drag-stokes` with `time-end = 12e-3`: the parcels end sweeps 0 and 2 inside the box (time-end records, code 0, x = 0.108416 m) and leave through the outlet in sweep 1 (U doubled, code 400), so the exit code must not survive a sweep. RED on a `reset_state` that keeps the exit code: sweep 2's 25 time-end records print code 400 (outloc 25 of 25 records differ), while `repeat-drag-stokes` passes | as `drag-stokes` (INPUT symlinked) | as `drag-stokes`; `time-end = 12e-3` |
 | **repeat-db-injection** | — (kind 8) | *two-sweep repeatability*, steady mode (the DB `vInj` hand-off) | as `db-injection` | as `db-injection` |
 | **repeat-two-mat** | — (kind 8) | *two-sweep repeatability*, steady mode, on the nm = 2 fixture: six `.dat` multisets and three `.tec` fields (`euler1`, `euler2`, `source`) sweep 1 ≡ sweep 0 — the per-material restore in `reset_state` at arity 2 | as `two-mat` | as `two-mat` |
 | **repeat-drag-stokes-dopri5** | — (kind 8) | *two-sweep repeatability*, steady mode, `ode-solver = H-dopri5` at OMP 5: the scatter cloud's determinism on the DOPRI5 path (`solout` accumulates the cloud on `x − xold`; RED on a DOPRI5 whose `COMMON /CONDO5/` XOLD is shared by every thread: sweeps differ run to run, 377 vs 345 records, 3/3; green with `/CONDO5/` THREADPRIVATE, 3/3) | as `drag-stokes` | as `drag-stokes-dopri5` |
@@ -431,7 +432,7 @@ box/BC. Sub-test IDs in parentheses.
 | **lint-test-inputs** | — (kind 8, contract meta-test) | *input lint*: `tools/lint_inputs.py` reads every `*.ini` under `tests/` once (a symlink through its target) and fails on a value list whose tokens are separated by anything but one blank — FiNeR counts a list's values as its blanks plus one (`vp = -1.0   -3.3` gives four values, and a get into four reals leaves two unset without an error) — and on any byte above 127. It fails on a value line `vp = 1.0  2.0`, on a single tab between values and on a comment line holding an em dash |
 | **psd-plane-tool** | — (kind 8, the planes file's size tool) | *closed form*: `tests/tools/test_psd_plane.py` runs `scripts/psd_plane.py` on a synthetic planes file (on plane 1 at r = 1 mm five forward classes d = 1…5 µm at number rates 5…1 and a forward and a backward 3 µm record of rate 3, a forward 5 µm record at r = 4 mm; a 1 µm record of rate 100 on plane 2) and holds the record counts, the number flow, D10, D32, D43, `dn50`, `dv10`, `dv50`, `dv90` (Hazen positions) and `dm` = `dv` at one density to their closed forms, within r = 2.5 mm net and forward only, and beyond r = 3 mm (1e-9 relative; 34 checks). RED: the volume weight with d² (`dv50` 3.000000 against 4.027668 µm; 24 of 34), the disc on \|Y\| alone (the r = 4 mm record enters), every plane read (the number flow 115 against 15), a sort on (d, w) (`dn50`, `dv10`; 32 of 34) |
 
-## MPI build only (`USE_MPI=ON`, 27 entries)
+## MPI build only (`USE_MPI=ON`, 28 entries)
 
 Each directory symlinks its parent case's `INPUT/`, `input.ini` and `check.py` — the oracle is the
 same inode — and every case first asserts the solver printed `MPI ranks = <n>`: a serial binary
@@ -454,6 +455,7 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 | **mpi-timing-report** | — (kind 8) | the `[IGLOO-timing]` report at n=4: the per-rank gather, one line and the strided parcel count per rank (`timing-report`'s `check.py`, symlinked) + rank witness | as `vie-plait` | as `vie-plait` |
 | **mpi-determinism** | — (kind 8) | the rank-order cross-rank sum: the 1672-parcel vortex cloud at n = 1, 3, 4 (one thread per rank); grid bytes at n = 3 and 4 independent of the MPI library's collective algorithm (`tests/mpi/INFO.md`) | as `vortex-cloud-st1` | as `vortex-cloud-st1` |
 | **mpi-repeat-drag-stokes** | — (kind 8) | `repeat-drag-stokes` under `mpiexec -n 2`: the two-sweep harness with the rank witness on every log, `check_twosweep.py` unchanged | as `repeat-drag-stokes` | as `repeat-drag-stokes` |
+| **mpi-repeat-drag-stokes-time-end** | — (kind 8) | `repeat-drag-stokes-time-end` under `mpiexec -n 2`: the two-sweep harness with the rank witness on every log, `check_twosweep.py` unchanged, the gas-refresh cycle included (RED as the serial case on a `reset_state` that keeps the exit code) | as `repeat-drag-stokes-time-end` | as `repeat-drag-stokes-time-end` |
 | **mpi-repeat-drag-stokes-dopri5** | — (kind 8) | `repeat-drag-stokes-dopri5` under `mpiexec -n 2`: the two-sweep harness with the rank witness on every log, `check_twosweep.py` unchanged | as `repeat-drag-stokes-dopri5` | as `repeat-drag-stokes-dopri5` |
 | **mpi-repeat-db-injection** | — (kind 8) | `repeat-db-injection` under `mpiexec -n 2`: the two-sweep harness with the rank witness on every log, `check_twosweep.py` unchanged | as `repeat-db-injection` | as `repeat-db-injection` |
 | **mpi-repeat-two-mat** | — (kind 8) | `repeat-two-mat` under `mpiexec -n 2`: the two-sweep harness with the rank witness on every log, `check_twosweep.py` unchanged | as `repeat-two-mat` | as `repeat-two-mat` |
@@ -469,11 +471,11 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-260 `e2e`-labelled + 51 `unit`-labelled + the optional `vortex-cloud-3way` = **312 CTest entries** in a
-serial build (+27 `mpi-*` under `USE_MPI`, 339), all green (counted from `tests/CMakeLists.txt`). The 260
+261 `e2e`-labelled + 51 `unit`-labelled + the optional `vortex-cloud-3way` = **313 CTest entries** in a
+serial build (+28 `mpi-*` under `USE_MPI`, 341), all green (counted from `tests/CMakeLists.txt`). The 261
 `e2e` entries are the 157 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
-threads), the four `threads-*` thread-count gates, the fourteen `repeat-*` two-sweep gates, the eighty-one `refuse-*` setup-refusal gates, `vv-order`
+threads), the four `threads-*` thread-count gates, the fifteen `repeat-*` two-sweep gates, the eighty-one `refuse-*` setup-refusal gates, `vv-order`
 (the record-order independence of eleven V&V figures) and `check-order` (of four gate printouts). The
 51 `unit` entries are 42 compiled unit tests, the property-table reader on its four fixtures
 (`test_properties_reader`, `-two-material`, `-atlas-water`, `-sigma-mu`), `self_test`, `registry-docs`, `exe-per-tree`,

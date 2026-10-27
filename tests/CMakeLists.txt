@@ -11,9 +11,9 @@
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-brk-tab-rhos/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ breakup-per-material/ khrt-plane/ pe-sigma-table/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,krho-{sum,negative},gas-no-density}
-#   repeatability/      two-sweep gates (twosweep driver): 14 cases
+#   repeatability/      two-sweep gates (twosweep driver): 15 cases
 #   mpi/                registered only under USE_MPI: 9 rank-count cases + 4 consistency + 1 determinism
-#                       + 13 two-sweep cases
+#                       + 14 two-sweep cases
 #
 # Run everything via ../test.sh (it builds this tree's IGLOO, which every e2e case runs, and publishes it to bin/).
 
@@ -328,6 +328,11 @@ endfunction()
 # uniformity -- which no e2e case can see, because one shared seed would reproduce perfectly
 # and pass every e2e gate.
 igloo_twosweep_case(repeat-drag-stokes  repeatability/drag-stokes
+                    "e2e;repeatability;standard"       "INPUT/solfile.tec")
+# repeat-drag-stokes-time-end: drag-stokes's parcels stopped by time-end at 12 ms, inside the box in the original gas
+# and at the outlet in the gas cycle's middle sweep: sweeps that end inside, at the outlet (code 400), inside. RED on a
+# reset_state that keeps the exit code: sweep 2's time-end records print code 400 (outloc 25 of 25 records differ).
+igloo_twosweep_case(repeat-drag-stokes-time-end repeatability/drag-stokes-time-end
                     "e2e;repeatability;standard"       "INPUT/solfile.tec")
 # repeat-drag-stokes-dopri5: two sweeps at OMP 5 with the explicit solver. Gates the scatter
 # cloud's determinism on the DOPRI5 path: solout's scatter accumulator reads x - xold, and
@@ -1390,9 +1395,10 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
             TIMEOUT 900)
     endfunction()
     # every repeatability case but burn-box-residue (its rank side is mpi-consistency-residue's) at 2 ranks x 2 threads
-    # (children, RNG, evaporation, ord2 accumulator shape,
-    # two materials, the explicit solver, the wedge, the gas-refresh cycle on drag-stokes, vie-plait and swirl-wedge)
+    # (children, RNG, evaporation, ord2 accumulator shape, two materials, the explicit solver, the wedge, the exit code's
+    # reset, the gas-refresh cycle on drag-stokes, drag-stokes-time-end, vie-plait and swirl-wedge)
     igloo_twosweep_case_mpi(mpi-repeat-drag-stokes        mpi/repeat-drag-stokes        2 2 "e2e;mpi;repeatability" "INPUT/solfile.tec")
+    igloo_twosweep_case_mpi(mpi-repeat-drag-stokes-time-end mpi/repeat-drag-stokes-time-end 2 2 "e2e;mpi;repeatability" "INPUT/solfile.tec")
     igloo_twosweep_case_mpi(mpi-repeat-drag-stokes-dopri5 mpi/repeat-drag-stokes-dopri5 2 2 "e2e;mpi;repeatability" "")
     igloo_twosweep_case_mpi(mpi-repeat-db-injection       mpi/repeat-db-injection       2 2 "e2e;mpi;repeatability" "")
     igloo_twosweep_case_mpi(mpi-repeat-two-mat            mpi/repeat-two-mat            2 2 "e2e;mpi;repeatability" "")
