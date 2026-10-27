@@ -22,6 +22,21 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   OPTION(USE_MPI "Use the MPI library for parallelization" OFF)
   OPTION(USE_OPENMP "Use OpenMP for parallelization" OFF)
 
+  # Core cycles per phase in the [IGLOO-timing] report (src/lib/igloo_cycles.c, IGLOO's only C source):
+  # standalone builds with a C compiler; a parent project skips this block and the report prints wall time alone.
+  OPTION(IGLOO_CYCLES "Count user-mode core cycles per timing phase (needs a C compiler)" ON)
+  set(IGLOO_HAVE_CYCLES OFF)
+  if(IGLOO_CYCLES)
+    include(CheckLanguage)
+    check_language(C)
+    if(CMAKE_C_COMPILER)
+      enable_language(C)
+      set(IGLOO_HAVE_CYCLES ON)
+    else()
+      message(STATUS "No C compiler: the [IGLOO-timing] report prints wall time only")
+    endif()
+  endif()
+
   # This INCLUDE statement executes code that sets the compile flags for DEBUG,
   # RELEASE, and TESTING. You should  review this file and make sure the flags 
   # are to your liking.

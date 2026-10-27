@@ -12,12 +12,22 @@ that do not come from the timers.
   5. the allocated sizes equal the closed form of the fixture's mesh (gas-order 2, 3D, source
      output only): gas (nsc+9)(Ni+2)(Nj+2)(Nk+2); accumulators (nm+4)(Ni+1)(Nj+1)(Nk+1);
      geometry = geo block 4(N+1)^3 + 16 N^3, gas block 3(N+2)^3 + (N+1)^3; the source block
-     holds no geometry (N^3 = Ni Nj Nk, (N+k)^3 = (Ni+k)(Nj+k)(Nk+k)).
+     holds no geometry (N^3 = Ni Nj Nk, (N+k)^3 = (Ni+k)(Nj+k)(Nk+k));
+  6. core cycles: exactly one state line. `unavailable` (not built, or perf_event_open refused) passes and
+     carries no figures; `incomplete` (counters on some threads only) fails. With counters on every thread:
+     their number is the solver's `OpenMP threads` times its ranks, one cycle line per phase in order
+     (setup:input `-`), each total between ranks x min and ranks x max, the sweep and setup totals the sums of
+     their phases, the aggregate GHz the sweep cycles over the sweep seconds, and two oracles from the
+     wall-clock accounting: parcel-loop cycles <= 6 GHz x the loop's slowest rank x the threads, and >= 0.5 GHz
+     x the threads' summed busy seconds (the rank lines).
 
 PASS stdout carries no times (they vary run to run).
 """
 import math
 import re
+
+CYC_CEIL = 6.0e9    # cycles per second no core exceeds
+CYC_FLOOR = 0.5e9   # cycles per busy second of an integrating thread, at least
 import sys
 
 PHASES = ['setup:input', 'setup:gas-read', 'setup:blocks', 'setup:gas-import', 'setup:pinning',
@@ -132,12 +142,85 @@ def main():
         if got != (gas, geo, acc):
             fail(f'sizes gas/geometry/accumulators {got}, closed form {(gas, geo, acc)}')
 
+    # 6. core cycles: one state line; with counters, one line per phase, the totals and two oracles that come
+    #    from the wall-clock accounting, not from the counters
+    st = [l for l in tl if re.match(r'\[IGLOO-timing\] cycles  (counters|unavailable|incomplete)', l)]
+    cyl = [l for l in tl if l.startswith('[IGLOO-timing] cycles phase ')]
+    cyt = [l for l in tl if l.startswith('[IGLOO-timing] cycles  sweep ')]
+    cstate = 'absent'
+    if len(st) != 1:
+        fail(f'{len(st)} cycles state lines, expected 1')
+    elif ' unavailable: ' in st[0]:
+        cstate = 'unavailable'
+        if cyl or cyt:
+            fail(f'cycles unavailable, yet {len(cyl)} cycle phase line(s) and {len(cyt)} total line(s)')
+    elif ' incomplete: ' in st[0]:
+        cstate = 'incomplete'
+        fail(f'cycle counters on some threads only: {st[0]}')
+    else:
+        cstate = 'counters'
+        c = re.search(r'counters (\d+) of (\d+) thread\(s\) on (\d+) rank\(s\)', st[0])
+        om = re.search(r'OpenMP threads =\s+(\d+)', text)
+        omp = int(om.group(1)) if om else 1
+        if not c:
+            fail(f'unreadable cycles state line: {st[0]}')
+        else:
+            n, m, r = (int(c.group(k)) for k in (1, 2, 3))
+            if r != nranks:
+                fail(f'cycles on {r} rank(s), the solver banner {nranks}')
+            if not (n == m == omp * nranks):
+                fail(f'counters {n} of {m} thread(s), expected {omp} OpenMP thread(s) x {nranks} rank(s)')
+        cp = [re.match(r'\[IGLOO-timing\] cycles phase (\S+)\s+(-|\d+)(?:\s+ranks min\s+(\d+) max\s+(\d+))?$', l)
+              for l in cyl]
+        if [p.group(1) if p else None for p in cp] != PHASES:
+            fail(f'cycle phase lines {[p.group(1) if p else None for p in cp]} differ from {PHASES}')
+        else:
+            tot = {}
+            for p in cp:
+                if p.group(1) == 'setup:input':
+                    if p.group(2) != '-':
+                        fail(f'setup:input carries cycles ({p.group(2)}): it starts before timing is read')
+                    continue
+                if p.group(2) == '-' or p.group(3) is None:
+                    fail(f'phase {p.group(1)} carries no cycle figures')
+                    continue
+                t, lo, hi = (int(p.group(k)) for k in (2, 3, 4))
+                if not (lo <= hi and nranks * lo <= t <= nranks * hi):
+                    fail(f'phase {p.group(1)} cycles {t} outside {nranks} x [{lo}, {hi}]')
+                tot[p.group(1)] = t
+            s = re.match(r'\[IGLOO-timing\] cycles  sweep (\d+)\s+setup (\d+)\s+aggregate\s+(\S+) GHz', cyt[0]) \
+                if len(cyt) == 1 else None
+            if not s:
+                fail(f'{len(cyt)} cycle total lines, expected 1')
+            elif len(tot) == len(PHASES) - 1:
+                sweep, setup = int(s.group(1)), int(s.group(2))
+                if sweep != sum(tot[q] for q in PHASES[5:]):
+                    fail(f'cycles sweep {sweep}, the nine sweep phases sum to {sum(tot[q] for q in PHASES[5:])}')
+                if setup != sum(tot[q] for q in PHASES[1:5]):
+                    fail(f'cycles setup {setup}, the measured setup phases sum to '
+                         f'{sum(tot[q] for q in PHASES[1:5])}')
+                # the oracles: the loop's cycles against its wall time and against the threads' busy seconds
+                loop = tot['parcel-loop']
+                lp = [p for p in ph if p and p.group(1) == 'parcel-loop']
+                lmax = float(lp[0].group(4)) if lp else 0.0
+                busy = sum(float(b) for b in re.findall(r'\[IGLOO-timing\] rank\s+\d+\s+parcel-loop\s+\S+ s\s+'
+                                                       r'parcels\s+\d+\s+threads\s+\d+\s+busy\s+(\S+) s', text))
+                if not loop <= CYC_CEIL * lmax * omp * nranks:
+                    fail(f'parcel-loop {loop} cycles above {CYC_CEIL:.0e}/s x {lmax} s x {omp * nranks} threads')
+                if not loop >= CYC_FLOOR * busy:
+                    fail(f'parcel-loop {loop} cycles below {CYC_FLOOR:.0e}/s x {busy} busy thread-seconds '
+                         f'(ratio {loop / max(CYC_FLOOR * busy, 1.0):.3f} of the floor)')
+                swt = sum(float(p.group(2)) for p in ph if p and p.group(1) in PHASES[5:])
+                agg = float(s.group(3))
+                if swt > 0 and abs(agg - sweep / swt / 1e9) > 0.01 + 1e-3 * agg:
+                    fail(f'aggregate {agg} GHz, sweep cycles / sweep seconds give {sweep / swt / 1e9:.3f}')
+
     if fails:
         for f in fails:
             print(f'  [FAIL] {f}')
         return 1
     print(f'  [PASS] {len(PHASES)} phase lines, {nthr} thread line(s), {nranks} rank line(s); '
-          f'{nparc} parcels split as the strided ownership gives; sizes match the closed form')
+          f'{nparc} parcels split as the strided ownership gives; sizes match the closed form; cycles {cstate}')
     return 0
 
 

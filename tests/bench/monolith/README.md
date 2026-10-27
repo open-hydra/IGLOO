@@ -22,8 +22,11 @@ the ranks, per-thread and per-rank parcel-loop accounting, the rank imbalance an
   `mpirun`'s start to the first rank's start, `life_s` the first start to the last end, `teardown_s` the last end
   to `mpirun`'s return. The launcher's cost does not depend on the slots, so wall-clock efficiencies are taken on
   `life_s` and `launch_s` is listed apart.
-- **Wall-clock only.** One busy core runs at a higher clock than eighty busy ones, so a wall-clock efficiency against
-  the 1-core anchor also contains the chip's frequency scaling; IGLOO reads no cycle counter.
+- **Seconds and cycles.** One busy core runs at a higher clock than eighty busy ones, so a wall-clock efficiency
+  against the 1-core anchor also contains the chip's frequency scaling. A binary built with IGLOO's cycle counter
+  (the default where a C compiler exists) adds the user-mode core cycles of every phase, summed over threads and
+  ranks; perfect parallelism keeps them constant whatever the clock, so `analyze.py` reports `eff_cyc` = C(1)/C(N)
+  on the sweep and on the parcel loop beside the efficiencies in seconds ("Core cycles" below).
 - **What ran where.** Each launch exports `I_MPI_DEBUG=4` and `OMP_DISPLAY_AFFINITY=TRUE`; the rank table and the
   per-thread binding lines become one `IAFF` line per repetition (ranks, threads per rank, distinct cores). A point
   still running after 30 s also gets an `IOCC` line (IGLOO threads and the cores they sit on).
@@ -108,13 +111,28 @@ Points are tagged `<workload>-<R>x<T>[-<variant>]`; `analyze.py` refers each to 
 
 | line | content |
 |---|---|
-| `JOB=`, `START`, `WORKDIR`, `BINARY`, `COMMIT`, `CPU`, `LAUNCH`, `WORKLOAD` | provenance: job, node, the binary's md5 and commit, the node's CPU model and flag digest, the launcher's resolver option, the workloads |
+| `JOB=`, `START`, `WORKDIR`, `BINARY`, `COMMIT`, `CPU`, `LAUNCH`, `WAITPOLICY`, `WORKLOAD` | provenance: job, node, the binary's md5 and commit, the node's CPU model and flag digest, the launcher's resolver option, the OpenMP wait policy, the workloads |
 | `IMAKE` | the workloads' build: exit code and seconds |
 | `IPIN` | the Intel MPI pin domain of the repetition (`omp`, or one mask per rank) |
 | `IAFF`, `IOCC` | placement at launch, occupancy at 30 s |
 | `IREP`, `IFAIL` | one per repetition: every field, or the reason it was not scored |
 | `IOK` | one per point: the statistics over the repetitions, then the fastest repetition's fields |
 | `ICHECK` | the exit codes of `check_finite.py` and of the workload's `check.py` on the last repetition |
+
+## Core cycles
+
+The report's `cycles` lines (`docs/development/parallelization.md`, "Per-phase timers") come from one
+`perf_event_open` counter per OpenMP thread, user mode only, read by the master at every phase switch. Two limits:
+
+- kernel time is not counted: the cycles of the input and output phases are not their cost (read their seconds);
+- idle threads spin after a parallel region (for Intel's OpenMP, up to `KMP_BLOCKTIME`, 200 ms by default) and the
+  spin lands in the next phase's cycles: the parcel loop's and the sweep's cycles stay comparable from point to
+  point, the per-phase cycles of the short phases after a parallel region do not without the wait policy, which
+  every job prints (`WAITPOLICY`: `KMP_BLOCKTIME`, `OMP_WAIT_POLICY`, `GOMP_SPINCOUNT`, set or unset) and every
+  repetition records. The harness sets none of them: a shorter block time would move the sweep times it measures.
+
+A host that refuses the counters (`perf_event_paranoid` above 2, a container) prints `cycles  unavailable` and the
+harness records `cyc_state=unavailable`; the times are unaffected.
 
 ## Launch cost
 

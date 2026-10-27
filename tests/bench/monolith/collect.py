@@ -13,18 +13,21 @@ import re
 import sys
 
 HEAD = ["tag", "workload", "ranks", "threads", "ppn", "reps", "nok", "rep"]
-STATS = ["%s_%s" % (k, s) for k in ("wall_s", "life_s", "launch_s", "sweep_s", "loop_s", "reduce_s")
-         for s in ("med", "min", "sd")]
+STATS = ["%s_%s" % (k, s) for k in ("wall_s", "life_s", "launch_s", "sweep_s", "loop_s", "reduce_s",
+                                    "cyc_sweep", "cyc_loop") for s in ("med", "min", "sd")]
 BEST = ["wall_s", "launch_s", "life_s", "teardown_s", "stamped",
         "setup_s", "sweep_s", "loop_s", "reduce_s", "finalize_s", "smoothing_s", "writeout_s",
         "parcel_loop_max_s", "busy_maxmean_max", "imbalance", "parcels", "particles", "children",
         "sz_gas", "sz_geo", "sz_acc", "sz_mib", "rss_rank_gb", "rss_node_gb",
-        "mpi_ranks", "hdr_ranks", "hdr_threads", "reports", "wl_md5"]
+        "mpi_ranks", "hdr_ranks", "hdr_threads", "reports", "wl_md5",
+        "cyc_state", "cyc_counters", "cyc_threads", "cyc_sweep", "cyc_loop", "cyc_setup", "cyc_ghz",
+        "kmp_blocktime", "omp_wait_policy", "gomp_spincount"]
 PHASES = ["setup:input", "setup:gas-read", "setup:blocks", "setup:gas-import", "setup:pinning",
           "accumulators", "ghost-fill", "solve-other", "parcel-loop", "census", "reduce", "finalize",
           "smoothing", "writeout+merge"]
 PHKEY = ["ph_" + re.sub(r"[^A-Za-z0-9]", "_", p) for p in PHASES]
-PHCOLS = [c for k in PHKEY for c in (k, k + "_min", k + "_max")]
+CYKEY = ["cy_" + re.sub(r"[^A-Za-z0-9]", "_", p) for p in PHASES]
+PHCOLS = [c for k in PHKEY + CYKEY for c in (k, k + "_min", k + "_max")]
 AFF = ["aff_ranks", "aff_threads", "aff_cores", "aff_cpus", "pin_ranks", "pin_cpus"]
 OCC = ["occ_threads", "occ_cores"]
 CHK = ["finite", "check"]
@@ -54,7 +57,13 @@ DEFS = """\
 #                      distinct cpus) and Intel MPI's rank table (ranks, distinct cpus)
 #   occ_*              IGLOO threads and the distinct cores they sat on 30 s into the run (empty if it had ended)
 #   finite, check      exit codes of check_finite.py and of the workload's check.py on the last repetition
+#   cyc_state          counters, unavailable, incomplete or absent (a binary without the counter); cyc_counters of
+#                      cyc_threads threads carry one; cyc_sweep, cyc_loop, cyc_setup: user-mode core cycles summed
+#                      over threads and ranks; cyc_ghz: the sweep's cycles over its seconds [GHz]
+#   kmp_blocktime, omp_wait_policy, gomp_spincount   the OpenMP wait policy of the launch (unset: the default);
+#                      idle threads spin into the cycles of the phase after a parallel region
 #   ph_<phase>[_min|_max]   each phase: rank 0's time and the minimum and maximum over the ranks [s]
+#   cy_<phase>[_min|_max]   each phase: its cycles summed over the ranks, and the minimum and maximum over the ranks
 """
 
 
@@ -98,7 +107,7 @@ def main():
         for d in oks:
             row = {"job": job, "node": node}
             row.update(d)
-            for k in PHKEY:
+            for k in PHKEY + CYKEY:
                 parts = d.get(k, "").split("/")
                 if len(parts) == 3:
                     row[k], row[k + "_min"], row[k + "_max"] = parts

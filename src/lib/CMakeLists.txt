@@ -2,6 +2,14 @@ file(GLOB LIBSRC *.f90 config/*.f90)
 add_library(${lib} ${LIBSRC})
 target_link_libraries(${lib} PRIVATE FiNeR::FiNeR OSLO ORION)
 
+# The per-thread cycle counter (standalone builds only, see the top-level IGLOO_CYCLES): a C target of its own,
+# so the Fortran and OpenMP flags of ${lib} never reach the C compiler.
+IF(IGLOO_HAVE_CYCLES)
+    add_library(IGLOOcyc STATIC igloo_cycles.c)
+    target_link_libraries(${lib} PRIVATE IGLOOcyc)
+    target_compile_definitions(${lib} PRIVATE IGLOO_HAVE_CYCLES)
+ENDIF()
+
 target_include_directories(${lib} INTERFACE
     $<BUILD_INTERFACE:${CMAKE_Fortran_MODULE_DIRECTORY}>)
 
