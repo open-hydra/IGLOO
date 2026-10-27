@@ -86,7 +86,7 @@ tests/
 │                                 # db-injection/coupled-body/body-evap-m2/body-evap-m4/body-burn-m5/db-2daxi/axis-200/wedge-fold/planar-slab/wedge-axis-row/wedge-tiny/two-mat/inlet-402-403/two-fam-bc/two-fam-bc-2blk/two-fam-bc-2blk-mollify/rot-2blk/chimera-2blk/chimera-2blk-rim/two-fam-bc-2blk-stretch-ord2/two-fam-bc-2blk-ord2-dual/two-fam-bc-2blk-ord2-dual-1l/two-fam-bc-2blk-ord2-dual-default/swirl-wedge-2blk-ord2-dual/chimera-2blk-shift-ord2/chimera-2blk-mollify/chimera-2blk-shift-mollify/periodic-y/periodic-2d/periodic-2d-ord2/periodic-2d-ord2-dual/conn-103/bc-center-2grp/inj-pack/inj-mdotmax/inj-dscell/inj-dsdegen/ini-comment-eq/foreign-keys/foreign-keys-db/zero-group-line/solver-fail-consumed/solver-fail-consumed-m4/solver-fail-midway/solver-fail-refine/stuck-cell/sym-plane-skate/sym-plane-skate-ord2/sym-plane-bounce/sym-plane-bounce-ord2/exit-census/wall-approach/varcp-tmin/psd-bare-token/inj-edge/inj-edge-payload (e2e)
 │                                 # refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-*,vapour-*,pure2d-*,bc-copies,bc-copy-order,chimera-*,periodic-not-mutual,ord2-*,*-token,breakup-token-material,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre,psd-*,comb-*,cap-*,ox0-*,brk-*,sigma-*,bc-legacy,bc-empty-payload,body-accel,plane-x,plane-x-empty,krho-*,gas-no-density} (setup-refusal gates)
 ├── repeatability/                # two-sweep state-leak gates: drag-stokes/drag-stokes-dopri5/db-injection/two-mat/d2law/khrt/vie-plait/etab/tab/tab-dopri5/solid-box/evap-breakup/swirl-wedge/burn-box-residue
-└── mpi/                          # USE_MPI build only: drag-stokes/conv-nu/khrt/khrt-plane/bc-center-2grp/two-mat/timing-report/psd-table/two-fam-bc-2blk-ord2-dual-np3/consistency/consistency-two-mat/consistency-psd/consistency-residue/determinism/repeat-*/ (13)
+└── mpi/                          # USE_MPI build only: drag-stokes/conv-nu/khrt/khrt-plane/bc-center-2grp/two-mat/timing-report/psd-table/two-fam-bc-2blk-ord2-dual-np3/consistency/consistency-two-mat/consistency-psd/consistency-residue/determinism/repeat-*/ (14)
 ```
 
 ### Categories
@@ -99,7 +99,7 @@ tests/
 | `combustion` | Beckstead $d^n$ Al-burn unit family, the oxide cap's among it; burn-box, burn-box-euler, body-burn-m5 (the body-force accumulators of model 5), burn-box-cap (the oxide cap), burn-box-residue (the burnout residue) and burn-box-ox0 (the oxide fraction at injection) e2e; the four combustion refusals, the three of the oxide cap and the two of the oxide fraction at injection |
 | `solidification` | Solidification unit family (supercooling, recalescence, plateau, melting, the birth state of a burnout residue); solid-box, solid-melt, solid-box-euler, solid-box-2mat, solid-box-rad, scatter-weight-solid e2e; breakup on a solidifying material: solid-brk-tab and solid-brk-khrt; the density change on freezing: solid-box-rhos, solid-box-varrho and solid-brk-tab-rhos; the freezing residue of burn-box-residue; the two-sweep solid-box and the seven solidification refusals |
 | `infrastructure` | Gas reconstruction, INI pipeline, property-table reader (four fixtures), RNG stream, axis dispatch, grazing stand-off, gas ghost ring, boundary-file families, dual-clip, source-reduction, multi-block mollifier, host-association and boundary-face fallback unit families, `self_test`, `registry-docs` and the planes-file size tool (`psd-plane-tool`); injection, coupling (the body-force accumulators of models 2, 4 and 5 among them), nozzle, wedge and slab, periodic, two-material, per-material breakup, per-family boundary-file, two-block, chimera, INI-comment, foreign-key, 0-group material line, wall-approach, varying-cp table, solver-failure and exit-record e2e cases; the two-sweep db-injection and two-mat; thirty-one setup-refusal gates (forty more sit in their model's category, two of them in both evaporation and breakup, and the ten size-distribution refusals carry the `injection` label) |
-| `repeatability` | Fourteen e2e cases run twice through `setup_static` → `reset_state` → `solve` with the second sweep compared to the first (see `tests/repeatability/INFO.md`) |
+| `repeatability` | Fifteen e2e cases run twice through `setup_static` → `reset_state` → `solve` with the second sweep compared to the first (see `tests/repeatability/INFO.md`) |
 | `mpi` | The serial gates re-run under `mpiexec` with a rank-count witness, plus cross-rank-count consistency (see `tests/mpi/INFO.md`) |
 
 CTest labels combine category (`standard`/`evaporation`/…), kind (`unit`/`e2e`),
@@ -109,8 +109,8 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **312 tests** in a serial build (260 e2e + 51 unit, `self_test`,
-`registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 27 more
+Current gate: **313 tests** in a serial build (261 e2e + 51 unit, `self_test`,
+`registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 28 more
 `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.
 

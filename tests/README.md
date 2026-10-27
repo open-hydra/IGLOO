@@ -55,7 +55,7 @@ tests/
 │   └── db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ periodic-y/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/   # e2e
 │   └── refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-*,vapour-*,pure2d-*,bc-copies,bc-copy-order,chimera-*,periodic-not-mutual,ord2-*,*-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre,psd-*,comb-*,cap-*,ox0-*,brk-*,sigma-*,bc-legacy,bc-empty-payload,body-accel,plane-x,plane-x-empty,krho-*,gas-no-density}/   # setup-refusal gates
 ├── repeatability/                # two-sweep gates: drag-stokes/ drag-stokes-dopri5/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/ tab-dopri5/ solid-box/ evap-breakup/ swirl-wedge/ burn-box-residue/
-└── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ khrt-plane/ bc-center-2grp/ two-mat/ timing-report/ psd-table/ two-fam-bc-2blk-ord2-dual-np3/ consistency/ consistency-two-mat/ consistency-psd/ consistency-residue/ determinism/ repeat-*/ (13)
+└── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ khrt-plane/ bc-center-2grp/ two-mat/ timing-report/ psd-table/ two-fam-bc-2blk-ord2-dual-np3/ consistency/ consistency-two-mat/ consistency-psd/ consistency-residue/ determinism/ repeat-*/ (14)
 ```
 
 Each unit family carries an `INFO.md` cataloguing its tests; `tools/aggregate_report.py`
@@ -100,10 +100,10 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 312/312 in a serial build (260 e2e + 51 unit, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` among the latter, and the
+ctest 313/313 in a serial build (261 e2e + 51 unit, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 27 more `mpi-*` cases, 339 in all (the 27 `mpi-*` pass). The e2e entries are 157 solver cases, two further
-oracles on `khrt-e2e`'s run, the four thread-count gates, the fourteen two-sweep gates, the eighty-one setup refusals, `vv-order` (eleven V&V
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 28 more `mpi-*` cases, 341 in all (the 28 `mpi-*` pass). The e2e entries are 157 solver cases, two further
+oracles on `khrt-e2e`'s run, the four thread-count gates, the fifteen two-sweep gates, the eighty-one setup refusals, `vv-order` (eleven V&V
 figures independent of the record order; skipped without matplotlib) and `check-order` (four gate printouts independent of it); the unit entries are 42
 compiled unit tests, the property-table reader on four fixtures, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool`. Evaporation with
 ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,
