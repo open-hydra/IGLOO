@@ -4,9 +4,12 @@
 <source>/bin/IGLOO and <source>/bin/DocGen are copies each build publishes for users; a test that ran
 them could meet a relink of another tree in progress (a launch then finds a missing or half-written
 file). Fails on
+  (0) a function(igloo_<name> ...) of tests/CMakeLists.txt whose body runs $<TARGET_FILE:IGLOO> and is
+      not one of the helpers rule (2) checks;
   (1) a registered test whose command or properties name <source>/bin/IGLOO or <source>/bin/DocGen;
-  (2) a test registered through igloo_e2e_case, igloo_e2e_case_mpi or igloo_refusal_case whose
-      ENVIRONMENT lacks IGLOO_EXE (the executable its check.py runs for a sibling case);
+  (2) a test registered through igloo_e2e_case, igloo_e2e_case_mpi, igloo_refusal_case or
+      igloo_threads_case whose ENVIRONMENT lacks IGLOO_EXE (the executable its check.py runs for a
+      sibling case);
   (3) a tests/**/*.py that builds the path bin/IGLOO anywhere but in the default of an IGLOO_EXE read
       (os.environ.get("IGLOO_EXE", <path>) or os.getenv("IGLOO_EXE", <path>)).
 The MPI gates that take the executable as an argument (mpi-consistency, mpi-consistency-two-mat,
@@ -20,7 +23,7 @@ import re
 import subprocess
 import sys
 
-HELPERS = ("igloo_e2e_case", "igloo_e2e_case_mpi", "igloo_refusal_case")
+HELPERS = ("igloo_e2e_case", "igloo_e2e_case_mpi", "igloo_refusal_case", "igloo_threads_case")
 SHARED = ("IGLOO", "DocGen")
 SKIP_DIRS = ("OUTPUT", "__pycache__")
 SKIP_PREFIXES = ("ref-", "tec_n", "_run-")
@@ -60,6 +63,23 @@ def helper_names(tests, srcdir):
     for h, n in re.findall(r"^\s*(%s)\(\s*([A-Za-z0-9_.+-]+)" % "|".join(HELPERS), text, re.M):
         names.add(n)
     return names & set(tests), "tests/CMakeLists.txt"
+
+
+def solver_helpers(srcdir):
+    """The function(igloo_<name> ...) definitions of tests/CMakeLists.txt whose body runs $<TARGET_FILE:IGLOO>."""
+    runners, cur = [], None
+    for line in open(os.path.join(srcdir, "tests", "CMakeLists.txt")):
+        s = line.strip()
+        m = re.match(r"function\(\s*(igloo_[A-Za-z0-9_]+)", s)
+        if m:
+            cur = m.group(1)
+            continue
+        if re.match(r"endfunction\s*\(", s):
+            cur = None
+            continue
+        if cur and not s.startswith("#") and "$<TARGET_FILE:IGLOO>" in s and cur not in runners:
+            runners.append(cur)
+    return runners
 
 
 def strval(node):
@@ -140,6 +160,8 @@ def main():
     me = os.path.basename(__file__)
     shared = re.compile(r"%s/bin/(%s)(?![A-Za-z0-9_.+-])" % (re.escape(srcdir), "|".join(SHARED)))
 
+    runners = solver_helpers(srcdir)
+    bad0 = sorted(f for f in runners if f not in HELPERS)
     bad1 = sorted(n for n, (cmd, props) in tests.items()
                   if me not in cmd and (shared.search(cmd) or shared.search(props)))
     helpers, source = helper_names(tests, srcdir)
@@ -154,6 +176,9 @@ def main():
 
     print("exe-per-tree: %d registered tests, %d helper registrations (%s), %d test scripts (%s)"
           % (len(tests), len(helpers), source, len(pyfiles), how))
+    print("  (0) helpers that run the IGLOO executable and are not checked: %d" % len(bad0))
+    for n in bad0:
+        print("      " + n)
     print("  (1) tests naming %s/bin/{%s}: %d" % ("<source>", ",".join(SHARED), len(bad1)))
     for n in bad1:
         print("      " + n)
@@ -166,7 +191,10 @@ def main():
     if not helpers:
         print("[FAIL] no helper registration found: the IGLOO_EXE check would be vacuous")
         return 1
-    if bad1 or bad2 or bad3:
+    if not runners:
+        print("[FAIL] no helper of tests/CMakeLists.txt runs $<TARGET_FILE:IGLOO>: rule (0) would be vacuous")
+        return 1
+    if bad0 or bad1 or bad2 or bad3:
         print("[FAIL] a test can run the shared executable another build tree publishes")
         return 1
     print("[PASS] every test runs its build tree's executable")
