@@ -70,7 +70,7 @@ module IGLOO_data_block
     logical, allocatable :: f(:,:)
   end type faceFlags
 
-  !> A geometric vertex shared across 101 faces: its dual cells and their summed octant volume.
+  !> A geometric vertex shared across 101 or 201 faces: its dual cells and their summed octant volume.
   type, public :: vertexClass
     integer, allocatable :: m(:,:)  !> (4, members): block, i, j, k; ascending block, then index
     real(R8) :: w = 0._R8           !> the members' dualW summed
@@ -369,7 +369,7 @@ contains
 
   end subroutine normalizeEUL
 
-  !> Each 101 vertex class's members take its source sum and its eulerian total over w (raw accumulators).
+  !> Each 101 or 201 vertex class's members take its source sum and its eulerian total over w (raw accumulators).
   subroutine combineInterfaceDual(src, eul, classes, gas)
     use IGLOO_variables, only: toll
     implicit none
@@ -1092,7 +1092,7 @@ contains
     class(obj_block), intent(inout) :: self      !> dual (gas) block
     logical,          intent(in)    :: is2D
     class(obj_block), intent(in)    :: geoblock   !> for the slab thickness in 2D
-    type(faceFlags),  intent(in), optional :: linked(6)  !> the 101 face cells
+    type(faceFlags),  intent(in), optional :: linked(6)  !> the 101 or 201 face cells
     integer  :: i, j, k, i0, j0, ii, jj, in, jn, kn, nxe, nye, nze
     real(R8) :: vol, Tgeo, geoArea, v(3,4), d1(3), d2(3)
     real(R8) :: rad, num, den, cSlab, fi, fj, fk
