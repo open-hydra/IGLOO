@@ -42,6 +42,10 @@ igloo_setup () {
        "NUMA $(lscpu | sed -n 's/^NUMA node(s): *//p') | flags-md5 $(lscpu | grep '^Flags' | md5sum | cut -c1-12)"
   free -g | head -2
   echo "LAUNCH RES_OPTIONS=${IGLOO_LAUNCH_RES_OPTIONS:-unset} (IGLOO_LAUNCH_RES_OPTIONS; mpirun only)"
+  # The OpenMP wait policy decides how long idle threads spin after a region, and the spin lands in the cycles of
+  # the phase that follows: every job states it (the harness sets none of the three).
+  echo "WAITPOLICY KMP_BLOCKTIME=${KMP_BLOCKTIME:-unset} OMP_WAIT_POLICY=${OMP_WAIT_POLICY:-unset}" \
+       "GOMP_SPINCOUNT=${GOMP_SPINCOUNT:-unset}"
   igloo_workloads
 }
 
@@ -190,10 +194,11 @@ igloo_casedir () {
 }
 
 # igloo_parse <tag> <rep> <stdout> <stderr>: line 1 the IAFF line (placement at launch: I_MPI_DEBUG's rank table,
-# OMP_DISPLAY_AFFINITY's thread lines), line 2 the report's fields as key=value.
+# OMP_DISPLAY_AFFINITY's thread lines), line 2 the report's fields as key=value, with the cycles and the wait
+# policy of the launch.
 igloo_parse () {
   python3 - "$@" <<'PY'
-import re, sys
+import os, re, sys
 tag, rep, fout, ferr = sys.argv[1:5]
 out = open(fout, errors="replace").read()
 err = open(ferr, errors="replace").read()
@@ -285,6 +290,21 @@ if n:
 n = re.findall(r"number of children =\s+(\d+)", out)
 if n:
     f["children"] = sum(int(x) for x in n)
+# core cycles (a build with the counter): the state, the totals, every phase; the wait policy they depend on
+m = re.search(r"\[IGLOO-timing\] cycles  (counters|unavailable|incomplete)", last)
+f["cyc_state"] = m.group(1) if m else "absent"
+m = re.search(r"\[IGLOO-timing\] cycles  counters (\d+) of (\d+) thread", last)
+if m:
+    f["cyc_counters"], f["cyc_threads"] = m.groups()
+for m in re.finditer(r"\[IGLOO-timing\] cycles phase (\S+)\s+(\d+)\s+ranks min\s+(\d+) max\s+(\d+)", last):
+    f["cy_" + re.sub(r"[^A-Za-z0-9]", "_", m.group(1))] = "%s/%s/%s" % m.group(2, 3, 4)
+    if m.group(1) == "parcel-loop":
+        f["cyc_loop"] = m.group(2)
+m = re.search(r"\[IGLOO-timing\] cycles  sweep (\d+)\s+setup (\d+)\s+aggregate\s+(\S+) GHz", last)
+if m:
+    f["cyc_sweep"], f["cyc_setup"], f["cyc_ghz"] = m.groups()
+for k in ("KMP_BLOCKTIME", "OMP_WAIT_POLICY", "GOMP_SPINCOUNT"):
+    f[k.lower()] = os.environ.get(k, "unset").replace(" ", "_") or "unset"
 print(" ".join("%s=%s" % kv for kv in f.items()))
 PY
 }
@@ -301,8 +321,8 @@ igloo_stamps () {
 }
 
 # igloo_summary <reps file> <reps asked>: the IOK line of a point from its IREP lines -- the median, minimum and
-# standard deviation of wall_s, life_s, launch_s, sweep_s, loop_s and reduce_s, then every field of the fastest
-# repetition (its rep= field names it).
+# standard deviation of wall_s, life_s, launch_s, sweep_s, loop_s, reduce_s, cyc_sweep and cyc_loop, then every
+# field of the fastest repetition (its rep= field names it).
 igloo_summary () {
   python3 - "$1" "$2" <<'PY'
 import re, statistics, sys
@@ -323,7 +343,7 @@ def fx(v):
 
 best = min(reps, key=lambda d: fx(d.get("wall_s")))
 stat = []
-for k in ("wall_s", "life_s", "launch_s", "sweep_s", "loop_s", "reduce_s"):
+for k in ("wall_s", "life_s", "launch_s", "sweep_s", "loop_s", "reduce_s", "cyc_sweep", "cyc_loop"):
     v = [fx(d[k]) for d in reps if d.get(k)]
     if not v:
         continue

@@ -9,6 +9,10 @@ point). For N = R x T slots:
   eff_life  = (T(1)/N) / T(N)  on life_s, the ranks' lifetime (the wall time without the launcher's start-up),
               from the medians and from the minima
   eff_sweep = the same on sweep_s, the report's nine sweep phases: the set-up does not scale and is listed apart
+  eff_cyc   = C(1) / C(N)  on the user-mode core cycles of the sweep and of the parcel loop (a binary with the
+              counter): perfect parallelism keeps the total constant whatever the clock, so the chip's frequency
+              scaling is divided out; per-phase cycles of the short phases after a parallel region also hold the
+              idle threads' spin (the wait policy each job prints)
 
 launch_s, the launcher's start-up before the first rank starts, is listed apart too: it does not depend on the
 slots. Wall-clock efficiencies also contain the chip's frequency scaling (one busy core runs faster than eighty).
@@ -68,7 +72,8 @@ def main():
     cols = ["workload", "tag", "ranks", "threads", "slots", "life_med_s", "life_min_s", "life_sd_s",
             "eff_life_med", "eff_life_min", "launch_med_s", "wall_med_s", "sweep_med_s", "eff_sweep_med",
             "setup_s", "loop_share", "reduce_share", "writeout_share", "imbalance", "busy_maxmean_max",
-            "sz_mib", "rss_rank_gb", "rss_over_sz", "rss_node_gb", "anchor"]
+            "sz_mib", "rss_rank_gb", "rss_over_sz", "rss_node_gb",
+            "cyc_sweep_med", "eff_cyc_sweep", "eff_cyc_loop", "ghz_per_slot", "anchor"]
     out = open(dest, "w")
     out.write("# IGLOO scaling, job %s, node %s, binary md5 %s\n# commit %s\n" % (job, node, binary, commit))
     out.write("# eff_* = (T(1)/N)/T(N) against the workload's 1x1 point of this job; life_s = the ranks' "
@@ -87,6 +92,10 @@ def main():
         es = ratio(ratio(a_sw, N), sw)
         bsw = num(d, "sweep_s")
         sz, rss = num(d, "sz_mib"), num(d, "rss_rank_gb")
+        cs, cl = num(d, "cyc_sweep_med"), num(d, "cyc_loop_med")
+        ecs = ratio(num(anchor, "cyc_sweep_med") if anchor else None, cs)
+        ecl = ratio(num(anchor, "cyc_loop_med") if anchor else None, cl)
+        ghz = ratio(num(d, "cyc_ghz"), float(N) if N else None)
         vals = [wl, d.get("tag", ""), str(R), str(T), str(N), fmt(lmed, "%.4f"), fmt(lmin, "%.4f"),
                 fmt(num(d, "life_s_sd"), "%.4f"), fmt(el, "%.3f"), fmt(elm, "%.3f"),
                 fmt(num(d, "launch_s_med"), "%.3f"), fmt(num(d, "wall_s_med"), "%.4f"), fmt(sw, "%.4f"),
@@ -95,15 +104,16 @@ def main():
                 fmt(ratio(num(d, "writeout_s"), bsw), "%.3f"), fmt(num(d, "imbalance"), "%.3f"),
                 fmt(num(d, "busy_maxmean_max"), "%.3f"), fmt(sz, "%.1f"), fmt(rss, "%.3f"),
                 fmt(ratio(rss, None if sz is None else sz / 1024.0), "%.2f"), fmt(num(d, "rss_node_gb"), "%.2f"),
+                fmt(cs, "%.4e"), fmt(ecs, "%.3f"), fmt(ecl, "%.3f"), fmt(ghz, "%.3f"),
                 anchor.get("tag", "") if anchor else ""]
         out.write("\t".join(vals) + "\n")
-        print("%-34s %5d %10s %10s %7s %7s %8s %10s %7s %9s %6s %6s %6s" % (
+        print("%-34s %5d %10s %10s %7s %7s %8s %10s %7s %9s %6s %6s %6s %7s %7s" % (
             d.get("tag", ""), N, vals[5], vals[6], vals[8], vals[9], vals[10], vals[12], vals[13], vals[14],
-            vals[15], vals[16], vals[18]))
+            vals[15], vals[16], vals[18], vals[25], vals[26]))
 
-    hdr = "%-34s %5s %10s %10s %7s %7s %8s %10s %7s %9s %6s %6s %6s" % (
+    hdr = "%-34s %5s %10s %10s %7s %7s %8s %10s %7s %9s %6s %6s %6s %7s %7s" % (
         "tag", "slots", "life_med", "life_min", "eff_l", "eff_lm", "launch", "sweep_med", "eff_s", "setup_s",
-        "loop", "reduce", "imbal")
+        "loop", "reduce", "imbal", "eff_cs", "eff_cl")
     for wl, pts in groups.items():
         anchor = next((d for d in pts if d["tag"] == wl + "-1x1"), None) or \
             next((d for d in pts if d["tag"].startswith(wl + "-1x1-")), None)

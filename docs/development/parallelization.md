@@ -228,6 +228,7 @@ and then nothing is printed.
 | `rank` | parcel-loop wall time, parcels, threads, summed `integrate` time and the thread max/mean, per rank |
 | `imbalance` | max/mean over the ranks of the parcel-loop wall time |
 | `sizes` | allocated real values per rank: gas fields, geometry arrays, accumulators at the solve shape |
+| `cycles` | the counters' state; with counters on every thread, each phase's user-mode core cycles summed over threads and ranks (with the minimum and maximum over the ranks), and the sweep and setup totals with the sweep's aggregate GHz |
 
 Phases, in order: `setup:input` (input files), `setup:gas-read` (the gas field: the Tecplot read,
 or the copy of the field a parent hands in), `setup:blocks` (block allocation, geometry, dual
@@ -242,6 +243,25 @@ phases are repeated in every report; sweep phases restart at zero after each.
 The report costs one `MPI_Gather` of a fixed per-rank record after the files are written, outside
 every loop; no other collective is added. The per-parcel accounting reads the clock twice per
 parcel and only when `timing = on`.
+
+The cycles come from one `perf_event_open` counter per OpenMP thread (`src/lib/igloo_cycles.c`),
+opened by each thread of the team when timing is first known to be on and read by the master at
+every phase switch. Perfect parallelism keeps the total cycles of a phase constant whatever the
+clock, so `C(1)/C(N)` is a parallel efficiency with the chip's frequency scaling divided out. The
+counters count user mode only: the kernel time of reading and writing files is not counted, so the
+cycles of the input and output phases are not their cost. Idle threads spin for a while after a
+parallel region (Intel's OpenMP for `KMP_BLOCKTIME`, 200 ms by default) and that spin lands in the
+cycles of the phase that follows: the parcel loop's and the sweep's cycles are comparable from run
+to run, the cycles of a short serial phase after a parallel region are not unless the wait policy
+(`KMP_BLOCKTIME`, `OMP_WAIT_POLICY`, `GOMP_SPINCOUNT`) is stated with them. `setup:input` carries
+no cycles (`-`): it starts before the input that turns timing on is read.
+
+The state line is one of `counters N of M thread(s) on R rank(s)` (every thread counts),
+`unavailable: not built` (no C compiler, `IGLOO_CYCLES=OFF`, or a parent project such as
+hydra-MI2), `unavailable: perf_event_open failed on every thread` (a kernel that refuses unprivileged
+counters, `perf_event_paranoid` above 2, or a container), or `incomplete` (some threads only); the
+last two name the slots without a counter and the class of their error (refused `EACCES`/`EPERM`,
+over a limit `EMFILE`/`ENFILE`/`ENOMEM`, another error), and none of the three prints cycle figures.
 
 ## Measured performance
 
@@ -321,6 +341,11 @@ thread count, so it bounds the speed-up first.
 With `--use-tecio` an MPI build links ORION's `teciompi` (built once into
 `lib/ORION/lib/TecIO/teciompi-install-*`). ASCII `.tec` I/O needs no TecIO, which is what the
 test suite uses; `-DUSE_TECIO=OFF` skips the TecIO build.
+
+The timing report's cycle counter is IGLOO's only C source: `-DIGLOO_CYCLES=ON` (the default)
+builds it when a C compiler is found; `-DIGLOO_CYCLES=OFF`, or no C compiler, leaves the report with
+wall time only. A parent project that adds IGLOO's directory (hydra-MI2) skips the option and builds
+no C.
 
 !!! note "`bin/IGLOO` is the copy of the last tree built"
     Each build tree links its own `<tree>/bin/IGLOO`, which its tests run, and publishes a copy to
