@@ -93,16 +93,21 @@ assembled weight is used rather than the clipped physical dual volume: a conserv
 identity must not be routed through an approximate geometry.
 
 **Block interfaces.** The dual cell of a vertex on a 101 face straddles the face, and each block holds
-only the octants on its side. With `gas-order = 2` the setup (`assembleInterfaceDual`) joins the dual
-cells of every face vertex, matched through the orientation integers of the face records, into one
-*vertex class*; it puts the ghost nodes of the face at the partner cells' centres, the nodes the same
-cells have as one block, assembles the dual metric with no clip normal to the face, and gives every
-member the class's summed octant volume $W$, so that the partition of unity spans both blocks. After the
+only the octants on its side; the dual cell of a vertex on a periodic (201) face is split the same way,
+its other half lying one period away, beside the partner face. With `gas-order = 2` the setup
+(`assembleInterfaceDual`) joins the dual cells of every face vertex, matched through the orientation
+integers of the face records (for a 201 face modulo the periodic offset $\mathbf t$, the partner face
+centre minus the own face centre), into one *vertex class*; it puts the ghost nodes of the face at the
+partner cells' centres, brought back by $\mathbf t$ across a period — the nodes the same cells have away
+from the face — assembles the dual metric with no clip normal to the face, and gives every member the
+class's summed octant volume $W$, so that the partition of unity spans both sides. After the
 accumulators are summed over the MPI ranks and before any field is reduced (`combineInterfaceDual`),
 every member takes the class's source sum and, for the eulerian fields, the class's amount over that
 volume, $\sum_m V_m q_m / W$ ($V_m$ the member's dual volume, $q_m$ its accumulated density). The
 reduction then hands each block the share of its own octants, and the two blocks reduce what one block
-would. The integration still cuts the segment at the block face (see
+would; across a periodic face the cells beside the face reduce what the same cells one period away do.
+The integration still cuts the segment at the block face, and at a periodic face, where the parcel is
+transported (see
 [Geometry](geometry.md#guided-cell-locator-updatecell-findparticle)): the source and the eulerian
 densities are additive over the cut, while the velocity and temperature numerators, arc-length means
 over a segment times its residence, differ from those of the uncut segment at second order: a cut at
@@ -181,7 +186,7 @@ $$
 
 When `cpVariable = .true.`, enthalpy integrals are inverted to temperature via the
 particle enthalpy table.  With `gas-order = 2`, the dual-mesh fields are reduced to
-geoblock shape by a sub-octant volume weighting (the vertex classes of a 101 face combined first, see
+geoblock shape by a sub-octant volume weighting (the vertex classes of a 101 or 201 face combined first, see
 **Block interfaces** under [Source fields](#source-fields)), so that $\sum \rho_p V$ over the
 geometry cells equals the total injected mass flow times residence time (the tiling
 invariant checked by the `axis-200`, `swirl-wedge-deposit` and `swirl-wedge-spin` cases).
