@@ -333,7 +333,7 @@ $X_\mathrm{eff}^{1.0}$ is the paper's final correlation.  `[Gal21]` (Gallier et 
 exposed-surface factor of an oxide lobe, its geometry and property laws.
 
 **Gates.** `test_combustion` (CB1–CB11); e2e companions `burn-box`, `burn-box-cap`,
-`burn-box-residue`, `burn-box-ox0` — see [End-to-End Cases](e2e.md).
+`burn-box-residue`, `burn-box-ox0`, `beckstead-air` — see [End-to-End Cases](e2e.md).
 
 <figure>
   {% include "vv/images/unit-combustion-beckstead.svg" ignore missing %}

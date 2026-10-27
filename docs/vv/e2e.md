@@ -370,6 +370,37 @@ $X_\mathrm{eff}^{1.0}$ exponent is the paper's own.
   {% include "vv/images/burn-box.svg" ignore missing %}
 </figure>
 
+### beckstead-air
+
+Burnout times of aluminium in air at 1 atm and 300 K against Beckstead's Eq. 7, with the burning times
+of his Fig. 1 drawn beside them.  25 particles, $D_0$ = 10–1000 µm log-spaced, one per inlet cell
+(`make_box_case.py --rp-sweep`), burn from injection at zero slip and zero thermal slip with no heat
+release, so the $d^n$ law is the only dynamics.  The oracle codes Eq. 7 from the paper,
+$t_b = a\,D^n/(X_\mathrm{eff}\,p^{0.1}\,T_0^{0.2})$ with $a = 0.00735$, $n = 1.8$ and
+$X_\mathrm{eff} = 0.21$ (a mole fraction): $K_\mathrm{eff} = 1.416955\times10^{-6}$ m$^{1.8}$/s, and
+the case's `K-burn` $= K_\mathrm{eff}/X_\mathrm{eff}$ to nine digits.  A parcel ends at the step whose
+mass reaches the solver's floor of $10^{-15}$ kg ($d_\mathrm{floor} = 0.865$ µm); its exit record
+carries that state's time and diameter.  The gates: the input against Eq. 7; 25 burnouts inside the
+box, one per inlet cell, each at or below $d_\mathrm{floor}$; each exit time against
+$(D_0^n - d_p^n)/K_\mathrm{eff}$ to $10^{-5}$ and not before the floor's time; $d^n = D_0^n -
+K_\mathrm{eff}t$ on every trajectory row within its print budget; $T_p$ and $u_p$ unchanged.
+`T-ign = 250 K` is a switch, not a physical claim: Eq. 7's rate does not depend on the particle
+temperature above ignition, so ignition is set below the injection temperature.
+
+The figure, on Fig. 1's axes: the 183 markers digitized from Fig. 1 as one glyph (the source labels
+of its stacked markers are not recovered), Fig. 1's fit as drawn, $t = 0.00258\,D^{1.989}$ (its label
+prints the rounded $0.003\,D^{1.99}$, 16.5–16.8 % above the drawn line), Eq. 7 at the case's condition and
+IGLOO's 25 burnout times.  Eq. 7 at this condition lies 2.8× (10 µm) to 1.17× (1000 µm) above the
+drawn fit, inside the scatter of the 12 sources.  Plotted, not gated against the data.
+
+**Result:** 25/25 burnouts; exit times within $3.9\times10^{-8}$ of Eq. 7's, the last step's overshoot
+past the floor $+2.5\times10^{-7}$ to $+1.37\times10^{-3}$ of its time; 170 rows within their print
+budget (0.997 of it at most).
+
+<figure>
+  {% include "vv/images/beckstead-air.svg" ignore missing %}
+</figure>
+
 ### burn-box-cap
 
 The oxide cap (model 8, [The oxide cap](../theory/combustion.md#the-oxide-cap-model-8)): burn-box's

@@ -349,7 +349,8 @@ mass-telescoping audit), `burn-box-euler` (the Eulerian field of model 5),
 (the residue's birth, books and freezing; `d-residue` with two groups; the residue after a solver
 failure) and `burn-box-ox0` (an oxide fraction at injection: the whole particle's mass and number rate, the
 cap from its initial oxide and the re-evaluated stretch against Gallier's exact lobe, the burnout time, the
-residue and the books).  See `tests/combustion/INFO.md`.
+residue and the books) and `beckstead-air` (burnout times of 10–1000 µm particles in air against Eq. 7 of
+`[Beck05]`, his Fig. 1 drawn beside them).  See `tests/combustion/INFO.md`.
 
 References:
 
