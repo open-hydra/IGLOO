@@ -5,7 +5,8 @@ ODE model 6 end to end on the shared box (`tools/make_box_case.py --kv 1.0 --kt 
 droplets of `d = 30 µm` enter at `T_0 = 2400 K` into the 600 K gas at the gas velocity, so `Re = 0`, `Nu = 2`
 and `x = u_g t`. The material line of `INPUT/phase.txt` is `A 1 solidification=on h-fus=1.07e6 cp-solid=600`
 (`T-melt = 2327 K` and `T-nuc = 0.8 T-melt = 1861.6 K` at their defaults); `ρ = 2950`, `c_l = 1250` come from
-`common/properties.dat`. `mollify = off` keeps the energy source per cell.
+`common/properties.dat`. `mollify = off` keeps the energy source per cell. `plane-x` puts ten planes just before the
+nucleation point and three on the plateau.
 
 Closed forms of the inputs only (`check.py`): liquid relaxation length `L_l = 0.10637 m`, nucleation at
 `x_n = 0.037805 m`, recalescence to `T_m` with `f0 = 0.54369`, plateau to `x_s = 0.061863 m`, solid
@@ -20,6 +21,7 @@ relaxation length `L_s = 0.051058 m`, exit at 907.3 K.
 | E4 | `Σ E` of `source.tec` = `Σ ṁ [c_l T_0 − h_solid(T_exit)]` (global telescoping) | 1e-5 | 2.9e-7 (the E13.6 print of `ṁ`) |
 | E4b | every cell with both faces in `(x_n, x_s)` holds `(ṁ/m) π d k_g Nu (T_m − T_g) dx/u_g`; no crossed cell has `E < 0` | 1e-5 | 200 cells, 2.9e-7; no negative cell |
 | E5 | `u = u_g`, `v = w = 0`, `d` and `m` constant, the mollify-off and model-6 witnesses, ≥ 20 parcels with ≥ 3 rows per regime | as temp-relax | 25 parcels |
+| S7 | the plane records (`plane-x`: ten planes 200 µm to 20 µm before `x_n`, 20 µm apart, three on the plateau at 0.045, 0.050, 0.055 m): one forward record per plane and parcel; before `x_n` `T` on E1's exponential from the injection and `f = 0`; on the plateau `T = T_m` and `f = f0 + s (x − x_n)` | the T print plus the chord of the step's linear interpolation, `dx²/8 \|T''\|` (a step spans at most one cell); E6's print and event-location bounds | 325 records; worst 0.026 of tol before `x_n` and on the plateau |
 | E6 | the frozen fraction `f` of the trajectory rows and exit records: `f = 0` on the liquid rows, `f = 1` on the solid rows and every exit; on the plateau `0 < f < 1` and `f − s x` one constant per parcel, `s = π d k_g Nu (T_m − T_g)/(m h_fus u_g) = 18.967 /m`, equal to `f0 − s x_n`; the phase `solid_phase(f, T, T_m)` of every row the closed form's (0 liquid at or above `T_m`, 1 undercooled, 2 plateau, 3 solid) | spread of the constant `2 × 9.98e-6` (the F10.6 half-ULP of `f` plus `s` × the F12.6 half-ULP of `x`); the constant within `1.39e-4 + 9.98e-6` of `f0 − s x_n` (the event located within `h²/(8 τ_l)` over a cell transit `h = dx/u_g`); liquid and solid values exact | spread 5.1e-7, offset 3.8e-6 over 225 plateau rows; the phase on 1525 rows; 25 parcels |
 
 The global energy balance telescopes (the deposit of every segment is a difference of one enthalpy function), so
@@ -41,6 +43,8 @@ it sees only the liquid and solid branches; the plateau branch is seen per cell 
 | particle files without an `f` column | E6: no `f` column in the trajectory and exit headers |
 | each row carrying the previous row's `f` (the segment-start value) | E6: the first plateau row of every parcel at `f = 0`; the plateau constant off by `−s dx = −0.0474` on all 25 parcels |
 | `solid_phase` ignoring `f` (`T < T_m` alone) | E6: the plateau rows read phase 0 (their printed `T` is `T_m`) instead of 2 on all 25 parcels; the doctest of `tests/tools/datcols.py` |
+| the segment finalize's plane records taken after the phase switch | S7: the planes of the step that ends at the nucleation (9 of the 10 before `x_n`) are interpolated toward the recalescence, up to 414.5 K off at 20 µm before `x_n` (4758 × tol) |
+| the segment finalize takes no plane record | S7: 25 records of 325 (only the plane 200 µm before `x_n` is crossed inside a step) |
 
 ## Comparison plot
 `verify.py` writes `OUTPUT/solid-box.svg` (non-gating): the best-sampled parcel's `T_p(x)` against the piecewise

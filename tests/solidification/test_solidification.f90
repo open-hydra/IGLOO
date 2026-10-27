@@ -40,6 +40,12 @@ program test_solidification
     !        solid-density slot after the metal block (the emissivity after it); one production rhsSolidification
     !        per phase with it, F(7) or F(8) at that diameter (1e-14); a material set up without rho-solid after
     !        one with it has no such slot; with radiation, the solid's convective and radiative heat at that diameter.
+    !   SG12g-h model 7 (KH-RT) with rho-solid: the solid-density slot after the metal block; one production
+    !        rhsSolidification per phase at a slip, Z(9) off the injection rate: F(7), F(8) at the diameter
+    !        (6 m ((1 - f)/rho_l + f/rho_s)/pi)^(1/3) of m = mdot/Z(9), Ranz-Marshall at its Re (1e-14), F(9) the
+    !        direct breakupOde at that d in the liquid phases (1e-12), exactly 0 on the plateau and the solid.
+    !   SG13 breakupStateAtSwitch for phase changes 0-4 and breakup models 0, 3, 4, 5: a nucleated TAB/ETAB
+    !        oscillator at rest, the KH-RT timer restarted at a re-melt, the state kept otherwise (exact).
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -98,6 +104,8 @@ program test_solidification
     call run_SG10(ok_all)
     call run_SG11(ok_all)
     call run_SG12(ok_all)
+    call run_SG12m7(ok_all)
+    call run_SG13(ok_all)
     call run_SB1(ok_all)
 
     call finalize_report(exit_code)
@@ -823,6 +831,114 @@ contains
         ok = ok .and. assert_lt('SG12f rho-solid with radiation: convection and radiation at the solid diameter', err, TOLR)
         call append_row('SG12f_rad', 'F', err, err, 0._R8, 0._R8, TOLR, err < TOLR)
     end subroutine run_SG12
+
+    subroutine run_SG12m7(ok)
+        !> model 7 (KH-RT) with rho-solid: the constant-mass diameter in the production RHS at a slip
+        use IGLOO_variables, only: ord2, mesh2D, eulerSwitch, bodyForce, bodyAccel, srcBodyForce, &
+                                   sourceSwitch, phaseChange, dragSelect, heatSelect
+        use IGLOO_particles,   only: obj_particle
+        use IGLOO_Lib_Breakup, only: breakupOde
+        use Lib_RHS, only: setupRHS, packAuxVars, rhsSolidification, nauxvar, nauxstate, &
+                           ind_mb, ind_sph, ind_rs, ind_eps, ind_sb1, ind_sb2
+        logical, intent(inout) :: ok
+        real(R8), parameter :: RHOS = 4600._R8, UG = 120._R8, UP = 20._R8, SIG = 5.e-3_R8, MUP = 1.e-3_R8
+        real(R8), parameter :: MDOT = 1.e-3_R8, TIME = 5.e-6_R8, TOLD = 1.e-6_R8, TC = 2.e-6_R8
+        real(R8), parameter :: RHOG = 1.2_R8, MUG = 1.8e-5_R8, GAMG = 1.4_R8, RGAS = 287._R8
+        real(R8), parameter :: TOLR = 1.0e-14_R8, TOL9 = 1.0e-12_R8
+        real(R8), parameter :: Tph(0:3) = [T0, 2000._R8, TM, 1800._R8], fph(0:3) = [0._R8, 0._R8, 0.5_R8, 1._R8]
+        type(obj_particle) :: p
+        real(R8), allocatable :: aux(:), auxst(:)
+        real(R8) :: Z(9), F(9), gas(9), gasNodes(9,8), gasVert(3,8), noTab(1)
+        real(R8) :: np7, m7, df, slip, Re, nusl, q, ref, err, errA, errB, rate, var(2)
+        integer  :: nAux, nAuxSt, nEvV, ph, iF, iZ
+        logical  :: propFlags(7), layout, live, off
+        noTab = 0._R8
+        ord2 = .false.;  mesh2D = .false.;  eulerSwitch = .false.
+        bodyForce = .false.;  bodyAccel = 0._R8;  srcBodyForce = .false.
+        sourceSwitch = .false.;  phaseChange = .false.
+        dragSelect = 2;  heatSelect = 5              ! Stokes, Ranz-Marshall
+        propFlags = .false.
+        call setupRHS(7, 3, 0, 0, 0, 0, 0, propFlags, brkConstants(3), 0, 0._R8, nAux, nAuxSt, nEvV, solidDensity=.true.)
+        layout = ind_rs == ind_mb + nmetal .and. nAux == ind_rs .and. ind_eps == 0 .and. ind_sb1 > 0
+        call flag('SG12g setupRHS(model 7, KH-RT, rho-solid): the solid-density slot after the metal block', &
+                  'SG12g_layout', layout, ok)
+        if (.not. layout) return
+        gas = [RHOG, UG, 0._R8, 0._R8, TG, MUG, GAMG, RGAS, KG]
+        gasNodes = spread(gas, 2, 8);  gasVert = 0._R8
+        p%cp = CL;  p%rho = RHOP;  p%d = D;  p%m = M;  p%mdot = MDOT;  p%sigma = SIG;  p%mup = MUP
+        p%Tmelt = TM;  p%hFus = HFUS;  p%Tnuc = TN;  p%cpSol = CS;  p%rhoSol = RHOS
+        allocate(aux(nauxvar), auxst(max(1, nauxstate)))
+        call packAuxVars(p, nauxvar, aux)
+        np7 = 1.5_R8*MDOT/M
+        m7  = MDOT/np7
+        errA = 0._R8;  errB = 0._R8;  live = .true.;  off = .true.
+        do ph = phLiquid, phSolid
+            auxst = 0._R8;  auxst(ind_sph) = real(ph, R8);  auxst(ind_sb1:ind_sb2) = [TOLD, TC]
+            Z = 0._R8;  Z(4) = UP;  Z(7) = Tph(ph);  Z(8) = fph(ph);  Z(9) = np7
+            call rhsSolidification(9, TIME, Z, F, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, &
+                                   gasNodes, gasVert, gas, 9, 8)
+            !> the closed forms at the constant-mass diameter of the rebuilt m and the phase's frozen fraction
+            df   = (6._R8*m7*((1._R8 - fph(ph))/RHOP + fph(ph)/RHOS)/PI)**(1._R8/3._R8)
+            slip = UG - UP
+            Re   = RHOG*slip*df/MUG
+            nusl = 2._R8 + 0.6_R8*sqrt(Re)*(MUG*GAMG*RGAS/((GAMG - 1._R8)*KG))**(1._R8/3._R8)
+            q    = nusl*KG*PI*df*(TG - Tph(ph))
+            select case (ph)
+            case (phPlateau); iF = 8;  iZ = 7;  ref = -q/(m7*HFUS)
+            case (phSolid);   iF = 7;  iZ = 8;  ref = q/(m7*CS)
+            case default;     iF = 7;  iZ = 8;  ref = q/(m7*CL)
+            end select
+            err = abs(F(iF) - ref)/abs(ref)
+            if (F(iZ) /= 0._R8) err = huge(1._R8)
+            errA = max(errA, err)
+            !> the breakup rate: breakupOde at that d in the liquid phases, exactly 0 on the plateau and the solid
+            var  = [TOLD, TC]
+            rate = breakupOde(df, SIG, MUP, RHOP, np7, RHOG, slip, Re, TIME, F(4:6), Z(4:6), var, 3, brkConstants(3))
+            if (ph <= phUndercooled) then
+                errB = max(errB, abs(F(9) - rate)/abs(rate))
+                live = live .and. F(9) /= 0._R8 .and. rate /= 0._R8
+            else
+                off = off .and. F(9) == 0._R8
+            end if
+            write(*,'(a,i0,a,es13.6,a,es13.6,a,es10.3,a,es13.6,a,es13.6)') '  [INFO] SG12g phase ', ph, ': F = ', F(iF), &
+                ', closed form ', ref, ', rel. ', err, '; F(9) = ', F(9), ', direct ', rate
+        end do
+        deallocate(aux, auxst)
+        ok = ok .and. assert_lt('SG12g model 7 with rho-solid: F(7), F(8) at the constant-mass d(f), relative', errA, TOLR)
+        call append_row('SG12g_rhs', 'F', errA, errA, 0._R8, 0._R8, TOLR, errA < TOLR)
+        ok = ok .and. assert_lt('SG12h model 7 with rho-solid: F(9) = breakupOde at d in the liquid phases, relative', &
+                                errB, TOL9)
+        call append_row('SG12h_rate', 'F9', errB, errB, 0._R8, 0._R8, TOL9, errB < TOL9)
+        call flag('SG12h F(9) non-zero in the liquid phases, exactly 0 on the plateau and the solid', 'SG12h_phases', &
+                  live .and. off, ok)
+    end subroutine run_SG12m7
+
+    subroutine run_SG13(ok)
+        !> the breakup state at a phase switch, for every phase change and breakup model
+        use IGLOO_Lib_Solidification, only: breakupStateAtSwitch
+        logical, intent(inout) :: ok
+        real(R8), parameter :: S0(2) = [0.25_R8, -1.5_R8], TNOW = 7.5e-4_R8
+        integer,  parameter :: brks(4) = [0, 3, 4, 5]
+        real(R8) :: got(2), want(2)
+        integer  :: which, ib, nbad
+        nbad = 0
+        do which = 0, 4
+            do ib = 1, 4
+                want = S0
+                if (which == 1 .and. (brks(ib) == 4 .or. brks(ib) == 5)) want = 0._R8
+                if (which == 3 .and. brks(ib) == 3) want = [TNOW, 0._R8]
+                got = breakupStateAtSwitch(which, brks(ib), TNOW, S0)
+                if (any(got /= want)) then
+                    nbad = nbad + 1
+                    write(*,'(a,i0,a,i0,a,2es12.4,a,2es12.4)') '  [INFO] SG13 change ', which, ', breakup ', brks(ib), &
+                        ': ', got, ' against ', want
+                end if
+            end do
+        end do
+        write(*,'(a,i0,a)') '  [INFO] SG13 ', nbad, ' of 20 (phase change, breakup model) pairs off'
+        call flag('SG13 breakupStateAtSwitch: TAB/ETAB at rest at nucleation, the KH-RT timer at a re-melt, else kept', &
+                  'SG13_switch', nbad == 0, ok)
+    end subroutine run_SG13
 
     subroutine run_SB1(ok)
         !> birthResidue on a freezing product (T-melt 2327, T-nuc 1861.6 K, rho 3950) from one parent record

@@ -32,6 +32,10 @@ E6  the frozen fraction f (the f column): 0 on the liquid rows, 1 on the solid r
     record; on the plateau rows 0 < f < 1 and f = f0 + s (x - x_n), s = Qdot(T_m)/(m h_fus u_g): f - s x
     constant per parcel within the print budget, and equal to f0 - s x_n within the event-location bound;
     on every row the phase datcols.solid_phase derives from (f, T) is the closed form's
+S7  the plane records (plane-x: ten planes 200 um to 20 um before x_n, three on the plateau): one forward record per
+    plane and parcel; before x_n T on E1's exponential from the injection and f = 0, within the T print and the chord
+    of the step's linear interpolation (a step spans at most one cell: dx^2/8 |T''|); on the plateau T = T_m and
+    f = f0 + s (x - x_n), within E6's print and event-location bounds
 """
 import math
 import os
@@ -76,6 +80,9 @@ MIN_ROWS, N_GOOD = 3, 20
 TOL_F_PRINT = HALF_ULP + S_PL * HALF_ULP
 TOL_F_EVENT = S_PL * DX**2 / (8.0 * L_L)
 X_BAND = DX**2 / (8.0 * L_L) + HALF_ULP           # rows this close to an event have no closed-form phase
+PLANES = "OUTPUT/planes-A.dat"
+PLANE_X = (0.037605, 0.037625, 0.037645, 0.037665, 0.037685, 0.037705, 0.037725, 0.037745, 0.037765, 0.037785,
+           0.045, 0.050, 0.055)                  # input.ini plane-x
 TRAJ_COLS = ("X", "Y", "Z", "U", "V", "W", "T", "d<sub>p", "m<sub>p")
 EXIT_COLS = ("X", "Y", "Z", "T", "|u<sub>p</sub>|", "<greek>a</greek>", "mdot", "Af")
 
@@ -224,6 +231,50 @@ def check_frozen(ftraj, fexit):
     return fails, n_good, spread_w, off_w, n_rows
 
 
+def check_planes(pids):
+    """S7 on the planes file: (failures, records checked, worst (resid/tol, text) before x_n and on the plateau)."""
+    try:
+        recs = datcols.rows(PLANES)
+    except (FileNotFoundError, ValueError, KeyError) as e:
+        return [f"S7 cannot read {PLANES}: {e}"], 0, (0.0, ""), (0.0, "")
+    fails, n, worst_l, worst_p = [], 0, (0.0, ""), (0.0, "")
+    by = {}
+    for r in recs:
+        by.setdefault((r["ID"], r["plane"]), []).append(r)
+    if len(recs) != len(pids) * len(PLANE_X):
+        fails.append(f"S7 {len(recs)} plane records, expected {len(pids)} parcels x {len(PLANE_X)} planes")
+    for pid in sorted(pids):
+        for k, xp in enumerate(PLANE_X, 1):
+            rr = by.get((pid, k), [])
+            if len(rr) != 1 or rr[0]["dir"] != 1 or abs(rr[0]["X"] - xp) > HALF_ULP:
+                fails.append(f"S7 ID={pid} plane {k} (x={xp}): {len(rr)} records, not one forward record at the plane")
+                continue
+            r = rr[0]
+            n += 1
+            if xp < X_N - X_BAND:
+                Tref = t_exp(xp, 0.0, T_0, L_L)
+                tol = HALF_ULP + DX**2 / 8.0 * abs(Tref - T_G) / L_L**2 + INT_FLOOR
+                res = abs(r["T"] - Tref)
+                if res / tol > worst_l[0]:
+                    worst_l = (res / tol, f"ID={pid} x={xp} T={r['T']:.6f} vs {Tref:.6f}, resid {res:.3e}")
+                if res > tol or r["f"] != 0.0:
+                    fails.append(f"S7 ID={pid} plane x={xp}: T={r['T']:.6f} vs the liquid {Tref:.6f} (tol {tol:.2e}),"
+                                 f" f={r['f']:.6f}")
+            elif X_N + X_BAND < xp < X_S - X_BAND:
+                fref = F_0 + S_PL * (xp - X_N)
+                tol_f = TOL_F_PRINT + TOL_F_EVENT
+                res_t, res_f = abs(r["T"] - T_M), abs(r["f"] - fref)
+                rat = max(res_t / (HALF_ULP + INT_FLOOR), res_f / tol_f)
+                if rat > worst_p[0]:
+                    worst_p = (rat, f"ID={pid} x={xp} T={r['T']:.6f} f={r['f']:.6f} vs {fref:.6f}")
+                if rat > 1.0:
+                    fails.append(f"S7 ID={pid} plane x={xp}: T={r['T']:.6f}, f={r['f']:.6f}, the plateau's T_m and "
+                                 f"f {fref:.6f}")
+            else:
+                fails.append(f"S7 plane x={xp} within {X_BAND:.2e} m of an event: no closed form")
+    return fails, n, worst_l, worst_p
+
+
 def main():
     try:
         traj, exits = load_rows(TRAJ, TRAJ_COLS), load_rows(EXIT, EXIT_COLS)
@@ -284,6 +335,10 @@ def main():
             fails.append(f"E6 non-vacuity: {f_good} parcels with >= {MIN_ROWS} liquid, plateau and solid rows "
                          f"(need >= {N_GOOD})")
 
+    p_fails, p_n, p_wl, p_wp = check_planes(traj.keys())
+    fails += p_fails
+    print(f"S7 {p_n} plane records; before x_n worst {p_wl[1]} (resid/tol {p_wl[0]:.3f}); on the plateau worst "
+          f"{p_wp[1]} (resid/tol {p_wp[0]:.3f})")
     print(f"E1 worst liquid point: {worst['E1'][1]} (resid/tol {worst['E1'][0]:.3f})")
     print(f"E3 worst solid point:  {worst['E3'][1]} (resid/tol {worst['E3'][0]:.3f})")
     print(f"E4 sum(E) = {e4_sum:.9e} W, sum mdot*dh = {e4_ref:.9e} W, rel {e4:.3e}")
