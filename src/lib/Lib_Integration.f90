@@ -177,15 +177,14 @@ contains
         call part%initializePart(geoblock,gasblock)
       endif
       if (part%varCp) then; part%stateVar(7) = lookupTab(hTab,part%tp); else; part%stateVar(7) = part%tp; endif
-      call part%computeMass(rhoTab); part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot
+      !> the injection mass: the initial cap (model 8), a frozen fraction at rho-solid, else the injected diameter
+      call part%injectionMass(rhoTab); part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot
       part%n0 = part%npdot
 
       select case(part%model)
       case(2,5); part%stateVar(8) = part%m
       case(8); if (part%xiOx0 > 0._R8) then
                  !> the whole particle at the injected diameter: metal and its initial cap
-                 part%m  = part%capInjMass()
-                 part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot; part%n0 = part%npdot
                  part%stateVar(8) = (1._R8 - part%xiOx0)*part%m
                  part%stateVar(9) = part%xiOx0*part%m
                else
@@ -197,11 +196,6 @@ contains
                part%stateVar(9) = part%npdot
       case(6,7); call solidPhaseAtInjection(part%tp, part%Tmelt, part%Tnuc, part%solidPhase, part%stateVar(8))
                  part%fSolid = part%stateVar(8)
-                 !> an injected frozen fraction at rho-solid: the mass of the injected diameter
-                 if (part%rhoSol > 0._R8 .and. part%fSolid > 0._R8) then
-                   part%m  = pi/6._R8*part%d**3._R8/((1._R8 - part%fSolid)/part%rho + part%fSolid/part%rhoSol)
-                   part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot; part%n0 = part%npdot
-                 endif
                  if (part%model == 7) part%stateVar(9) = part%npdot
       end select
       if (eulerSwitch)    part%stateVar(part%nOde+1:part%neq) = 0._R8

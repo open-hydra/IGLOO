@@ -492,7 +492,7 @@ contains
                 ptmp = pgr%particle(ip)
                 ptmp%d = ptmp%dInj
                 if (all(ptmp%iInj == [0,0,0,0])) ptmp%stateVar(4:6) = ptmp%vInj
-                call ptmp%resolveInjectionRate(self%geoblock, self%gasblock)
+                call ptmp%resolveInjectionRate(self%geoblock, self%gasblock, self%material(m2)%rhoTab)
                 !> residues per parent droplet: one, or the cap's mass over a residue's at d-residue
                 rRes = 1._R8
                 if (pgr%xiOx0 > 0._R8) then
@@ -520,7 +520,7 @@ contains
             ptmp = gr%particle(ip)
             !> DB/assigned streams: seed the velocity as integrate does.
             if (all(ptmp%iInj == [0,0,0,0])) ptmp%stateVar(4:6) = ptmp%vInj
-            call ptmp%resolveInjectionRate(self%geoblock, self%gasblock)
+            call ptmp%resolveInjectionRate(self%geoblock, self%gasblock, mat%rhoTab)
             if (ptmp%npdot > 0._R8) Ndot = Ndot + ptmp%npdot
             vsp = norm2(ptmp%stateVar(4:6))
             if (vsp < threshold) then; Vsum = Vsum + vsp; nValid = nValid + 1; endif

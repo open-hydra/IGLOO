@@ -33,6 +33,10 @@ V5  the solid rows (x > x_s + dx) and the exit records: T against the RK4 anchor
 V6  solid-box E4's energy balance (1e-5), no crossed cell with E < 0, no mass exchange; guards: u = u_g,
     v = w = 0, the injection at T_0, liquid rows f = 0, solid rows f = 1, the mollify-off and model-6
     witnesses, >= 20 parcels with >= 3 rows in each regime
+V7  the scatter cloud's weight quantum: the logged dNscat = Ndot (L_ref/V_ref)/(100 x 25), Ndot = sum over the exit
+    records of mdot/m (m the injection mass at the table's density at T_0; no mass exchange), L_ref the box
+    diagonal, V_ref the injection speed u_g, within the ES10.3 half-ULP and the exit records' E13.6 prints; the
+    scatter file holds rows of every parcel
 """
 import importlib.util
 import math
@@ -52,8 +56,11 @@ def load(name, path):
 sb = load("solid_box_check", os.path.join(HERE, "..", "solid-box", "check.py"))
 datcols = sb.datcols
 import proptab                                      # noqa: E402  (tools/ is on the path solid-box's check set)
+import scatter_rate                                 # noqa: E402
 
 TRAJ, EXIT, SRC, LOG, PROP = sb.TRAJ, sb.EXIT, sb.SRC, sb.LOG, "INPUT/properties.dat"
+SCAT = "OUTPUT/scatter-A.dat"
+L_REF = math.sqrt(sb.LX ** 2 + (sb.NY * sb.DY) ** 2 + (sb.NZ * sb.DZ) ** 2)   # the box diagonal
 
 # ---- error model -----------------------------------------------------------------------------
 HALF_ULP, HALF_ULP_F = sb.HALF_ULP, 0.5e-6          # F12.6 x and T; F10.6 f
@@ -139,6 +146,24 @@ def group(path):
     for r in datcols.rows(path):
         out.setdefault(r["ID"], []).append(r)
     return {k: sorted(v, key=lambda r: r["X"]) for k, v in out.items()}
+
+
+def check_scatter_rate(log, exits, m_inj, n_streams):
+    """V7: (failures, logged dNscat, expected dNscat, scatter parcels)."""
+    got = scatter_rate.logged(log)
+    ndot = math.fsum(r["mdot"] / m_inj for v in exits.values() for r in v)
+    want = scatter_rate.expected(ndot, L_REF, sb.U_G, n_streams)
+    tol = scatter_rate.half_ulp(want) + 1.0e-6 * want
+    try:
+        ids = {r["ID"] for r in datcols.rows(SCAT)}
+    except (FileNotFoundError, ValueError, KeyError):
+        ids = set()
+    fails = []
+    if got is None or abs(got - want) > tol:
+        fails.append(f"V7 the logged dNscat {got} against Ndot tau_ref/(100 x {n_streams}) = {want:.4e} (tol {tol:.1e})")
+    if ids != set(exits):
+        fails.append(f"V7 the scatter file holds rows of {len(ids)} parcels, the run {len(exits)}")
+    return fails, got, want, len(ids)
 
 
 def main():
@@ -307,6 +332,8 @@ def main():
     if any(w != 0.0 for w in wdot):
         fails.append("V6 wdot /= 0: a constant-mass material exchanges no mass")
 
+    v7_fails, v7_got, v7_want, v7_ids = check_scatter_rate(log, exits, drop.m, len(traj))
+    fails += v7_fails
     print(f"V0 RK4 step halving: liquid rows {v0:.3e} K, solid legs {v0_sol:.3e} K, x_n {abs(x_n - x_n2):.3e} m")
     print(f"V1 m on every row of {len(traj)} parcels: worst |m - m_0| = {w_m:.3f} half-ULP")
     print(f"V2 {n_rows} rows and exit records: worst d resid/tol {w_d[0]:.3f} ({w_d[1]})")
@@ -318,6 +345,8 @@ def main():
           f"{max(v[0]['T'] for v in exits.values()):.6f} K")
     print(f"V6 sum(E) = {e_sum:.9e} W, sum mdot*dh = {e_ref:.9e} W, rel {e_rel:.3e}; crossed cells with E < 0: "
           f"{len(neg)}; {n_good} parcels verified in all three regimes (need >= {sb.N_GOOD})")
+    print(f"V7 dNscat logged {v7_got} against {v7_want:.4e} (the injection mass at the table's density); the scatter "
+          f"file holds rows of {v7_ids} parcels")
     for f in fails[:40]:
         print(f"[FAIL] {f}")
     if fails:

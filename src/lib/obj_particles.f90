@@ -6,7 +6,7 @@ module IGLOO_particles
   use IGLOO_Lib_Drag
   use IGLOO_Lib_Heat
   use IGLOO_Lib_Properties, only: tableValue, comp_TfromTab, Tmin, Tmax
-  use IGLOO_Lib_Solidification, only: hSolid, solidDiameter
+  use IGLOO_Lib_Solidification, only: hSolid, solidDiameter, solidPhaseAtInjection
   use IGLOO_bcBox
   use IGLOO_data_block, only: obj_block, obj_flowblock, obj_bc_cell
   use IGLOO_RayFaceIntersection3D
@@ -139,6 +139,7 @@ module IGLOO_particles
     procedure, pass(self) :: initializePart
     !> self properties computing
     procedure, pass(self) :: computeMass
+    procedure, pass(self) :: injectionMass
     procedure, pass(self) :: capInjMass
     procedure, pass(self) :: computeSource
     procedure, pass(self) :: resolveInjectionRate
@@ -158,6 +159,28 @@ contains
   end subroutine computeMass
 
 
+  !> The injection mass integrate takes: the injected diameter at the density (a table at the injection temperature),
+  !  then the initial cap (model 8) or a frozen fraction at rho-solid (models 6, 7) in its place.
+  subroutine injectionMass(self, rhoTab)
+    implicit none
+    class(obj_particle), intent(inout) :: self
+    real(R8),            intent(in)    :: rhoTab(:)
+    real(R8) :: f
+    integer  :: phase
+
+    call self%computeMass(rhoTab)
+    f = 0._R8
+    if ((self%model == 6 .or. self%model == 7) .and. self%rhoSol > 0._R8) &
+      call solidPhaseAtInjection(self%tp, self%Tmelt, self%Tnuc, phase, f)
+    if (self%model == 8 .and. self%xiOx0 > 0._R8) then
+      self%m = self%capInjMass()
+    elseif (f > 0._R8) then
+      self%m = pi/6._R8*self%d**3._R8/((1._R8 - f)/self%rho + f/self%rhoSol)
+    endif
+
+  end subroutine injectionMass
+
+
   !> The whole particle's mass at its diameter: metal and initial cap at the equal volume.
   pure function capInjMass(self) result(m)
     implicit none
@@ -171,24 +194,39 @@ contains
 
   !> Number rate npdot = mdot/m of this stream without the geometric cell search (run on a
   !  throwaway copy); BC streams take mdot from their BC cell via initializePart.
-  subroutine resolveInjectionRate(self, block, gasblock)
+  subroutine resolveInjectionRate(self, block, gasblock, rhoTab)
     implicit none
     class(obj_particle), intent(inout) :: self
     type(obj_block),     intent(in)    :: block(nb)
     type(obj_flowblock), intent(in)    :: gasblock(nb)
+    real(R8),            intent(in)    :: rhoTab(:)
+    real(R8) :: f
+    integer  :: phase
 
     if (.not. all(self%iInj == [0,0,0,0])) then
       self%i = self%iInj
       call self%initializePart(block, gasblock)   ! mdot (and v,tp) from the BC cell; no search
     endif
-    if (self%rho > 0._R8 .and. self%d > 0._R8) then
-      if (self%model == 8 .and. self%xiOx0 > 0._R8) then
-        self%npdot = self%mdot / self%capInjMass()
+    !> a frozen injection at rho-solid; a database stream without its temperature is valued liquid
+    f = 0._R8
+    if ((self%model == 6 .or. self%model == 7) .and. self%rhoSol > 0._R8 .and. self%tp > 0._R8) &
+      call solidPhaseAtInjection(self%tp, self%Tmelt, self%Tnuc, phase, f)
+    if (self%varRho) then
+      !> a density table: integrate's mass at the injection temperature, unknown without one => skip
+      self%npdot = 0._R8
+      if (self%tp > 0._R8 .and. self%d > 0._R8) then
+        call self%injectionMass(rhoTab)
+        self%npdot = self%mdot / self%m
+      endif
+    elseif (self%rho > 0._R8 .and. self%d > 0._R8) then
+      if ((self%model == 8 .and. self%xiOx0 > 0._R8) .or. f > 0._R8) then
+        call self%injectionMass(rhoTab)
+        self%npdot = self%mdot / self%m
       else
         self%npdot = self%mdot / (pi/6._R8 * self%rho * self%d**3)
       endif
     else
-      self%npdot = 0._R8                            ! varRho (rho unset here) / degenerate => skip
+      self%npdot = 0._R8                            ! degenerate => skip
     endif
   end subroutine resolveInjectionRate
 
