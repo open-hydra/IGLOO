@@ -1,21 +1,28 @@
-!> The gas file's one-pass reader: every ASCII Tecplot file it accepts is read with ORION's semantics, its values
-!  converted by the run-time library's list-directed READ as ORION converts them, one READ per run of plain number
-!  tokens, on every OpenMP thread; a file it declines is left to ORION's reader. IGLOO_TEC_FAST=0 in the environment
-!  brings back ORION's reader. The header routines are copies of ORION's (Lib_Tecplot, GPL-3.0); their messages on
+!> The gas file's one-pass reader and the grid files' stream writer. The reader reads every ASCII Tecplot file it
+!  accepts with ORION's semantics, its values converted by the run-time library's list-directed READ as ORION converts
+!  them, one READ per run of plain number tokens, on every OpenMP thread; a file it declines is left to ORION's reader.
+!  The writer writes the bytes of ORION's ASCII writer, its values formatted by the run-time library's internal WRITE
+!  many at a time and written by stream access. IGLOO_TEC_FAST=0 in the environment brings back ORION's reader and
+!  writer. The header routines and expressions are copies of ORION's (Lib_Tecplot, GPL-3.0); the reader's messages on
 !  the paths that end in a refusal are left to ORION's reader, which reads every declined file.
 module IGLOO_Mod_TecASCII
   use, intrinsic :: iso_fortran_env, only: I8 => int64, R8 => real64, stderr => error_unit
   use Lib_ORION_data, only: orion_data
+  use IR_Precision, only: str, FR_P, DR_P
   !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
   implicit none
   private
-  public :: tec_read_ascii_fast, tec_fast_enabled
+  public :: tec_read_ascii_fast, tec_write_ascii_fast, tec_fast_enabled
 
   integer(I8), parameter :: CHUNK_DEFAULT = 268435456_I8   !> stream buffer [bytes]
   integer, parameter :: RUN_MAX = 65536                    !> plain tokens per list-directed READ
   integer, parameter :: TOK_MAX = 100                      !> ORION's token buffer
   integer, parameter :: HDR = 1000, VHDR = 32768           !> ORION's line buffers: zone and data lines, VARIABLES
   integer(I8), parameter :: NULL_BITS = int(z'7FF8DEAD0BEEF001', I8)   !> a NaN no text reads as: a null value
+  integer(I8), parameter :: WCHUNK_DEFAULT = 4194304_I8    !> the writer's values per stream WRITE
+  integer, parameter :: WSLICE = 4096                      !> the writer's values per internal WRITE
+  integer, parameter :: WREC = DR_P + 1                    !> the writer's bytes per value: ORION's FR_P field, a line feed
+  character, parameter :: LF = achar(10)
 
   !> The file seen through a buffer: b(lo:hi) unread, next the file position of the byte after hi.
   type :: stream_t
@@ -87,6 +94,180 @@ contains
     orion%strandid = o%strandid
     orion%tec%node = o%tec%node
   end function tec_read_ascii_fast
+
+  !> Writes orion to filename as ORION's tec_write_structured_multiblock writes it in ASCII, byte for byte, for the
+  !  orion_data write_outfield makes (writable): ORION's VARIABLES and zone lines, then every field one FR_P value per
+  !  line, formatted WSLICE values per internal WRITE, chunk_values values per stream WRITE. 0 written, 1 declined
+  !  (nothing opened: ORION's writer takes it), 2 an I/O error (the unit closed).
+  integer function tec_write_ascii_fast(orion, varnames, filename, chunk_values) result(stat)
+    type(orion_data), intent(in) :: orion
+    character(len=*), intent(in) :: varnames, filename
+    integer(I8), intent(in), optional :: chunk_values
+    character(len=32768) :: tecvarname
+    character(len=500) :: teczoneheader, tecvarlocstr
+    character(len=WREC), allocatable :: rec(:)
+    integer(I8) :: chunk, nmax
+    integer :: b, d, k, u, ios, ndir, nvar, nvartot, ni1, ni2, nj1, nj2, nk1, nk2
+    real(R8) :: time_
+    logical :: time_accurate
+
+    stat = 1
+    if (.not. writable(orion)) return
+    chunk = WCHUNK_DEFAULT
+    if (present(chunk_values)) chunk = max(1_I8, chunk_values)
+    ndir = 3
+    nvar = size(orion%block(1)%vars, 1)
+    nvartot = ndir + nvar
+    time_accurate = .true.
+    time_ = orion%solutiontime
+    if (time_ < 0) then
+      time_ = abs(time_)
+      time_accurate = .false.
+    endif
+    ! ORION's header text (tec_init, tec_blk_data: the ASCII branch)
+    tecvarname = ' VARIABLES = x'
+    tecvarname = trim(tecvarname)//' y'
+    tecvarname = trim(tecvarname)//' z'
+    tecvarname = trim(tecvarname)//' '//unquote(trim(varnames))
+    if (nvar == 1) then
+      tecvarlocstr = ', VARLOCATION=([1-'//trim(str(.true.,ndir))//']=NODAL,['//trim(str(.true.,ndir+1))// &
+                     ']=CELLCENTERED)'
+    else
+      tecvarlocstr = ', VARLOCATION=([1-'//trim(str(.true.,ndir))//']=NODAL,['//trim(str(.true.,ndir+1))//'-'// &
+                     trim(str(.true.,nvartot))//']=CELLCENTERED)'
+    endif
+    nmax = 1
+    do b = 1, size(orion%block)
+      nmax = max(nmax, size(orion%block(b)%mesh, kind=I8)/ndir)
+    enddo
+    allocate(rec(min(chunk, nmax)))
+    stat = 2
+    open(newunit=u, file=trim(filename), access='stream', form='unformatted', status='replace', action='write', &
+         iostat=ios)
+    if (ios /= 0) return
+    write(u, iostat=ios) trim(tecvarname)//LF
+    do b = 1, size(orion%block)
+      if (ios /= 0) exit
+      associate(blk => orion%block(b))
+        ni1 = 0; ni2 = size(blk%mesh, 2) - 1
+        nj1 = 0; nj2 = size(blk%mesh, 3) - 1
+        nk1 = 0; nk2 = size(blk%mesh, 4) - 1
+        teczoneheader = ' ZONE  T = '//trim(blk%name)//                     &
+                        ', I='//trim(str(no_sign=.true.,n=ni2-ni1+1))//       &
+                        ', J='//trim(str(no_sign=.true.,n=nj2-nj1+1))//       &
+                        ', K='//trim(str(no_sign=.true.,n=nk2-nk1+1))//       &
+                        ', DATAPACKING=BLOCK'//adjustl(trim(tecvarlocstr))
+        teczoneheader = trim(teczoneheader)//', SOLUTIONTIME='//trim(str(no_sign=.true.,n=time_))
+        if (.not. time_accurate) teczoneheader = trim(teczoneheader)//', STRANDID = 0'
+        write(u, iostat=ios) trim(teczoneheader)//LF
+        do d = 1, ndir
+          if (ios == 0) call write_field(u, blk%mesh(d, ni1:ni2, nj1:nj2, nk1:nk2), chunk, rec, ios)
+        enddo
+        if (ni2 == 0) ni2 = 1
+        if (nj2 == 0) nj2 = 1
+        if (nk2 == 0) nk2 = 1
+        do k = 1, nvar
+          if (ios == 0) call write_field(u, blk%vars(k, ni1+1:ni2, nj1+1:nj2, nk1+1:nk2), chunk, rec, ios)
+        enddo
+      end associate
+    enddo
+    if (ios /= 0) then
+      close(u, iostat=ios)
+      return
+    endif
+    close(u, iostat=ios)
+    if (ios == 0) stat = 0
+  end function tec_write_ascii_fast
+
+  !> The orion_data write_outfield makes, the one tec_write_ascii_fast writes: ASCII, no ghost cells, cell-centred
+  !  variables, three coordinates over nodes from index 0, the same variables in every block over cells from index 1
+  !  (one cell along a direction without cells, as ORION's writer loops).
+  logical function writable(orion) result(ok)
+    type(orion_data), intent(in) :: orion
+    integer :: b, nvar
+    ok = .false.
+    if (trim(orion%tec%format) /= 'ascii' .or. orion%tec%node .or. orion%tec%bc) return
+    if (.not. allocated(orion%block)) return
+    if (size(orion%block) < 1) return
+    if (.not. allocated(orion%block(1)%vars)) return
+    nvar = size(orion%block(1)%vars, 1)
+    if (nvar < 1) return
+    do b = 1, size(orion%block)
+      associate(blk => orion%block(b))
+        if (.not. (allocated(blk%mesh) .and. allocated(blk%vars))) return
+        if (size(blk%mesh, 1) /= 3 .or. any(lbound(blk%mesh) /= [1, 0, 0, 0])) return
+        if (any(lbound(blk%vars) /= 1)) return
+        if (any(shape(blk%vars) /= [nvar, max(1, size(blk%mesh, 2) - 1), max(1, size(blk%mesh, 3) - 1), &
+                                    max(1, size(blk%mesh, 4) - 1)])) return
+      end associate
+    enddo
+    ok = .true.
+  end function writable
+
+  !> Field f (i fastest, as ORION loops) to unit u, chunk values per stream WRITE, rec the chunk's text.
+  subroutine write_field(u, f, chunk, rec, ios)
+    integer, intent(in) :: u
+    real(R8), intent(in) :: f(:,:,:)
+    integer(I8), intent(in) :: chunk
+    character(len=WREC), intent(inout) :: rec(:)
+    integer, intent(out) :: ios
+    integer(I8) :: n, c0, m, q
+    n = size(f, kind=I8)
+    ios = 0
+    c0 = 0
+    do while (c0 < n)
+      m = min(chunk, n - c0)
+      do q = 0, m - 1, WSLICE
+        call format_slice(f, c0 + q, min(int(WSLICE, I8), m - q), rec(q+1:), ios)
+        if (ios /= 0) return
+      enddo
+      write(u, iostat=ios) rec(1:m)
+      if (ios /= 0) return
+      c0 = c0 + m
+    enddo
+  end subroutine write_field
+
+  !> Values t0 .. t0+n-1 (0-based, i fastest) of f into rec(1:n): one internal WRITE of FR_P, then a line feed each.
+  subroutine format_slice(f, t0, n, rec, ios)
+    real(R8), intent(in) :: f(:,:,:)
+    integer(I8), intent(in) :: t0, n
+    character(len=WREC), intent(inout) :: rec(:)
+    integer, intent(out) :: ios
+    real(R8) :: v(WSLICE)
+    integer(I8) :: ni, nj, nij, r
+    integer :: i, j, k, q
+    ni = size(f, 1, kind=I8); nj = size(f, 2, kind=I8); nij = ni*nj
+    k = int(t0/nij); r = t0 - k*nij
+    j = int(r/ni); i = int(r - j*ni)
+    do q = 1, int(n)
+      v(q) = f(i+1, j+1, k+1)
+      i = i + 1
+      if (i == ni) then
+        i = 0; j = j + 1
+        if (j == nj) then
+          j = 0; k = k + 1
+        endif
+      endif
+    enddo
+    write(rec(1:n), FR_P, iostat=ios) v(1:n)
+    do q = 1, int(n)
+      rec(q)(WREC:WREC) = LF
+    enddo
+  end subroutine format_slice
+
+  !> `"a""b"` -> ` a  b `: ORION's writer's quotes made blanks (Lib_Tecplot unquote).
+  pure function unquote(sin) result(sout)
+    character(len=*), intent(in) :: sin
+    character(len=len(sin)) :: sout
+    integer :: i
+    do i = 1, len(sin)
+      if (sin(i:i) == '"') then
+        sout(i:i) = ' '
+      else
+        sout(i:i) = sin(i:i)
+      endif
+    enddo
+  end function unquote
 
   !> The VARIABLES text, then every zone in file order: its header, ORION's checks, its arrays, its values.
   subroutine read_file(s, o, stat, reason)

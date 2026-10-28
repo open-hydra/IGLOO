@@ -253,7 +253,7 @@ the file, its values converted on rank 0's OpenMP threads, and broadcasts the fi
 A file with POINT packing, CR line ends, a value longer than 100 characters or a null value (`/`, `r*`) is read by
 ORION's reader, which cuts every line at 1000 characters, and so is a file the reader refuses; the run then prints
 `[IGLOO] gas file read by ORION's reader:` and the reason. `IGLOO_TEC_FAST=0` in the environment reads every gas file
-with ORION's reader. Under hydra-MI2 the gas comes from memory (`external_gas`): no file is read.
+with ORION's reader (and writes the grid files with ORION's writer: [Field output](using.md#field-output)). Under hydra-MI2 the gas comes from memory (`external_gas`): no file is read.
 
 ---
 

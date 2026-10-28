@@ -485,9 +485,12 @@ about half of it geometry.
   busy-wait while rank 0 reads. With ORION's reader (`IGLOO_TEC_FAST=0`) the box of
   [Measured performance](#measured-performance) (3 M cells, ASCII) reads its gas for 177–178 s
   at up to four ranks and 210 s at forty; its parcel loop takes 38.5 s at 4 × 20.
-- **The grid output is written by rank 0 alone**, after the cross-rank sum: the box's source
-  and Eulerian fields take 105–106 s at up to four ranks, of a sweep of 149 s at 4 × 20. With
-  the gas read, 283 of the 331 s of its fastest split.
+- **The grid output is written by rank 0 alone**, after the cross-rank sum, through a stream
+  writer that formats many values per internal WRITE and writes large blocks
+  ([Field output](../user/using.md#field-output)). With ORION's writer (`IGLOO_TEC_FAST=0`) the
+  box's source and Eulerian fields take 105–106 s at up to four ranks, of a sweep of 149 s at
+  4 × 20; with ORION's reader too, the gas read and the grid write take 283 of the 331 s of its
+  fastest split.
 - **Memory does not scale**: every rank holds the full mesh, gas field and accumulators
   (see [Memory per rank](#memory-per-rank)). Breaking that wall would need shared-memory windows
   (`MPI_Win_allocate_shared`) or genuine domain decomposition — neither is implemented.
