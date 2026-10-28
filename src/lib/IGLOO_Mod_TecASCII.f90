@@ -2,7 +2,7 @@
 !  accepts with ORION's semantics, its values converted by the run-time library's list-directed READ as ORION converts
 !  them, one READ per run of plain number tokens, on every OpenMP thread; a file it declines is left to ORION's reader.
 !  The writer writes the bytes of ORION's ASCII writer, its values formatted by the run-time library's internal WRITE
-!  many at a time and written by stream access. IGLOO_TEC_FAST=0 in the environment brings back ORION's reader and
+!  many at a time, on every OpenMP thread, and written by stream access. IGLOO_TEC_FAST=0 in the environment brings back ORION's reader and
 !  writer. The header routines and expressions are copies of ORION's (Lib_Tecplot, GPL-3.0); the reader's messages on
 !  the paths that end in a refusal are left to ORION's reader, which reads every declined file.
 module IGLOO_Mod_TecASCII
@@ -97,8 +97,8 @@ contains
 
   !> Writes orion to filename as ORION's tec_write_structured_multiblock writes it in ASCII, byte for byte, for the
   !  orion_data write_outfield makes (writable): ORION's VARIABLES and zone lines, then every field one FR_P value per
-  !  line, formatted WSLICE values per internal WRITE, chunk_values values per stream WRITE. 0 written, 1 declined
-  !  (nothing opened: ORION's writer takes it), 2 an I/O error (the unit closed).
+  !  line, formatted on every thread WSLICE values per internal WRITE, chunk_values values per stream WRITE. 0 written,
+  !  1 declined (nothing opened: ORION's writer takes it), 2 an I/O error (the unit closed).
   integer function tec_write_ascii_fast(orion, varnames, filename, chunk_values) result(stat)
     type(orion_data), intent(in) :: orion
     character(len=*), intent(in) :: varnames, filename
@@ -204,23 +204,39 @@ contains
     ok = .true.
   end function writable
 
-  !> Field f (i fastest, as ORION loops) to unit u, chunk values per stream WRITE, rec the chunk's text.
+  !> Field f (i fastest, as ORION loops) to unit u, chunk values per stream WRITE, rec the chunk's text: each chunk cut
+  !  into one piece per thread, each piece formatted on its thread; the pieces' errors joined after the region.
   subroutine write_field(u, f, chunk, rec, ios)
     integer, intent(in) :: u
     real(R8), intent(in) :: f(:,:,:)
     integer(I8), intent(in) :: chunk
     character(len=WREC), intent(inout) :: rec(:)
     integer, intent(out) :: ios
-    integer(I8) :: n, c0, m, q
+    integer(I8) :: n, c0, m, lo, hi, q
+    integer :: nt, np, p, st, nerr
     n = size(f, kind=I8)
+    nt = 1
+    !$ nt = omp_get_max_threads()
     ios = 0
     c0 = 0
     do while (c0 < n)
       m = min(chunk, n - c0)
-      do q = 0, m - 1, WSLICE
-        call format_slice(f, c0 + q, min(int(WSLICE, I8), m - q), rec(q+1:), ios)
-        if (ios /= 0) return
+      np = int(min(int(nt, I8), m))
+      nerr = 0
+      !$omp parallel do schedule(static) default(shared) private(p, lo, hi, q, st) reduction(+:nerr) if(np > 1)
+      do p = 1, np
+        lo = (m*(p - 1))/np
+        hi = (m*p)/np
+        do q = lo, hi - 1, WSLICE
+          call format_slice(f, c0 + q, min(int(WSLICE, I8), hi - q), rec(q+1:), st)
+          if (st /= 0) nerr = nerr + 1
+        enddo
       enddo
+      !$omp end parallel do
+      if (nerr > 0) then
+        ios = 1
+        return
+      endif
       write(u, iostat=ios) rec(1:m)
       if (ios /= 0) return
       c0 = c0 + m

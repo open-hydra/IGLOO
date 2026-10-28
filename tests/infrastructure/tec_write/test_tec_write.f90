@@ -1,22 +1,59 @@
 !> The grid files' stream writer (IGLOO_Mod_TecASCII's tec_write_ascii_fast) against ORION's ASCII writer in the same
-!  executable: the orion_data write_outfield makes, written by both and compared byte for byte at every chunk size, a
-!  longer file at the same name before every write of the stream writer.
+!  executable: the orion_data write_outfield makes, written by both and compared byte for byte at every chunk size and
+!  thread count, a longer file at the same name before every write of the stream writer.
+!    test_tec_write                                the fixtures
+!    test_tec_write [--threads n,m,...] <file> ... each file read by the one-pass reader and written by ORION's writer
+!                                                  and by the stream writer at each thread count (default: the
+!                                                  environment's), timed, every stream write against ORION's bytes
 program test_tec_write
   use, intrinsic :: iso_fortran_env, only: I8 => int64, R8 => real64
+  use, intrinsic :: iso_c_binding, only: c_int
   use Lib_ORION_data, only: orion_data
   use Lib_Tecplot, only: tec_write_structured_multiblock
-  use IGLOO_Mod_TecASCII, only: tec_write_ascii_fast
+  use IGLOO_Mod_TecASCII, only: tec_write_ascii_fast, tec_read_ascii_fast
+  !$ use omp_lib, only: omp_get_max_threads
   implicit none
+
+  interface
+    !> The runtime's C entry: with -fno-underscoring (the gfortran flags) the Fortran name reaches it by reference.
+    subroutine set_num_threads_c(n) bind(c, name='omp_set_num_threads')
+      import :: c_int
+      integer(c_int), value :: n
+    end subroutine set_num_threads_c
+  end interface
 
   integer, parameter :: LLEN = 200                             !> write_outfield's varnames length (IGLOO_variables llen)
   integer(I8), parameter :: CHUNKS(3) = [1_I8, 4096_I8, 0_I8]   !> values per stream WRITE; 0: the writer's default
+  integer, parameter :: THREADS(4) = [1, 2, 3, 7]
+  integer, parameter :: REPEATS = 20                           !> the writes at 7 threads, per chunk size
   integer, parameter :: EXTRA = 4096                           !> bytes the junk file holds beyond ORION's file
   character, parameter :: LF = achar(10)
-  integer :: nfail = 0, ncmp = 0
+  integer :: nfail = 0, ncmp = 0, nthr = 1, i
+  integer, allocatable :: tlist(:)
+  character(len=4096) :: arg
   type(orion_data) :: o
   character(len=LLEN) :: vn
 
-  ! source.tec of one material, one block, every field above 4096 values
+  !$ nthr = size(THREADS)
+  if (command_argument_count() > 0) then
+    i = 1
+    tlist = [0]
+    call get_command_argument(1, arg)
+    if (trim(arg) == '--threads') then
+      call get_command_argument(2, arg)
+      call parse_threads(trim(arg))
+      i = 3
+    endif
+    do while (i <= command_argument_count())
+      call get_command_argument(i, arg)
+      call timed(trim(arg))
+      i = i + 1
+    enddo
+    call finish()
+    stop
+  endif
+
+  ! source.tec of one material, one block, every field above 4096 values (and above 7 x 4096)
   call make(o, [40], [30], [25], 5, -10._R8)
   vn = source_names([character(len=16) :: 'A'])
   call check('f1-source', o, vn)
@@ -30,15 +67,24 @@ program test_tec_write
   vn = source_names([character(len=16) :: 'Al2O3_particles', 'H2O_droplets', 'n-decane_drops', 'n-heptane_drops', &
                      'kerosene_jp10', 'aluminium_bulk'])
   call check('f3-source-nz1', o, vn)
-
-  write(*,'(A,I0,A,I0,A)') ' test_tec_write: ', ncmp, ' writes compared, ', nfail, ' failure(s)'
-  if (nfail > 0) then
-    write(*,'(A)') ' [FAIL] the stream writer differs from ORION''s writer'
-    error stop 1
-  endif
-  write(*,'(A)') ' [PASS] the stream writer writes ORION''s bytes'
+  call finish()
 
 contains
+
+  subroutine finish()
+    write(*,'(A,I0,A,I0,A)') ' test_tec_write: ', ncmp, ' writes compared, ', nfail, ' failure(s)'
+    if (nfail > 0) then
+      write(*,'(A)') ' [FAIL] the stream writer differs from ORION''s writer'
+      error stop 1
+    endif
+    write(*,'(A)') ' [PASS] the stream writer writes ORION''s bytes'
+  end subroutine finish
+
+  subroutine set_threads(n)
+    integer, intent(in) :: n
+    !$ call set_num_threads_c(int(n, c_int))
+    !$ if (omp_get_max_threads() /= n) call fail('the thread count is not '//itoa(int(n, I8)))
+  end subroutine set_threads
 
   subroutine fail(msg)
     character(len=*), intent(in) :: msg
@@ -201,32 +247,40 @@ contains
     enddo
   end function count_lf
 
-  !> ORION's writer on o into orion-<tag>.tec, the stream writer on o at every chunk size into fast-<tag>.tec over a
-  !  longer junk file, every fast file against ORION's byte for byte.
+  !> ORION's writer on o into orion-<tag>.tec, the stream writer on o at every thread count and chunk size into
+  !  fast-<tag>.tec over a longer junk file (20 times at 7 threads), every fast file against ORION's byte for byte.
   subroutine check(tag, o, vn)
     character(len=*), intent(in) :: tag
     type(orion_data), intent(in) :: o
     character(len=*), intent(in) :: vn
     character(len=:), allocatable :: ref, got, t
-    integer :: c, rc
+    integer :: c, rc, k, r, nr
     rc = tec_write_structured_multiblock(orion=o, varnames=vn, filename='orion-'//tag//'.tec')
     ref = slurp('orion-'//tag//'.tec')
-    do c = 1, size(CHUNKS)
-      t = tag//' chunk '//itoa(CHUNKS(c))
-      call junk('fast-'//tag//'.tec', len(ref, kind=I8) + EXTRA)
-      if (CHUNKS(c) > 0) then
-        rc = tec_write_ascii_fast(o, vn, 'fast-'//tag//'.tec', chunk_values=CHUNKS(c))
-      else
-        rc = tec_write_ascii_fast(o, vn, 'fast-'//tag//'.tec')
-      endif
-      ncmp = ncmp + 1
-      if (rc /= 0) then
-        call fail(t//': the stream writer returns '//itoa(int(rc, I8)))
-        cycle
-      endif
-      got = slurp('fast-'//tag//'.tec')
-      call same_bytes(t, ref, got)
+    do k = 1, nthr
+      call set_threads(THREADS(k))
+      nr = 1
+      if (THREADS(k) == 7) nr = REPEATS
+      do r = 1, nr
+        do c = 1, size(CHUNKS)
+          t = tag//' chunk '//itoa(CHUNKS(c))//' threads '//itoa(int(THREADS(k), I8))
+          call junk('fast-'//tag//'.tec', len(ref, kind=I8) + EXTRA)
+          if (CHUNKS(c) > 0) then
+            rc = tec_write_ascii_fast(o, vn, 'fast-'//tag//'.tec', chunk_values=CHUNKS(c))
+          else
+            rc = tec_write_ascii_fast(o, vn, 'fast-'//tag//'.tec')
+          endif
+          ncmp = ncmp + 1
+          if (rc /= 0) then
+            call fail(t//': the stream writer returns '//itoa(int(rc, I8)))
+            cycle
+          endif
+          got = slurp('fast-'//tag//'.tec')
+          call same_bytes(t, ref, got)
+        enddo
+      enddo
     enddo
+    call set_threads(1)
   end subroutine check
 
   !> What write_outfield never makes is declined: nothing opened, the file at the name left as it was.
@@ -260,5 +314,123 @@ contains
     got = slurp('decline.tec')
     if (len(got) /= 1000 .or. got(1:1) /= 'J') call fail(tag//': the file at the name was touched')
   end subroutine decline_case
+
+  ! ---------------------------------------------------------------- the timed mode
+  !> n,m,... into tlist.
+  subroutine parse_threads(t)
+    character(len=*), intent(in) :: t
+    integer :: p, q, n
+    tlist = [integer ::]
+    p = 1
+    do while (p <= len(t))
+      q = index(t(p:), ',')
+      if (q == 0) then
+        q = len(t) + 1
+      else
+        q = p + q - 1
+      endif
+      read(t(p:q-1), *) n
+      tlist = [tlist, n]
+      p = q + 1
+    enddo
+  end subroutine parse_threads
+
+  function secs(c, rate) result(s)
+    integer(I8), intent(in) :: c, rate
+    character(len=:), allocatable :: s
+    character(len=16) :: t
+    write(t,'(F10.3)') real(c, R8)/real(rate, R8)
+    s = trim(adjustl(t))//' s'
+  end function secs
+
+  !> 0 when files a and b hold the same bytes, else the 1-based offset of the first byte that differs.
+  integer(I8) function first_difference(fa, fb) result(off)
+    character(len=*), intent(in) :: fa, fb
+    integer(I8), parameter :: BLK = 67108864_I8
+    character(len=:), allocatable :: a, b
+    integer(I8) :: na, nb, p, m, k
+    integer :: ua, ub
+    open(newunit=ua, file=fa, access='stream', form='unformatted', action='read', status='old')
+    open(newunit=ub, file=fb, access='stream', form='unformatted', action='read', status='old')
+    inquire(unit=ua, size=na)
+    inquire(unit=ub, size=nb)
+    allocate(character(len=BLK) :: a, b)
+    off = 0
+    p = 1
+    do while (p <= min(na, nb))
+      m = min(BLK, min(na, nb) - p + 1)
+      read(ua, pos=p) a(1:m)
+      read(ub, pos=p) b(1:m)
+      if (a(1:m) /= b(1:m)) then
+        do k = 1, m
+          if (a(k:k) /= b(k:k)) exit
+        enddo
+        off = p + k - 1
+        exit
+      endif
+      p = p + m
+    enddo
+    if (off == 0 .and. na /= nb) off = min(na, nb) + 1
+    close(ua)
+    close(ub)
+  end function first_difference
+
+  subroutine remove(f)
+    character(len=*), intent(in) :: f
+    integer :: u, ios
+    open(newunit=u, file=f, status='old', iostat=ios)
+    if (ios == 0) close(u, status='delete')
+  end subroutine remove
+
+  !> File f read by the one-pass reader, written as a grid file (its variables cell-centred, write_outfield's solution
+  !  time) by ORION's writer into orion-timed.tec and by the stream writer at each thread count of tlist into
+  !  fast-timed.tec, timed, every stream write against ORION's bytes; both files deleted at the end.
+  subroutine timed(f)
+    character(len=*), intent(in) :: f
+    type(orion_data) :: o
+    character(len=96) :: why
+    character(len=:), allocatable :: vn
+    integer :: rc, k, j, n
+    integer(I8) :: c0, c1, rate, off, nval
+    o%tec%node = .false.; o%tec%bc = .false.; o%tec%format = 'ascii'
+    call system_clock(c0, rate)
+    rc = tec_read_ascii_fast(o, f, why=why)
+    call system_clock(c1)
+    write(*,'(A)') ' '//f//': read by the one-pass reader, rc '//itoa(int(rc, I8))//', in '//secs(c1 - c0, rate)
+    if (rc /= 0) then
+      call fail(f//': the reader returns '//itoa(int(rc, I8))//' ('//trim(why)//')')
+      return
+    endif
+    vn = ''
+    do j = 4, size(o%varnames)
+      vn = vn//'"'//trim(o%varnames(j))//'" '
+    enddo
+    o%solutiontime = -10._R8
+    nval = 0
+    do j = 1, size(o%block)
+      nval = nval + size(o%block(j)%mesh, kind=I8) + size(o%block(j)%vars, kind=I8)
+    enddo
+    call system_clock(c0, rate)
+    rc = tec_write_structured_multiblock(orion=o, varnames=vn, filename='orion-timed.tec')
+    call system_clock(c1)
+    write(*,'(A)') ' '//itoa(nval)//' values: ORION''s writer rc '//itoa(int(rc, I8))//' in '//secs(c1 - c0, rate)
+    do k = 1, size(tlist)
+      if (tlist(k) > 0) call set_threads(tlist(k))
+      n = 1
+      !$ n = omp_get_max_threads()
+      call system_clock(c0, rate)
+      rc = tec_write_ascii_fast(o, vn, 'fast-timed.tec')
+      call system_clock(c1)
+      off = first_difference('orion-timed.tec', 'fast-timed.tec')
+      write(*,'(A)') ' '//itoa(nval)//' values: the stream writer at '//itoa(int(n, I8))//' thread(s) rc '// &
+                     itoa(int(rc, I8))//' in '//secs(c1 - c0, rate)//', first byte differing from ORION''s: '// &
+                     itoa(off)//' (0: none)'
+      ncmp = ncmp + 1
+      if (rc /= 0) call fail(f//': the stream writer returns '//itoa(int(rc, I8)))
+      if (off /= 0) call fail(f//' at '//itoa(int(n, I8))//' thread(s): byte '//itoa(off)//' differs')
+    enddo
+    call remove('orion-timed.tec')
+    call remove('fast-timed.tec')
+  end subroutine timed
 
 end program test_tec_write

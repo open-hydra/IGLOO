@@ -183,7 +183,7 @@ After `solve`, `obj_IGLOO%writeout` writes the mesh-projected fields:
 
 Both outputs are mollified by a local binomial smoother (controlled by `mollify` and `mollify-passes` in `[IGLOO-General]`) to reduce deposition noise.
 
-Both are ASCII Tecplot files in BLOCK packing: the coordinates at the nodes, then the variables at the cells, one value per line in `E23.15E3`, the bytes ORION's writer writes. A stream writer formats the values many at a time and writes them in large blocks; `IGLOO_TEC_FAST=0` in the environment writes them with ORION's writer; so does a run whose stream writer fails, which prints `[IGLOO] <file> written by ORION's writer`.
+Both are ASCII Tecplot files in BLOCK packing: the coordinates at the nodes, then the variables at the cells, one value per line in `E23.15E3`, the bytes ORION's writer writes. A stream writer formats the values many at a time on every OpenMP thread and writes them in large blocks; `IGLOO_TEC_FAST=0` in the environment writes them with ORION's writer; so does a run whose stream writer fails, which prints `[IGLOO] <file> written by ORION's writer`.
 
 ---
 
