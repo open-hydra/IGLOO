@@ -478,12 +478,13 @@ about half of it geometry.
 
 ## Known limits
 
-- **Setup is replicated, except the Tecplot read**: rank 0 parses the gas file and broadcasts
+- **Setup is replicated, except the Tecplot read**: rank 0 reads the gas file in one pass
+  (`IGLOO_Mod_TecASCII`; [the gas file](../user/input.md#the-gas-file-gas-file)) and broadcasts
   the field (`mpi_bcast_orion`: names, solution time, block dimensions, mesh and variables);
-  every rank then builds the blocks, the geometry and the pinning itself. On a large mesh the
-  read is the largest serial part: the box of [Measured performance](#measured-performance)
-  (3 M cells, ASCII) reads its gas for 177–178 s at up to four ranks and 210 s at forty, while
-  the other ranks busy-wait; its parcel loop takes 38.5 s at 4 × 20.
+  every rank then builds the blocks, the geometry and the pinning itself, and the other ranks
+  busy-wait while rank 0 reads. With ORION's reader (`IGLOO_TEC_FAST=0`) the box of
+  [Measured performance](#measured-performance) (3 M cells, ASCII) reads its gas for 177–178 s
+  at up to four ranks and 210 s at forty; its parcel loop takes 38.5 s at 4 × 20.
 - **The grid output is written by rank 0 alone**, after the cross-rank sum: the box's source
   and Eulerian fields take 105–106 s at up to four ranks, of a sweep of 149 s at 4 × 20. With
   the gas read, 283 of the 331 s of its fastest split.

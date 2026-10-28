@@ -79,6 +79,8 @@ mkdir -p OUTPUT
 !!! warning "Stack size"
     Always set `ulimit -s unlimited` (or `KMP_STACKSIZE=100M` for Intel compilers) before launching the solver. Large automatic arrays in the per-particle integration (cell-crossing ray tests and the ODE-solver work arrays) requires more stack than the default system limit.
 
+With the Intel runtime, `FORT_BUFFERED=true` in the environment buffers the grid write (`source.tec`, `euler<fam>.tec`), which otherwise makes one system call per value.
+
 Output is written to `OUTPUT/` on completion. The solver prints progress to stdout; any fatal errors go to stderr.
 
 ### Running a verification case

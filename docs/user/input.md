@@ -239,6 +239,24 @@ Selects and tunes the ODE integrator.
 
 ---
 
+## The gas file (`gas-file`)
+
+The gas field is an ASCII Tecplot file of ordered zones in BLOCK packing: a `VARIABLES` line (its names may continue
+on the following lines, up to the first `ZONE` record), then per block a `ZONE` record with `I`, `J` and `K` (its
+header may continue over several lines; the first line that starts with a number starts the values), the coordinates
+at the nodes, then the variables, at the nodes or at the cells (`VARLOCATION=([...]=CELLCENTERED)`), one centring for
+every zone. Values are separated by blanks, tabs, commas or line ends, and a data line is read whole, whatever its
+length. Each value is converted as the Fortran runtime's list-directed READ converts it, as ORION's reader converts
+it: on a file whose lines are shorter than 1000 characters the field is ORION's reader's, bit for bit. Rank 0 reads
+the file and broadcasts the field.
+
+A file with POINT packing, CR line ends, a value longer than 100 characters or a null value (`/`, `r*`) is read by
+ORION's reader, which cuts every line at 1000 characters, and so is a file the reader refuses; the run then prints
+`[IGLOO] gas file read by ORION's reader:` and the reason. `IGLOO_TEC_FAST=0` in the environment reads every gas file
+with ORION's reader. Under hydra-MI2 the gas comes from memory (`external_gas`): no file is read.
+
+---
+
 ## Property tables (`INPUT/properties.dat`)
 
 One zone per material, in the order of the material lines of `INPUT/phase.txt`; every zone on
