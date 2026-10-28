@@ -24,7 +24,7 @@ FAMILY_DIRS = [
     "infrastructure/material_tokens",
     "infrastructure/axis_dispatch",
     "infrastructure/graze_standoff", "infrastructure/dual_clip",
-    "infrastructure/mollify_blocks", "infrastructure/host_assoc",
+    "infrastructure/mollify_blocks", "infrastructure/host_assoc", "infrastructure/fmt",
     "standard/drag", "standard/temperature",
     "evaporation", "evaporation/interface-neq", "evaporation/tc-analytic",
     "evaporation/evap-breakup", "evaporation/liquid-p2t", "evaporation/boiling-zgr",
