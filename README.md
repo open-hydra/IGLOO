@@ -34,6 +34,7 @@ IGLOO is an open-source Lagrangian particle solver written in modern Fortran. It
 | **CMake** | ≥ 3.23 |
 | **Fortran compiler** | GNU (`gfortran`) or Intel/oneAPI (`ifort` / `ifx`) |
 | **C/C++ compiler** | Required only for optional TecIO support |
+| **Python 3** (tests) | the standard library (the suite runs on 3.6); scipy for the three boiling checks; matplotlib + numpy for the V&V figures |
 
 ### Build
 

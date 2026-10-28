@@ -13,6 +13,7 @@ This page describes how to build IGLOO. Two build modes exist: **standalone** (I
 | **C/C++ compiler** | Required only for optional TecIO support |
 | **OpenMP** | Optional; required for multi-threaded execution |
 | **MPI** | Optional; hybrid MPI + OpenMP execution (`--use-mpi`) |
+| **Python 3** (tests) | the standard library (the suite runs on 3.6); scipy for the three boiling checks; matplotlib + numpy for the V&V figures |
 
 ---
 

@@ -17,6 +17,11 @@ USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # the rank-count gates, buil
 ./tests/test.sh clean            # wipe what the tests write in their directories + build/verif/
 ```
 
+**Requirements.** Python 3 (the suite runs on 3.6) with its standard library runs every check. scipy is required by
+the three boiling checks (`boiling-zgr-flash`, `-hot`, `-switch`: their oracle integrates with `solve_ivp`), which
+fail without it. matplotlib with numpy draws the V&V figures (`verify.py`, `tools/plot_curves.py`) and runs
+`vv-order`, which is skipped without them.
+
 Opt-in via `-DBUILD_VERIFICATION=ON` (default OFF, so the production build is
 byte-for-byte untouched). `test.sh` configures a **separate `build/verif/`**
 (`build/mpi/` with `USE_MPI=ON`) and builds it before every run (same source, RELEASE, in-tree
