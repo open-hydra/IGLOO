@@ -31,6 +31,10 @@ ELSE()
     MESSAGE(FATAL_ERROR "CMAKE_BUILD_TYPE not valid, choices are DEBUG, RELEASE, or TESTING")
 ENDIF(BT STREQUAL "RELEASE")
 
+# Remove -fno-underscoring from a cached CMAKE_Fortran_FLAGS
+STRING(REPLACE " -fno-underscoring" "" FFLAGS_STRIPPED "${CMAKE_Fortran_FLAGS}")
+SET(CMAKE_Fortran_FLAGS "${FFLAGS_STRIPPED}" CACHE STRING "Set the CMAKE_Fortran_FLAGS flags" FORCE)
+
 #########################################################
 # If the compiler flags have already been set, return now
 #########################################################
@@ -50,10 +54,6 @@ ENDIF(CMAKE_Fortran_FLAGS_RELEASE AND CMAKE_Fortran_FLAGS_TESTING AND CMAKE_Fort
 #####################
 ### GENERAL FLAGS ###
 #####################
-
-# Don't add underscores in symbols for C-compatability
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
-                 Fortran "-fno-underscoring")
 
 # There is some bug where -march=native doesn't work on Mac
 IF(APPLE)
