@@ -1,11 +1,12 @@
 # stuck-cell — the give-up guard of a parcel that does not move
 
-**Purpose.** The integration loop (`Lib_Integration::integrate`) carries three give-up guards: the segments a
+**Purpose.** The integration loop (`Lib_Integration::integrate`) carries four give-up guards: the segments a
 parcel spends in one cell (`part%Ncell` past `nMaxCell` = 10: `stuck in cell`), the segments without net
-displacement (`nStall` past `nMaxStall` = 100: `no net progress`), and the outer cap (`maxIter` = 500 000
-segments). A parcel at rest trips the first long before the second, so the residency guard is the one a
-fixture can provoke; this case pins that it fires, once per parcel, and that the parcel leaves with an exit
-record where it stands.
+displacement (`nStall` past `nMaxStall` = 100: `no net progress`), the reflections without progress (every
+`nMaxStall` reflections, closer than 1e-4 m to the previous checkpoint: `stuck in cell` as well, gated by
+[`sym-plane-creep`](../sym-plane-creep/INFO.md)), and the outer cap (`maxIter` = 500 000 segments). A parcel at
+rest trips the first long before the second, so the residency guard is the one a fixture can provoke; this case
+pins that it fires, once per parcel, and that the parcel leaves with an exit record where it stands.
 
 **Fixture** (`python3 make_fixture.py`, output committed; `phase.txt` and `properties.dat` from `common/`):
 `drag-stokes`'s box with the gas at rest (`tools/make_box_case.py --ug 0`) and every inlet cell coded 402 at

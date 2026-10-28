@@ -5,7 +5,10 @@
 yet it is not residency: a parcel bouncing along the plane makes progress. At gas order 1 the segments that end in
 a reflection are counted apart and do not count toward the guard; at gas order 2 a reflection already restarts
 the count. This case is the guard's gate at gas order 1; [`sym-plane-bounce-ord2`](../sym-plane-bounce-ord2/INFO.md)
-runs the same parcels at gas order 2.
+runs the same parcels at gas order 2. The progress guard, which ends a parcel that moves less than 1e-4 m over 100
+reflections, lets them through as well: their least advance over 100 reflections is 5.36e-3 m;
+[`sym-plane-creep`](../sym-plane-creep/INFO.md) is this fixture with the gas at 3 mm/s, where that guard ends
+every parcel.
 
 **Fixture.** `tools/make_box_case.py --sym-face 5 --no-inlet --ug 0.1` writes `INPUT/solfile.tec`: drag-stokes's
 box (60×5×5 cells, 0.15 m) with the gas at 0.1 m/s along +x, T = 600 K; `INPUT/bc.txt` is

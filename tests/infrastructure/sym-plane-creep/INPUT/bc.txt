@@ -1,0 +1,1 @@
+../../sym-plane-skate/INPUT/bc.txt
