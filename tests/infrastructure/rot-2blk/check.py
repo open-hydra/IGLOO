@@ -14,12 +14,14 @@ check.py runs the same box as one block (INPUT-1blk/, this input.ini without [IG
 ref-1blk/ and holds this run to it. The rotated block lists each cell's vertices in another order, so the
 in/out test at a face the step was cut to is decided by different roundings: a crossing can end ~1e-10 m on the
 other side. That is the floor of the comparison (an unrotated two-block box matches the one-block run to 2e-15).
+In block 2 it moves every printed field by far less than one unit of its last printed place (INFO.md), so a value
+that close to a rounding boundary prints one unit apart, never two.
 
 Targets
-  R1  the one-block run: trajectories equal as sorted multisets; exit records equal per parcel within one print
-      ULP; scatter markers equal in number per parcel with the same Y, Z, d, m; euler1 and source equal cell by
-      cell within ten times their measured floor (TOL_FIELD, at least 1e-12 of the field scale), block 2's cell
-      (i, j, k) being the one-block cell (61 - i, j, 6 - k)
+  R1  the one-block run: trajectories and exit records equal per parcel within one unit of the last printed
+      place, the same rows in order; scatter markers equal in number per parcel with the same Y, Z, d, m;
+      euler1 and source equal cell by cell within ten times their measured floor (TOL_FIELD, at least 1e-12 of
+      the field scale), block 2's cell (i, j, k) being the one-block cell (61 - i, j, 6 - k)
   R2  the block-change line: 25 parcels change block through the connected cell, none through the block sweep,
       no rim exit, no stencil refresh
   R3  the orientation witness: every record of block 1's face 2 and block 2's face 2 in INPUT/drop-bc.txt is a
@@ -140,6 +142,35 @@ def by_id(path):
     return out
 
 
+def headers(path):
+    """The variables= and zone lines of a .dat file, in order."""
+    return [s for s in (ln.strip() for ln in open(path)) if s.lower().startswith(("variables", "zone"))]
+
+
+def within_one_unit(a, b, what, per_parcel=None):
+    """Two by_id tables: per parcel the same number of rows (per_parcel when given), row by row in file order the
+    same fields, each equal or within one unit of its last printed place. (fields one unit apart, the rest)."""
+    flips, worse = 0, []
+    for pid in sorted(set(a) | set(b)):
+        ra, rb = a.get(pid, []), b.get(pid, [])
+        if len(ra) != len(rb) or (per_parcel is not None and len(ra) != per_parcel):
+            worse.append(f"ID {pid}: {len(ra)} vs {len(rb)} {what}")
+            continue
+        for k, (x, y) in enumerate(zip(ra, rb)):
+            if set(x) != set(y):
+                worse.append(f"ID {pid} row {k}: fields {sorted(set(x) ^ set(y))}")
+                continue
+            for name, u in x.items():
+                v = y[name]
+                if u == v:
+                    continue
+                if "." in u and "." in v and abs(float(u) - float(v)) <= 1.0001 * max(ulp(u), ulp(v)):
+                    flips += 1
+                else:
+                    worse.append(f"ID {pid} row {k} {name}: {u} vs {v}")
+    return flips, worse
+
+
 def run_sibling():
     ref = os.path.join(HERE, "ref-1blk")
     shutil.rmtree(ref, ignore_errors=True)
@@ -196,28 +227,18 @@ def main():
         return rc | fail(f"R1 the one-block run exited {code}")
     mine = lambda f: os.path.join("OUTPUT", PREFIX + f)
     theirs = lambda f: os.path.join(ref, "OUTPUT", f)
-    la = sorted(open(mine("trajectories-A.dat")).read().split("\n"))
-    lb = sorted(open(theirs("trajectories-A.dat")).read().split("\n"))
-    if la != lb:
-        rc |= fail(f"R1 trajectories differ from the one-block run: {len(set(la) ^ set(lb))} distinct lines")
+    # trajectories and exits: per parcel, every field (by its header name) within one unit of its last printed place
+    ta, tb = by_id(mine("trajectories-A.dat")), by_id(theirs("trajectories-A.dat"))
+    flips, worse = within_one_unit(ta, tb, "trajectory rows")
+    if headers(mine("trajectories-A.dat")) != headers(theirs("trajectories-A.dat")):
+        worse.append("the variables and zone lines differ")
+    if worse or not ta:
+        rc |= fail(f"R1 trajectories beyond one print unit of the one-block run: {worse[:4]}")
     else:
-        print(f"R1 trajectories equal the one-block run as sorted multisets ({len(la)} lines) PASS")
-    # exits: per parcel, every field (by its header name) within one unit of its last printed place
+        print(f"R1 trajectories equal the one-block run per parcel within one print unit "
+              f"({sum(len(v) for v in ta.values())} rows, {flips} field(s) one unit apart) PASS")
     ea, eb = by_id(mine("outloc-A.dat")), by_id(theirs("outloc-A.dat"))
-    flips, worse = 0, []
-    for pid in sorted(set(ea) | set(eb)):
-        ra, rb = ea.get(pid, []), eb.get(pid, [])
-        if len(ra) != 1 or len(rb) != 1 or set(ra[0]) != set(rb[0]):
-            worse.append(f"ID {pid}: {len(ra)} vs {len(rb)} exit records")
-            continue
-        for name, x in ra[0].items():
-            y = rb[0][name]
-            if x == y:
-                continue
-            if "." in x and "." in y and abs(float(x) - float(y)) <= 1.0001 * max(ulp(x), ulp(y)):
-                flips += 1
-            else:
-                worse.append(f"ID {pid} {name}: {x} vs {y}")
+    flips, worse = within_one_unit(ea, eb, "exit records", per_parcel=1)
     if worse:
         rc |= fail(f"R1 exit records beyond one print unit: {worse[:4]}")
     else:
