@@ -1,31 +1,57 @@
 !> The gas file's one-pass reader (IGLOO_Mod_TecASCII) against ORION's reader in the same executable: every tracked
-!  .tec input of the suite and a synthetic set written here, every value compared bit for bit, at every chunk size.
-!    test_tec_read --list <file>   the suite's files (the list CMake writes at configure time), then the synthetic set
-!    test_tec_read <file> ...      the given files only, read once by ORION and once by the reader, timed
+!  .tec input of the suite and a synthetic set written here, every value compared bit for bit, at every chunk size and
+!  thread count.
+!    test_tec_read --list <file>                the suite's files (the list CMake writes at configure time), then the
+!                                               synthetic set
+!    test_tec_read [--threads n,m,...] <file>   the given files only, read once by ORION and once by the reader at each
+!                                               thread count (default: the environment's), timed
 program test_tec_read
   use, intrinsic :: iso_fortran_env, only: I8 => int64, R8 => real64
+  use, intrinsic :: iso_c_binding, only: c_int
   use Lib_ORION_data, only: orion_data
   use Lib_Tecplot, only: tec_read_structured_multiblock, tec_write_structured_multiblock
   use IGLOO_Mod_TecASCII, only: tec_read_ascii_fast
+  !$ use omp_lib, only: omp_get_max_threads
   implicit none
+
+  interface
+    !> The runtime's C entry: with -fno-underscoring (the gfortran flags) the Fortran name reaches it by reference.
+    subroutine set_num_threads_c(n) bind(c, name='omp_set_num_threads')
+      import :: c_int
+      integer(c_int), value :: n
+    end subroutine set_num_threads_c
+  end interface
 
   integer, parameter :: SUITE_FILES = 67      !> the tracked .tec inputs of tests/: a new one moves this number
   integer(I8), parameter :: CHUNKS(4) = [64_I8, 4096_I8, 1048576_I8, 0_I8]   !> 0: the reader's default
+  integer, parameter :: THREADS(4) = [1, 2, 3, 7]
+  integer, parameter :: REPEATS = 5           !> the synthetic set's reads at 7 threads, per chunk size
   character, parameter :: LF = achar(10)
-  integer :: nfail = 0, nread = 0
+  integer :: nfail = 0, nread = 0, nrep7 = 1, nthr = 1
+  integer, allocatable :: tlist(:)
   character(len=4096) :: arg
   character(len=:), allocatable :: txt
   integer :: i
 
+  !$ nthr = size(THREADS)
   call get_command_argument(1, arg)
   if (trim(arg) == '--list') then
     call get_command_argument(2, arg)
     call suite(trim(arg))
+    nrep7 = REPEATS
     call synthetic()
   else
-    do i = 1, command_argument_count()
+    i = 1
+    tlist = [0]
+    if (trim(arg) == '--threads') then
+      call get_command_argument(2, arg)
+      call parse_threads(trim(arg))
+      i = 3
+    endif
+    do while (i <= command_argument_count())
       call get_command_argument(i, arg)
       call timed(trim(arg))
+      i = i + 1
     enddo
   endif
   write(*,'(A,I0,A,I0,A)') ' test_tec_read: ', nread, ' reads compared, ', nfail, ' failure(s)'
@@ -139,25 +165,39 @@ contains
     character(len=*), intent(in) :: f, expect
     type(orion_data), intent(in), optional :: ref
     type(orion_data) :: a
-    integer :: rco, c
+    integer :: rco, c, t, r, nr
     rco = 0
     if (expect == 'agree') rco = orion_read(f, a)
-    do c = 1, size(CHUNKS)
-      call check_chunk(f, expect, CHUNKS(c), rco, a, ref)
+    do t = 1, nthr
+      call set_threads(THREADS(t))
+      nr = 1
+      if (THREADS(t) == 7) nr = nrep7
+      do r = 1, nr
+        do c = 1, size(CHUNKS)
+          call check_chunk(f, expect, CHUNKS(c), THREADS(t), rco, a, ref)
+        enddo
+      enddo
     enddo
+    call set_threads(1)
   end subroutine check_file
 
-  subroutine check_chunk(f, expect, chunk, rco, a, ref)
+  subroutine set_threads(n)
+    integer, intent(in) :: n
+    !$ call set_num_threads_c(int(n, c_int))
+    !$ if (omp_get_max_threads() /= n) call fail('the thread count is not '//itoa(n))
+  end subroutine set_threads
+
+  subroutine check_chunk(f, expect, chunk, nt, rco, a, ref)
     character(len=*), intent(in) :: f, expect
     integer(I8), intent(in) :: chunk
-    integer, intent(in) :: rco
+    integer, intent(in) :: nt, rco
     type(orion_data), intent(in) :: a
     type(orion_data), intent(in), optional :: ref
     type(orion_data) :: b
     integer :: rcf
     character(len=96) :: why
     character(len=:), allocatable :: tag
-    tag = short(f)//' chunk '//itoa(int(chunk))
+    tag = short(f)//' chunk '//itoa(int(chunk))//' threads '//itoa(nt)
     rcf = fast_read(f, b, chunk, why)
     select case (expect)
     case ('agree')
@@ -577,27 +617,64 @@ contains
   end subroutine orion_file
 
   ! ---------------------------------------------------------------- one large file, timed
+  !> n,m,... into tlist.
+  subroutine parse_threads(t)
+    character(len=*), intent(in) :: t
+    integer :: p, q, n
+    tlist = [integer ::]
+    p = 1
+    do while (p <= len(t))
+      q = index(t(p:), ',')
+      if (q == 0) then
+        q = len(t) + 1
+      else
+        q = p + q - 1
+      endif
+      read(t(p:q-1), *) n
+      tlist = [tlist, n]
+      p = q + 1
+    enddo
+  end subroutine parse_threads
+
   subroutine timed(f)
     character(len=*), intent(in) :: f
-    type(orion_data) :: a, b
-    integer :: rco, rcf
-    integer(I8) :: c0, c1, c2, rate
-    character(len=96) :: why
+    type(orion_data) :: a
+    integer :: rco, k
+    integer(I8) :: c0, c1, rate
     call system_clock(c0, rate)
     rco = orion_read(f, a)
     call system_clock(c1)
+    write(*,'(A,A,A,I0,A,F10.3,A)') ' ', f, ': ORION rc ', rco, ' in ', real(c1 - c0, R8)/rate, ' s'
+    do k = 1, size(tlist)
+      call timed_fast(f, a, rco, tlist(k))
+    enddo
+  end subroutine timed
+
+  !> One read by the reader at nt threads (0: the environment's), timed, against ORION's a.
+  subroutine timed_fast(f, a, rco, nt)
+    character(len=*), intent(in) :: f
+    type(orion_data), intent(in) :: a
+    integer, intent(in) :: rco, nt
+    type(orion_data) :: b
+    integer :: rcf, n
+    integer(I8) :: c1, c2, rate
+    character(len=96) :: why
+    n = 1
+    if (nt > 0) call set_threads(nt)
+    !$ n = omp_get_max_threads()
+    call system_clock(c1, rate)
     rcf = fast_read(f, b, 0_I8, why)
     call system_clock(c2)
-    write(*,'(A,A,A,I0,A,F10.3,A,I0,A,F10.3,A)') ' ', f, ': ORION rc ', rco, ' in ', real(c1 - c0, R8)/rate, &
-      ' s; the reader rc ', rcf, ' in ', real(c2 - c1, R8)/rate, ' s'
+    write(*,'(A,A,A,I0,A,I0,A,F10.3,A)') ' ', f, ': the reader at ', n, ' thread(s) rc ', rcf, ' in ', &
+      real(c2 - c1, R8)/rate, ' s'
     if (rco /= 0) then
       nread = nread + 1
       if (rcf == 0) call fail(f//': ORION refuses it, the reader reads it')
     elseif (rcf /= 0) then
       call fail(f//': the reader returns '//itoa(rcf)//' ('//trim(why)//')')
     else
-      call compare(f, a, b)
+      call compare(f//' at '//itoa(n)//' thread(s)', a, b)
     endif
-  end subroutine timed
+  end subroutine timed_fast
 
 end program test_tec_read

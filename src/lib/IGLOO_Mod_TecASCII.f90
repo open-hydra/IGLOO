@@ -1,11 +1,12 @@
 !> The gas file's one-pass reader: every ASCII Tecplot file it accepts is read with ORION's semantics, its values
 !  converted by the run-time library's list-directed READ as ORION converts them, one READ per run of plain number
-!  tokens; a file it declines is left to ORION's reader. IGLOO_TEC_FAST=0 in the environment brings back ORION's
-!  reader. The header routines are copies of ORION's (Lib_Tecplot, GPL-3.0); their messages on the paths that end
-!  in a refusal are left to ORION's reader, which reads every declined file.
+!  tokens, on every OpenMP thread; a file it declines is left to ORION's reader. IGLOO_TEC_FAST=0 in the environment
+!  brings back ORION's reader. The header routines are copies of ORION's (Lib_Tecplot, GPL-3.0); their messages on
+!  the paths that end in a refusal are left to ORION's reader, which reads every declined file.
 module IGLOO_Mod_TecASCII
   use, intrinsic :: iso_fortran_env, only: I8 => int64, R8 => real64, stderr => error_unit
   use Lib_ORION_data, only: orion_data
+  !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
   implicit none
   private
   public :: tec_read_ascii_fast, tec_fast_enabled
@@ -360,8 +361,8 @@ contains
     character(len=*), intent(inout) :: reason
     type(zone_t) :: z
     integer(I8) :: got, re, pend, q
-    real(R8), allocatable :: tmp(:)
-    integer :: st
+    real(R8), allocatable :: tmp(:,:)
+    integer :: st, nt
 
     stat = 1
     z%ndir = size(o%block(b)%mesh, 1)
@@ -376,7 +377,9 @@ contains
       z%v(1:size(o%block(b)%vars, kind=I8)) => o%block(b)%vars
     endif
     z%need = z%ndir*z%nn + z%nvar*z%nc
-    allocate(tmp(RUN_MAX))
+    nt = 1
+    !$ nt = omp_get_max_threads()
+    allocate(tmp(RUN_MAX, nt))
     got = 0
     do while (got < z%need)
       ! the complete lines in the buffer (or its every byte at the end of the file)
@@ -395,7 +398,7 @@ contains
         if (s%ioerr) return
         cycle
       endif
-      call convert_span(s%b, s%lo, re, z, got, pend, tmp, st)
+      call convert_region(s%b, s%lo, re, z, got, pend, tmp, st)
       if (st /= 0) then
         reason = decline_text(st); return
       endif
@@ -415,26 +418,129 @@ contains
     stat = 0
   end subroutine read_zone_values
 
-  !> The tokens of b(a:e) into the zone's slots got, got+1, ... until the zone is full: runs of plain tokens by one
-  !  list-directed READ each (their separators made blanks in place), any other token by ORION's own READ. pend is
-  !  the last byte of the last token taken; st /= 0 a decline (decline_text).
-  subroutine convert_span(b, a, e, z, got, pend, tmp, st)
+  !> The tokens of b(a:e) into the zone's slots from got on, until the zone is full, on every thread: the span cut into
+  !  one piece per thread at line ends, pass A counts each piece's tokens, their prefix sum gives each piece its first
+  !  slot, pass B converts each piece's tokens (convert_span), the piece that fills the zone up to the zone's count.
+  !  pend: the last byte of the last token taken; st /= 0: the decline of the first piece that declines; tmp(:,t): the
+  !  scratch of thread t.
+  subroutine convert_region(b, a, e, z, got, pend, tmp, st)
     character(len=*), intent(inout) :: b
     integer(I8), intent(in) :: a, e
-    type(zone_t), intent(inout) :: z
+    type(zone_t), intent(in) :: z
     integer(I8), intent(inout) :: got
     integer(I8), intent(out) :: pend
+    real(R8), intent(inout) :: tmp(:,:)
+    integer, intent(out) :: st
+    integer(I8), allocatable :: pa(:), pb(:), cnt(:), t0(:), lim(:), nk(:), pe(:)
+    integer, allocatable :: sp(:)
+    integer(I8) :: q, nom, n1, e1
+    integer :: np, k, m, tid
+
+    np = size(tmp, 2)
+    if (np == 1) then
+      ! one thread: the tokens in order until the zone is full or the span ends
+      call convert_span(b, a, e, z, got, z%need - got, n1, e1, tmp(:,1), st)
+      pend = e1
+      got = got + n1
+      return
+    endif
+    allocate(pa(np), pb(np))
+    ! the cuts: piece k ends at the line feed at or after a + k*len/np - 1
+    m = 0
+    q = a
+    do k = 1, np
+      if (q > e) exit
+      m = m + 1
+      pa(m) = q
+      nom = max(q, a + ((e - a + 1)*k)/np - 1)
+      if (k == np .or. nom >= e) then
+        pb(m) = e
+      else
+        do while (nom < e)
+          if (iachar(b(nom:nom)) == 10) exit
+          nom = nom + 1
+        enddo
+        pb(m) = nom
+      endif
+      q = pb(m) + 1
+    enddo
+    np = m
+    allocate(cnt(np), t0(np), lim(np), nk(np), pe(np), sp(np))
+    !$omp parallel do schedule(static) default(shared) private(k) if(np > 1)
+    do k = 1, np
+      cnt(k) = count_tokens(b, pa(k), pb(k))
+    enddo
+    !$omp end parallel do
+    t0(1) = got
+    do k = 2, np
+      t0(k) = t0(k-1) + cnt(k-1)
+    enddo
+    do k = 1, np
+      lim(k) = max(0_I8, min(cnt(k), z%need - t0(k)))
+    enddo
+    sp = 0
+    nk = 0
+    pe = 0
+    !$omp parallel do schedule(static) default(shared) private(k, tid) if(np > 1)
+    do k = 1, np
+      tid = 1
+      !$ tid = omp_get_thread_num() + 1
+      if (lim(k) > 0) call convert_span(b, pa(k), pb(k), z, t0(k), lim(k), nk(k), pe(k), tmp(:,tid), sp(k))
+    enddo
+    !$omp end parallel do
+    st = 0
+    pend = a - 1
+    do k = 1, np
+      if (sp(k) == 0 .and. nk(k) /= lim(k)) sp(k) = 5
+      if (sp(k) /= 0) then
+        st = sp(k)
+        return
+      endif
+      if (lim(k) > 0) then
+        got = got + lim(k)
+        pend = pe(k)
+      endif
+    enddo
+  end subroutine convert_region
+
+  !> The number of tokens of b(a:e): the runs of bytes other than the separators and CR.
+  pure function count_tokens(b, a, e) result(n)
+    character(len=*), intent(in) :: b
+    integer(I8), intent(in) :: a, e
+    integer(I8) :: n, p
+    integer :: c
+    logical :: gap, cut
+
+    n = 0
+    gap = .true.
+    do p = a, e
+      c = iachar(b(p:p))
+      cut = is_sep(c) .or. c == 13
+      if (gap .and. .not. cut) n = n + 1
+      gap = cut
+    enddo
+  end function count_tokens
+
+  !> The tokens of b(a:e), at most nmax, into the zone's slots t0, t0+1, ...: runs of plain tokens by one list-directed
+  !  READ each (their separators made blanks in place), any other token by ORION's own READ. ntok: the tokens taken;
+  !  pend: the last byte of the last one; st /= 0: a decline (decline_text).
+  subroutine convert_span(b, a, e, z, t0, nmax, ntok, pend, tmp, st)
+    character(len=*), intent(inout) :: b
+    integer(I8), intent(in) :: a, e, t0, nmax
+    type(zone_t), intent(in) :: z
+    integer(I8), intent(out) :: ntok, pend
     real(R8), intent(inout) :: tmp(:)
     integer, intent(out) :: st
-    integer(I8) :: p, ts, ra, rb
+    integer(I8) :: p, ts, ra, rb, got
     integer :: c, n, ios
     real(R8) :: x
 
     st = 0
     pend = a - 1
+    got = t0
     n = 0; ra = 0; rb = 0
     p = a
-    do while (p <= e .and. got + n < z%need)
+    do while (p <= e .and. got + n < t0 + nmax)
       c = iachar(b(p:p))
       if (c == 13) then
         st = 1; exit
@@ -456,7 +562,7 @@ contains
         if (n == 0) ra = ts
         rb = p - 1
         n = n + 1
-        if (n == RUN_MAX) then
+        if (n == size(tmp)) then
           call run(st)
           if (st /= 0) exit
         endif
@@ -472,10 +578,11 @@ contains
       endif
     enddo
     if (st == 0) call run(st)
+    ntok = got - t0
   contains
     subroutine run(st)
       integer, intent(out) :: st
-      integer(I8) :: q, t0, tq
+      integer(I8) :: q, q0, q1
       integer :: k
       st = 0
       if (n == 0) return
@@ -491,14 +598,14 @@ contains
             q = q + 1
             cycle
           endif
-          t0 = q
+          q0 = q
           do while (q <= rb)
             if (b(q:q) == ' ') exit
             q = q + 1
           enddo
-          tq = q - 1
+          q1 = q - 1
           k = k + 1
-          call token_read(b(t0:tq), tmp(k), st)
+          call token_read(b(q0:q1), tmp(k), st)
           if (st /= 0) return
         enddo
       endif
@@ -541,6 +648,8 @@ contains
       t = 'a token the runtime cannot read'
     case (4)
       t = 'a null value (/, r*)'
+    case (5)
+      t = 'fewer tokens than counted'
     case default
       t = 'an internal state'
     end select
@@ -549,7 +658,7 @@ contains
   !> Values v(1:n) into the slots of the zone's tokens t0 .. t0+n-1 (0-based): the coordinates field after field over
   !  the nodes, then the variables field after field over the cells, i fastest, as ORION's loops store them.
   subroutine put_values(z, t0, v, n)
-    type(zone_t), intent(inout) :: z
+    type(zone_t), intent(in) :: z
     integer(I8), intent(in) :: t0
     real(R8), intent(in) :: v(:)
     integer, intent(in) :: n

@@ -4,9 +4,14 @@
 (`src/lib/IGLOO_Mod_TecASCII.f90`), against ORION's reader, `tec_read_structured_multiblock`, linked in the
 same executable: the oracle is ORION's reader on the same bytes, the reader IGLOO falls back to. Every file is read
 by ORION once and by the reader once per buffer size — 64 B, 4 KiB, 1 MiB and the default 256 MiB — so that lines,
-tokens and fields fall across buffer ends; the result is compared field by field: the variable names, the solution
-time, the `STRANDID`, the centring, the number of blocks, `Ni`/`Nj`/`Nk`, the bounds of `mesh` and `vars`, and every
-value bit for bit (`transfer` to `int64`: `-0.0` against `0.0` and NaN payloads count).
+tokens and fields fall across buffer ends, at 1, 2, 3 and 7 OpenMP threads, so that they fall across the pieces the
+threads convert; the synthetic files are read five times at 7 threads. The result is compared field by field: the
+variable names, the solution time, the `STRANDID`, the centring, the number of blocks, `Ni`/`Nj`/`Nk`, the bounds of
+`mesh` and `vars`, and every value bit for bit (`transfer` to `int64`: `-0.0` against `0.0` and NaN payloads count).
+
+The test sets each thread count through the runtime's C entry `omp_set_num_threads` and asserts it
+(`omp_get_max_threads`): with gfortran's flags here (`-fno-underscoring`) the Fortran name reaches the C entry, which
+then takes the argument's address for the count.
 
 **The suite's files**: every tracked `.tec` input under `tests/`, from the list CMake writes at configure time
 (`build/…/tests/tec_read_files.txt`: the `.tec` files of the source tree outside the directories runs and checks
@@ -39,16 +44,21 @@ or more (ORION cuts a line there), no CR byte, no POINT zone.
 | `s19-short-zone` | a zone with fewer values than its dimensions before the next zone | refused by both |
 | `s20-long-token` | a token of 120 characters | refused by both |
 
-"Declined" means the reader returns 1 and IGLOO reads the file with ORION's reader. 87 files × 4 buffer sizes = 348
-reads compared.
+"Declined" means the reader returns 1 and IGLOO reads the file with ORION's reader. 87 files × 4 buffer sizes × 4
+thread counts, plus four more reads of each synthetic file at 7 threads and every buffer size: 1 712 reads compared.
 
 The values of the test's own fixtures are integers times powers of two, exact, so that no fixture value depends on
 how a compiler rounds an expression at two call sites.
 
-**RED**: the gate fails on a reader whose buffer refill drops the unread bytes (200 failures, all with the 64 B and
-4 KiB buffers), on one that does not take the comma as a separator (4: `s03` at every buffer size),
-and on one that batches every token into the list-directed READ (15: `s04` — `3*1.5` read as three values — `s16`
-and `s17`).
+**RED**: the gate fails on a reader whose buffer refill drops the unread bytes (868 failures, 81 files), on one that
+does not take the comma as a separator (32: `s03` at every buffer size and thread count), on one that batches every
+token into the list-directed READ (93: `s04` — `3*1.5` read as three values — `s16` and `s17`), on one whose threads'
+pieces are cut inside a token (2 519, 82 files), on one whose prefix sum of the pieces' token counts is inclusive
+(1 360, 80 files) and on one whose threads share one scratch array (2 502, 80 files); the last three fail at 2, 3 and
+7 threads only. A piece that ends one byte past its line feed cuts a token only where a line starts with a digit or a
+sign: 46 failures, in `infrastructure/rot-2blk/INPUT-atlas/mesh.tec` and `s14` alone (the other files start their
+lines with a blank).
 
 **Other trees**: the same executable takes file names in place of `--list` and reads each once by ORION and once
-by the reader, timed, with the same comparison (a large gas file, e.g. a benchmark mesh).
+by the reader, timed, with the same comparison (a large gas file, e.g. a benchmark mesh); `--threads 1,20` before
+the names reads each by the reader at each of those thread counts.
