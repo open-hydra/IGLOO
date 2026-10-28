@@ -92,6 +92,9 @@ ssh $IGLOO_PERF_REMOTE "bash -lc 'cd $IGLOO_PERF_ROOT && sbatch --output=$IGLOO_
 tests/bench/monolith/fetch-results.sh <jobid>
 python3 tests/bench/monolith/collect.py $IGLOO_PERF_LOCAL/<jobid>/igloo-smoke-<jobid>.out > smoke.tsv
 python3 tests/bench/monolith/analyze.py $IGLOO_PERF_LOCAL/<jobid>/igloo-final-box-4fam-<jobid>.out scaling.tsv
+# a repetition whose IREP line carries no report fields (the parser failed on its output): parse its kept log
+# again, insert its IAFF line and recompute its point's IOK line; every other line is copied unchanged
+python3 tests/bench/monolith/reparse.py <job.out> $IGLOO_PERF_LOCAL/<jobid>/logs > <corrected .out>
 ```
 
 | job | content |

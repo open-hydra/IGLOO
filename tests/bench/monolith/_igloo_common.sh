@@ -207,7 +207,7 @@ both = out + "\n" + err
 
 def cpus(s):
     got = set()
-    for part in s.replace(" ", "").split(","):
+    for part in re.sub(r"\s+", "", s).split(","):
         if not part:
             continue
         if "-" in part:
