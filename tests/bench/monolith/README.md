@@ -67,6 +67,9 @@ point of the box is left out. `IGLOO_BOX_CELLS="NX NY NZ"` sizes the box otherwi
 | `IGLOO_WRAP` | per point | a wrapper of the binary, e.g. `numactl --interleave=all` |
 | `IGLOO_INI_SET` | per point | `"key=value ..."` set in `[IGLOO-General]` of the run's `input.ini` |
 | `IGLOO_AA=1` | per point | run the twin snapshot |
+| `IGLOO_IO_STEPS` | `igloo-io.slurm` | the steps it runs, blank-, comma- or colon-separated (default all: `facts write read threads stream bcast buffered`) |
+| `IGLOO_IO_PROBE_DIR` | `igloo-io.slurm` | where the probe's executables are (default `$IGLOO_PERF_ROOT/bin`, `build-cfg.sh probe` installs them there) |
+| `IGLOO_IO_KHRT_REPS` | `igloo-io.slurm` | repetitions of the khrt-stress points of the write step (default 5) |
 
 ## Running
 
@@ -100,6 +103,11 @@ python3 tests/bench/monolith/reparse.py <job.out> $IGLOO_PERF_LOCAL/<jobid>/logs
 python3 tests/bench/monolith/results.py <job.out> [<job.out> ...] > tests/bench/monolith/results/measured-performance.tsv
 # a job whose repetitions lack report fields goes in as its re-parsed .out (reparse.py, the command above): the
 # committed file takes the re-parsed .out of every job that has one
+
+# the I/O job: the probe built beside the campaign binary, then igloo-io.slurm (every step, or IGLOO_IO_STEPS)
+tests/bench/monolith/sync-src-monolith.sh probe
+ssh $IGLOO_PERF_REMOTE "bash -lc 'cd $IGLOO_PERF_ROOT && sbatch --output=$IGLOO_PERF_ROOT/logs/%x-%j.out \
+    --export=ALL,IGLOO_PERF_ROOT=$IGLOO_PERF_ROOT scripts/igloo-io.slurm'"
 ```
 
 | job | content |
@@ -110,8 +118,26 @@ python3 tests/bench/monolith/results.py <job.out> [<job.out> ...] > tests/bench/
 | `igloo-final-box-4fam.slurm` | the same curve without 80 x 1, the twin at 4 x 20 (3 repetitions, 20 h) |
 | `igloo-omp.slurm` | thread placement: inside one socket, spread over the sockets, interleaved pages, the hybrid controls (11 h) |
 | `igloo-numa.slurm` | page placement at 1 x 80 and 1 x 40, plain and interleaved, beside 4 x 20 (2 h) |
+| `igloo-io.slurm` | where the box's gas read and grid write spend their time: the solver's write buffered and unbuffered, on the job's file system and on tmpfs; the I/O probe's read split, thread scaling, stream write, broadcast and buffered-output steps (3 h) |
 
 The limits are about 1.3 to 1.5 times the cost measured by the smoke job.
+
+## The I/O probe
+
+`io-probe/` holds a measurement program, built only by `build-cfg.sh probe` (CMake option `IGLOO_IO_PROBE`, off by
+default, never registered with ctest), in the MPI + OpenMP tree and with that tree's flags. `io-probe` times, on
+the box's gas file and on the random sets of `make_values.py` (doubles written by Python with 16, 17 and 18
+significant digits, and by the runtime with `E23.15E3`): ORION's reader; one formatted line read per line, with
+and without ORION's zone test; stream reads, cold and warm; the tokenizer; the conversion kernels `rtl-token`
+(ORION's list-directed READ per token), `rtl-batch` (one list-directed READ per run of plain tokens), `fast` (the
+exact conversion of a decimal mantissa of at most 2^53 by a power of ten of at most 10^22), `fastg` (`fast`
+without the tokens whose exact value lies within 2^-10 ulp of a midpoint between two doubles), `x87` (the
+conversion in extended precision) and `strtod` (glibc); and `E23.15E3` by the runtime (`fmt-batch`, one WRITE per
+4096 values) and by a formatter that calls no runtime routine (`fmt-fast`, the exact digits from a fused
+multiply-add, the runtime for exact ties and values outside its range). Every kernel's values are compared bit
+for bit with `rtl-token`'s, and every formatter's bytes with the runtime's. `io-probe-wr` writes about 10 M values
+through ORION's ASCII writer; its four builds put `-assume buffered_io` on the main program, on a copy of the
+module holding the OPEN, on both or nowhere.
 
 Points are tagged `<workload>-<R>x<T>[-<variant>]`; `analyze.py` refers each to its variant's `-1x1-<variant>`
 point when the job has one, else to its workload's `-1x1` point.
@@ -127,6 +153,11 @@ point when the job has one, else to its workload's `-1x1` point.
 | `IREP`, `IFAIL` | one per repetition: every field, or the reason it was not scored |
 | `IOK` | one per point: the statistics over the repetitions, then the fastest repetition's fields |
 | `ICHECK` | the exit codes of `check_finite.py` and of the workload's `check.py` on the last repetition |
+| `STEPS`, `PROBE`, `PROBE-COMMIT` | `igloo-io.slurm`: the steps, the probe's executables (md5) and the commit they were built from |
+| `IFACT` | `igloo-io.slurm`: file systems and mounts, dirty-page limits, tools, compiler, the default of `buffered_io` in its manual page, the libraries the binary links, the CPU list, the cold read of the box by `dd` |
+| `ITIMES` | `igloo-io.slurm`: user and system CPU time of one run (`io-times.sh`, GNU time), per rank and repetition |
+| `IPROBE` | one probe measurement: `step=`, `mode=` or `kernel=`, then its counts, times and mismatches as `key=value` |
+| `IBCAST`, `ISTRACE`, `ISTRACE-RAW` | `igloo-io.slurm`: the broadcast launches' exit codes; the write system calls of one writer run (strace) |
 
 ## Core cycles
 

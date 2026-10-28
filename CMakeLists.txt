@@ -178,4 +178,10 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     enable_testing()
     add_subdirectory(tests)
   endif()
+
+  # The I/O probe of the timing harness (tests/bench/monolith/io-probe): a measurement tool, never a test.
+  option(IGLOO_IO_PROBE "Build the I/O probe of the timing harness" OFF)
+  if(IGLOO_IO_PROBE)
+    add_subdirectory(tests/bench/monolith/io-probe)
+  endif()
 endif()
