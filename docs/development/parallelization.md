@@ -201,8 +201,11 @@ For a parent solver driving IGLOO:
   `reset_state(gas)` → `solve` → `writeout` **per sweep**. `solve` hard-errors via
   `stateIsFresh` if `reset_state` did not run.
 
-Recommended placement: `mpirun --map-by numa --bind-to numa`, `OMP_PLACES=cores`,
-`OMP_PROC_BIND=close`, `KMP_STACKSIZE=100M`, `ulimit -s unlimited`.
+Recommended placement: one rank per NUMA domain, its threads on that domain's cores with
+`OMP_PLACES=cores` and `OMP_PROC_BIND=close` ([Measured performance](#measured-performance)). With Intel
+MPI: `I_MPI_PIN_DOMAIN=omp` and `OMP_NUM_THREADS` = the cores of one domain (under SLURM a `numactl` around
+`mpirun` does not pin the ranks); with Open MPI: `mpirun --map-by numa --bind-to numa`. With either,
+`KMP_STACKSIZE=100M` and `ulimit -s unlimited`.
 
 ## Scatter-cloud output path
 
@@ -265,31 +268,115 @@ over a limit `EMFILE`/`ENFILE`/`ENOMEM`, another error), and none of the three p
 
 ## Measured performance
 
-`khrt-stress`, **single rank** (pure OpenMP scaling), measured on sprop1 at load 41–42,
-median of 3:
+One exclusive node per job: four Intel Xeon Gold 6230 sockets of 20 cores, one NUMA domain each, one
+hardware thread per core used; the hybrid build (ifx 2023.0, Intel MPI 2021.8, `-xHost`, TecIO off, the
+cycle counter on). Every number is the median of five repetitions (the box: three), and every efficiency
+is taken against the 1 × 1 point of the same workload in the same job, on the same node:
 
-| threads | wall time | speed-up |
+- `E` = (T(1)/N) / T(N) for N slots (ranks × threads), on the ranks' lifetime (*life*: the first rank's
+  start to the last rank's end, the launcher's start-up excluded) and on the *sweep* (the nine sweep
+  phases of the timing report, the set-up excluded);
+- `C` = C(1)/C(N) on the user-mode core cycles of the sweep and of the parcel loop: perfect parallelism
+  keeps them constant whatever the clock, so `C` holds the parallel losses without the fall of the clock.
+
+The 150 measured points, each with the job, node, commit and binary it came from, are in
+`tests/bench/monolith/results/measured-performance.tsv` (written by `results.py` of the harness,
+`tests/bench/monolith/`); every number below is a cell of that table or computed from the cells of one
+job.
+
+| workload | what it loads | life at 1 × 1 |
 |---|---|---|
-| 1 | 13818 ms | 1.00× |
-| 2 | 8385 ms | 1.65× |
-| 5 | 5591 ms | 2.47× |
+| `khrt-stress` | KH-RT breakup, 726 parcels with the children, the scatter records written inside the parcel loop | 10.1 s |
+| `vie-plait-dense` | 250 parcels at gas order 2 | 9.4 s, 2.0 s of it set-up |
+| `box-4fam` | 300 × 100 × 100 cells, four families, 40 000 parcels at gas order 2, source and Eulerian output, no particle output | 2269 s |
 
-Hybrid grid, 4 slots, same host:
+From 4 to 32 slots each split spreads its cores evenly over the four sockets (one rank of four threads:
+one core per socket; four ranks: one per socket); the 80-slot splits use Intel MPI's `omp` domains, each
+rank on `OMP_NUM_THREADS` consecutive cores, so that 4 × 20 is one rank per socket. The threads are bound
+with `OMP_PROC_BIND=close` and `OMP_PLACES=cores`. The fastest split at each slot count:
 
-| configuration | wall time |
-|---|---|
-| 4 ranks × 1 thread | 7223 ms |
-| 2 ranks × 2 threads | 7451 ms |
-| 1 rank × 4 threads | **5652 ms** |
+| workload | slots | split | life | E life | E sweep | C sweep | C loop |
+|---|---|---|---|---|---|---|---|
+| `box-4fam` | 4 | 4 × 1 | 806.8 s | 0.703 | 0.836 | 0.952 | 0.995 |
+| | 8 | 4 × 2 | 559.2 s | 0.507 | 0.692 | 0.944 | 0.986 |
+| | 16 | 4 × 4 | 432.9 s | 0.328 | 0.522 | 0.948 | 0.983 |
+| | 32 | 4 × 8 | 367.8 s | 0.193 | 0.352 | 0.934 | 0.982 |
+| | 80 | 4 × 20 | 331.4 s | 0.086 | 0.175 | 0.904 | 0.983 |
+| `khrt-stress` | 4 | 1 × 4 | 4.01 s | 0.633 | 0.710 | 0.756 | 0.797 |
+| | 8 | 1 × 8 | 2.82 s | 0.450 | 0.556 | 0.660 | 0.731 |
+| | 16 | 1 × 16 | 2.46 s | 0.258 | 0.337 | 0.501 | 0.592 |
+| | 32 | 1 × 32 | 2.52 s | 0.126 | 0.163 | 0.348 | 0.432 |
+| | 80 | 8 × 10 | 3.07 s | 0.041 | 0.052 | 0.383 | 0.765 |
+| `vie-plait-dense` | 4 | 1 × 4 | 4.44 s | 0.527 | 0.873 | 0.893 | 0.978 |
+| | 8 | 1 × 8 | 3.62 s | 0.323 | 0.751 | 0.796 | 0.967 |
+| | 16 | 1 × 16 | 3.28 s | 0.179 | 0.538 | 0.632 | 0.891 |
+| | 32 | 1 × 32 | 3.26 s | 0.090 | 0.285 | 0.473 | 0.847 |
+| | 80 | 8 × 10 | 3.28 s | 0.036 | 0.140 | 0.488 | 0.727 |
 
-`1 rank × 4 threads` is the fastest of the three, which is what makes hybrid MPI+OpenMP worth
-configuring: within a rank, threads share the replicated mesh and gas field for free, while
-extra ranks pay the replicated setup. The remaining thread-scaling limit is in the
-**compute** path (OSlo implicit solver 37–38 %, `pow` 32 %, memory bandwidth), not in output.
+Three things separate the efficiency in seconds from the efficiency in cycles:
 
-Two output-side levers are available to the user: putting `OUTPUT/` on tmpfs (14 % at one
-thread, **30 % at five** on `khrt-stress`), and lowering `fsample-traj` to thin the scatter
-cloud.
+- **The clock.** A socket's clock falls as more of its cores are busy. The box's parcel loop, where every
+  thread is busy in user mode, runs at 3.78 GHz per core on one core and at 2.46 GHz with all eighty busy
+  (its cycles per core-second); at 4 × 20 its time efficiency, 0.640, is its cycle efficiency, 0.983,
+  times the ratio of the two clocks.
+- **The serial parts.** On the box, rank 0 reads the gas file (`setup:gas-read`, 177.9 s at 4 × 20) and
+  writes the source and Eulerian grid fields (`writeout+merge`, 105.5 s) at every split: 283 s of the
+  331 s at 4 × 20, while the parcel loop takes 1973 s on one core and 38.5 s at 4 × 20. The rest of the
+  sweep outside the loop is a few seconds (at 4 × 20: smoothing 2.2 s, finalize 1.3 s, reduction 0.8 s).
+- **Waiting.** On `khrt-stress` the output of the scatter records inside the parcel loop holds the
+  threads: with the scatter cloud off (and the Eulerian output, more deposits, on) the loop keeps
+  `C` = 0.905 at 1 × 32 against its own one-core point; with the cloud on, 0.432. On `vie-plait-dense` the
+  250 parcels run out: from 16 threads the last parcels keep a few threads busy while the others wait
+  (thread busy max/mean 1.100 at 1 × 16, 1.084 at 1 × 32), and the 2.0 s set-up is most of the lifetime
+  (3.28 s at 16 slots, 3.26 s at 32, 3.28 s at 80).
+
+The 80-slot splits, median life (sweep) in seconds; one column with `OUTPUT/` on tmpfs:
+
+| split | `box-4fam` | `khrt-stress` | `khrt-stress`, tmpfs | `vie-plait-dense` |
+|---|---|---|---|---|
+| 1 × 80 | 333.0 (152.9) | 3.93 (3.16) | 3.65 (2.89) | 3.79 (1.26) |
+| 4 × 20 | **331.4** (149.0) | 3.88 (2.38) | 3.27 (1.81) | 3.82 (0.58) |
+| 8 × 10 | 340.8 (154.1) | **3.07** (2.28) | — | **3.28** (0.61) |
+| 16 × 5 | 356.7 (162.4) | 3.18 (2.33) | — | 3.44 (0.64) |
+| 20 × 4 | 367.1 (170.1) | 3.32 (2.41) | — | 3.53 (0.67) |
+| 40 × 2 | 405.9 (189.0) | 4.14 (2.85) | — | 4.16 (0.79) |
+| 80 × 1 | — | 6.64 (3.84) | 5.92 (3.09) | 6.78 (1.20) |
+
+The box at 80 × 1 is not run: eighty ranks at the finalize peak would exceed the node's memory (each rank
+allocates 1474 MiB; 2.6 GiB resident per rank at 4 × 20). Every rank beyond one per socket repeats work:
+from 4 × 20 to 40 × 2 the gas read grows from 177.9 to 209.6 s (the other ranks busy-wait for it, and the
+reading core's clock falls with every busy core), the grid write from 105.5 to 120.9 s, the smoothing,
+which every rank runs on the whole field, from 2.2 to 18.8 s, and the reduction from 0.8 to 3.7 s. On
+`khrt-stress` every added rank pays the root merge of the particle shards: `writeout+merge` takes 1.72 s at
+4 × 1 against 0.014 s at 1 × 4, although the loop of 4 × 1 is the shorter (2.49 s against 3.09 s). With
+`OUTPUT/` on tmpfs the merge at 4 × 20 takes 1.42 s instead of 1.74 s, and opening the output files
+(`solve-other`) 0.001 s instead of 0.165 s.
+
+**Placement.** Inside one rank, placing the threads trades the clock against the cycles: the box's 1 × 20
+runs its loop at 2.53 GHz per core on one socket (`C` 0.983) and at 3.43 GHz spread over four (`C`
+0.878), and the spread sweep is 10 % shorter; `khrt-stress`, held by its output, is 5–12 % slower spread.
+One rank per socket has both: at 4 × 20 the box's loop keeps the cycle efficiency of one socket, 0.983, on
+all eighty cores, against 0.808 for 1 × 80. Interleaving the pages of one rank over the four NUMA domains
+(`numactl --interleave=all`) moves the sweep by −0.4 % to +5.0 % at 1 × 40 and 1 × 80, and the loop's
+cycle efficiency by at most 0.014: the loss of a rank spread over the sockets does not come from where its
+pages are.
+
+**Noise.** A second copy of the binary in its own directory (the A/A twin) reproduces the medians within
+0.2 % in life and in sweep (the box at 4 × 20, the other two at 1 × 1 and 4 × 20), except `khrt-stress`
+at 4 × 20: 1.6 % in life, from one slow repetition of five (standard deviation 6.2 %, the twin's 0.8 %).
+Over the repetitions the standard deviation is 0.2–0.6 % at 1 × 1 and on the box's 4 × 20.
+
+**Choosing the split.**
+
+- **A large mesh**: one rank per NUMA domain, its threads on that domain's cores. On this node that is
+  4 × T, the box's fastest split at every slot count: at 4 slots 4 × 1 takes 8 % less sweep than 1 × 4;
+  at 80, 4 × 20 takes 2.6 % less sweep than 1 × 80 (its loop 38.5 s against 44.5 s).
+- **Particle output**: one rank and its threads, up to about 16 (`khrt-stress`: 2.33 s at 1 × 10 on one
+  socket, 2.46 s at 1 × 16 spread); a sparser scatter cloud (a lower `[IGLOO-General] fsample-traj`)
+  lightens the output that holds the threads. Each added rank pays the root merge of the particle shards,
+  which `OUTPUT/` on tmpfs shortens (16 % of the lifetime at 4 × 20) but does not remove.
+- **More ranks than NUMA domains** add only the replicated work (the box: 331 s at 4 × 20, 357 s at
+  16 × 5, 406 s at 40 × 2), and interleaving the pages does not replace one rank per domain.
 
 ## How this is verified
 
@@ -335,8 +422,9 @@ mpirun -n 4 ./bin/IGLOO
 ```
 
 For output-heavy runs put `OUTPUT/` on tmpfs (`mkdir -p /dev/shm/$USER/<case> && ln -s
-/dev/shm/$USER/<case> OUTPUT`): the storage term of the scatter output is nearly constant in the
-thread count, so it bounds the speed-up first.
+/dev/shm/$USER/<case> OUTPUT`): on `khrt-stress` it removes the opening of the output files (0.2 s a
+run) and about a fifth of the root merge of the particle shards
+([Measured performance](#measured-performance)).
 
 With `--use-tecio` an MPI build links ORION's `teciompi` (built once into
 `lib/ORION/lib/TecIO/teciompi-install-*`). ASCII `.tec` I/O needs no TecIO, which is what the
@@ -392,8 +480,13 @@ about half of it geometry.
 
 - **Setup is replicated, except the Tecplot read**: rank 0 parses the gas file and broadcasts
   the field (`mpi_bcast_orion`: names, solution time, block dimensions, mesh and variables);
-  every rank then builds the blocks, the geometry and the pinning itself — a one-time cost at
-  this scale.
+  every rank then builds the blocks, the geometry and the pinning itself. On a large mesh the
+  read is the largest serial part: the box of [Measured performance](#measured-performance)
+  (3 M cells, ASCII) reads its gas for 177–178 s at up to four ranks and 210 s at forty, while
+  the other ranks busy-wait; its parcel loop takes 38.5 s at 4 × 20.
+- **The grid output is written by rank 0 alone**, after the cross-rank sum: the box's source
+  and Eulerian fields take 105–106 s at up to four ranks, of a sweep of 149 s at 4 × 20. With
+  the gas read, 283 of the 331 s of its fastest split.
 - **Memory does not scale**: every rank holds the full mesh, gas field and accumulators
   (see [Memory per rank](#memory-per-rank)). Breaking that wall would need shared-memory windows
   (`MPI_Win_allocate_shared`) or genuine domain decomposition — neither is implemented.

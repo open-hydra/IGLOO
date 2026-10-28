@@ -95,6 +95,11 @@ python3 tests/bench/monolith/analyze.py $IGLOO_PERF_LOCAL/<jobid>/igloo-final-bo
 # a repetition whose IREP line carries no report fields (the parser failed on its output): parse its kept log
 # again, insert its IAFF line and recompute its point's IOK line; every other line is copied unchanged
 python3 tests/bench/monolith/reparse.py <job.out> $IGLOO_PERF_LOCAL/<jobid>/logs > <corrected .out>
+# the committed table of the campaign: every point of the given jobs, scored as analyze.py scores it, with its job,
+# node label, commit and binary md5 (the column definitions head the file)
+python3 tests/bench/monolith/results.py <job.out> [<job.out> ...] > tests/bench/monolith/results/measured-performance.tsv
+# a job whose repetitions lack report fields goes in as its re-parsed .out (reparse.py, the command above): the
+# committed file takes the re-parsed .out of every job that has one
 ```
 
 | job | content |
@@ -108,7 +113,8 @@ python3 tests/bench/monolith/reparse.py <job.out> $IGLOO_PERF_LOCAL/<jobid>/logs
 
 The limits are about 1.3 to 1.5 times the cost measured by the smoke job.
 
-Points are tagged `<workload>-<R>x<T>[-<variant>]`; `analyze.py` refers each to its workload's `-1x1` point.
+Points are tagged `<workload>-<R>x<T>[-<variant>]`; `analyze.py` refers each to its variant's `-1x1-<variant>`
+point when the job has one, else to its workload's `-1x1` point.
 
 ## Lines of a job's .out
 
@@ -159,5 +165,5 @@ start-up either way.
   dependency directory without `.git` and fetches from GitHub when one is off its pin. `sync-src-monolith.sh`
   checks both sides before it submits the build. OSLO's tracked `libiode_intel64.a` travels too (OSLO links it).
 - `make-workloads.sh` replaces a workload whose recipe or files changed: never run it while a job reads them.
-- The campaign's numbers go to `docs/development/parallelization.md` ("Measured performance"), each with its job,
-  node and commit; nothing measured is committed here.
+- The campaign's numbers: `results/measured-performance.tsv` (`results.py`), each point with its job, node label,
+  commit and binary md5; `docs/development/parallelization.md` ("Measured performance") quotes them without these.
