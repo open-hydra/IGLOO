@@ -24,9 +24,9 @@ face 1 an outlet, every other face a wall. ATLAS pairs the two faces 2 cell by c
 --zgradient 2000`).
 
 **Gates** (`check.py`, which runs the one-block box with this `input.ini` minus `phase` into `ref-1blk/`).
-- R1 the one-block run: trajectories equal as sorted multisets; the exit records equal per parcel within one
-  unit of the last printed place; the scatter markers equal in number per parcel with the same Y, Z, d and
-  m; `euler1` and `source` equal cell by cell, block 2's cell (i, j, k) being the one-block cell
+- R1 the one-block run: the trajectories and the exit records equal per parcel within one unit of the last
+  printed place (the same rows, in order); the scatter markers equal in number per parcel with the same Y, Z,
+  d and m; `euler1` and `source` equal cell by cell, block 2's cell (i, j, k) being the one-block cell
   (61 − i, j, 6 − k), within ten times the floor measured on the correct code (at least 1e-12 of the field
   scale): ρ_p and n_p 3.3e-7, T_p 1.9e-8, u_p 1.3e-10, Fx 1.5e-10, E 2.1e-10.
 - R2 the block-change line `25 via the connected cell, 0 via the block sweep, 0 rim exits; stencil refreshed
@@ -39,8 +39,14 @@ face 1 an outlet, every other face a wall. ATLAS pairs the two faces 2 cell by c
 
 **The floor.** The rotated block lists each cell's vertices in another order, so the in/out test of a step
 that was cut to end at a face is decided by different roundings, and a segment can end about 1e-10 m on the
-other side of the face. The trajectories (rows at the crossings) are equal byte for byte. Measured against the
-one-block run: `euler1` ρ_p and n_p 3.26e-8 of the field scale (the residence path per cell moves by
+other side of the face. Block 1 is not rotated and its trajectory rows (one per cell crossed) are equal byte for
+byte. In block 2 the parcels have nearly reached the gas velocity and temperature (|dT/ds| ≤ 45 K/m and
+|dU/ds| ≤ 0.93 s⁻¹ there, against 7.3e4 K/m and 1.6e3 s⁻¹ at the inlet): a crossing moved by 1e-10 m moves T
+by 4.5e-3 of its print unit (1e-6 K) and U by 9e-5 of its own, and integrating with every step different
+(relative and absolute tolerance 1e-12 or 1e-13 instead of 1e-11) moves 12 of block 2's 775 rows by one unit of
+T and none by two. A value that close to a rounding boundary prints one unit apart: a gfortran build prints
+T = 609.981551 against 609.981552 on two rows (IDs 1 and 2 at x = 0.1325), an ifx build none. Measured against
+the one-block run: `euler1` ρ_p and n_p 3.26e-8 of the field scale (the residence path per cell moves by
 ~1e-10 m in 2.5 mm), T_p 1.88e-9, u_p 1.25e-11; `source` Fx 1.46e-11, E 2.04e-11; on 5 of the 25 exit records
 the angle column reads 0.000001 against 0.000000 (an arccos near 1), every other column equal; the scatter
 markers sit at ODE step ends, which the crossing shifts: x within 3.2e-5 m and T within 7.3e-4 K of the
