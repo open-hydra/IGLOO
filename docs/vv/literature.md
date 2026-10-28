@@ -114,7 +114,7 @@ override.
 (source-free).
 
 **Literature references.** `[RM52]`; `[Lef89]` (Lefebvre 1989 — d²-law canonical
-constant $K = 8 k_g \ln(1+B_T)/(\rho_l c_{pg})$); Abramzon & Sirignano (1989) eq. 20/24.
+constant $K = 8 k_g \ln(1+B_T)/(\rho_l c_{pg})$); Abramzon & Sirignano (1989) eqs. 17 ($F(B)$), 20 (Frössling's $\mathrm{Sh}_0$, $\mathrm{Nu}_0$) and 24 (the heat term).
 
 **Gates.** `test_evaporation`; `test_evap_probes` (XE1/XE2/XE3).  The end-to-end
 d²-law case (`evaporation/d2law`) is described in [Evaporation](evaporation.md).

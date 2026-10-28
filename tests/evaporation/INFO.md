@@ -24,7 +24,7 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
 - **C3 source:** the ASM/A–S family combines several papers (Abramzon &
   Sirignano 1989 for the core formulation, `[AS89]`; Sazhin reviews for compact summaries).
   `asm-box` types the rate law from `[MHB98]`'s statement of the model and the gas-side heat
-  from `[AS89]` eq. 20.
+  from `[AS89]` eq. 24.
 - **C1 frozen-`T_p`:** the d²-law closed form assumes `T_p` constant;
   `d2law-line` realizes it with a particle `cp` 100× and a density 2.7× the `d2law` table's
   (`ρ_p·cp_p` 271×; `T_p` drifts 0.77 K over the residence), and `d2law` integrates the law

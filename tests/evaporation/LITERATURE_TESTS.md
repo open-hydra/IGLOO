@@ -118,7 +118,7 @@ Prefactor `π d ρ_f D_f Sh` → **canonical (2π d at Sh=2). CEM-B correct.**
 
 **(a) Paper.** Abramzon, B. & Sirignano, W.A., "Droplet vaporization model for spray
 combustion calculations," *Int. J. Heat Mass Transfer* **32**(9) (1989) 1605–1618.
-DOI:10.1016/0017-9310(89)90064-7 (suggest tag `[AS89]` for REFERENCES.md).
+DOI:10.1016/0017-9310(89)90043-4 (suggest tag `[AS89]` for REFERENCES.md).
 
 **(b) Verification tests the paper presents.** A–S give: the modified `Sh*`, `Nu*` with
 the film-thickness correction `F(B)`; and figure comparisons of `Nu*/Nu0`, `Sh*/Sh0`,
@@ -136,9 +136,9 @@ limit checks: `B→0 ⇒ F(B)→1 ⇒ Sh*→Sh0, Nu*→Nu0`; `Re→0 ⇒ Sh0,Nu0
 | A–S eq | quantity | code | verdict |
 |---|---|---|---|
 | 17 | `F(B)=(1+B)^0.7 ln(1+B)/B` | [#L251](../../src/lib/Lib_Evaporation.f90#L251) | **CONFIRMED**, exponent 0.7 correct |
-| 19/Frössling | `Sh0=2+0.552 Re^0.5 Sc^⅓` | [#L200](../../src/lib/Lib_Evaporation.f90#L200) | **CONFIRMED** 0.552 |
-| 19/Frössling | `Nu0=2+0.552 Re^0.5 Pr^⅓` | [#L214](../../src/lib/Lib_Evaporation.f90#L214) | **CONFIRMED** |
-| 18 | `Sh*=2+(Sh0−2)/F_M` | [#L201](../../src/lib/Lib_Evaporation.f90#L201) | **CONFIRMED** |
+| 20/Frössling | `Sh0=2+0.552 Re^0.5 Sc^⅓` | [#L200](../../src/lib/Lib_Evaporation.f90#L200) | **CONFIRMED** 0.552 |
+| 20/Frössling | `Nu0=2+0.552 Re^0.5 Pr^⅓` | [#L214](../../src/lib/Lib_Evaporation.f90#L214) | **CONFIRMED** |
+| 10 | `Sh*=2+(Sh0−2)/F_M` | [#L201](../../src/lib/Lib_Evaporation.f90#L201) | **CONFIRMED** |
 | 8 | `mdot=−π d ρ_g D_v Sh* ln(1+B_M)` | [#L204](../../src/lib/Lib_Evaporation.f90#L204) | **CONFIRMED** (=canonical 2π d at Sh*=2) |
 | 22 | `φ=(c_pv/c_pg)(Sh*/Nu*)(1/Le)` | [#L220](../../src/lib/Lib_Evaporation.f90#L220) | **CONFIRMED** |
 | 23 | `B_T=(1+B_M)^φ−1` | [#L221](../../src/lib/Lib_Evaporation.f90#L221) | **CONFIRMED** |

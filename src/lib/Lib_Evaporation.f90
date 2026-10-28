@@ -427,7 +427,7 @@ contains
             Nu_star = 2._R8 + (Nu0 - 2._R8) / FT         ! eq. 11
         enddo
 
-        !> Step 3: gas-side heat Q_G [eq. 20], positive into the droplet, latent sink excluded
+        !> Step 3: gas-side heat Q_G [eq. 24, without L], positive into the droplet
         if (BT > 0._R8) then
             Qdot_evap = -mdot * cpv_eff * (Tg - Tp) / BT * cpFactor
         else
