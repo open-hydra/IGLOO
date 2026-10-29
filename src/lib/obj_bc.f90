@@ -121,7 +121,7 @@ contains
 
   !> Apply the exit cell's boundary condition to the particle state: reflection (300 and non-wedge
   !  200), wedge fold (200), connected interface (101/103: retry in the partner cell), or exit (gone).
-  subroutine bcDef(cell,vertices,pold,vold,intersect,f,p,v,time,iold,angle,Af,found,gone,retry,reflected)
+  subroutine bcDef(cell,vertices,pold,vold,intersect,f,p,v,time,iold,angle,Af,found,gone,retry,reflected,vHit)
     use IGLOO_variables, only: pi, toll, delthe, axisDir
     implicit none
     class(obj_bc_cell), intent(in)    :: cell
@@ -135,6 +135,7 @@ contains
     real(R8),           intent(out)   :: angle, Af
     logical,            intent(out)   :: gone, retry
     logical, optional,  intent(out)   :: reflected   !> the reflection branch was taken (grazing or specular)
+    real(R8), optional, intent(out)   :: vHit(3)     !> exit branch: the velocity at the crossing point, else v
     real(R8) :: nn(3), nn1(3), nn2(3), pstop(3), rot
     real(R8) :: azim
     integer      :: try
@@ -142,6 +143,7 @@ contains
     gone  = .false.
     retry = .false.
     if (present(reflected)) reflected = .false.
+    if (present(vHit)) vHit = v
 
     !> classify a 200 face by its geometry: |azim| > wedgeAzimTol is a wedge face, else it reflects
     azim = 0._R8
@@ -190,6 +192,9 @@ contains
     !> Wall/Outflow boundary
     else
       gone  = .true.
+      !> the step's velocity at the crossing point, linear along the step as in the reflection above
+      if (present(vHit) .and. found .and. norm2(p-pold) > minDist) &
+        vHit = norm2(intersect-pold)/norm2(p-pold)*(v-vold) + vold
       if (found) p = intersect
       nn = cell%normal
       angle = 180.0_R8/pi*acos(dot_product(myRay%direction,nn))

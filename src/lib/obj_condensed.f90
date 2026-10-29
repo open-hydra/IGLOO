@@ -183,7 +183,7 @@ contains
     kid%igasOld = rec%igas
     kid%xi0     = 0.5_R8
     kid%Ncell = 0; kid%gone = .false.; kid%wasin = .false.; kid%lost = .false.
-    kid%angle = 0._R8; kid%exitCode = 0
+    kid%angle = 0._R8; kid%exitCode = 0; kid%exitCell = 0
     if (dRes > 0._R8) then
       kid%d     = dRes
       kid%m     = pi/6._R8*kid%rho*dRes**3

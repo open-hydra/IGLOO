@@ -569,7 +569,7 @@ contains
     subroutine writeStartRecord()
       part%stateVar(1:3) = part%pInj
       part%stateVar(4:6) = 0._R8
-      part%angle = 0._R8; part%Af = 0._R8; part%exitCode = 0
+      part%angle = 0._R8; part%Af = 0._R8; part%exitCode = 0; part%exitCell = 0
       !> A boundary-face stream derives its temperature and flow at injection, which did not take place.
       if (.not. all(part%iInj == [0,0,0,0])) then; part%tp = 0._R8; part%mdot = 0._R8; endif
       call writeExitRow(started=.false.)
