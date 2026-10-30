@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (320 in a serial build: 268 e2e + 51 unit incl. `self_test`,
+One row per registered CTest entry (327 in a serial build: 275 e2e + 51 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 28 `mpi-*`
-rows in their own section, 348).
+rows in their own section, 355).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (83 of 164 e2e fixtures)
+## Shared box fixture (83 of 165 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,7 +39,7 @@ writes with its defaults.
 Eighty-three fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other eighty-one:
+once here, referenced as **"shared box"** below. The other eighty-two:
 
 - non-uniform gas (twenty-six): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
@@ -67,7 +67,7 @@ once here, referenced as **"shared box"** below. The other eighty-one:
   `evap-breakup-box` and `evap-breakup-box-varcp` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
   (`--t-gas --kt`); `tab-hf92` and `etab-hf92` on a 1.2 m × 480-cell box at U=200 m/s, T=297 K in Hsiang & Faeth's air,
   one diameter with a slip per cell (`--d0 --rhog --mug`), the lateral faces reflecting (`--side-code 300`);
-- uniform gas on another mesh (twenty-nine): `mhb98-water`, `mhb98-water-psat` and `mhb98-water-blowing` (a `make_box_case.py`
+- uniform gas on another mesh (thirty): `mhb98-water`, `mhb98-water-psat` and `mhb98-water-blowing` (a `make_box_case.py`
   variant lengthened to 0.17 m at the same Δx: water in air at T_G=298 K with a near-static
   U=1.9×10⁻⁴ m/s clock, the Miller-Harstad-Bellan Fig-2 conditions); `planar-slab` (a 20×20
   single-layer planar slab), `wall-approach` (a 100×20 single layer, the gas drifting toward the wall
@@ -82,7 +82,7 @@ once here, referenced as **"shared box"** below. The other eighty-one:
   with a 200×100 inlet, `make_box_case.py --nx 1 --ny 200 --nz 100`); `stuck-cell` and `plane-back` (the box with the gas at rest,
   `make_box_case.py --ug 0`), `sym-plane-bounce` and `sym-plane-bounce-ord2` (the box with the gas at 0.1 m/s,
   `--ug 0.1 --sym-face 5 --no-inlet`), `sym-plane-creep` and `sym-plane-creep-ord2` (the box with the gas at 3 mm/s,
-  `--ug 0.003 --sym-face 5 --no-inlet`), `boiling-zgr-switch` (the box with the gas at 1 m/s, `--ug 1.0`), `solid-melt` and `solid-melt-rhos` (the box with the gas at 3000 K, `--tg 3000`), `inj-dsdegen` (the box with geometric rows along y, `--ygrade 2`) and `beckstead-air` (the box with air at 300 K and 0.04 m/s, one diameter per inlet cell, `--tg 300 --ug 0.04 --rp-sweep`).
+  `--ug 0.003 --sym-face 5 --no-inlet`), `boiling-zgr-switch` (the box with the gas at 1 m/s, `--ug 1.0`), `solid-melt` and `solid-melt-rhos` (the box with the gas at 3000 K, `--tg 3000`), `inj-dsdegen` (the box with geometric rows along y, `--ygrade 2`), `beckstead-air` (the box with air at 300 K and 0.04 m/s, one diameter per inlet cell, `--tg 300 --ug 0.04 --rp-sweep`) and `wall-flux` (the box in 15 cells along x, its outlet face a dispersed-phase wall, `--no-inlet --outlet-code 301 --nx 15`).
 
 `khrt-e2e-rt` and `khrt-e2e-threads` are further oracles on `khrt-e2e`'s run (the second at 1/2/4
 threads) and add no fixture, nor do the four `threads-*` gates (each runs its parent's inputs in private directories); `khrt-stress` differs from `khrt-e2e` only in `mShedLim`, and the twins
@@ -274,6 +274,7 @@ oracle possible.
 | **chimera-2blk-mollify** | — (the box run as one block) | *the field mollifier across chimera faces*: `chimera-2blk`'s case with the mollifier at its default (8 passes), each chimera face smoothed through a halo of its layer-1 donor (one per facelet, weight 1). G-C6 the one-block run, by `check.py` into `ref-1blk/`: `source.tec`, `euler1.tec` and `euler2.tec` of each block equal the one-block cells they cover (block 2's cell i = one-block 26 + i) to 1e-12 of the field scale (measured 1.7e-15); G-M2s both blocks' source totals minus the logged mirrored totals (the mirror and each block's halo exchange) equal the one-block total, 1e-12 of Σ\|S\| (measured 1.4e-15); W1 the mollifier line and the one-block E moved against an unsmoothed run (`ref-1blk-raw/`) in at least half its cells (1500 of 1500); W2 50 exits at x = 0.15. The seam (both blocks' source with each overlap cell weighted 1/2, column sums against the one-block run) is printed (1.0e-18 of the largest column). RED of G-C6 with zero flux at the chimera faces (the mirror alone): block 2 `Fx` 1.25e-3, `E` 2.82e-3, the eulerian fields up to 7.8e-3; with the halo and no mirror: block 2 `E` 2.3e-2; with neither: block 2 `E` 3.1e-2, the eulerian densities 0.47. RED of G-M2s with the halo's exchange left out of the mirrored totals: `Fx` 2.4e-4, `E` 3.6e-4 of Σ\|S\| | `chimera-2blk`'s (`INPUT/` symlinked) | as `chimera-2blk` |
 | **chimera-2blk-shift-mollify** | — (the box run as one block, unshifted and shifted) | *the field mollifier across chimera faces between misaligned cells*: `chimera-2blk-shift-ord2`'s blocks (block 2 shifted by half a cell, two donors of weight 1/2 per facelet) on `drag-stokes`'s uniform gas, gas-order 1, the mollifier at its default. G-M2s the sum over both blocks of the smoothed source minus the logged mirrored totals equals the same quantity of the unsmoothed run (`ref-raw/`), 1e-12 of Σ\|S\| (measured 1.4e-15; RED with the halo's exchange left out of the mirrored totals: `Fx` 5.7e-5, `E` 4.3e-5; without the mirror the lines are absent); W1 the mollifier line and the smoothed E moved in at least half the cells; W2 50 exits at x = 0.15125. Measured, not gated (G-C6s): each block against the one-block run on its own cells (block 1: the unshifted box, `ref-1blk/`; block 2: a box with a half cell at the inlet and cells shifted by half, `ref-shift/`), worst of the field scale, source `E` 1.5e-3 / 2.2e-3 (block 1 / block 2; 1.3e-3 / 3.1e-2 owner-only, 1.3e-3 / 3.7e-3 with the mirror and zero flux, where block 1 is the owner-only run bit for bit), euler1 ρ_p 3.5e-2 / 4.3e-2: what remains is the centroid map's (the centroids of the overlap on interior faces of the other block go to one of two cells, block 2's fringe cell keeps half its content, and the halo carries that into block 1) | own two-zone `solfile.tec` (`make_box_case.py --blocks 2 --overlap 4 --shift 0.5 --families 2`) | as `chimera-2blk` |
 | **varcp-tmin** | — (drag-stokes's `[Stokes]` closed form) | *positive gate* for a varying-cp table that starts above 1 K: drag-stokes's case with an own 280..380 K table (cp = 1250 + (T − 280)), the parcels at T_g = 600 K on its extended last segment. drag-stokes's oracle imported unchanged (25/25, worst 0.014 of the tolerance), T = 600.000000 on 1550/1550 rows, 25 exits, the enthalpy-state line. RED: refused at setup (exit 128) | `drag-stokes`'s (symlinked) | as `drag-stokes`; own `phase.txt` (`A 1`) and `properties.dat` |
+| **wall-flux** | — (definitions; output contract) | *the wall sums of `[IGLOO-Erosion]`*: five assigned NoDrag streams on straight lines, material A in two groups and B in one, `model = none none`, `wall-density = 1800`; four streams end on the 301 face (cells (2,2) twice, (3,3), (1,3)), one on a side face (400). W0 the log names 1 wall face and both models; W1 `OUTPUT/wall.tec`: `x y z er-A er-B g-A g-B rdot`, one zone `B1F2` (I = 1, J = K = 6), variables 4–8 cell-centred; W2 the 36 nodes on face 2's grid; W3 `g-<mat>` per cell = the streams' flows through the cell × the groups / dy dz, exactly 0 in the 22 other cells (1e-12 of the largest; measured 7.4×10⁻¹⁷); W4 the same from the bc-301 exit records, Σ mdot / Af (1e-6; 1.5×10⁻¹⁶); W5 er and rdot 0 (model none); W6 the exit census (A 10/8/2, B 5/4/1); W7 without the section (`ref-noerosion/`): no `wall.tec`, no log line, the same exit records. RED: the deposit skipped (W3, W4 worst 1.0), every parcel into material 1 (g-A worst 0.5, g-B 1.0), face 2's nodes at x = 0 (W2, 36 nodes), g not over the area (W3, W4 1.0), bc 400 taken as a wall (W0, W1: six zones); a solver without the feature ignores the section (W0, W1) | `make_box_case.py --no-inlet --outlet-code 301 --nx 15 --ny 5 --nz 5` (drag-stokes's gas, 0.01 m cells) | five `[IGLOO-BC]` assigned streams, d = 11.89 µm, 600 K; `NoDrag`, `NoHeat`; `A 2`, `B 1` (`two-mat`'s properties); face 2 = 301, faces 1, 3–6 = 400; `[IGLOO-Erosion] model = none none`, `wall-density = 1800.0` |
 | **refuse-p2t** | — (kind 8, refusal) | *setup refusal* (`tools/check_refusal.py` via `igloo_refusal_case`): `liquid-conduction = P2T` on a material that does not evaporate must exit ≠ 0 with `liquid-conduction=P2T requires an evaporating material`, nothing integrated, no `OUTPUT/*.dat`. The harness is non-vacuous: on drag-stokes's own output it fails on all five counts | as `drag-stokes` | as `drag-stokes` |
 | **refuse-p2t-kliq** | — (kind 8, refusal) | *setup refusal*: `liquid-conduction = P2T` on `d2law` (no `k-liq` on its material line) → `liquid-conduction=P2T requires k-liq > 0` | as `d2law` | as `d2law` |
 | **refuse-p2t-muliq** | — (kind 8, refusal) | *setup refusal*: the same with `k-liq=0.6` and no `mu-liq` on a material that does not break → `liquid-conduction=P2T requires mu-liq > 0` | as `d2law` | as `d2law` |
@@ -357,6 +358,12 @@ oracle possible.
 | **refuse-gas-no-density** | — (kind 8, refusal) | *setup refusal*: a gas file whose density variable is renamed (`refusals/make_gas_refusals.py`) → `IGLOO: the gas file has no density variable (Roi(s) or rho(s))` at the gas import (RED on an import that ends on a bare `error stop 1`: exit 1, no payload) | own `solfile.tec`: a 2×2×2 box, `"Roi( 1 )"` renamed `"Q( 1 )"` | as `drag-stokes` |
 | **drag-stokes-dopri5** | `[Stokes]` (drag-stokes's oracle, symlinked) | `ode-solver = H-dopri5`, otherwise `drag-stokes` (`etab-e2e-dopri5` and the `*-dopri5` repeatability twins run the explicit solver too). RED on a DOPRI5 whose per-step call keeps Hairer's eleven-argument `SOLOUT`: IGLOO's interrupt never reaches DOPRI5 and every parcel dies at injection (NMAX exceeded); green with the six-argument call `SOLOUT(NACCPT+1,XOLDS,X,Y,N,IRTRN)` and a silent label 79: 25/25, resid/tol 0.014 | as `drag-stokes` | as `drag-stokes` |
 | **khrt-e2e-rt** | `[Reitz87]` (as `khrt-e2e`) | *RT-shatter persistence gate* (`check_rt.py`) on `khrt-e2e`'s own run: the RT/shed event must fire, apply, and persist as a mass-consistent discontinuous shatter (RED on an RT/shed event whose npdot never reaches the model-3 ODE state y(8), so the event reverts) | as `khrt-e2e` | as `khrt-e2e` |
+| **refuse-erosion-model-missing** | — (kind 8, refusal) | *setup refusal*: `[IGLOO-Erosion]` without its `model` key → `IGLOO: [IGLOO-Erosion] model is missing` (RED without the check: the stop at `model is empty`, not its payload) | as `wall-flux` (`INPUT/` symlinked) | as `wall-flux`; `wall-density = 1800.0` only |
+| **refuse-erosion-model-empty** | — (kind 8, refusal) | *setup refusal*: `model =` with nothing after the `=` → `IGLOO: [IGLOO-Erosion] model is empty` (RED without the check: the token-count stop, not its payload) | as `wall-flux` (`INPUT/` symlinked) | as `wall-flux`; `model =`, `wall-density = 1800.0` |
+| **refuse-erosion-model-count** | — (kind 8, refusal) | *setup refusal*: one `model` token for the phase file's two materials → `IGLOO: [IGLOO-Erosion] model needs one token per material` (RED without the check: read past the list, the unknown-token stop) | as `wall-flux` (`INPUT/` symlinked) | as `wall-flux`; `model = none`, `wall-density = 1800.0` |
+| **refuse-erosion-model-token** | — (kind 8, refusal) | *setup refusal*: a token that names no erosion model → `IGLOO: unknown [IGLOO-Erosion] model` (RED with the token taken as `none`: exit 0, `wall.tec` written) | as `wall-flux` (`INPUT/` symlinked) | as `wall-flux`; `model = Finnie none`, `wall-density = 1800.0` |
+| **refuse-erosion-density-missing** | — (kind 8, refusal) | *setup refusal*: `[IGLOO-Erosion]` without `wall-density` → `IGLOO: [IGLOO-Erosion] wall-density [kg/m^3] is missing or not positive` (RED without the check: exit 0, `rdot` = NaN in `wall.tec`) | as `wall-flux` (`INPUT/` symlinked) | as `wall-flux`; `model = none none` only |
+| **refuse-erosion-density-negative** | — (kind 8, refusal) | *setup refusal*: `wall-density = -1800.0` → the same payload (RED without the check: exit 0, `wall.tec` written) | as `wall-flux` (`INPUT/` symlinked) | as `wall-flux`; `model = none none`, `wall-density = -1800.0` |
 | **repeat-drag-stokes** | — (kind 8, harness contract) | *two-sweep repeatability* (`support/twosweep.f90` + `tools/check_twosweep.py`): sweep 1 ≡ sweep 0 — `.dat` sorted multisets identical, `.tec` ≤ 1e-12 scale-relative; **plus gas-cycle**: original field → `U` doubled → original, sweep 1 must differ, sweep 2 must match sweep 0 | as `drag-stokes` | as `drag-stokes` |
 | **repeat-drag-stokes-time-end** | — (kind 8) | *two-sweep repeatability*, steady **and gas-cycle**, `drag-stokes` with `time-end = 12e-3`: the parcels end sweeps 0 and 2 inside the box (time-end records, code 0, x = 0.108416 m) and leave through the outlet in sweep 1 (U doubled, code 400), so the exit code must not survive a sweep. RED on a `reset_state` that keeps the exit code: sweep 2's 25 time-end records print code 400 (outloc 25 of 25 records differ), while `repeat-drag-stokes` passes | as `drag-stokes` (INPUT symlinked) | as `drag-stokes`; `time-end = 12e-3` |
 | **repeat-db-injection** | — (kind 8) | *two-sweep repeatability*, steady mode (the DB `vInj` hand-off) | as `db-injection` | as `db-injection` |
@@ -479,11 +486,11 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-268 `e2e`-labelled + 51 `unit`-labelled + the optional `vortex-cloud-3way` = **320 CTest entries** in a
-serial build (+28 `mpi-*` under `USE_MPI`, 348), all green (counted from `tests/CMakeLists.txt`). The 268
-`e2e` entries are the 164 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+275 `e2e`-labelled + 51 `unit`-labelled + the optional `vortex-cloud-3way` = **327 CTest entries** in a
+serial build (+28 `mpi-*` under `USE_MPI`, 355), all green (counted from `tests/CMakeLists.txt`). The 275
+`e2e` entries are the 165 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
-threads), the four `threads-*` thread-count gates, the fifteen `repeat-*` two-sweep gates, the eighty-one `refuse-*` setup-refusal gates, `vv-order`
+threads), the four `threads-*` thread-count gates, the fifteen `repeat-*` two-sweep gates, the eighty-seven `refuse-*` setup-refusal gates, `vv-order`
 (the record-order independence of thirteen V&V figures) and `check-order` (of four gate printouts). The
 51 `unit` entries are 42 compiled unit tests, the property-table reader on its four fixtures
 (`test_properties_reader`, `-two-material`, `-atlas-water`, `-sigma-mu`), `self_test`, `registry-docs`, `exe-per-tree`,

@@ -128,6 +128,18 @@ module IGLOO_data_block
     procedure, pass(self), public :: normalize => normalizeEUL
   end type obj_eulerblock
 
+  !> Wall-impact sums of one face: acc(1:2, nm, Nm, Nn), per face cell and material, the sum of mdot*E and of mdot
+  !  over the parcels that left through the cell.
+  type, public :: obj_wallface
+    real(R8), dimension(:,:,:,:), allocatable :: acc
+  end type obj_wallface
+
+  !> Wall-impact sums of one block: the faces that hold an eroding wall cell (on) and their sums.
+  type, public :: obj_wallblock
+    logical            :: on(6) = .false.
+    type(obj_wallface) :: face(6)
+  end type obj_wallblock
+
 contains
 
   !> Deallocate the block's geometry arrays.

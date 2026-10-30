@@ -5,7 +5,7 @@ module IGLOO_Mod_MPI
   use mpi
 #endif
   use, intrinsic :: iso_fortran_env, only: R8 => real64
-  use IGLOO_data_block, only: obj_sourceblock, obj_eulerblock
+  use IGLOO_data_block, only: obj_sourceblock, obj_eulerblock, obj_wallblock
 
   implicit none
   private
@@ -246,15 +246,25 @@ contains
   end subroutine mpi_allreduce_sum_i4_array
 
 
-  !> Sums the per-rank partial source/euler accumulators in rank order so every rank holds the same
-  !  raw totals. Called inside solve, before finalize (which is nonlinear).
-  subroutine reduce_accumulators(srcblock, eulblock, srcSwitch, eulSwitch)
+  !> Sums the per-rank partial source/euler accumulators, and the wall sums when given, in rank order so
+  !  every rank holds the same raw totals. Called inside solve, before finalize (which is nonlinear).
+  subroutine reduce_accumulators(srcblock, eulblock, srcSwitch, eulSwitch, wallblock)
     type(obj_sourceblock), intent(inout) :: srcblock(:)
     type(obj_eulerblock),  intent(inout) :: eulblock(:,:)
     logical,               intent(in)    :: srcSwitch, eulSwitch
-    integer :: b, fam
+    type(obj_wallblock),   intent(inout), optional :: wallblock(:)
+    integer :: b, fam, f
 
     if (mpi_size_ <= 1) return
+
+    if (present(wallblock)) then
+      do b = 1, size(wallblock)
+        do f = 1, 6
+          if (wallblock(b)%on(f)) &
+            call mpi_ordered_sum_r8_array(wallblock(b)%face(f)%acc, size(wallblock(b)%face(f)%acc))
+        enddo
+      enddo
+    endif
 
     do b = 1, size(srcblock)
       if (srcSwitch) then

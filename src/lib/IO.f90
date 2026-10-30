@@ -7,6 +7,7 @@ module IGLOO_IO
   public:: read_cdp_bc_file
   public:: read_cdp_properties
   public:: write_outfield
+  public:: write_wallfield
   public:: merge_rank_particle_files
 
 contains
@@ -984,6 +985,106 @@ contains
     endif
 
   end subroutine write_outfield
+
+
+  !> Write OUTPUT/<prefix>wall<tag>.tec in MOSE's wall-file layout: one zone per block face holding a wall cell
+  !  (B<b>F<f>: the face's nodes, the values cell-centred), er-<mat> and g-<mat> of every material, then rdot.
+  !  Per face cell: er-<mat> = sum(mdot*E)/sum(mdot) over the material's parcels that left through it, g-<mat> =
+  !  sum(mdot)/A with A the area of the cell's face, rdot = sum over the materials of g*er/wall-density.
+  subroutine write_wallfield(material, geoblock, wall, tag)
+    use IR_Precision
+    use Lib_Tecplot
+    use Lib_ORION_data
+    use IGLOO_variables,             only: nm, IGLOO_phase_prefix
+    use IGLOO_data_block,            only: obj_block, obj_wallblock
+    use IGLOO_data_phases,           only: obj_material
+    use IGLOO_RayFaceIntersection3D, only: computeArea
+    use IGLOO_Lib_Erosion,           only: rhoWall
+    implicit none
+    type(obj_material),  intent(in) :: material(:)
+    class(obj_block),    intent(in) :: geoblock(:)
+    type(obj_wallblock), intent(in) :: wall(:)
+    character(len=*),    intent(in), optional :: tag
+    type(orion_data) :: orion
+    integer(I4P)     :: E_IO
+    integer          :: b, f, z, m, n, i, j, k, mat, cell(3), lo(3), hi(3)
+    real(R8)         :: vertices(3,8), area, ermSum
+    character(len=:), allocatable :: sfx, varnames
+
+    sfx = ''
+    if (present(tag)) sfx = tag
+    z = 0
+    do b = 1, size(wall)
+      z = z + count(wall(b)%on)
+    enddo
+    if (z == 0) return
+
+    orion%tec%node     = .false.
+    orion%tec%bc       = .false.
+    orion%tec%format   = 'ascii'
+    orion%solutiontime = -10.d0
+    allocate(orion%block(1:z))
+    z = 0
+    do b = 1, size(wall)
+      do f = 1, 6
+        if (.not. wall(b)%on(f)) cycle
+        z = z + 1
+        associate(blk => geoblock(b), zb => orion%block(z), acc => wall(b)%face(f)%acc)
+        zb%name = 'B'//trim(adjustl(str(.true.,b)))//'F'//trim(adjustl(str(.true.,f)))
+        !> the face's nodes: the block's node range, the normal index on the face's plane
+        lo = 0; hi = [blk%Nx, blk%Ny, blk%Nz]
+        select case (f)
+        case (1); hi(1) = 0
+        case (2); lo(1) = blk%Nx
+        case (3); hi(2) = 0
+        case (4); lo(2) = blk%Ny
+        case (5); hi(3) = 0
+        case (6); lo(3) = blk%Nz
+        end select
+        allocate(zb%mesh(1:3, 0:hi(1)-lo(1), 0:hi(2)-lo(2), 0:hi(3)-lo(3)))
+        zb%mesh = blk%node(:, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
+        zb%Ni = hi(1) - lo(1); zb%Nj = hi(2) - lo(2); zb%Nk = hi(3) - lo(3)
+        allocate(zb%vars(1:2*nm+1, max(zb%Ni,1), max(zb%Nj,1), max(zb%Nk,1)))
+        zb%vars = 0._R8
+        do n = 1, blk%face(f)%Nn
+          do m = 1, blk%face(f)%Nm
+            call blk%fmn2ijk(f, m, n, i, j, k)
+            call blk%getVertices([i, j, k], vertices)
+            area = computeArea(f, vertices)
+            !> the cell's place in the zone: the face-local (m,n), 1 across the face
+            select case (f)
+            case (1,2);   cell = [1, m, n]
+            case (3,4);   cell = [m, 1, n]
+            case default; cell = [m, n, 1]
+            end select
+            ermSum = 0._R8
+            do mat = 1, nm
+              if (acc(2,mat,m,n) > 0._R8) zb%vars(mat, cell(1), cell(2), cell(3)) = acc(1,mat,m,n)/acc(2,mat,m,n)
+              zb%vars(nm+mat, cell(1), cell(2), cell(3)) = acc(2,mat,m,n)/area
+              ermSum = ermSum + acc(1,mat,m,n)
+            enddo
+            zb%vars(2*nm+1, cell(1), cell(2), cell(3)) = ermSum/(area*rhoWall)
+          enddo
+        enddo
+        end associate
+      enddo
+    enddo
+
+    varnames = ''
+    do mat = 1, nm
+      varnames = varnames//'"er-'//trim(material(mat)%matName)//'"'
+    enddo
+    do mat = 1, nm
+      varnames = varnames//'"g-'//trim(material(mat)%matName)//'"'
+    enddo
+    varnames = varnames//'"rdot"'
+    write(*,*)
+    write(*,*)' Writing tec-format file: wall.tec'
+    write(*,*)
+    E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames, &
+                                           filename='OUTPUT/'//trim(IGLOO_phase_prefix)//'wall'//sfx//'.tec')
+
+  end subroutine write_wallfield
 
 
   !> Merge this sweep's per-rank particle-output shards into the serial file layout and delete

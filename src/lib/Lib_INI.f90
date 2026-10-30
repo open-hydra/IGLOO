@@ -21,7 +21,7 @@ module IGLOO_IO_INI
 contains
 
 
-  !> Reads input.ini: [IGLOO-General], [IGLOO-Models], [IGLOO-Properties], [IGLOO-BC], [IGLOO-ODE].
+  !> Reads input.ini: [IGLOO-General], [IGLOO-Models], [IGLOO-Properties], [IGLOO-BC], [IGLOO-ODE], [IGLOO-Erosion].
   subroutine read_IGLOO_input(method,srcSwitch,eulSwitch,gasfile,pos0,vel0,temp0,mdot,diam)
     use IGLOO_variables, only: llen, threshold
     implicit none
@@ -36,6 +36,7 @@ contains
     call read_properties()
     call read_bc(method,pos0,vel0,temp0,mdot,diam)
     call read_ode()
+    call read_erosion()
   end subroutine read_IGLOO_input
 
 
@@ -833,6 +834,32 @@ contains
     if (error/=0) failAfter = 0._R8
 
   end subroutine read_ode
+
+
+  !> [IGLOO-Erosion]: wall erosion by particle impact, absent = off (no OUTPUT/wall.tec). model: one token per
+  !  material of the phase file (checked against it by checkErosionInput); wall-density [kg/m^3].
+  subroutine read_erosion()
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use IGLOO_Lib_Erosion, only: erosionOn, eroModelWord, rhoWall
+    implicit none
+    integer :: n
+
+    if (allocated(eroModelWord)) deallocate(eroModelWord)
+    rhoWall   = 0._R8
+    erosionOn = fini%has_section(section_name='IGLOO-Erosion')
+    if (.not. erosionOn) return
+    if (.not. inSection('IGLOO-Erosion','model')) &
+      error stop 'IGLOO: [IGLOO-Erosion] model is missing (one token per material of the phase file)'
+    n = fini%count_values(section_name='IGLOO-Erosion', option_name='model')
+    if (n < 1) error stop 'IGLOO: [IGLOO-Erosion] model is empty'
+    allocate(eroModelWord(n))
+    call fini%get(section_name='IGLOO-Erosion', option_name='model', val=eroModelWord, error=error)
+    call fini%get(section_name='IGLOO-Erosion', option_name='wall-density', val=rhoWall, error=error)
+    if (error /= 0 .or. .not. ieee_is_finite(rhoWall) .or. .not. (rhoWall > 0._R8)) &
+      error stop 'IGLOO: [IGLOO-Erosion] wall-density [kg/m^3] is missing or not positive'
+    write(*,*) ' >> Output field: wall erosion (wall.tec)'
+
+  end subroutine read_erosion
 
 
   !> True if `word` is an off-token (off / false / no / 0 / F, any case).

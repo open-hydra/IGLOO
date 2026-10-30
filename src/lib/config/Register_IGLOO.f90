@@ -196,6 +196,14 @@ contains
       'A forced solver failure of the oxide-cap model (ODE model 8) once a parcel''s last accepted time reaches this '// &
       'value [s]: the failure path of the burnout residue; 0 = off','',.false.)
 
+    ! --- [IGLOO-Erosion] ---
+    call reg%add('IGLOO-Erosion','model',d_s(26),'-', &
+      'Wall erosion model, one token per material of the phase file; the section present writes OUTPUT/wall.tec '// &
+      '(per wall face cell: er-<mat> and g-<mat> of every material, rdot), absent = no erosion','none',.false.)
+    call reg%add('IGLOO-Erosion','wall-density',d_r(28),'0', &
+      'Density of the wall material [kg/m^3], the same for every wall: rdot = sum over the materials of '// &
+      'g-<mat>*er-<mat>/wall-density; required (> 0) with the section','',.false.)
+
   end subroutine Register_IGLOO_Params
 
 end module IGLOO_Register

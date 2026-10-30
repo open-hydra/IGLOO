@@ -100,6 +100,7 @@ tests/
 | `combustion` | Beckstead $d^n$ Al-burn unit family, the oxide cap's among it; burn-box, burn-box-euler, body-burn-m5 (the body-force accumulators of model 5), burn-box-cap (the oxide cap), burn-box-residue (the burnout residue), burn-box-ox0 (the oxide fraction at injection) and beckstead-air (burnout times in air against Beckstead's Eq. 7, his Fig. 1 drawn beside them) e2e; the four combustion refusals, the three of the oxide cap and the two of the oxide fraction at injection |
 | `solidification` | Solidification unit family (supercooling, recalescence, plateau, melting, the birth state of a burnout residue); solid-box, solid-melt, solid-box-euler, solid-box-2mat, solid-box-rad, scatter-weight-solid e2e; breakup on a solidifying material: solid-brk-tab and solid-brk-khrt; the density change on freezing: solid-box-rhos, solid-box-varrho, solid-brk-tab-rhos and solid-melt-rhos; the freezing residue of burn-box-residue; the two-sweep solid-box and the seven solidification refusals |
 | `infrastructure` | Gas reconstruction, INI pipeline, property-table reader (four fixtures), RNG stream, axis dispatch, grazing stand-off, gas ghost ring, boundary-file families, dual-clip, source-reduction, multi-block mollifier, host-association and boundary-face fallback unit families, `self_test`, `registry-docs` and the planes-file size tool (`psd-plane-tool`); injection, coupling (the body-force accumulators of models 2, 4 and 5 among them), nozzle, wedge and slab, periodic, two-material, per-material breakup, per-family boundary-file, two-block, chimera, INI-comment, foreign-key, 0-group material line, wall-approach, varying-cp table, solver-failure, exit-record and backward plane-crossing (plane-back) e2e cases; the two-sweep db-injection and two-mat; thirty-one setup-refusal gates (forty more sit in their model's category, two of them in both evaporation and breakup, and the ten size-distribution refusals carry the `injection` label) |
+| `erosion` | Wall erosion by particle impact (`[IGLOO-Erosion]`, `OUTPUT/wall.tec`): wall-flux (the incident mass flux per wall cell and material, `g-<mat>`, from the streams' straight lines and from the exit records; the file's zone and nodes; no file and the same parcels without the section); six `[IGLOO-Erosion]` setup refusals (`model` missing, empty, of the wrong length or unknown; `wall-density` missing or negative) |
 | `repeatability` | Fifteen e2e cases run twice through `setup_static` → `reset_state` → `solve` with the second sweep compared to the first (see `tests/repeatability/INFO.md`) |
 | `mpi` | The serial gates re-run under `mpiexec` with a rank-count witness, plus cross-rank-count consistency (see `tests/mpi/INFO.md`) |
 
@@ -110,7 +111,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **320 tests** in a serial build (268 e2e + 51 unit, `self_test`,
+Current gate: **327 tests** in a serial build (275 e2e + 51 unit, `self_test`,
 `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 28 more
 `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.

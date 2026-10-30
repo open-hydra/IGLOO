@@ -962,6 +962,28 @@ igloo_e2e_case(chimera-2blk-shift-mollify infrastructure/chimera-2blk-shift-moll
 # varcp-tmin: a varying-cp table from 280 K, the parcels at 600 K on its extended last segment.
 igloo_e2e_case(varcp-tmin infrastructure/varcp-tmin "e2e;infrastructure;heat")
 
+# ---------- erosion (wall erosion by particle impact: [IGLOO-Erosion], OUTPUT/wall.tec) ------------------------
+# wall-flux: a box whose outlet face is a dispersed-phase wall (301), five assigned NoDrag streams on straight lines,
+# material A in two groups and B in one, model none: wall.tec's zone and nodes, g-<mat> per wall cell from the
+# streams' lines and from the bc-301 exit records, er and rdot zero, no wall file without the section.
+igloo_e2e_case(wall-flux erosion/wall-flux "e2e;erosion;io")
+# [IGLOO-Erosion] refusals on wall-flux's case (INPUT symlinked, materials A and B), each RED on the reader without
+# its check: the missing and the empty model stop at the next check (another payload), one token for two materials
+# reads past its list and stops at the unknown-token check, an unknown token and the missing or negative
+# wall-density run to the end with exit 0 (the missing density writes rdot = NaN; see erosion/refusals/INFO.md).
+igloo_refusal_case(refuse-erosion-model-missing    erosion/refusals/model-missing
+                   "IGLOO: [IGLOO-Erosion] model is missing"                   "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-model-empty      erosion/refusals/model-empty
+                   "IGLOO: [IGLOO-Erosion] model is empty"                     "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-model-count      erosion/refusals/model-count
+                   "IGLOO: [IGLOO-Erosion] model needs one token per material" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-model-token      erosion/refusals/model-token
+                   "IGLOO: unknown [IGLOO-Erosion] model"                      "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-density-missing  erosion/refusals/density-missing
+                   "IGLOO: [IGLOO-Erosion] wall-density [kg/m^3] is missing or not positive" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-density-negative erosion/refusals/density-negative
+                   "IGLOO: [IGLOO-Erosion] wall-density [kg/m^3] is missing or not positive" "e2e;refusal;erosion")
+
 # ---------- refusals (setup-time error stops) ------------------------------------------------
 # Each is drag-stokes (or two-mat's phase.txt) plus ONE offending key/file. The expected text is the solver's own
 # message; check_refusal.py also requires exit == IGLOO_ERROR_STOP_RC and that nothing integrated.
