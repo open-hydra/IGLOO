@@ -78,7 +78,7 @@ contains
     use IGLOO_overlap,        only: hasChimeraFaces, buildOverlapMap
     use IGLOO_Mod_MPI,        only: mpi_is_root, mpi_size_
     use IGLOO_Mod_Timing,     only: tm_phase, TM_IDLE, TM_INPUT, TM_GASREAD, TM_BLOCKS, TM_IMPORT, TM_PIN
-    use IGLOO_Lib_Erosion,    only: erosionOn, eroModelWord, checkErosionInput, setupWall
+    use IGLOO_Lib_Erosion,    only: erosionOn, eroModelWord, checkErosionInput, setupWall, describeErosion
     use Lib_ORION_data
     implicit none
     class(obj_IGLOO), intent(inout)        :: self
@@ -152,6 +152,7 @@ contains
       write(*,'(A,I0,A)') ' [IGLOO] wall erosion: ', nWallFace, ' block face(s) with wall cells (codes 301, 103, 104)'
       do m = 1, nm
         write(*,'(A)') '         material '//trim(self%material(m)%matName)//': '//trim(adjustl(eroModelWord(m)))
+        if (len(describeErosion(m)) > 0) write(*,'(A)') '           '//describeErosion(m)
       enddo
       if (nWallFace == 0) write(*,'(A)') ' [WARNING] [IGLOO-Erosion] no wall cell in the boundary file: no OUTPUT/wall.tec'
     endif

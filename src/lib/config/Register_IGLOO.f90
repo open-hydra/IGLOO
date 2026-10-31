@@ -9,7 +9,7 @@ module IGLOO_Register
   !> Dummy pointer targets (values are never read back).
   integer,           target :: d_i(20)
   real(R8),          target :: d_r(64)
-  real(R8),          target :: d_a(24,3)
+  real(R8),          target :: d_a(48,3)
   character(len=64), target :: d_s(30)
 
 contains
@@ -198,11 +198,58 @@ contains
 
     ! --- [IGLOO-Erosion] ---
     call reg%add('IGLOO-Erosion','model',d_s(26),'-', &
-      'Wall erosion model, one token per material of the phase file; the section present writes OUTPUT/wall.tec '// &
-      '(per wall face cell: er-<mat> and g-<mat> of every material, rdot), absent = no erosion','none',.false.)
+      'Wall erosion model, one token per material of the phase file (any case): Oka (Oka et al. 2005), '// &
+      'Neilson-Gilchrist (Neilson and Gilchrist 1968) or none; the section present writes OUTPUT/wall.tec '// &
+      '(per wall face cell: er-<mat> and g-<mat> of every material, rdot), absent = no erosion', &
+      'Oka, Neilson-Gilchrist, none',.false.)
     call reg%add('IGLOO-Erosion','wall-density',d_r(28),'0', &
       'Density of the wall material [kg/m^3], the same for every wall: rdot = sum over the materials of '// &
       'g-<mat>*er-<mat>/wall-density; required (> 0) with the section','',.false.)
+    call reg%add('IGLOO-Erosion','Hv',d_r(29),'0', &
+      'Oka: Vickers hardness of the wall [GPa], one value for every wall; required (> 0) with an Oka material','',.false.)
+    call reg%add('IGLOO-Erosion','a',d_r(30),'0', &
+      'Oka: load-relaxation constant a of the wall (Part 2 eq. 1), in E90 = K (a Hv)^(k1 b) (v/v-ref)^k2 '// &
+      '(d/D-ref)^k3; a = b = 1 gives Part 1''s E90; required (> 0) with an Oka material','',.false.)
+    call reg%add('IGLOO-Erosion','b',d_r(31),'0', &
+      'Oka: load-relaxation exponent b of the wall (Part 2 eq. 1); required (>= 0) with an Oka material','',.false.)
+    call reg%add('IGLOO-Erosion','K',d_a(21,:),'0', &
+      'Oka, one value per material: the particle factor K of E90 [mm^3/kg] (> 0)','',.false.)
+    call reg%add('IGLOO-Erosion','k1',d_a(22,:),'0', &
+      'Oka, one value per material: exponent of (a Hv) in E90 (with b)','',.false.)
+    call reg%add('IGLOO-Erosion','k2',d_a(23,:),'0', &
+      'Oka, one value per material: velocity exponent of E90 (> 0); or k2-s and k2-q','',.false.)
+    call reg%add('IGLOO-Erosion','k2-s',d_a(24,:),'0', &
+      'Oka, one value per material: k2 = k2-s*Hv^k2-q, instead of k2 (Part 2 Table 1)','',.false.)
+    call reg%add('IGLOO-Erosion','k2-q',d_a(25,:),'0', &
+      'Oka, one value per material: exponent of Hv in k2 = k2-s*Hv^k2-q','',.false.)
+    call reg%add('IGLOO-Erosion','k3',d_a(26,:),'0', &
+      'Oka, one value per material: particle-diameter exponent of E90','',.false.)
+    call reg%add('IGLOO-Erosion','n1',d_a(27,:),'0', &
+      'Oka, one value per material: exponent of sin(alpha) in g(alpha) (> 0); or n1-s and n1-q','',.false.)
+    call reg%add('IGLOO-Erosion','n1-s',d_a(28,:),'0', &
+      'Oka, one value per material: n1 = n1-s*Hv^n1-q, instead of n1 (Part 1 Table 3)','',.false.)
+    call reg%add('IGLOO-Erosion','n1-q',d_a(29,:),'0', &
+      'Oka, one value per material: exponent of Hv in n1 = n1-s*Hv^n1-q','',.false.)
+    call reg%add('IGLOO-Erosion','n2',d_a(30,:),'0', &
+      'Oka, one value per material: exponent of (1 + Hv (1 - sin(alpha))) in g(alpha); or n2-s and n2-q','',.false.)
+    call reg%add('IGLOO-Erosion','n2-s',d_a(31,:),'0', &
+      'Oka, one value per material: n2 = n2-s*Hv^n2-q, instead of n2 (Part 1 Table 3)','',.false.)
+    call reg%add('IGLOO-Erosion','n2-q',d_a(32,:),'0', &
+      'Oka, one value per material: exponent of Hv in n2 = n2-s*Hv^n2-q','',.false.)
+    call reg%add('IGLOO-Erosion','v-ref',d_a(33,:),'0', &
+      'Oka, one value per material: reference impact speed v'' of E90 [m/s] (> 0)','',.false.)
+    call reg%add('IGLOO-Erosion','D-ref',d_a(34,:),'0', &
+      'Oka, one value per material: reference particle diameter D'' of E90 [m] (> 0)','',.false.)
+    call reg%add('IGLOO-Erosion','phi',d_a(35,:),'0', &
+      'Neilson-Gilchrist, one value per material: energy of cutting wear per unit eroded mass [J/kg] (> 0)','',.false.)
+    call reg%add('IGLOO-Erosion','epsilon',d_a(36,:),'0', &
+      'Neilson-Gilchrist, one value per material: energy of deformation wear per unit eroded mass [J/kg] (> 0)', &
+      '',.false.)
+    call reg%add('IGLOO-Erosion','n',d_a(37,:),'0', &
+      'Neilson-Gilchrist, one value per material: angle constant n (> 0), alpha0 = pi/(2n)','',.false.)
+    call reg%add('IGLOO-Erosion','k',d_a(38,:),'0', &
+      'Neilson-Gilchrist, one value per material: the normal velocity below which no deformation erosion occurs, '// &
+      'the paper''s K [m/s] (>= 0)','',.false.)
 
   end subroutine Register_IGLOO_Params
 

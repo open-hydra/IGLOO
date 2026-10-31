@@ -74,6 +74,13 @@ The last column is what the code does to the **gas** ghost ring under `gas-order
 !!! note "Default is wall/outflow"
     Any `bcdef` code not listed above (e.g. 0, 404–407, 420) is treated as a wall or outflow: the particle is removed from the domain at the crossing point. Code `103` (a connection between blocks of different phases) and `104` (a chimera face between blocks of different phases) are header only in a dispersed-phase file, so a particle leaves the domain there.
 
+!!! note "Walls that erode"
+    With `[IGLOO-Erosion]` the parcels that leave through a **301**, **104** or partner-less **103** cell erode
+    it ([Wall erosion](../theory/erosion.md)); no other code erodes. ATLAS writes a manifold (501) and every
+    gas-surface interaction (502–506) as a symmetry (`300`) in a dispersed phase's file — the particle is
+    reflected there and nothing erodes — and a solid-propellant grain (502) whose section gives the phase's inlet
+    keys as a `401` inlet.
+
 ---
 
 ## Injection Patches

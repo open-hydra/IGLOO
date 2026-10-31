@@ -837,15 +837,23 @@ contains
 
 
   !> [IGLOO-Erosion]: wall erosion by particle impact, absent = off (no OUTPUT/wall.tec). model: one token per
-  !  material of the phase file (checked against it by checkErosionInput); wall-density [kg/m^3].
+  !  material of the phase file; wall-density [kg/m^3]; the constants of the models, each as given (one value per
+  !  material, or the wall's Hv, a, b), checked against the phase file and the models by checkErosionInput.
   subroutine read_erosion()
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-    use IGLOO_Lib_Erosion, only: erosionOn, eroModelWord, rhoWall
+    use IGLOO_Lib_Erosion, only: erosionOn, eroModelWord, rhoWall, NERO_KEYS, eroKeyName, eroIn, &
+                                 NERO_WALL, eroWallName, eroWall, eroWallGiven
     implicit none
-    integer :: n
+    integer :: n, i
+    real(R8), allocatable :: vals(:)
 
     if (allocated(eroModelWord)) deallocate(eroModelWord)
     rhoWall   = 0._R8
+    do i = 1, NERO_KEYS
+      eroIn(i)%given = .false.
+      if (allocated(eroIn(i)%v)) deallocate(eroIn(i)%v)
+    enddo
+    eroWall = 0._R8; eroWallGiven = .false.
     erosionOn = fini%has_section(section_name='IGLOO-Erosion')
     if (.not. erosionOn) return
     if (.not. inSection('IGLOO-Erosion','model')) &
@@ -857,7 +865,52 @@ contains
     call fini%get(section_name='IGLOO-Erosion', option_name='wall-density', val=rhoWall, error=error)
     if (error /= 0 .or. .not. ieee_is_finite(rhoWall) .or. .not. (rhoWall > 0._R8)) &
       error stop 'IGLOO: [IGLOO-Erosion] wall-density [kg/m^3] is missing or not positive'
+    do i = 1, NERO_KEYS
+      if (.not. erosion_reals(trim(eroKeyName(i)), vals)) cycle
+      eroIn(i)%given = .true.
+      call move_alloc(vals, eroIn(i)%v)
+    enddo
+    do i = 1, NERO_WALL
+      if (.not. erosion_reals(trim(eroWallName(i)), vals)) cycle
+      if (size(vals) /= 1) then
+        write(*,'(A,I0,A)') ' [ERROR] [IGLOO-Erosion] '//trim(eroWallName(i))//': ', size(vals), &
+          ' values for the one wall material'
+        error stop 'IGLOO: [IGLOO-Erosion] a wall constant takes one value'
+      endif
+      eroWallGiven(i) = .true.
+      eroWall(i) = vals(1)
+    enddo
     write(*,*) ' >> Output field: wall erosion (wall.tec)'
+
+  contains
+
+    !> The values of key in [IGLOO-Erosion], each a finite number; .false. when the key is absent.
+    logical function erosion_reals(key, x) result(given)
+      character(len=*),      intent(in)  :: key
+      real(R8), allocatable, intent(out) :: x(:)
+      integer :: nv, t, ios
+      character(len=64), allocatable :: toks(:)
+
+      given = inSection('IGLOO-Erosion', key)
+      if (.not. given) return
+      nv = fini%count_values(section_name='IGLOO-Erosion', option_name=key)
+      if (nv < 1) then
+        write(*,'(A)') ' [ERROR] [IGLOO-Erosion] '//key//' has no value'
+        error stop 'IGLOO: [IGLOO-Erosion] a constant that is not a number'
+      endif
+      allocate(toks(nv), x(nv))
+      call fini%get(section_name='IGLOO-Erosion', option_name=key, val=toks, error=error)
+      do t = 1, nv
+        read(toks(t), *, iostat=ios) x(t)
+        if (ios == 0) then
+          if (.not. ieee_is_finite(x(t))) ios = 1
+        endif
+        if (ios /= 0) then
+          write(*,'(A)') ' [ERROR] [IGLOO-Erosion] '//key//': "'//trim(toks(t))//'" is not a finite number'
+          error stop 'IGLOO: [IGLOO-Erosion] a constant that is not a number'
+        endif
+      enddo
+    end function erosion_reals
 
   end subroutine read_erosion
 
