@@ -81,6 +81,7 @@ def main():
                     if payload:
                         f.write(payload)
                     nrec += 1
+    box.bc401.convert("INPUT/bc.txt", quiet=True)      # the 401 record of ATLAS's mixture rule (field 1, G)
     per = nrec // (BLOCKS * len(FAMILIES))
     print(f"INPUT/solfile.tec: {BLOCKS} zones of {NXB} x {NY} x {NZ} cells")
     print(f"INPUT/bc.txt: {BLOCKS} blocks x {len(FAMILIES)} copies x {per} face records = {nrec}")

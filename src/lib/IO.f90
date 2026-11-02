@@ -497,7 +497,7 @@ contains
     type(obj_material)   , intent(in)    :: material(nm)
     type(obj_block)      , intent(inout) :: geoblock(nb)
     type(obj_flowblock)  , intent(inout) :: gasblock(nb)
-    integer, parameter :: nPropDP = 9
+    integer, parameter :: nPropDP = 10      !> inlet columns: 1-7 numbers, 8 the law, 9 ds, 10 G (401)
     integer            :: b, mat, p, f, m, n, i, mend(6), nend(6)
     integer            :: u, dumi, totFam, ci_n, s, ios, nTok, readLine(9)
     integer            :: c, nCopies, nrec, nFaceTot, nfb, ic, code, hdr(5), nchi(2)
@@ -505,7 +505,6 @@ contains
     integer            :: i_g, j_g, k_g
     real(R8)           :: propBuffer(nPropDP)
     real(R8)           :: vertices(3, 8)
-    real(R8)           :: kmin
     character(len=256) :: tok(nPropDP)
     character(len=512) :: lineString
     integer            :: ipos, lawc
@@ -587,9 +586,7 @@ contains
                 if (allocated(cell%properties)) deallocate(cell%properties)
                 allocate(cell%properties(1:totFam, 1:nPropDP))
 
-                ! Reset the per-cell accumulators, compute the face area, seed mdotGas from the gas.
-                cell%mdotPart = 0._R8
-                cell%krhoTot  = 0._R8
+                ! Compute the face area, seed mdotGas from the gas.
                 call blk%fmn2ijk(f, m, n, i_g, j_g, k_g)
                 call blk%getVertices([i_g, j_g, k_g], vertices)
                 cell%area = 0.5_R8 * (computeArea(f, vertices) + &
@@ -710,30 +707,33 @@ contains
               propBuffer(9) = 0._R8
             endif
             if (propBuffer(9) > 0._R8) dsSwitch = .true.
+            ! Col 10 (401): G, the sum of gp over the 402/403 records of the cell in the files of every dispersed
+            ! phase, by which ATLAS writes krho/(1 - krho_tot) in col 1 (the mixture rule over the phases): the family
+            ! injects col 1 times (mdotGas + G area). A 401 line without it is from an ATLAS before the rule (its col 1
+            ! is krho): refused
+            propBuffer(10) = 0._R8
+            if (cell%bcdef == 401) then
+              if (nTok < 10) then
+                write(*,'(A)') ' [ERROR] INPUT/'//trim(name)//'bc.txt: a 401 inlet line without its 10th field G, '// &
+                  'the fixed mass flux of the cell: written by an ATLAS before the mixture rule over the dispersed '// &
+                  'phases (its field 1 is krho); regenerate it with ATLAS BCB'
+                error stop 'IGLOO: bc.txt 401 line without G (an ATLAS before the mixture rule): regenerate it'
+              endif
+              read(tok(10),*,iostat=ios) propBuffer(10)
+              if (ios /= 0) then
+                write(*,'(A)') ' [ERROR] INPUT/'//trim(name)//'bc.txt: the 10th field G of a 401 inlet line is not '// &
+                  'a number'
+                error stop 'IGLOO: bc.txt 401 field G unreadable'
+              endif
+            endif
             if (nCopies == 1) then
               !> one record per face: the payload is every family's
               do i = 1, totFam
                 cell%properties(i,:) = propBuffer(:)
               enddo
-
-              ! Per-family totals: krho (401) into krhoTot, gp*area (402/403) into mdotPart.
-              do i = 1, totFam
-                select case (cell%bcdef)
-                case (401)
-                  cell%krhoTot  = cell%krhoTot  + cell%properties(i, 1)
-                case (402, 403)
-                  cell%mdotPart = cell%mdotPart + cell%properties(i, 1) * cell%area
-                end select
-              enddo
             else
               !> one copy per family, in ATLAS order: copy c is family c (material-major, group-minor)
               cell%properties(c,:) = propBuffer(:)
-              select case (cell%bcdef)
-              case (401)
-                cell%krhoTot  = cell%krhoTot  + propBuffer(1)
-              case (402, 403)
-                cell%mdotPart = cell%mdotPart + propBuffer(1) * cell%area
-              end select
             endif
 
           case default
@@ -746,7 +746,8 @@ contains
     enddo
     close(u)
 
-    !> A 401 cell's flow divides by 1 - krhoTot: every krho >= 0 and their sum below 1, or refuse.
+    !> A 401 cell injects col 1, krho/(1 - krho_tot), times (mdotGas + G area), G col 10 (ATLAS): both finite and
+    !> >= 0, or refuse.
     do b = 1, size(geoblock)
       blkKrho: associate(blk => geoblock(b))
       mend(1:2) = blk%Ny; nend(1:2) = blk%Nz
@@ -755,11 +756,13 @@ contains
       do f = 1, 6; do n = 1, nend(f); do m = 1, mend(f)
         associate(cell => blk%face(f)%cell(m,n))
         if (cell%bcdef == 401) then
-          kmin = minval(cell%properties(1:totFam, 1))
-          if (cell%krhoTot >= 1._R8 .or. kmin < 0._R8) then
+          ! .not. (x >= 0 .and. x <= huge): negative, NaN and infinite alike (min/minval would pass a NaN by)
+          if (any(.not. (cell%properties(1:totFam, [1, 10]) >= 0._R8 .and. &
+                         cell%properties(1:totFam, [1, 10]) <= huge(1._R8)))) then
             write(*,'(A,I0,A,I0,A,I0,A,I0,A,ES13.6,A,ES13.6)') ' [IGLOO::read_cdp_bc_file] 401 inlet, block ', b, &
-              ' face ', f, ' cell (', m, ',', n, '): krho sum ', cell%krhoTot, ', smallest krho ', kmin
-            error stop 'IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1'
+              ' face ', f, ' cell (', m, ',', n, '): smallest krho/(1 - krho_tot) ', &
+              minval(cell%properties(1:totFam, 1)), ', smallest G ', minval(cell%properties(1:totFam, 10))
+            error stop 'IGLOO: bc.txt 401 inlet: krho/(1 - krho_tot) and G must be finite and >= 0'
           endif
         endif
         end associate

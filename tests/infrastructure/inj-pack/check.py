@@ -33,7 +33,7 @@ import datcols  # noqa: E402
 
 RHO_U = 1.2 * 10.0          # make_box_case.py GAS_VARS: rho_g U [kg/(m^2 s)]
 U_G, T_G = 10.0, 600.0      # make_box_case.py GAS_VARS: gas velocity and temperature
-KRHO = 0.34                 # 401 payload column 1 (one family: krhoTot = krho)
+KRHO = 0.34                 # krho of the 401 rows (bc.txt's field 1 is krho/(1 - krho), ATLAS's rule, one family)
 LX, LY, LZ, NY, NZ = 0.15, 0.05, 0.05, 5, 5
 HALF = 0.5e-6
 PAIR_FLOOR = 1.5e-6         # two printed points, F12.6

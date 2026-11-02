@@ -19,6 +19,9 @@ twice the radius (krho 0.17, rp 1.189e-5).
 import os
 import sys
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+import bc401  # noqa: E402
+
 NX, NY, NZ = 60, 5, 5
 FAMILIES = [(0.34, 5.945e-6), (0.17, 1.189e-5)]      # (krho, rp) of family 1 (A), family 2 (B)
 KV, KT, SIGMAP, DS = 0.1, 1.0, 0.0, 0.0
@@ -63,6 +66,7 @@ def main():
                 if payload:
                     f.write(payload)
                 nrec += 1
+    bc401.convert("INPUT/bc.txt", quiet=True)          # the 401 record of ATLAS's mixture rule (field 1, G)
     print(f"INPUT/bc.txt: {len(copies)} copies x {nrec // len(copies)} face records = {nrec}"
           + (" (copy 2: records 51 and 52 exchanged)" if swap else ""))
 

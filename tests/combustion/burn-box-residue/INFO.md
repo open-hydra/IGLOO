@@ -27,7 +27,8 @@ group's offset (the parcels of the earlier groups naming the same product) plus 
 `τ = ρ_res c_s d²/(12 k_g) = 6.667e-3 s`. `check.py` runs two siblings with the same executable (`IGLOO_EXE`):
 
 - `ref-dres/`: `d-residue=5.0e-6` and the burning line in two groups (`A 2 …`, `bc.txt`'s face table written twice:
-  one copy per family);
+  one copy per family, each with the case's field 1, krho/(1 − krho) of one family: D's checks are ratios to the
+  parent, which the loading leaves alone);
 - `ref-fail/`: `[IGLOO-ODE] fail-after = 3.6e-3` — the solver failure of the cap model forced once a parcel's last
   accepted time reaches it; the parcel reverts to its last accepted step, and its residue is born there.
 

@@ -23,6 +23,12 @@ import argparse
 import math
 import os
 
+import sys
+
+if os.path.dirname(os.path.abspath(__file__)) not in sys.path:   # bc401, beside this file, wherever this is
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # loaded from (a check.py loads it by path)
+import bc401  # noqa: E402
+
 # ---- geometry defaults ----
 LY, LZ = 0.05, 0.05
 NY, NZ = 5, 5                             # 5x5 = 25 inlet cells
@@ -103,6 +109,7 @@ def write_bc(path, sweep, sigma, kv, kt, u_gas, nx, convention, rhog=RHOG, d0=No
                         f.write(f"   {KRHO:.5E}   {kvi:.5E}   normal,   normal,"
                                 f"   {kt:.5E}   {rp:.5E}   {0.0:.5E}   Dirac   {0.0:.5E}\n")
                         n_inlet += 1
+    bc401.convert(path, quiet=True)            # the 401 record of ATLAS's mixture rule (field 1, G)
     return n_inlet, slip
 
 
