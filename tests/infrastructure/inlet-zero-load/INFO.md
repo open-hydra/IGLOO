@@ -6,7 +6,8 @@ yet the pinning places parcels by geometry alone (`isInj` reads the code): witho
 mass from the inlet to its exit. `dropZeroFlow` (`obj_IGLOO.f90`), called once every parcel of a family is pinned,
 removes the parcels of the cells whose column 1 is zero for that family (401: krho/(1 − krho_tot); 402/403: gp),
 renumbers the rest 1…n and prints `[IGLOO] family <f>: <n> parcel(s) of inlet cells with a zero loading (field 1 = 0)
-not injected`. The draws of the parcels kept are those of the pinning without the filter.
+not injected`. The pinning draws (injection diameters) of the parcels kept are those of the pinning without the
+filter; their per-parcel random streams, reseeded each sweep from the family and the ID, follow the new IDs.
 
 **Fixture.** `two-fam-bc`'s case (drag-stokes's box and gas, materials A and B from `two-mat`, one centred parcel per
 inlet cell at `ds = 10`; `out-file = S`, `out-time = on`) with its own `INPUT/bc.txt` (`make_fixture.py`, from
