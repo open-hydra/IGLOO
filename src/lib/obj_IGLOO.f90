@@ -86,7 +86,7 @@ contains
     type(orion_data)     :: own_gas
     character(len=llen)  :: gasfile
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
-    integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar, b, b2, nMoved, nWallFace
+    integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar, b, b2, nMoved, nWallFace, nDrop
     character(len=16)    :: dualCodes
     integer, allocatable :: npair(:,:), resCount(:)
     character(len=2)     :: method
@@ -193,6 +193,12 @@ contains
         gr%gID   = g
         gr%famID = fam
         call pin_particles(gr, self%geoblock, self%gasblock, method, pos0,vel0,temp0,mdot,diam, fam, gr%nparticles)
+        !> A boundary parcel of a cell that injects nothing for this family -- a 401 of field 1 zero (ATLAS's 401 of
+        !  krho 0, a phase without inlet keys at an inflow grain), a 402/403 of gp zero -- would carry zero mass from
+        !  the inlet to its exit: dropped once every parcel is pinned, so the parcels kept keep their pinning draws.
+        call dropZeroFlow(gr, self%geoblock, fam, nDrop)
+        if (mpi_is_root .and. nDrop > 0) write(*,'(A,I0,A,I0,A)') ' [IGLOO] family ', fam, ': ', nDrop, &
+          ' parcel(s) of inlet cells with a zero loading (field 1 = 0) not injected'
         !> Pin-time census, never overwritten.
         gr%nInjected = gr%nparticles
         end associate
@@ -1039,6 +1045,54 @@ contains
 
 
   !> Resize a particle array to newCapacity, preserving the leading entries.
+  !> Drop the pinned boundary parcels of family fam whose injection cell injects nothing for it: column 1 of the
+  !  cell's 401-403 payload is zero (401: krho/(1 - krho_tot); 402/403: gp), so the parcel would carry zero mass. The
+  !  parcels kept stay in their pinning order, renumbered 1..n (the IDs solve gives them each sweep); a parcel of an
+  !  assigned stream (iInj all 0) is kept. ndrop: the parcels dropped.
+  subroutine dropZeroFlow(gr, block, fam, ndrop)
+    use IGLOO_data_phases, only: obj_group
+    implicit none
+    type(obj_group), intent(inout) :: gr
+    type(obj_block), intent(in)    :: block(:)
+    integer,         intent(in)    :: fam
+    integer,         intent(out)   :: ndrop
+    integer :: ip, n, am, an
+    logical :: keep
+
+    ndrop = 0
+    if (.not. allocated(gr%particle)) return
+    n = 0
+    do ip = 1, gr%nparticles
+      keep = .true.
+      associate(p => gr%particle(ip))
+      if (any(p%iInj /= 0)) then
+        call block(p%iInj(1))%ijk2fmn(p%iInj(2), p%iInj(3), p%iInj(4), p%fInj, am, an)
+        if (am > 0) then
+          associate(cell => block(p%iInj(1))%face(p%fInj)%cell(am, an))
+          select case (cell%bcdef)
+          case (401:403)
+            if (allocated(cell%properties)) keep = cell%properties(fam, 1) /= 0._R8
+          end select
+          end associate
+        endif
+      endif
+      end associate
+      if (.not. keep) then
+        ndrop = ndrop + 1
+        cycle
+      endif
+      n = n + 1
+      if (n /= ip) gr%particle(n) = gr%particle(ip)
+    enddo
+    if (ndrop == 0) return
+    call resizeParticleArray(gr%particle, n)
+    gr%nparticles = n
+    do ip = 1, n
+      gr%particle(ip)%ID = ip
+    enddo
+  end subroutine dropZeroFlow
+
+
   subroutine resizeParticleArray(arr, newCapacity)
     use IGLOO_particles, only: obj_particle
     implicit none

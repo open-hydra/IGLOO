@@ -13,6 +13,13 @@ the presence of `x`/`y`/`z` coordinates in `[IGLOO-BC]` selects the second:
 Injection cells are those whose `bcdef` code satisfies `isInj`: ATLAS codes 401–420
 (inlet/outlet) and 501–502 (SRM grain).
 
+A cell that injects nothing for a family — column 1 of its 401–403 payload zero: a 401 of krho 0, as ATLAS writes it
+for a phase without inlet keys at an inflow grain, or a 402/403 of gp 0 — keeps no parcel of that family. Every
+parcel is pinned first, so the stochastic draws of the others are those of a run without the filter; `dropZeroFlow`
+(`obj_IGLOO.f90`) then removes those of such cells, renumbers the rest 1…n and prints
+`[IGLOO] family <f>: <n> parcel(s) of inlet cells with a zero loading (field 1 = 0) not injected`. A family left
+without parcels runs empty. Verified by `inlet-zero-load`.
+
 ---
 
 ## Face-based injection (FB)
