@@ -47,7 +47,7 @@ contains
     use IGLOO_records,     only: recList, rec_emit, rec_emit_traj, rec_push, rec_break, &
                                  STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT, &
                                  L_ROW, L_ROW_T, L_ROW_F, L_ROW_TF, L_ROW_S, L_ROW_TS, &
-                                 L_EXIT, L_EXIT_T, L_EXIT_F, L_EXIT_TF, L_PLANE
+                                 L_EXIT, L_EXIT_T, L_EXIT_F, L_EXIT_TF, L_PLANE, L_SCAT, L_SCAT_F
     implicit none
     class(obj_particle),   intent(inout) :: part
     type(obj_block),       intent(in)    :: geoblock(nb)
@@ -74,7 +74,7 @@ contains
     real(R8) :: Ein, Eout, Pin(3), Pout(3), massIn, massOut, vol
     real(R8) :: entryPos(3)   ! cell-entry position, for the closed-form body-force work (models 1,3)
     real(R8) :: pMid(3)       ! segment mid position: azimuth of the meridian-frame source deposit
-    real(R8) :: wAcc          ! scatter-cloud npdot-weight accumulator (host-associated into solout)
+    real(R8) :: wAcc          ! scatter-cloud accumulator: npRef*h per step, a marker per dNscat (host-associated)
     real(R8) :: wAccOld       ! wAcc at the last latched state, restored when a cut step is integrated again
     !> The parcel's rows per particle file, written at its end by emitParcel
     type(recList) :: lTraj, lExit, lPlane, lSnap, lScat
@@ -238,7 +238,9 @@ contains
     nStall = 0; posPrev = part%stateVar(1:3) - 1._R8
     nRefl = 0
     nReflW = 0; posReflW = part%stateVar(1:3)
-    !> Scatter accumulator, seeded with a per-ID golden-ratio phase offset.
+    !> Scatter cloud: the marker rate npRef/dNscat, fixed at entry (a breakup child's is its parent's); the accumulator
+    !  seeded with the golden-ratio phase of the parcel's own ID.
+    if (part%time==0._R8 .or. part%npRef < 0._R8) part%npRef = part%npdot
     wAcc = dNscat * mod(real(part%ID,R8)*0.6180339887498949_R8, 1._R8)
     do while (part%time<tEnd.and.iter<maxIter)
       iter = iter+1
@@ -915,6 +917,7 @@ contains
             shedRec%time  = t1
             shedRec%phase = part%solidPhase
             shedRec%parent = part%ID
+            shedRec%npRef = part%npRef
             call shed%push(shedRec)
             !> the child's birth mass flow, in its computeMass/computeSource operation order
             shedM = shedRec%npdot * (pi/6._R8*part%rho*shedRec%diam**3._R8)
@@ -1037,15 +1040,8 @@ contains
 
       IRTRN = 1
 
-      !> Scatter cloud: accumulate this step's npdot-weight.
-      if (scatOn .and. dNscat>0._R8) then
-        select case(mod_model)
-        case(3);      np = y(8)            ! model 3: npdot is stateVar(8)
-        case(4,7);    np = y(9)            ! models 4, 7: npdot is stateVar(9)
-        case default; np = part%npdot      ! models 1,2: npdot constant
-        end select
-        wAcc = wAcc + np*(x - xold)
-      endif
+      !> Scatter cloud: accumulate this step's marker weight at the parcel's constant rate.
+      if (scatOn .and. dNscat>0._R8) wAcc = wAcc + part%npRef*(x - xold)
 
       !> Geo containment only when the gas cell is on a boundary  (ord2==true)
       if (.not.ord2 .or. atGasBoundary) then
@@ -1147,7 +1143,8 @@ contains
       if (allocated(stateLocal)) oldStLocal = stateLocal
       if (allocated(eventLocal)) oldEvLocal = eventLocal
 
-      !> Scatter cloud: emit one marker per weight quantum dNscat, carrying the remainder.
+      !> Scatter cloud: one marker per dNscat of accumulated weight, carrying the remainder; it weighs the droplets
+      !  np/r it stands for.
       if (scatOn .and. dNscat>0._R8 .and. wAcc >= dNscat) then
         if (mod_propFlags(1)) then; tp  = comp_TfromTab(hTab,y(7)); else; tp  = y(7);              endif
         if (mod_propFlags(2)) then; rho = tableValue(rhoTab, Tmin, Tmax, tp); else; rho = auxLocal(ind_rho); endif
@@ -1162,11 +1159,16 @@ contains
         else; d = (sixOverPi*m/rho)**oneThird; endif
         if (ind_rs > 0) d = solidDiameter(m, y(8), rho, auxLocal(ind_rs))
         if (mod_model == 8) d = (sixOverPi*(y(8)/rho + y(9)/auxLocal(ind_mb+imRr-1)))**oneThird
+        select case(mod_model)
+        case(3);      np = y(8)
+        case(4,7);    np = y(9)
+        case default; np = part%npdot
+        end select
         if (frozenOn) then
           fScat = 0._R8; if (mod_isSolid) fScat = y(8)
-          call rec_push(lScat, [y(1:6), tp, d, m, real(part%ID, R8), fScat], L_ROW_F)
+          call rec_push(lScat, [y(1:6), tp, d, m, real(part%ID, R8), fScat, dNscat*(np/part%npRef)], L_SCAT_F)
         else
-          call rec_push(lScat, [y(1:6), tp, d, m, real(part%ID, R8)], L_ROW)
+          call rec_push(lScat, [y(1:6), tp, d, m, real(part%ID, R8), dNscat*(np/part%npRef)], L_SCAT)
         endif
         wAcc = wAcc - dNscat
       endif

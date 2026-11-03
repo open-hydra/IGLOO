@@ -272,7 +272,7 @@ set_tests_properties(test_tec_write PROPERTIES
     TIMEOUT 900)
 # The particle files' edit descriptors without the runtime (IGLOO_fmt): every record layout the trajectories, outloc,
 # planes, snapshot and scatter files write and the zone headers' I0, each on its descriptors' constructed values (fixed)
-# and on 3e5 random records (the program's default; 3e6 by hand), and the scatter layout on 3e6 plausible records,
+# and on 3e5 random records (the program's default; 3e6 by hand), and the trajectory layout on 3e6 plausible records,
 # against the runtime's internal write of the same values with the same descriptors. RED without the near-tie window:
 # 355828 of the 3e6 plausible records; with the compilers' -0.0 rules exchanged, the sign of a value that rounds to
 # zero dropped or the integers' sign dropped: every descriptor the rule touches.

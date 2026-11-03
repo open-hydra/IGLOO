@@ -28,6 +28,7 @@ module IGLOO_particles
     real(R8)     :: mdot      !> mass flow rate of the self stream (stationary conditions)
     real(R8)     :: npdot     !> number of single particles flowing per unit time 
     real(R8)     :: npold
+    real(R8)     :: npRef = -1._R8 !> the number rate of the scatter-marker rate npRef/dNscat; < 0: its own at entry
     real(R8)     :: time=0.   !> integration time (coordinate)
     real(R8)     :: Tstay     !> time spent within the cell
     real(R8)     :: deltaL    !> path length within the cell

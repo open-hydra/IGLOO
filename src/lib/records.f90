@@ -15,17 +15,19 @@ module IGLOO_records
 
   !> The streams (one file each per material)
   integer, parameter, public :: STR_TRAJ = 1, STR_EXIT = 2, STR_PLANE = 3, STR_SNAP = 4, STR_SCAT = 5
-  !> The record layouts: trajectory, snapshot and scatter rows (t: time, f: frozen fraction, s: surface temperature),
-  !  exit records, plane crossings
+  !> The record layouts: trajectory and snapshot rows (t: time, f: frozen fraction, s: surface temperature), exit
+  !  records, plane crossings, scatter rows (their weight last)
   integer, parameter, public :: L_ROW = 1, L_ROW_T = 2, L_ROW_F = 3, L_ROW_TF = 4, L_ROW_S = 5, L_ROW_TS = 6, &
-                                L_EXIT = 7, L_EXIT_T = 8, L_EXIT_F = 9, L_EXIT_TF = 10, L_PLANE = 11
-  integer, parameter :: NLAY = 11
+                                L_EXIT = 7, L_EXIT_T = 8, L_EXIT_F = 9, L_EXIT_TF = 10, L_PLANE = 11, &
+                                L_SCAT = 12, L_SCAT_F = 13
+  integer, parameter :: NLAY = 13
   character(len=56), parameter :: LAYFMT(NLAY) = [character(len=56) :: &
     '(7F12.6,2E13.6E2,I8)', '(7F12.6,2E13.6E2,I8,ES16.8E2)', '(7F12.6,2E13.6E2,I8,F10.6)', &
     '(7F12.6,2E13.6E2,I8,ES16.8E2,F10.6)', '(7F12.6,2E13.6E2,I8,F12.6)', '(7F12.6,2E13.6E2,I8,ES16.8E2,F12.6)', &
     '(6F12.6,2E13.6E2,I8,I5,E13.6E2)', '(6F12.6,2E13.6E2,I8,ES16.8E2,I5,E13.6E2)', &
     '(6F12.6,2E13.6E2,I8,I5,E13.6E2,F10.6)', '(6F12.6,2E13.6E2,I8,ES16.8E2,I5,E13.6E2,F10.6)', &
-    '(I3,7F12.6,2E13.6E2,2ES16.8E2,F10.6,2I10,ES16.8E2,I3)']
+    '(I3,7F12.6,2E13.6E2,2ES16.8E2,F10.6,2I10,ES16.8E2,I3)', '(7F12.6,2E13.6E2,I8,E13.6E2)', &
+    '(7F12.6,2E13.6E2,I8,F10.6,E13.6E2)']
   character, parameter :: LF = achar(10)
 
   !> The compiled layouts: written once by rec_setup, outside the parcel loops
