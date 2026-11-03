@@ -62,7 +62,8 @@ def fail(msg):
 def read_zones(path):
     """BLOCK-packed Tecplot file: (names, [(ni, nj, nk, {cell variable: values})] per zone)."""
     txt = open(path).read()
-    names = re.findall(r'"([^"]*)"', re.search(r'VARIABLES\s*=(.*?)\n', txt, re.I).group(1))
+    hdr = re.search(r'VARIABLES\s*=(.*?)\n', txt, re.I).group(1)
+    names = re.findall(r'"([^"]*)"', hdr) or hdr.replace(",", " ").split()   # quoted or blank-separated
     zones = []
     for part in re.split(r'\n\s*ZONE', txt, flags=re.I)[1:]:
         head, body = part.split("\n", 1)

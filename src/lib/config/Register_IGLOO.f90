@@ -53,6 +53,9 @@ contains
       'Binomial smoothing passes; 0 = off; default 8 when mollify is on','',.false.)
     call reg%add('IGLOO-General','body-accel',d_a(1,:),'0', &
       'Uniform body acceleration gx gy gz [m/s^2]; absent or all-zero = off','',.false.)
+    call reg%add('IGLOO-General','timing',d_s(24),'off', &
+      'Print [IGLOO-timing] lines after each output write: wall time per phase, parcel count and '// &
+      'integration time per thread and per rank, rank imbalance, allocated array sizes','on, off',.false.)
 
     ! --- [IGLOO-Models] ---
     call reg%add('IGLOO-Models','drag',d_s(6),'-', &

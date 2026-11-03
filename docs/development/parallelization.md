@@ -22,7 +22,7 @@ flowchart TB
         SN["identical replicated setup"] --> PN["own parcels<br/>ip ≡ N-1 (mod N)"]
         PN --> TN["OpenMP threads"]
     end
-    T0 --> A["MPI_Allreduce(SUM)<br/>source + euler accumulators"]
+    T0 --> A["rank-order sum<br/>source + euler accumulators"]
     T1 --> A
     TN --> A
     A --> W["root-only grid write<br/>(.tec)"]
@@ -43,6 +43,20 @@ Consequence: any partition of the parcel set produces the same trajectories. Onl
 *grid* accumulators need combining, and summation is associative up to floating-point
 re-association — which is why the grid `.tec` is compared with a tolerance while the
 particle `.dat` is compared as an exact multiset.
+
+### The cross-rank sum is fixed in rank order
+
+The ranks' partial accumulators are added in rank order, `((v0 + v1) + v2) + …`: rank r
+receives the sum of ranks 0..r−1, adds its own part and passes it on, and the last rank's
+total is broadcast (`mpi_ordered_sum_r8_array`). A library reduction (`MPI_Allreduce`) would
+let the MPI library choose the association per message size and rank count — on Intel MPI
+the ring algorithm (`I_MPI_ADJUST_ALLREDUCE=8`) and the default give different bytes on the
+1672-parcel vortex cloud at three and four ranks. With the fixed order the grid fields at a
+given rank count are the same bytes on every run, placement and library tuning, at one
+thread per rank (inside a rank, the `!$OMP ATOMIC` deposits of several threads still land in
+scheduling order). The cost per accumulator array is p − 1 point-to-point messages per 8 MiB
+chunk plus one broadcast; the integer census and fold counters keep `MPI_Allreduce`
+(integer sums are exact in any order).
 
 ## Level 1 — MPI, across ranks
 
@@ -70,11 +84,13 @@ The whole MPI surface is three places. Everything else is serial-identical code.
 | # | Where | What it does |
 |---|---|---|
 | 1 | `owns_particle` in `solve`'s two `!$OMP PARALLEL DO` loops | each rank integrates only its stripe |
-| 2 | `reduce_accumulators` at the end of `solve` | `MPI_Allreduce(SUM)` over the source and euler accumulators |
+| 2 | `reduce_accumulators` at the end of `solve` | sum of the source and euler accumulators over the ranks, in rank order |
 | 3 | `merge_rank_particle_files` in `writeout` | root collapses per-rank `.dat` shards into the serial file layout |
 
-Every `#ifdef USE_MPI` in `src/` lives inside `IGLOO_Mod_MPI.f90`; the rest of the tree
-calls its wrappers (`mpi_init_env`, `owns_particle`, `reduce_accumulators`, …). A serial
+Every `#ifdef USE_MPI` in `src/` lives inside `IGLOO_Mod_MPI.f90`, apart from the timing
+report's one gather in `IGLOO_Mod_Timing.f90` (a leaf module, so that any routine can mark a
+phase); the rest of the tree calls their wrappers (`mpi_init_env`, `owns_particle`,
+`reduce_accumulators`, …). A serial
 build compiles the module to no-ops (`mpi_size_ = 1`, `mpi_is_root = .true.`,
 `rank_suffix()` empty), so **the serial code path carries no MPI logic at all**.
 
@@ -137,7 +153,7 @@ time order, which is what the per-ID loaders in the oracles actually rely on.
 At one rank the suffix is empty and the merge is a no-op, so **a serial run keeps
 byte-identical filenames**. Nothing downstream needs to know the rank count.
 
-Grid output (`.tec`) is **root-only**, after the allreduce.
+Grid output (`.tec`) is **root-only**, after the cross-rank sum.
 
 ## Level 2 — OpenMP, within a rank
 
@@ -152,6 +168,21 @@ loop body, so MPI and OpenMP are genuinely orthogonal axes.
 `setupRHS` writes module-level per-material state, so **materials must be set up and
 integrated sequentially** — the parallelism is over particles *within* a group. There is a
 runtime tripwire: `error stop` if `setupRHS` is ever called inside a parallel region.
+
+### Fatal errors inside the parcel loop
+
+MPI is initialised at `MPI_THREAD_FUNNELED`: every MPI call is made by the master thread
+outside the parallel regions, so a worker thread may neither call `MPI_Abort` nor stop its rank
+while the others wait in the next collective. Under MPI the fatal sites reachable inside the
+parcel loop — a non-finite step size after the update (`integrate`), an unknown BC code at
+injection (`initializePart`), a wedge fold that leaves the sector (`axisymFold`) — record the
+first message (`region_fail`) and drop their parcel; `integrate` returns at entry once a failure
+is recorded and ends the parcels in flight at their next segment; when the loop has joined, the
+master thread calls `region_fail_check`, which prints `[IGLOO rank r] ABORT: <message>` and
+aborts every rank. A serial run stops at the site as before, with the same message and exit
+code. Two guards stay `error stop` under MPI: the gas `cp <= 0` check of the evaporation models
+(a `pure` procedure) and the parameter checks of the breakup size samplers (inside a rejection
+loop); Intel MPI's launcher then ends the whole job on the rank's non-zero exit.
 
 ## Embedding contract
 
@@ -176,6 +207,35 @@ record: on `khrt-stress` that is ~2270 records per parcel, so the number of lock
 acquisitions on the output unit is the number of parcels, not the number of records, and
 the formatting happens *inside* the parallel region where it scales. Memory is bounded by
 one parcel's records (~270 kB), not by the total cloud.
+
+## Per-phase timers
+
+`[IGLOO-General] timing = on` makes `writeout` print an `[IGLOO-timing]` report of the sweep it
+closes (under hydra-MI2, which calls `writeout` once, of every solve since setup). Off by default,
+and then nothing is printed.
+
+| line | content |
+|---|---|
+| `sweep` | sweep number, solves covered, ranks, threads of rank 0 |
+| `phase` | wall time of rank 0, with the minimum and maximum over the ranks |
+| `thread` | parcels integrated and the time spent inside `integrate`, per thread of rank 0 |
+| `rank` | parcel-loop wall time, parcels, threads, summed `integrate` time and the thread max/mean, per rank |
+| `imbalance` | max/mean over the ranks of the parcel-loop wall time |
+| `sizes` | allocated real values per rank: gas fields, geometry arrays, accumulators at the solve shape |
+
+Phases, in order: `setup:input` (input files), `setup:gas-read` (the gas field: the Tecplot read,
+or the copy of the field a parent hands in), `setup:blocks` (block allocation, geometry, dual
+weights and metrics, block-interface links), `setup:gas-import`, `setup:pinning`; then per
+sweep `accumulators` (allocation and zeroing), `ghost-fill` (gas-order 2), `parcel-loop`,
+`census` (the child census of the breakup passes), `reduce` (cross-rank sum of the
+accumulators), `finalize`, `smoothing` (the mollifier across the blocks, timed apart from the
+finalize around it), `writeout+merge`, and
+`solve-other` (the rest of `solve`: file opens, the scatter pre-pass, ODE set-up). Setup
+phases are repeated in every report; sweep phases restart at zero after each.
+
+The report costs one `MPI_Gather` of a fixed per-rank record after the files are written, outside
+every loop; no other collective is added. The per-parcel accounting reads the clock twice per
+parcel and only when `timing = on`.
 
 ## Measured performance
 
@@ -207,7 +267,7 @@ cloud.
 
 ## How this is verified
 
-Rank-count invariance is **gated**, not assumed. Seven MPI cases run under `mpiexec`
+Rank-count invariance is **gated**, not assumed. Twenty-one MPI cases run under `mpiexec`
 (`tests/mpi/`), registered only in a `USE_MPI` build:
 
 | gate | ranks × threads |
@@ -217,8 +277,11 @@ Rank-count invariance is **gated**, not assumed. Seven MPI cases run under `mpie
 | `mpi-khrt` | 4 × 2 |
 | `mpi-bc-center-2grp` | 4 × 2 |
 | `mpi-two-mat` | 4 × 2 |
-| `mpi-consistency` | cross-rank-count comparison |
-| `mpi-consistency-two-mat` | cross-rank-count comparison, two materials |
+| `mpi-timing-report` | 4 × 2 (the per-rank lines of the timing report) |
+| `mpi-consistency` | 1 vs 4 ranks, then 4 ranks at 1 and 5 threads: multisets, layout, `.tec` |
+| `mpi-consistency-two-mat` | the same, two materials |
+| `mpi-determinism` | 3 and 4 × 1: grid bytes independent of the collective algorithm, within 1e-12 of n = 1 |
+| `mpi-repeat-<case>` (12) | 2 × 2: every two-sweep repeatability case (the embedding mode) |
 
 Each case symlinks its parent case's `INPUT/`, `input.ini` and `check.py`, so the fixture and
 the oracle are shared with the serial gate — the MPI case adds only the launch and the
@@ -245,9 +308,13 @@ index instead of the global band turns `mpi-khrt` red at n ≥ 2.
 mpirun -n 4 ./bin/IGLOO
 ```
 
-!!! danger "`--use-mpi` and `--use-tecio` cannot be combined"
-    ORION builds `teciompi` under MPI but links `tecio::tecio`, so the configure fails. ASCII
-    `.tec` I/O works fine without TecIO, which is what the whole test suite uses.
+For output-heavy runs put `OUTPUT/` on tmpfs (`mkdir -p /dev/shm/$USER/<case> && ln -s
+/dev/shm/$USER/<case> OUTPUT`): the storage term of the scatter output is nearly constant in the
+thread count, so it bounds the speed-up first.
+
+With `--use-tecio` an MPI build links ORION's `teciompi` (built once into
+`lib/ORION/lib/TecIO/teciompi-install-*`). ASCII `.tec` I/O needs no TecIO, which is what the
+test suite uses; `-DUSE_TECIO=OFF` skips the TecIO build.
 
 !!! danger "`bin/IGLOO` is ONE link target shared by every build tree"
     `cmake --build <tree>` is a **no-op** when that tree has nothing to recompile, so it can
@@ -259,12 +326,46 @@ mpirun -n 4 ./bin/IGLOO
     ldd bin/IGLOO | grep -c libmpi        # 0 = serial, >0 = MPI
     ```
 
+## Memory per rank
+
+Every rank, and every thread team inside it, shares one copy of each array below; every rank
+holds all of them. Real (8-byte) values per block of `Ni × Nj × Nk` cells, with `N³ = Ni·Nj·Nk`
+and `(N+k)³ = (Ni+k)(Nj+k)(Nk+k)` (on a single-layer 2D block the `k` factor of the dual and
+ghost-ringed arrays is 1); `nsc` gas species, `nm` materials, `nfam` families (Σ groups);
+`S = 1` with source output, `E = 1` with Eulerian output (`out-file`).
+
+| arrays | gas-order 2 | gas-order 1 |
+|---|---|---|
+| gas fields: density per species, velocity, temperature, five property arrays | `(nsc + 9) (N+2)³` | `(nsc + 9) N³` |
+| accumulators at the solve shape: mass per material, momentum, energy; per family density, number, velocity, temperature | `[(nm + 4) S + 6 nfam E] (N+1)³` | `[(nm + 4) S + 6 nfam E] N³` |
+| geometry block: nodes, centres, edge lengths, minimum edge, cell volumes; octant volumes and dual weights | `4 (N+1)³ + 16 N³` | `3 (N+1)³ + 8 N³` |
+| gas block: dual nodes, dual volumes | `3 (N+2)³ + (N+1)³` | `3 (N+1)³` |
+| copies of nodes, centres, edge lengths, minimum edge in the source block and in each family's Eulerian block | `(S + nfam E) [3 (N+1)³ + 7 N³]` | the same |
+
+During `finalize` at gas-order 2 the cell-shaped results are built beside the dual-shaped
+accumulators, `[(nm + 4) S + 6 nfam E] N³` more, and the mollifier adds two (source) or one
+(Eulerian) cell-sized scratch arrays. `[IGLOO-General] timing = on` prints the allocated totals
+of the first three groups as the `sizes` line, gas / geometry (the last three rows) /
+accumulators: the `timing-report` gate checks that line against this table.
+
+Worked example, `standard/vie-plait` (one block of 120 × 50 × 5 cells, gas-order 2, `nsc = 1`,
+`nm = 1`, source output only): `N³ = 30000`, `(N+1)³ = 37026`, `(N+2)³ = 44408`; gas
+`10 × 44408 = 444080`; accumulators `5 × 37026 = 185130`; geometry `(4 × 37026 + 16 × 30000) +
+(3 × 44408 + 37026) + (3 × 37026 + 7 × 30000) = 1119432`; together 1748642 values, 13.3 MiB per
+rank, which is what the run prints. At gas-order 1 the same totals hold on `infrastructure/coupled-body`
+(60 × 5 × 5, source and Eulerian output, one family): gas 15000, geometry 59352, accumulators
+16500. On a 200³ block with one species, material and family and both outputs (gas-order 2) the
+table gives about 82 M gas, 89 M accumulator and 354 M geometry values — 3.9 GiB per rank,
+two thirds of it geometry, of which the per-family copies are 161 M.
+
 ## Known limits
 
-- **Setup is replicated, including the Tecplot read**: N ranks read the same file — a
-  one-time cost at this scale.
+- **Setup is replicated, except the Tecplot read**: rank 0 parses the gas file and broadcasts
+  the field (`mpi_bcast_orion`: names, solution time, block dimensions, mesh and variables);
+  every rank then builds the blocks, the geometry and the pinning itself — a one-time cost at
+  this scale.
 - **Memory does not scale**: every rank holds the full mesh, gas field and accumulators
-  (`O(nb × nfam × cells)` per rank). Breaking that wall would need shared-memory windows
+  (see [Memory per rank](#memory-per-rank)). Breaking that wall would need shared-memory windows
   (`MPI_Win_allocate_shared`) or genuine domain decomposition — neither is implemented.
 - The parallelization is **one-way**: the gas field is steady and read-only within a sweep.
   Two-way coupling would need the accumulators fed back, which changes the communication

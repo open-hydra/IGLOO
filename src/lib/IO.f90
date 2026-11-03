@@ -670,10 +670,12 @@ contains
   end subroutine checkChimera
 
 
-  !> Read the background gas field from an ASCII Tecplot multiblock file.
+  !> Read the background gas field from an ASCII Tecplot multiblock file: rank 0 parses it, the
+  !  other ranks receive rank 0's copy.
   subroutine read_TECsolfile(filename,orion)
     use Lib_Tecplot
     use Lib_ORION_data
+    use IGLOO_Mod_MPI, only: mpi_is_root, mpi_bcast_orion
     implicit none
     character(len=*), intent(in) :: filename
     type(orion_data) :: orion
@@ -683,7 +685,8 @@ contains
     orion%tec%bc = .false.
 
     orion%tec%format = 'ascii'
-    error = tec_read_structured_multiblock(orion=orion,filename=filename)
+    if (mpi_is_root) error = tec_read_structured_multiblock(orion=orion,filename=filename)
+    call mpi_bcast_orion(orion)
 
   end subroutine read_TECsolfile
 

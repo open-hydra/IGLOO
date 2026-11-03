@@ -8,7 +8,8 @@ solver as its gas field evolves (`setup_static` once, then `reset_state` + `solv
 sweep) — a mode nothing else here exercises.
 
 Driver: [../support/twosweep.f90](../support/twosweep.f90) → `build/verif/tests/twosweep`.
-Oracle: [../tools/check_twosweep.py](../tools/check_twosweep.py).
+Oracle: [../tools/check_twosweep.py](../tools/check_twosweep.py). An MPI build also runs every case
+here at two ranks (`mpi-repeat-<case>`, see [../mpi/INFO.md](../mpi/INFO.md)).
 
 ## Layout
 

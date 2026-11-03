@@ -95,7 +95,8 @@ def load_source(path):
     var = [i for i, s in enumerate(lines) if s.strip().upper().startswith("VARIABLES")]
     if not head or not var:
         raise ValueError("no VARIABLES or ZONE line")
-    names = re.findall(r'"([^"]*)"', " ".join(lines[var[0]:head[0]]))
+    hdr = " ".join(lines[var[0]:head[0]]).split("=", 1)[1]
+    names = re.findall(r'"([^"]*)"', hdr) or hdr.replace(",", " ").split()   # quoted or blank-separated
     zone = lines[head[0]]
     dims = [int(re.search(rf"\b{k}\s*=\s*(\d+)", zone).group(1)) for k in ("I", "J", "K")]
     cc = re.search(r"\[(\d+)-(\d+)\]\s*=\s*CELLCENTERED", zone)

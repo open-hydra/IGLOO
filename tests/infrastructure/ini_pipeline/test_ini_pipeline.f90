@@ -15,12 +15,14 @@ program test_ini_pipeline
     !   IP3  body-accel = (0,-200,0) and bodyForce switch on
     !   IP4  [IGLOO-ODE] rtol=atol=1e-11; [IGLOO-BC] ds=10 cm -> 0.1 m
     !   IP5  seed default 42 (option absent)
+    !   IP6  timing = on reaches the timing switch (default off)
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_IO_INI,      only: read_IGLOO_input
     use IGLOO_variables,   only: dragSelect, heatSelect, bodyForce, bodyAccel, &
                                  rtol, atol, ds, rng_seed, llen, blowSelect
     use IGLOO_Lib_Breakup, only: bp, bpMethod, bpScale
+    use IGLOO_Mod_Timing,  only: timingOn
     implicit none
 
     character(len=2)      :: method
@@ -65,6 +67,9 @@ program test_ini_pipeline
 
     ! IP5 — RNG seed default
     call check(rng_seed == 42,           'IP5 seed default 42', nbad)
+
+    ! IP6 — [IGLOO-General] timing
+    call check(timingOn,                 'IP6 timing = on', nbad)
 
     if (nbad == 0) then
         write(*,'(a)') 'test_ini_pipeline: OVERALL PASS'; stop 0

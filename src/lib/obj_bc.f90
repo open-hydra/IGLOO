@@ -200,6 +200,7 @@ contains
   !  axisDir by -nint(theta/delthe)*delthe, then assert the state is inside the sector.
   subroutine axisymFold(stateVar, nSect)
     use IGLOO_variables, only: axisym, delthe, axisDir, refDir
+    use IGLOO_Mod_MPI,   only: mpi_size_, region_fail
     implicit none
     real(R8), intent(inout) :: stateVar(:)
     integer, optional, intent(out) :: nSect   !> sectors rotated (0 = no fold)
@@ -219,8 +220,14 @@ contains
     stateVar(4:6) = rotateVector(stateVar(4:6), axisDir, rot)
     theta = atan2(dot_product(stateVar(1:3), binormal), dot_product(stateVar(1:3), refDir))
     !> post-condition: the state is inside the sector
-    if (abs(theta) > 0.5_R8*d*(1._R8 + 1.e-9_R8)) &
+    if (abs(theta) > 0.5_R8*d*(1._R8 + 1.e-9_R8)) then
+      !> MPI: no stop inside the parallel loop; flag it, the parcel is ended after this segment.
+      if (mpi_size_ > 1) then
+        call region_fail('IGLOO: axisymFold left the wedge sector (rotation sense, or refDir not normal to axisDir?)')
+        return
+      endif
       error stop 'IGLOO: axisymFold left the wedge sector (rotation sense, or refDir not normal to axisDir?)'
+    endif
   end subroutine axisymFold
 
   !> Distance along `dir` from `p0` (inside the band) to the k-plane the ray leaves through, 0 if none.

@@ -137,9 +137,10 @@ Controls the gas field source, output modes, and miscellaneous run-time options.
 | `mollify` | string | `on` | Enable field mollification smoother (`off` to disable) |
 | `mollify-passes` | integer | `8` | Binomial smoother passes; `0` = off |
 | `body-accel` | real(3) | `0 0 0` | Uniform body acceleration [m/s²]: `gx gy gz`; absent or all-zero = no-op |
+| `timing` | string | `off` | `on` prints `[IGLOO-timing]` lines after each output write: wall time per phase, parcel count and integration time per thread and per rank, the rank imbalance, the allocated array sizes (see [Parallelization](../development/parallelization.md#per-phase-timers)) |
 
 !!! warning "on/off switches are strings, not Fortran logicals"
-    FiNeR's `get(logical)` only accepts `T` or `F`. The `out-traj`, `out-scatter`, `out-time` and `mollify` keys are parsed as strings; accepted off-tokens are `off`, `false`, `no`, `0`, `F`, `f` (any case). Anything else is treated as on.
+    FiNeR's `get(logical)` only accepts `T` or `F`. The `out-traj`, `out-scatter`, `out-time`, `timing` and `mollify` keys are parsed as strings; accepted off-tokens are `off`, `false`, `no`, `0`, `F`, `f` (any case). Anything else is treated as on.
 
 ### `[IGLOO-Models]`
 
