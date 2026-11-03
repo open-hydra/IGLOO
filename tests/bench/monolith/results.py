@@ -11,6 +11,7 @@ cells of one job.
 """
 import os
 import re
+import statistics
 import sys
 
 sys.dont_write_bytecode = True   # no __pycache__ beside the harness
@@ -22,7 +23,8 @@ COLS = ["job", "node", "commit", "binary_md5", "smt", "workload", "tag", "ranks"
         "eff_sweep", "loop_med_s", "eff_loop", "cyc_sweep_med", "eff_cyc_sweep", "cyc_loop_med", "eff_cyc_loop",
         "ghz_loop", "setup_s", "gas_read_s", "blocks_s", "solve_other_s", "finalize_s", "smoothing_s", "writeout_s",
         "reduce_med_s",
-        "imbalance", "busy_maxmean_max", "sz_mib", "rss_rank_gb"]
+        "imbalance", "busy_maxmean_max", "sz_mib", "rss_rank_gb",
+        "gas_read_med_s", "writeout_med_s", "writeout_min_s", "writeout_max_s"]
 
 DEFS = """\
 # columns:
@@ -50,6 +52,8 @@ DEFS = """\
 #   reduce_med_s       the reduce phase, median [s]
 #   imbalance          rank parcel-loop max/mean; busy_maxmean_max the worst rank's thread busy max/mean
 #   sz_mib, rss_rank_gb   allocated values per rank [MiB], the largest rank's sampled resident set [GiB]
+#   gas_read_med_s, writeout_med_s, writeout_min_s, writeout_max_s   rank 0's setup:gas-read (median) and
+#                      writeout+merge (median, minimum, maximum) over the scored repetitions [s]
 """
 
 
@@ -70,6 +74,21 @@ def cpu_ranges(masks):
     if run:
         out.append(run)
     return ",".join(str(r[0]) if len(r) == 1 else "%d-%d" % (r[0], r[-1]) for r in out)
+
+
+def phases(src):
+    """Rank 0's setup:gas-read and writeout+merge of every scored repetition, by point."""
+    out = {}
+    for line in open(src, errors="replace"):
+        if line.startswith("IREP "):
+            d = dict(re.findall(r"(\w+)=(\S*)", line))
+            p = out.setdefault(d.get("tag"), {"gas": [], "wo": []})
+            for k, v in (("gas", d.get("ph_setup_gas_read", "").split("/")[0]), ("wo", d.get("writeout_s", ""))):
+                try:
+                    p[k].append(float(v))
+                except ValueError:
+                    pass
+    return out
 
 
 def job_extras(src):
@@ -98,7 +117,7 @@ def main():
     jobs = []
     for src in sys.argv[1:]:
         rows, job, node, _, binary = analyze.read_job(src)
-        jobs.append((job, node, binary, rows) + job_extras(src))
+        jobs.append((job, node, binary, rows) + job_extras(src) + (phases(src),))
     jobs.sort(key=lambda j: int(j[0]) if j[0].isdigit() else 0)
     label, nodes = {}, []
     for j in jobs:
@@ -114,7 +133,7 @@ def main():
     out.write(DEFS)
     out.write("\t".join(COLS) + "\n")
     f, num, ratio = analyze.fmt, analyze.num, analyze.ratio
-    for job, node, binary, rows, commit, cpu, pin in jobs:
+    for job, node, binary, rows, commit, cpu, pin, ph_reps in jobs:
         groups, other = analyze.group_points(rows)
         scored = [(wl, d, analyze.anchor_of(wl, d, pts)) for wl, pts in groups.items() for d in pts]
         scored += [(d.get("workload", "?"), d, None) for d in other]
@@ -127,6 +146,9 @@ def main():
             ph = d.get("ph_setup_gas_read", "").split("/")[0]
             bl = d.get("ph_setup_blocks", "").split("/")[0]
             so = d.get("ph_solve_other", "").split("/")[0]
+            pr = ph_reps.get(d.get("tag"), {"gas": [], "wo": []})
+            stat = [statistics.median(pr["gas"]) if pr["gas"] else None]
+            stat += [g(pr["wo"]) if pr["wo"] else None for g in (statistics.median, min, max)]
             vals = [job, label[node], commit, binary, cpu.get("threads/core", "?"), wl, d.get("tag", ""),
                     str(s["R"]), str(s["T"]), str(s["N"]), "omp" if ip == "omp" else cpu_ranges(ip),
                     d.get("reps", ""), d.get("nok", ""), anchor.get("tag", "") if anchor else "",
@@ -140,7 +162,7 @@ def main():
                     f(num(d, "finalize_s"), "%.3f"), f(num(d, "smoothing_s"), "%.3f"), f(num(d, "writeout_s"), "%.3f"),
                     f(num(d, "reduce_s_med"), "%.3f"), f(num(d, "imbalance"), "%.3f"),
                     f(num(d, "busy_maxmean_max"), "%.3f"), f(num(d, "sz_mib"), "%.1f"),
-                    f(num(d, "rss_rank_gb"), "%.3f")]
+                    f(num(d, "rss_rank_gb"), "%.3f")] + [f(x, "%.3f") for x in stat]
             out.write("\t".join(vals) + "\n")
 
 
