@@ -17,8 +17,9 @@ proves reproducibility at the solver level; this test proves the stream itself.
 | RS1 | distinctness | seeds unique over a realistic (famID, ID) grid — 8 families × 4000 IDs, 0 collisions. `ID` is unique only within a group, so `famID` must be mixed in or parcel 1 of every family shares a stream | PASS |
 | RS2 | reproducibility | re-seeding replays the identical sequence — what makes a sweep, a thread count and an MPI rank count invisible in the output | PASS |
 | RS3 | range + uniformity | draws strictly in (0,1) (`RosinRammler` takes `log(x)`); moment check against the uniform distribution | PASS |
+| RS4 | known answers | `oracle.py` computes the stream modulo 2^64 on Python's integers: `rngSeedFor(1, 1)` and `rngSeedFor(4, 200000)`; the state and the last draw after 1000 draws; from `rngSeedFor(1, 1)` and from -1, the state after 1000 `NormalStandardS` and after 300 `ChiSquareS(3)` calls, exactly, and the sums of those draws within 1e-12 of the sum of their magnitudes (log, sqrt and fused multiply-adds round differently by compiler: at most (N + 8) eps of it). The normal and chi-square samplers draw inside their module, where the compiler inlines the stream: an implementation that relies on signed integer overflow fails those four rows under gfortran -O2 and -O3 and passes the first two | PASS |
 
 ## Notes
 
-- Oracle is analytic (count collisions, replay, moments); no reference data.
+- RS1–RS3: the oracle is analytic (count collisions, replay, moments); RS4: `oracle.py`, independent of IGLOO.
 - `repeat-tab` is `tab-e2e`'s case (`INPUT/` symlinked) in the repeatability suite.
