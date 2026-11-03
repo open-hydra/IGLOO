@@ -693,7 +693,8 @@ behavioral cases with no reference curve, summarised in the table on the
 a case that pins particle *placement* or a *refusal* rather than a trajectory has
 nothing to plot. The four `psd-*` cases have no figure either: their reference is the prescribed size
 distribution, tested on the injection diameters of 20 000 parcels by the Kolmogorov-Smirnov and
-Anderson-Darling statistics (see `tests/standard/psd-table/INFO.md`).
+Anderson-Darling statistics (see `tests/standard/psd-table/INFO.md`); nor has `psd-bare-token` (a
+size-distribution file named without `.` or `/`, every parcel at the table's single diameter).
 
 The routine-level member of this category is the interpolation family
 `test_gas_reconstruction` (E1–E5), documented under

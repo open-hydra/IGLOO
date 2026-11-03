@@ -60,7 +60,7 @@ output written).
 | `refuse-psd-missing` | own `INPUT/bc.txt` (`tools/make_box_case.py --law 0.0 tables/psd.dat`, shared by the six table cases below), no table | `IGLOO: size-distribution file not found` — after trying `tables/psd.dat` and `INPUT/psd.dat` (both printed) |
 | `refuse-psd-line-long` | own `bc.txt`: every inlet payload line padded to 600 characters with blanks between columns 7 and 8 | `IGLOO: bc.txt inlet payload line too long` — a line that fills the 512-character buffer |
 | `refuse-psd-token-long` | own `bc.txt`: column 8 a path of 256 characters | `IGLOO: bc.txt inlet payload token too long` — a token that fills the 256-character buffer |
-| `refuse-psd-law-typo` | own `bc.txt`: column 8 `lognorml` | `IGLOO: unsupported distribution law` — neither a law name nor a path, never searched as a file |
+| `refuse-psd-law-typo` | own `bc.txt`: column 8 `lognorml` | `IGLOO: unsupported distribution law` — neither a law name nor the name of a file (no `lognorml`, no `INPUT/lognorml`) |
 | `refuse-psd-unsorted` | `INPUT/psd.dat` radii 5, 4, 6 µm | `IGLOO: size-distribution file: the radii must increase` |
 | `refuse-psd-negative` | a mass fraction of −0.3 | `IGLOO: size-distribution file: a mass fraction is negative` |
 | `refuse-psd-three-col` | a data line `5.0e-6 0.3 1.0` | `IGLOO: size-distribution file: a data line must hold exactly two finite numbers` |

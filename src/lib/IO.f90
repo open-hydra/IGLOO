@@ -1104,16 +1104,17 @@ contains
   end subroutine next_token
 
 
-  !> bc.txt column 8 -> law code: a law name, else a size-distribution file (a token holding '.'
-  !  or '/') as TableDistrBase + its registry index; any other token is refused.
+  !> bc.txt column 8 -> law code: a law name, else a size-distribution file found as written or as
+  !  INPUT/<basename> (TableDistrBase + its registry index); a token naming no file is refused, as a
+  !  missing file when it holds '.' or '/', as an unsupported law otherwise.
   function law_token_code(tok) result(code)
-    use IGLOO_Lib_Statistics, only: lawCode, isLawName, loadPSDTable, TableDistrBase
+    use IGLOO_Lib_Statistics, only: lawCode, isLawName, isPSDFile, loadPSDTable, TableDistrBase
     implicit none
     character(len=*), intent(in) :: tok
     integer :: code
     if (isLawName(tok)) then
       code = lawCode(tok)
-    elseif (scan(trim(tok), './') > 0) then
+    elseif (isPSDFile(tok) .or. scan(trim(tok), './') > 0) then
       code = TableDistrBase + loadPSDTable(tok)
     else
       write(*,'(A)') ' [ERROR] [IGLOO::read_cdp_bc_file] unsupported distribution law: '//trim(tok)

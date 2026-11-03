@@ -106,11 +106,13 @@ distribution of the injected **mass flow** over the diameter.
 
 ### Size-distribution files
 
-A column-8 token that is not a law name and holds a `.` or a `/` names a file. IGLOO looks for it as
-written, relative to the case directory (the working directory of a run), then as `INPUT/` + its file
-name; any other token is refused (`IGLOO: unsupported distribution law`), so a misspelt law name is never
-searched as a file. Keep the table in `INPUT/` and write `distribution = INPUT/<file>` in ATLAS's inlet
-section: ATLAS (run in the case directory) and IGLOO then read the same file.
+A column-8 token that is not a law name names a file, whatever its shape (`psd`, `size-dist.txt`,
+`INPUT/psd.dat`): IGLOO looks for it as written, relative to the case directory (the working directory
+of a run), then as `INPUT/` + its file name. A token found under neither name is refused — `IGLOO:
+size-distribution file not found` when it holds a `.` or a `/`, `IGLOO: unsupported distribution law`
+otherwise (a misspelt law name such as `lognorml`). Keep the table in `INPUT/` and write
+`distribution = INPUT/<file>` in ATLAS's inlet section: ATLAS (run in the case directory) and IGLOO
+then read the same file.
 
 The file is plain text: blank lines and lines starting with `#`, `!` or `;` are skipped, and every other
 line holds exactly two numbers, the particle **radius** $r_k$ [m] and its **mass fraction** $m_k$ (any
