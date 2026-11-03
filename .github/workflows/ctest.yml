@@ -18,9 +18,11 @@ jobs:
           submodules: true
 
       - name: Install system dependencies
+        # numpy, scipy and matplotlib: the checkers of some tests import them, where those tests exist (the scipy
+        # oracle of the boiling-zgr cases, the V&V figures that vv-order draws with numpy and matplotlib).
         run: |
           sudo apt-get update
-          sudo apt-get install -y gfortran
+          sudo apt-get install -y gfortran python3-numpy python3-scipy python3-matplotlib
 
       - name: Configure
         run: |
@@ -37,11 +39,11 @@ jobs:
       - name: Build
         run: cmake --build build --parallel $(nproc)
 
-      - name: Run standard tests
-        # The standard category only (tests/test.sh standard). Its checkers
-        # need nothing beyond the Python standard library.
+      - name: Run the test suite
+        # The whole suite (tests/test.sh all): every category, unit and end-to-end, in parallel on the runner's cores.
+        # vortex-cloud-3way is skipped without hydra and ICE; the mpi cases exist only with USE_MPI=ON.
         run: >
           ctest --test-dir build
           --output-on-failure
-          --timeout 600
-          -L '^standard$'
+          --timeout 900
+          --parallel $(nproc)
