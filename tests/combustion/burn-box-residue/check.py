@@ -26,6 +26,9 @@ build an expectation: the inputs below, the product's line and table, and the pr
   F   ref-fail/: [IGLOO-ODE] fail-after = 3.6e-3 s: every parent ends at t* >= 3.6e-3 s; its exit record is its
       residue's birth row; m_res = xi nu (m0 - m_Al(t*)), m_Al(t*) from the burn law (Gallier's F by bisection,
       c = 1.397686) at the printed t*: 1e-5; R1, R3, R3e
+  G3  in each run: one trajectory zone per parcel, A's titled parent 0, each residue's titled with the ID of the
+      parent exit records its birth row equals (X, Y, Z, T, t printed alike; in ref-dres a residue of the second
+      group, ID 25 + k, has parent k)
 
 The gate fails on a residue sized with the burning material's density (R2: d 2.168897e-5 m), on a birth flux left
 in the gas books (R3: 0.378 of the injected flow), on the product's datum left out of the birth flux (R3e 100.7 %),
@@ -43,7 +46,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
-from datcols import zones  # noqa: E402
+from datcols import parcel_zones, zones  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("burnboxcap_oracle", os.path.join(HERE, "..", "burn-box-cap", "check.py"))
 cap = importlib.util.module_from_spec(_spec)
@@ -163,6 +166,31 @@ def birth_identity(name, par_by_id, res_rows):
             "differ" % (name, TOL_V, worst_v, bad, len(res_rows)), bad == 0 and worst_v <= TOL_V and len(res_rows) > 0)
 
 
+def zone_titles(name, d, checks):
+    """G3: one trajectory zone per parcel (datcols.parcel_zones), the burning material's titled parent 0 and each
+    residue's titled with the ID of the parcel it was born from: the parent exit records its birth row equals (X, Y,
+    Z, T, t printed alike), whatever their group."""
+    out = os.path.join(d, "OUTPUT")
+    try:
+        za = parcel_zones(os.path.join(out, "trajectories-A.dat"))
+        zo = parcel_zones(os.path.join(out, "trajectories-OX.dat"))
+    except (OSError, ValueError) as e:
+        checks.append(("%s G3 %s" % (name, e), False))
+        return
+    ex = [r for z in zones(os.path.join(out, "outloc-A.dat")) for r in z["rows"]]
+    bad = [z["title"] for z in za + zo if z["image"] != 0] + [z["title"] for z in za if z["parent"] != 0]
+    for z in zo:
+        b = z["rows"][0]
+        ids = sorted({r["ID"] for r in ex if all(r[k] == b[k] for k in ("X", "Y", "Z", "T", "t"))})
+        if ids != [z["parent"]]:
+            bad.append("%s born at the exit records of IDs %s" % (z["title"], ids))
+    nin = sum(1 for r in ex if r["X"] < LX - 1e-6)
+    checks.append(("%s G3 one zone per parcel: %d of A (parent 0, %d exit records), %d of OX each titled with the ID "
+                   "of the exit records its birth row equals (%d parents burnt out inside): %d off%s"
+                   % (name, len(za), len(ex), len(zo), nin, len(bad), (": " + "; ".join(bad[:2])) if bad else ""),
+                   not bad and len(za) == len(ex) and 0 < len(zo) == nin))
+
+
 def banner(log):
     m = re.findall(r"combustion product \(residues: (\d+)\)", log)
     return int(m[0]) if len(m) == 1 else -1
@@ -190,6 +218,7 @@ def check_main(checks):
                    " of the printed m: worst %.2e <= %.0e" % (mres, wm, TOL_M2, wd, TOL_D2),
                    wm <= TOL_M2 and wd <= TOL_D2))
     checks += books("main", par, res_exit, wA, ox_zero, E)
+    zone_titles("main", HERE, checks)
     # R4: the residue's temperature history
     worst, nrow, phase_ok = 0.0, 0, True
     for rs in res_rows.values():
@@ -267,6 +296,7 @@ def check_d(checks):
                    % (D_RES, dd, ratio_ref, wn, TOL_DNP, bb.T_G, min(Tex), max(Tex)),
                    dd <= 0.5e-11 and wn <= TOL_DNP and all(abs(T - bb.T_G) <= 1e-4 for T in Tex)))
     checks += books("D", par, res_exit, wA, ox_zero, E)
+    zone_titles("D", d, checks)
 
 
 def check_f(checks):
@@ -297,6 +327,7 @@ def check_f(checks):
     checks.append(("F residue mass vs xi nu (m0 - m_Al(t*)) (m_Al(t*)/m0 %.4f at t* = %.6e s): worst %.2e <= %.0e"
                    % (m_al_at(t0) / M0, t0, wm, TOL_F), wm <= TOL_F))
     checks += books("F", par, res_exit, wA, ox_zero, E)
+    zone_titles("F", d, checks)
 
 
 def main():

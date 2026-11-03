@@ -118,6 +118,14 @@ check, 553,795 rows at 0.994; `mpi-khrt` runs it too). RED with the scatter row 
 diameter, which only a breakup event resyncs: 2,552 rows of 16 parcels off the identity, the worst by 7.2271e-2
 (`khrt-e2e-euler`: 2,605 of 553,795).
 
+## Trajectory zones (`check.py::check_zones`)
+`trajectories-A.dat` holds one ordered zone per parcel, `ZONE T="Mat A Group  1 ID <id> parent <pid>"` with `I`
+its rows, in parcel order (`tools/datcols.py::parcel_zones`). The flow is along x, so the 25 injected parcels
+(IDs 1–25, parent 0) ride 25 distinct (Y, Z) lines and a child stays on the line it was born on: each of the 241
+children (the log's count, one zone each) must be titled with the injected parcel on its line, whose x range holds
+the child's birth row. The pairing is geometric, not the ID arithmetic the note above warns against. RED: one zone
+per group (no parcel title); a child titled with its own ID (241 off). `khrt-e2e-euler` and `mpi-khrt` run it too.
+
 ## What `check.py` gates (KH stripping, GREEN)
 IGLOO's initial `dd/dt` (leading-window LSQ, matched against the same-window RK4 of the
 Reitz-87 KH rate — the decelerating rate's finite-window bias cancels on both sides) vs

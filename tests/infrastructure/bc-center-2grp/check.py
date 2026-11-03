@@ -32,6 +32,7 @@ release build, rc=0 and EMPTY STDERR in every case -- none of this announces its
      exit on the outflow plane. A pinning bug that injects everything out of domain
      still exits 0, so "the solver ran" is never the criterion.
 """
+import re
 import sys
 from collections import defaultdict
 
@@ -51,8 +52,9 @@ MIN_TRAJ   = 5      # a particle that dies at injection writes ~1 record
 
 
 def load_zoned(path, ncols, idcol=None):
-    """Return {zone_index: [row, ...]} for a Tecplot point file with one zone per group; a row is the
-    columns before idcol (default the last) and the ID in it."""
+    """Return {group: [row, ...]} for a Tecplot point file, the group read from each zone's title (an exit file
+    holds one zone per group, a trajectory file one per parcel image); a row is the columns before idcol (default
+    the last) and the ID in it."""
     if idcol is None:
         idcol = ncols - 1
     zones = defaultdict(list)
@@ -62,9 +64,9 @@ def load_zoned(path, ncols, idcol=None):
             s = line.strip()
             if not s or s.startswith("variables"):
                 continue
-            if s.startswith("Zone"):
-                z += 1
-                zones[z] = []
+            if s.lower().startswith("zone"):
+                m = re.search(r"Group\s*(\d+)", s)
+                z = int(m.group(1)) if m else 0
                 continue
             c = s.split()
             if len(c) != ncols or z == 0:

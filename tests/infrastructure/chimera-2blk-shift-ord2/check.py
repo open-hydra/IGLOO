@@ -14,9 +14,9 @@ check.py runs the box as one unshifted block (make_box_case.py, this input.ini) 
   R1  the ghost line: 98 ghost nodes interpolated, none uncovered; no ghost node away from its donors
   K   the block-change line: 50 through the connected cell, none through the block sweep, no rim exit
   C1  50 exits (25 per family), all at block 2's outlet, x = 0.15125
-  X1  the trajectory rows against the one-block run, matched by parcel and x (block 2's faces and
-      centres fall on the one-block centres and faces, so most rows of either run have a partner; at
-      least 75 % matched): temperature within 8e-5 K, velocity within 2e-6
+  X1  the trajectory rows against the one-block run, matched by family (the zone title's group), parcel
+      and x (block 2's faces and centres fall on the one-block centres and faces, so most rows of either
+      run have a partner; at least 75 % matched): temperature within 8e-5 K, velocity within 2e-6
   C2  no stuck, no-progress or maxIter line
 """
 import os
@@ -63,11 +63,12 @@ def run_sibling():
 
 
 def trajectories(path):
-    """{(zone, parcel ID): {x: (u, T)}} (IDs restart in every family's zone)."""
+    """{(group, parcel ID): {x: (u, T)}}, the group read from each zone's title (IDs restart in every family)."""
     out, zone = {}, 0
     for ln in open(path):
         if ln.lstrip().upper().startswith("ZONE"):
-            zone += 1
+            m = re.search(r"Group\s*(\d+)", ln)
+            zone = int(m.group(1)) if m else 0
             continue
         t = ln.split()
         if len(t) < 10:

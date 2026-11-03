@@ -95,6 +95,7 @@ tail -n+3 trajectories-A.dat | sort | md5sum
 ```
 
 A script that picks one parcel among several (the longest, the worst) visits the
-parcels in ID order, so a tie goes to the lowest ID, never to the first in the file;
+parcels in ID order, so a tie goes to the lowest ID, never to the first in the file, and
+finds a parcel's trajectory by its zone's title (group, ID, image), never by its position;
 `vv-order` and `check-order` (`tests/tools/vv_order_check.py`) hold the registered
 figures and printouts to this.

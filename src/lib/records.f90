@@ -5,12 +5,13 @@
 !  and parcel block, and the index is gathered on the root rank for the merge.
 module IGLOO_records
   use, intrinsic :: iso_fortran_env, only: R8 => real64, I8 => int64
-  use IGLOO_fmt, only: fmtSpec, fmt_compile, fmt_row
+  use IGLOO_fmt, only: fmtSpec, fmt_compile, fmt_row, fmt_int
   use IGLOO_Mod_Timing, only: tm_window
   use IGLOO_Mod_MPI, only: mpi_size_, mpi_gather_i8, mpi_abort_all, region_fail
   implicit none
   private
-  public :: recList, rec_setup, rec_emit, rec_push, ps_open, ps_text, ps_close, ps_begin, ps_end
+  public :: recList, rec_setup, rec_emit, rec_emit_traj, rec_push, rec_break, ps_open, ps_text, ps_zone, ps_close, &
+            ps_begin, ps_end
 
   !> The streams (one file each per material)
   integer, parameter, public :: STR_TRAJ = 1, STR_EXIT = 2, STR_PLANE = 3, STR_SNAP = 4, STR_SCAT = 5
@@ -31,11 +32,14 @@ module IGLOO_records
   type(fmtSpec) :: spec(NLAY)
   logical :: ready = .false.
 
-  !> One stream's rows of a parcel, v(:, k) row k in the layout lay (integer columns hold exact integers).
+  !> One stream's rows of a parcel, v(:, k) row k in the layout lay (integer columns hold exact integers); a trajectory's
+  !  images after the first: brk(:, j) = (its first row, its number)
   type :: recList
     real(R8), allocatable :: v(:,:)
     integer :: n = 0
     integer :: lay = 0
+    integer, allocatable :: brk(:,:)
+    integer :: nbrk = 0
   end type recList
 
   !> A window slot: no block yet, nothing (left) to write, a block held in memory, a block in the spill file
@@ -62,6 +66,8 @@ module IGLOO_records
     integer(I8), allocatable :: ix(:,:)
     integer :: nix = 0
     integer(I8) :: pos = 1
+    !> trajectories: the current group's zone title, `ZONE T="Mat <mat> Group<g, I3>`
+    character(len=:), allocatable :: zone
   end type partStream
 
   !> A particle file's index gathered on the root rank: rows(4*j-3:4*j) = (group, key, offset, length) of item j, rank
@@ -116,6 +122,84 @@ contains
     list%v(:, list%n) = row
     list%lay = lay
   end subroutine rec_push
+
+
+  !> The rows pushed from now on start image k of the trajectory (a 201 wrap); an image left without rows is dropped.
+  subroutine rec_break(list, k)
+    type(recList), intent(inout) :: list
+    integer, intent(in) :: k
+    integer, allocatable :: tmp(:,:)
+    if (list%nbrk > 0) then
+      if (list%brk(1, list%nbrk) == list%n + 1) then
+        list%brk(2, list%nbrk) = k
+        return
+      endif
+    endif
+    if (.not. allocated(list%brk)) allocate(list%brk(2, 4))
+    if (list%nbrk == size(list%brk, 2)) then
+      allocate(tmp(2, 2*size(list%brk, 2)))
+      tmp(:, 1:list%nbrk) = list%brk(:, 1:list%nbrk)
+      call move_alloc(tmp, list%brk)
+    endif
+    list%nbrk = list%nbrk + 1
+    list%brk(:, list%nbrk) = [list%n + 1, k]
+  end subroutine rec_break
+
+
+  !> The trajectory block of slot (parcel id, shed or burnt out by parent, 0 if injected): one ordered zone per image
+  !  with rows, `<zone title> ID <id> parent <parent>[ image <k>]", I=<rows>, ZONETYPE=ORDERED, DATAPACKING=POINT`, then
+  !  its rows; the list is emptied.
+  subroutine rec_emit_traj(list, slot, id, parent)
+    type(recList), intent(inout) :: list
+    integer, intent(in) :: slot, id, parent
+    character(len=:), allocatable :: buf
+    integer :: k, n, b, r0, r1, img
+    if (list%n == 0) then
+      call ps_hand(STR_TRAJ, slot, id, '')
+      list%nbrk = 0
+      return
+    endif
+    allocate(character(len=list%n*(spec(list%lay)%maxlen + 1) + &
+                           (list%nbrk + 1)*(len(ps(STR_TRAJ)%zone) + 128)) :: buf)
+    n = 0
+    r0 = 1
+    img = 0
+    do b = 0, list%nbrk
+      r1 = list%n
+      if (b < list%nbrk) r1 = list%brk(1, b+1) - 1
+      if (r1 >= r0) then
+        call put(ps(STR_TRAJ)%zone//' ID ')
+        call fmt_int(int(id, I8), 0, buf, n)
+        call put(' parent ')
+        call fmt_int(int(parent, I8), 0, buf, n)
+        if (img > 0) then
+          call put(' image ')
+          call fmt_int(int(img, I8), 0, buf, n)
+        endif
+        call put('", I=')
+        call fmt_int(int(r1 - r0 + 1, I8), 0, buf, n)
+        call put(', ZONETYPE=ORDERED, DATAPACKING=POINT'//LF)
+        do k = r0, r1
+          call fmt_row(spec(list%lay), list%v(:, k), buf, n)
+          n = n + 1
+          buf(n:n) = LF
+        enddo
+      endif
+      if (b < list%nbrk) then
+        r0 = list%brk(1, b+1)
+        img = list%brk(2, b+1)
+      endif
+    enddo
+    call ps_hand(STR_TRAJ, slot, id, buf(1:n))
+    list%n = 0
+    list%nbrk = 0
+  contains
+    subroutine put(t)
+      character(len=*), intent(in) :: t
+      buf(n+1:n+len(t)) = t
+      n = n + len(t)
+    end subroutine put
+  end subroutine rec_emit_traj
 
 
   !> Format the rows of list into one block and hand it to stream's writer as the block of slot (parcel id), an empty
@@ -269,6 +353,14 @@ contains
     ps(k)%pos = 1
     if (indexOn .and. .not. allocated(ps(k)%ix)) allocate(ps(k)%ix(4, 1024))
   end subroutine ps_open
+
+
+  !> The zone title of stream k's next group (master, outside the parcel loops): `ZONE T="Mat <mat> Group<g, I3>`.
+  subroutine ps_zone(k, title)
+    integer, intent(in) :: k
+    character(len=*), intent(in) :: title
+    ps(k)%zone = title
+  end subroutine ps_zone
 
 
   !> A header or zone line of stream k's file (master, outside the parcel loops): group 0 or key 0, a line every rank's

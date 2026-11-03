@@ -44,7 +44,8 @@ contains
                                         eventPassed, solidTransition, solidDiameter, phUndercooled, &
                                         breakupStateAtSwitch
     use IGLOO_Mod_MPI,     only: mpi_size_, region_fail, region_failed
-    use IGLOO_records,     only: recList, rec_emit, rec_push, STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT, &
+    use IGLOO_records,     only: recList, rec_emit, rec_emit_traj, rec_push, rec_break, &
+                                 STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT, &
                                  L_ROW, L_ROW_T, L_ROW_F, L_ROW_TF, L_ROW_S, L_ROW_TS, &
                                  L_EXIT, L_EXIT_T, L_EXIT_F, L_EXIT_TF, L_PLANE
     implicit none
@@ -81,6 +82,7 @@ contains
     logical  :: rowsNew, haveRow, wrp
     real(R8) :: tL, xL(3), preRow(12), svRow(6), tRow
     integer  :: nPre, layPre
+    integer  :: nWrap         !> 201 wraps so far: the number of the trajectory image the next one starts
     integer  :: neq, nsp, ng, b, i, j, k, ngVert, iu, iw, it, iter, nCross, nE, nStall
     integer  :: nRefl         ! gas order 1: segments of this cell that ended in a reflection
     real(R8) :: posPrev(3)    ! last outer-iter position, for the zero-progress guard
@@ -223,6 +225,7 @@ contains
     !  parcel's own aux and cell gas.
     rowsNew = trajOn .and. .not.dcellSet
     haveRow = .false.
+    nWrap = 0
     if (part%time==0._R8 .and. trajOn) call writeTrajRow()
     if (part%newborn) then
       if (trajOn) call writeTrajRow()
@@ -348,7 +351,7 @@ contains
         if (nSect > 0) then
           !$OMP ATOMIC
           nSectorFold = nSectorFold + 1
-          if (rowsNew) call transportRows()
+          if (rowsNew) call transportRows(.false.)
         else
           part%Ncell = part%Ncell + 1   ! no fold: counted as residency
         endif
@@ -421,7 +424,7 @@ contains
         if (nSect > 0) then
           !$OMP ATOMIC
           nSectorFold = nSectorFold + 1
-          if (rowsNew) call transportRows()
+          if (rowsNew) call transportRows(.false.)
         endif
         if (nSect > 1) then
           !$OMP ATOMIC
@@ -582,21 +585,32 @@ contains
     end subroutine writeLastRow
 
 
-    !> A wrap or fold under the parcel rule: preRow (taken before it), then the re-entry row, the next row's reference.
-    subroutine transportRows()
+    !> A wrap or fold under the parcel rule: preRow (taken before it), then the re-entry row, the next row's reference;
+    !  a wrap's re-entry row starts the next image.
+    subroutine transportRows(wrap)
+      logical, intent(in) :: wrap
       call pushTraj(preRow(1:nPre), layPre)
+      if (wrap) call rec_break(lTraj, nWrap)
       preRow(1:6) = part%stateVar(1:6)
       call pushTraj(preRow(1:nPre), layPre)
       tL = part%time; xL = part%stateVar(1:3)
     end subroutine transportRows
 
 
-    !> updateCell from the outer loop; a 201 wrap writes its two rows under the parcel rule (the first: the segment end).
+    !> updateCell from the outer loop; a 201 wrap starts the next trajectory image (in every mode) and writes its two rows
+    !  under the parcel rule (the first: the segment end).
     subroutine relocate()
       if (rowsNew) call trajRow(preRow, nPre, layPre)
       call part%updateCell(geoblock, reflected=refl, wrapped=wrp)
       reflSeg = reflSeg .or. refl
-      if (rowsNew .and. wrp) call transportRows()
+      if (wrp) then
+        nWrap = nWrap + 1
+        if (rowsNew) then
+          call transportRows(.true.)
+        elseif (trajOn) then
+          call rec_break(lTraj, nWrap)
+        endif
+      endif
     end subroutine relocate
 
 
@@ -710,7 +724,7 @@ contains
 
     !> The parcel's rows, one block per particle file.
     subroutine emitParcel()
-      if (trajOn) call rec_emit(lTraj, STR_TRAJ, slot, part%ID)
+      if (trajOn) call rec_emit_traj(lTraj, slot, part%ID, part%parentID)
       call rec_emit(lExit, STR_EXIT, slot, part%ID)
       if (planeOn) call rec_emit(lPlane, STR_PLANE, slot, part%ID)
       if (snapOn) call rec_emit(lSnap, STR_SNAP, slot, part%ID)

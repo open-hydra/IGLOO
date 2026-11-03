@@ -42,6 +42,7 @@ group's offset (the parcels of the earlier groups naming the same product) plus 
 | R4 | each residue's rows: born undercooled (`f = 0`), solid after its first segment at the enthalpy-conserving jump's temperature, then `T = T_g + (T_a − T_g) e^{−(t−t_b)/τ}`; per row the F12.6 budget of `temp-relax` with the jump's anchor (`c_l/c_s`) and the print of `d` in `τ` | the budget | worst 0.096 of it (800 rows) |
 | R5 | each residue's `ṁ = (m_res/m₀)` × its parent's | 1e-5 relative | 1.5e-6 |
 | D | `ref-dres/`: 50 residues with IDs 1–50 (the second group's at 25 + its parents' IDs); `d = 5e-6 m`; `ṅ_res/ṅ_parent = 60.958139`; R3, R3e (6.531021e6 J/kg); `T = 600 K` at the outlet | exact; 4e-5; 1e-5; 1e-4 K | 3.7e-6; 3.0e-7, 4.7e-7; 5e-6 K |
+| G3 | in each run (the case, `ref-dres/`, `ref-fail/`): one trajectory zone per parcel (`datcols.parcel_zones`: the title's fields, `I` its rows, parcel order); A's titled `parent 0`, each residue's with the ID of the parent exit records its birth row equals (X, Y, Z, T, t printed alike; in `ref-dres/` the residue of the second group's parcel k, ID 25 + k, has parent k, both groups' parcel k matching) | exact | 25, 50, 25 residue zones |
 | F | `ref-fail/`: every parent ends at `t* ≥ 3.6e-3 s` (3.7278e-3 to 3.7491e-3 s, its last accepted step); its exit record is its residue's birth row; `m = ξν(m₀ − m_Al(t*))`, `m_Al(t*)` from the burn law (Gallier's `F` by bisection, `c = 1.397686`) at the printed `t*`; R3, R3e | 1e-5 relative | 3.8e-6 |
 
 Each parcel and its residue ride one `(j, k)` column: the fields and the printout do not depend on the thread count.
@@ -58,5 +59,7 @@ Each parcel and its residue ride one `(j, k)` column: the fields and the printou
 | `d-residue` ignored | D: d 1.97e-5 m, the number-rate ratio 0.98 off |
 | the group's offset dropped from the residue ID | D: 25 distinct IDs among the 50 residues |
 | no revert on the failure exit (the segment-start state) | F: `t* = 3.5e-3 s < fail-after` on every parent |
+| one trajectory zone per group (the format before the parcel zones) | G3 in every run: no parcel title |
+| a residue titled with its own ID | G3 in `ref-dres/` only: 25 of 50 (in the case and in `ref-fail/` a residue's ID is its parent's) |
 
 A solver that does not know the `residue` token stops on `IGLOO: unknown per-material key in the phase file`.

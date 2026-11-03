@@ -19,7 +19,10 @@ per particle (20 of the 25 must verify), every particle out at x = 0.15, and the
 guards; and S-P, the source smoothed across the periodic pair (2D sweeps in x and y): the case against
 its unsmoothed sibling smoothed by `check.py` (measured 1.5e-14 of the field scale, tolerance 1e-12), and
 the same pair with only face 1's first row injecting (measured 8.6e-15; periodic and zero-flux smoothing
-differ there by 0.29).
+differ there by 0.29); and G3, one trajectory zone per parcel image, a wrap at each of the 71 image
+boundaries and inside none, here and in the `print-ds = 2e-3` sibling (`ref-ds/`), whose images end on
+their exit rows on a y face and begin on the partner face (RED without the image split: 71 wraps inside
+25 zones).
 
 **RED.** A reader that takes four index integers on a one-layer mesh stores the partner's k (1) as the
 partner face, so the transport takes the centre of a face-1 facelet (or of no facelet at all): no

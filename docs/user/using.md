@@ -102,7 +102,7 @@ A parcel's rows reach the particle files (trajectories, scatter cloud, exit loca
 
 ### Trajectories
 
-`OUTPUT/trajectories-<mat>.dat` records particle state at every cell crossing (one row per crossing). Columns (Tecplot ASCII variables header):
+`OUTPUT/trajectories-<mat>.dat` holds the parcels' trajectories, one Tecplot ordered zone per parcel and periodic image. Columns (Tecplot ASCII variables header):
 
 ```
 "X" "Y" "Z" "U" "V" "W" "T" "d_p" "m_p" "ID"
@@ -110,8 +110,13 @@ A parcel's rows reach the particle files (trajectories, scatter cloud, exit loca
 
 Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). A trajectory starts with the parcel's injection row and ends with a row at its stop (a boundary exit, a burnout, a solver failure, a guard, `time-end`) that holds the state of its exit record. Between them a row is written at a segment end when the parcel is `print-ds` [m] from its last row or, when `print-ds` is not set, when `print-dtime` [s] has passed since its last row; with neither key, the trajectory holds its first and last rows. A periodic (201) wrap and a wedge's sector fold each write two rows at the same time: the parcel's state before the transport and after it. With `print-dcell` set, the rows follow the diagnostic crossing cadence instead: a row every `print-dcell` cell crossings and, when `print-dtime` is positive, at the first segment end at or past each multiple of that interval, a row at `time-end`, and a row at the exit point of a parcel that leaves through a boundary face; `print-ds` is then ignored. With `out-time = on` every row carries the particle time [s] as an eleventh column, `"t"`. The rows of a solidifying material end with `"f"`. The rows of a material with `liquid-conduction = P2T` end with `"T<sub>s"`: the surface temperature [K] of the parabolic profile at the row's state (the boiling temperature in the boiling branch of `boiling = ZGR`), with six decimals; the column `T` is the droplet's mean temperature. No other file carries the surface temperature. A breakup child's first row is its birth state, written before its first step: its parent's position, velocity and temperature at the shed, and its own diameter and mass.
 
-!!! warning "Non-deterministic ordering"
-    With OpenMP enabled, the row order within a zone is non-deterministic across runs (different thread scheduling). Verification scripts must sort by particle ID and position before comparing, not rely on byte-identical output.
+Each zone holds one parcel's rows in time order:
+
+```
+ZONE T="Mat <mat> Group <g> ID <id> parent <pid>", I=<rows>, ZONETYPE=ORDERED, DATAPACKING=POINT
+```
+
+`parent` is the ID of the parcel a breakup child was shed from or a combustion residue was born of (in the burning material), 0 for an injected parcel. A periodic (201) wrap ends the parcel's zone and continues the parcel in a new one, titled `… parent <pid> image <k>` with k the number of wraps so far, so that no line of a plot crosses the domain: the zone ends on the exit row and the next begins with the re-entry row (with `print-dcell`, with the first row written after the wrap; an image without rows is left out). A wedge's sector fold does not split the zone. The zones follow by group, then parcel ID, then image, whatever the thread and rank counts.
 
 ### Scatter cloud
 
@@ -151,7 +156,7 @@ Every step the integration keeps is checked against every plane: a step from $x_
 
 `mdot` and `npdot` follow the ODE model. For models 3 and 7 the number rate is an ODE state and `mdot` is the stream's flow over the step; for models 2, 4, 5 and 8 `mdot = npdot·m_p` (metal and cap for model 8), with the number rate the stream's (2, 5, 8) or the state (4); for models 1 and 6 both are the stream's. The forward records' `mdot` minus the backward ones' is the mass flow through the plane: a breakup child carries the flow its parent shed, and its `parent` names that parcel.
 
-Records are written from the OpenMP region, as trajectory rows are: their order within a zone is not deterministic. Under MPI each rank writes its own file and the merge leaves one `planes-<mat>.dat`, as for the other particle files.
+A zone's records follow by parcel ID, each parcel's in the order of its crossings, whatever the thread and rank counts; under MPI the ranks' files are merged into one `planes-<mat>.dat`, as for the other particle files.
 
 `scripts/psd_plane.py` prints the size statistics of one plane:
 

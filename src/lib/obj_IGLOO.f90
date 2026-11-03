@@ -378,7 +378,7 @@ contains
     use IGLOO_Mod_Footprint,  only: record_footprint
     use IGLOO_overlap,        only: mirrorSource, mirrorEuler
     use IGLOO_Lib_Combustion, only: nuOx
-    use IGLOO_records,        only: rec_setup, ps_open, ps_text, ps_close, ps_begin, ps_end, &
+    use IGLOO_records,        only: rec_setup, ps_open, ps_text, ps_zone, ps_close, ps_begin, ps_end, &
                                     STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT
     use oslo
     use omp_lib
@@ -610,7 +610,8 @@ contains
         endif
 
         write(g3, '(I3)') g
-        if (trajOn) call ps_text(STR_TRAJ, 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF, g, 0)
+        !> trajectories: one zone per parcel image, titled by its group, ID, parent and image
+        if (trajOn) call ps_zone(STR_TRAJ, 'ZONE T="Mat '//trim(mat%matName)//' Group'//g3)
         call ps_text(STR_EXIT, 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF, g, 0)
         if (snapOn) call ps_text(STR_SNAP, 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF, g, 0)
         if (planeOn) call ps_text(STR_PLANE, 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF, g, 0)

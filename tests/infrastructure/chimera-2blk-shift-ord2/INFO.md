@@ -23,7 +23,7 @@ Two families of material A. `gas-order = 2`, `mollify = off`.
 | R1 | control | the ghost line `ghost nodes at connected faces: 98 interpolated, 0 not covered`, and no ghost node located away from its ATLAS donors |
 | K | control | the block-change line `50 via the connected cell, 0 via the block sweep, 0 rim exits` |
 | C1 | control | 50 exits, all at block 2's outlet, x = 0.15125 |
-| X1 | control | trajectory rows matched by family, parcel and x with the one-block run (block 2's faces and centres fall on the one-block centres and faces; 3500 of 4330 rows matched): T within 8e-5 K, velocity within 2e-6 |
+| X1 | control | trajectory rows matched by family (read from the zone title), parcel and x with the one-block run (block 2's faces and centres fall on the one-block centres and faces; 3500 of 4330 rows matched): T within 8e-5 K, velocity within 2e-6 |
 | C2 | control | no stuck, no-progress or maxIter line |
 
 **Numbers** (OMP 5): X1 T 8e-6 K, velocity 1e-6 (one printed digit); the tolerance on T sits ten

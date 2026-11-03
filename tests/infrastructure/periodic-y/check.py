@@ -22,6 +22,10 @@ VELOCITY UNCHANGED, then relocate it in the block. Gates:
      first row injecting (ref-row/, ref-row-raw/). The case's parcels start one cell apart, so its
      deposits are uniform in y to ~1e-6; (b)'s are not, and there the same passes with zero flux in y
      must differ by more than 1e-6 (the periodic faces carry a flux the gate can see).
+  6. (G3) one trajectory zone per parcel image: a parcel's images numbered 0, 1, 2, ..., a wrap at every image
+     boundary and none inside an image -- in this run (the crossing cadence) and in a sibling with print-ds = 2e-3
+     and out-time = on (ref-ds/), where each image ends on its exit row on a y face and the next starts on the
+     partner face, Ly away, at the same time with the same state.
 """
 import math
 import os
@@ -29,6 +33,9 @@ import re
 import shutil
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+import datcols  # noqa: E402
 
 TRAJ   = "OUTPUT/trajectories-A.dat"
 OUTLOC = "OUTPUT/outloc-A.dat"
@@ -67,6 +74,41 @@ NPASS     = 8           # its default number of passes
 TOL_FIELD = 1.0e-12     # scale-relative, compare_tec.py's rule
 MIN_SEEN  = 1.0e-6      # periodic vs zero-flux smoothing: the gate's non-vacuity floor
 MOLLIFY_LINE = "Field mollification ON: 8 binomial pass(es)"
+DS_SIBLING = "print-ds = 2.0e-3\nout-time = on"   # G3's sibling: the parcel rule, the time on every row
+FACE_TOL  = 0.5e-6      # a row on a y face: half the F12.6 quantum
+WRAP_TOL  = 1.0e-6      # |dy| = Ly within the F12.6 quantum
+
+
+def zone_images(lab, path, faces):
+    """G3: one zone per parcel image (datcols.parcel_zones), a parcel's images numbered 0, 1, 2, ..., a wrap (a y
+    jump of more than Ly/2 between consecutive rows) at every image boundary and none inside an image. With faces
+    (the parcel rule's wrap rows): each image's last row on a y face, the next image's first row on the partner face
+    Ly away, every other column (t included) printed alike."""
+    try:
+        zs = datcols.parcel_zones(path)
+    except (OSError, ValueError) as e:
+        print(f"[FAIL] G3 {lab}: {e}")
+        return 1
+    par = {}
+    for z in zs:
+        par.setdefault((z["group"], z["id"]), []).append(z)
+    inner = jumps = numbering = off = 0
+    for zl in par.values():
+        numbering += [z["image"] for z in zl] != list(range(len(zl)))
+        inner += sum(abs(b["Y"] - a["Y"]) > 0.5 * LY for z in zl for a, b in zip(z["rows"], z["rows"][1:]))
+        for za, zb in zip(zl, zl[1:]):
+            p, q = za["rows"][-1], zb["rows"][0]
+            jumps += abs(q["Y"] - p["Y"]) > 0.5 * LY
+            off += faces and not (min(abs(p["Y"]), abs(p["Y"] - LY)) <= FACE_TOL
+                                  and abs(abs(q["Y"] - p["Y"]) - LY) <= WRAP_TOL
+                                  and all(p[k] == q[k] for k in p if k != "Y"))
+    nb = len(zs) - len(par)
+    ok = not inner and not numbering and not off and jumps == nb >= MIN_WRAPS * len(par)
+    print(f"G3 {lab}: {len(par)} parcels in {len(zs)} zones, a wrap at {jumps} of the {nb} image boundaries and "
+          f"{inner} inside an image, images numbered 0, 1, ... in {len(par) - numbering} parcels"
+          + (f"; {nb - off} boundaries from an exit row on a y face to the partner face, Ly away, the other "
+             f"columns alike" if faces else "") + f"  {'PASS' if ok else 'FAIL'}")
+    return 0 if ok else 1
 
 
 def load(path):
@@ -151,9 +193,9 @@ def row_bc(src, dst):
     return kept
 
 
-def sibling(name, extra_ini, row_only):
-    """This case run again into <name>/ with extra_ini in [IGLOO-General]; with row_only only face 1's
-    first row injects. Returns (dir, exit code)."""
+def sibling(name, extra_ini, row_only, drop=()):
+    """This case run again into <name>/ with extra_ini in [IGLOO-General] and the keys in drop removed; with
+    row_only only face 1's first row injects. Returns (dir, exit code)."""
     case = os.getcwd()
     d = os.path.join(case, name)
     shutil.rmtree(d, ignore_errors=True)
@@ -167,6 +209,7 @@ def sibling(name, extra_ini, row_only):
     else:
         os.symlink(os.path.join(case, "INPUT"), os.path.join(d, "INPUT"))
     ini = open(os.path.join(case, "input.ini")).read()
+    ini = "\n".join(ln for ln in ini.split("\n") if ln.split("=")[0].strip() not in drop)
     if extra_ini:
         ini = ini.replace("[IGLOO-General]\n", "[IGLOO-General]\n" + extra_ini + "\n", 1)
     open(os.path.join(d, "input.ini"), "w").write(ini)
@@ -318,9 +361,17 @@ def main():
     print(f"verified wrappers: {verified} (need >= {N_GOOD})")
 
     sp = smoothing_gate()
-    ok = (nviol == 0 and verified >= N_GOOD and exits == len(parts) and sp == 0)
+    zi = zone_images("this run", TRAJ, False)
+    ds, code = sibling("ref-ds", DS_SIBLING, False, ("print-dcell",))
+    if code != 0:
+        print(f"[FAIL] G3 the print-ds run exited {code}")
+        zi = 1
+    else:
+        zi |= zone_images("ref-ds (print-ds 2e-3)", os.path.join(ds, TRAJ), True)
+    ok = (nviol == 0 and verified >= N_GOOD and exits == len(parts) and sp == 0 and zi == 0)
     print(("\n[PASS] 201 periodic transport verified: velocity untouched, "
-           "position exact modulo Ly, all particles exit; the source smoothed across the periodic faces.") if ok
+           "position exact modulo Ly, all particles exit; the source smoothed across the periodic faces; "
+           "one trajectory zone per parcel image.") if ok
           else "\n[FAIL] periodic-transport or smoothing violation(s) -- see above.")
     return 0 if ok else 1
 

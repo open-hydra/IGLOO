@@ -44,7 +44,8 @@ never from production output. Four gates:
    same properties, same physics ⇒ group 2 must be a faithful clone). The strongest
    available statement that group 2 was *pinned* correctly, not merely *counted* correctly.
 4. **integration** — every particle writes ≥5 trajectory records and exits on the outflow
-   plane. A pinning bug that injects everything out of domain still exits 0, so "the
+   plane (a row's group is read from its zone's title: the exit file holds one zone per
+   group, the trajectory file one per parcel; counting zones as groups reads 0 records). A pinning bug that injects everything out of domain still exits 0, so "the
    solver ran" is never the criterion.
 
 ## RED signature (counters carried between calls)

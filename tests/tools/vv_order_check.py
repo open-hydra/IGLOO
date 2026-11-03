@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 """vv-order, check-order: a case's V&V figure (verify.py) and its gate's printout (check.py) do not depend on the
-order of the records in its .dat files.
+order of the records in its .dat files, nor on the order of a trajectory file's zones.
 
-An OpenMP run writes each parcel's records in time order, interleaved with the other parcels' records in any order.
+A run writes a zone's records parcel by parcel, and a trajectory file one zone per parcel image, titled by its group,
+ID and image (datcols.parcel): a script must read them by ID and by title, never by position.
 For each case named, the tests tree is mirrored into <work>/<copy>/ (the case directory copied without its
 threads-omp*/ runs, every other entry linked, so the scripts' relative paths resolve; no bin/), once per order:
-  a     the records as the run wrote them
-  up    every zone grouped by parcel, ascending ID (a one-thread run)
-  down  every zone grouped by parcel, descending ID
-  mix   figure mode: every zone's records shuffled outright, a parcel's own records included;
-        printout mode: the parcels' records interleaved at random, each parcel's own order kept
+  a     the files as the run wrote them
+  up    every zone grouped by parcel, ascending ID; a trajectory file's zones by ascending group, ID and image
+  down  every zone grouped by parcel, descending ID; a trajectory file's zones by descending group and ID, a
+        parcel's images in their order
+  mix   figure mode: every zone's records shuffled outright, a parcel's own records included, and a trajectory
+        file's zones shuffled outright;
+        printout mode: the parcels' records interleaved at random, each parcel's own order kept, and a trajectory
+        file's zones interleaved at random, each parcel's images in their order
 (every OUTPUT/*.dat of the copy, sibling runs' included; the ID column is found by name in each `variables` line, and
-a zone without one keeps its order except under the figure mode's mix; VV_ORDER_SEED sets the seed). Among parcels
-tied in what a script picks them by, the first in file order is the lowest tied ID in `up` and the highest in
-`down`, so a pick that follows the file order fails whatever order the run gave.
+a zone without one keeps its order except under the figure mode's mix; a file's zones move only when every title is
+a parcel image's; VV_ORDER_SEED sets the seed). Among parcels tied in what a script picks them by, the first in file
+order is the lowest tied ID in `up` and the highest in `down`, so a pick that follows the file order fails whatever
+order the run gave.
 Figure mode: verify.py in every copy, the same SVG bytes; exit 77 when matplotlib is absent.
 Printout mode (--printout): check.py in every copy with IGLOO_EXE unset and IGLOO_REUSE_SIBLING=1 (a sibling run is
 read as the case's run left it, never run again), exit 0 in copy a and the same exit code and printout (the copy's
@@ -27,6 +32,8 @@ import re
 import shutil
 import subprocess
 import sys
+
+import datcols
 
 SEED = int(os.environ.get("VV_ORDER_SEED", "20261016"))
 ORDERS = ("up", "down", "mix")
@@ -76,11 +83,50 @@ def reorder(block, col, order, rng, outright):
     return [ln for k in keys for ln in groups[k]]
 
 
+def zone_key(line):
+    """(group, ID, image) of a trajectory zone line, None for any other line."""
+    m = re.search(r'T\s*=\s*"([^"]*)"', line) if line.lstrip().lower().startswith("zone") else None
+    p = datcols.parcel(m.group(1)) if m else None
+    return p[1:3] + p[4:] if p else None
+
+
+def reorder_zones(lines, order, rng, outright):
+    """A trajectory file's lines with its parcel-image zones (each zone line with its records) in the given order;
+    any other file as it is."""
+    head, units = [], []
+    for ln in lines:
+        if ln.lstrip().lower().startswith("zone"):
+            units.append([ln])
+        elif units:
+            units[-1].append(ln)
+        else:
+            head.append(ln)
+    keys = [zone_key(u[0]) for u in units]
+    if len(units) < 2 or None in keys:
+        return lines
+    pairs = list(zip(keys, units))
+    if order == "up":
+        pairs.sort(key=lambda p: p[0])
+    elif order == "down":
+        pairs.sort(key=lambda p: (-p[0][0], -p[0][1], p[0][2]))
+    elif outright:
+        rng.shuffle(pairs)
+    else:
+        parcels = {}
+        for k, u in pairs:
+            parcels.setdefault(k[:2], []).append((k, u))
+        seq = [k for k, g in parcels.items() for _ in g]
+        rng.shuffle(seq)
+        nxt = {k: iter(g) for k, g in parcels.items()}
+        pairs = [next(nxt[k]) for k in seq]
+    return head + [ln for _, u in pairs for ln in u]
+
+
 def reorder_file(path, order, rng, outright):
-    """Rewrite a .dat file with its records in the given order; True if the bytes changed."""
+    """Rewrite a .dat file with its zones and records in the given order; True if the bytes changed."""
     lines = [ln if ln.endswith("\n") else ln + "\n" for ln in open(path).read().splitlines(True)]
     out, block, col = [], [], None
-    for ln in lines:
+    for ln in reorder_zones(lines, order, rng, outright):
         if is_record(ln):
             block.append(ln)
             continue

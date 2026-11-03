@@ -1363,8 +1363,9 @@ igloo_e2e_case(sym-plane-creep-ord2 infrastructure/sym-plane-creep-ord2 "e2e;inf
 igloo_e2e_case(exit-census infrastructure/exit-census "e2e;infrastructure;io")
 
 # vv-order, check-order: the V&V figures (verify.py) and the printouts of the gates that pick parcels (check.py) are
-# the same whatever order an OpenMP run gives the records of each zone of the .dat files (vv_order_check.py). Both
-# read the cases' fresh OUTPUT/, which each case starts by removing: each case is a fixture, its output a lock.
+# the same whatever the order of the records of each zone of the .dat files and of a trajectory file's zones
+# (vv_order_check.py). Both read the cases' fresh OUTPUT/, which each case starts by removing: each case is a fixture,
+# its output a lock.
 foreach(_c tab-e2e burn-box solid-box conv-nu temp-relax drag-stokes body-force coupled-body periodic-y
         tab-hf92 etab-hf92 mhb98-water beckstead-air d2law-varcp body-evap-m2 body-evap-m4 body-burn-m5)
     set_tests_properties(${_c} PROPERTIES FIXTURES_SETUP order_${_c} RESOURCE_LOCK ${_c}_output)

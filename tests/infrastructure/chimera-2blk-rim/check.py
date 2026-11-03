@@ -45,11 +45,13 @@ def bc_codes(path):
 
 
 def zoned_rows(path, width):
-    """(zone index, tokens) of every data row of the given width, zones counted from 1."""
+    """(group, tokens) of every data row of the given width, the group read from its zone's title (an exit file
+    holds one zone per group, a trajectory file one per parcel image)."""
     out, z = [], 0
     for ln in open(path):
         if ln.strip().lower().startswith("zone"):
-            z += 1
+            m = re.search(r"Group\s*(\d+)", ln)
+            z = int(m.group(1)) if m else 0
             continue
         t = ln.split()
         if len(t) == width and t[0][0] in "0123456789-.":
@@ -70,7 +72,7 @@ def r1b(ex):
         want = codes.get((blk, 2, int(y / DY) + 1, int(zz / DZ) + 1))
         n += 1
         if bc != want or d != first_d.get((z, pid)):
-            bad.append(f"zone {z} ID {pid} at x = {x}: bc {bc} (bc.txt {want}), d {d} (first row "
+            bad.append(f"group {z} ID {pid} at x = {x}: bc {bc} (bc.txt {want}), d {d} (first row "
                        f"{first_d.get((z, pid))})")
     rim = sorted({int(t[9]) for _, t in zoned_rows("OUTPUT/outloc-A.dat", 11) if abs(float(t[0]) - X_RIM) < 1.0e-6})
     out = sorted({int(t[9]) for _, t in zoned_rows("OUTPUT/outloc-A.dat", 11) if abs(float(t[0]) - X_OUT) < 1.0e-6})
