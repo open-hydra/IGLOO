@@ -18,8 +18,6 @@ module IGLOO_particles
   type, public :: obj_particle
     real(R8), allocatable :: stateVar(:) !> ODE state vector (IC for solver), size neq
     real(R8), allocatable :: oldstate(:) !> checkpoint at each accepted step, size neq
-    real(R8), allocatable :: auxState(:) !> variables updated at RHS runtime, size nAuxState
-    real(R8), allocatable :: eventVar(:) !> vars modified if an event occurs, size nEventVar
     real(R8), allocatable :: intE(:)     !> self velocity&temperature integral
     real(R8)     :: m         !> mass of the single self
     real(R8)     :: m0        !> initial mass (before mass sheddig due to breakup)
@@ -70,7 +68,6 @@ module IGLOO_particles
     logical      :: varPsat   !> ODE system switch for pSat=pSat(T)
     logical      :: brkupEvent=.false. !> flag active when breakup model is of type "event"
     !> ODE system configuration (set by assign_group2particle)
-    logical      :: flags(5) = .false. !> [varCp, varRho, ord2, mesh2D, eulerSwitch]
     integer      :: evapSelect  = 0    !> evaporation gas-side selector
     integer      :: brkupSelect = 0    !> breakup model selector
     !> Composable phase-change axes
@@ -101,7 +98,6 @@ module IGLOO_particles
     real(R8)     :: Yinf       = 0._R8
     real(R8)     :: LvMvOverRu = 0._R8
     real(R8)     :: invTboil   = 0._R8
-    real(R8)     :: psat       = 0._R8
     !> Optional per-material properties; each is read only by the model that needs it.
     real(R8)     :: alphaE     = 1._R8  !> LK accommodation coefficient
     real(R8)     :: kLiq       = 0._R8  !> liquid thermal conductivity [W/m/K] (reserved for P2T)

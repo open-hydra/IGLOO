@@ -97,12 +97,12 @@ contains
         srcBodyForce = .false.;  sourceSwitch = .false.;  phaseChange = .true.
 
         propFlags = .false.
-        call setupRHS(2, 0, 1, 0, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
+        call setupRHS(2, 0, 1, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
 
         p%cp = 4180._R8;  p%rho = rho_p;  p%d = dp0
         p%m  = rho_p*(PI/6._R8)*dp0**3
         p%Mv = Mv;  p%Lv = Lv;  p%cpv = cpv;  p%Le = 1._R8;  p%Yinf = 0._R8
-        p%LvMvOverRu = Lv*Mv/Ru;  p%invTboil = 1._R8/Tboil;  p%psat = 0._R8
+        p%LvMvOverRu = Lv*Mv/Ru;  p%invTboil = 1._R8/Tboil
         allocate(aux(nauxvar), auxst(max(1,nauxstate)))
         auxst = 0._R8
         call packAuxVars(p, nauxvar, aux)

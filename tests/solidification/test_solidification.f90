@@ -4,7 +4,7 @@ program test_solidification
     ! (supercooling, adiabatic recalescence, freezing plateau at T-melt, solid cooling),
     ! called directly with an alumina-like particle.
     !
-    !   SG0  metal-slot pin: imTm/imHf/imTn/imCps = 7/8/9/10 of the nmp = nmetal = 11 block.
+    !   SG0  metal-slot pin: imHf/imCps = 7/8 of the nmp = nmetal = 9 block.
     !   SG1  nucleationJump: f0 = cl*(Tm-Tn)/hfus with T back to Tm; the whole-freeze branch
     !        (f0 >= 1) at the temperature that conserves the enthalpy.
     !   SG2  plateauRate: m*hfus*df/dt = -Qdot, sign and magnitude; RK4 lands on f = 1 at
@@ -32,7 +32,7 @@ program test_solidification
                                         eventValue, eventFunction, eventCrossed, eventPassed,     &
                                         solidTransition,                                          &
                                         phLiquid, phUndercooled, phPlateau, phSolid
-    use IGLOO_Lib_Combustion, only: nmp, imTm, imHf, imTn, imCps
+    use IGLOO_Lib_Combustion, only: nmp, imHf, imCps
     use Lib_RHS,              only: nmetal
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
@@ -109,11 +109,10 @@ contains
     end subroutine flag
 
     subroutine run_SG0(ok)
-        !> the four solidification slots of the metal block, and the block length on both sides
+        !> the two solidification slots of the metal block, and the block length on both sides
         logical, intent(inout) :: ok
-        call flag('SG0 metal slots imTm/imHf/imTn/imCps = 7/8/9/10, nmp = nmetal = 11', 'SG0_slots', &
-                  imTm == 7 .and. imHf == 8 .and. imTn == 9 .and. imCps == 10 .and. &
-                  nmp == 11 .and. nmetal == 11, ok)
+        call flag('SG0 metal slots imHf/imCps = 7/8, nmp = nmetal = 9', 'SG0_slots', &
+                  imHf == 7 .and. imCps == 8 .and. nmp == 9 .and. nmetal == 9, ok)
     end subroutine run_SG0
 
     subroutine run_SG1(ok)
@@ -413,7 +412,7 @@ contains
                            ind_mb, ind_m, ind_d, ind_sph
         use IGLOO_Lib_Combustion, only: imKb, imN, imXe, imBeta, imXi, imTig, imQc
         logical, intent(inout) :: ok
-        integer, parameter :: poisoned(9) = [imKb, imN, imXe, imBeta, imXi, imTig, imTm, imTn, imQc]
+        integer, parameter :: poisoned(7) = [imKb, imN, imXe, imBeta, imXi, imTig, imQc]
         real(R8), parameter :: UG = 10._R8, Tph(0:3) = [T0, 2000._R8, TM, 1800._R8]
         type(obj_particle) :: p
         real(R8), allocatable :: aux(:), auxP(:), auxst(:)
@@ -425,7 +424,7 @@ contains
         sourceSwitch = .false.;  phaseChange = .false.
         dragSelect = 2;  heatSelect = 5              ! Stokes, Ranz-Marshall
         propFlags = .false.
-        call setupRHS(6, 0, 0, 0, 0, 0, 0, 1, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
+        call setupRHS(6, 0, 0, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
         layout = ind_mb > 0 .and. ind_m > 0 .and. ind_d > 0 .and. ind_sph > 0 .and. nauxstate >= 1
         call flag('SG6a setupRHS(model 6): mass, diameter, metal block and phase slot present', 'SG6a_layout', layout, ok)
         if (.not. layout) return
@@ -460,7 +459,7 @@ contains
         write(*,'(a,es10.3)') '  [INFO] SG6b worst relative error of F over the four phases = ', errMax
         ok = ok .and. assert_lt('SG6b rhsSolidification per phase: F(7), F(8), euler tail', errMax, 1.0e-13_R8)
         call append_row('SG6b_rhs', 'F', errMax, errMax, 0._R8, 0._R8, 1.0e-13_R8, errMax < 1.0e-13_R8)
-        call flag('SG6c poisoned non-solidification metal slots and T-melt/T-nuc change no F bit', 'SG6c_poison', same, ok)
+        call flag('SG6c poisoned non-solidification metal slots change no F bit', 'SG6c_poison', same, ok)
     end subroutine run_SG6
 
     !> piecewise closed form of the melting history at time t

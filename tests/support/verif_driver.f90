@@ -74,7 +74,7 @@ contains
 
         ! --- configure model 1 (constant mass, no breakup/evap, const props) ---
         propFlags = .false.
-        call setupRHS(1, 0, 0, 0, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
+        call setupRHS(1, 0, 0, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
 
         ! --- pack particle props into aux (cp/rho/m/d) ---
         p%cp = cp;  p%rho = rho;  p%d = d;  p%m = m

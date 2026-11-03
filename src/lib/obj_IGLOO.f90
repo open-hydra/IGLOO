@@ -128,8 +128,7 @@ contains
           write(*,'(A)') '  >> DB injection carries wp /= 0 (2.5D)'
       endif
     endif
-    call read_cdp_bc_file(IGLOO_phase_prefix,self%material,self%geoblock, &
-                          self%gasblock,self%source,self%euler,self%srcSwitch,self%eulSwitch)
+    call read_cdp_bc_file(IGLOO_phase_prefix,self%material,self%geoblock,self%gasblock)
     call tm_phase(TM_BLOCKS)
     call buildInterfaceLinks(self%geoblock, self%links)
     if (mpi_is_root) call reportNonAligned(self%links)

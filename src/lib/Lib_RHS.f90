@@ -10,13 +10,13 @@ module Lib_RHS
   public  :: rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, rhsAlCombustion
   public  :: rhsSolidification
   public  :: ind_d, ind_rho, ind_sig, ind_mup
-  public  :: ind_ps, ind_Mv, ind_Lv, ind_Cv
+  public  :: ind_Mv, ind_Lv, ind_Cv
   public  :: ind_Le, ind_Yi, ind_e1, ind_e2, ind_cp, ind_m
   public  :: ind_sxi, ind_sb1, ind_sb2, ind_sph
   public  :: ind_evd, ind_evn, ind_evm0, ind_ev1, ind_ev2
   public  :: ind_e3, ind_e4, ind_e5, ind_mb, nmetal
   public  :: mod_model, mod_brkSelect, mod_evapSelect, mod_propFlags
-  public  :: mod_liqSelect, mod_intfSelect, mod_boilSelect, mod_combSelect, mod_solidSelect
+  public  :: mod_liqSelect, mod_intfSelect, mod_boilSelect, mod_combSelect
   public  :: mod_bp, mod_bpMethod, mod_bpScale
   public  :: nauxvar, nauxstate, neventvar, nbrkst
 
@@ -28,7 +28,6 @@ module Lib_RHS
   integer :: mod_intfSelect = 0         !> interface:   0 VLE, 1 Langmuir-Knudsen
   integer :: mod_boilSelect = 0         !> boiling:     0 clamp, 1 ZGR (not implemented)
   integer :: mod_combSelect = 0         !> metal combustion: 0 off, 1 Beckstead
-  integer :: mod_solidSelect= 0         !> solidification:   0 off, 1 supercool + recalescence
   logical :: mod_propFlags(5) = .false. !> [varCp, varRho, varSig, varMup, varPsat]
   real(R8), allocatable :: mod_bp(:)    !> breakup params (copy of bp from IGLOO_Lib_Breakup)
   integer  :: mod_bpMethod  = 1         !> TAB sub-method selector
@@ -37,11 +36,11 @@ module Lib_RHS
   !> AuxVars indices (set by computeNaux, 0 = absent)
   integer :: ind_cp  = 0, ind_m  = 0, ind_d   = 0, ind_rho = 0
   integer :: ind_sig = 0, ind_mup = 0
-  integer :: ind_ps  = 0, ind_Mv  = 0, ind_Lv = 0, ind_Cv = 0
+  integer :: ind_Mv  = 0, ind_Lv = 0, ind_Cv = 0
   integer :: ind_Le  = 0, ind_Yi  = 0, ind_e1 = 0, ind_e2  = 0
   integer :: ind_e3  = 0, ind_e4  = 0, ind_e5 = 0  !> alpha_e (LK interface); k_liq / mu_liq reserved for P2T
   integer :: ind_mb  = 0                            !> metal-block start (combustion), 0 = absent
-  integer, parameter :: nmetal = 11                 !> metal parameter block, order = IGLOO_Lib_Combustion imKb..imQc
+  integer, parameter :: nmetal = 9                  !> metal parameter block, order = IGLOO_Lib_Combustion imKb..imQc
   integer :: nauxvar = 0
 
   !> AuxState indices (set by computeNauxState)
@@ -143,9 +142,6 @@ contains
 
     !> evaporation: ind_Mv..ind_e5 contiguous, ordered as IGLOO_Lib_Evaporation ep(1:10)
     if (evapSelect > 0) then
-      if (.not.propFlags(5)) then
-        nEvap = nEvap + 1; ind_ps = ind; ind = ind + 1    !> psat (const)
-      endif
       nEvap = nEvap + 10
       ind_Mv = ind; ind = ind + 1                         !> Mv       → ep(1)
       ind_Lv = ind; ind = ind + 1                         !> Lv       → ep(2)
@@ -219,12 +215,12 @@ contains
   !> Set the module-level per-material config and compute the aux/auxState/eventVar layouts;
   !  called once per material/group, outside any parallel region.
   subroutine setupRHS(model, brkSelect, evapSelect, liqSelect, intfSelect, boilSelect, &
-                      combSelect, solidSelect, propFlags, bp_in, &
+                      combSelect, propFlags, bp_in, &
                       bpMethod_in, bpScale_in, nAux, nAuxSt, nEvV)
     use IGLOO_variables, only: ord2, mesh2D
     !$ use omp_lib, only: omp_in_parallel
     integer,  intent(in) :: model, brkSelect, evapSelect
-    integer,  intent(in) :: liqSelect, intfSelect, boilSelect, combSelect, solidSelect
+    integer,  intent(in) :: liqSelect, intfSelect, boilSelect, combSelect
     logical,  intent(in) :: propFlags(5)
     real(R8), intent(in) :: bp_in(:)
     integer,  intent(in) :: bpMethod_in
@@ -239,7 +235,6 @@ contains
     mod_intfSelect = intfSelect
     mod_boilSelect = boilSelect
     mod_combSelect = combSelect
-    mod_solidSelect= solidSelect
     mod_propFlags  = propFlags
     !> Copy breakup params
     if (allocated(mod_bp)) deallocate(mod_bp)
@@ -251,7 +246,7 @@ contains
     !> Reset all ind_* to 0 (sentinel: 0 = not in aux)
     ind_cp=0;  ind_m=0;   ind_d=0;  ind_rho=0
     ind_sig=0; ind_mup=0
-    ind_ps=0;  ind_Mv=0;  ind_Lv=0; ind_Cv=0; ind_Le=0; ind_Yi=0
+    ind_Mv=0;  ind_Lv=0; ind_Cv=0; ind_Le=0; ind_Yi=0
     ind_e1=0;  ind_e2=0;  ind_e3=0; ind_e4=0; ind_e5=0
     ind_mb=0
     !> Compute layouts
@@ -283,7 +278,6 @@ contains
     if (ind_sig > 0) aux(ind_sig) = particle%sigma
     if (ind_mup > 0) aux(ind_mup) = particle%mup
     !> evaporation (contiguous ep(10) slice: Mv,Lv,cpv,Le,Yinf,LvMvOverRu,invTboil,alphaE,kLiq,muLiq)
-    if (ind_ps > 0) aux(ind_ps) = particle%psat
     if (ind_Mv > 0) then
       aux(ind_Mv) = particle%Mv
       aux(ind_Lv) = particle%Lv
@@ -299,8 +293,8 @@ contains
     !> metal (contiguous nmetal slice)
     if (ind_mb > 0) aux(ind_mb:ind_mb+nmetal-1) =                        &
       [particle%Kburn, particle%nBurn, particle%Xeff, particle%betaPart, &
-       particle%xiCap, particle%Tign,  particle%Tmelt, particle%hFus,    &
-       particle%Tnuc,  particle%cpSol, particle%qComb]
+       particle%xiCap, particle%Tign,  particle%hFus,  particle%cpSol,   &
+       particle%qComb]
   end subroutine packAuxVars
 
   !> Pack the particle's auxiliary state (xi0, KHRT told/tc, solidification phase) into auxst.

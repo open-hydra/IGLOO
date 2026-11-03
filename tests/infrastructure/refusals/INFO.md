@@ -29,6 +29,8 @@ output written).
 | `refuse-properties-two-enthalpy` | own 10-row `INPUT/properties.dat` whose header names `"Enthalpy"` and `"Enthalpy_abs"` | `the enthalpy datum is ambiguous` |
 | `refuse-properties-bad-row` | own 10-row `properties.dat`, row 3's enthalpy typed `375O.000000` (a letter O) | `unreadable rows: line 7 does not hold 4 numbers` |
 | `refuse-properties-psat` | tc-box (`bc.txt`/`solfile.tec` symlinked), its table on 1..1000 K plus a `"Psat"` column = its Clausius-Clapeyron line (`tools/make_psat_table.py --anchors 500 0.018150089922984093 600 1.0`, the first ratio `exp(-Lv Mv/Ru (1/500 - 1/600))`) with the 549 K and 550 K values swapped | `Psat column: a pressure that decreases with T` |
+| `refuse-pure2d-mesh` | own `INPUT/solfile.tec`: `planar-slab`'s gas file reduced to its first node plane, `K=1` (`python3 make_pure2d.py`, run from this directory); `planar-slab`'s `bc.txt` and settings | `IGLOO: a pure 2D mesh (one node plane) is not supported: give IGLOO the mesh of one cell layer` — refused at mesh import (`allocation.f90`): ORION reads the one-plane zone as a block of `Nk = 0` cells |
+| `refuse-pure2d-bc` | own `INPUT/bc.txt`: `planar-slab`'s records of faces 1–4 with 5-integer headers `b i j f code`, as ATLAS writes a pure-2D mesh (`make_pure2d.py`); `planar-slab`'s gas file and settings | `IGLOO: bc.txt has 5 header integers (a pure 2D ATLAS file): give IGLOO the boundary file of the one-cell-layer mesh` — refused from the first header in `read_cdp_bc_file` |
 | `refuse-bc-copies` | own `INPUT/`: `phase.txt` `A 3` (three families), `two-fam-bc`'s two-copy `bc.txt`, `common/properties.dat` — 2500 records where one copy (1250) or one per family (3750) is readable | `IGLOO: bc.txt record count is neither one copy nor one copy per family` — refused in `read_cdp_bc_file`, which prints the three counts |
 | `refuse-bc-copy-order` | own `INPUT/`: `two-fam-bc`'s file with two face-3 headers of copy 2 exchanged (`python3 ../../two-fam-bc/make_fixture.py --swap`, run from the case directory), `two-mat`'s `phase.txt`/`properties.dat` | `IGLOO: bc.txt family copies do not repeat the faces of copy 1` — the codes still line up, only the header integers differ (`family 2 of block 1 ... at record 51`) |
 | `refuse-chimera-counts` | own `INPUT/` (`python3 make_chimera.py`, run from this directory): a box of two overlapping blocks joined by chimera (102) faces (`tools/make_box_case.py --nx 8 --ny 2 --nz 2 --blocks 2 --overlap 1 --families 2`), the counts line of block 1's first chimera record holding three integers | `IGLOO: chimera donor counts line is not two non-negative integers` — refused at the first scan of the file |
@@ -68,7 +70,11 @@ output written).
 | `refuse-psd-radius-zero` | a first radius of 0 | `IGLOO: size-distribution file: a radius is not positive` |
 | `refuse-psd-mass-zero` | every mass fraction 0 | `IGLOO: size-distribution file: the mass fractions sum to zero` |
 
-All forty-six exit 128 at setup with nothing injected or integrated. **The ten size-distribution cases are
+All forty-eight exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
+(`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
+5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
+line) — neither is their payload. **The ten size-distribution cases are
 RED** on a reader that splits the inlet line with a list-directed read: a path ends at its slash (`tables`,
 `INPUT`), so nine of them stop at `unsupported distribution law` with exit 1 and no payload, and the
 600-character line is cut to 512 characters and run as a Dirac (exit 0, output written). The six table

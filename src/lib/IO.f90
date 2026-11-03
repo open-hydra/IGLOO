@@ -25,7 +25,7 @@ contains
                                      check_table_nodes, check_table_columns, validate_psat_column, &
                                      table_reason, psat_reason
     use IGLOO_IO_INI,          only: ini_Mv, ini_Lv, ini_Tboil, ini_cpv, ini_Le, ini_Yinf, &
-                                        ini_sigma, ini_mu, ini_psat, &
+                                        ini_sigma, ini_mu, &
                                         set_material_defaults, apply_material_key, finalize_material_models
     use Lib_ORION_data
     use Lib_Tecplot
@@ -253,7 +253,6 @@ contains
       !> evaporation properties
       if (phaseChange) then
         !> constants from [IGLOO-Properties]
-        if (allocated(ini_psat)) material(i)%psat = ini_psat(i)
         if (allocated(ini_Mv)) then;    material(i)%Mv = ini_Mv(i)
         else; error stop '[ERROR] Evaporation requires Mv. Provide in [IGLOO-Properties]'
         endif
@@ -311,21 +310,18 @@ contains
   !  pass 1 tags every face cell from copy 1 and seeds the inflow cells (area, mdotGas); pass 2
   !  fills properties/connections, copy c into family c. The ord2 gas ghost ring is IGLOO's,
   !  filled per sweep by fillGhostGradient/fillGhostPartners -- never here.
-  subroutine read_cdp_bc_file(name,material,geoblock,gasblock,sourceblock,eulerblock,srcSwitch,eulSwitch)
+  subroutine read_cdp_bc_file(name,material,geoblock,gasblock)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_variables,             only: nb, nm, mesh2D, dsSwitch
-    use IGLOO_data_block,            only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, obj_bc_cell
+    use IGLOO_data_block,            only: obj_block, obj_flowblock, obj_bc_cell
     use IGLOO_data_phases,           only: obj_material
     use IGLOO_RayFaceIntersection3D, only: computeArea
     use IGLOO_Lib_Statistics,        only: DiracDistr, TableDistrBase
     implicit none
     character(len=*)     , intent(in)    :: name
     type(obj_material)   , intent(in)    :: material(nm)
-    logical,               intent(in)    :: srcSwitch, eulSwitch
     type(obj_block)      , intent(inout) :: geoblock(nb)
     type(obj_flowblock)  , intent(inout) :: gasblock(nb)
-    type(obj_sourceblock), intent(inout) :: sourceblock(nb)
-    type(obj_eulerblock) , intent(inout) :: eulerblock(:,:)
     integer, parameter :: nPropDP = 9
     integer            :: b, mat, p, f, m, n, i, mend(6), nend(6)
     integer            :: u, dumi, totFam, ci_n, s, ios, nTok, readLine(9)
@@ -353,6 +349,12 @@ contains
       nFaceTot = nFaceTot + 2*(geoblock(b)%Ny*geoblock(b)%Nz + geoblock(b)%Nx*geoblock(b)%Nz + &
                                geoblock(b)%Nx*geoblock(b)%Ny)
     enddo
+    !> A first header of 5 integers (b i j f code) is ATLAS's pure 2D layout.
+    read(u,'(A)',iostat=ios) lineString
+    if (ios == 0 .and. countTokens(lineString) == 5) &
+      error stop 'IGLOO: bc.txt has 5 header integers (a pure 2D ATLAS file): give IGLOO the boundary &
+                 &file of the one-cell-layer mesh'
+    rewind(u)
     nrec = 0
     do
       read(u,*,iostat=ios) dumi, dumi, dumi, dumi, dumi, code
@@ -362,7 +364,7 @@ contains
         write(*,'(A,I0,A,I0)') ' [IGLOO::read_cdp_bc_file] bad BC cell line: record ', nrec + 1, ', bcdef = ', code
         write(*,*) '  expected 6 integer columns with a 3-digit code (or 0) in column 6.'
         write(*,*) '  Legacy-schema bc.txt? Regenerate it (ATLAS BCB) before running IGLOO.'
-        error stop 1
+        error stop 'IGLOO: bc.txt line is not six integers with a 3-digit code (legacy schema?)'
       endif
       nrec = nrec + 1
       call skipPayload(u, code)
@@ -499,7 +501,7 @@ contains
             nTok = countTokens(lineString)
             if (nTok == 0) then
               write(*,*) ' [IGLOO::read_cdp_bc_file] empty property line for inflow cell'
-              error stop 1
+              error stop 'IGLOO: bc.txt inlet payload line is empty'
             endif
             ipos = 1
             do s = 1, min(nTok, nPropDP)

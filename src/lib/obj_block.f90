@@ -88,7 +88,6 @@ module IGLOO_data_block
   contains
     private
     procedure, pass(self), public :: allocate
-    procedure, pass(self), public :: pass_geometry
     procedure, pass(self), public :: gasProperties
     procedure, pass(self), public :: fillGhostGradient
     procedure, pass(self), public :: setGhostFace
@@ -102,7 +101,6 @@ module IGLOO_data_block
     contains
     private
     procedure, pass(self), public :: allocate => allocateSRC
-    procedure, pass(self), public :: pass_geometry => pass_geometrySRC
     procedure, pass(self), public :: finalize => finalizeSRC
   end type obj_sourceblock
 
@@ -114,7 +112,6 @@ module IGLOO_data_block
     contains
     private
     procedure, pass(self), public :: allocate => allocateEUL
-    procedure, pass(self), public :: pass_geometry => pass_geometryEUL
     procedure, pass(self), public :: reduce => reduceEUL
     procedure, pass(self), public :: normalize => normalizeEUL
   end type obj_eulerblock
@@ -602,60 +599,6 @@ contains
     enddo; enddo; enddo
     vol = hexVolume(verts)
   end subroutine computeVolume
-
-  !> Copy the block dimensions, nodes and centers into the flow block.
-  pure subroutine pass_geometry(self,block)
-    implicit none
-    class(obj_flowblock), intent(inout) :: self
-    class(obj_block), intent(in)    :: block
-
-    self%Nx = block%Nx
-    self%Ny = block%Ny
-    self%Nz = block%Nz
-    allocate(self%center(3,1:self%Nx,1:self%Ny,1:self%Nz))
-    allocate(self%dl    (3,1:self%Nx,1:self%Ny,1:self%Nz))
-    allocate(self%dlmin (1:self%Nx,1:self%Ny,1:self%Nz))
-    allocate(self%node  (3,0:self%Nx,0:self%Ny,0:self%Nz))
-    self%center = block%center
-    self%node   = block%node
-
-  end subroutine pass_geometry
-
-  !> Copy the block dimensions, nodes and centers into the source block.
-  pure subroutine pass_geometrySRC(self,block)
-    implicit none
-    class(obj_sourceblock), intent(inout) :: self
-    class(obj_block), intent(in)    :: block
-
-    self%Nx = block%Nx
-    self%Ny = block%Ny
-    self%Nz = block%Nz
-    allocate(self%center(3,1:self%Nx,1:self%Ny,1:self%Nz))
-    allocate(self%dl    (3,1:self%Nx,1:self%Ny,1:self%Nz))
-    allocate(self%dlmin (1:self%Nx,1:self%Ny,1:self%Nz))
-    allocate(self%node  (3,0:self%Nx,0:self%Ny,0:self%Nz))
-    self%center = block%center
-    self%node   = block%node
-
-  end subroutine pass_geometrySRC
-
-  !> Copy the block dimensions, nodes and centers into the euler block.
-  pure subroutine pass_geometryEUL(self,block)
-    implicit none
-    class(obj_eulerblock), intent(inout) :: self
-    class(obj_block), intent(in)    :: block
-
-    self%Nx = block%Nx
-    self%Ny = block%Ny
-    self%Nz = block%Nz
-    allocate(self%center(3,1:self%Nx,1:self%Ny,1:self%Nz))
-    allocate(self%dl    (3,1:self%Nx,1:self%Ny,1:self%Nz))
-    allocate(self%dlmin (1:self%Nx,1:self%Ny,1:self%Nz))
-    allocate(self%node  (3,0:self%Nx,0:self%Ny,0:self%Nz))
-    self%center = block%center
-    self%node   = block%node
-
-  end subroutine pass_geometryEUL
 
   !> Axis-aligned bounding box over the block's nodes.
   subroutine computeBBox(self)

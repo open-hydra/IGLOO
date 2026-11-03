@@ -41,7 +41,7 @@ program test_bc_families
     !
     use, intrinsic :: iso_fortran_env, only: real64
     use IGLOO_IO,          only: read_cdp_bc_file
-    use IGLOO_data_block,  only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock
+    use IGLOO_data_block,  only: obj_block, obj_flowblock
     use IGLOO_data_phases, only: obj_material
     use IGLOO_variables,   only: nb, nm, mesh2D, dsSwitch
     implicit none
@@ -78,15 +78,13 @@ contains
     subroutine f1_one_copy
         type(obj_block)                 :: geo(1)
         type(obj_flowblock)             :: gas(1)
-        type(obj_sourceblock)           :: src(1)
-        type(obj_eulerblock)            :: eul(1,1)
         type(obj_material), allocatable :: mat(:)
         integer :: u
         call setup(geo, reshape([4, 3, 1], [3, 1]), mat, [1, 1])
         open(newunit=u, file='INPUT/famtest-F1-bc.txt', status='replace', action='write')
         call writeCopy(u, 1, 4, 3, 1, 401, 0.1_real64, 1.0e-6_real64, 0.0_real64)
         close(u)
-        call read_cdp_bc_file('famtest-F1-', mat, geo, gas, src, eul, .false., .false.)
+        call read_cdp_bc_file('famtest-F1-', mat, geo, gas)
         call expectInlet('F1', geo(1), [0.1_real64, 0.1_real64], [1.0e-6_real64, 1.0e-6_real64], 0.2_real64)
         call expectTags('F1', geo(1), 3)
     end subroutine f1_one_copy
@@ -98,8 +96,6 @@ contains
         integer,      intent(in) :: groups(:)
         type(obj_block)                 :: geo(1)
         type(obj_flowblock)             :: gas(1)
-        type(obj_sourceblock)           :: src(1)
-        type(obj_eulerblock)            :: eul(1,1)
         type(obj_material), allocatable :: mat(:)
         integer :: u
         call setup(geo, reshape([4, 3, 1], [3, 1]), mat, groups)
@@ -107,7 +103,7 @@ contains
         call writeCopy(u, 1, 4, 3, 1, 401, 0.1_real64, 1.0e-6_real64, 0.0_real64)
         call writeCopy(u, 1, 4, 3, 1, 401, 0.2_real64, 2.0e-6_real64, 0.0_real64)
         close(u)
-        call read_cdp_bc_file('famtest-'//lab//'-', mat, geo, gas, src, eul, .false., .false.)
+        call read_cdp_bc_file('famtest-'//lab//'-', mat, geo, gas)
         call expectInlet(lab, geo(1), [0.1_real64, 0.2_real64], [1.0e-6_real64, 2.0e-6_real64], 0.3_real64)
         call expectTags(lab, geo(1), 3)
     end subroutine f2_two_copies
@@ -116,8 +112,6 @@ contains
     subroutine f3_two_blocks
         type(obj_block)                 :: geo(2)
         type(obj_flowblock)             :: gas(2)
-        type(obj_sourceblock)           :: src(2)
-        type(obj_eulerblock)            :: eul(2,2)
         type(obj_material), allocatable :: mat(:)
         integer :: u
         call setup(geo, reshape([4, 3, 1, 5, 3, 1], [3, 2]), mat, [1, 1])
@@ -127,7 +121,7 @@ contains
         call writeCopy(u, 2, 5, 3, 1, 401, 0.3_real64, 3.0e-6_real64, 0.0_real64)
         call writeCopy(u, 2, 5, 3, 1, 401, 0.4_real64, 4.0e-6_real64, 0.0_real64)
         close(u)
-        call read_cdp_bc_file('famtest-F3-', mat, geo, gas, src, eul, .false., .false.)
+        call read_cdp_bc_file('famtest-F3-', mat, geo, gas)
         call expectInlet('F3 block 1', geo(1), [0.1_real64, 0.2_real64], [1.0e-6_real64, 2.0e-6_real64], 0.3_real64)
         call expectTags('F3 block 1', geo(1), 3)
         call expectInlet('F3 block 2', geo(2), [0.3_real64, 0.4_real64], [3.0e-6_real64, 4.0e-6_real64], 0.7_real64)
@@ -138,8 +132,6 @@ contains
     subroutine f4_mass_flux
         type(obj_block)                 :: geo(1)
         type(obj_flowblock)             :: gas(1)
-        type(obj_sourceblock)           :: src(1)
-        type(obj_eulerblock)            :: eul(1,1)
         type(obj_material), allocatable :: mat(:)
         integer :: u, m
         call setup(geo, reshape([4, 3, 1], [3, 1]), mat, [1, 1])
@@ -147,7 +139,7 @@ contains
         call writeCopy(u, 1, 4, 3, 1, 402, 0.1_real64, 1.0e-6_real64, 0.0_real64)
         call writeCopy(u, 1, 4, 3, 1, 402, 0.2_real64, 2.0e-6_real64, 0.0_real64)
         close(u)
-        call read_cdp_bc_file('famtest-F4-', mat, geo, gas, src, eul, .false., .false.)
+        call read_cdp_bc_file('famtest-F4-', mat, geo, gas)
         do m = 1, 3
             associate(cell => geo(1)%face(1)%cell(m, 1))
             call expectEq('F4 cell '//itoa(m)//' mdotPart', cell%mdotPart, 0.3_real64*H*H)
@@ -160,8 +152,6 @@ contains
     subroutine f5_ds
         type(obj_block)                 :: geo(1)
         type(obj_flowblock)             :: gas(1)
-        type(obj_sourceblock)           :: src(1)
-        type(obj_eulerblock)            :: eul(1,1)
         type(obj_material), allocatable :: mat(:)
         integer :: u
         call setup(geo, reshape([4, 3, 1], [3, 1]), mat, [1, 1])
@@ -169,7 +159,7 @@ contains
         call writeCopy(u, 1, 4, 3, 1, 401, 0.1_real64, 1.0e-6_real64, 0.0_real64)
         call writeCopy(u, 1, 4, 3, 1, 401, 0.2_real64, 2.0e-6_real64, 0.01_real64)
         close(u)
-        call read_cdp_bc_file('famtest-F5-', mat, geo, gas, src, eul, .false., .false.)
+        call read_cdp_bc_file('famtest-F5-', mat, geo, gas)
         call expectEq('F5 fam 1 ds', geo(1)%face(1)%cell(1, 1)%properties(1, 9), 0.0_real64)
         call expectEq('F5 fam 2 ds', geo(1)%face(1)%cell(1, 1)%properties(2, 9), 0.01_real64)
         if (dsSwitch) then
@@ -186,8 +176,6 @@ contains
     subroutine f6_chimera
         type(obj_block)                 :: geo(2)
         type(obj_flowblock)             :: gas(2)
-        type(obj_sourceblock)           :: src(2)
-        type(obj_eulerblock)            :: eul(2,2)
         type(obj_material), allocatable :: mat(:)
         integer :: u, c, m, b, f, n102(2), n400(2)
         call setup(geo, reshape([4, 3, 1, 5, 3, 1], [3, 2]), mat, [1, 1])
@@ -199,7 +187,7 @@ contains
             call writeChimCopy(u, 2, 5, 3, 1, 1)
         enddo
         close(u)
-        call read_cdp_bc_file('famtest-F6-', mat, geo, gas, src, eul, .false., .false.)
+        call read_cdp_bc_file('famtest-F6-', mat, geo, gas)
         call expectChim('F6 block 1 face 2 m=1', geo(1)%face(2)%cell(1,1), [1, 1], &
                         reshape([2, 1, 1, 1], [1, 4]), [1.0_real64])
         call expectChim('F6 block 1 face 2 m=2', geo(1)%face(2)%cell(2,1), [2, 1], &
@@ -231,8 +219,6 @@ contains
     subroutine f7_connection_2d
         type(obj_block)                 :: geo(1)
         type(obj_flowblock)             :: gas(1)
-        type(obj_sourceblock)           :: src(1)
-        type(obj_eulerblock)            :: eul(1,1)
         type(obj_material), allocatable :: mat(:)
         integer :: u, f, m, n, i, j, mend(6), nend(6)
         call setup(geo, reshape([4, 3, 1], [3, 1]), mat, [1, 1])
@@ -261,7 +247,7 @@ contains
             endif
         enddo; enddo; enddo
         close(u)
-        call read_cdp_bc_file('famtest-F7-', mat, geo, gas, src, eul, .false., .false.)
+        call read_cdp_bc_file('famtest-F7-', mat, geo, gas)
         do m = 1, 4
             call expectConn('F7 face 3 m='//itoa(m)//' (nine integers)', geo(1)%face(3)%cell(m,1), &
                             [1, m, 3, 1], 4, [1, 0, 0, 1])
