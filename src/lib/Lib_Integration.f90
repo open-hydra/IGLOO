@@ -14,7 +14,7 @@ contains
                         hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, shed,noShed,resid)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
-    use IGLOO_variables,  only: unitTraj,unitExit,unitScat,unitSnap,iprint,dtprint,tEnd,timeOn,snapOn,frozenOn, &
+    use IGLOO_variables,  only: unitTraj,unitExit,unitScat,unitSnap,iprint,dtprint,dsprint,dcellSet,tEnd,timeOn,snapOn,frozenOn, &
                                 nb,toll,ord2,mesh2D,threshold,            &
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
@@ -75,6 +75,10 @@ contains
     real(R8) :: wAccOld       ! wAcc at the last latched state, restored when a cut step is integrated again
     !> The parcel's rows per particle file, written at its end by emitParcel
     type(recList) :: lTraj, lExit, lPlane, lSnap, lScat
+    !> Parcel-rule rows (print-dcell unset): the last row's t and x, the pre-transport row, the last pushed state
+    logical  :: rowsNew, haveRow, wrp
+    real(R8) :: tL, xL(3), preRow(12), svRow(6), tRow
+    integer  :: nPre, layPre
     integer  :: neq, nsp, ng, b, i, j, k, ngVert, iu, iw, it, iter, nCross, nE, nStall
     integer  :: nRefl         ! gas order 1: segments of this cell that ended in a reflection
     real(R8) :: posPrev(3)    ! last outer-iter position, for the zero-progress guard
@@ -211,11 +215,14 @@ contains
     call packAuxVars(part, nauxvar, auxLocal)
     !> The injection row, then a breakup child's first row (its birth state, before its first step), on the
     !  parcel's own aux and cell gas.
+    rowsNew = trajOn .and. .not.dcellSet
+    haveRow = .false.
     if (part%time==0._R8 .and. trajOn) call writeTrajRow()
     if (part%newborn) then
       if (trajOn) call writeTrajRow()
       part%newborn = .false.
     endif
+    tL = part%time; xL = part%stateVar(1:3)
 
     !> TRAJECTORY INTEGRATION LOOP
     iter = 0; nCross=0; tprint = part%time + dtprint
@@ -330,10 +337,12 @@ contains
       !> Wedge sector exit: fold the azimuth back into the band after the deposits, before the cell logic.
       foldOnly = sectorOut .and. .not.(newGas .or. IamOut)
       if (sectorOut) then
+        if (rowsNew) call trajRow(preRow, nPre, layPre)
         call axisymFold(part%stateVar, nSect=nSect)
         if (nSect > 0) then
           !$OMP ATOMIC
           nSectorFold = nSectorFold + 1
+          if (rowsNew) call transportRows()
         else
           part%Ncell = part%Ncell + 1   ! no fold: counted as residency
         endif
@@ -373,12 +382,12 @@ contains
                   tol=geoHexTol)
             endif
           else
-            call part%updateCell(geoblock, reflected=refl); reflSeg = reflSeg .or. refl; call handleGeoEvent()
+            call relocate(); call handleGeoEvent()
           endif
         endif
         !> Geo domain exit / BC handling.
         if (IamOut) then
-          call part%updateCell(geoblock, reflected=refl); reflSeg = reflSeg .or. refl; call handleGeoEvent()
+          call relocate(); call handleGeoEvent()
         endif
         !> Residency count on the gas cell; a pure sector fold is neither a crossing nor residency.
         if (newGas .or. IamOut) then; nCross = nCross + 1; part%Ncell = 0
@@ -386,7 +395,7 @@ contains
       else
         !> ord1: geo-driven.
         if (IamOut) then
-          call part%updateCell(geoblock, reflected=refl); reflSeg = reflSeg .or. refl; b = part%i(1)
+          call relocate(); b = part%i(1)
           call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen, &
               tol=geoHexTol)
         endif
@@ -401,10 +410,12 @@ contains
 
       !> Wedge safety net: fold a segment that ended past a k-plane together with an x-y crossing.
       if (axisym) then
+        if (rowsNew) call trajRow(preRow, nPre, layPre)
         call axisymFold(part%stateVar, nSect=nSect)
         if (nSect > 0) then
           !$OMP ATOMIC
           nSectorFold = nSectorFold + 1
+          if (rowsNew) call transportRows()
         endif
         if (nSect > 1) then
           !$OMP ATOMIC
@@ -438,7 +449,20 @@ contains
         part%gone = .true.
       endif
 
-      if ((dtprint>0._R8.and.part%time>=tprint).or.(mod(nCross,iprint)==0.and.part%Ncell==0.and..not.foldOnly) &
+      !> MPI: end every parcel in flight after a failure, before the row decision writes its last row
+      if (region_failed()) part%gone = .true.
+      !> Rows: the parcel rule (print-ds, else print-dtime, from the last row; a last row at a stop) or print-dcell's cadence
+      if (.not.dcellSet) then
+        if (rowsNew) then
+          if (part%gone .or. part%time>=tEnd) then
+            call writeLastRow()
+          elseif (dsprint>0._R8) then
+            if (norm2(part%stateVar(1:3) - xL) >= dsprint) call writeRuleRow()
+          elseif (dtprint>0._R8) then
+            if (part%time - tL >= dtprint) call writeRuleRow()
+          endif
+        endif
+      elseif ((dtprint>0._R8.and.part%time>=tprint).or.(mod(nCross,iprint)==0.and.part%Ncell==0.and..not.foldOnly) &
           .or.part%time>=tEnd) then
         if (trajOn) call writeTrajRow()
         tprint = tprint + dtprint
@@ -455,7 +479,6 @@ contains
           call rec_push(lSnap, [part%stateVar(1:6), part%tp, part%d, part%m, real(part%ID, R8), part%time], L_ROW_T)
         endif
       endif
-      if (region_failed()) part%gone = .true.   !> MPI: end every parcel in flight after a failure
       if (part%gone) then
         !> The residue's record: the state its parent's exit record prints.
         if (resBorn) then
@@ -482,37 +505,93 @@ contains
     if (iter >= maxIter .and. .not. part%gone) then
       write(*,'(A,I4,A,I0,A)') '       ==> Particle ',part%ID,' hit outer maxIter (',maxIter,'); flagging gone'
       part%gone = .true.
+      if (rowsNew) call writeLastRow()
       call writeExitRow()
       part%time = 0._R8
     endif
     !> Time end reached inside the domain: the record of where integration stopped.
-    if (.not. part%gone .and. part%time >= tEnd) call writeExitRow()
+    if (.not. part%gone .and. part%time >= tEnd) then
+      if (rowsNew) call writeLastRow()
+      call writeExitRow()
+    endif
     !> Every exit path writes the parcel's rows.
     call emitParcel()
 
   contains
 
-    !> One trajectory row; out-time appends the parcel time, a solidifying material the frozen fraction,
-    !  a P2T material the surface temperature.
+    !> One trajectory row of the parcel's current state.
     subroutine writeTrajRow()
-      real(R8) :: tsRow
+      real(R8) :: row(12)
+      integer  :: n, lay
+      call trajRow(row, n, lay)
+      call pushTraj(row(1:n), lay)
+    end subroutine writeTrajRow
+
+
+    !> The trajectory row of the parcel's current state, n values in layout lay; out-time appends the parcel time,
+    !  a solidifying material the frozen fraction, a P2T material the surface temperature.
+    subroutine trajRow(row, n, lay)
+      real(R8), intent(out) :: row(12)
+      integer,  intent(out) :: n, lay
+      row(1:6) = part%stateVar(1:6); row(7) = part%tp; row(8) = part%d; row(9) = part%m; row(10) = real(part%ID, R8)
+      n = 10; lay = L_ROW
       if (part%liqSelect == 1) then
-        tsRow = surfaceTemp()
         if (timeOn) then
-          call rec_push(lTraj, [part%stateVar(1:6), part%tp, part%d, part%m, real(part%ID, R8), part%time, tsRow], L_ROW_TS)
+          row(11) = part%time; row(12) = surfaceTemp(); n = 12; lay = L_ROW_TS
         else
-          call rec_push(lTraj, [part%stateVar(1:6), part%tp, part%d, part%m, real(part%ID, R8), tsRow], L_ROW_S)
+          row(11) = surfaceTemp(); n = 11; lay = L_ROW_S
         endif
       elseif (timeOn .and. frozenOn) then
-        call rec_push(lTraj, [part%stateVar(1:6), part%tp, part%d, part%m, real(part%ID, R8), part%time, part%fSolid], L_ROW_TF)
+        row(11) = part%time; row(12) = part%fSolid; n = 12; lay = L_ROW_TF
       elseif (timeOn) then
-        call rec_push(lTraj, [part%stateVar(1:6), part%tp, part%d, part%m, real(part%ID, R8), part%time], L_ROW_T)
+        row(11) = part%time; n = 11; lay = L_ROW_T
       elseif (frozenOn) then
-        call rec_push(lTraj, [part%stateVar(1:6), part%tp, part%d, part%m, real(part%ID, R8), part%fSolid], L_ROW_F)
-      else
-        call rec_push(lTraj, [part%stateVar(1:6), part%tp, part%d, part%m, real(part%ID, R8)], L_ROW)
+        row(11) = part%fSolid; n = 11; lay = L_ROW_F
       endif
-    end subroutine writeTrajRow
+    end subroutine trajRow
+
+
+    !> Push one trajectory row; the parcel rule's last row compares the parcel's state with it.
+    subroutine pushTraj(row, lay)
+      real(R8), intent(in) :: row(:)
+      integer,  intent(in) :: lay
+      call rec_push(lTraj, row, lay)
+      svRow = row(1:6); tRow = part%time; haveRow = .true.
+    end subroutine pushTraj
+
+
+    !> The parcel rule's row at a reached limit: it becomes the reference of the next one.
+    subroutine writeRuleRow()
+      call writeTrajRow()
+      tL = part%time; xL = part%stateVar(1:3)
+    end subroutine writeRuleRow
+
+
+    !> The parcel rule's last row at a stop, unless the row just pushed holds this state.
+    subroutine writeLastRow()
+      if (haveRow) then
+        if (tRow == part%time .and. all(svRow == part%stateVar(1:6))) return
+      endif
+      call writeTrajRow()
+    end subroutine writeLastRow
+
+
+    !> A wrap or fold under the parcel rule: preRow (taken before it), then the re-entry row, the next row's reference.
+    subroutine transportRows()
+      call pushTraj(preRow(1:nPre), layPre)
+      preRow(1:6) = part%stateVar(1:6)
+      call pushTraj(preRow(1:nPre), layPre)
+      tL = part%time; xL = part%stateVar(1:3)
+    end subroutine transportRows
+
+
+    !> updateCell from the outer loop; a 201 wrap writes its two rows under the parcel rule (the first: the segment end).
+    subroutine relocate()
+      if (rowsNew) call trajRow(preRow, nPre, layPre)
+      call part%updateCell(geoblock, reflected=refl, wrapped=wrp)
+      reflSeg = reflSeg .or. refl
+      if (rowsNew .and. wrp) call transportRows()
+    end subroutine relocate
 
 
     !> The surface temperature of a P2T parcel at its current state: its right-hand side on copies of the aux and gas
