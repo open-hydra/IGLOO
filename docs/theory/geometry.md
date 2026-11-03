@@ -130,9 +130,10 @@ after its bounding-box test) and continues in every other block in index order; 
 contains the point takes the particle. The containment tests are inclusive (to the cell's tolerance), so a conformal
 interface leaves no gap. `bcDef`'s 101 branch, an index jump into the cell named by the bc file, runs
 only when no block contains the point. With
-`gas-order = 2` the ODE step ends at the block face, since the particle must change block there:
-the trajectory gains a row at the interface that a single block would not write, and the scatter
-markers beside it keep their times, their interpolated states moving with the step; the source and the eulerian densities are additive over the cut step, the eulerian
+`gas-order = 2` the ODE step ends at the block face, since the particle must change block there,
+where a single block would not end it: the interface is one more crossing of `print-dcell`'s
+cadence (a row there with `print-dcell = 1`) and, without `print-dcell`, one more segment end (a
+row there only when the `print-ds` or `print-dtime` limit is reached), and the scatter markers beside it keep their times, their interpolated states moving with the step; the source and the eulerian densities are additive over the cut step, the eulerian
 velocity and temperature move at second order in the step (see **Block interfaces** in
 [Eulerian feedback](eulerian-feedback.md#source-fields)). The gas stencil is then sought in
 the new block's own dual mesh, and so is it when the cell search at the entry of a boundary dual cell
@@ -161,13 +162,18 @@ when the particle reaches a sector plane (`sectorOut`) exactly as it ends at any
 face.  `axisymFold(part%stateVar)` in `src/lib/obj_bc.f90` then rotates position and
 velocity about the axis by one sector, back into $[-\Delta\theta/2, +\Delta\theta/2]$,
 with the sector angle derived from the mesh k-layer geometry.  A sector crossing is not
-a cell crossing: no trajectory row is written and the stuck-in-cell counter ignores it.
+a cell crossing: the stuck-in-cell counter ignores it, and with `print-dcell` set no trajectory
+row is written for it; without it the fold writes two rows at one time, the state before it and
+after it.
 The fold is the identity for particles on the meridian plane.
 
 **Periodic transport (bcdef 201)**:
 Translational periodic BC.  The particle is translated to the partner face position,
 velocity is unchanged.  Distinct from conformal connections (101); the partner face is
-read explicitly.
+read explicitly.  The trajectory continues in a new zone: without `print-dcell` the wrap
+writes two rows at one time, the state before the transport and after it, the second opening the
+zone; with `print-dcell` set the wrap is a cell crossing, and the first row written after it opens
+the zone.
 
 **Domain exit / `gone`**:
 When `updateCell` cannot locate the particle (or `bcDef` marks it as exited), `part%gone`
