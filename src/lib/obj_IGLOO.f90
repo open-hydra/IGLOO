@@ -375,6 +375,7 @@ contains
     use IGLOO_Mod_Footprint,  only: record_footprint
     use IGLOO_overlap,        only: mirrorSource, mirrorEuler
     use IGLOO_Lib_Combustion, only: nuOx
+    use IGLOO_records,        only: rec_setup
     use oslo
     use omp_lib
     implicit none
@@ -395,6 +396,8 @@ contains
     type(obj_particle) :: ptmp   ! throwaway copy for the inject-only pre-pass
     character(len=4) :: fHead    !> the frozen-fraction header entry, blank for a material that does not solidify
     character(len=10) :: tsHead  !> the trajectory file's surface-temperature entry, blank for a material without P2T
+    character(len=3)  :: g3      !> a group's number as its zone line prints it (I3)
+    character, parameter :: LF = achar(10)
 
     !> Refuse to run on a stale particle state.
     if (.not. self%stateIsFresh) then
@@ -432,6 +435,9 @@ contains
     enddo
     Lref = norm2(xmax - xmin)
 
+    !> The particle files' record layouts, compiled once.
+    call rec_setup()
+
     !> Two passes: every burning material before every combustion product, whatever the line order.
     do pass = 1, 2
     do m = 1, nm
@@ -444,40 +450,45 @@ contains
       tsHead = ''; if (mat%liqSelect == 1) tsHead = ',"T<sub>s"'
       !> Per-material output files: <kind>-<material><sweeptag><ranksuffix>.dat (rank suffix empty at one rank).
       if (trajOn) then
-        open(newunit=unitTraj,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'trajectories-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
+        open(newunit=unitTraj,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'trajectories-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
+             access='stream', form='unformatted', status='replace')
         if (timeOn) then
-          write(unitTraj,'(1X,A)') 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)// &
-                                   trim(tsHead)
+          write(unitTraj) ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)// &
+                          trim(tsHead)//LF
         else
-          write(unitTraj,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)//trim(tsHead)
+          write(unitTraj) ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)//trim(tsHead)//LF
         endif
       endif
-      open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
+      open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
+             access='stream', form='unformatted', status='replace')
       if (timeOn) then
-        write(unitExit,'(1X,A)') 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","t",'// &
-                                 '"bc","d<sub>p</sub>"'//trim(fHead)
+        write(unitExit) ' variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","t",'// &
+                        '"bc","d<sub>p</sub>"'//trim(fHead)//LF
       else
-        write(unitExit,'(1X,A)') 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID",'// &
-                                 '"bc","d<sub>p</sub>"'//trim(fHead)
+        write(unitExit) ' variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID",'// &
+                        '"bc","d<sub>p</sub>"'//trim(fHead)//LF
       endif
       !> One record per plane crossing.
       if (planeOn) then
-        open(newunit=unitPlane,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'planes-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
-        write(unitPlane,'(1X,A)') 'variables="plane","X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","mdot","npdot",'// &
-                                  '"f","ID","parent","t","dir"'
+        open(newunit=unitPlane,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'planes-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
+             access='stream', form='unformatted', status='replace')
+        write(unitPlane) ' variables="plane","X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","mdot","npdot",'// &
+                         '"f","ID","parent","t","dir"'//LF
       endif
       !> Parcels still in the domain at time-end, one record each.
       if (snapOn) then
-        open(newunit=unitSnap,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'snapshot-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
-        write(unitSnap,'(1X,A)') 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)
+        open(newunit=unitSnap,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'snapshot-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
+             access='stream', form='unformatted', status='replace')
+        write(unitSnap) ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)//LF
       endif
 
       !> Scatter cloud: one zone per material; auto-size the weight quantum dNscat to ~trajSample points per stream.
       dNscat = 0._R8
       if (scatOn) then
-        open(newunit=unitScat,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'scatter-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
-        write(unitScat,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)
-        write(unitScat,'(A,A,A)')'Zone T="Mat ',trim(mat%matName),' scatter"'
+        open(newunit=unitScat,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'scatter-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
+             access='stream', form='unformatted', status='replace')
+        write(unitScat) ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)//LF
+        write(unitScat) 'Zone T="Mat '//trim(mat%matName)//' scatter"'//LF
         !> Serial inject-only pre-pass over ALL particles (replicated on every rank so dNscat is
         !  identical everywhere): resolves each stream's npdot and injection speed.
         Ndot = 0._R8; nStreams = 0; Vsum = 0._R8; nValid = 0
@@ -583,10 +594,11 @@ contains
           if (eulerSwitch) write(*,*) '       - eulerian field included'
         endif
 
-        if (trajOn) write(unitTraj,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
-        write(unitExit ,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
-        if (snapOn) write(unitSnap,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
-        if (planeOn) write(unitPlane,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
+        write(g3, '(I3)') g
+        if (trajOn) write(unitTraj) 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF
+        write(unitExit) 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF
+        if (snapOn) write(unitSnap) 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF
+        if (planeOn) write(unitPlane) 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF
 
         if (gr%brkupHasChild) then
           if (allocated(gr%shed)) deallocate(gr%shed)

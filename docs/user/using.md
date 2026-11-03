@@ -98,6 +98,8 @@ python3 check.py                          # oracle gate
 
 ## Output Files
 
+A parcel's rows reach the particle files (trajectories, scatter cloud, exit locations, snapshot, plane crossings) when its integration ends, one block per file: a run that crashes leaves no rows for the parcels it was integrating.
+
 ### Trajectories
 
 `OUTPUT/trajectories-<mat>.dat` records particle state at every cell crossing (one row per crossing). Columns (Tecplot ASCII variables header):
