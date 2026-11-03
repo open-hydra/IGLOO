@@ -9,9 +9,8 @@ threads convert; the synthetic files are read five times at 7 threads. The resul
 variable names, the solution time, the `STRANDID`, the centring, the number of blocks, `Ni`/`Nj`/`Nk`, the bounds of
 `mesh` and `vars`, and every value bit for bit (`transfer` to `int64`: `-0.0` against `0.0` and NaN payloads count).
 
-The test sets each thread count through the runtime's C entry `omp_set_num_threads` and asserts it
-(`omp_get_max_threads`): with gfortran's flags here (`-fno-underscoring`) the Fortran name reaches the C entry, which
-then takes the argument's address for the count.
+The test sets each thread count by calling the runtime's C entry `omp_set_num_threads` through a `bind(c)`
+interface that passes the count by value, and asserts it (`omp_get_max_threads`).
 
 **The suite's files**: every tracked `.tec` input under `tests/`, from the list CMake writes at configure time
 (`build/…/tests/tec_read_files.txt`: the `.tec` files of the source tree outside the directories runs and checks

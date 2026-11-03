@@ -9,9 +9,8 @@ format fall inside fields and inside the 4096-value slices; at 7 threads every w
 that is not thread-safe fails only some runs). Every file is compared with ORION's byte for byte: the lengths, then
 the first byte that differs and its line.
 
-The test sets each thread count through the runtime's C entry `omp_set_num_threads` and asserts it
-(`omp_get_max_threads`): with gfortran's flags here (`-fno-underscoring`) the Fortran name reaches the C entry, which
-then takes the argument's address for the count.
+The test sets each thread count by calling the runtime's C entry `omp_set_num_threads` through a `bind(c)`
+interface that passes the count by value, and asserts it (`omp_get_max_threads`).
 
 **The fixtures** are the `orion_data` `write_outfield` makes (a mesh over the nodes from index 0, cell-centred
 variables from index 1, ASCII, no ghost cells) with the `varnames` strings it builds, by its own expressions, in a

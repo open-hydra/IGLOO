@@ -15,7 +15,7 @@ program test_tec_write
   implicit none
 
   interface
-    !> The runtime's C entry: with -fno-underscoring (the gfortran flags) the Fortran name reaches it by reference.
+    !> The runtime's C entry, the count passed by value.
     subroutine set_num_threads_c(n) bind(c, name='omp_set_num_threads')
       import :: c_int
       integer(c_int), value :: n
