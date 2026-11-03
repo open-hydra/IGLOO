@@ -18,9 +18,9 @@ run, on four axes:
      merged files carry the same total line count and the same number of `Zone` records as the
      1-rank run. A content-only check does NOT cover this: duplicating the zone header per rank left
      a case's own check.py passing (measured 2026-08-10, Phase 4).
-  3. PARTICLE STREAMS -- `.dat` files compare as an exact sorted MULTISET. Record order is
-     nondeterministic by design (OMP writes as particles finish, and the merge emits rank-blocked
-     data), but the set of records is exact: no tolerance.
+  3. PARTICLE STREAMS -- every merged `.dat` byte for byte the 1-rank run's: each rank writes its parcels'
+     blocks in parcel order and the merge places them by group and parcel ID, so the files do not depend on
+     the rank or thread count (a dropped, duplicated or misplaced block changes the bytes).
   4. GRID FIELDS -- `.tec` files compare on SCALE-relative error (tools/compare_tec.py). These are
      accumulated under `!$OMP ATOMIC UPDATE`, so changing the rank count re-partitions a
      non-associative sum; that is the same FP-reassociation class already floored at <= 4e-15
@@ -73,6 +73,10 @@ def data_lines(path):
             except ValueError:
                 continue
     return recs, nline, nzone
+
+
+def file_hash(path):
+    return hashlib.md5(open(path, 'rb').read()).hexdigest()[:12]
 
 
 def multiset_hash(recs):
@@ -140,7 +144,7 @@ def run(mpiexec, npflag, exe, arm, keep):
     snap = {}
     for p in sorted(glob.glob("OUTPUT/*.dat")):
         recs, nline, nzone = data_lines(p)
-        snap[os.path.basename(p)] = (multiset_hash(recs), len(recs), nline, nzone, x_range(recs))
+        snap[os.path.basename(p)] = (file_hash(p), len(recs), nline, nzone, x_range(recs))
     for p in sorted(glob.glob("OUTPUT/*.tec")):
         dst = os.path.join(keep, os.path.basename(p))
         shutil.copyfile(p, dst)
@@ -197,7 +201,7 @@ def main():
             if nz != rnz:
                 bad.append(f"{name}: {nz} Zone records at {label(arm)} vs {rnz} at {label(ref)}")
             if h != rh:
-                bad.append(f"{name}: record multiset differs -- {nr} records {h} at {label(arm)} "
+                bad.append(f"{name}: bytes differ -- {nr} records {h} at {label(arm)} "
                            f"vs {rnr} records {rh} at {label(ref)}")
 
     #> Axis 4.
@@ -223,7 +227,7 @@ def main():
             print(f"  [FAIL] {b}")
         return 1
 
-    print(f"  [PASS] {len(snaps[ref])} .dat multisets exact, layout identical, "
+    print(f"  [PASS] {len(snaps[ref])} .dat byte-identical, layout identical, "
           f"{ntec} .tec comparison(s) within scale-relative {DEFAULT_TOL:.0e}, across "
           f"{', '.join(label(a) for a in ARMS)}")
     return 0

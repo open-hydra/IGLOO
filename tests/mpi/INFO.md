@@ -69,8 +69,9 @@ with 1 and with 5 threads per rank, and compares every run with the 1-rank run o
 2. **Layout** — no `.rank<r>.dat` shard survives, and total line count and `Zone` count match n=1.
    This axis is load-bearing: a merge that duplicates the zone header per rank leaves a case's own
    `check.py` **passing** (measured by falsification).
-3. **Particle streams** — `.dat` as an exact sorted **multiset**, no tolerance. Record order is
-   nondeterministic by design: OMP writes as particles finish, and the merge emits rank-blocked data.
+3. **Particle streams** — every merged `.dat` **byte for byte** the 1-rank run's: each rank writes its
+   parcels' blocks in parcel order and indexes them (group, parcel ID, offset, length); the root rank
+   gathers the indices and places every block by group and ID, which is the 1-rank file's order.
 4. **Grid fields** — `.tec` on **scale-relative** error via [`tools/compare_tec.py`](../tools/compare_tec.py),
    never a per-value relative error. See that file for the measurement behind the choice.
 
@@ -91,7 +92,7 @@ size-distribution law at pin time (one stream, seeded identically on every rank)
 acts later, at integration. A per-rank seed would give every rank a valid sample of the law, but a
 different one: the merged output would still pass `psd-table`'s statistical oracle, and only a comparison
 with the 1-rank run sees it. Hence both: `mpi-psd-table` (the oracle on four ranks) and
-`mpi-consistency-psd` (the multisets against one rank). RED with the seed offset by the rank
+`mpi-consistency-psd` (the files against one rank). RED with the seed offset by the rank
 (`initRandomSeed(rng_seed + mpi_rank_)`): `mpi-consistency-psd` fails at every 4-rank arm on the
 trajectory multiset (the first rows of the 15 000 parcels owned by ranks 1 to 3 differ; the exit records
 carry no diameter), while `mpi-psd-table` stays green (D_n 5.1e-3 against 1.4e-2, A² 0.33 against 5.97).
@@ -115,7 +116,7 @@ are the same bytes whatever the MPI library does. The gate runs the 1672-parcel 
 (`standard/vortex-cloud-st1`, symlinked) at n = 1, then at n = 3 and n = 4 twice each, once with
 the library's default collectives and once with `I_MPI_ADJUST_ALLREDUCE=8` (Intel MPI's ring
 algorithm; other libraries ignore the variable and the pair is a plain rerun), all at one thread
-per rank, and asserts the pair byte-identical, every `.dat` multiset equal to n = 1's and the
+per rank, and asserts the pair byte-identical, every `.dat` byte-identical to n = 1's and the
 `.tec` within the scale-relative 1e-12 of n = 1. The fixture matters: in the box cases each cell
 row is fed by one or two parcels, so no reduction order can move a printed digit there; in the
 vortex cloud every cell on the cloud's path is fed by parcels of every rank. A library
@@ -127,6 +128,6 @@ change between the two algorithms (5.1e-20 of field scale).
 Changing the rank count re-partitions the `!$OMP ATOMIC`-accumulated grid sums, and FP addition is not
 associative — so `.tec` needs a tolerance while `.dat` does not. Measured floors on `sprop2`:
 `.tec` bit-identical across n=1,2,4 on coupled-body / khrt-e2e / db-2daxi, 1.8e-23 of field scale on
-vie-plait; `.dat` multisets exact at n = 1,2,3,4,5,7. A serial-binary-vs-`mpiexec -n 1` comparison
+vie-plait; `.dat` byte-identical (the merge reproduces the 1-rank order). A serial-binary-vs-`mpiexec -n 1` comparison
 spans two different *builds* and carries the separate ≤4e-15 build-generation floor — compare one
 binary against itself.

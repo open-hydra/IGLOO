@@ -8,6 +8,7 @@ module IGLOO_module
   use IGLOO_data_phases, only: obj_material
   use IGLOO_Lib_Mollify, only: cellLink, linkDonors
   use IGLOO_overlap,     only: overlapMap, mirroredTotals
+  use IGLOO_records,     only: partIndex
   implicit none
 
   type, public :: obj_IGLOO
@@ -36,6 +37,8 @@ module IGLOO_module
     logical :: stateIsFresh  = .false.
     !> Output generation: -1 before the first reset_state, 0 on the first sweep (untagged files).
     integer :: sweep = -1
+    !> MPI: the last solve's particle-file indices (stream, material), gathered on the root rank for the merge
+    type(partIndex),       allocatable :: pidx(:,:)
   contains
     procedure, pass(self) :: setup
     procedure, pass(self) :: setup_static
@@ -375,7 +378,7 @@ contains
     use IGLOO_Mod_Footprint,  only: record_footprint
     use IGLOO_overlap,        only: mirrorSource, mirrorEuler
     use IGLOO_Lib_Combustion, only: nuOx
-    use IGLOO_records,        only: rec_setup, ps_open, ps_close, ps_begin, ps_end, &
+    use IGLOO_records,        only: rec_setup, ps_open, ps_text, ps_close, ps_begin, ps_end, &
                                     STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT
     use oslo
     use omp_lib
@@ -438,8 +441,10 @@ contains
     enddo
     Lref = norm2(xmax - xmin)
 
-    !> The particle files' record layouts, compiled once.
+    !> The particle files' record layouts, compiled once; the files' indices of this solve (MPI).
     call rec_setup()
+    if (allocated(self%pidx)) deallocate(self%pidx)
+    allocate(self%pidx(5, nm))
 
     !> Two passes: every burning material before every combustion product, whatever the line order.
     do pass = 1, 2
@@ -455,38 +460,40 @@ contains
       if (trajOn) then
         open(newunit=unitTraj,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'trajectories-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
              access='stream', form='unformatted', status='replace')
-        if (timeOn) then
-          write(unitTraj) ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)// &
-                          trim(tsHead)//LF
-        else
-          write(unitTraj) ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)//trim(tsHead)//LF
-        endif
         call ps_open(STR_TRAJ, unitTraj)
+        if (timeOn) then
+          call ps_text(STR_TRAJ, ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)// &
+                       trim(tsHead)//LF, 0, 0)
+        else
+          call ps_text(STR_TRAJ, ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)// &
+                       trim(tsHead)//LF, 0, 0)
+        endif
       endif
       open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
              access='stream', form='unformatted', status='replace')
-      if (timeOn) then
-        write(unitExit) ' variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","t",'// &
-                        '"bc","d<sub>p</sub>"'//trim(fHead)//LF
-      else
-        write(unitExit) ' variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID",'// &
-                        '"bc","d<sub>p</sub>"'//trim(fHead)//LF
-      endif
       call ps_open(STR_EXIT, unitExit)
+      if (timeOn) then
+        call ps_text(STR_EXIT, ' variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","t",'// &
+                     '"bc","d<sub>p</sub>"'//trim(fHead)//LF, 0, 0)
+      else
+        call ps_text(STR_EXIT, ' variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID",'// &
+                     '"bc","d<sub>p</sub>"'//trim(fHead)//LF, 0, 0)
+      endif
       !> One record per plane crossing.
       if (planeOn) then
         open(newunit=unitPlane,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'planes-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
              access='stream', form='unformatted', status='replace')
-        write(unitPlane) ' variables="plane","X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","mdot","npdot",'// &
-                         '"f","ID","parent","t","dir"'//LF
         call ps_open(STR_PLANE, unitPlane)
+        call ps_text(STR_PLANE, ' variables="plane","X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","mdot","npdot",'// &
+                     '"f","ID","parent","t","dir"'//LF, 0, 0)
       endif
       !> Parcels still in the domain at time-end, one record each.
       if (snapOn) then
         open(newunit=unitSnap,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'snapshot-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
              access='stream', form='unformatted', status='replace')
-        write(unitSnap) ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)//LF
         call ps_open(STR_SNAP, unitSnap)
+        call ps_text(STR_SNAP, ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)//LF, &
+                     0, 0)
       endif
 
       !> Scatter cloud: one zone per material; auto-size the weight quantum dNscat to ~trajSample points per stream.
@@ -494,9 +501,9 @@ contains
       if (scatOn) then
         open(newunit=unitScat,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'scatter-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
              access='stream', form='unformatted', status='replace')
-        write(unitScat) ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)//LF
-        write(unitScat) 'Zone T="Mat '//trim(mat%matName)//' scatter"'//LF
         call ps_open(STR_SCAT, unitScat)
+        call ps_text(STR_SCAT, ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)//LF, 0, 0)
+        call ps_text(STR_SCAT, 'Zone T="Mat '//trim(mat%matName)//' scatter"'//LF, 0, 1)
         !> Serial inject-only pre-pass over ALL particles (replicated on every rank so dNscat is
         !  identical everywhere): resolves each stream's npdot and injection speed.
         Ndot = 0._R8; nStreams = 0; Vsum = 0._R8; nValid = 0
@@ -603,10 +610,10 @@ contains
         endif
 
         write(g3, '(I3)') g
-        if (trajOn) write(unitTraj) 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF
-        write(unitExit) 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF
-        if (snapOn) write(unitSnap) 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF
-        if (planeOn) write(unitPlane) 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF
+        if (trajOn) call ps_text(STR_TRAJ, 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF, g, 0)
+        call ps_text(STR_EXIT, 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF, g, 0)
+        if (snapOn) call ps_text(STR_SNAP, 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF, g, 0)
+        if (planeOn) call ps_text(STR_PLANE, 'Zone T="Mat '//trim(mat%matName)//' Group'//g3//'"'//LF, g, 0)
 
         if (gr%brkupHasChild) then
           if (allocated(gr%shed)) deallocate(gr%shed)
@@ -636,7 +643,7 @@ contains
               if (probeOn) skipIp(ip) = .not.any(gr%particle(ip)%ID==probeIDs)
               if (loopCounter == 1) skipIp(ip) = skipIp(ip) .or. .not.owns_particle(ip)
             enddo
-            call ps_begin(start, nEnd, skipIp)
+            call ps_begin(start, nEnd, skipIp, g)
 
             call tm_phase(TM_LOOP)
             !$OMP PARALLEL DO SCHEDULE(DYNAMIC)
@@ -801,7 +808,7 @@ contains
             if (probeOn) skipIp(ip) = .not.any(gr%particle(ip)%ID==probeIDs)
             skipIp(ip) = skipIp(ip) .or. .not.owns_particle(ip)
           enddo
-          call ps_begin(1, gr%nparticles, skipIp)
+          call ps_begin(1, gr%nparticles, skipIp, g)
 
           call tm_phase(TM_LOOP)
           !$OMP PARALLEL DO SCHEDULE(DYNAMIC)
@@ -829,11 +836,12 @@ contains
         end associate group
       enddo
       end associate material
-      if (trajOn) call ps_close(STR_TRAJ)
-      if (scatOn) call ps_close(STR_SCAT)
-      if (snapOn) call ps_close(STR_SNAP)
-      if (planeOn) call ps_close(STR_PLANE)
-      call ps_close(STR_EXIT)
+      !> MPI: each file's index to the root rank, every rank in the same order (collective)
+      if (trajOn) call ps_close(STR_TRAJ, self%pidx(STR_TRAJ, m))
+      if (scatOn) call ps_close(STR_SCAT, self%pidx(STR_SCAT, m))
+      if (snapOn) call ps_close(STR_SNAP, self%pidx(STR_SNAP, m))
+      if (planeOn) call ps_close(STR_PLANE, self%pidx(STR_PLANE, m))
+      call ps_close(STR_EXIT, self%pidx(STR_EXIT, m))
     enddo
     enddo
 
@@ -982,8 +990,8 @@ contains
       call write_outfield(self%material,self%geoblock,self%source,self%euler,self%srcSwitch, &
                           self%eulSwitch, tag=self%sweepTag())
 
-      !> Collapse this sweep's per-rank .dat shards into the serial layout (no-op at one rank).
-      call merge_rank_particle_files(self%material, tag=self%sweepTag())
+      !> Collapse the last solve's per-rank .dat shards into the serial layout (no-op at one rank).
+      if (allocated(self%pidx)) call merge_rank_particle_files(self%material, self%pidx, tag=self%sweepTag())
     endif
 
     !> Every rank: one gather to root when timing is on.

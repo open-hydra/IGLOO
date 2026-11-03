@@ -710,11 +710,11 @@ contains
 
     !> The parcel's rows, one block per particle file.
     subroutine emitParcel()
-      if (trajOn) call rec_emit(lTraj, STR_TRAJ, slot)
-      call rec_emit(lExit, STR_EXIT, slot)
-      if (planeOn) call rec_emit(lPlane, STR_PLANE, slot)
-      if (snapOn) call rec_emit(lSnap, STR_SNAP, slot)
-      if (scatOn) call rec_emit(lScat, STR_SCAT, slot)
+      if (trajOn) call rec_emit(lTraj, STR_TRAJ, slot, part%ID)
+      call rec_emit(lExit, STR_EXIT, slot, part%ID)
+      if (planeOn) call rec_emit(lPlane, STR_PLANE, slot, part%ID)
+      if (snapOn) call rec_emit(lSnap, STR_SNAP, slot, part%ID)
+      if (scatOn) call rec_emit(lScat, STR_SCAT, slot, part%ID)
     end subroutine emitParcel
 
 

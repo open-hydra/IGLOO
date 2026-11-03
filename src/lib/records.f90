@@ -1,14 +1,16 @@
 !> A parcel's particle records: the rows of each stream held as numbers while the parcel is integrated, formatted by
 !  IGLOO_fmt at its end and handed as one byte block per stream to that stream's writer, which writes the blocks of a
 !  parcel loop in slot (parcel) order: a block that arrives before its turn waits in memory, within a budget over every
-!  stream, or else in the stream's spill file.
+!  stream, or else in the stream's spill file. Under MPI each file (a rank's shard) is indexed, one row per header line
+!  and parcel block, and the index is gathered on the root rank for the merge.
 module IGLOO_records
   use, intrinsic :: iso_fortran_env, only: R8 => real64, I8 => int64
   use IGLOO_fmt, only: fmtSpec, fmt_compile, fmt_row
   use IGLOO_Mod_Timing, only: tm_window
+  use IGLOO_Mod_MPI, only: mpi_size_, mpi_gather_i8, mpi_abort_all, region_fail
   implicit none
   private
-  public :: recList, rec_setup, rec_emit, rec_push, ps_open, ps_close, ps_begin, ps_end
+  public :: recList, rec_setup, rec_emit, rec_push, ps_open, ps_text, ps_close, ps_begin, ps_end
 
   !> The streams (one file each per material)
   integer, parameter, public :: STR_TRAJ = 1, STR_EXIT = 2, STR_PLANE = 3, STR_SNAP = 4, STR_SCAT = 5
@@ -44,21 +46,34 @@ module IGLOO_records
     character(len=:), allocatable :: b
   end type heldBlock
 
-  !> A particle file's writer: its unit and the window of the current parcel loop (slots first..last, next = the first
-  !  slot not written yet), each slot's state, held block, or spill offset and length
+  !> A particle file's writer: its unit and the window of the current parcel loop (slots first..last of the group's
+  !  loop, next = the first slot not written yet), each slot's state, parcel ID, held block, or spill offset and length;
+  !  under MPI the file's index, ix(:, j) = (group, key, offset, length) of item j in file order, and the next offset
   type :: partStream
     logical :: on = .false.
     integer :: unit = 0
-    integer :: first = 1, last = 0, next = 1
-    integer, allocatable :: st(:), nb(:)
+    integer :: first = 1, last = 0, next = 1, group = 0
+    integer, allocatable :: st(:), nb(:), id(:)
     integer(I8), allocatable :: off(:)
     type(heldBlock), allocatable :: mem(:)
     logical :: spillOpen = .false.
     integer :: spill = 0
     integer(I8) :: spillEnd = 1
+    integer(I8), allocatable :: ix(:,:)
+    integer :: nix = 0
+    integer(I8) :: pos = 1
   end type partStream
 
+  !> A particle file's index gathered on the root rank: rows(4*j-3:4*j) = (group, key, offset, length) of item j, rank
+  !  by rank in file order; cnt(r) = the values from rank r. Key 0, or group 0, marks a line every shard holds.
+  type, public :: partIndex
+    integer(I8), allocatable :: rows(:)
+    integer, allocatable :: cnt(:)
+  end type partIndex
+
   type(partStream) :: ps(5)
+  !> The files are indexed (decomposed runs)
+  logical :: indexOn = .false.
   !> The bytes the windows may hold in memory over every stream (IGLOO_IOBUF_BYTES, a test hook; default 64 MiB)
   integer(I8) :: budget = 67108864_I8
   !> Bytes held now; the current window's high-water of held bytes, spilled bytes and largest block
@@ -77,9 +92,9 @@ contains
     call get_environment_variable('IGLOO_IOBUF_BYTES', val, status=st)
     if (st == 0) then
       read(val, *, iostat=st) budget
-      if (st /= 0 .or. budget < 0) error stop 'IGLOO: IGLOO_IOBUF_BYTES must be an integer >= 0 [bytes]'
+      if (st /= 0 .or. budget < 0) call mpi_abort_all('IGLOO: IGLOO_IOBUF_BYTES must be an integer >= 0 [bytes]')
     elseif (st == -1) then
-      error stop 'IGLOO: IGLOO_IOBUF_BYTES must be an integer >= 0 [bytes]'
+      call mpi_abort_all('IGLOO: IGLOO_IOBUF_BYTES must be an integer >= 0 [bytes]')
     endif
     ready = .true.
   end subroutine rec_setup
@@ -103,15 +118,15 @@ contains
   end subroutine rec_push
 
 
-  !> Format the rows of list into one block and hand it to stream's writer as the block of slot, an empty block
-  !  included; the list is emptied.
-  subroutine rec_emit(list, stream, slot)
+  !> Format the rows of list into one block and hand it to stream's writer as the block of slot (parcel id), an empty
+  !  block included; the list is emptied.
+  subroutine rec_emit(list, stream, slot, id)
     type(recList), intent(inout) :: list
-    integer, intent(in) :: stream, slot
+    integer, intent(in) :: stream, slot, id
     character(len=:), allocatable :: buf
     integer :: k, n
     if (list%n == 0) then
-      call ps_hand(stream, slot, '')
+      call ps_hand(stream, slot, id, '')
       return
     endif
     allocate(character(len=list%n*(spec(list%lay)%maxlen + 1)) :: buf)
@@ -121,58 +136,65 @@ contains
       n = n + 1
       buf(n:n) = LF
     enddo
-    call ps_hand(stream, slot, buf(1:n))
+    call ps_hand(stream, slot, id, buf(1:n))
     list%n = 0
   end subroutine rec_emit
 
 
-  !> Hand the block of slot to stream's writer, under that stream's critical section.
-  subroutine ps_hand(stream, slot, blk)
-    integer, intent(in) :: stream, slot
+  !> Hand the block of slot (parcel id) to stream's writer, under that stream's critical section.
+  subroutine ps_hand(stream, slot, id, blk)
+    integer, intent(in) :: stream, slot, id
     character(len=*), intent(in) :: blk
     select case (stream)
     case (STR_TRAJ)
       !$OMP CRITICAL (igloo_rec_traj)
-      call ps_put(ps(STR_TRAJ), slot, blk)
+      call ps_put(ps(STR_TRAJ), slot, id, blk)
       !$OMP END CRITICAL (igloo_rec_traj)
     case (STR_EXIT)
       !$OMP CRITICAL (igloo_rec_exit)
-      call ps_put(ps(STR_EXIT), slot, blk)
+      call ps_put(ps(STR_EXIT), slot, id, blk)
       !$OMP END CRITICAL (igloo_rec_exit)
     case (STR_PLANE)
       !$OMP CRITICAL (igloo_rec_plane)
-      call ps_put(ps(STR_PLANE), slot, blk)
+      call ps_put(ps(STR_PLANE), slot, id, blk)
       !$OMP END CRITICAL (igloo_rec_plane)
     case (STR_SNAP)
       !$OMP CRITICAL (igloo_rec_snap)
-      call ps_put(ps(STR_SNAP), slot, blk)
+      call ps_put(ps(STR_SNAP), slot, id, blk)
       !$OMP END CRITICAL (igloo_rec_snap)
     case (STR_SCAT)
       !$OMP CRITICAL (igloo_rec_scat)
-      call ps_put(ps(STR_SCAT), slot, blk)
+      call ps_put(ps(STR_SCAT), slot, id, blk)
       !$OMP END CRITICAL (igloo_rec_scat)
     end select
   end subroutine ps_hand
 
 
-  !> The block of slot (under the stream's critical section): written now when it is the next slot, else held, in memory
-  !  while the bytes held over every stream stay within the budget, else in the spill file; then the ready slots that
-  !  follow are written.
-  subroutine ps_put(s, slot, blk)
+  !> The block of slot (parcel id; under the stream's critical section): written now when it is the next slot, else
+  !  held, in memory while the bytes held over every stream stay within the budget, else in the spill file; then the
+  !  ready slots that follow are written.
+  subroutine ps_put(s, slot, id, blk)
     type(partStream), intent(inout) :: s
-    integer, intent(in) :: slot
+    integer, intent(in) :: slot, id
     character(len=*), intent(in) :: blk
     integer :: i
     integer(I8) :: n, h
-    if (.not. s%on) error stop 'IGLOO: a particle block for a file that is not open'
-    if (slot < s%first .or. slot > s%last) error stop 'IGLOO: a particle block outside its parcel loop''s window'
+    !> inside the parcel loop: a defect fails the loop, which aborts after the join
+    if (.not. s%on .or. slot < s%first .or. slot > s%last) then
+      call region_fail('IGLOO: a particle block outside an open file''s window')
+      return
+    endif
     i = slot - s%first + 1
-    if (s%st(i) /= ST_WAIT) error stop 'IGLOO: a parcel handed two blocks to one particle file'
+    if (s%st(i) /= ST_WAIT) then
+      call region_fail('IGLOO: a parcel handed two blocks to one particle file')
+      return
+    endif
     n = len(blk, kind=I8)
     !$OMP ATOMIC UPDATE
     largest = max(largest, n)
+    s%id(i) = id
     if (slot == s%next) then
-      if (n > 0) write(s%unit) blk
+      if (n > 0) call ps_out(s, blk, s%group, id)
       s%st(i) = ST_NONE
       s%next = s%next + 1
       call ps_drain(s)
@@ -220,14 +242,14 @@ contains
         exit
       case (ST_MEM)
         n = len(s%mem(i)%b, kind=I8)
-        write(s%unit) s%mem(i)%b
+        call ps_out(s, s%mem(i)%b, s%group, s%id(i))
         deallocate(s%mem(i)%b)
         !$OMP ATOMIC UPDATE
         held = held - n
       case (ST_SPILL)
         allocate(character(len=s%nb(i)) :: tmp)
         read(s%spill, pos=s%off(i)) tmp
-        write(s%unit) tmp
+        call ps_out(s, tmp, s%group, s%id(i))
         deallocate(tmp)
       end select
       s%st(i) = ST_NONE
@@ -236,19 +258,59 @@ contains
   end subroutine ps_drain
 
 
-  !> Stream k's file is open on unit (master, outside the parcel loops).
+  !> Stream k's file is open on unit, empty (master, outside the parcel loops).
   subroutine ps_open(k, unit)
     integer, intent(in) :: k, unit
     ps(k)%on = .true.
     ps(k)%unit = unit
-    ps(k)%first = 1; ps(k)%last = 0; ps(k)%next = 1
+    ps(k)%first = 1; ps(k)%last = 0; ps(k)%next = 1; ps(k)%group = 0
+    indexOn = mpi_size_ > 1
+    ps(k)%nix = 0
+    ps(k)%pos = 1
+    if (indexOn .and. .not. allocated(ps(k)%ix)) allocate(ps(k)%ix(4, 1024))
   end subroutine ps_open
 
 
-  !> Close stream k's file and its spill file (a scratch file, deleted).
-  subroutine ps_close(k)
+  !> A header or zone line of stream k's file (master, outside the parcel loops): group 0 or key 0, a line every rank's
+  !  shard holds.
+  subroutine ps_text(k, text, group, key)
+    integer, intent(in) :: k, group, key
+    character(len=*), intent(in) :: text
+    call ps_out(ps(k), text, group, key)
+  end subroutine ps_text
+
+
+  !> Write bytes to the stream's file; when decomposed, index them as (group, key, offset, length).
+  subroutine ps_out(s, bytes, group, key)
+    type(partStream), intent(inout) :: s
+    character(len=*), intent(in) :: bytes
+    integer, intent(in) :: group, key
+    integer(I8), allocatable :: tmp(:,:)
+    write(s%unit) bytes
+    if (.not. indexOn) return
+    if (s%nix == size(s%ix, 2)) then
+      allocate(tmp(4, 2*size(s%ix, 2)))
+      tmp(:, 1:s%nix) = s%ix(:, 1:s%nix)
+      call move_alloc(tmp, s%ix)
+    endif
+    s%nix = s%nix + 1
+    s%ix(:, s%nix) = [int(group, I8), int(key, I8), s%pos, len(bytes, kind=I8)]
+    s%pos = s%pos + len(bytes, kind=I8)
+  end subroutine ps_out
+
+
+  !> Close stream k's file and its spill file (a scratch file, deleted). Decomposed: the index must tile the file, and it
+  !  is gathered on the root rank into idx (collective: every rank closes the same streams in the same order).
+  subroutine ps_close(k, idx)
     integer, intent(in) :: k
+    type(partIndex), intent(inout) :: idx
+    integer(I8) :: p
     if (.not. ps(k)%on) return
+    if (indexOn) then
+      inquire(unit=ps(k)%unit, pos=p)
+      if (p /= ps(k)%pos) call mpi_abort_all('IGLOO: a particle file holds bytes its block index does not')
+      call mpi_gather_i8(ps(k)%ix, 4*ps(k)%nix, idx%rows, idx%cnt)
+    endif
     if (ps(k)%spillOpen) close(ps(k)%spill)
     ps(k)%spillOpen = .false.
     close(ps(k)%unit)
@@ -256,17 +318,17 @@ contains
   end subroutine ps_close
 
 
-  !> Open the window of a parcel loop over slots first..last on every open stream; skip marks the slots whose parcel is
-  !  not integrated here (master, before the loop).
-  subroutine ps_begin(first, last, skip)
-    integer, intent(in) :: first, last
+  !> Open the window of a parcel loop of group over slots first..last on every open stream; skip marks the slots whose
+  !  parcel is not integrated here (master, before the loop).
+  subroutine ps_begin(first, last, skip, group)
+    integer, intent(in) :: first, last, group
     logical, intent(in) :: skip(first:)
     integer :: k, n
     n = max(last - first + 1, 0)
     do k = 1, size(ps)
       if (.not. ps(k)%on) cycle
       call ps_grow(ps(k), n)
-      ps(k)%first = first; ps(k)%last = last; ps(k)%next = first; ps(k)%spillEnd = 1
+      ps(k)%first = first; ps(k)%last = last; ps(k)%next = first; ps(k)%spillEnd = 1; ps(k)%group = group
       if (n > 0) ps(k)%st(1:n) = merge(ST_NONE, ST_WAIT, skip(first:last))
       call ps_drain(ps(k))
     enddo
@@ -280,9 +342,9 @@ contains
     integer, intent(in) :: n
     if (allocated(s%st)) then
       if (size(s%st) >= n) return
-      deallocate(s%st, s%nb, s%off, s%mem)
+      deallocate(s%st, s%nb, s%id, s%off, s%mem)
     endif
-    allocate(s%st(max(n, 1)), s%nb(max(n, 1)), s%off(max(n, 1)), s%mem(max(n, 1)))
+    allocate(s%st(max(n, 1)), s%nb(max(n, 1)), s%id(max(n, 1)), s%off(max(n, 1)), s%mem(max(n, 1)))
   end subroutine ps_grow
 
 
@@ -293,9 +355,9 @@ contains
     do k = 1, size(ps)
       if (.not. ps(k)%on) cycle
       call ps_drain(ps(k))
-      if (ps(k)%next <= ps(k)%last) error stop 'IGLOO: a parcel of the loop left no block for a particle file'
+      if (ps(k)%next <= ps(k)%last) call mpi_abort_all('IGLOO: a parcel of the loop left no block for a particle file')
     enddo
-    if (held /= 0) error stop 'IGLOO: the particle-file window still holds bytes after its loop'
+    if (held /= 0) call mpi_abort_all('IGLOO: the particle-file window still holds bytes after its loop')
     call tm_window(budget, heldMax, spilled, largest)
   end subroutine ps_end
 
