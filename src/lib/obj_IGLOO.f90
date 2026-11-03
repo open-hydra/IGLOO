@@ -2,13 +2,17 @@
 !  setup / reset_state / solve / writeout entry points.
 module IGLOO_module
   use, intrinsic :: iso_fortran_env, only : R8 => real64
-  use IGLOO_data_block, only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, fillGhostPartners
+  use IGLOO_data_block, only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, fillGhostPartners, &
+                              buildInterfaceLinks, reportNonAligned, mollifyEulerBlocks, mollifySourceBlocks
   use IGLOO_data_phases, only: obj_material
+  use IGLOO_Lib_Mollify, only: cellLink
   implicit none
 
   type, public :: obj_IGLOO
     type(obj_block),       allocatable :: geoblock(:)
     type(obj_flowblock),   allocatable :: gasblock(:)
+    !> The 101 face cells and their partner cells, built once after the bc read.
+    type(cellLink),        allocatable :: links(:)
     !> Valid only between a solve and the next reset_state (which deallocates them).
     type(obj_sourceblock), allocatable :: source(:)
     type(obj_eulerblock),  allocatable :: euler(:,:)
@@ -115,6 +119,8 @@ contains
     endif
     call read_cdp_bc_file(IGLOO_phase_prefix,self%material,self%geoblock, &
                           self%gasblock,self%source,self%euler,self%srcSwitch,self%eulSwitch)
+    call buildInterfaceLinks(self%geoblock, self%links)
+    if (mpi_is_root) call reportNonAligned(self%links)
     call initRandomSeed(rng_seed)   ! before pinning: stochastic injection diameters
     fam = 0
     do m = 1, nm
@@ -580,29 +586,27 @@ contains
     !> Allreduce the partial grid sums across ranks before finalize, which is nonlinear.
     call reduce_accumulators(self%source, self%euler, sourceSwitch, eulerSwitch)
 
-    !> Finalize the source/euler fields: normalize the moments, reduce to geoblock shape under ord2.
+    !> Finalize the source/euler fields: reduce to geoblock shape under ord2, mollify across the
+    !  blocks, normalize the eulerian moments.
     if (sourceSwitch) then
       do b = 1, nb
         call self%source(b)%finalize(self%geoblock(b))
       enddo
+      call mollifySourceBlocks(self%source, self%geoblock, self%links)
     endif
     if (eulerSwitch) then
-      ! allocate(famDone(size(self%euler, 2)))
-      ! famDone = .false.
       do m = 1, nm
         do g = 1, self%material(m)%ngroups
           fam = self%material(m)%group(g)%famID
-          ! if (.not. famDone(fam)) then
           do b = 1, nb
-            call self%euler(b, fam)%finalize(self%geoblock(b), &
-                                              self%material(m)%hTab, &
-                                              self%material(m)%cpVariable)
+            call self%euler(b, fam)%reduce(self%geoblock(b))
           enddo
-            ! famDone(fam) = .true.
-          ! endif
+          call mollifyEulerBlocks(self%euler(:, fam), self%geoblock, self%links)
+          do b = 1, nb
+            call self%euler(b, fam)%normalize(self%material(m)%hTab, self%material(m)%cpVariable)
+          enddo
         enddo
       enddo
-      ! deallocate(famDone)
     endif
 
     !> Wedge fold counters.

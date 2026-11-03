@@ -1,9 +1,11 @@
 module IGLOO_data_block
   use, intrinsic :: iso_fortran_env, only : R8 => real64
-  use IGLOO_Lib_Mollify, only: binomial_smooth
+  use IGLOO_Lib_Mollify, only: binomial_smooth, mollifyBlocks, cellLink, blockField
   implicit none
   private
   public :: fillGhostPartners
+  public :: buildInterfaceLinks, reportNonAligned
+  public :: mollifyEulerBlocks, mollifySourceBlocks
 
   type, public :: obj_bc_cell
     real(R8),dimension(:,:),allocatable :: properties !> first index per group (family)
@@ -12,9 +14,13 @@ module IGLOO_data_block
     real(R8)     :: mdotPart  = 0._R8 !> particle mass flow rate from 402/403 families [kg/s]
     real(R8)     :: area      = 0._R8 !> face area [m²]
     integer      :: nInj      = 0     !> injection particles pinned in this cell
-    integer      :: bcdef
-    integer      :: connection(4)   !> partner cell [block,i,j,k] (101/103/201)
+    integer      :: bcdef     = 0     !> boundary code; 0 until read_cdp_bc_file tags the cell
+    integer      :: connection(4) = 0 !> partner cell [block,i,j,k] of a 101/201 payload; 0 = none
     integer      :: connectionFace=0!> partner face index (201 periodic)
+    integer      :: orient(4) = 0     !> 101/201 orientation integers d11 d12 d21 d22 of the payload
+    integer      :: chimN(2)  = 0     !> 102: donor counts of the two ghost layers
+    integer,  allocatable :: chimDonor(:,:) !> 102: layer-1 donor cells (n, [block,i,j,k])
+    real(R8), allocatable :: chimW(:)       !> 102: layer-1 donor volume weights
     real(R8)     :: center(3)
     real(R8)     :: normal(3)
   end type obj_bc_cell
@@ -88,7 +94,8 @@ module IGLOO_data_block
     private
     procedure, pass(self), public :: allocate => allocateEUL
     procedure, pass(self), public :: pass_geometry => pass_geometryEUL
-    procedure, pass(self), public :: finalize => finalizeEUL
+    procedure, pass(self), public :: reduce => reduceEUL
+    procedure, pass(self), public :: normalize => normalizeEUL
   end type obj_eulerblock
 
 contains
@@ -178,9 +185,10 @@ contains
   end subroutine allocateEUL
 
   !> End-of-solve source finalization: under ord2 the dual-shape accumulators are redistributed
-  !  to geoblock cells by the assembled octant weights (conservative); then the field is mollified.
+  !  to geoblock cells by the assembled octant weights (conservative). The caller mollifies
+  !  (mollifySourceBlocks).
   subroutine finalizeSRC(self, geoblock)
-    use IGLOO_variables, only: toll, ord2, mesh2D, nm, mollifyPasses
+    use IGLOO_variables, only: toll, ord2, mesh2D, nm
     implicit none
     class(obj_sourceblock), intent(inout) :: self
     type(obj_block),        intent(in)    :: geoblock
@@ -231,27 +239,22 @@ contains
       call move_alloc(sourceEn_geo,   self%sourceEn)
     endif
 
-    if (mollifyPasses > 0) call mollifySource(self, geoblock)
-
   end subroutine finalizeSRC
 
-  !> End-of-solve eulerian finalization: 1. (ord2) reduce the raw accumulators to geoblock
-  !  cells; 2. mollify the conserved densities; 3. normalize velocity and temperature by density.
-  subroutine finalizeEUL(self, geoblock, hTab, cpVariable)
-    use IGLOO_Lib_Properties, only: comp_TfromTab
-    use IGLOO_variables,      only: toll, ord2, mesh2D, mollifyPasses
+  !> End-of-solve eulerian reduction (ord2): the raw dual-shape numerators to geoblock cells, the
+  !  sub-octant-volume mean of each cell's eight dual nodes. The caller then mollifies the conserved
+  !  densities (mollifyEulerBlocks) and normalizes them (normalizeEUL).
+  subroutine reduceEUL(self, geoblock)
+    use IGLOO_variables, only: toll, ord2, mesh2D
     implicit none
     class(obj_eulerblock), intent(inout) :: self
     type(obj_block),       intent(in)    :: geoblock
-    real(R8),              intent(in)    :: hTab(:)
-    logical,               intent(in)    :: cpVariable
     integer  :: i, j, k, gi, gj, gk, da, db, dc, oct, gNx, gNy, gNz
     integer  :: lo_i, hi_i, lo_j, hi_j, lo_k, hi_k
-    real(R8) :: rho, v, sumVol, accDens, accNp, accVel(3), accT
+    real(R8) :: v, sumVol, accDens, accNp, accVel(3), accT
     real(R8), allocatable :: density_geo(:,:,:), np_geo(:,:,:)
     real(R8), allocatable :: velocity_geo(:,:,:,:), temperature_geo(:,:,:)
 
-    !> Step 1 (ord2): reduce the raw numerators to geoblock cells before normalizing.
     if (ord2) then
       gNx = geoblock%Nx;  gNy = geoblock%Ny;  gNz = geoblock%Nz
       allocate(density_geo    (1:gNx, 1:gNy, 1:gNz))
@@ -301,13 +304,20 @@ contains
       call move_alloc(temperature_geo, self%temperature)
     endif
 
-    !> Step 2: mollify the conserved densities {rho, rho*v, rho*e, n}.
+  end subroutine reduceEUL
 
-    if (mollifyPasses > 0) call mollifyEuler(self, geoblock)
+  !> End-of-solve eulerian normalization in place: velocity = momentum/density, temperature =
+  !  energy/density (h -> T for cpVariable groups).
+  subroutine normalizeEUL(self, hTab, cpVariable)
+    use IGLOO_Lib_Properties, only: comp_TfromTab
+    use IGLOO_variables,      only: toll
+    implicit none
+    class(obj_eulerblock), intent(inout) :: self
+    real(R8),              intent(in)    :: hTab(:)
+    logical,               intent(in)    :: cpVariable
+    integer  :: i, j, k
+    real(R8) :: rho
 
-
-    !> Step 3: normalize in place; velocity = momentum/density, temperature = energy/density
-    !  (h -> T for cpVariable groups).
     do k = lbound(self%density, 3), ubound(self%density, 3)
       do j = lbound(self%density, 2), ubound(self%density, 2)
         do i = lbound(self%density, 1), ubound(self%density, 1)
@@ -327,7 +337,7 @@ contains
       enddo
     enddo
 
-  end subroutine finalizeEUL
+  end subroutine normalizeEUL
 
   !> Mollify the eulerian conserved densities {rho, rho*v, rho*e, n} in place with the
   !  local binomial smoother.
@@ -382,6 +392,103 @@ contains
     end associate
     deallocate(tmp, qold)
   end subroutine mollifySource
+
+  !> Mollify one family's eulerian densities over every block: each block on its own when no
+  !  aligned 101 link joins two cells (mollifyEuler), else across the links (mollifyBlocks).
+  subroutine mollifyEulerBlocks(eul, geo, links)
+    use IGLOO_variables, only: mesh2D, mollifyPasses
+    implicit none
+    type(obj_eulerblock), intent(inout) :: eul(:)
+    type(obj_block),      intent(in)    :: geo(:)
+    type(cellLink),       intent(in)    :: links(:)
+    type(blockField), allocatable :: fld(:), vol(:)
+    integer :: ndim, b, c, iv
+
+    if (mollifyPasses <= 0) return
+    if (.not. any(links(:)%dir > 0)) then
+      do b = 1, size(eul)
+        call mollifyEuler(eul(b), geo(b))
+      enddo
+      return
+    endif
+    ndim = merge(2, 3, mesh2D)
+    allocate(fld(size(eul)), vol(size(eul)))
+    do b = 1, size(eul)
+      vol(b)%q = geo(b)%cellVol
+    enddo
+    !> rho, rho*u (three components), rho*e, n: the order of mollifyEuler
+    do iv = 1, 6
+      do b = 1, size(eul)
+        select case (iv)
+        case (1);    fld(b)%q = eul(b)%density
+        case (2:4);  fld(b)%q = eul(b)%velocity(iv-1,:,:,:)
+        case (5);    fld(b)%q = eul(b)%temperature
+        case (6);    fld(b)%q = eul(b)%np
+        end select
+      enddo
+      call mollifyBlocks(fld, vol, links, mollifyPasses, ndim)
+      do b = 1, size(eul)
+        select case (iv)
+        case (1);    eul(b)%density = fld(b)%q
+        case (2:4);  c = iv - 1; eul(b)%velocity(c,:,:,:) = fld(b)%q
+        case (5);    eul(b)%temperature = fld(b)%q
+        case (6);    eul(b)%np = fld(b)%q
+        end select
+      enddo
+    enddo
+  end subroutine mollifyEulerBlocks
+
+  !> Mollify the source totals {mass, mom, en} over every block, as densities (/V, smoothed, *V):
+  !  each block on its own when no aligned 101 link joins two cells (mollifySource), else across
+  !  the links (mollifyBlocks).
+  subroutine mollifySourceBlocks(src, geo, links)
+    use IGLOO_variables, only: mesh2D, mollifyPasses, nm
+    implicit none
+    type(obj_sourceblock), intent(inout) :: src(:)
+    type(obj_block),       intent(in)    :: geo(:)
+    type(cellLink),        intent(in)    :: links(:)
+    type(blockField), allocatable :: fld(:), vol(:)
+    integer :: ndim, b, iv
+
+    if (mollifyPasses <= 0) return
+    if (.not. any(links(:)%dir > 0)) then
+      do b = 1, size(src)
+        call mollifySource(src(b), geo(b))
+      enddo
+      return
+    endif
+    ndim = merge(2, 3, mesh2D)
+    allocate(fld(size(src)), vol(size(src)))
+    do b = 1, size(src)
+      vol(b)%q = geo(b)%cellVol
+    enddo
+    !> mass of each material, the three momentum components, energy: the order of mollifySource
+    do iv = 1, nm + 4
+      do b = 1, size(src)
+        associate(V => geo(b)%cellVol)
+        if (iv <= nm) then
+          fld(b)%q = src(b)%sourceMass(iv,:,:,:) / V
+        elseif (iv <= nm + 3) then
+          fld(b)%q = src(b)%sourceMom(iv-nm,:,:,:) / V
+        else
+          fld(b)%q = src(b)%sourceEn / V
+        endif
+        end associate
+      enddo
+      call mollifyBlocks(fld, vol, links, mollifyPasses, ndim)
+      do b = 1, size(src)
+        associate(V => geo(b)%cellVol)
+        if (iv <= nm) then
+          src(b)%sourceMass(iv,:,:,:) = fld(b)%q * V
+        elseif (iv <= nm + 3) then
+          src(b)%sourceMom(iv-nm,:,:,:) = fld(b)%q * V
+        else
+          src(b)%sourceEn = fld(b)%q * V
+        endif
+        end associate
+      enddo
+    enddo
+  end subroutine mollifySourceBlocks
 
   !> Cell indices (i,j,k) on face af -> face-local pair (m,n); (0,0) if the cell is not on it.
   pure subroutine ijk2fmn(self,Ai,Aj,Ak,af,am,an)
@@ -1360,6 +1467,84 @@ contains
       end associate
     enddo
   end subroutine fillGhostPartners
+
+
+  !> Link table of the 101 face cells, one entry per cell: the partner cell of its connection and
+  !  the partner face, which is the face of the partner cell whose own 101 record names this cell
+  !  (the payload's face column is not used). Refuses a partner outside the mesh, a connection
+  !  that is not mutual and, on a one-layer mesh, a 101 record on face 5 or 6.
+  subroutine buildInterfaceLinks(geo, links)
+    use IGLOO_variables, only: mesh2D
+    implicit none
+    type(obj_block),             intent(in)  :: geo(:)
+    type(cellLink), allocatable, intent(out) :: links(:)
+    integer :: nl, l, b, f, m, n, i, j, k, pb, pi, pj, pk, pf, qf, qm, qn, hits
+
+    nl = 0
+    do b = 1, size(geo)
+      do f = 1, 6
+        if (allocated(geo(b)%face(f)%cell)) nl = nl + count(geo(b)%face(f)%cell(:,:)%bcdef == 101)
+      enddo
+    enddo
+    allocate(links(nl))
+    if (nl == 0) return
+
+    l = 0
+    do b = 1, size(geo)
+      do f = 1, 6
+        do n = 1, geo(b)%face(f)%Nn; do m = 1, geo(b)%face(f)%Nm
+          if (geo(b)%face(f)%cell(m,n)%bcdef /= 101) cycle
+          if (mesh2D .and. f >= 5) error stop 'IGLOO: a 101 connection on face 5 or 6 of a one-layer (2D) mesh'
+          call geo(b)%fmn2ijk(f, m, n, i, j, k)
+          pb = geo(b)%face(f)%cell(m,n)%connection(1)
+          if (pb < 1 .or. pb > size(geo)) error stop 'IGLOO: a 101 connection names a block outside the mesh'
+          pi = geo(b)%face(f)%cell(m,n)%connection(2)
+          pj = geo(b)%face(f)%cell(m,n)%connection(3)
+          pk = geo(b)%face(f)%cell(m,n)%connection(4)
+          if (pi < 1 .or. pi > geo(pb)%Nx .or. pj < 1 .or. pj > geo(pb)%Ny .or. pk < 1 .or. pk > geo(pb)%Nz) &
+            error stop 'IGLOO: a 101 connection names a cell outside its block'
+          hits = 0; pf = 0
+          do qf = 1, 6
+            if (mesh2D .and. qf >= 5) cycle
+            call geo(pb)%ijk2fmn(pi, pj, pk, qf, qm, qn)
+            if (qm == 0) cycle
+            if (geo(pb)%face(qf)%cell(qm,qn)%bcdef /= 101) cycle
+            if (geo(pb)%face(qf)%cell(qm,qn)%connection(1) /= b) cycle
+            if (any(geo(pb)%face(qf)%cell(qm,qn)%connection(2:4) /= [i, j, k])) cycle
+            hits = hits + 1
+            if (hits == 1 .or. qf == geo(b)%face(f)%cell(m,n)%connectionFace) pf = qf
+          enddo
+          if (hits == 0) error stop 'IGLOO: a 101 connection is not mutual: the partner cell does not name this cell'
+          l = l + 1
+          links(l) = cellLink(b=b, f=f, i=i, j=j, k=k, pb=pb, pf=pf, pi=pi, pj=pj, pk=pk, &
+                              dir=merge((f+1)/2, 0, (f+1)/2 == (pf+1)/2))
+        enddo; enddo
+      enddo
+    enddo
+  end subroutine buildInterfaceLinks
+
+
+  !> One warning line per pair of 101 faces normal to different index directions: the field
+  !  mollifier gives such an interface zero flux.
+  subroutine reportNonAligned(links)
+    implicit none
+    type(cellLink), intent(in) :: links(:)
+    integer :: l, s
+    logical :: seen
+
+    do l = 1, size(links)
+      if (links(l)%dir /= 0) cycle
+      if (links(l)%b > links(l)%pb .or. (links(l)%b == links(l)%pb .and. links(l)%f > links(l)%pf)) cycle
+      seen = .false.
+      do s = 1, l - 1
+        if (links(s)%dir == 0 .and. links(s)%b == links(l)%b .and. links(s)%f == links(l)%f .and. &
+            links(s)%pb == links(l)%pb .and. links(s)%pf == links(l)%pf) seen = .true.
+      enddo
+      if (.not. seen) write(*,'(A,4(I0,A))') ' [WARNING] 101 interface block ', links(l)%b, ' face ', links(l)%f, &
+        ' - block ', links(l)%pb, ' face ', links(l)%pf, &
+        ': faces normal to different index directions, the field mollifier gives it zero flux'
+    enddo
+  end subroutine reportNonAligned
 
 
   !> Linear extrapolation of the gas state to ghost (ig,jg,kg) from (i1,j1,k1) and (i2,j2,k2).

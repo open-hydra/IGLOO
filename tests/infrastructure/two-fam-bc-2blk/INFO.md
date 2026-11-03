@@ -2,9 +2,12 @@
 
 **Purpose.** The suite's case with more than one mesh block. `read_cdp_bc_file` takes each block's
 records from that block's place in the file (ATLAS writes the tables block-outermost, then one copy
-per family), and a parcel that reaches a block interface continues in the partner block: `bcDef`'s
-101 branch retries it in the cell the connection line names. This is `two-fam-bc` on the same box
-split in two: two families in ATLAS order, two blocks, every parcel crossing the interface.
+per family), and a parcel that reaches a block interface continues in the partner block: the cell
+search (`updateCell` → `findParticle`) looks in the current block, then in every other block, and
+block 2 contains the point past the face. `bcDef`'s 101 branch, the index jump into the cell the
+connection line names, runs only when no block contains the point, which this conformal interface
+never produces. This is `two-fam-bc` on the same box split in two: two families in ATLAS order, two
+blocks, every parcel crossing the interface.
 
 **Fixture** (`make_fixture.py`, output committed; run from this directory, `python3 make_fixture.py`):
 
@@ -21,20 +24,29 @@ split in two: two families in ATLAS order, two blocks, every parcel crossing the
 - `phase.txt` and `properties.dat`: `two-mat`'s (A ρ_p 2950, B ρ_p 1000), symlinked. `input.ini`:
   `two-fam-bc`'s, plus `mollify = off`.
 
-**Mollification off.** The field mollifier (`binomial_smooth`) smooths each block on its own with
-zero-flux block boundaries, a 101 face included. With it on (8 passes), 400 of 1500 cells differ from
-the one-block run, all within 8 cells of the interface — up to 9.1e-4 of the field scale in `E`,
-3.7e-4 in `euler2`'s ρ_p and n_p — while the totals hold per block. With it off the two runs agree
-cell by cell, which is what this case gates.
+**Mollification off.** The field mollifier smooths across the 101 face as across an interior face
+(`mollifyBlocks`); `two-fam-bc-2blk-mollify` runs this case with it on and holds the smoothed fields
+to the one-block run. This case keeps it off, so that its fields match the one-block run bit for bit
+whatever the build.
 
 **Gas-order 2, not gated.** X2 runs at gas-order 1. At gas-order 2 the block face also ends the
 integration step: 15 parcels per material print one more trajectory row, at x = 0.075 (every other
 row identical); scatter keeps its 244 (A) and 250 (B) samples but 6 and 11 of them move, most by
-1e-6 m and those beside the interface by up to 1.2e-4 m (A) and 2.2e-4 m (B); and the two cell
-columns beside the interface differ from the one-block run by up to 5.0e-2 of the field scale in
-`euler2`'s n_p and ρ_p (1.9e-2 in `euler1`, 3.5e-4 in `E`; below 1e-6 in every other cell). The ord2
-deposit's dual volumes (`dualW`, `precomputeDualWeights`) are summed over a block's own cells, so an
-interface vertex carries only its own block's half.
+1e-6 m and those beside the interface by up to 1.2e-4 m (A) and 2.2e-4 m (B). The two cell columns
+beside the interface (30 and 31) differ from the one-block run; every other cell by less than 1e-6
+of the field scale. The difference has two parts:
+
+- **Each block's own dual mesh.** At gas-order 2 every block keeps its own dual mesh, clipped at the
+  block face, and reduces its deposits to its own cells. Column 30 moves, mirrored with the opposite
+  sign in column 31's rows k = 4, 5; the two column sums are equal and opposite, so the total holds.
+  Of the field scale: `euler1` ρ_p and n_p 8.8e-6, u_p 2.6e-5; `euler2` ρ_p and n_p 2.8e-5, u_p
+  9.0e-5; `Fx` 2.1e-5; `E` 7.0e-5.
+- **Ties of the fixture.** One centred parcel per inlet cell with v = w = 0 puts every parcel on a
+  line of dual nodes, so the transverse dual row a deposit falls in is a tie, which the change of
+  block resolves differently from the one-block run. Column 31's rows k = 1–3 carry steps of one
+  parcel's deposit in one dual row (±q/2, q = 1.485e10 m⁻³ in `euler2`'s n_p), summing to about zero
+  over the column: up to 5.0e-2 of the field scale in `euler2`'s n_p and ρ_p, 1.9e-2 in `euler1`'s,
+  3.5e-4 in `E`.
 
 **Numbers** (from the inputs, as in `two-fam-bc`): ṁ_A = 0.34/(1 − 0.51) · 1.2e-3 = 8.326531e-4 kg/s,
 ṁ_B = 4.163265e-4 kg/s; d_B = 23.78 µm, τ_B = 1.745e-3 s; m_B/m_A = 2.711864 at injection;

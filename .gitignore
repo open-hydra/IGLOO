@@ -26,6 +26,8 @@ ref-tboil
 ref-psat
 # two-fam-bc-2blk runs its one-block sibling into ref-1blk/ (tests/infrastructure/two-fam-bc-2blk/check.py)
 ref-1blk
+# two-fam-bc-2blk-mollify also runs it unsmoothed into ref-1blk-raw/ (tests/infrastructure/two-fam-bc-2blk-mollify/check.py)
+ref-1blk-raw
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/

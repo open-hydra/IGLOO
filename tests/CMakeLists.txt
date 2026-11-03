@@ -10,7 +10,7 @@
 #   combustion/         unit family (root) + burn-box/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ two-fam-bc-2blk/ varcp-tmin/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},bc-copies,bc-copy-order,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ chimera-2blk/ varcp-tmin/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho}}
 #   repeatability/      two-sweep gates (twosweep driver): 12 cases
 #   mpi/                registered only under USE_MPI: 5 rank-count cases + 2 consistency
 #
@@ -167,6 +167,10 @@ igloo_unit_test(test_dual_clip          infrastructure/dual_clip          "unit;
 # "conserves by construction". Also pins the partition-of-unity invariant sum(dualW) ==
 # sum(subVol). RED on the pre-fix tree: 0.4000 / 0.2963 / 0.6000 / 0.4444 and 1, 1/2, 1/4, 1/8.
 igloo_unit_test(test_source_reduction  infrastructure/source_reduction   "unit;infrastructure;euler;t1")
+# The field mollifier over blocks joined by 101 links (mollifyBlocks): a random grid cut into blocks
+# smooths as the uncut grid (3D and 2D cuts, three blocks, 2 x 2 blocks, above the OpenMP threshold),
+# Sum(q V) holds over the blocks, and without an aligned link each block is smoothed on its own.
+igloo_unit_test(test_mollify_blocks    infrastructure/mollify_blocks     "unit;infrastructure;mollify;t1")
 
 # ---------- two-sweep repeatability harness -----------------------------------
 # Drives one pinned population through solve() TWICE. Every other case in the suite is
@@ -603,6 +607,15 @@ igloo_e2e_case(two-fam-bc infrastructure/two-fam-bc "e2e;infrastructure;bc;io")
 # one-block sibling. Read as one copy per block, block 2 takes block 1's second copy -- an inlet at
 # the interface and a connection on the outlet face -- and the run does not end.
 igloo_e2e_case(two-fam-bc-2blk infrastructure/two-fam-bc-2blk "e2e;infrastructure;bc;io")
+# two-fam-bc-2blk-mollify: the same two blocks with the field mollifier at its default (8 passes); check.py
+# holds the smoothed source and eulerian fields cell by cell to the box run as one block. RED while each
+# block is smoothed with zero flux at the 101 face: 400 of 1500 cells, E 9.1e-4 of the field scale.
+igloo_e2e_case(two-fam-bc-2blk-mollify infrastructure/two-fam-bc-2blk-mollify "e2e;infrastructure;bc;mollify")
+# chimera-2blk: drag-stokes's box as two overlapping blocks joined by chimera (102) faces (make_box_case.py
+# --overlap 4 --families 2), each family copy repeating the chimera payload: the file is read (the routing
+# line counts 50 facelets) and every parcel leaves at x = 0.15. RED on a reader without 102: pass 0 stops on
+# the first payload ("bad BC cell line ... Legacy-schema").
+igloo_e2e_case(chimera-2blk infrastructure/chimera-2blk "e2e;infrastructure;bc;io;chimera")
 # varcp-tmin: a varying-cp table from 280 K, the parcels at 600 K on its extended last segment.
 igloo_e2e_case(varcp-tmin infrastructure/varcp-tmin "e2e;infrastructure;heat")
 
@@ -634,6 +647,19 @@ igloo_refusal_case(refuse-bc-copies        infrastructure/refusals/bc-copies
                    "IGLOO: bc.txt record count is neither one copy nor one copy per family" "e2e;refusal;infrastructure;bc")
 igloo_refusal_case(refuse-bc-copy-order    infrastructure/refusals/bc-copy-order
                    "IGLOO: bc.txt family copies do not repeat the faces of copy 1" "e2e;refusal;infrastructure;bc")
+# Chimera (102) payloads (refusals/make_chimera.py: one record of a small overlap box spoiled): a counts line
+# that is not two integers, a donor line that is not four integers and a weight, a donor outside its block, a
+# layer whose weights do not sum to 1, a family copy whose counts differ from copy 1's.
+igloo_refusal_case(refuse-chimera-counts   infrastructure/refusals/chimera-counts
+                   "IGLOO: chimera donor counts line is not two non-negative integers" "e2e;refusal;infrastructure;bc;chimera")
+igloo_refusal_case(refuse-chimera-donor-line infrastructure/refusals/chimera-donor-line
+                   "IGLOO: chimera donor line is not four integers and a weight" "e2e;refusal;infrastructure;bc;chimera")
+igloo_refusal_case(refuse-chimera-donor-cell infrastructure/refusals/chimera-donor-cell
+                   "IGLOO: chimera donor list names a cell outside the donor block" "e2e;refusal;infrastructure;bc;chimera")
+igloo_refusal_case(refuse-chimera-weights  infrastructure/refusals/chimera-weights
+                   "IGLOO: chimera donor list is not normalised" "e2e;refusal;infrastructure;bc;chimera")
+igloo_refusal_case(refuse-chimera-copies   infrastructure/refusals/chimera-copies
+                   "IGLOO: bc.txt family copies do not repeat the chimera donor counts of copy 1" "e2e;refusal;infrastructure;bc;chimera")
 # Unknown model tokens (ledger O26): the selectors used to print the menu and execute a plain
 # `stop`, exit 0 -- invisible to any harness or embedding parent. Now error stops.
 igloo_refusal_case(refuse-drag-token        infrastructure/refusals/drag-token

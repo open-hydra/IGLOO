@@ -22,6 +22,7 @@ FAMILY_DIRS = [
     "infrastructure/properties_reader",
     "infrastructure/rng_stream", "infrastructure/axis_dispatch",
     "infrastructure/graze_standoff", "infrastructure/dual_clip",
+    "infrastructure/mollify_blocks",
     "standard/drag", "standard/temperature",
     "evaporation", "evaporation/interface-neq", "evaporation/tc-analytic",
     "evaporation/evap-breakup",

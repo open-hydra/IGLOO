@@ -31,6 +31,11 @@ output written).
 | `refuse-properties-psat` | tc-box (`bc.txt`/`solfile.tec` symlinked), its table on 1..1000 K plus a `"Psat"` column = its Clausius-Clapeyron line (`tools/make_psat_table.py --anchors 500 0.018150089922984093 600 1.0`, the first ratio `exp(-Lv Mv/Ru (1/500 - 1/600))`) with the 549 K and 550 K values swapped | `Psat column: a pressure that decreases with T` |
 | `refuse-bc-copies` | own `INPUT/`: `phase.txt` `A 3` (three families), `two-fam-bc`'s two-copy `bc.txt`, `common/properties.dat` — 2500 records where one copy (1250) or one per family (3750) is readable | `IGLOO: bc.txt record count is neither one copy nor one copy per family` — refused in `read_cdp_bc_file`, which prints the three counts |
 | `refuse-bc-copy-order` | own `INPUT/`: `two-fam-bc`'s file with two face-3 headers of copy 2 exchanged (`python3 ../../two-fam-bc/make_fixture.py --swap`, run from the case directory), `two-mat`'s `phase.txt`/`properties.dat` | `IGLOO: bc.txt family copies do not repeat the faces of copy 1` — the codes still line up, only the header integers differ (`family 2 of block 1 ... at record 51`) |
+| `refuse-chimera-counts` | own `INPUT/` (`python3 make_chimera.py`, run from this directory): a box of two overlapping blocks joined by chimera (102) faces (`tools/make_box_case.py --nx 8 --ny 2 --nz 2 --blocks 2 --overlap 1 --families 2`), the counts line of block 1's first chimera record holding three integers | `IGLOO: chimera donor counts line is not two non-negative integers` — refused at the first scan of the file |
+| `refuse-chimera-donor-line` | the same box, the first donor line of that record holding three integers and a weight | `IGLOO: chimera donor line is not four integers and a weight` |
+| `refuse-chimera-donor-cell` | the same box, that donor naming cell i = 99 of block 2 (5 cells along x) | `IGLOO: chimera donor list names a cell outside the donor block` |
+| `refuse-chimera-weights` | the same box, that donor's weight 0.9 (its layer sums to 0.9) | `IGLOO: chimera donor list is not normalised` |
+| `refuse-chimera-copies` | the same box, copy 2 of that record writing the counts `2 0` against copy 1's `1 1` (the same number of payload lines) | `IGLOO: bc.txt family copies do not repeat the chimera donor counts of copy 1` |
 | `refuse-drag-token` | `drag = no-such-drag-law` | `IGLOO: unknown drag model` |
 | `refuse-heat-token` | `heat = no-such-nusselt-law` | `IGLOO: unknown heat model` |
 | `refuse-breakup-token` | `breakup = no-such-breakup-model` | `IGLOO: unknown breakup model` |
@@ -53,7 +58,10 @@ output written).
 | `refuse-solid-varrho` | the valid line plus an own 10-row `properties.dat` whose `Density` column varies | `solidification=on requires a constant-density material` |
 | `refuse-wedge-offcentre` | a generated wedge whose k-planes sit at 0 and +1° (`tools/make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`) | `IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)` — refused at mesh import (`allocation.f90`), not at the properties choke point |
 
-All thirty-one exit 128 at setup with nothing injected or integrated. **The three `properties.dat` cases were
+All thirty-six exit 128 at setup with nothing injected or integrated. **The five chimera cases are RED** on a
+reader without the 102 record, which stops each of them at the first chimera payload (`bad BC cell line`,
+exit 1, not their payload), and on the reader with its five chimera checks taken out, which runs each of them
+to "Stop condition" with exit 0 and writes its output. **The three `properties.dat` cases were
 RED first**: the reader that took three columns by position ran each of them to "All particles out of
 domain" with exit 0 — the two-enthalpy header as an absolute datum with `hOff = 0`, the typed row with
 its enthalpy undefined (ORION keeps only the last row's read status), and the decreasing `Psat` column
