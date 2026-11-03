@@ -11,17 +11,17 @@ contains
   !> Integrate one particle from its current state to domain exit (or burnout) through the
   !  steady gas field, one cell segment at a time, depositing source and Eulerian moments.
   subroutine integrate(part,geoblock,gasblock,srcblock,eulblock,     &
-                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, shed,noShed,resid)
+                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, slot,shed,noShed,resid)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
-    use IGLOO_variables,  only: unitTraj,unitExit,unitScat,unitSnap,iprint,dtprint,dsprint,dcellSet,tEnd,timeOn,snapOn,frozenOn, &
+    use IGLOO_variables,  only: iprint,dtprint,dsprint,dcellSet,tEnd,timeOn,snapOn,frozenOn, &
                                 nb,toll,ord2,mesh2D,threshold,            &
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
                                 nInjNoCell,                                &
                                 trajOn, scatOn, dNscat, sixOverPi, pi,    &
-                                planeOn, planeX, unitPlane, failAfter
+                                planeOn, planeX, failAfter
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs, grazeStandoff
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock
@@ -55,6 +55,8 @@ contains
     type(obj_eulerblock),  intent(inout) :: eulblock(nb)
     real(R8),              intent(in)    :: hTab(:),cpTab(:),rhoTab(:),     &
                                             mupTab(:),sigTab(:),psatTab(:),LvTab(:),cpvTab(:)
+    !> The parcel's slot in its loop's ordered window of the particle files (its storage index)
+    integer,               intent(in)    :: slot
     !> This parent's shed list (intent(inout) required).
     type(shedList),        intent(inout), optional :: shed
     !> True on the last generation pass: sheds are suppressed and the parent keeps the mass.
@@ -123,7 +125,11 @@ contains
     !> Burnout threshold on droplet mass [kg]: a consuming droplet at m <= mBurnTol is declared consumed.
     real(R8), parameter :: mBurnTol=1.e-15_R8
 
-    if (region_failed()) return   !> MPI: a parcel of this loop failed; its rank aborts after the join
+    !> MPI: a parcel of this loop failed; its rank aborts after the join (empty blocks keep the window whole)
+    if (region_failed()) then
+      call emitParcel()
+      return
+    endif
     neq = part%neq       !> save local copy of neq
     atGasBoundary = .true.   !> conservative default: geo consulted until proven interior
     nsp = 1              !> nsp = nspecies(part%Iinj(1)) !> for multi-species gas
@@ -704,11 +710,11 @@ contains
 
     !> The parcel's rows, one block per particle file.
     subroutine emitParcel()
-      if (trajOn) call rec_emit(lTraj, unitTraj, STR_TRAJ)
-      call rec_emit(lExit, unitExit, STR_EXIT)
-      if (planeOn) call rec_emit(lPlane, unitPlane, STR_PLANE)
-      if (snapOn) call rec_emit(lSnap, unitSnap, STR_SNAP)
-      if (scatOn) call rec_emit(lScat, unitScat, STR_SCAT)
+      if (trajOn) call rec_emit(lTraj, STR_TRAJ, slot)
+      call rec_emit(lExit, STR_EXIT, slot)
+      if (planeOn) call rec_emit(lPlane, STR_PLANE, slot)
+      if (snapOn) call rec_emit(lSnap, STR_SNAP, slot)
+      if (scatOn) call rec_emit(lScat, STR_SCAT, slot)
     end subroutine emitParcel
 
 

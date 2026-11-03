@@ -10,8 +10,8 @@ OUTPUT/. Gates:
      n > 1 it prints that n: a binary built without OpenMP, or an environment that never reached the solver,
      cannot pass as a thread comparison.
   2. FILES -- the same OUTPUT/*.dat and *.tec at every thread count, every number finite (check_finite.py).
-  3. PARTICLE STREAMS -- every .dat as an exact sorted multiset of its lines: the record order belongs to the
-     schedule, the records do not (a torn or a schedule-dependent record is a different line).
+  3. PARTICLE STREAMS -- every .dat byte for byte the 1-thread run's: the particle files hold their records in
+     parcel order at every thread count (a torn, a schedule-dependent or a reordered record changes the bytes).
   4. GRID FIELDS -- every .tec through compare_tec.py at 1e-12 of the field scale (the `!$OMP ATOMIC` sums
      re-associate with the schedule; their floor is <= 4e-15).
   5. ORACLE -- the case's own check.py on the one-thread run.
@@ -43,14 +43,21 @@ def unlimited_stack():
         pass
 
 
-def multiset(path):
-    """(md5 of the sorted lines, line count)."""
+def filehash(path):
+    """(md5 of the file's bytes, line count)."""
     with open(path, "rb") as fh:
-        lines = sorted(fh.read().splitlines())
-    h = hashlib.md5()
-    for ln in lines:
-        h.update(ln + b"\n")
-    return h.hexdigest(), len(lines)
+        data = fh.read()
+    return hashlib.md5(data).hexdigest(), data.count(b"\n")
+
+
+def first_diff(a, b):
+    """The first line (1-based) at which two files differ."""
+    with open(a, "rb") as fa, open(b, "rb") as fb:
+        la, lb = fa.read().splitlines(), fb.read().splitlines()
+    for k, (x, y) in enumerate(zip(la, lb)):
+        if x != y:
+            return k + 1
+    return min(len(la), len(lb)) + 1
 
 
 def run(case, exe, n):
@@ -100,7 +107,7 @@ def main():
         if d is None:
             return 1
         dirs[n] = d
-        dats[n] = {os.path.basename(p): multiset(p) for p in sorted(glob.glob(os.path.join(d, "OUTPUT", "*.dat")))}
+        dats[n] = {os.path.basename(p): filehash(p) for p in sorted(glob.glob(os.path.join(d, "OUTPUT", "*.dat")))}
         tecs[n] = sorted(os.path.basename(p) for p in glob.glob(os.path.join(d, "OUTPUT", "*.tec")))
         print("  %d thread(s): %s; %d .tec" % (n, "  ".join("%s=%s(%dL)" % (f, h[:12], nl)
                                                             for f, (h, nl) in sorted(dats[n].items())), len(tecs[n])))
@@ -115,8 +122,9 @@ def main():
             continue
         for f in sorted(dats[ref]):
             if dats[n][f] != dats[ref][f]:
-                bad.append("%s: record multiset at %d threads (%d lines, %s) differs from 1 thread (%d lines, %s)"
-                           % (f, n, dats[n][f][1], dats[n][f][0][:12], dats[ref][f][1], dats[ref][f][0][:12]))
+                bad.append("%s: bytes at %d threads (%d lines, %s) differ from 1 thread (%d lines, %s) from line %d"
+                           % (f, n, dats[n][f][1], dats[n][f][0][:12], dats[ref][f][1], dats[ref][f][0][:12],
+                              first_diff(os.path.join(dirs[ref], "OUTPUT", f), os.path.join(dirs[n], "OUTPUT", f))))
         for f in tecs[ref]:
             ok, worst, ndiff, nval = compare_tec(os.path.join(dirs[ref], "OUTPUT", f), os.path.join(dirs[n], "OUTPUT", f))
             if not ok:
@@ -139,7 +147,7 @@ def main():
         print("[FAIL] %s's check.py on the 1-thread run: exit %d" % (name, res.returncode))
         return 1
     print("  check.py on the 1-thread run: %s" % last.strip())
-    print("[PASS] %s: %d .dat multisets exact and %d .tec within %.0e of the field scale at %s threads"
+    print("[PASS] %s: %d .dat byte-identical and %d .tec within %.0e of the field scale at %s threads"
           % (name, len(dats[ref]), len(tecs[ref]), DEFAULT_TOL, ", ".join(map(str, threads))))
     return 0
 

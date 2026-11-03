@@ -72,11 +72,15 @@ Three gates cover the KH-shed path, which the case's other gates cannot see:
   25 injected parents, which is only possible if some parent sheds more than once. Without it,
   a one-shed cap would leave every other gate green.
 - **`khrt-e2e-threads`** → `check_threads.py`. Runs the case at `OMP_NUM_THREADS` 1/2/4 and
-  compares `trajectories-A.dat`/`outloc-A.dat` as **sorted multisets**, so record ordering
-  (OMP-nondeterministic by design) is ignored while a *torn* record is not — those two files
-  are written from inside the parallel region with no synchronisation; the `threads-*` gates
-  catch interleaving on their own cases, this one on the KH-shed path. Shares
+  compares `trajectories-A.dat`/`outloc-A.dat` as **sorted multisets**, so the record order
+  (gated byte for byte by `threads-khrt-stress`) is ignored while a *torn* record is not — those
+  two files are written from inside the parallel region; the `threads-*` gates catch
+  interleaving on their own cases, this one on the KH-shed path. Shares
   `RESOURCE_LOCK khrt_output` with the other two.
+- **`window-khrt-e2e`** → `tests/tools/check_window_case.py`. The case at one thread, and at 5
+  threads with the particle files' ordered window at its default budget and at 64 KiB
+  (`IGLOO_IOBUF_BYTES`): the 64 KiB run spills, holds at most 64 KiB, and both 5-thread runs
+  write the one-thread files byte for byte. Runs in its own `window-*/` directories.
 
 Heavy shedding is stressed separately by [breakup/khrt-stress](../khrt-stress/INFO.md).
 

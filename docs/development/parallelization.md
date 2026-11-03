@@ -231,6 +231,7 @@ and then nothing is printed.
 | `rank` | parcel-loop wall time, parcels, threads, summed `integrate` time and the thread max/mean, per rank |
 | `imbalance` | max/mean over the ranks of the parcel-loop wall time |
 | `sizes` | allocated real values per rank: gas fields, geometry arrays, accumulators at the solve shape |
+| `particle files` | the particle files' ordered window: its memory budget, the most bytes it held (the maximum over the ranks), the bytes it moved to its spill file (summed over the ranks) and the largest parcel block |
 | `cycles` | the counters' state; with counters on every thread, each phase's user-mode core cycles summed over threads and ranks (with the minimum and maximum over the ranks), and the sweep and setup totals with the sweep's aggregate GHz |
 
 Phases, in order: `setup:input` (input files), `setup:gas-read` (the gas field: the Tecplot read,

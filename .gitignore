@@ -94,6 +94,8 @@ tests/*/*/diag_*.txt
 tests/mpi/*/tec_n*/
 # Per-thread-count runs of the thread gates (tests/tools/check_threads_case.py)
 tests/*/*/threads-omp*/
+# The window gate's runs (tests/tools/check_window_case.py)
+tests/*/*/window-*/
 
 # mkdocs build output
 site/

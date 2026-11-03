@@ -375,7 +375,8 @@ contains
     use IGLOO_Mod_Footprint,  only: record_footprint
     use IGLOO_overlap,        only: mirrorSource, mirrorEuler
     use IGLOO_Lib_Combustion, only: nuOx
-    use IGLOO_records,        only: rec_setup
+    use IGLOO_records,        only: rec_setup, ps_open, ps_close, ps_begin, ps_end, &
+                                    STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT
     use oslo
     use omp_lib
     implicit none
@@ -390,6 +391,8 @@ contains
     integer, allocatable :: nShedAll(:), shedOff(:)
     ! logical, allocatable :: famDone(:)
     real(R8), allocatable :: relTol(:), absTol(:), exch(:,:)
+    !> The slots of a parcel loop whose parcel is not integrated here (probe filter, MPI ownership)
+    logical, allocatable :: skipIp(:)
     !> Scatter-cloud weight-quantum (dNscat) auto-sizing scratch.
     integer  :: c, nStreams, nValid
     real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp, rRes
@@ -458,6 +461,7 @@ contains
         else
           write(unitTraj) ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)//trim(tsHead)//LF
         endif
+        call ps_open(STR_TRAJ, unitTraj)
       endif
       open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
              access='stream', form='unformatted', status='replace')
@@ -468,18 +472,21 @@ contains
         write(unitExit) ' variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID",'// &
                         '"bc","d<sub>p</sub>"'//trim(fHead)//LF
       endif
+      call ps_open(STR_EXIT, unitExit)
       !> One record per plane crossing.
       if (planeOn) then
         open(newunit=unitPlane,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'planes-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
              access='stream', form='unformatted', status='replace')
         write(unitPlane) ' variables="plane","X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","mdot","npdot",'// &
                          '"f","ID","parent","t","dir"'//LF
+        call ps_open(STR_PLANE, unitPlane)
       endif
       !> Parcels still in the domain at time-end, one record each.
       if (snapOn) then
         open(newunit=unitSnap,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'snapshot-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
              access='stream', form='unformatted', status='replace')
         write(unitSnap) ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)//LF
+        call ps_open(STR_SNAP, unitSnap)
       endif
 
       !> Scatter cloud: one zone per material; auto-size the weight quantum dNscat to ~trajSample points per stream.
@@ -489,6 +496,7 @@ contains
              access='stream', form='unformatted', status='replace')
         write(unitScat) ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)//LF
         write(unitScat) 'Zone T="Mat '//trim(mat%matName)//' scatter"'//LF
+        call ps_open(STR_SCAT, unitScat)
         !> Serial inject-only pre-pass over ALL particles (replicated on every rank so dNscat is
         !  identical everywhere): resolves each stream's npdot and injection speed.
         Ndot = 0._R8; nStreams = 0; Vsum = 0._R8; nValid = 0
@@ -620,22 +628,29 @@ contains
               call gr%shed(ip)%reserve(1)
             enddo
 
+            !> The probe filter, and the MPI ownership filter on the parent generation only.
+            if (allocated(skipIp)) deallocate(skipIp)
+            allocate(skipIp(start:nEnd))
+            do ip = start, nEnd
+              skipIp(ip) = .false.
+              if (probeOn) skipIp(ip) = .not.any(gr%particle(ip)%ID==probeIDs)
+              if (loopCounter == 1) skipIp(ip) = skipIp(ip) .or. .not.owns_particle(ip)
+            enddo
+            call ps_begin(start, nEnd, skipIp)
+
             call tm_phase(TM_LOOP)
             !$OMP PARALLEL DO SCHEDULE(DYNAMIC)
             do ip = start, nEnd
-              if (probeOn) then; if (.not.any(gr%particle(ip)%ID==probeIDs)) cycle; endif
-              !> MPI ownership filter applies to the parent generation only.
-              if (loopCounter == 1) then
-                if (.not. owns_particle(ip)) cycle
-              endif
+              if (skipIp(ip)) cycle
               call tm_parcel_begin()
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                              mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab,    &
-                             mat%LvTab,mat%cpvTab, gr%shed(ip), noShed=(loopCounter==maxLoop))
+                             mat%LvTab,mat%cpvTab, slot=ip, shed=gr%shed(ip), noShed=(loopCounter==maxLoop))
               call tm_parcel_end()
             enddo
             !$OMP END PARALLEL DO
             call region_fail_check()
+            call ps_end()
             call tm_phase(TM_CENSUS)
 
             !> Shed census of the current generation, indexed by position in its global ID band.
@@ -777,29 +792,36 @@ contains
               call gr%resid(ip)%reserve(1)
             enddo
           endif
+          !> The probe and MPI ownership filters; a product's residues live on their parents' rank: no filter.
+          if (allocated(skipIp)) deallocate(skipIp)
+          allocate(skipIp(1:gr%nparticles))
+          do ip = 1, gr%nparticles
+            skipIp(ip) = .false.
+            if (mat%isProduct) cycle
+            if (probeOn) skipIp(ip) = .not.any(gr%particle(ip)%ID==probeIDs)
+            skipIp(ip) = skipIp(ip) .or. .not.owns_particle(ip)
+          enddo
+          call ps_begin(1, gr%nparticles, skipIp)
+
           call tm_phase(TM_LOOP)
           !$OMP PARALLEL DO SCHEDULE(DYNAMIC)
           do ip = 1,gr%nparticles
-            !> A product's residues live on their parents' rank: no probe or ownership filter.
-            if (.not. mat%isProduct) then
-              if (probeOn) then; if (.not.any(gr%particle(ip)%ID==probeIDs)) cycle; endif
-              !> MPI ownership filter.
-              if (.not. owns_particle(ip)) cycle
-            endif
+            if (skipIp(ip)) cycle
             call tm_parcel_begin()
             if (gr%resOn) then
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                               mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
-                              mat%LvTab,mat%cpvTab, resid=gr%resid(ip))
+                              mat%LvTab,mat%cpvTab, slot=ip, resid=gr%resid(ip))
             else
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                               mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
-                              mat%LvTab,mat%cpvTab)
+                              mat%LvTab,mat%cpvTab, slot=ip)
             endif
             call tm_parcel_end()
           enddo
           !$OMP END PARALLEL DO
           call region_fail_check()
+          call ps_end()
           !> The residues of this group's parcels join its product's group, on this rank.
           if (gr%resOn) call drainResidues(self%material(gr%prodID)%group(1), gr)
           call tm_phase(TM_SOLVE)
@@ -807,11 +829,11 @@ contains
         end associate group
       enddo
       end associate material
-      if (trajOn) close(unitTraj)
-      if (scatOn) close(unitScat)
-      if (snapOn) close(unitSnap)
-      if (planeOn) close(unitPlane)
-      close(unitExit)
+      if (trajOn) call ps_close(STR_TRAJ)
+      if (scatOn) call ps_close(STR_SCAT)
+      if (snapOn) call ps_close(STR_SNAP)
+      if (planeOn) call ps_close(STR_PLANE)
+      call ps_close(STR_EXIT)
     enddo
     enddo
 

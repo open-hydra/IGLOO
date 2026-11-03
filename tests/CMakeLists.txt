@@ -351,8 +351,8 @@ function(igloo_twosweep_case name casedir labels gasfile)
         TIMEOUT 900)
 endfunction()
 # Thread-count invariance of a serial case (tools/check_threads_case.py): its input.ini run at 1, 2 and 5 threads in
-# <case>/threads-omp<N>/ (never the case's own OUTPUT/), the thread witness, every .dat an exact multiset, every .tec
-# within 1e-12 of the field scale, the case's check.py on the 1-thread run.
+# <case>/threads-omp<N>/ (never the case's own OUTPUT/), the thread witness, every .dat byte for byte the 1-thread
+# run's, every .tec within 1e-12 of the field scale, the case's check.py on the 1-thread run.
 function(igloo_threads_case name casedir labels)
     add_test(NAME ${name}
         COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_threads_case.py
@@ -831,6 +831,9 @@ set_tests_properties(khrt-e2e-rt PROPERTIES
 # per-parent shed lists go through ~7 doublings. Gates mass exactness under heavy shedding
 # plus "the runaway guard did not fire". INPUT/ is a symlink to ../khrt-e2e/INPUT.
 igloo_e2e_case(khrt-stress breakup/khrt-stress "e2e;breakup;khrt;stress")
+# threads-khrt-stress: khrt-stress at 1, 2 and 5 threads -- 25 parents and their 701 children, two parcel loops with
+# an ordered window each, and the suite's largest particle file (scatter, 195 MB).
+igloo_threads_case(threads-khrt-stress breakup/khrt-stress "e2e;breakup;khrt;omp")
 # khrt-e2e-euler: the khrt-e2e case (model 3) with the Eulerian output on (out-file ALL, mollify off, out-time):
 # its oracles, no parcel lost to a solver failure or a non-finite state, and the Eulerian mass = sum over
 # exits of flow x time. RED while a breakup child enters without its state count (241 children lost at
@@ -894,6 +897,17 @@ set_tests_properties(khrt-e2e-threads PROPERTIES
     TIMEOUT 600)
 # All three rm -rf the same OUTPUT/ in the same working directory.
 set_tests_properties(khrt-e2e khrt-e2e-rt khrt-e2e-threads PROPERTIES RESOURCE_LOCK khrt_output)
+# window-khrt-e2e: the particle files' ordered window (tools/check_window_case.py): khrt-e2e at 1 thread, and at 5
+# threads with the default budget and with a 64 KiB one (IGLOO_IOBUF_BYTES), in khrt-e2e/window-*/: the spill
+# exercised, the bytes held within the budget, every .dat byte for byte the 1-thread run's.
+add_test(NAME window-khrt-e2e
+    COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_window_case.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/breakup/khrt-e2e $<TARGET_FILE:IGLOO>
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/breakup/khrt-e2e")
+set_tests_properties(window-khrt-e2e PROPERTIES
+    LABELS "e2e;breakup;khrt;omp;output"
+    ENVIRONMENT "KMP_STACKSIZE=100M;IGLOO_EXE=$<TARGET_FILE:IGLOO>"
+    TIMEOUT 600)
 
 # ---------- infrastructure: combined output paths --------------------------------
 # coupled-body: the euler, source and body-force accumulators combined in one run
