@@ -79,7 +79,7 @@ mkdir -p OUTPUT
 !!! warning "Stack size"
     Always set `ulimit -s unlimited` (or `KMP_STACKSIZE=100M` for Intel compilers) before launching the solver. Large automatic arrays in the per-particle integration (cell-crossing ray tests and the ODE-solver work arrays) requires more stack than the default system limit.
 
-With the Intel runtime, `FORT_BUFFERED=true` in the environment buffers the particle files (`trajectories-`, `outloc-`, `scatter-`, `planes-` and `snapshot-<mat>.dat`) and, under `IGLOO_TEC_FAST=0`, the grid files (`source.tec`, `euler<fam>.tec`), which otherwise make one system call per line.
+With the Intel runtime, `FORT_BUFFERED=true` in the environment buffers the grid files written under `IGLOO_TEC_FAST=0` (`source.tec`, `euler<fam>.tec`), which otherwise make one system call per line. The particle files are written one block per parcel and file ([Output Files](#output-files)).
 
 Output is written to `OUTPUT/` on completion. The solver prints progress to stdout; any fatal errors go to stderr.
 
@@ -98,7 +98,7 @@ python3 check.py                          # oracle gate
 
 ## Output Files
 
-A parcel's rows reach the particle files (trajectories, scatter cloud, exit locations, snapshot, plane crossings) when its integration ends, one block per file: a run that crashes leaves no rows for the parcels it was integrating.
+A parcel's rows reach the particle files (trajectories, scatter cloud, exit locations, snapshot, plane crossings) when its integration ends, one block per file, and every file holds the blocks in parcel order: by group, then parcel ID. A block that is ready before the blocks of the parcels ahead of it waits for them, in memory within a budget over all the files (64 MiB; `IGLOO_IOBUF_BYTES` in the environment sets it, an integer ≥ 0 in bytes) and beyond it in a scratch file deleted when the file closes. The files are therefore the same bytes at every thread count and, merged, at every MPI rank count, for one executable and one input. A run that crashes leaves no rows for the parcels it was integrating, nor for those whose blocks were waiting.
 
 ### Trajectories
 

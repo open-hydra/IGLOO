@@ -84,15 +84,16 @@ parallel region — every parcel draws from its own seeded stream (`part%rngStat
 
 ---
 
-## Trajectory ordering
+## Particle-file order
 
-`OUTPUT/trajectories-*.dat` record order within a zone is **OMP-nondeterministic**
-across runs. When writing verification scripts or checking regression gates, sort
-by particle ID and position before comparing — never rely on byte identity:
-
-```bash
-tail -n+3 trajectories-A.dat | sort | md5sum
-```
+The particle files (`trajectories-`, `outloc-`, `scatter-`, `snapshot-` and
+`planes-<mat>.dat`) hold their records in parcel order: by group, then parcel ID, each
+parcel's records in the order it wrote them. One binary on one input writes the same
+bytes at every OpenMP thread count and, merged, at every MPI rank count, so two of its
+runs compare with `cmp`. A different build can move the last printed digit: an oracle
+never compares a file with stored bytes. The grid fields (`*.tec`) are sums whose
+`!$OMP ATOMIC` deposits land in scheduling order; compare them on the field scale
+(`tests/tools/compare_tec.py`).
 
 A script that picks one parcel among several (the longest, the worst) visits the
 parcels in ID order, so a tie goes to the lowest ID, never to the first in the file, and

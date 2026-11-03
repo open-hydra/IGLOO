@@ -75,19 +75,17 @@ would pass every gate in this directory.
   (proving it fully overwrites, leaving no residue). The second half is the load-bearing
   one — a partial import passes the first check and fails this.
 
-## Why the comparison is not byte-identity
+## Comparison rules
 
-Two sources of nondeterminism are inherent; both are measured (host `sprop2`,
-`OMP_NUM_THREADS=5`):
-
-- **`*.dat` record order** is OMP-nondeterministic — the parallel loop writes as particles
-  finish, so order varies between two runs of the *same* sweep. Compared as a **sorted
-  multiset**, which is exact: no tolerance.
+- **`*.dat`** — compared as a **sorted multiset** of lines, which is exact: no tolerance. The
+  record order is not part of this gate: the particle files hold their records in parcel order
+  at every thread count, which the `threads-*` gates (`tools/check_threads_case.py`) hold byte
+  for byte.
 - **`*.tec` values** are accumulated under `!$OMP ATOMIC UPDATE`, and FP addition is not
-  associative. Compared on **max relative difference** against `TEC_TOL = 1e-12`. The
-  run-to-run floor at fixed sweep is ≤ `4e-15`; a reset without the accumulator deallocation
-  shows `5.2e-11`. The two are ~4 decades apart; the tolerance sits ~2.4 decades above the
-  floor and ~1.7 below that variant.
+  associative. Compared on **max relative difference** against `TEC_TOL = 1e-12`. Measured on
+  host `sprop2` at `OMP_NUM_THREADS=5`: the run-to-run floor at fixed sweep is ≤ `4e-15`; a reset
+  without the accumulator deallocation shows `5.2e-11`. The two are ~4 decades apart; the
+  tolerance sits ~2.4 decades above the floor and ~1.7 below that variant.
 
 Plus an integration criterion: a reset that injects every
 particle out of domain also yields two identical *empty* sweeps and would pass vacuously, so

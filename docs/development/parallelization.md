@@ -42,7 +42,8 @@ parcel's deposition. The only shared writes in the entire tree are **15 `!$OMP A
 Consequence: any partition of the parcel set produces the same trajectories. Only the
 *grid* accumulators need combining, and summation is associative up to floating-point
 re-association — which is why the grid `.tec` is compared with a tolerance while the
-particle `.dat` is compared as an exact multiset.
+particle `.dat` files, written in parcel order ([Output model](#output-model)), are compared
+byte for byte.
 
 ### The cross-rank sum is fixed in rank order
 
@@ -85,7 +86,7 @@ The whole MPI surface is three places. Everything else is serial-identical code.
 |---|---|---|
 | 1 | `owns_particle` in `solve`'s two `!$OMP PARALLEL DO` loops | each rank integrates only its stripe |
 | 2 | `reduce_accumulators` at the end of `solve` | sum of the source and euler accumulators over the ranks, in rank order |
-| 3 | `merge_rank_particle_files` in `writeout` | root collapses per-rank `.dat` shards into the serial file layout |
+| 3 | `ps_close` in `solve`, `merge_rank_particle_files` in `writeout` | each rank's particle files are indexed by parcel block, the indices gathered on root, which merges the per-rank `.dat` shards into the one-rank files |
 
 Every `#ifdef USE_MPI` in `src/` lives inside `IGLOO_Mod_MPI.f90`, apart from the timing
 report's one gather in `IGLOO_Mod_Timing.f90` (a leaf module, so that any routine can mark a
@@ -140,24 +141,26 @@ trajectories-A-sweep1.rank2.dat        ← per-rank shard
 ```
 
 `rank_suffix()` composes **after** the sweep tag, so `<kind>-<material><sweeptag>` stays the
-logical file identity and `.rank<r>` is a pure shard marker — the merge globs
-`<logical>.rank*.dat` per sweep. Reversing the order would make the glob straddle sweeps.
+logical file identity and `.rank<r>` is a pure shard marker: the merge of a sweep reads
+`<logical>.rank0.dat` … `<logical>.rank<N-1>.dat`.
 
-The merge is a **lockstep zone merge, not a concatenation**. Every rank writes the same
-`variables=` line and the same zone headers in the same order (the material and group loops
-are fully replicated; only the particles inside them are striped), so emitting each header
-once and interleaving the data blocks reproduces the serial layout exactly — every existing
-`check.py` runs unmodified. Structural disagreement between shards is **fatal**, never
-patched over: a differing header or zone count means the replication assumption is false, and
-concatenating anyway would produce a file that loads in Tecplot and is wrong.
+Every shard is written in parcel order ([Particle-file output path](#particle-file-output-path))
+and **indexed**: each parcel's block and each line every shard holds (the `variables=` line, a
+zone line) is one entry (group, key, offset, length), the key of a block being its parcel's ID
+and a shared line carrying group 0 or key 0. When a material's files close, each rank checks
+that its index covers every byte of its shard, and the indices are gathered on root.
+`writeout` then merges each file on root by a **k-way merge on (group, ID)**: every shard is
+read once, in its own order, and each block is copied as it is, no record parsed. The material
+and group loops are fully replicated (only the parcels inside them are striped), so every
+shard holds the same shared lines: root writes each once and checks its bytes against every
+shard. The merged file is the one-rank file byte for byte. Structural disagreement is
+**fatal**, never patched over: a shared line that differs between shards, one parcel's block
+in two shards, or an index that does not tile its shard or leaves (group, ID) order aborts
+the run, because merging anyway would produce a file that loads in Tecplot and is wrong.
 
-Within a zone, records come out rank-blocked. That is deliberately **not** sorted — the
-serial file is not sorted either (OpenMP already interleaves), and every gate treats record
-order as noise. Each parcel is owned by one rank, so its own records stay contiguous and in
-time order, which is what the per-ID loaders in the oracles actually rely on.
-
-At one rank the suffix is empty and the merge is a no-op, so **a serial run keeps
-byte-identical filenames**. Nothing downstream needs to know the rank count.
+At one rank the suffix is empty and nothing is indexed or merged, so **a serial run keeps
+byte-identical filenames**. Root deletes the shards after the merge; nothing downstream needs
+to know the rank count.
 
 Grid output (`.tec`) is **root-only**, after the cross-rank sum.
 
@@ -186,7 +189,8 @@ first message (`region_fail`) and drop their parcel; `integrate` returns at entr
 is recorded and ends the parcels in flight at their next segment; when the loop has joined, the
 master thread calls `region_fail_check`, which prints `[IGLOO rank r] ABORT: <message>` and
 aborts every rank. A serial run stops at the site as before, with the same message and exit
-code. Two guards stay `error stop` under MPI: the gas `cp <= 0` check of the evaporation models
+code. A particle file's writer handed a block outside its window, or two blocks for one parcel
+(`ps_put`), takes the `region_fail` path in every build. Two guards stay `error stop` under MPI: the gas `cp <= 0` check of the evaporation models
 (a `pure` procedure) and the parameter checks of the breakup size samplers (inside a rejection
 loop); Intel MPI's launcher then ends the whole job on the rank's non-zero exit.
 
@@ -207,15 +211,31 @@ MPI: `I_MPI_PIN_DOMAIN=omp` and `OMP_NUM_THREADS` = the cores of one domain (und
 `mpirun` does not pin the ranks); with Open MPI: `mpirun --map-by numa --bind-to numa`. With either,
 `KMP_STACKSIZE=100M` and `ulimit -s unlimited`.
 
-## Scatter-cloud output path
+## Particle-file output path
 
-Scatter records are the one output stream large enough to matter for scaling
-(`khrt-stress` emits 1.64 M of them). Each parcel buffers its own records inside
-`integrate` and emits them with **one write** when it finishes, instead of one write per
-record: on `khrt-stress` that is ~2270 records per parcel, so the number of lock
-acquisitions on the output unit is the number of parcels, not the number of records, and
-the formatting happens *inside* the parallel region where it scales. Memory is bounded by
-one parcel's records (~270 kB), not by the total cloud.
+Every particle file (trajectories, exit records, scatter cloud, snapshot, plane crossings) is
+written the same way. While a parcel is integrated, its rows are held as numbers, one list per
+file; when it ends, its thread formats them with IGLOO's own formatter of the files' edit
+descriptors (`IGLOO_fmt`: no Fortran runtime lock, no formatted I/O in the parcel loop) and
+hands one byte block per file to that file's writer, under the file's critical section. The
+writer writes the blocks of a parcel loop in **parcel order**: a block is written when its
+parcel is the next one, followed by the blocks after it that are ready; a block that arrives
+early waits. Before the loop the master marks the parcels that leave no block (not owned under
+MPI, filtered by `probe-ids`); after it, it checks that every parcel's block was written and
+that nothing is held. Every particle file is thus in (group, parcel ID) order at every thread
+count.
+
+The waiting blocks are held in memory within a budget over all the files, 64 MiB by default;
+`IGLOO_IOBUF_BYTES` in the environment sets it in bytes (a negative value, or one that does not
+read as an integer, stops the run). A block that would exceed it goes to the file's spill file, a Fortran scratch file
+deleted when the particle file closes, and is copied into the file at its turn. Memory is
+therefore, per thread, one parcel's rows and their formatted block, plus the budget, whatever
+the size of the cloud. The `particle files` line of the [timing report](#per-phase-timers)
+gives the budget, the most bytes held, the bytes spilled and the largest block.
+
+The scatter cloud is the stream large enough to matter: `khrt-stress` writes 1.64 M scatter
+records from 726 parcels, about 270 kB of them per parcel, and the writer takes its critical
+section once per parcel and file, not once per record.
 
 ## Per-phase timers
 
@@ -351,10 +371,8 @@ allocates 1474 MiB; 2.6 GiB resident per rank at 4 × 20). Every rank beyond one
 from 4 × 20 to 40 × 2 the gas read grows from 177.9 to 209.6 s (the other ranks busy-wait for it, and the
 reading core's clock falls with every busy core), the grid write from 105.5 to 120.9 s, the smoothing,
 which every rank runs on the whole field, from 2.2 to 18.8 s, and the reduction from 0.8 to 3.7 s. On
-`khrt-stress` every added rank pays the root merge of the particle shards: `writeout+merge` takes 1.72 s at
-4 × 1 against 0.014 s at 1 × 4, although the loop of 4 × 1 is the shorter (2.49 s against 3.09 s). With
-`OUTPUT/` on tmpfs the merge at 4 × 20 takes 1.42 s instead of 1.74 s, and opening the output files
-(`solve-other`) 0.001 s instead of 0.165 s.
+`khrt-stress` at 4 × 20, with `OUTPUT/` on tmpfs, opening the output files (`solve-other`) takes 0.001 s
+instead of 0.165 s.
 
 **Placement.** Inside one rank, placing the threads trades the clock against the cycles: the box's 1 × 20
 runs its loop at 2.53 GHz per core on one socket (`C` 0.983) and at 3.43 GHz spread over four (`C`
@@ -377,8 +395,7 @@ Over the repetitions the standard deviation is 0.2–0.6 % at 1 × 1 and on the 
   at 80, 4 × 20 takes 2.6 % less sweep than 1 × 80 (its loop 38.5 s against 44.5 s).
 - **Particle output**: one rank and its threads, up to about 16 (`khrt-stress`: 2.33 s at 1 × 10 on one
   socket, 2.46 s at 1 × 16 spread); a sparser scatter cloud (a lower `[IGLOO-General] fsample-traj`)
-  lightens the output that holds the threads. Each added rank pays the root merge of the particle shards,
-  which `OUTPUT/` on tmpfs shortens (16 % of the lifetime at 4 × 20) but does not remove.
+  lightens the output that holds the threads.
 - **More ranks than NUMA domains** add only the replicated work (the box: 331 s at 4 × 20, 357 s at
   16 × 5, 406 s at 40 × 2), and interleaving the pages does not replace one rank per domain.
 
@@ -424,7 +441,7 @@ Rank-count invariance is **gated**, not assumed. Twenty-one MPI cases run under 
 | `mpi-bc-center-2grp` | 4 × 2 |
 | `mpi-two-mat` | 4 × 2 |
 | `mpi-timing-report` | 4 × 2 (the per-rank lines of the timing report) |
-| `mpi-consistency` | 1 vs 4 ranks, then 4 ranks at 1 and 5 threads: multisets, layout, `.tec` |
+| `mpi-consistency` | 1 vs 4 ranks, then 4 ranks at 1 and 5 threads: `.dat` bytes, layout, `.tec` |
 | `mpi-consistency-two-mat` | the same, two materials |
 | `mpi-determinism` | 3 and 4 × 1: grid bytes independent of the collective algorithm, within 1e-12 of n = 1 |
 | `mpi-repeat-<case>` (12) | 2 × 2: every two-sweep repeatability case (the embedding mode) |
@@ -439,12 +456,13 @@ witness.
     independent full sweeps clobbering each other's output still satisfy a per-particle
     trajectory check.
 
-Measured invariance: `.dat` sorted multisets identical at n = 1, 2, 3, 4, 5, 7; grid `.tec`
-bit-identical at n = 1, 2, 4 on most cases (worst 1.8e-23 of field scale on `vie-plait`, from
-`!$OMP ATOMIC` re-association). Shard count scales as 3n while the merged record total stays
-invariant — **that is what proves partitioning rather than replication**. Balance at n = 7:
-33–47 exit records per rank. The gates are falsifiable: seeding child IDs from the storage
-index instead of the global band turns `mpi-khrt` red at n ≥ 2.
+Measured invariance: every merged `.dat` byte-identical to the one-rank file at n = 2, 3, 4, 5, 7
+(`coupled-body` and `khrt-e2e`, one thread per rank); grid `.tec` bit-identical at n = 1, 2, 4 on
+most cases (worst 1.8e-23 of field scale on `vie-plait`, from `!$OMP ATOMIC` re-association).
+Shard count scales as 3n while the merged record total stays invariant — **that is what proves
+partitioning rather than replication**. Balance at n = 7: 33–47 exit records per rank. The gates
+are falsifiable: seeding child IDs from the storage index instead of the global band turns
+`mpi-khrt` red at n ≥ 2.
 
 ## Build
 
@@ -456,8 +474,7 @@ mpirun -n 4 ./bin/IGLOO
 
 For output-heavy runs put `OUTPUT/` on tmpfs (`mkdir -p /dev/shm/$USER/<case> && ln -s
 /dev/shm/$USER/<case> OUTPUT`): on `khrt-stress` it removes the opening of the output files (0.2 s a
-run) and about a fifth of the root merge of the particle shards
-([Measured performance](#measured-performance)).
+run at 4 × 20, [Measured performance](#measured-performance)).
 
 With `--use-tecio` an MPI build links ORION's `teciompi` (built once into
 `lib/ORION/lib/TecIO/teciompi-install-*`). ASCII `.tec` I/O needs no TecIO, which is what the

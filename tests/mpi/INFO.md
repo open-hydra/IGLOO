@@ -39,7 +39,7 @@ green, nothing decomposed. Without the witness this whole directory would be a v
 | `mpi-conv-nu` | 4 | heat transfer, 4 ranks |
 | `mpi-khrt` | 4 | 241 children — the child-ID census; the oracle reads the child count out of the solver log |
 | `mpi-khrt-plane` | 4 | `khrt-plane`'s oracle on the merged planes file: a child is born, integrated and recorded on its parent's rank, the four planes shards are merged into one `planes-A.dat`. RED with the planes stream left out of the merge: no `planes-A.dat`, four shards; rank 0's shard alone carries 7/25 of the flow through every plane (P1 rel 0.72) |
-| `mpi-bc-center-2grp` | 4 | two groups (`ngroups=2`): the rank-file merge's per-zone loop, which `mpi-two-fam-bc-2blk-ord2-dual-np3` runs too |
+| `mpi-bc-center-2grp` | 4 | two groups (`ngroups=2`): the rank-file merge across groups (the parcels' blocks by group, then ID, each group's zone line ahead of its blocks in the exit file), which `mpi-two-fam-bc-2blk-ord2-dual-np3` runs too |
 | `mpi-two-mat` | 4 | `nm=2`, as `mpi-consistency-two-mat` and `mpi-repeat-two-mat`: six shards merged per sweep, two `sourceMass` slots, two euler families reduced |
 | `mpi-timing-report` | 4 | the `[IGLOO-timing]` report (`timing = on`): the per-rank gather, one line and the strided parcel count per rank |
 | `mpi-psd-table` | 4 | `psd-table`'s Kolmogorov-Smirnov and Anderson-Darling oracle on the merged output: the size-distribution file loaded and sampled on every rank |
@@ -82,7 +82,7 @@ long, a parcel's injection row and its exit lie in different files).
 The thread arms exist because rank invariance holds by construction (per-parcel RNG streams), and a
 defect that depends on the thread count would leave every rank-count arm at a fixed thread count
 green. Measured: a deposit perturbation keyed on the team size (identity at 2 threads) fails the
-4 x 1 and 4 x 5 arms on every `.dat` multiset and both `.tec` fields while 1 x 2 and 4 x 2 stay
+4 x 1 and 4 x 5 arms on every `.dat` and both `.tec` fields while 1 x 2 and 4 x 2 stay
 identical.
 
 ## A tabulated injection law under MPI
@@ -94,7 +94,7 @@ different one: the merged output would still pass `psd-table`'s statistical orac
 with the 1-rank run sees it. Hence both: `mpi-psd-table` (the oracle on four ranks) and
 `mpi-consistency-psd` (the files against one rank). RED with the seed offset by the rank
 (`initRandomSeed(rng_seed + mpi_rank_)`): `mpi-consistency-psd` fails at every 4-rank arm on the
-trajectory multiset (the first rows of the 15 000 parcels owned by ranks 1 to 3 differ; the exit records
+trajectory file (the first rows of the 15 000 parcels owned by ranks 1 to 3 differ; the exit records
 carry no diameter), while `mpi-psd-table` stays green (D_n 5.1e-3 against 1.4e-2, A² 0.33 against 5.97).
 
 ## The two-sweep cases under MPI

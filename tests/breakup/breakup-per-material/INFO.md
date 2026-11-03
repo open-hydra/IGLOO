@@ -20,8 +20,7 @@ properties, a phase file without tokens, and X's model and constants given to ev
 (`ref-A`: `TAB` with `Comega = 10`; `ref-B`: `Reitz-KHRT` with `B1 = 40`; `ref-C`: no breakup, no `sigma` or `mu`;
 `ref-D`: `Reitz-KHRT` with `B1 = 30`). Per material:
 
-- `trajectories-X.dat` and `outloc-X.dat` equal `ref-X`'s as sorted multisets of lines (the record order follows the
-  OpenMP schedule);
+- `trajectories-X.dat` and `outloc-X.dat` equal `ref-X`'s as sorted multisets of lines;
 - the children lines of B's and D's group blocks in `run_out.txt` (`number of children`, `max … sheds from one
   parcel`) equal the siblings';
 - every row of `trajectories-C.dat` keeps its parcel's injected diameter.

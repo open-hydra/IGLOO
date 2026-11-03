@@ -127,15 +127,17 @@ python3 -B check.py         # re-run just the oracle against the existing OUTPUT
 The oracle's failure messages are quantitative (which row, which variable, error vs
 tolerance). `check.py` exit 0 is the only pass criterion — solver stderr is not.
 
-**Determinism.** Unit tests seed their RNGs and must be bit-stable. E2e trajectory
-*files* are OpenMP-order nondeterministic in record order only; compare content as a
-multiset, e.g.:
+**Determinism.** Unit tests seed their RNGs and must be bit-stable. E2e particle
+files hold their records in parcel order, so one binary rerun on one input writes the
+same bytes at any thread count:
 
 ```bash
-tail -n+3 OUTPUT/trajectories-A.dat | sort | md5sum
+md5sum OUTPUT/*.dat         # the same sums at OMP_NUM_THREADS=1 and 5
 ```
 
-Rerun with `OMP_NUM_THREADS=1` vs `5`: the sorted hash must not change.
+The grid fields (`*.tec`) can differ in their last digits between thread counts (the
+`!$OMP ATOMIC` sums re-associate): compare them with `tests/tools/compare_tec.py`
+(1e-12 of the field scale).
 
 ---
 

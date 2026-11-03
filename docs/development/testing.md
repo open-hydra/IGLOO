@@ -138,6 +138,8 @@ listed families and empty reports, not ids).
 
 A new gate must be shown to fail on a deliberately broken build before it is accepted:
 a gate that has never been seen red is not evidence of anything.  Measure the
-nondeterminism floor of the artifacts it compares (OpenMP record order, floating-point
-re-association across thread counts) and choose the comparison rule — exact,
-order-insensitive, or numeric tolerance — from that measurement.
+nondeterminism floor of the artifacts it compares and choose the comparison rule — exact,
+order-insensitive, or numeric tolerance — from that measurement: the particle files are in
+parcel order, the same bytes at every thread and rank count for one binary and input; the
+grid fields carry the floating-point re-association of the `!$OMP ATOMIC` sums across
+thread counts.
