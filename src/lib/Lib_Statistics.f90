@@ -59,9 +59,8 @@ contains
         integer, intent(in) :: famID, ID
         integer(I8) :: state
 
-        state = mix64( int(rng_seed,I8)                                &
-                     + int(famID,I8) * SM_GOLDEN           &
-                     + int(ID,   I8) * SM_IDMIX )
+        state = mix64(add64(add64(int(rng_seed,I8), mul64(int(famID,I8), SM_GOLDEN)), &
+                            mul64(int(ID,I8), SM_IDMIX)))
 
     end function rngSeedFor
 
@@ -74,7 +73,7 @@ contains
         real(R8), parameter :: twoM53 = 1._R8/9007199254740992._R8   ! 2**-53
 
         do
-            state = state + SM_GOLDEN      ! splitmix64 Weyl increment
+            state = add64(state, SM_GOLDEN)      ! splitmix64 Weyl increment
             z     = mix64(state)
             !> Top 53 bits -> [0,1), taken with a logical shift.
             u = real(ibits(z, 11, 53), R8) * twoM53
@@ -83,18 +82,50 @@ contains
 
     end function rngNext
 
-    !> splitmix64 finalizer; the multiplies wrap mod 2**64 by design.
+    !> splitmix64 finalizer; its products modulo 2**64 through mul64.
     pure function mix64(x) result(z)
         implicit none
         integer(I8), intent(in) :: x
         integer(I8) :: z
 
         z = x
-        z = ieor(z, ishft(z, -30)) * SM_MIX_A
-        z = ieor(z, ishft(z, -27)) * SM_MIX_B
+        z = mul64(ieor(z, ishft(z, -30)), SM_MIX_A)
+        z = mul64(ieor(z, ishft(z, -27)), SM_MIX_B)
         z = ieor(z, ishft(z, -31))
 
     end function mix64
+
+    !> a + b modulo 2**64 on 32-bit halves, without signed overflow.
+    pure function add64(a, b) result(s)
+        implicit none
+        integer(I8), intent(in) :: a, b
+        integer(I8) :: s, lo, hi
+
+        lo = ibits(a, 0, 32) + ibits(b, 0, 32)
+        hi = ibits(a, 32, 32) + ibits(b, 32, 32) + ishft(lo, -32)
+        s  = ior(ibits(lo, 0, 32), ishft(ibits(hi, 0, 32), 32))
+
+    end function add64
+
+    !> a * b modulo 2**64 on 16-bit limbs, without signed overflow.
+    pure function mul64(a, b) result(p)
+        implicit none
+        integer(I8), intent(in) :: a, b
+        integer(I8) :: p, x(0:3), y(0:3), t0, t1, t2, t3
+        integer :: k
+
+        do k = 0, 3
+            x(k) = ibits(a, 16*k, 16)
+            y(k) = ibits(b, 16*k, 16)
+        enddo
+        t0 = x(0)*y(0)
+        t1 = x(0)*y(1) + x(1)*y(0) + ishft(t0, -16)
+        t2 = x(0)*y(2) + x(1)*y(1) + x(2)*y(0) + ishft(t1, -16)
+        t3 = x(0)*y(3) + x(1)*y(2) + x(2)*y(1) + x(3)*y(0) + ishft(t2, -16)
+        p  = ior(ior(ibits(t0, 0, 16), ishft(ibits(t1, 0, 16), 16)), &
+                 ior(ishft(ibits(t2, 0, 16), 32), ishft(ibits(t3, 0, 16), 48)))
+
+    end function mul64
 
     !> Streamed standard normal N(0,1), Marsaglia polar method.
     function NormalStandardS(state) result(z)
