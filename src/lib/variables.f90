@@ -88,7 +88,7 @@ module IGLOO_variables
   integer :: unitTraj, unitScat, unitExit, unitSnap, unitPlane
 
   !> [IGLOO-General] out-traj / out-scatter output switches (default on); dNscat is the
-  !  per-material scatter weight quantum (droplets per point), auto-sized.
+  !  per-material scatter quantum (a parcel writes npRef/dNscat markers per second), auto-sized.
   logical  :: trajOn=.true., scatOn=.true.
   !> snapshot-<mat>.dat: each parcel's state at time-end (on when time-end is set).
   logical  :: snapOn=.false.

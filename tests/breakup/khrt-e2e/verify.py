@@ -55,7 +55,7 @@ def main():
     # either way: no child clears We_r >= WE_MIN.
     gated, ungated, kids = [], [], []
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:

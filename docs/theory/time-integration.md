@@ -95,11 +95,15 @@ Each outer iteration covers one cell transit:
 
 The OSlo solver calls `solout` at every accepted step.  It performs:
 
-1. **Scatter cloud** — accumulates the npdot-weight of the accepted interval; a step that
-   stays in its cell emits one scatter marker when the running total reaches `dNscat`,
-   carrying the remainder. The total is latched with the state, so a step that `ODEsystem`
-   cuts at a face and integrates again adds its weight once, and a model-6 phase event keeps
-   the fraction of the step it keeps.
+1. **Scatter cloud** — adds `npRef·h` to the parcel's accumulator, `npRef` the number rate
+   the parcel entered with (a breakup child's is its parent's), and, as the step is latched,
+   writes a marker at each multiple of `dNscat` the accumulator crosses on it, at the fraction
+   of the step where it does: the position on the cubic Hermite interpolant of the step's end
+   positions and velocities, the other columns linear, the weight `dNscat·ṅ_p/npRef`. A step
+   that ends a segment writes its markers at the segment's finalize, over the part of the step
+   it keeps, before the phase jump and the breakup event. The total is latched with the state,
+   so a step that `ODEsystem` cuts at a face and integrates again adds its weight once, and a
+   model-6 phase event keeps the fraction of the step it keeps.
 2. **Cell-crossing detection** — `isPointInsideCell(y(1:3), vert, ...)` sets `IamOut`
    (and `sectorOut` when the point left the wedge sector); for `ord2` mode a separate
    gas-dual-cell test sets `newGas`.

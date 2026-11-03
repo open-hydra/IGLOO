@@ -116,7 +116,7 @@ ODE breakup (model 4), breakup events in the mass state and the KH-shed source a
 `evap-breakup-box`, `d2law-brk-dormant`, `rd-evap-frozen`, `tab-evap-frozen`, `etab-evap-frozen`, `khrt-evap-frozen`,
 `khrt-evap-frozen-euler`, `khrt-evap-live`, `khrt-e2e-euler`, `khrt-shed-noexchange`,
 `solver-fail-consumed-m4` and `repeat-evap-breakup`. The scatter cloud's marker count per parcel is gated by
-`scatter-weight`, `scatter-weight-evap` and `scatter-weight-solid`, the markers' placement and weights by `scatter-placement`. Reading a boundary file of several blocks and
+`scatter-weight`, `scatter-weight-evap` and `scatter-weight-solid`, the markers' placement, their count under breakup and their weights by `scatter-placement`. Reading a boundary file of several blocks and
 families, and a parcel's crossing of a block interface, are gated by `two-fam-bc-2blk`; the field mollifier
 across a block interface by `two-fam-bc-2blk-mollify` and `test_mollify_blocks`, across a periodic pair by `periodic-y`,
 `periodic-2d`, `test_mollify_blocks` and `refuse-periodic-not-mutual`; chimera faces by `chimera-2blk`,

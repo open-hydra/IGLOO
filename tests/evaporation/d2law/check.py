@@ -232,7 +232,7 @@ def main():
         # injection point at the final crossing) appends one non-monotone phantom row
         # carrying the exit-time state. Drop such rows LOUDLY -- they are a tracking
         # artifact, not evaporation physics (this oracle's scope is the rate law).
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:

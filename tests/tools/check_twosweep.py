@@ -10,11 +10,11 @@ structurally blind to state that leaks from one solve() into the next. Everythin
 checks -- trajectories, exit locations, source field -- is checked against the SAME
 code on the SAME input; the only variable is how many times solve() has run.
 
-Two comparison rules, both forced on us by real nondeterminism rather than chosen:
+Two comparison rules:
 
-  *.dat  sorted MULTISET equality. Record order is OMP-nondeterministic (the parallel
-         loop writes as particles finish), so byte-identity does not hold even between
-         two runs of one sweep. The multiset is exact -- no tolerance.
+  *.dat  sorted MULTISET equality, exact -- no tolerance. The record order is not part of
+         this gate: the particle files hold their records in parcel order at every thread
+         count, which the threads-* gates (tools/check_threads_case.py) hold byte for byte.
 
   *.tec  max SCALE-relative difference below TEC_TOL, i.e. max|a-b| normalised by the
          FIELD's magnitude max|a| -- NOT a per-value |a-b|/|a|, which is ill-conditioned

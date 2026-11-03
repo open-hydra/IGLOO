@@ -233,9 +233,9 @@ therefore, per thread, one parcel's rows and their formatted block, plus the bud
 the size of the cloud. The `particle files` line of the [timing report](#per-phase-timers)
 gives the budget, the most bytes held, the bytes spilled and the largest block.
 
-The scatter cloud is the stream large enough to matter: `khrt-stress` writes 1.64 M scatter
-records from 726 parcels, about 270 kB of them per parcel, and the writer takes its critical
-section once per parcel and file, not once per record.
+The writer takes its critical section once per parcel and file, not once per record: on
+`khrt-stress` the largest stream, the scatter cloud, holds 37 007 markers from 726 parcels
+(4.9 MB, 6.7 kB per parcel).
 
 ## Per-phase timers
 
@@ -430,7 +430,7 @@ byte-reproducible) are identical to those of a build with ORION's reader and wri
 
 ## How this is verified
 
-Rank-count invariance is **gated**, not assumed. Twenty-one MPI cases run under `mpiexec`
+Rank-count invariance is **gated**, not assumed. Twenty-eight MPI cases run under `mpiexec`
 (`tests/mpi/`), registered only in a `USE_MPI` build:
 
 | gate | ranks × threads |
@@ -438,13 +438,18 @@ Rank-count invariance is **gated**, not assumed. Twenty-one MPI cases run under 
 | `mpi-drag-stokes` | 2 × 2 |
 | `mpi-conv-nu` | 4 × 2 |
 | `mpi-khrt` | 4 × 2 |
+| `mpi-khrt-plane` | 4 × 2 (the planes file, children born on their parent's rank) |
 | `mpi-bc-center-2grp` | 4 × 2 |
 | `mpi-two-mat` | 4 × 2 |
 | `mpi-timing-report` | 4 × 2 (the per-rank lines of the timing report) |
+| `mpi-psd-table` | 4 × 2 (a tabulated injection law) |
+| `mpi-two-fam-bc-2blk-ord2-dual-np3` | 3 × 2 (gas-order 2 across a 101 face, against one rank) |
 | `mpi-consistency` | 1 vs 4 ranks, then 4 ranks at 1 and 5 threads: `.dat` bytes, layout, `.tec` |
 | `mpi-consistency-two-mat` | the same, two materials |
+| `mpi-consistency-psd` | the same, 20 000 parcels whose sizes every rank draws from a tabulated law |
+| `mpi-consistency-residue` | the same, combustion residues on their parent's rank |
 | `mpi-determinism` | 3 and 4 × 1: grid bytes independent of the collective algorithm, within 1e-12 of n = 1 |
-| `mpi-repeat-<case>` (12) | 2 × 2: every two-sweep repeatability case (the embedding mode) |
+| `mpi-repeat-<case>` (14) | 2 × 2: every two-sweep repeatability case but `burn-box-residue` (the embedding mode) |
 
 Each case symlinks its parent case's `INPUT/`, `input.ini` and `check.py`, so the fixture and
 the oracle are shared with the serial gate — the MPI case adds only the launch and the

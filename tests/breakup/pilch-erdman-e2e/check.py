@@ -176,7 +176,7 @@ def bval2_gate(parts):
     print(f"{'ID':>3} {'We0':>5} {'d_end(mm)':>9} {'r_zero-bp':>9} {'r_PE87':>7}  verdict")
     n_pl = n_bad = 0
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:
@@ -250,7 +250,7 @@ def main():
     n_good = n_viol = 0
     worst = 0.0
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:

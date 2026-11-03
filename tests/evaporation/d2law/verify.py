@@ -38,7 +38,7 @@ def best_evaporator(parts):
     """(pid, xs, d_meas_um, d_pred_um) of the strongest evaporator."""
     best = None
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:
