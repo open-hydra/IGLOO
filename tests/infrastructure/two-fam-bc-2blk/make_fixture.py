@@ -7,8 +7,8 @@ into two blocks at x = Lx/2, each block's boundary table written once per family
   - bc.txt: block-outermost, then family (material-major, population-minor), then faces f = 1..6,
     n outer, m inner -- [block 1: A][block 1: B][block 2: A][block 2: B] -- with ATLAS's header
     "b i j k f code" (6I8, (i, j, k) from obj_block%fmn2ijk's face rule on the block's own size);
-  - block 1: face 1 the inlet (401), face 2 a connection (101) to block 2's face 1, faces 3-6 100;
-    block 2: face 1 a connection (101) to block 1's face 2, faces 2-6 100. A 101 record's line is
+  - block 1: face 1 the inlet (401), face 2 a connection (101) to block 2's face 1, faces 3-6 400;
+    block 2: face 1 a connection (101) to block 1's face 2, faces 2-6 400. A 101 record's line is
     ATLAS's: the partner block, the partner cell (i, j, k), the partner face and the four
     orientation integers, the same in every family copy.
 
@@ -29,7 +29,7 @@ BLOCKS = 2
 NXB, NY, NZ = box.NX // BLOCKS, box.NY, box.NZ
 FAMILIES = [(0.34, 5.945e-6), (0.17, 1.189e-5)]      # (krho, rp) of family 1 (A), family 2 (B)
 KV, KT, SIGMAP, DS = 0.1, 1.0, 0.0, 0.0
-INLET, OTHER, CONN = 401, 100, 101
+INLET, OTHER, CONN = 401, 400, 101
 
 
 def ijk(face, m, n):

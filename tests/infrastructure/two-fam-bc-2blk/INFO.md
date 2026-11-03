@@ -14,7 +14,7 @@ split in two: two families in ATLAS order, two blocks, every parcel crossing the
 - `INPUT/bc.txt`: 2 blocks × 2 families × 650 face records = 2600, in the order block 1 A, block 1 B,
   block 2 A, block 2 B, with ATLAS's `b i j k f code` headers. Block 1: face 1 the inlet (401; A =
   `drag-stokes`'s line, krho 0.34, rp 5.945e-6; B krho 0.17, rp 1.189e-5, as in `two-fam-bc`),
-  face 2 a 101 connection, faces 3–6 100. Block 2: face 1 a 101 connection, faces 2–6 100. A 101
+  face 2 a 101 connection, faces 3–6 400. Block 2: face 1 a 101 connection, faces 2–6 400. A 101
   record's line is ATLAS's `pb pi pj pk pf 1 0 0 1`: block 1's face-2 cell (m, n) names block 2's
   cell (1, m, n) on face 1, block 2's face-1 cell names block 1's (30, m, n) on face 2; every
   family copy repeats it.

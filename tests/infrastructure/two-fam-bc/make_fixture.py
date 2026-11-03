@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Writes INPUT/bc.txt for the two-fam-bc case: drag-stokes's box (60 x 5 x 5 cells, face 1 the
-inlet, every other face 100) with the boundary table written TWICE, once per family, in the order
+inlet, every other face 400) with the boundary table written TWICE, once per family, in the order
 and header layout ATLAS BCB uses for a phase with several (material, population) pairs:
 
   - one copy of the block's complete face table per family, block-outermost, material-major,
@@ -22,7 +22,7 @@ import sys
 NX, NY, NZ = 60, 5, 5
 FAMILIES = [(0.34, 5.945e-6), (0.17, 1.189e-5)]      # (krho, rp) of family 1 (A), family 2 (B)
 KV, KT, SIGMAP, DS = 0.1, 1.0, 0.0, 0.0
-INLET, OTHER = 401, 100
+INLET, OTHER = 401, 400
 
 
 def ijk(face, m, n):

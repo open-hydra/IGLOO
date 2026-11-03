@@ -10,7 +10,7 @@ program test_bc_families
     !
     ! Each case writes its own INPUT/famtest-<case>-bc.txt in the ATLAS layout (header
     ! "b i j k f code", f = 1..6, n outer, m inner; face 1 an inlet with a payload line, every
-    ! other face 100) and reads it through read_cdp_bc_file. Blocks 4 x 3 x 1 (38 boundary
+    ! other face 400) and reads it through read_cdp_bc_file. Blocks 4 x 3 x 1 (38 boundary
     ! faces) and 5 x 3 x 1 (46), H = 0.25. mdotGas is seeded on every face cell, so initMdotGas
     ! returns at once and the case stays a parser test. Two families throughout.
     !
@@ -205,7 +205,7 @@ contains
 
     !> One copy of block b's boundary table in the ATLAS layout: header "b i j k f code" per face
     !  cell (fmn2ijk's face rule), f = 1..6, n outer, m inner; face 1 carries code1 and a payload
-    !  line in drag-stokes's form, every other face 100.
+    !  line in drag-stokes's form, every other face 400.
     subroutine writeCopy(u, b, nx, ny, nz, code1, col1, rp, ds)
         integer,      intent(in) :: u, b, nx, ny, nz, code1
         real(real64), intent(in) :: col1, rp, ds
@@ -227,7 +227,7 @@ contains
                 write(u, '(2(2x,es12.5),2(3x,a),3(2x,es12.5),3x,a,2x,es12.5)') col1, 0.1_real64, &
                     'normal,', 'normal,', 1.0_real64, rp, 0.0_real64, 'Dirac', ds
             else
-                write(u, '(6i8)') b, i, j, k, f, 100
+                write(u, '(6i8)') b, i, j, k, f, 400
             endif
         enddo; enddo; enddo
     end subroutine writeCopy
@@ -258,24 +258,24 @@ contains
         enddo
     end subroutine expectInlet
 
-    !> Inlet cells of blk: exactly n401 cells tagged 401, all on face 1; every other cell 100.
+    !> Inlet cells of blk: exactly n401 cells tagged 401, all on face 1; every other cell 400.
     subroutine expectTags(lab, blk, n401)
         character(*),    intent(in) :: lab
         type(obj_block), intent(in) :: blk
         integer,         intent(in) :: n401
-        integer :: f, per(6), got100, want100
-        got100 = 0; want100 = 0
+        integer :: f, per(6), got400, want400
+        got400 = 0; want400 = 0
         do f = 1, 6
             per(f)  = count(blk%face(f)%cell(:,:)%bcdef == 401)
-            got100  = got100 + count(blk%face(f)%cell(:,:)%bcdef == 100)
-            want100 = want100 + size(blk%face(f)%cell)
+            got400  = got400 + count(blk%face(f)%cell(:,:)%bcdef == 400)
+            want400 = want400 + size(blk%face(f)%cell)
         enddo
-        want100 = want100 - n401
-        if (per(1) == n401 .and. sum(per(2:6)) == 0 .and. got100 == want100) then
-            print '(a,2(i0,a))', '  [ok]   famtest '//lab//' tags: ', per(1), ' x 401 on face 1, ', got100, ' x 100'
+        want400 = want400 - n401
+        if (per(1) == n401 .and. sum(per(2:6)) == 0 .and. got400 == want400) then
+            print '(a,2(i0,a))', '  [ok]   famtest '//lab//' tags: ', per(1), ' x 401 on face 1, ', got400, ' x 400'
         else
             print '(a,6(i0,1x),a,i0,a,2(i0,a))', '  [FAIL] famtest '//lab//' tags: 401 per face ', per, &
-                '; ', got100, ' x 100; want ', n401, ' x 401 on face 1, ', want100, ' x 100'
+                '; ', got400, ' x 400; want ', n401, ' x 401 on face 1, ', want400, ' x 400'
             nfail = nfail + 1
         endif
     end subroutine expectTags
