@@ -45,7 +45,7 @@ def main():
     print(f"oracle: T0 {T0:.6f} K, d0 {d0:.3e} m, m0 {m0:.6e} kg, T_B(p) {tb:.9f} K, A {Z.CPG*(TG - tb)/Z.LV:.6f}")
     nv, wT, wm, below = 0, (0.0, ""), (0.0, ""), 0
     ids = set()
-    for r in rows:
+    for r in sorted(rows, key=lambda r: r["ID"]):   # by parcel: a tie picks the lowest ID
         ids.add(r["ID"])
         x, T, m = r["X"], r["T"], r["m<sub>p"]
         t = x/UG

@@ -30,6 +30,7 @@ turn of the gas, `t = QUARTER = π/2`:
 | G0' | the input's seed lists are the generator's; all 1672 IDs start from their seed state at t = 0 (F12.6 half-ULP); `snapshot-A.dat` holds every parcel at t = QUARTER (1e-8 s); one exit record per parcel, code 0 (none left through a face), at its snapshot row's position and time; the log reports the planar single-layer path and no lost, stuck or stalled parcel |
 | G1 | `C(0) = 1`, `C'(0) = i Ω`; `Im(C'/C) > 0` and `d|C|/dt > 0` on [1e-3, QUARTER]; the closed form against RK4 of `τ z'' + z' = i Ω z` at QUARTER to 1e-12 |
 | G2' | at every time-stamped row and snapshot record, `|z − C(t) z0| ≤ 3e-6` m and `|v − C'(t) z0| ≤ 3e-6` m/s |
+| G3 | St = 1 only (keyed on the Stokes number the oracle reads, so in this directory): the parcel rule on a curved path. `check.py` runs two siblings without `print-dcell`, `ref-ends/` (`print-dtime = 1e-300`, a row at every segment end) and `ref-ds/` (`print-ds = 0.1` m, about 2.4 cells); `ref-ds`'s rows are the rule's applied to `ref-ends`'s segment ends (`tools/replay.py`), row for row, a decision within the print quantum of the limit (2e-6 m) accepted either way |
 
 Printed, not gated: the cloud's own `|C|`, lag and velocity slope from the snapshot (weights mdot
 by ID) beside the closed form.
@@ -43,7 +44,9 @@ by ID) beside the closed form.
 | 1 | 57008 | 6.98e-7 | 7.04e-7 | 1.617416 / 0.345426 |
 | 10 | 54107 | 6.69e-7 | 7.06e-7 | 1.828830 / 0.538470 |
 
-The tolerance sits 4.2× above the floor. Wall time ≈ 15 s per directory at OMP 5. Under MPI (4 ranks
+The tolerance sits 4.2× above the floor. G3: 16 958 rows by the rule from the 57 008 segment ends, 2 decisions
+within the quantum; the two siblings take about 2.5 s each (`ref-ends/` writes 7.8 MB, as the case's own
+`print-dcell = 1` run). Wall time ≈ 15 s per directory at OMP 5. Under MPI (4 ranks
 × 2 threads) the St = 1 snapshot and trajectory rows are the serial ones as sorted multisets.
 
 **RED runs** (deliberately wrong inputs; worst residual of G2' or the premise that refuses):
@@ -57,7 +60,9 @@ The tolerance sits 4.2× above the floor. Wall time ≈ 15 s per directory at OM
 
 `diam × √2` in the input is refused before G2' ("none of the table diameters"): the oracle reads St
 from the diameter. R6, `time-end` absent (St 10): no `snapshot-A.dat`, G0' fails. R7, `out-time =
-off`: 10-column rows, G0' refuses ("no time column"). Faces 1–4 retagged 300 is not a RED run: by
+off`: 10-column rows, G0' refuses ("no time column"). G3 with the rule's reference moved at every segment end
+instead of at a row (a solver mutant): every parcel off, its first and last rows only (3 344 against 16 958).
+Faces 1–4 retagged 300 is not a RED run: by
 QUARTER no parcel of any St comes within h/2 of the boundary (max |x| 1.44, |y| 1.82 m at St 10),
 so the mirrored ghosts are never sampled; that mirror is gated by `test_ghost_bc` and
 `wall-approach`.

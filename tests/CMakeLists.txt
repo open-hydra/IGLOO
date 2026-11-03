@@ -505,7 +505,8 @@ igloo_e2e_case(vie-plait-dense standard/vie-plait-dense "e2e;standard;drag;gas;s
 # swirl-wedge: solid-body swirl on an annular axisymmetric wedge (mesh2D + axisym), three DB
 # parcels with prescribed wp -- the quantitative gate on the 2.5D fold: r, w_p,
 # v_r and the unwrapped azimuth against the exact cylindrical ODE, tolerances = the derived
-# 2.5D frame-error budget. RED with the fold rotating position only; omega = 0 fails G2.
+# 2.5D frame-error budget. RED with the fold rotating position only; omega = 0 fails G2. G7: a print-ds sibling
+# (ref-ds/) writes two rows at one t at every fold, as many pairs as the log's fold count (RED without them: 0).
 igloo_e2e_case(swirl-wedge standard/swirl-wedge "e2e;standard;drag;gas;axisym")
 # swirl-wedge-deposit: the same run with out-file ALL and mollify off -- the source and euler
 # fields under swirl. Radial bands isolate P3 from P1+P2:
@@ -542,14 +543,18 @@ igloo_e2e_case(scatter-weight standard/scatter-weight "e2e;standard;scatter")
 # placement clauses), on a child taking its own rate or its parent's np at the shed (the count: 675 and 81 of 726
 # parcels) and on weights frozen at entry (312 of 726 parcels, the sum).
 igloo_e2e_case(scatter-placement standard/scatter-placement "e2e;standard;scatter")
-# The output cadence on drag-stokes's case: print-dcell = 3 (rows a subset of the plain run's), print-dtime (the
-# time rule), out-traj/out-scatter off (no file, the exits and source unchanged); each plain run in ref-plain/.
+# The output keys on drag-stokes's case: print-dcell = 3 (rows a subset of the plain run's), print-dtime without
+# print-dcell (the parcel rule's time limit, replayed on a sibling that writes every segment end, ref-ends/),
+# out-traj/out-scatter off (no file, the exits and source unchanged); each plain run in ref-plain/.
 igloo_e2e_case(out-dcell3 standard/out-dcell3 "e2e;standard;io")
 igloo_e2e_case(out-dtime  standard/out-dtime  "e2e;standard;io")
 igloo_e2e_case(out-off    standard/out-off    "e2e;standard;io")
-# out-exit-row: drag-stokes's case at gas order 1, print-dcell 1, and five siblings run by check.py (gas order 2;
-# print-dcell 3; print-dtime, at both orders): every exited parcel's last trajectory row is its exit record's
-# position and time, written once. RED with the exit row left to the cadence: 4 of the 6 runs.
+# out-exit-row: drag-stokes's case at gas order 1, print-dcell 1, and eleven siblings run by check.py (gas order 2;
+# print-dcell 3; print-dtime with print-dcell; without it a row at every segment end, print-ds 0.9 cell and
+# print-dtime 3e-3, each at both orders): every exited parcel's last trajectory row is its exit record's position
+# and time, written once; the print-ds and print-dtime rows are the parcel rule's on the every-end run (replay).
+# RED with the exit row left to the cadence: 4 of the 6 print-dcell runs; with the rule's reference moved at every
+# segment end: the replay under print-dtime (every parcel) and print-ds at gas order 2 (10 parcels).
 igloo_e2e_case(out-exit-row standard/out-exit-row "e2e;standard;io")
 # psd-*: the injected diameters follow bc.txt column 8 -- a size-distribution file (psd-table) or a
 # parametric law -- on a 200 x 100 inlet in the cell-centre mode (one parcel per cell, 20 000 parcels of
@@ -568,7 +573,9 @@ igloo_e2e_case(psd-bare-token   infrastructure/psd-bare-token "e2e;infrastructur
 # vortex-cloud: ICE's verification case I -- a cloud of 1672 parcels released at the gas velocity into a
 # frozen solid-body vortex, stopped at a quarter turn (time-end, out-time). Exact per parcel, z = C(t) z0:
 # every time-stamped row within 3e-6 of the closed form (floor 7e-7). One dir per Stokes number, INPUT and
-# check.py shared. RED: no drag, tau doubled, seeded at rest, gas-order 1 (1.4e-3 to 1.6 m).
+# check.py shared. RED: no drag, tau doubled, seeded at rest, gas-order 1 (1.4e-3 to 1.6 m). At St 1 the check
+# replays the parcel rule on two siblings (every segment end; print-ds 0.1 m): RED with the rule's reference moved
+# at every segment end, every parcel off.
 igloo_e2e_case(vortex-cloud-st0p01 standard/vortex-cloud-st0p01 "e2e;standard;drag;gas")
 igloo_e2e_case(vortex-cloud-st0p1  standard/vortex-cloud-st0p1  "e2e;standard;drag;gas")
 igloo_e2e_case(vortex-cloud-st1    standard/vortex-cloud-st1    "e2e;standard;drag;gas")
@@ -651,7 +658,8 @@ igloo_e2e_case(no-psat evaporation/no-psat "e2e;evaporation")
 igloo_e2e_case(scatter-weight-evap evaporation/scatter-weight-evap "e2e;evaporation;scatter")
 # mhb98-water: VALIDATION vs a paper's own case — single water droplet vs
 # Miller-Harstad-Bellan 1998 Fig.2 (exp. Ranz-Marshall 1952b). Gate = IGLOO-vs-LK-kernel
-# (tight); the digitized experiment is a NON-gating overlay in verify.py.
+# (tight); the digitized experiment is a NON-gating overlay in verify.py. L1: a sibling without row keys (ref-last/)
+# ends every droplet's trajectory once at its burnout record (RED before the parcel rule: the last crossing before).
 igloo_e2e_case(mhb98-water evaporation/mhb98-water "e2e;evaporation;val;mhb98")
 # mhb98-water-psat: the same droplet with p_sat from the Psat column ATLAS GPB writes for water (its
 # CP-psat-water table, byte for byte) -- the tabulated p_sat on the CEM + LK path. RED with the column
@@ -1336,14 +1344,16 @@ igloo_e2e_case(solver-fail-consumed-m4 infrastructure/solver-fail-consumed-m4 "e
 # solver-fail-midway: the ODE solver gives up mid-trajectory (max-steps-ode = 60 at a gas velocity jump, model 1,
 # Eulerian output on): the parcel reverts to the last step the failing call accepted, past its entry into the cell
 # (F1'), and the segment is deposited up to it, so the field's mass equals the exit records' sum of mdot*t within 1e-5.
-# RED with the revert taken out: every exit record at its cell-entry time (F1', 25 parcels).
+# RED with the revert taken out: every exit record at its cell-entry time (F1', 25 parcels). L1: a sibling without row
+# keys (ref-last/) ends every trajectory once at its exit record (RED before the parcel rule: at the cell entry).
 igloo_e2e_case(solver-fail-midway infrastructure/solver-fail-midway "e2e;infrastructure;euler")
 # solver-fail-refine: the solver gives up on a refinement call (max-steps-ode = 10, in the first cell): the exit
 # record lies inside the cell, the field holds the exit records' mdot*t, and a body-force sibling closes Fx on the drag
 # reaction plus the impulse. RED with the revert taken out: X past the face, the field -1.000, Fx -9.840e-1 of it.
 igloo_e2e_case(solver-fail-refine infrastructure/solver-fail-refine "e2e;infrastructure;euler")
 # stuck-cell: parcels at rest in a gas at rest (402 inlet, |v| = 0): the residency guard ends each one once, at its
-# injection point, before the zero-progress guard or the outer cap.
+# injection point, before the zero-progress guard or the outer cap. L1: a sibling without row keys (ref-last/) ends
+# every trajectory once at its exit record (RED before the parcel rule: the injection row alone).
 igloo_e2e_case(stuck-cell infrastructure/stuck-cell "e2e;infrastructure;guard")
 # plane-back: parcels thrown at 10 m/s into a gas at rest under a body acceleration toward the inlet turn back: each plane
 # is crossed forward and then backward, the trajectory on the closed form, the flows through each plane cancelling.
@@ -1357,7 +1367,9 @@ igloo_e2e_case(sym-plane-skate-ord2 infrastructure/sym-plane-skate-ord2 "e2e;inf
 # sym-plane-bounce: six slow streams pressed onto a symmetry plane by gravity in a 0.1 m/s gas bounce up to 49 times
 # in one cell: at gas order 1 a reflection is not residency, so no 'stuck in cell' and every exit at the outlet.
 # RED with reflections counted: 6 'stuck in cell' in cell 3. The -ord2 twin (a reflection restarts the count there)
-# is the control and witnesses more than 11 rows of one parcel in one cell.
+# is the control. Both write a row at nearly every segment end (print-ds 1e-5 m) and witness more than 11 rows of one
+# parcel in one cell (49 and 50; RED with print-ds at the cell: 2); their rows are the parcel rule's replayed on a
+# sibling that writes every segment end (ref-ends/).
 igloo_e2e_case(sym-plane-bounce infrastructure/sym-plane-bounce "e2e;infrastructure;bc;guard")
 igloo_e2e_case(sym-plane-bounce-ord2 infrastructure/sym-plane-bounce-ord2 "e2e;infrastructure;bc;guard;gas")
 # sym-plane-creep: sym-plane-bounce's six streams in a 3 mm/s gas creep along the plane by far less than one grazing
@@ -1369,7 +1381,8 @@ igloo_e2e_case(sym-plane-creep-ord2 infrastructure/sym-plane-creep-ord2 "e2e;inf
 # exit-census: seven assigned streams in drag-stokes's box, each stopped one way: three leave through the outlet,
 # three are inside at time-end, one starts outside the box (no cell holds it) and is not integrated. Every parcel
 # leaves one exit record, code 0 where the integration stopped inside. RED with no record for the time-end and
-# never-integrated stops: records for IDs 1-3 only.
+# never-integrated stops: records for IDs 1-3 only. L1: a sibling without row keys (ref-last/) ends each integrated
+# parcel's trajectory once at its exit record, ID 7 without one (RED with the last row left out: 6 parcels).
 igloo_e2e_case(exit-census infrastructure/exit-census "e2e;infrastructure;io")
 
 # vv-order, check-order: the V&V figures (verify.py) and the printouts of the gates that pick parcels (check.py) are
@@ -1377,7 +1390,8 @@ igloo_e2e_case(exit-census infrastructure/exit-census "e2e;infrastructure;io")
 # (vv_order_check.py). Both read the cases' fresh OUTPUT/, which each case starts by removing: each case is a fixture,
 # its output a lock.
 foreach(_c tab-e2e burn-box solid-box conv-nu temp-relax drag-stokes body-force coupled-body periodic-y
-        tab-hf92 etab-hf92 mhb98-water beckstead-air d2law-varcp body-evap-m2 body-evap-m4 body-burn-m5)
+        tab-hf92 etab-hf92 mhb98-water beckstead-air d2law-varcp body-evap-m2 body-evap-m4 body-burn-m5
+        boiling-zgr-flash boiling-zgr-hot boiling-zgr-switch sym-plane-bounce sym-plane-bounce-ord2)
     set_tests_properties(${_c} PROPERTIES FIXTURES_SETUP order_${_c} RESOURCE_LOCK ${_c}_output)
 endforeach()
 add_test(NAME vv-order COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/vv_order_check.py
@@ -1394,11 +1408,13 @@ set_tests_properties(vv-order PROPERTIES
     TIMEOUT 900)
 add_test(NAME check-order COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/vv_order_check.py --printout
     ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/check-order evaporation/d2law-varcp
-    infrastructure/body-evap-m2 infrastructure/body-evap-m4 infrastructure/body-burn-m5)
+    infrastructure/body-evap-m2 infrastructure/body-evap-m4 infrastructure/body-burn-m5
+    evaporation/boiling-zgr-flash evaporation/boiling-zgr-hot evaporation/boiling-zgr-switch
+    infrastructure/sym-plane-bounce infrastructure/sym-plane-bounce-ord2)
 set_tests_properties(check-order PROPERTIES
     LABELS "e2e;infrastructure"
-    FIXTURES_REQUIRED "order_d2law-varcp;order_body-evap-m2;order_body-evap-m4;order_body-burn-m5"
-    RESOURCE_LOCK "d2law-varcp_output;body-evap-m2_output;body-evap-m4_output;body-burn-m5_output"
+    FIXTURES_REQUIRED "order_d2law-varcp;order_body-evap-m2;order_body-evap-m4;order_body-burn-m5;order_boiling-zgr-flash;order_boiling-zgr-hot;order_boiling-zgr-switch;order_sym-plane-bounce;order_sym-plane-bounce-ord2"
+    RESOURCE_LOCK "d2law-varcp_output;body-evap-m2_output;body-evap-m4_output;body-burn-m5_output;boiling-zgr-flash_output;boiling-zgr-hot_output;boiling-zgr-switch_output;sym-plane-bounce_output;sym-plane-bounce-ord2_output"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     TIMEOUT 900)
 

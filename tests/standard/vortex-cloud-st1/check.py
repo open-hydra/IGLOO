@@ -21,6 +21,10 @@ Gates
       tau z'' + z' = i Omega z at QUARTER to 1e-12
   G2' per parcel, at every time-stamped trajectory row and at the snapshot:
       |z_row - C(t_row) z0| <= TOL_Z and |v_row - C'(t_row) z0| <= TOL_V
+  G3  St = 1 only (vortex-cloud-st1): the parcel rule on a curved path. Two siblings with print-dcell left out run
+      with the IGLOO_EXE executable, ref-ends/ (print-dtime = 1e-300, a row at every segment end) and ref-ds/
+      (print-ds = 0.1 m, about 2.4 cells); ref-ds's rows are the rule's on ref-ends's segment ends
+      (tools/replay.py), row for row, its decisions within the print quantum of the limit counted
 Printed, not gated: the closed form at QUARTER (|C|, lag = Omega t - arg C) beside the
 cloud's own values from the snapshot (mass-weighted centroid and velocity slope, weights mdot
 from the input by ID), and the largest G2' residuals.
@@ -29,6 +33,9 @@ import cmath
 import importlib.util
 import math
 import os
+import re
+import shutil
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -36,6 +43,11 @@ spec = importlib.util.spec_from_file_location(
     "make_vortex_case", os.path.join(HERE, "..", "..", "tools", "make_vortex_case.py"))
 gen = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gen)
+sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
+import replay  # noqa: E402
+
+IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
+DS = 0.1                   # m, the replayed sibling's print-ds
 
 HALF_ULP = 0.5e-6          # F12.6
 TOL_Z = 3.0e-6             # m
@@ -108,6 +120,36 @@ def rk4_quarter(tau, n=20000):
         s = (s[0] + h * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]) / 6.0,
              s[1] + h * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]) / 6.0)
     return s
+
+
+def run_sibling(name, keyline):
+    """name/ with input.ini's print-dcell line replaced by keyline; the solver's exit code."""
+    ref = os.path.join(os.getcwd(), name)
+    shutil.rmtree(ref, ignore_errors=True)
+    os.makedirs(os.path.join(ref, "OUTPUT"))
+    os.symlink(os.path.join("..", "INPUT"), os.path.join(ref, "INPUT"))
+    ini = open("input.ini").read()
+    open(os.path.join(ref, "input.ini"), "w").write(re.sub(r"^print-dcell\s*=.*$", keyline, ini, count=1, flags=re.M))
+    with open(os.path.join(ref, "run_out.txt"), "w") as out, open(os.path.join(ref, "run_err.txt"), "w") as err:
+        return subprocess.call([IGLOO], cwd=ref, stdout=out, stderr=err)
+
+
+def rule_replay():
+    """G3: ref-ds/'s rows against the rule replayed on ref-ends/'s segment ends."""
+    for name, keyline in (("ref-ends", "print-dtime = 1.0e-300"), ("ref-ds", "print-ds    = %g" % DS)):
+        code = run_sibling(name, keyline)
+        if code != 0:
+            return fail("G3 the %s sibling exited %d (see %s/run_err.txt)" % (name, code, name))
+    try:
+        res = replay.replay("ref-ends", "ref-ds", ds=DS)
+    except (FileNotFoundError, ValueError) as e:
+        return fail("G3 %s" % e)
+    if res["differing"] or res["expected"] <= 2 * res["parcels"]:
+        return fail("G3 %d parcels off the print-ds rule replayed on ref-ends (key, rows expected, rows, first off): %s"
+                    % (len(res["differing"]), res["differing"][:3]))
+    print("G3 print-ds %g m: %d rows of the %d parcels, the rule's on ref-ends's segment ends row for row, %d decisions "
+          "within the print quantum PASS" % (DS, res["got"], res["parcels"], res["ambiguous"]))
+    return 0
 
 
 def main():
@@ -256,6 +298,8 @@ def main():
               % (T, abs(ratio), abs(C), gen.OMEGA * T - cmath.phase(ratio), gen.OMEGA * T - cmath.phase(C),
                  slope.real, slope.imag, (Cd / C).real, (Cd / C).imag))
 
+    if st == 1:
+        rc |= rule_replay()
     if rc == 0:
         print("\n[PASS] vortex-cloud St = %g" % st)
     return rc

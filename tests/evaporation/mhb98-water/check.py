@@ -37,11 +37,19 @@ IGLOO lands on M7 (beta 6.295 vs 6.35e-3, 0.8%) -- it reproduces MHB98's own mod
 our re-coded kernel. The experiment (reference/mhb98_fig2_exp_d2.csv: the Ranz & Marshall
 circles of Fig. 2(a), re-digitized from the page image, beta_exp = 6.48e-3) is drawn by
 verify.py, not gated here.
+
+L1, this case's own run only (mhb98-water-blowing calls main() without it): the parcel rule's last row at the
+burnout (tools/lastrow.py), on a sibling in ref-last/ without row keys and with out-time on, run with the IGLOO_EXE
+executable; each droplet's trajectory is its injection row and a last row at its exit record's state (X, Y, Z within
+half the F12.6 quantum, t within the ES16.8 half-unit), once.
 """
 import math
 import os
 import re
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+import lastrow  # noqa: E402
 
 TRAJ   = "OUTPUT/trajectories-A.dat"
 OUTLOC = "OUTPUT/outloc-A.dat"
@@ -329,7 +337,7 @@ def check_mass_telescoping(parts):
     return 0 if ok else 1
 
 
-def main():
+def main(last_row=False):
     try:
         parts = load_trajectories(TRAJ)
     except FileNotFoundError:
@@ -519,6 +527,9 @@ def main():
             n_violation += 1
 
     n_violation += check_mass_telescoping(parts)
+    if last_row:
+        n_violation += lastrow.gate(HERE, os.environ.get(
+            "IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO"))))
 
     if n_violation == 0 and verified >= N_GOOD:
         print(f"\n[PASS] {verified} water droplets' d^2 histories match the CEM rate law "
@@ -532,4 +543,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(last_row=True))

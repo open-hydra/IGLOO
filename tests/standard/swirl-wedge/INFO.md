@@ -39,7 +39,9 @@ the exact injection state, h = T/20000, with two refutations run before every ga
 h moves the end state < 1e-12, and RK4 on the 6-state Cartesian system with the true field
 agrees with the cylindrical form < 1e-12 (measured 3.7e-15 / 2.9e-15 with DOP853). Measured from `trajectories-A.dat` (`7F12.6,2E13.6E2,I8`, no time column):
 `r = hypot(y,z)`, `v_r = (yv + zw)/r`, `w_p = (yw − zv)/r`, `θ_raw = atan2(z,y)`,
-`θ_unwrapped = θ_raw + n·delthe` per detected fold (jump < −delthe/2, `n = round`).
+`θ_unwrapped = θ_raw + n·delthe` summed over consecutive rows, `n = round((oracle sweep − raw jump)/delthe)`
+the folds between the two rows: no fold is skipped whatever the spacing of the rows (an unwrap that counts a
+jump below −delthe/2 as a fold skips one, a whole sector in θ, on a trajectory with rows 1.2e-2 rad apart).
 
 **What the code does (exact 2.5D sampling).** The 2D dual holds the θ = 0
 Cartesian components `(U0, 0, Ωy)`; `sampleGas2D` evaluates them at the parcel's (x, r) and
@@ -79,9 +81,11 @@ sampler (below).
 | G4 | `\|w_p − w_oracle(t)\|` | 3.0e-6 (≈ 6× floor; budget 3.0e-5) |
 | G5 | `\|θ_unwrapped − θ_oracle(t)\|` | 8.0e-6 (≈ 5× floor at r = 0.3; budget 2.5e-4) |
 | G6 | `\|v_r − v_r,oracle(t)\|` | 3.0e-6 (≈ 5× floor; budget 2.0e-4) |
+| G7 | in this directory only, keyed on its name (the check is shared by name with three variants; `repeatability/swirl-wedge`, so named too, holds no `check.py`): the parcel rule's fold rows. A sibling in `ref-ds/` runs with the `IGLOO_EXE` executable, `print-ds = 8e-3` m in place of `print-dcell` and `out-time = on`; every sector fold writes two rows at one t, the segment end outside the sector and its re-entry n sectors back (n ≥ 1, r unchanged), so the pairs of consecutive rows at one t are as many as the log's `wedge sector folds` count, those of n > 1 its multi-sector count, and each is such a pair | θ within 4e-6/r, r within one F12.6 quantum |
 
 The diagnostic line per parcel (max residuals, end Δr with sign, fold counts) is printed on
-PASS.
+PASS. G7 measured: 649 rows (201–233 per parcel), 62 pairs at one t, each a fold one sector back, the log's 62
+sector folds (0 multi-sector).
 
 **RED.**
 - The unrotated sampler against these gates: G3/G6 red on
@@ -97,6 +101,10 @@ PASS.
   stops spiralling. With the rotation: green, trajectories identical to the reference.
 - R2 — **no swirl** (`--omega 0`, `wp = 0 0 0`, oracle at Ω = 0): G3–G6 trivially green,
   G2 red on every parcel (`only 0 folds`) ⇒ G2 is the guard that makes the case non-vacuous.
+- G7 with the fold rows left out of the parcel rule (a mutant): no pair at one t against the log's 62 folds; on a
+  binary from before the parcel rule (one zone per group, a row at every crossing without a key): no fold pair
+  either, the zone's consecutive rows at one t being different parcels' injection and crossing rows. G1–G6 green
+  under both.
 
 **Floor** (OMP 1 and 5, three runs each, with either sampler): `trajectories-A.dat`
 identical as a sorted multiset across all six runs and the gate output byte-identical; only

@@ -23,9 +23,12 @@ Two families of material A. `gas-order = 2`, `mollify = off`.
 | R1 | control | the ghost line `ghost nodes at connected faces: 98 interpolated, 0 not covered`, and no ghost node located away from its ATLAS donors |
 | K | control | the block-change line `50 via the connected cell, 0 via the block sweep, 0 rim exits` |
 | C1 | control | 50 exits, all at block 2's outlet, x = 0.15125 |
-| X1 | control | trajectory rows matched by family (read from the zone title), parcel and x with the one-block run (block 2's faces and centres fall on the one-block centres and faces; 3500 of 4330 rows matched): T within 8e-5 K, velocity within 2e-6 |
+| X1 | control | trajectory rows matched by family (read from the zone title), parcel and x with the one-block run: T within 8e-5 K, velocity within 2e-6 on every matched row. Block 1 (x < 0.085, up to its chimera face; its cells are the one-block cells): every row of either run matched (2410 = 2410). Block 2 (shifted by half a cell, so 43 % of its rows sit on points where the one-block run has none): at least half of this run's rows matched (1090 of 1920), a guard against a vacuous comparison, not a sharp gate. With gfortran both runs write more crossing rows: 2674 = 2674 and 1506 of 2128 |
 | C2 | control | no stuck, no-progress or maxIter line |
 
 **Numbers** (OMP 5): X1 T 8e-6 K, velocity 1e-6 (one printed digit); the tolerance on T sits ten
 times above. **RED** with the gas sampler's Newton stopped at an absolute residual of 1e-5 m: X1 T
-4.47e-4 K, 5.6 times the tolerance (the floor of `two-fam-bc-2blk-stretch-ord2`).
+4.47e-4 K, 5.6 times the tolerance (the floor of `two-fam-bc-2blk-stretch-ord2`). On edited copies of
+this run's trajectory file: one block-1 row's T raised by 1e-4 K, or one block-1 row deleted, fails block 1
+(a deleted row passed the earlier 75 % of all rows); every block-2 row moved by 1e-6 m fails block 2's
+floor (none matched).

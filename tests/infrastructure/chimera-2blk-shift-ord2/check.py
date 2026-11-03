@@ -15,8 +15,10 @@ check.py runs the box as one unshifted block (make_box_case.py, this input.ini) 
   K   the block-change line: 50 through the connected cell, none through the block sweep, no rim exit
   C1  50 exits (25 per family), all at block 2's outlet, x = 0.15125
   X1  the trajectory rows against the one-block run, matched by family (the zone title's group), parcel
-      and x (block 2's faces and centres fall on the one-block centres and faces, so most rows of either
-      run have a partner; at least 75 % matched): temperature within 8e-5 K, velocity within 2e-6
+      and x: temperature within 8e-5 K, velocity within 2e-6 on every matched row. Block 1 (x < 0.085, its
+      chimera face toward block 2; its cells are the one-block cells): every row of either run matched.
+      Block 2 (shifted by half a cell, its rows on other points than the one-block run's for 43 % of them): at
+      least half of this run's rows matched, a guard against a vacuous comparison
   C2  no stuck, no-progress or maxIter line
 """
 import os
@@ -38,6 +40,8 @@ GHOSTS = " [IGLOO] ghost nodes at connected faces: 98 interpolated, 0 not covere
 CHANGES = (" [IGLOO] block changes: 50 via the connected cell, 0 via the block sweep, 0 rim exits; "
            "stencil refreshed on a block change at a boundary entry: 0")
 TOL_T, TOL_U = 8.0e-5, 2.0e-6
+X_B1 = 0.085                         # block 1's chimera face toward block 2
+MIN_B2 = 0.5                         # block 2's rows matched, at least (measured 1090 of 1920)
 
 
 def fail(msg):
@@ -120,21 +124,20 @@ def main():
         return rc | fail(f"X1 the one-block run exited {code}")
     ta = trajectories("OUTPUT/trajectories-A.dat")
     tb = trajectories(os.path.join(ref, "OUTPUT", "trajectories-A.dat"))
-    dT = dU = 0.0
-    nrow = nmiss = 0
-    for k, rows in ta.items():
-        for x, (u, T) in rows.items():
-            q = tb.get(k, {}).get(x)
-            if q is None:
-                nmiss += 1
-                continue
-            nrow += 1
-            dU, dT = max(dU, abs(u - q[0])), max(dT, abs(T - q[1]))
-    if nrow < 0.75 * (nrow + nmiss) or dT > TOL_T or dU > TOL_U:
-        rc |= fail(f"X1 trajectories: T {dT:.2e} K (tolerance {TOL_T:g}), u {dU:.1e} (tolerance {TOL_U:g}) "
-                   f"over {nrow} matched rows, {nmiss} unmatched")
-    else:
-        print(f"X1 the trajectories as the one-block run (T within {TOL_T:g} K, u within {TOL_U:g}) PASS")
+    for lab, sel in (("block 1", lambda x: x < X_B1 - 1.0e-9), ("block 2", lambda x: x >= X_B1 - 1.0e-9)):
+        ra = {(k, x): v for k, rows in ta.items() for x, v in rows.items() if sel(x)}
+        rb = {(k, x): v for k, rows in tb.items() for x, v in rows.items() if sel(x)}
+        both = set(ra) & set(rb)
+        dT = max((abs(ra[k][1] - rb[k][1]) for k in both), default=0.0)
+        dU = max((abs(ra[k][0] - rb[k][0]) for k in both), default=0.0)
+        matched = (len(both) == len(ra) == len(rb)) if lab == "block 1" else len(both) >= MIN_B2 * len(ra)
+        what = (f"{len(ra)} / {len(rb)} rows, {len(both)} matched ({len(both) / max(len(ra), 1):.1%} of this run's, "
+                f"{len(both) / max(len(rb), 1):.1%} of the one-block run's); T {dT:.1e} K, u {dU:.1e}")
+        if not ra or not matched or dT > TOL_T or dU > TOL_U:
+            rc |= fail(f"X1 {lab}: {what} (tolerances {TOL_T:g} K, {TOL_U:g}; matched: "
+                       f"{'every row' if lab == 'block 1' else f'at least {MIN_B2:.0%}'})")
+        else:
+            print(f"X1 {lab}: {what} PASS")
 
     hits = len(re.findall(r"stuck in cell|no net progress|outer maxIter", log))
     if hits:

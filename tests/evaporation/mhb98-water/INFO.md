@@ -96,6 +96,15 @@ Three gates, tightest first:
    Both panels are genuine IGLOO-vs-digitized-model-**curve** gates, not an analytic-`β`
    proxy.
 
+L1, in this case's own run (`mhb98-water-blowing` calls the gates above without it): the parcel rule's
+last row at the burnout (`tools/lastrow.py`). `check.py` runs a sibling in `ref-last/` with the
+`IGLOO_EXE` executable, the input without `print-dcell` (no row key: the first and last rows) and with
+`out-time = on`; each droplet's trajectory is its injection row and a last row at its exit record's state
+(X, Y, Z within half the F12.6 quantum, t within the ES16.8 half-unit), its only row there: 50 rows. RED on
+a binary from before the parcel rule (no key meant a row at every crossing there): every trajectory ends at
+the last crossing before the burnout (815.8 s against 825.4 s, 63 rows); with the last row left out of the
+rule (a mutant): the injection row alone.
+
 ## Comparison plot (`verify.py` → `OUTPUT/mhb98-water.svg`, non-gating)
 Two panels vs the **normalized** `t/t_life` (t_life = D0²/K from the LSQ slope, extrapolated to
 D²→0 rather than taken as the last sample, which lands at d²/d0²≈0.012): (a) `d²/d0²` — IGLOO, its LK kernel (gated oracle), and the

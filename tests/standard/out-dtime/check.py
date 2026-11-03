@@ -1,34 +1,37 @@
 #!/usr/bin/env python3
 """
-out-dtime -- the time cadence print-dtime.
+out-dtime -- the time limit print-dtime of the parcel rule.
 
-drag-stokes's case (INPUT symlinked) with print-dtime = 1.0e-3 s, print-dcell = 1000000 (a row is written when either
-condition holds; the crossing one is out of reach) and out-time = on. A row is written at the first segment end at
-or past t0 + k dt (then the next threshold is k + 1), so with t0 = 0:
-  T1  each parcel's first row is the injection row (t = 0); its k-th row after it has t >= k dt
-  T2  each parcel has between 5 and floor(t_exit / dt) rows after the injection row, t_exit its exit time (exit
-      record, by header name): at 10 m/s an interval spans about four cell crossings, so the rule is not met at
-      every segment end
+drag-stokes's case (INPUT symlinked) with print-dtime = 1.0e-3 s, no print-dcell and out-time = on. A row is
+written at the first segment end whose time since the parcel's last row reaches the limit, besides the injection row
+and the last row at the stop. check.py runs a sibling with the IGLOO_EXE executable into ref-ends/, the input with
+print-dtime = 1e-300 (a row at every segment end).
+  T1  each parcel's first row is the injection row (t = 0); every later row but the last is at least dt after the
+      row before it (within 1e-8 t, the ES16.8 print of both times)
+  T2  the rows are the rule's applied to ref-ends's segment ends (tools/replay.py), row for row, a decision within
+      the print quantum of the limit accepted either way; 25 parcels
   T3  drag-stokes's closed form x(u) on every row, anchored at the injection row, with its tolerance
 """
 import importlib.util
-import math
 import os
+import re
+import shutil
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TESTS = os.path.join(HERE, "..", "..")
 sys.path.insert(0, os.path.join(TESTS, "tools"))
 import datcols  # noqa: E402
+import replay  # noqa: E402
 
 spec = importlib.util.spec_from_file_location("drag_stokes_check", os.path.join(TESTS, "standard", "drag-stokes", "check.py"))
 DS = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(DS)
 
+IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
 DT = 1.0e-3
-MIN_ROWS = 5
 N_PARCELS = 25
-T_HALF = 5.0e-9          # ES16.8: relative half-unit of the printed time
 
 
 def fail(msg):
@@ -36,32 +39,37 @@ def fail(msg):
     return 1
 
 
+def run_ends():
+    """ref-ends/: the input with a row at every segment end; the solver's exit code."""
+    ref = os.path.join(HERE, "ref-ends")
+    shutil.rmtree(ref, ignore_errors=True)
+    os.makedirs(os.path.join(ref, "OUTPUT"))
+    os.symlink(os.path.join("..", "INPUT"), os.path.join(ref, "INPUT"))
+    ini = open(os.path.join(HERE, "input.ini")).read()
+    open(os.path.join(ref, "input.ini"), "w").write(re.sub(r"^print-dtime\s*=.*$", "print-dtime = 1.0e-300", ini,
+                                                           count=1, flags=re.M))
+    with open(os.path.join(ref, "run_out.txt"), "w") as out, open(os.path.join(ref, "run_err.txt"), "w") as err:
+        return subprocess.call([IGLOO], cwd=ref, stdout=out, stderr=err)
+
+
 def main():
     rc = 0
     try:
-        rows = datcols.rows(os.path.join("OUTPUT", "trajectories-A.dat"))
-        ex = {r["ID"]: r for r in datcols.rows(os.path.join("OUTPUT", "outloc-A.dat"))}
+        parts = replay.parcels(os.path.join("OUTPUT", "trajectories-A.dat"))
     except (FileNotFoundError, ValueError) as e:
         return fail(str(e))
-    parts = {}
-    for r in rows:
-        parts.setdefault(r["ID"], []).append(r)
-    bad1, bad2, counts, worst = [], [], [], (0.0, "")
-    nviol = 0
-    for pid, pr in sorted(parts.items()):
-        pr.sort(key=lambda r: r["t"])
+    bad1, counts, worst, nviol = [], [], (0.0, ""), 0
+    for key, pr in sorted(parts.items()):
+        pid = key[2]
         if pr[0]["t"] != 0.0:
             bad1.append(f"ID {pid}: first row at t = {pr[0]['t']:.8e}")
             continue
-        for k, r in enumerate(pr[1:], 1):
-            if r["t"] < k * DT * (1.0 - T_HALF):
-                bad1.append(f"ID {pid}: row {k} at t = {r['t']:.8e} < {k} dt")
+        for k in range(1, len(pr) - 1):
+            if pr[k]["t"] - pr[k - 1]["t"] < DT - 1.0e-8 * pr[k]["t"]:
+                bad1.append(f"ID {pid}: row {k} at t = {pr[k]['t']:.8e}, {pr[k]['t'] - pr[k - 1]['t']:.3e} s after "
+                            f"the row before")
                 break
-        n = len(pr) - 1
-        counts.append(n)
-        t_exit = ex[pid]["t"] if pid in ex else float("nan")
-        if not (MIN_ROWS <= n <= math.floor(t_exit / DT)):
-            bad2.append(f"ID {pid}: {n} rows, t_exit {t_exit:.6e} s")
+        counts.append(len(pr))
         xa, va = pr[0]["X"], pr[0]["U"]
         for r in pr:
             if not (va - 1e-9 <= r["U"] <= DS.WIN_HI):
@@ -73,13 +81,23 @@ def main():
             if res > tol:
                 nviol += 1
     if bad1 or len(parts) != N_PARCELS:
-        rc |= fail(f"T1 {len(bad1)} parcels break the time rule: {bad1[:3]}")
+        rc |= fail(f"T1 {len(parts)} parcels, {len(bad1)} break the time limit: {bad1[:3]}")
     else:
-        print(f"T1 every parcel's k-th row after injection at t >= k * {DT:g} s PASS")
-    if bad2:
-        rc |= fail(f"T2 {len(bad2)} parcels off [{MIN_ROWS}, floor(t_exit/dt)] rows: {bad2[:3]}")
+        print(f"T1 every parcel's rows from injection (t = 0), each but the last at least {DT:g} s after the row "
+              f"before PASS")
+    code = run_ends()
+    try:
+        res = replay.replay("ref-ends", ".", dt=DT) if code == 0 else None
+    except (FileNotFoundError, ValueError) as e:
+        res, code = None, str(e)
+    if res is None:
+        rc |= fail(f"T2 the ref-ends sibling: {code}")
+    elif res["differing"] or res["parcels"] != N_PARCELS or res["expected"] <= 2 * N_PARCELS:
+        rc |= fail(f"T2 {len(res['differing'])} of {res['parcels']} parcels off the rule replayed on ref-ends "
+                   f"(key, rows expected, rows, first off): {res['differing'][:3]}")
     else:
-        print(f"T2 {min(counts)}..{max(counts)} rows per parcel after injection, within [{MIN_ROWS}, floor(t_exit/dt)] PASS")
+        print(f"T2 {res['got']} rows ({min(counts)}..{max(counts)} per parcel), the rule's on ref-ends's segment ends "
+              f"row for row, {res['ambiguous']} decisions within the print quantum PASS")
     if nviol:
         rc |= fail(f"T3 {nviol} rows off drag-stokes's closed form (worst resid/tol {worst[0]:.2f}, {worst[1]})")
     else:
