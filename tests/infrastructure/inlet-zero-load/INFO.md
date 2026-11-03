@@ -1,7 +1,7 @@
 # inlet-zero-load — an inlet cell that injects nothing pins no parcel
 
 **Purpose.** ATLAS writes a 401 of krho 0 for a phase without inlet keys at an inflow grain (its mixture rule over the
-dispersed phases; `grain-bc = inflow`), and a cell outside a krho profile carries 0 too. Such a cell injects nothing,
+dispersed phases; a grain is an inlet unless `grain-wall = T`), and a cell outside a krho profile carries 0 too. Such a cell injects nothing,
 yet the pinning places parcels by geometry alone (`isInj` reads the code): without a filter each one would carry zero
 mass from the inlet to its exit. `dropZeroFlow` (`obj_IGLOO.f90`), called once every parcel of a family is pinned,
 removes the parcels of the cells whose column 1 is zero for that family (401: krho/(1 − krho_tot); 402/403: gp),
