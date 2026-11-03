@@ -5,7 +5,7 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-stokes-dopri5/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ rad-cool/ emissivity-cap/ rad-foreign-key/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-stokes-dopri5/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ rad-cool/ emissivity-cap/ rad-foreign-key/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ scatter-placement/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/, liquid-p2t/, boiling-zgr/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ evap-breakup-box-varcp/ d2law-brk-dormant/ temp-relax-p2t/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ burn-box-ox0/ beckstead-air/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-melt-rhos/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-brk-tab-rhos/ (e2e)
@@ -530,10 +530,18 @@ igloo_e2e_case(swirl-wedge-ord1 standard/swirl-wedge-ord1 "e2e;standard;drag;gas
 # RED on a binary without the two tokens: refused at setup (exit 128, nothing integrated).
 igloo_e2e_case(no-exchange standard/no-exchange "e2e;standard;drag;heat")
 # scatter-weight: drag-stokes's case (INPUT symlinked) with out-time. Each parcel's scatter markers N against
-# its residence time: floor(X) - 1 <= N <= floor(X), X = frac(ID*phi) + npdot*t_exit/dNscat, every printed
-# input taken with its half-ULP. RED when a step cut at a cell face adds its weight twice: every parcel
-# 2 to 3 markers above the bound (X about 10, about sixty cut steps per parcel).
+# its residence time: N = floor(X), X = frac(ID*phi) + npdot*t_exit/dNscat, every printed input taken with its
+# half-ULP. RED when a step cut at a cell face adds its weight twice: every parcel 2 to 3 markers above the
+# bound (X about 10, about sixty cut steps per parcel).
 igloo_e2e_case(scatter-weight standard/scatter-weight "e2e;standard;scatter")
+# scatter-placement: khrt-stress's case (khrt-e2e's INPUT symlinked) with out-file ALL and out-time. The markers
+# against the x-faces (at most 3x the faces' share within 1e-6 m), each other (none alike) and U(0,1) in the cell
+# (KS p >= 1e-3); each parcel's count floor(frac(ID*phi) + r*tau), r its injected ancestor's rate; each parcel's
+# sum of w inside its printed states' bracket of the integral of np dt widened by (TV + M)/r, the brackets' sum
+# holding the Euler moment, the sum of w within the parcels' bounds of it. RED on markers at step ends (the three
+# placement clauses), on a child taking its own rate or its parent's np at the shed (the count: 675 and 81 of 726
+# parcels) and on weights frozen at entry (312 of 726 parcels, the sum).
+igloo_e2e_case(scatter-placement standard/scatter-placement "e2e;standard;scatter")
 # The output cadence on drag-stokes's case: print-dcell = 3 (rows a subset of the plain run's), print-dtime (the
 # time rule), out-traj/out-scatter off (no file, the exits and source unchanged); each plain run in ref-plain/.
 igloo_e2e_case(out-dcell3 standard/out-dcell3 "e2e;standard;io")
@@ -706,7 +714,9 @@ igloo_e2e_case(burn-box-cap combustion/burn-box-cap "e2e;combustion;euler")
 # burn-box-residue: the burnout residue (residue=on, product OX freezing): one residue per parcel burned out inside the
 # box, born at its parent's exit record with the cap's mass; the mass and energy books with the birth flux withdrawn;
 # its nucleation and relaxation; siblings ref-dres/ (d-residue, two groups: the residue IDs' offset) and ref-fail/
-# ([IGLOO-ODE] fail-after: the residue born after a solver failure).
+# ([IGLOO-ODE] fail-after: the residue born after a solver failure); in every run each parcel's scatter-marker
+# count at its rate, a residue's its own at birth against the product's quantum (RED in ref-dres/ on a residue at
+# its parent's rate and on the product's markers at the burning material's quantum).
 igloo_e2e_case(burn-box-residue combustion/burn-box-residue "e2e;combustion;solidification")
 # burn-box-ox0: an oxide fraction at injection (xi-ox0 0.1 on burn-box-residue's capped line, an inert product): the
 # whole particle's mass and number rate at injection; every trajectory row against an oracle on Gallier's exact lobe

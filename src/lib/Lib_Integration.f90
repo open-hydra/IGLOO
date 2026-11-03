@@ -724,6 +724,58 @@ contains
     end subroutine emitPlanes
 
 
+    !> The scatter markers of the step (ta,ya)-(tb,yb): one at each multiple of dNscat the accumulator crosses on it,
+    !  at its fraction s of the step: the position on the cubic Hermite interpolant of the end positions and
+    !  velocities, the rest linear; each weighs the droplets np/r it stands for.
+    subroutine emitScatter(ta, ya, tb, yb)
+      use IGLOO_variables, only: oneThird
+      real(R8), intent(in) :: ta, tb, ya(:), yb(:)
+      real(R8) :: s, h, lev, pos(3), vel(3), z7, tp, rho, m, d, np, f, mAlS, mOxS
+      integer  :: k
+      if (.not. (wAcc > wAccOld .and. wAcc < huge(wAcc))) return
+      h = tb - ta
+      k = 0
+      lev = dNscat
+      do while (wAcc >= lev)
+        k = k + 1
+        s   = (lev - wAccOld)/(wAcc - wAccOld)
+        pos = (2._R8*s**3 - 3._R8*s**2 + 1._R8)*ya(1:3) + (s**3 - 2._R8*s**2 + s)*h*ya(4:6) &
+            + (3._R8*s**2 - 2._R8*s**3)*yb(1:3) + (s**3 - s**2)*h*yb(4:6)
+        vel = ya(4:6) + s*(yb(4:6) - ya(4:6))
+        z7  = ya(7) + s*(yb(7) - ya(7))
+        if (mod_propFlags(1)) then; tp = comp_TfromTab(hTab, z7); else; tp = z7; endif
+        if (mod_propFlags(2)) then; rho = tableValue(rhoTab, Tmin, Tmax, tp); else; rho = auxLocal(ind_rho); endif
+        select case(mod_model)
+        case(3)
+          np = ya(8) + s*(yb(8) - ya(8)); m = auxLocal(ind_m)/np
+        case(7)
+          np = ya(9) + s*(yb(9) - ya(9)); m = auxLocal(ind_m)/np
+        case(2,5)
+          np = part%npdot; m = ya(8) + s*(yb(8) - ya(8))
+        case(4)
+          np = ya(9) + s*(yb(9) - ya(9)); m = ya(8) + s*(yb(8) - ya(8))
+        case(8)
+          np = part%npdot; mAlS = ya(8) + s*(yb(8) - ya(8)); mOxS = ya(9) + s*(yb(9) - ya(9)); m = mAlS + mOxS
+        case default
+          np = part%npdot; m = auxLocal(ind_m)
+        end select
+        f = 0._R8
+        if (mod_isSolid) f = ya(8) + s*(yb(8) - ya(8))
+        if (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7) then; d = auxLocal(ind_d)
+        else; d = (sixOverPi*m/rho)**oneThird; endif
+        if (ind_rs > 0) d = solidDiameter(m, f, rho, auxLocal(ind_rs))
+        if (mod_model == 8) d = (sixOverPi*(mAlS/rho + mOxS/auxLocal(ind_mb+imRr-1)))**oneThird
+        if (frozenOn) then
+          call rec_push(lScat, [pos, vel, tp, d, m, real(part%ID, R8), f, dNscat*(np/part%npRef)], L_SCAT_F)
+        else
+          call rec_push(lScat, [pos, vel, tp, d, m, real(part%ID, R8), dNscat*(np/part%npRef)], L_SCAT)
+        endif
+        lev = real(k + 1, R8)*dNscat
+      enddo
+      wAcc = wAcc - real(k, R8)*dNscat
+    end subroutine emitScatter
+
+
     !> The parcel's rows, one block per particle file.
     subroutine emitParcel()
       if (trajOn) call rec_emit_traj(lTraj, slot, part%ID, part%parentID)
@@ -841,8 +893,9 @@ contains
           t1 = timeLocal + sEv*(t1 - timeLocal)
           wAcc = wAccOld + sEv*(wAcc - wAccOld)
         endif
-        !> Planes the finalized step crosses, before the phase jump and the breakup event.
+        !> Planes and scatter markers the finalized step crosses, before the phase jump and the breakup event.
         if (planeOn) call emitPlanes(timeLocal, oldLocal, t1, y)
+        if (scatOn .and. dNscat>0._R8) call emitScatter(timeLocal, oldLocal, t1, y)
         if (solidEv .and. .not.(IamOut .or. newGas .or. sectorOut)) then
           phaseEv = nint(stateLocal(ind_sph))
           call solidTransition(whichEv, part%cp, part%cpSol, part%Tmelt, part%hFus, y(7), y(8), phaseEv)
@@ -1031,7 +1084,7 @@ contains
       integer  :: NR, N
       real(R8) :: X, XOLD, Y(N)
       integer  :: IRTRN
-      real(R8) :: Vdif(3), vel, Re, Fdrag(3), Qdot, tp, acc(3), d, rho, sigma, mup, m, np, fScat
+      real(R8) :: Vdif(3), vel, Re, Fdrag(3), Qdot, tp, acc(3), d, rho, sigma, mup, m
       real(R8) :: brkupState(max(nbrkst,1))
       real(R8) :: gOld, gEnd
       real(R8) :: vEvt(3)   !> the velocity breakupEvent works on (Y stays the solver's)
@@ -1135,43 +1188,15 @@ contains
       !> Never latch a non-finite state as the last good one.
       if (any(y/=y)) return
 
-      !> Planes the accepted step crosses, emitted once as it is latched.
+      !> Planes and scatter markers the accepted step crosses, emitted once as it is latched.
       if (planeOn) call emitPlanes(timeLocal, oldLocal, x, y)
+      if (scatOn .and. dNscat>0._R8) call emitScatter(timeLocal, oldLocal, x, y)
 
       timeLocal  = x
       oldLocal   = y
       if (allocated(stateLocal)) oldStLocal = stateLocal
       if (allocated(eventLocal)) oldEvLocal = eventLocal
 
-      !> Scatter cloud: one marker per dNscat of accumulated weight, carrying the remainder; it weighs the droplets
-      !  np/r it stands for.
-      if (scatOn .and. dNscat>0._R8 .and. wAcc >= dNscat) then
-        if (mod_propFlags(1)) then; tp  = comp_TfromTab(hTab,y(7)); else; tp  = y(7);              endif
-        if (mod_propFlags(2)) then; rho = tableValue(rhoTab, Tmin, Tmax, tp); else; rho = auxLocal(ind_rho); endif
-        select case(mod_model)
-        case(3);      m = auxLocal(ind_m)/y(8)
-        case(7);      m = auxLocal(ind_m)/y(9)
-        case(2,4,5);  m = y(8)
-        case(8);      m = y(8) + y(9)
-        case default; m = auxLocal(ind_m)
-        end select
-        if (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7) then; d = auxLocal(ind_d)
-        else; d = (sixOverPi*m/rho)**oneThird; endif
-        if (ind_rs > 0) d = solidDiameter(m, y(8), rho, auxLocal(ind_rs))
-        if (mod_model == 8) d = (sixOverPi*(y(8)/rho + y(9)/auxLocal(ind_mb+imRr-1)))**oneThird
-        select case(mod_model)
-        case(3);      np = y(8)
-        case(4,7);    np = y(9)
-        case default; np = part%npdot
-        end select
-        if (frozenOn) then
-          fScat = 0._R8; if (mod_isSolid) fScat = y(8)
-          call rec_push(lScat, [y(1:6), tp, d, m, real(part%ID, R8), fScat, dNscat*(np/part%npRef)], L_SCAT_F)
-        else
-          call rec_push(lScat, [y(1:6), tp, d, m, real(part%ID, R8), dNscat*(np/part%npRef)], L_SCAT)
-        endif
-        wAcc = wAcc - dNscat
-      endif
       !> Latched with the state, after the emission: a refinement never writes a marker twice.
       wAccOld = wAcc
 

@@ -50,7 +50,7 @@ tests/
 │   └── twosweep.f90              # the two-sweep repeatability driver
 ├── standard/                     # drag + heat
 │   ├── drag/  temperature/       #   unit families
-│   └── drag-stokes/ drag-stokes-dopri5/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ rad-cool/ emissivity-cap/ rad-foreign-key/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/   # e2e
+│   └── drag-stokes/ drag-stokes-dopri5/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ scatter-placement/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ rad-cool/ emissivity-cap/ rad-foreign-key/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/   # e2e
 ├── evaporation/                  # unit families: (root)  interface-neq/  tc-analytic/  evap-breakup/  liquid-p2t/  boiling-zgr/
 │   └── d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ evap-breakup-box-varcp/ d2law-brk-dormant/ temp-relax-p2t/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/     # e2e
 ├── combustion/                   # unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ burn-box-ox0/ beckstead-air/ (e2e)
@@ -106,9 +106,9 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 325/325 in a serial build (270 e2e + 54 unit, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` among the latter, and the
+ctest 326/326 in a serial build (271 e2e + 54 unit, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 28 more `mpi-*` cases, 353 in all (the 28 `mpi-*` pass). The e2e entries are 164 solver cases, two further
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 28 more `mpi-*` cases, 354 in all (the 28 `mpi-*` pass). The e2e entries are 165 solver cases, two further
 oracles on `khrt-e2e`'s run, the five thread-count gates, the ordered-window gate, the fifteen two-sweep gates, the eighty-one setup refusals, `vv-order` (thirteen V&V
 figures independent of the record and zone order; skipped without matplotlib) and `check-order` (four gate printouts independent of it); the unit entries are 45
 compiled unit tests, the property-table reader on four fixtures, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool`. Evaporation with
@@ -116,7 +116,7 @@ ODE breakup (model 4), breakup events in the mass state and the KH-shed source a
 `evap-breakup-box`, `d2law-brk-dormant`, `rd-evap-frozen`, `tab-evap-frozen`, `etab-evap-frozen`, `khrt-evap-frozen`,
 `khrt-evap-frozen-euler`, `khrt-evap-live`, `khrt-e2e-euler`, `khrt-shed-noexchange`,
 `solver-fail-consumed-m4` and `repeat-evap-breakup`. The scatter cloud's marker count per parcel is gated by
-`scatter-weight`, `scatter-weight-evap` and `scatter-weight-solid`. Reading a boundary file of several blocks and
+`scatter-weight`, `scatter-weight-evap` and `scatter-weight-solid`, the markers' placement and weights by `scatter-placement`. Reading a boundary file of several blocks and
 families, and a parcel's crossing of a block interface, are gated by `two-fam-bc-2blk`; the field mollifier
 across a block interface by `two-fam-bc-2blk-mollify` and `test_mollify_blocks`, across a periodic pair by `periodic-y`,
 `periodic-2d`, `test_mollify_blocks` and `refuse-periodic-not-mutual`; chimera faces by `chimera-2blk`,
