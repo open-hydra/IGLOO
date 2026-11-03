@@ -3,7 +3,8 @@
 module IGLOO_module
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_data_block, only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, fillGhostPartners, &
-                              buildInterfaceLinks, reportNonAligned, mollifyEulerBlocks, mollifySourceBlocks
+                              buildInterfaceLinks, reportNonAligned, mollifyEulerBlocks, mollifySourceBlocks, &
+                              hasConnectedFaces, buildGhostLinks
   use IGLOO_data_phases, only: obj_material
   use IGLOO_Lib_Mollify, only: cellLink
   implicit none
@@ -13,6 +14,8 @@ module IGLOO_module
     type(obj_flowblock),   allocatable :: gasblock(:)
     !> The 101 face cells and their partner cells, built once after the bc read.
     type(cellLink),        allocatable :: links(:)
+    !> A face cell carries 101, 103, 201, 102 or 100: solve reports the block changes.
+    logical :: connFaces = .false.
     !> Valid only between a solve and the next reset_state (which deallocates them).
     type(obj_sourceblock), allocatable :: source(:)
     type(obj_eulerblock),  allocatable :: euler(:,:)
@@ -27,6 +30,7 @@ module IGLOO_module
     procedure, pass(self) :: setup
     procedure, pass(self) :: setup_static
     procedure, pass(self) :: reset_state
+    procedure, pass(self) :: set_ghost_face
     procedure, pass(self) :: sweepTag
     procedure, pass(self) :: solve
     procedure, pass(self) :: getSourceTerms
@@ -68,7 +72,7 @@ contains
     type(orion_data)     :: own_gas
     character(len=llen)  :: gasfile
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
-    integer              :: m, g, fam, nthreads
+    integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar
     character(len=2)     :: method
 
     if (self%staticDone) then
@@ -129,6 +133,14 @@ contains
     call tm_phase(TM_BLOCKS)
     call buildInterfaceLinks(self%geoblock, self%links)
     if (mpi_is_root) call reportNonAligned(self%links)
+    self%connFaces = hasConnectedFaces(self%geoblock)
+    if (ord2) then
+      call buildGhostLinks(self%gasblock, self%geoblock, nGhostIn, nGhostMiss, nGhostFar)
+      if (mpi_is_root .and. nGhostIn + nGhostMiss > 0) write(*,'(A,2(I0,A))') &
+        ' [IGLOO] ghost nodes at connected faces: ', nGhostIn, ' interpolated, ', nGhostMiss, ' not covered'
+      if (mpi_is_root .and. nGhostFar > 0) write(*,'(A,I0)') &
+        ' [IGLOO] chimera ghost nodes located away from their ATLAS donors: ', nGhostFar
+    endif
     call tm_phase(TM_PIN)
     call initRandomSeed(rng_seed)   ! before pinning: stochastic injection diameters
     fam = 0
@@ -175,6 +187,11 @@ contains
       call copyORION(external_gas, own_gas)
       call import_gas(own_gas, self%gasblock)
     endif
+
+    !> A parent's ghost faces hold for one sweep only.
+    do b = 1, nb
+      self%gasblock(b)%ghostExternal = .false.
+    enddo
 
     !> Drop last sweep's source/euler accumulators (all of them); solve re-allocates them at the right shape.
     do b = 1, nb
@@ -239,6 +256,24 @@ contains
   end subroutine reset_state
 
 
+  !> A parent's gas ghost ring on face f of block b, for the next solve only (reset_state drops it):
+  !  the values at the face's ghost nodes over its interior range, gas-order 2. They replace the
+  !  ring's own fill there (a non-positive scalar falls back to the interior cell's), a connected
+  !  face keeps them instead of the interpolated ones, and the edge and corner nodes beside the face
+  !  are extrapolated from them. Call after reset_state, before solve.
+  subroutine set_ghost_face(self, b, f, density, velocity, temperature, mil, kl, gam, R)
+    use IGLOO_variables, only: ord2
+    implicit none
+    class(obj_IGLOO), intent(inout) :: self
+    integer,          intent(in)    :: b, f
+    real(R8),         intent(in)    :: density(:,:,:), velocity(:,:,:)
+    real(R8),         intent(in)    :: temperature(:,:), mil(:,:), kl(:,:), gam(:,:), R(:,:)
+    if (.not. ord2) error stop 'IGLOO: set_ghost_face: the ghost ring exists only under gas-order 2'
+    if (b < 1 .or. b > size(self%gasblock)) error stop 'IGLOO: set_ghost_face: the block is not in the mesh'
+    call self%gasblock(b)%setGhostFace(f, density, velocity, temperature, mil, kl, gam, R)
+  end subroutine set_ghost_face
+
+
   !> Filename tag of the current output generation: empty on sweep 0, '-sweep<N>' afterwards.
   function sweepTag(self) result(tag)
     implicit none
@@ -266,7 +301,8 @@ contains
                                 eulerSwitch, sourceSwitch, unitTraj, unitScat, &
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
                                 trajOn, scatOn, dNscat, trajSample, threshold, &
-                                probeOn, probeIDs, axisym, nSectorFold, nMultiFold, &
+                                probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
+                                nConnHit, nSweepHit, nRimExit, &
                                 unitSnap, snapOn, timeOn, tEnd
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
@@ -304,7 +340,7 @@ contains
       error stop 1
     endif
     self%stateIsFresh = .false.
-    nSectorFold = 0; nMultiFold = 0
+    nSectorFold = 0; nMultiFold = 0; nStencilRefresh = 0; nConnHit = 0; nSweepHit = 0; nRimExit = 0
 
     sourceSwitch = self%srcSwitch
     eulerSwitch  = self%eulSwitch
@@ -652,6 +688,7 @@ contains
       if (mpi_is_root .and. sum(foldStat) > 0) write(*,'(A,I0,A,I0,A)') '     - wedge sector folds: ', &
                                                  foldStat(1), ' (multi-sector: ', foldStat(2), ')'
     endif
+    if (self%connFaces) call reportBlockChanges()
     if (mpi_is_root) then
       if (snapOn) then
         write(*,'(A,ES16.8E2,A)') '  Stop condition : time-end = ', tEnd, ' s reached, or the particle left the domain'
@@ -731,6 +768,19 @@ contains
     call tm_report(self%sweep)
 
   end subroutine writeout
+
+
+  !> The sweep's block changes, summed over the ranks and printed by the root rank.
+  subroutine reportBlockChanges()
+    use IGLOO_variables, only: nConnHit, nSweepHit, nRimExit, nStencilRefresh
+    use IGLOO_Mod_MPI,   only: mpi_allreduce_sum_i4_array, mpi_is_root
+    implicit none
+    integer :: cnt(4)
+    cnt = [nConnHit, nSweepHit, nRimExit, nStencilRefresh]
+    call mpi_allreduce_sum_i4_array(cnt, 4)
+    if (mpi_is_root) write(*,'(A,4(I0,A))') ' [IGLOO] block changes: ', cnt(1), ' via the connected cell, ', cnt(2), &
+      ' via the block sweep, ', cnt(3), ' rim exits; stencil refreshed on a block change at a boundary entry: ', cnt(4), ''
+  end subroutine reportBlockChanges
 
 
   !> Print the IGLOO banner.

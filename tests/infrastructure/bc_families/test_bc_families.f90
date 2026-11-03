@@ -31,6 +31,11 @@ program test_bc_families
     !       layer 2 is dropped; every other face 400. RED: a reader without 102 stops at pass 0
     !       on the first chimera record; with the layer-1 lines stored in reverse order the
     !       two-donor facelet fails (0.75, 0.25)
+    !   F7  a one-layer (2D) block with faces 3/4 periodic (201): face 3's connection lines carry
+    !       ATLAS's nine integers (block, i, j, k, face, d11..d22), face 4's the eight-integer form
+    !       (block, i, j, face, d11..d22); each cell keeps its partner cell, partner face and the
+    !       four orientation integers. RED: a reader taking four index integers on a one-layer mesh
+    !       stores k (1) as face 3's partner face and (4, 1, 0, 0) as its orientation
     !
     ! A pair (a, b) is a family's payload columns 1 and 6: krho (401) or gp (402), and rp.
     !
@@ -56,6 +61,7 @@ program test_bc_families
     call f4_mass_flux
     call f5_ds
     call f6_chimera
+    call f7_connection_2d
 
     if (nfail == 0) then
         print '(a)', ''
@@ -220,6 +226,51 @@ contains
     end subroutine f6_chimera
 
 
+    !> F7 -- 201 connection lines on a one-layer block (4 x 3 x 1): nine integers on face 3, eight on
+    !  face 4; partner cell, face and orientation as written.
+    subroutine f7_connection_2d
+        type(obj_block)                 :: geo(1)
+        type(obj_flowblock)             :: gas(1)
+        type(obj_sourceblock)           :: src(1)
+        type(obj_eulerblock)            :: eul(1,1)
+        type(obj_material), allocatable :: mat(:)
+        integer :: u, f, m, n, i, j, mend(6), nend(6)
+        call setup(geo, reshape([4, 3, 1], [3, 1]), mat, [1, 1])
+        mend(1:2) = 3; nend(1:2) = 1; mend(3:4) = 4; nend(3:4) = 1; mend(5:6) = 4; nend(5:6) = 3
+        open(newunit=u, file='INPUT/famtest-F7-bc.txt', status='replace', action='write')
+        do f = 1, 6; do n = 1, nend(f); do m = 1, mend(f)
+            select case (f)
+            case (1); i = 1; j = m
+            case (2); i = 4; j = m
+            case (3); i = m; j = 1
+            case (4); i = m; j = 3
+            case (5, 6); i = m; j = n
+            end select
+            if (f == 1) then
+                write(u, '(6i8)') 1, i, j, 1, f, 401
+                write(u, '(2(2x,es12.5),2(3x,a),3(2x,es12.5),3x,a,2x,es12.5)') 0.1_real64, 0.1_real64, &
+                    'normal,', 'normal,', 1.0_real64, 1.0e-6_real64, 0.0_real64, 'Dirac', 0.0_real64
+            elseif (f == 3) then
+                write(u, '(6i8)') 1, i, j, 1, f, 201
+                write(u, '(9i8)') 1, m, 3, 1, 4, 1, 0, 0, 1
+            elseif (f == 4) then
+                write(u, '(6i8)') 1, i, j, 1, f, 201
+                write(u, '(8i8)') 1, m, 1, 3, 1, 0, 0, 1
+            else
+                write(u, '(6i8)') 1, i, j, 1, f, 400
+            endif
+        enddo; enddo; enddo
+        close(u)
+        call read_cdp_bc_file('famtest-F7-', mat, geo, gas, src, eul, .false., .false.)
+        do m = 1, 4
+            call expectConn('F7 face 3 m='//itoa(m)//' (nine integers)', geo(1)%face(3)%cell(m,1), &
+                            [1, m, 3, 1], 4, [1, 0, 0, 1])
+            call expectConn('F7 face 4 m='//itoa(m)//' (eight integers)', geo(1)%face(4)%cell(m,1), &
+                            [1, m, 1, 1], 3, [1, 0, 0, 1])
+        enddo
+    end subroutine f7_connection_2d
+
+
     ! ------------------------------------------------------------------ fixture
 
     !> Blocks of the given sizes through the production geometry path, mdotGas seeded on every
@@ -330,6 +381,22 @@ contains
 
 
     ! ------------------------------------------------------------------ report
+
+    !> A 101/201 cell: partner cell, partner face and orientation integers.
+    subroutine expectConn(lab, cell, conn, face, orient)
+        use IGLOO_data_block, only: obj_bc_cell
+        character(*),      intent(in) :: lab
+        type(obj_bc_cell), intent(in) :: cell
+        integer,           intent(in) :: conn(4), face, orient(4)
+        if (all(cell%connection == conn) .and. cell%connectionFace == face .and. all(cell%orient == orient)) then
+            print '(a,4(i0,1x),a,i0,a,4(i0,1x))', '  [ok]   famtest '//lab//': partner ', conn, 'face ', face, &
+                ', orientation ', orient
+        else
+            print '(a,4(i0,1x),a,i0,a,4(i0,1x))', '  [FAIL] famtest '//lab//': partner ', cell%connection, 'face ', &
+                cell%connectionFace, ', orientation ', cell%orient
+            nfail = nfail + 1
+        endif
+    end subroutine expectConn
 
     !> A chimera facelet: code 102, the two layer counts, and the layer-1 donors and weights in order.
     subroutine expectChim(lab, cell, nchi, donor, w)

@@ -345,8 +345,6 @@ contains
     enddo
     psdNotice = .false.
 
-    if (mesh2D) then; ci_n = 4; else; ci_n = 5; endif
-
     open(newunit=u,FILE='INPUT/'//trim(name)//'bc.txt',action='read')
 
     !> PASS 0: one record per boundary face (fanned out) or one copy per family (ATLAS order); else refuse.
@@ -467,15 +465,20 @@ contains
 
           ! Standard / coupled connection and periodic
           case (101, 201)
-            read(u,*) readLine(1:ci_n+4)
-            if (mesh2D) then
-              cell%connection(1:3) = readLine(1:3)
-              cell%connection(4)   = 1
-              cell%connectionFace  = readLine(4)   !> [block,i,j, face, d11..d22]
-            else
-              cell%connection(1:4) = readLine(1:4)
-              cell%connectionFace  = readLine(5)   !> [block,i,j,k, face, d11..d22]
+            !> [block,i,j,k, face, d11..d22]; a one-layer mesh may also carry [block,i,j, face, d11..d22]
+            read(u,'(A)') lineString
+            nTok = countTokens(lineString)
+            ci_n = 5
+            if (mesh2D .and. nTok == 8) ci_n = 4
+            readLine = 0
+            read(lineString,*,iostat=ios) readLine(1:ci_n+4)
+            if (ios /= 0 .or. nTok < ci_n+4) then
+              write(*,*) ' [IGLOO::read_cdp_bc_file] connection line: ', trim(lineString)
+              error stop 'IGLOO: a 101/201 connection line is not 9 integers (8 on a one-layer mesh)'
             endif
+            cell%connection(1:3) = readLine(1:3)
+            cell%connection(4)   = merge(1, readLine(4), mesh2D)
+            cell%connectionFace  = readLine(ci_n)
             cell%orient = readLine(ci_n+1:ci_n+4)
 
           ! Chimera: the donors were taken in pass 1

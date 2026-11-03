@@ -56,13 +56,13 @@ ATLAS translates these to numeric `bcdef` codes in `bc.txt`. IGLOO does not pars
 
 The `bc.txt` file has one data row per boundary face cell (one copy of the table per family when the phase has several — see [Several families](#several-families)). Column 6 is the integer `bcdef` code; `IO.f90::read_cdp_bc_file` reads it and `obj_bc.f90::bcDef` dispatches on it (code 201 is handled by `obj_particles.f90::updateCell` → `periodicTransport`).
 
-The last column is what the code does to the **gas** ghost ring under `gas-order = 2`, a separate question from what it does to a particle: the dual mesh's boundary row straddles the domain face, so the gas sampled there averages an interior node with a ghost node outside the domain. `obj_block.f90::fillGhostGradient` fills that ring once per sweep — a linear extrapolation `2q₁ − q₂` on every face, then the bc-aware corrections below, then the axis override and the edge/corner cascade; `fillGhostPartners` follows for 101/201.
+The last column is what the code does to the **gas** ghost ring under `gas-order = 2`, a separate question from what it does to a particle: the dual mesh's boundary row straddles the domain face, so the gas sampled there averages an interior node with a ghost node outside the domain. `obj_block.f90::fillGhostGradient` fills that ring once per sweep — a linear extrapolation `2q₁ − q₂` on every face, then the bc-aware corrections below, then the axis override and the edge/corner cascade; `fillGhostPartners` then sets the ghost nodes of connected faces from the connected block's gas (see [Connected faces: the gas ghost ring](#connected-faces-the-gas-ghost-ring)).
 
 | Code | Name | Behavior (particle) | ord2 gas ghost |
 |------|------|----------|----------------|
-| `101` | Conformal connection | Conformal block interface: the particle continues in the partner block (see [Block Connections](#block-connections-code-101)). An extra data line follows with the partner block/i/j(/k)/face and the four orientation integers. | **Partner copy** — the partner block's boundary-adjacent interior state. |
-| `201` | Periodic transport | Translational periodicity: position is shifted by the vector from the exit face center to the partner face center; velocity is unchanged. The partner cell is read from the extra data line. | **Partner copy**, as 101. |
-| `102` | Chimera (overset) face | The block overlaps another one: the particle continues in whichever block contains it (see [Chimera faces](#chimera-faces-code-102)); one found in no block leaves the domain there. The record carries the donor cells of the two ghost layers behind the facelet. | Linear fill. |
+| `101` | Conformal connection | Conformal block interface: the particle continues in the partner block (see [Block Connections](#block-connections-code-101)). An extra data line follows with the partner block/i/j(/k)/face and the four orientation integers. | **Interpolated** — the partner block's gas at the ghost node. |
+| `201` | Periodic transport | Translational periodicity: position is shifted by the vector from the exit face center to the partner face center; velocity is unchanged. The partner cell is read from the extra data line. | **Interpolated**, as 101, at the node's periodic image. |
+| `102` | Chimera (overset) face | The block overlaps another one: the particle continues in whichever block contains it (see [Chimera faces](#chimera-faces-code-102)); one found in no block leaves the domain there. The record carries the donor cells of the two ghost layers behind the facelet. | **Interpolated** — the overlapping block's gas at the ghost node. |
 | `100` | Unresolved connection | ATLAS's code for a connection or chimera facelet that found no partner or donor; header only. The particle leaves the domain there. | Linear fill. |
 | `300` | Symmetry / reflection | Velocity is reflected through the face normal (elastic wall). Grazing impacts ($v_n / \|v\| < 0.02$) slide along the face to prevent micro-bounce skating. | **Mirror** — the interior partner's normal component is reflected into the ghost (`v_g·n = −v_i·n`), the tangential part kept from the linear fill, so the sampled `v_n` at the plane is 0 for any profile. A non-positive extrapolated scalar falls back to zero-gradient. |
 | `200` | Axisymmetric wedge | Position and velocity are rotated by $\pm\Delta\theta$ about the x-axis to fold the particle back into the wedge sector. `face6` (+k) rotates by $-\Delta\theta$; `face5` (-k) by $+\Delta\theta$. $\Delta\theta$ is the wedge angle, computed from the mesh k-layer geometry. | Linear fill; a ghost node flagged `nodeOnAxis` is then overridden by `axisGhost` (scalars copied, velocity reduced to its axis-parallel component). |
@@ -177,13 +177,13 @@ Velocity is unchanged. After the shift the integration continues from the partne
 
 ## Block Connections (code 101)
 
-Conformal connections (`bcdef` 101) are coincident interfaces between adjacent structured blocks. An extra data line in `bc.txt` gives, for each face cell, its partner cell and the orientation of the partner face: `[block, i, j, k, partner_face, d11, d12, d21, d22]` (`[block, i, j, partner_face, …]` on a one-layer mesh).
+Conformal connections (`bcdef` 101) are coincident interfaces between adjacent structured blocks. An extra data line in `bc.txt` gives, for each face cell, its partner cell and the orientation of the partner face: `[block, i, j, k, partner_face, d11, d12, d21, d22]`. On a one-layer (2D) mesh the line carries the same nine integers (`k` = 1, what ATLAS writes) or eight without `k`; IGLOO tells the two apart by the count, and any other count stops the run (`IGLOO: a 101/201 connection line is not 9 integers (8 on a one-layer mesh)`). The same line, and the same reading, belong to a periodic (201) face.
 
-**Setup.** IGLOO lists every 101 face cell with its partner cell and checks the pair: the partner block and cell must exist, and the partner cell must carry a 101 record of its own that names this cell — otherwise the run stops (`IGLOO: a 101 connection names a block outside the mesh`, `... names a cell outside its block`, `... is not mutual: the partner cell does not name this cell`). The partner face is taken as the face of the partner cell whose record names this cell. On a one-layer (2D) mesh a 101 record on face 5 or 6 is refused.
+**Setup.** IGLOO lists every 101 face cell with its partner cell and checks the pair: the partner block and cell must exist, the partner cell must lie on the partner face, and its 101 record on that face must name this cell and this face — otherwise the run stops (`IGLOO: a 101 connection names a block outside the mesh`, `... names a cell outside its block`, `... is not mutual: the partner cell does not name this cell`). On a one-layer (2D) mesh a 101 record on face 5 or 6 is refused.
 
-**Particles.** When a step ends past the face, the cell search (`updateCell` → `findParticle`) looks in the current block first and then in every other block; the first block that contains the point takes the particle, so it continues in the partner block. The containment tests are inclusive, so a conformal interface leaves no gap between the blocks. The index jump of `bcDef` (into the cell the record names) runs only when no block contains the point. With `gas-order = 2` the integration step ends at the block face, where a single block would not end it: the trajectory gains a row at the interface and scatter samples near it can move by a fraction of a step; the deposited fields are additive over the cut.
+**Particles.** When a step ends past the face, the cell search (`updateCell`) looks first in the partner cell the record names, and around it, starting from the point where the step crossed the face (see [Connected faces](#connected-faces-the-particle-search)); only if the partner block does not hold the point does it search the current block and then every other block. The containment tests are inclusive, so a conformal interface leaves no gap between the blocks. The index jump of `bcDef` (into the cell the record names) runs only when no block contains the point. With `gas-order = 2` the integration step ends at the block face, where a single block would not end it: the trajectory gains a row at the interface and scatter samples near it can move by a fraction of a step; the deposited fields are additive over the cut.
 
-**Fields.** The field mollifier smooths across the interface as across an interior face when both faces are normal to the same index direction; an interface whose two faces are normal to different index directions is smoothed with zero flux, and the setup names it with one warning line per face pair (see [Field mollification](../theory/mollification.md#block-interfaces)). With `gas-order = 2` each block keeps its own dual mesh: at a 101 face the boundary dual cells of each block are clipped to the half inside it, the ghost nodes of the face take the partner's boundary-adjacent cell (the partner copy above), and a deposit near the face is reduced to the geometry cells of the block that received it.
+**Fields.** The field mollifier smooths across the interface as across an interior face when both faces are normal to the same index direction; an interface whose two faces are normal to different index directions is smoothed with zero flux, and the setup names it with one warning line per face pair (see [Field mollification](../theory/mollification.md#block-interfaces)). With `gas-order = 2` each block keeps its own dual mesh: at a 101 face the boundary dual cells of each block are clipped to the half inside it, the ghost nodes of the face hold the partner block's gas interpolated at the node (see [Connected faces: the gas ghost ring](#connected-faces-the-gas-ghost-ring)), and a deposit near the face is reduced to the geometry cells of the block that received it.
 
 ---
 
@@ -208,9 +208,83 @@ then prints, when the file holds any chimera, unresolved (100) or header-only 10
 
 counted per facelet (not per family copy).
 
-A particle that leaves a block through a chimera facelet continues in whichever block contains its
-position (the cell search looks in the current block, then in every other block); one that no block
-contains leaves the domain there. Each particle deposits into the block it is tracked in, so the cells
+A particle that leaves a block through a chimera facelet is searched for first in the facelet's layer-1
+donor cells, by decreasing weight, then in every block (see [Connected faces](#connected-faces-the-particle-search));
+one that no block contains leaves the domain there, a rim exit. Each particle deposits into the block it is tracked in, so the cells
 of the other block in the overlap receive none of its deposits; the field mollifier gives a chimera face
-zero flux, and under `gas-order = 2` its ghost ring is the linear fill.
+zero flux, and under `gas-order = 2` its ghost nodes hold the overlapping block's gas interpolated at the
+node (see [Connected faces: the gas ghost ring](#connected-faces-the-gas-ghost-ring)).
 
+---
+
+## Connected faces: the particle search
+
+A face cell is connected when its record names where a particle continues: a 101 (or a 103 with a
+partner cell) names the partner cell, a 201 the partner cell across the periodic pair, a 102 its layer-1
+donor cells. When a step ends outside its cell through a connected face cell, `updateCell` searches the
+connected cell first — the partner cell, the partner cell after the periodic transport, or each donor by
+decreasing weight — together with its ±1 neighbourhood and a walk from the point where the step crossed
+the face. Only when that search fails does it fall back to the cell search of the current block and of
+every other block, and only when no block contains the point does the face's own rule apply (the 101
+index jump, the 201 transport, an exit).
+
+A particle that leaves the domain through a 100 facelet (ATLAS's unresolved connection: a connection or
+chimera facelet that found no partner) or through a 102 facelet whose donors and blocks do not hold it is
+a *rim exit*; its exit record is an ordinary one (position, `Af` of the facelet). When the bc file holds
+any 101, 103, 201, 102 or 100 facelet, `solve` prints once per sweep, summed over the MPI ranks:
+
+```
+ [IGLOO] block changes: N via the connected cell, M via the block sweep, K rim exits; stencil refreshed on a block change at a boundary entry: n
+```
+
+N counts the particles placed by the connected-cell search, M the block changes the cell search of the
+blocks made instead (none on a conformal or overlapping interface whose records are complete), K the rim
+exits, and n the gas stencils re-sought under `gas-order = 2` because the cell search at the entry of a
+boundary dual cell found the particle in another block.
+
+---
+
+## Connected faces: the gas ghost ring
+
+Under `gas-order = 2` a particle near a connected face samples a dual cell whose outer nodes are ghost
+nodes of the face. Those nodes take the connected block's gas, interpolated where they lie.
+
+**Setup.** For every ghost node of a connected face — the nodes of its plane, edges and corners included
+(a node shared by two connected faces belongs to the first, in face order; nodes on the symmetry axis are
+left to the axis rule) — IGLOO locates the node in the dual mesh of the connected block: around the
+partner cell of a 101 (or a 103 with a partner cell), at the node's periodic image around the partner
+cell of a 201, around the layer-1 donors of a 102 by decreasing weight, then over the whole dual mesh.
+It keeps the dual cell and the weights of its eight nodes (four on a one-layer mesh): trilinear
+(bilinear) shape functions at the node, from the cell extents on a cell aligned with the axes and by
+Newton iterations to 1e-14 of the cell diagonal otherwise; a node within 1e-12 of the diagonal from a
+node of the connected block takes that node's value outright, so the ghost of a conformal interface
+between equal cells is the partner centre's value, bit for bit. A node no dual cell holds keeps its own
+fill. The setup prints
+
+```
+ [IGLOO] ghost nodes at connected faces: N interpolated, M not covered
+```
+
+and, for a 102 node located in a dual cell none of whose nodes is a listed donor or next to one (the
+value is interpolated all the same),
+
+```
+ [IGLOO] chimera ghost nodes located away from their ATLAS donors: K
+```
+
+**Per sweep.** After every block has filled its own ring (linear fill, wall mirrors, axis, edge and
+corner cascade), each located ghost node takes the weighted sum of the connected block's node values,
+for density, velocity, temperature, viscosity, conductivity, γ and R. Every value is computed from the
+rings as the blocks' own fills left them before any is written, so no block reads another block's
+overridden ring and the result does not depend on the order of the blocks. Edge and corner nodes that
+also touch a wall (300/301) then take the wall's mirror again. A face whose ring a parent solver provided
+for the sweep keeps it (see [Using IGLOO](using.md#embedding-in-hydra)); on a connected face its edge and
+corner nodes are still interpolated unless their other face is provided too.
+
+**Accuracy.** A field linear in space is reproduced at every ghost node, whatever the cells on either
+side: the node interpolates the connected block's centres and, near its boundary, that block's own
+linear fill, exact on a linear field. On a curved field the ghost is second order, like the fill it
+replaces: a node between two centres of the other block is off by at most $q h^2/4$ for a field
+$q x^2$ ($h$ the spacing there), against $2 q h^2$ for the block's own linear fill; at an interface
+between cells of $h$ and $2h$ the ghost of the fine side reads the coarse block's own fill and is off by
+$1.25\,q h^2$.

@@ -3,10 +3,10 @@
 **Purpose.** The suite's case with more than one mesh block. `read_cdp_bc_file` takes each block's
 records from that block's place in the file (ATLAS writes the tables block-outermost, then one copy
 per family), and a parcel that reaches a block interface continues in the partner block: the cell
-search (`updateCell` → `findParticle`) looks in the current block, then in every other block, and
-block 2 contains the point past the face. `bcDef`'s 101 branch, the index jump into the cell the
-connection line names, runs only when no block contains the point, which this conformal interface
-never produces. This is `two-fam-bc` on the same box split in two: two families in ATLAS order, two
+search (`updateCell`) looks first in the partner cell the connection line names, around it, and finds
+the point past the face there; the search of every block is the fallback. `bcDef`'s 101 branch, the
+index jump into the cell the connection line names, runs only when no block contains the point,
+which this conformal interface never produces. This is `two-fam-bc` on the same box split in two: two families in ATLAS order, two
 blocks, every parcel crossing the interface.
 
 **Fixture** (`make_fixture.py`, output committed; run from this directory, `python3 make_fixture.py`):
@@ -63,6 +63,7 @@ of the field scale. The difference has two parts:
 | T4 | target | `euler1.tec` and `euler2.tec`: ρ_p/n_p of their own material in every cell of both zones, and every cell deposited |
 | X1 | target | every parcel of both materials has rows on both sides of x = 0.075 and exits at x = 0.15 |
 | X2 | target | the one-block sibling (`two-fam-bc`'s `INPUT/`, this `input.ini`, run by `check.py` into `ref-1blk/`): trajectories, exits and scatter of both materials equal as sorted multisets; `euler1`, `euler2` and `source` equal cell by cell (block 2's cell i is the sibling's 30 + i) to 1e-12 of the field scale |
+| K1 | target | the run log's block-change line: `block changes: 50 via the connected cell, 0 via the block sweep, 0 rim exits; stencil refreshed on a block change at a boundary entry: 0` — every parcel's crossing found in the partner cell |
 | C1 | control | A's parcels pass the closed form at d = 11.89 µm; A and B inject from the same 25 stations |
 | C2 | control | 25 exits per material, non-empty `scatter-<mat>.dat` |
 | C3 | control | `source.tec`: the `wdot` slots zero; Fx and E summed over both zones balance the parcels of both materials with each parcel's own ṁ to 1e-6 |
@@ -76,3 +77,7 @@ reach x = 0.15 and the run stops progressing; 0 exits, no output for B, ctest ti
 still running at 900 s by hand). Read per block and per family, every gate passes: the one-block run
 is matched bit for bit (trajectories, exits and scatter as multisets; the three fields cell by
 cell), Σ Fx = −0.2810128, Σ E = −1.545536 over both zones.
+K1 is RED on the cell search without the connected-cell step: no block-change line; with the step skipped
+the line reads `0 via the connected cell, 50 via the block sweep` (the search of every block found the 50
+crossings in block 2).
+
