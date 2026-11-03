@@ -30,7 +30,7 @@ import sys
 H_OFF = -1.7113460e7
 REL_TOL = 1.0e-9
 HERE = os.path.dirname(os.path.abspath(__file__))
-IGLOO = os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO"))
+IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
 SIB = os.path.join(HERE, "..", "tc-box")
 
 

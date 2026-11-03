@@ -26,7 +26,11 @@ bag/stripping branch selection) end-to-end. The pointwise RD formula (both branc
 handoff) is independently pinned by the unit test `test_breakup_rd`.
 """
 import math
+import os
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+from trajtime import cumulative_time  # noqa: E402
 
 TRAJ = "OUTPUT/trajectories-A.dat"
 
@@ -113,13 +117,12 @@ def windowed_rates(rows, max_loss=0.03, nmax=6):
     """(slope_meas, slope_ref): same-window LSQ of measured d vs the RD reference over the
     leading window with <= max_loss loss (matched averaging cancels the finite-window bias)."""
     d0 = rows[0][2]
-    t, dm = [0.0], [d0]
+    dm = [d0]
     for k in range(1, min(nmax + 1, len(rows))):
-        x0, u0, _ = rows[k - 1]; x1, u1, _ = rows[k]
-        t.append(t[-1] + (x1 - x0) / (0.5 * (u0 + u1)))
         dm.append(rows[k][2])
         if (d0 - rows[k][2]) / d0 > max_loss:
             break
+    t = cumulative_time([r[0] for r in rows[:len(dm)]], [r[1] for r in rows[:len(dm)]])
     n = len(t)
     if n < 2:
         return None, None

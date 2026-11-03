@@ -49,9 +49,8 @@ def digest(path):
 
 
 def exe_stat(exe):
-    """Identity of the binary at launch time. bin/IGLOO is ONE link target shared by every build
-    tree and every e2e case, so a mode/inode/size change between launches is the first thing to
-    rule out when this gate misbehaves (BUGS.md O13)."""
+    """Identity of the binary at launch time: a mode/inode/size change between launches means the
+    executable was replaced during the gate (a relink of its own build tree)."""
     try:
         st = os.stat(exe)
         return (f"mode={oct(st.st_mode)} size={st.st_size} ino={st.st_ino} "
@@ -103,8 +102,8 @@ def run(exe, nthreads):
     open(SENTINEL, "w").close()
     env = dict(os.environ, OMP_NUM_THREADS=str(nthreads), KMP_STACKSIZE="100M")
     before = exe_stat(exe)
-    #> Trap the launch itself: an OSError here (O13 shape A was EACCES on execve of the shared
-    #  bin/IGLOO) used to surface as a bare traceback with no evidence attached.
+    #> Trap the launch itself: an OSError here (EACCES on execve of an executable being relinked)
+    #  surfaces with the evidence attached instead of a bare traceback.
     try:
         with open("run_out.txt", "w") as out, open("run_err.txt", "w") as err:
             rc = subprocess.call([exe], stdout=out, stderr=err, env=env)

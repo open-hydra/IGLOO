@@ -9,19 +9,20 @@ Registry of record: [`CMakeLists.txt`](CMakeLists.txt) (every gate) and
 ## Run
 
 ```bash
-./tests/test.sh all              # build (build/verif/, relinking bin/IGLOO and bin/DocGen) + full ctest + aggregated report
+./tests/test.sh all              # build (build/verif/, publishing its IGLOO and DocGen to bin/) + full ctest + aggregated report
 ./tests/test.sh standard         # one category: standard|evaporation|combustion|solidification|breakup|infrastructure|repeatability|mpi
 ./tests/test.sh e2e              # by kind: unit|e2e
 USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # the rank-count gates, built in build/mpi/
 ./tests/test.sh conv-nu          # single test by ctest name
-./tests/test.sh clean            # wipe e2e OUTPUT/run logs + build/verif/
+./tests/test.sh clean            # wipe what the tests write in their directories + build/verif/
 ```
 
 Opt-in via `-DBUILD_VERIFICATION=ON` (default OFF, so the production build is
 byte-for-byte untouched). `test.sh` configures a **separate `build/verif/`**
-(`build/mpi/` with `USE_MPI=ON`) and relinks `bin/IGLOO` and `bin/DocGen` from it
-before every run (same source, RELEASE, in-tree `lib/` dependencies) — the executables the e2e
-cases and `registry-docs` run, shared by every build tree.
+(`build/mpi/` with `USE_MPI=ON`) and builds it before every run (same source, RELEASE, in-tree
+`lib/` dependencies). The e2e cases and `registry-docs` run the tree's own `IGLOO` and `DocGen`
+(`<tree>/bin/`); `bin/IGLOO` and `bin/DocGen` are copies of the last tree built, which `test.sh`
+publishes after its build.
 
 ## Layout
 
@@ -31,7 +32,7 @@ tests/
 ├── CMakeLists.txt                # single ctest registry (unit + e2e, labeled)
 ├── test.sh                       # MOSE-style runner: standard evaporation combustion solidification breakup infrastructure repeatability mpi unit e2e
 ├── vv_style.py                   # the single plot-style source for every SVG
-├── common/                       # shared box fixtures + the MOSE nozzle solfile (db-2daxi, axis-200)
+├── common/                       # shared phase.txt and properties.dat + the MOSE nozzle solfile (db-2daxi, axis-200)
 ├── tools/                        # make_box_case.py make_pe_case.py make_vie_case.py make_vortex_case.py make_wedge_case.py make_uniform_gas.py
 │                                 # make_psat_table.py proptab.py set_kv.py ks_ad.py
 │                                 # aggregate_report.py check_twosweep.py check_refusal.py compare_tec.py check_registry.cmake plot_curves.py mpi_scaling_smoke.sh
@@ -60,7 +61,8 @@ Each unit family carries an `INFO.md` cataloguing its tests; `tools/aggregate_re
 (the aggregator consistency gate) fails the run if a family listed in its `FAMILY_DIRS` lacks one
 for the schema and `REFERENCES.md` for the master bibliography. E2e cases are
 self-contained: `input.ini`, `INPUT/`, independent oracle `check.py`
-(PASS == exit 0; the solver's stderr is NOT the gate).
+(PASS == exit 0, after `tools/check_finite.py` found every number of `OUTPUT/*.tec` and `*.dat`
+finite; the solver's stderr is NOT the gate).
 
 ctest labels: category (`standard`/`evaporation`/`breakup`/`combustion`/`infrastructure`)
 + kind (`unit`/`e2e`) + family tags (`drag`, `heat`, `tab`, …). There is **no `xfail`
@@ -97,11 +99,12 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 187/187 in a serial build (147 e2e + 39 unit, `self_test` and `registry-docs` among the latter, and the
+ctest 190/190 in a serial build (148 e2e + 41 unit, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 21 more `mpi-*` cases, 208 in all (the 21 `mpi-*` pass). The e2e entries are 85 solver cases, two further
-oracles on `khrt-e2e`'s run, the twelve two-sweep gates and the forty-eight setup refusals; the unit entries are 34
-compiled unit tests, the property-table reader on three fixtures, `self_test` and `registry-docs`. Evaporation with
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 21 more `mpi-*` cases, 211 in all (the 21 `mpi-*` pass). The e2e entries are 85 solver cases, two further
+oracles on `khrt-e2e`'s run, the twelve two-sweep gates, the forty-eight setup refusals and `vv-order` (two V&V
+figures independent of the record order; skipped without matplotlib); the unit entries are 34
+compiled unit tests, the property-table reader on three fixtures, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs`. Evaporation with
 ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,
 `evap-breakup-box`, `d2law-brk-dormant`, `rd-evap-frozen`, `tab-evap-frozen`, `etab-evap-frozen`, `khrt-evap-frozen`,
 `khrt-evap-frozen-euler`, `khrt-e2e-euler`, `khrt-shed-noexchange`,

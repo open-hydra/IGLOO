@@ -16,7 +16,7 @@ reference source and oracle: `tests/VERIFICATION_MATRIX.md`.
 ```bash
 cd /path/to/IGLOO/
 
-# Build + run full suite (configures build/verif/, relinks bin/IGLOO and bin/DocGen)
+# Build + run full suite (configures build/verif/, publishes its IGLOO and DocGen to bin/)
 ./tests/test.sh all
 
 # One category
@@ -36,21 +36,23 @@ USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # rank-count gates, built in
 # Single test by ctest name
 ./tests/test.sh conv-nu
 
-# Wipe e2e OUTPUT/, run logs, and build/verif/
+# Wipe what the tests write in their directories (OUTPUT/, run logs, sibling runs) and build/verif/
 ./tests/test.sh clean
 ```
 
 `test.sh` configures a **separate `build/verif/`** (`build/mpi/` when `USE_MPI=ON`) with
-`-DBUILD_VERIFICATION=ON` (default OFF, so the production build is unchanged), and relinks
-`bin/IGLOO` and `bin/DocGen` from it (same source, RELEASE, in-tree `lib/` dependencies) — the executables
-the e2e cases and `registry-docs` run.
+`-DBUILD_VERIFICATION=ON` (default OFF, so the production build is unchanged) and builds it (same
+source, RELEASE, in-tree `lib/` dependencies). Each build tree links its own `IGLOO` and `DocGen` into
+`<tree>/bin/`, and the e2e cases and `registry-docs` of that tree run those files.
 
-!!! warning "`bin/IGLOO` and `bin/DocGen` are link targets shared by every build tree"
-    `test.sh` removes both before it builds, so each run tests the binaries of the tree it built.
-    `cmake --build <tree>` by hand is a no-op when that tree has nothing to recompile, so it can
-    leave another tree's binaries in place and the gates run those instead. After a build by hand:
-    `rm -f bin/IGLOO bin/DocGen && cmake --build build/verif -j 8`, then confirm with
-    `ldd bin/IGLOO bin/DocGen | grep -c libmpi` (0 = serial).
+!!! note "`bin/IGLOO` and `bin/DocGen` are copies of the last tree built"
+    A build that relinks a tree publishes its executables to `bin/` by a copy and a rename, so a
+    running process or a launch never meets a half-written file (`-DIGLOO_PUBLISH_BIN=OFF` turns the
+    copy off); `test.sh` also publishes the tree it tested. A build with nothing to relink publishes
+    nothing, so after builds in several trees `bin/IGLOO` may hold another tree's executable:
+    `./tests/test.sh <test>`, or `rm -f build/verif/bin/IGLOO build/verif/bin/DocGen && cmake --build build/verif -j 8`,
+    republishes the serial tree; confirm with `ldd bin/IGLOO bin/DocGen | grep -c libmpi` (0 = serial).
+    The tests never run `bin/`.
 
 ### Layout
 
@@ -60,7 +62,7 @@ tests/
 ├── CMakeLists.txt                # single ctest registry (unit + e2e, labeled)
 ├── test.sh                       # MOSE-style runner
 ├── vv_style.py                   # the single plot-style source for every SVG
-├── common/                       # shared box fixtures + the MOSE nozzle solfile
+├── common/                       # shared phase.txt and properties.dat + the MOSE nozzle solfile
 ├── tools/                        # make_box_case.py, make_vie_case.py, make_wedge_case.py, plot_curves.py, …
 ├── support/                      # shared Fortran library (NOT a test family)
 │   ├── verif_norms.f90
@@ -105,8 +107,8 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **187 tests** in a serial build (147 e2e + 39 unit, `self_test` and
-`registry-docs` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 21 more
+Current gate: **190 tests** in a serial build (148 e2e + 41 unit, `self_test`,
+`registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 21 more
 `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.
 

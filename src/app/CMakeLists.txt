@@ -13,8 +13,9 @@ if (USE_OPENMP)
   target_link_options(${solver} PRIVATE ${OpenMP_Fortran_FLAGS})
 endif()
 
+# Each build tree links into its own bin/ (its tests run that file) and publishes a copy to <source>/bin/.
 set_target_properties(${solver} PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/
     LINKER_LANGUAGE Fortran)
 
 # Doc-only DocGen: regenerates docs/user/registry.md (standalone builds only —
@@ -26,5 +27,22 @@ if (USE_OPENMP)
   target_link_options(DocGen PRIVATE ${OpenMP_Fortran_FLAGS})
 endif()
 set_target_properties(DocGen PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/
     LINKER_LANGUAGE Fortran)
+
+# Publication: copy to a part file of this tree, then rename over <source>/bin/<exe> (one atomic step: a
+# running process keeps its file, a launch sees the old or the new executable, never a partial one).
+option(IGLOO_PUBLISH_BIN "Publish the executables this tree links to <source>/bin/" ON)
+if (IGLOO_PUBLISH_BIN)
+  get_filename_component(_tree "${CMAKE_BINARY_DIR}" NAME)
+  string(MD5 _tree_id "${CMAKE_BINARY_DIR}")
+  string(SUBSTRING "${_tree_id}" 0 8 _tree_id)
+  foreach(_exe ${solver} DocGen)
+    set(_part "${CMAKE_SOURCE_DIR}/bin/.${_exe}.${_tree}-${_tree_id}.part")
+    add_custom_command(TARGET ${_exe} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/bin"
+      COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${_exe}>" "${_part}"
+      COMMAND ${CMAKE_COMMAND} -E rename "${_part}" "${CMAKE_SOURCE_DIR}/bin/${_exe}"
+      VERBATIM)
+  endforeach()
+endif()

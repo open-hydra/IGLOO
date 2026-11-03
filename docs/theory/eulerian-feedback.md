@@ -168,8 +168,8 @@ its ODE system is sized):
 | Slot offset | Symbol | Meaning |
 | :---: | :--- | :--- |
 | `nOde+1` | $\ell = \int\|\mathbf{v}_p\|$ | Arc-length integrand |
-| `nOde+2..4` | $\mathbf{v}_p\,\ell$ | Momentum integrand (mass-weighted for models 2–5) |
-| `nOde+5` | energy integrand | $T_p\,\ell$ or $h_p\,\ell$ (mass-weighted for models 2–5) |
+| `nOde+2..4` | $\mathbf{v}_p\,\ell$ | Momentum integrand (weighted by the parcel mass $m$ for models 2 and 5 and by the stream mass $m\,\dot n_p$ for model 4; unweighted for models 1, 3 and 6) |
+| `nOde+5` | energy integrand | $T_p\,\ell$ or $h_p\,\ell$ (weighted by the parcel mass $m$ for models 2 and 5 and by the stream mass $m\,\dot n_p$ for model 4; unweighted for models 1, 3 and 6) |
 | `nOde+6` | mass or number moment | $m$ (models 2, 5), $\dot n_p$ (model 3), $m\,\dot n_p$ (model 4) |
 | `nOde+7` | $\dot n_p$ | Number moment (model 4 only) |
 

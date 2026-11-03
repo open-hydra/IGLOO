@@ -3,9 +3,9 @@
 #         FILE: test.sh
 #        USAGE: ./test.sh [all|<category>|<test-name>|clean] [-- <cmake args>]
 #  DESCRIPTION: MOSE-style runner for the IGLOO test suite. Configures + builds
-#               build/verif/ (build/mpi/ when USE_MPI=ON), relinking bin/IGLOO
-#               and bin/DocGen from that tree, then dispatches to ctest by label
-#               or name.
+#               build/verif/ (build/mpi/ when USE_MPI=ON), whose tests run that
+#               tree's own IGLOO, publishes its IGLOO and DocGen to bin/, then
+#               dispatches to ctest by label or name.
 #               Categories: standard evaporation combustion solidification breakup infrastructure unit e2e
 #===============================================================================
 set -euo pipefail
@@ -20,7 +20,7 @@ usage() {
     echo "  <category>     one of: ${CATEGORIES}"
     echo "  mpi            USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF (builds build/mpi, see mpi/INFO.md)"
     echo "  <test-name>    single ctest name (e.g. conv-nu, test_breakup_tab)"
-    echo "  clean          remove e2e OUTPUT/run logs and build/verif/ (build/mpi/ with USE_MPI=ON)"
+    echo "  clean          remove what the tests write in their directories and build/verif/ (build/mpi/ with USE_MPI=ON)"
     exit 1
 }
 
@@ -40,11 +40,13 @@ BUILD_DIR="${IGLOO_ROOT}/build/verif"
 if [[ "${MPI}" == ON ]]; then BUILD_DIR="${IGLOO_ROOT}/build/mpi"; fi
 
 if [[ "${TARGET}" == clean ]]; then
-    for d in "${SCRIPT_DIR}"/*/*/; do
-        [ -f "${d}/check.py" ] || continue
-        rm -rf "${d}/OUTPUT" "${d}/run_out.txt" "${d}/run_err.txt"
+    # every directory a test runs in holds an input.ini; remove what the runs and their checks write there
+    while IFS= read -r d; do
+        rm -rf "${d}/OUTPUT" "${d}"/run_out*.txt "${d}"/run_err*.txt "${d}/rc.txt" "${d}"/run_n*.txt \
+               "${d}"/err_n*.txt "${d}"/tec_n*/ "${d}"/ref-*/ "${d}/diag_threads.txt"
         echo "cleaned ${d#"${SCRIPT_DIR}"/}"
-    done
+    done < <(find "${SCRIPT_DIR}" -name input.ini -not -path '*/OUTPUT/*' -not -path '*/ref-*/*' \
+                  -not -path '*/_run-*/*' -printf '%h\n' | sort -u)
     rm -rf "${BUILD_DIR}"
     exit 0
 fi
@@ -57,9 +59,15 @@ cmake -B "${BUILD_DIR}" -S "${IGLOO_ROOT}" \
     -DCMAKE_BUILD_TYPE=RELEASE \
     "${EXTRA_CMAKE_ARGS[@]}"
 
-# bin/IGLOO and bin/DocGen are link targets of every build tree: relink them from this one.
-rm -f "${IGLOO_ROOT}/bin/IGLOO" "${IGLOO_ROOT}/bin/DocGen"
 cmake --build "${BUILD_DIR}" -j
+
+# bin/ holds the executables of the tree tested last: copy, then rename (a launch never sees a partial file).
+mkdir -p "${IGLOO_ROOT}/bin"
+for exe in IGLOO DocGen; do
+    part="${IGLOO_ROOT}/bin/.${exe}.test-sh.$$.part"
+    cp -f "${BUILD_DIR}/bin/${exe}" "${part}"
+    mv -f "${part}" "${IGLOO_ROOT}/bin/${exe}"
+done
 
 if [[ "${TARGET}" == all ]]; then
     ctest --test-dir "${BUILD_DIR}" --output-on-failure

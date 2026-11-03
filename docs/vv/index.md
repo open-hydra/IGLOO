@@ -204,7 +204,7 @@ solver could only emulate with a no-drag production flag.  See
 ## Running the suite
 
 ```bash
-# Full suite: builds build/verif/ (and bin/IGLOO for the e2e cases), runs ctest
+# Full suite: builds build/verif/ (its IGLOO runs the e2e cases), runs ctest
 ./tests/test.sh all
 
 # By kind or category

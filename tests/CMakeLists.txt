@@ -15,7 +15,7 @@
 #   mpi/                registered only under USE_MPI: 6 rank-count cases + 2 consistency + 1 determinism
 #                       + 12 two-sweep cases
 #
-# Run everything via ../test.sh (builds bin/IGLOO too — e2e cases use it).
+# Run everything via ../test.sh (it builds this tree's IGLOO, which every e2e case runs, and publishes it to bin/).
 
 # ---------- support library --------------------------------------------------
 # verif_driver hooks production: it USEs Lib_RHS / IGLOO_variables / IGLOO_particles
@@ -55,9 +55,10 @@ function(igloo_unit_test name srcdir labels)
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 endfunction()
 
-# e2e case: run the freshly built bin/IGLOO in the case dir, then its oracle.
+# e2e case: run this build tree's IGLOO in the case dir, check every output number is finite, then its oracle
+# (IGLOO_EXE names the executable for sibling runs).
 # Ordinary solver exit codes are deliberately NOT gated (benign ifort stderr warnings);
-# PASS == check.py exit 0.
+# PASS == check_finite.py and check.py exit 0.
 # EXCEPT signals (rc >= 128): 2026-08-03 a SIGSEGV in the KHRT child-creation path still
 # reported PASS, because check.py happily read the PARTIAL trajectory written before the
 # crash. A crashed solver must never be green, so death-by-signal now fails the case
@@ -65,11 +66,11 @@ endfunction()
 # tolerance that the comment above is about.
 function(igloo_e2e_case name casedir labels)
     add_test(NAME ${name}
-        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${CMAKE_SOURCE_DIR}/bin/IGLOO 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ge 128 ]; then echo \"[FAIL] solver died on signal (exit $rc)\"; exit 1; fi; python3 -B check.py"
+        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; $<TARGET_FILE:IGLOO> 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ge 128 ]; then echo \"[FAIL] solver died on signal (exit $rc)\"; exit 1; fi; python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_finite.py || exit 1; python3 -B check.py"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
     set_tests_properties(${name} PROPERTIES
         LABELS "${labels}"
-        ENVIRONMENT "OMP_NUM_THREADS=5;KMP_STACKSIZE=100M"
+        ENVIRONMENT "OMP_NUM_THREADS=5;KMP_STACKSIZE=100M;IGLOO_EXE=$<TARGET_FILE:IGLOO>"
         TIMEOUT 300)
 endfunction()
 
@@ -88,11 +89,11 @@ endfunction()
 #    all and lets the two run concurrently under `ctest -j`.
 function(igloo_e2e_case_mpi name casedir nranks nthreads labels)
     add_test(NAME ${name}
-        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${nranks} ${CMAKE_SOURCE_DIR}/bin/IGLOO 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ne 0 ]; then echo \"[FAIL] mpiexec exit $rc on ${nranks} ranks\"; tail -20 run_out.txt; exit 1; fi; grep -q \"MPI ranks = ${nranks}\" run_out.txt || { echo \"[FAIL] solver did not report ${nranks} ranks -- is bin/IGLOO an MPI build?\"; exit 1; }; python3 -B check.py"
+        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${nranks} $<TARGET_FILE:IGLOO> 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ne 0 ]; then echo \"[FAIL] mpiexec exit $rc on ${nranks} ranks\"; tail -20 run_out.txt; exit 1; fi; grep -q \"MPI ranks = ${nranks}\" run_out.txt || { echo \"[FAIL] solver did not report ${nranks} ranks -- is this tree's IGLOO an MPI build?\"; exit 1; }; python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_finite.py || exit 1; python3 -B check.py"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
     set_tests_properties(${name} PROPERTIES
         LABELS "${labels}"
-        ENVIRONMENT "OMP_NUM_THREADS=${nthreads};KMP_STACKSIZE=100M"
+        ENVIRONMENT "OMP_NUM_THREADS=${nthreads};KMP_STACKSIZE=100M;IGLOO_EXE=$<TARGET_FILE:IGLOO>"
         TIMEOUT 600)
 endfunction()
 
@@ -235,11 +236,11 @@ message(STATUS "error stop exit code (${CMAKE_Fortran_COMPILER_ID}): ${IGLOO_ERR
 
 function(igloo_refusal_case name casedir expected labels)
     add_test(NAME ${name}
-        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${CMAKE_SOURCE_DIR}/bin/IGLOO 1>run_out.txt 2>run_err.txt; echo $? > rc.txt; python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_refusal.py \"${expected}\""
+        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; $<TARGET_FILE:IGLOO> 1>run_out.txt 2>run_err.txt; echo $? > rc.txt; python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_refusal.py \"${expected}\""
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
     set_tests_properties(${name} PROPERTIES
         LABELS "${labels}"
-        ENVIRONMENT "OMP_NUM_THREADS=1;KMP_STACKSIZE=100M;IGLOO_ERROR_STOP_RC=${IGLOO_ERROR_STOP_RC}"
+        ENVIRONMENT "OMP_NUM_THREADS=1;KMP_STACKSIZE=100M;IGLOO_ERROR_STOP_RC=${IGLOO_ERROR_STOP_RC};IGLOO_EXE=$<TARGET_FILE:IGLOO>"
         TIMEOUT 120)
 endfunction()
 function(igloo_twosweep_case name casedir labels gasfile)
@@ -317,6 +318,19 @@ add_test(NAME registry-docs COMMAND ${CMAKE_COMMAND}
 set_tests_properties(registry-docs PROPERTIES
     LABELS "unit;infrastructure;docs;t9"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# exe-per-tree: every test runs this tree's executables (<source>/bin/ holds a published copy another tree's
+# build can replace mid-run); helper registrations carry IGLOO_EXE; no test script builds the shared path.
+add_test(NAME exe-per-tree COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_exe_per_tree.py
+    ${CMAKE_CURRENT_BINARY_DIR}/CTestTestfile.cmake ${CMAKE_SOURCE_DIR})
+set_tests_properties(exe-per-tree PROPERTIES
+    LABELS "unit;infrastructure;build"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# lint-test-inputs: every test INI separates list values by one blank (FiNeR counts blanks + 1) and is ASCII.
+add_test(NAME lint-test-inputs COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/lint_inputs.py
+    ${CMAKE_CURRENT_SOURCE_DIR})
+set_tests_properties(lint-test-inputs PROPERTIES
+    LABELS "unit;infrastructure;lint"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # DB ("assigned position") injection — regression gate for bug B1 (fixed 2026-07-08):
 igloo_e2e_case(db-injection infrastructure/db-injection "e2e;infrastructure;injection")
 configure_file(infrastructure/ini_pipeline/input.ini ${CMAKE_CURRENT_BINARY_DIR}/input.ini COPYONLY)
@@ -391,7 +405,7 @@ igloo_e2e_case(vortex-cloud-st10   standard/vortex-cloud-st10   "e2e;standard;dr
 # hydra's test/vortex-cloud/compare.py --check. Optional: skipped (exit 77) without HYDRADIR, the driver, ICE's
 # verification scripts or an ICE binary, so neither suite depends on the other's binary.
 add_test(NAME vortex-cloud-3way
-    COMMAND bash -c "d=\"$HYDRADIR/test/vortex-cloud/compare.py\"; if [ -z \"$HYDRADIR\" ] || [ ! -f \"$d\" ]; then echo \"[SKIP] HYDRADIR unset or no $d\"; exit 77; fi; IGLOO_DIR=${CMAKE_SOURCE_DIR} IGLOO_BIN=${CMAKE_SOURCE_DIR}/bin/IGLOO python3 -B \"$d\" --check --work ${CMAKE_CURRENT_BINARY_DIR}/vortex-cloud-3way"
+    COMMAND bash -c "d=\"$HYDRADIR/test/vortex-cloud/compare.py\"; if [ -z \"$HYDRADIR\" ] || [ ! -f \"$d\" ]; then echo \"[SKIP] HYDRADIR unset or no $d\"; exit 77; fi; IGLOO_DIR=${CMAKE_SOURCE_DIR} IGLOO_BIN=$<TARGET_FILE:IGLOO> python3 -B \"$d\" --check --work ${CMAKE_CURRENT_BINARY_DIR}/vortex-cloud-3way"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vortex-cloud-3way PROPERTIES
     LABELS "3way;external"
@@ -524,6 +538,19 @@ igloo_e2e_case(pilch-erdman-e2e breakup/pilch-erdman-e2e "e2e;breakup;val;pe")
 # first-breakup time to sub-percent). Found + gated the A18 fix (event-breakup path was
 # dead; now live: TAB breaks on time, resized drops persist). GREEN.
 igloo_e2e_case(tab-e2e breakup/tab-e2e "e2e;breakup;val;tab")
+# vv-order: the tab-e2e and burn-box figures (verify.py) are the same bytes whatever order an OpenMP run gives the
+# records of each zone of their .dat files; it reads those cases' fresh OUTPUT/, which both start by removing.
+set_tests_properties(tab-e2e PROPERTIES FIXTURES_SETUP vv_order_tab RESOURCE_LOCK tab_e2e_output)
+set_tests_properties(burn-box PROPERTIES FIXTURES_SETUP vv_order_burn RESOURCE_LOCK burn_box_output)
+add_test(NAME vv-order COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/vv_order_check.py
+    ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/vv-order breakup/tab-e2e combustion/burn-box)
+set_tests_properties(vv-order PROPERTIES
+    LABELS "e2e;infrastructure;vv"
+    FIXTURES_REQUIRED "vv_order_tab;vv_order_burn"
+    RESOURCE_LOCK "tab_e2e_output;burn_box_output"
+    SKIP_RETURN_CODE 77
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    TIMEOUT 300)
 # B-VAL-5 (2026-07-22): ETAB vs Tanner 97/98 — shared TAB oscillator (onset + t_bu) plus
 # the deterministic exponential-cascade product size across the bag/stripping branches.
 igloo_e2e_case(etab-e2e breakup/etab-e2e "e2e;breakup;val;etab")
@@ -540,7 +567,7 @@ igloo_e2e_case(khrt-e2e breakup/khrt-e2e "e2e;breakup;val;khrt")
 # The rc guard matches igloo_e2e_case: without it a solver that died on a signal reached
 # check_rt.py, which would then judge whatever partial OUTPUT survived (BUGS.md O13).
 add_test(NAME khrt-e2e-rt
-    COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${CMAKE_SOURCE_DIR}/bin/IGLOO 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ne 0 ]; then echo \"[FAIL] solver exit $rc\"; exit 1; fi; python3 -B check_rt.py"
+    COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; $<TARGET_FILE:IGLOO> 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ne 0 ]; then echo \"[FAIL] solver exit $rc\"; exit 1; fi; python3 -B check_rt.py"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/breakup/khrt-e2e")
 set_tests_properties(khrt-e2e-rt PROPERTIES
     LABELS "e2e;breakup;val;khrt;rt"
@@ -589,7 +616,7 @@ igloo_e2e_case(khrt-varrho breakup/khrt-varrho "e2e;breakup;khrt")
 # unitTraj/unitExit are written from inside it. Established green while the one-shed cap was
 # still on, so a later red result indicts the cap lift rather than a pre-existing defect.
 add_test(NAME khrt-e2e-threads
-    COMMAND python3 -B check_threads.py "${CMAKE_SOURCE_DIR}/bin/IGLOO"
+    COMMAND python3 -B check_threads.py "$<TARGET_FILE:IGLOO>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/breakup/khrt-e2e")
 set_tests_properties(khrt-e2e-threads PROPERTIES
     LABELS "e2e;breakup;val;khrt;omp"
@@ -858,7 +885,7 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
     # mpiexec itself (khrt-e2e-threads precedent), so it is not an igloo_e2e_case_mpi.
     add_test(NAME mpi-consistency
         COMMAND python3 -B check.py "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}"
-                                   "${CMAKE_SOURCE_DIR}/bin/IGLOO"
+                                   "$<TARGET_FILE:IGLOO>"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mpi/consistency")
     set_tests_properties(mpi-consistency PROPERTIES
         LABELS "e2e;mpi;infrastructure;consistency"
@@ -868,7 +895,7 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
     # three .tec fields must agree across the rank count
     add_test(NAME mpi-consistency-two-mat
         COMMAND python3 -B check.py "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}"
-                                   "${CMAKE_SOURCE_DIR}/bin/IGLOO"
+                                   "$<TARGET_FILE:IGLOO>"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mpi/consistency-two-mat")
     set_tests_properties(mpi-consistency-two-mat PROPERTIES
         LABELS "e2e;mpi;infrastructure;consistency"
@@ -879,7 +906,7 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
     # 1672-parcel vortex cloud (every cell fed by every rank); check.py sets one thread per rank itself.
     add_test(NAME mpi-determinism
         COMMAND python3 -B check.py "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}"
-                                   "${CMAKE_SOURCE_DIR}/bin/IGLOO"
+                                   "$<TARGET_FILE:IGLOO>"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mpi/determinism")
     set_tests_properties(mpi-determinism PROPERTIES
         LABELS "e2e;mpi;infrastructure;consistency"
