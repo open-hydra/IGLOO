@@ -691,7 +691,9 @@ a 101 connection), `two-fam-bc-2blk-mollify` (the same with the field mollifier 
 behavioral cases with no reference curve, summarised in the table on the
 [Overview](index.md).  This page is organized around comparison figures;
 a case that pins particle *placement* or a *refusal* rather than a trajectory has
-nothing to plot.
+nothing to plot. The four `psd-*` cases have no figure either: their reference is the prescribed size
+distribution, tested on the injection diameters of 20 000 parcels by the Kolmogorov-Smirnov and
+Anderson-Darling statistics (see `tests/standard/psd-table/INFO.md`).
 
 The routine-level member of this category is the interpolation family
 `test_gas_reconstruction` (E1–E5), documented under

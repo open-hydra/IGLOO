@@ -90,6 +90,7 @@ KV   = 0.1                               # v0 = kV*|u_g| (col 2); --kv override
 KT   = 1.0                               # Tp0 = kT*T_g  (col 5); --kt override
 RP   = 5.945e-6                          # d = 2*rp = 11.89 um (col 6); --rp override
 SIGMAP  = 0.0                            # Dirac (monodisperse) => const tau
+LAW     = "Dirac"                        # col 8: law name or size-distribution file; --law override
 DS_COL9 = 0.0                            # per-cell ds disabled (use global [IGLOO-BC] ds)
 
 
@@ -101,7 +102,7 @@ def inlet_data(kv, kt, rp, alpha=None, krho=KRHO):
     else:                       # explicit angles in radians: alphap=alpha, betap=0
         direc, kvs = f"{alpha:.10E}   0.0", f"{kv:.10E}"
     return (f"   {krho:.5E}   {kvs}   {direc}   {kt:.5E}"
-            f"   {rp:.5E}   {SIGMAP:.5E}   Dirac   {DS_COL9:.5E}\n")
+            f"   {rp:.5E}   {SIGMAP:.5E}   {LAW}   {DS_COL9:.5E}\n")
 
 
 BCDEF_INLET = 401
@@ -245,6 +246,9 @@ def main():
     p.add_argument("--kt", type=float, default=KT)
     p.add_argument("--rp", type=float, default=RP)
     p.add_argument("--alpha", type=float, default=None)
+    p.add_argument("--law", nargs=2, metavar=("SIGMAP", "TOKEN"), default=None,
+                   help="bc.txt columns 7-8: sigmap and the law (Normal, LogNormal, RosinRammler, Dirac) "
+                        "or the path of a size-distribution file (default 0.0 Dirac)")
     p.add_argument("--periodic-y", action="store_true",
                    help="faces 3/4 (y-min/y-max) become a translational periodic pair (201)")
     p.add_argument("--blocks", type=int, choices=(1, 2), default=1,
@@ -259,6 +263,9 @@ def main():
     p.add_argument("--rim", action="store_true", help="block 2 one row shorter in y (with --overlap)")
     p.add_argument("--families", type=int, default=1, help="one face-table copy per family (default 1)")
     a = p.parse_args()
+    if a.law:
+        global SIGMAP, LAW
+        SIGMAP, LAW = float(a.law[0]), a.law[1]
     if min(a.nx, a.ny, a.nz) < 1 or a.nx % a.blocks:
         p.error("--nx/--ny/--nz must be >= 1 and --nx a multiple of --blocks")
     if a.overlap and (a.blocks != 2 or a.overlap >= a.nx // 2 or a.periodic_y):

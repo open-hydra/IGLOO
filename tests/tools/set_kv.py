@@ -2,10 +2,10 @@
 """Rewrite the velocity-scaling (kV, col 2) and optionally the particle radius
 (rp, col 6) on every inflow data line of an IGLOO bc.txt, producing a case-local copy.
 
-IGLOO reads each inflow property line list-directed (IO.f90:282-288: read '(A)'
-then whitespace-tokenise), so token width is irrelevant -- we only need the tokens
-to be valid whitespace-separated reals. An inflow data line is recognised by its
-distribution-law name token (default 'Dirac') plus the two leading reals; the
+IGLOO splits each inflow property line on blanks and tabs (read_cdp_bc_file), so
+token width is irrelevant -- we only need the tokens to be valid whitespace-separated
+reals. An inflow data line is recognised by its two leading reals and its column 8: a
+distribution-law name (default 'Dirac') or a size-distribution file path; the
 preceding header line (b i j k <ci> bcdef) is left untouched.
 
 For a 401 inlet cell, initializePart sets v0 = kV*|u_gas|*dir (obj_particles.f90:189),
@@ -21,17 +21,22 @@ import re
 import sys
 
 # A bc.txt inflow data line: two leading reals, two direction tokens, three reals,
-# a law-name token, then optional ds. We only require: starts with two reals and
-# contains a known law name. Header lines are 6 integers -> no match.
+# the law token (column 8), then optional ds. We require: starts with two reals and
+# column 8 is one of IGLOO's law names (any case) or a path (holds '.' or '/').
+# Header lines are 6 integers and connection lines 9 -> no match.
 _REAL = r"[+-]?\d*\.?\d+(?:[EeDd][+-]?\d+)?"
 _DATA_RE = re.compile(rf"^\s*{_REAL}\s+{_REAL}\s")
-_LAWS = ("Dirac", "Gauss", "RRosin", "Rosin", "LogNormal", "Nukiyama")
+_LAWS = ("dirac", "none", "normal", "lognormal", "rosinrammler")
 
 
 def is_data_line(line):
     if not _DATA_RE.match(line):
         return False
-    return any(law in line for law in _LAWS)
+    toks = line.split()
+    if len(toks) < 8:
+        return False
+    law = toks[7]
+    return law.lower() in _LAWS or "." in law or "/" in law
 
 
 def main():

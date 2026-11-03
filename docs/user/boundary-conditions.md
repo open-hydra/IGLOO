@@ -94,10 +94,46 @@ Per-cell injection properties stored in `bc.txt` columns (after the `bcdef` colu
 | 3 | Flow angle α (in-plane inclination from mesh normal) |
 | 4 | Flow angle β (out-of-plane) |
 | 5 | Initial temperature $T_p$ [K] |
-| 6 | Particle radius $r_p$ [m] |
-| 7 | Diameter distribution standard deviation $\sigma_p$ [m] |
-| 8 | Distribution law code (Dirac=0, Normal=1, LogNormal=2, Rosin–Rammler=3) |
+| 6 | Particle radius $r_p$ [m]: the diameter $2r_p$ of a Dirac, the mean of a Normal or LogNormal, the size parameter $x_0$ of a Rosin–Rammler law; unused by a size-distribution file |
+| 7 | Width $\sigma_p$: the diameter standard deviation [m] of a Normal or LogNormal, the spread $n$ of a Rosin–Rammler law; $\sigma_p \le 0$ turns a law name into a Dirac; unused by a size-distribution file |
+| 8 | Size distribution: a law name — `Dirac`, `Normal`, `LogNormal`, `RosinRammler` (any case) — or the path of a size-distribution file; absent → Dirac |
 | 9 | Per-cell injection spacing override `ds` [m] (0 → use global `[IGLOO-BC] ds`) |
+
+The line is split on blanks and tabs (a `normal,` direction token keeps its comma, which is accepted); a
+line of 512 characters or more and a token of 256 or more are refused. The laws and their CDFs are
+listed under [Injection](../theory/injection.md#stochastic-diameter-sampling); every law is the
+distribution of the injected **mass flow** over the diameter.
+
+### Size-distribution files
+
+A column-8 token that is not a law name and holds a `.` or a `/` names a file. IGLOO looks for it as
+written, relative to the case directory (the working directory of a run), then as `INPUT/` + its file
+name; any other token is refused (`IGLOO: unsupported distribution law`), so a misspelt law name is never
+searched as a file. Keep the table in `INPUT/` and write `distribution = INPUT/<file>` in ATLAS's inlet
+section: ATLAS (run in the case directory) and IGLOO then read the same file.
+
+The file is plain text: blank lines and lines starting with `#`, `!` or `;` are skipped, and every other
+line holds exactly two numbers, the particle **radius** $r_k$ [m] and its **mass fraction** $m_k$ (any
+scale: IGLOO divides by $\sum m_k$). The radii must be positive and increase strictly, the fractions be
+non-negative with a positive sum. The table is a histogram: class $k$ holds its mass uniformly between
+the mid-points to its neighbours, the first and last classes extended by half the adjacent spacing (the
+first edge floored at $r_1/2$), so the cumulative mass fraction is piecewise linear through the class
+edges, and one draw $u$ of the random stream gives the diameter $d = 2r$ with $F(r) = u$. A single data
+row is a Dirac at $2r_1$ and draws nothing. The file replaces columns 6 and 7 of the inlet; when column 6
+holds a radius outside the table, IGLOO prints one notice. Each distinct path is read once.
+
+```
+# particle radius [m]   mass fraction
+2.5e-6    0.05
+4.0e-6    0.10
+1.5e-5    0.35
+3.0e-5    0.10
+```
+
+Refused at setup, each with an `error stop` naming the defect: the file found under neither name, a data
+line that is not two finite numbers, a radius ≤ 0, radii that do not increase, a negative fraction,
+fractions summing to 0, no data rows. A size distribution applies to IGLOO's phase only: ICE reads the
+first six inlet columns and is monodisperse per family.
 
 ### Several families
 

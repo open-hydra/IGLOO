@@ -57,8 +57,23 @@ output written).
 | `refuse-solid-varcp` | the valid line plus an own 10-row `properties.dat` whose `Cp` column varies (the enthalpy its trapezoid sum, so the table itself is valid) | `solidification=on requires a constant-cp material` |
 | `refuse-solid-varrho` | the valid line plus an own 10-row `properties.dat` whose `Density` column varies | `solidification=on requires a constant-density material` |
 | `refuse-wedge-offcentre` | a generated wedge whose k-planes sit at 0 and +1° (`tools/make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`) | `IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)` — refused at mesh import (`allocation.f90`), not at the properties choke point |
+| `refuse-psd-missing` | own `INPUT/bc.txt` (`tools/make_box_case.py --law 0.0 tables/psd.dat`, shared by the six table cases below), no table | `IGLOO: size-distribution file not found` — after trying `tables/psd.dat` and `INPUT/psd.dat` (both printed) |
+| `refuse-psd-line-long` | own `bc.txt`: every inlet payload line padded to 600 characters with blanks between columns 7 and 8 | `IGLOO: bc.txt inlet payload line too long` — a line that fills the 512-character buffer |
+| `refuse-psd-token-long` | own `bc.txt`: column 8 a path of 256 characters | `IGLOO: bc.txt inlet payload token too long` — a token that fills the 256-character buffer |
+| `refuse-psd-law-typo` | own `bc.txt`: column 8 `lognorml` | `IGLOO: unsupported distribution law` — neither a law name nor a path, never searched as a file |
+| `refuse-psd-unsorted` | `INPUT/psd.dat` radii 5, 4, 6 µm | `IGLOO: size-distribution file: the radii must increase` |
+| `refuse-psd-negative` | a mass fraction of −0.3 | `IGLOO: size-distribution file: a mass fraction is negative` |
+| `refuse-psd-three-col` | a data line `5.0e-6 0.3 1.0` | `IGLOO: size-distribution file: a data line must hold exactly two finite numbers` |
+| `refuse-psd-empty` | comment and blank lines only | `IGLOO: size-distribution file holds no data rows` |
+| `refuse-psd-radius-zero` | a first radius of 0 | `IGLOO: size-distribution file: a radius is not positive` |
+| `refuse-psd-mass-zero` | every mass fraction 0 | `IGLOO: size-distribution file: the mass fractions sum to zero` |
 
-All thirty-six exit 128 at setup with nothing injected or integrated. **The five chimera cases are RED** on a
+All forty-six exit 128 at setup with nothing injected or integrated. **The ten size-distribution cases are
+RED** on a reader that splits the inlet line with a list-directed read: a path ends at its slash (`tables`,
+`INPUT`), so nine of them stop at `unsupported distribution law` with exit 1 and no payload, and the
+600-character line is cut to 512 characters and run as a Dirac (exit 0, output written). The six table
+cases are also RED on a loader that resolves the file but refuses every table (`IGLOO: tabulated size
+distribution not implemented`, not their payload). **The five chimera cases are RED** on a
 reader without the 102 record, which stops each of them at the first chimera payload (`bad BC cell line`,
 exit 1, not their payload), and on the reader with its five chimera checks taken out, which runs each of them
 to "Stop condition" with exit 0 and writes its output. **The three `properties.dat` cases were
