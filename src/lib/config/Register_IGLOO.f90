@@ -33,7 +33,7 @@ contains
     call reg%add('IGLOO-General','print-dcell',d_i(3),'1', &
       'Trajectory print frequency in cell crossings','',.false.)
     call reg%add('IGLOO-General','print-dtime',d_r(1),'-1', &
-      'Trajectory print interval [s]; <0 = cell-based printing','',.false.)
+      'Trajectory print interval [s]: a row also at the first segment end at or past each multiple of it, besides the print-dcell rows; <0 = off','',.false.)
     call reg%add('IGLOO-General','time-end',d_r(26),'-1', &
       'Parcel end time [s]: every parcel still in the domain stops there, with a last trajectory row at that time '// &
       'and its state in snapshot-<mat>.dat; <=0 = off (integrate until the parcel leaves the domain)','',.false.)

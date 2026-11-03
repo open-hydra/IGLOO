@@ -5,15 +5,15 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ temp-relax-varcp/ temp-relax-varrho/ body-force/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ no-exchange/ scatter-weight/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ temp-relax-varcp/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ periodic-y/ bc-center-2grp/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ wall-approach/ periodic-2d/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero}}
-#   repeatability/      two-sweep gates (twosweep driver): 12 cases
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
+#   repeatability/      two-sweep gates (twosweep driver): 13 cases
 #   mpi/                registered only under USE_MPI: 6 rank-count cases + 2 consistency + 1 determinism
-#                       + 12 two-sweep cases
+#                       + 13 two-sweep cases
 #
 # Run everything via ../test.sh (it builds this tree's IGLOO, which every e2e case runs, and publishes it to bin/).
 
@@ -39,6 +39,22 @@ if(USE_OPENMP)
 endif()
 
 # ---------- helpers -----------------------------------------------------------
+# Intel compilers: every test executable keeps its arrays static (-auto-scalar, their storage model without OpenMP), so
+# an internal procedure never addresses a static copy of a main-program array (infrastructure/host_assoc).
+function(igloo_test_static_arrays)
+    if(NOT CMAKE_Fortran_COMPILER_ID MATCHES "^Intel")
+        return()
+    endif()
+    get_property(_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(_t IN LISTS _targets)
+        get_target_property(_type ${_t} TYPE)
+        if(_type STREQUAL "EXECUTABLE")
+            target_compile_options(${_t} PRIVATE -auto-scalar)
+        endif()
+    endforeach()
+endfunction()
+cmake_language(DEFER CALL igloo_test_static_arrays)
+
 # unit test: plain exe linked against verif_support, run from the build dir
 function(igloo_unit_test name srcdir labels)
     add_executable(${name} ${srcdir}/${name}.f90)
@@ -184,6 +200,7 @@ igloo_unit_test(test_source_reduction  infrastructure/source_reduction   "unit;i
 # smooths as the uncut grid (3D and 2D cuts, three blocks, 2 x 2 blocks, above the OpenMP threshold),
 # Sum(q V) holds over the blocks, and without an aligned link each block is smoothed on its own.
 igloo_unit_test(test_mollify_blocks    infrastructure/mollify_blocks     "unit;infrastructure;mollify;t1")
+igloo_unit_test(test_host_assoc        infrastructure/host_assoc         "unit;infrastructure;build;t1")
 
 # ---------- two-sweep repeatability harness -----------------------------------
 # Drives one pinned population through solve() TWICE. Every other case in the suite is
@@ -307,6 +324,10 @@ igloo_twosweep_case(repeat-solid-box    repeatability/solid-box
 # repeat-evap-breakup: ODE model 4's droplet mass and number rate are re-seeded at injection every sweep.
 igloo_twosweep_case(repeat-evap-breakup repeatability/evap-breakup
                     "e2e;repeatability;evaporation;breakup" "")
+# repeat-swirl-wedge: the first twin on a wedge (Nk = 1, the sector fold): the setup-time wedge state survives a
+# solve, every DB parcel's azimuthal velocity is restored at injection; plus the gas-refresh cycle.
+igloo_twosweep_case(repeat-swirl-wedge  repeatability/swirl-wedge
+                    "e2e;repeatability;axisym" "INPUT/solfile.tec")
 # docs/user/registry.md is DocGen OUTPUT that is also TRACKED, so it can silently
 # disagree with the registry it documents (it did twice on 2026-07-30). Regenerate
 # into the build tree and diff. Kind 8 (contract meta-test): no physics, no figure.
@@ -348,6 +369,9 @@ igloo_e2e_case(temp-relax-varcp standard/temp-relax-varcp "e2e;standard;heat")
 # temp-relax-varrho: the same with a varying density; the diameter follows d(T) at constant mass.
 igloo_e2e_case(temp-relax-varrho standard/temp-relax-varrho "e2e;standard;heat")
 igloo_e2e_case(body-force  standard/body-force  "e2e;standard;drag")
+# body-force-z: body-force with g along -z and T rising along z: the drift crosses k-faces, the parcel's T relaxes
+# toward the temperature of the k-layer that holds it (a parcel placed in the wrong cell after a crossing is seen).
+igloo_e2e_case(body-force-z standard/body-force-z "e2e;standard;drag")
 igloo_e2e_case(conv-nu     standard/conv-nu     "e2e;standard;heat")
 igloo_e2e_case(vie-plait   standard/vie-plait   "e2e;standard;drag;gas")
 # swirl-wedge: solid-body swirl on an annular axisymmetric wedge (mesh2D + axisym), three DB
@@ -369,6 +393,9 @@ igloo_e2e_case(swirl-wedge-deposit standard/swirl-wedge-deposit "e2e;standard;dr
 # clock) and the eulerian mass per geo cell against the oracle residence projected with the
 # solver's dual-to-geo rule. RED on the pre-fix binary: no witness, first cells +33 % / -37 %.
 igloo_e2e_case(swirl-wedge-spin standard/swirl-wedge-spin "e2e;standard;drag;gas;axisym;euler")
+# swirl-wedge-ord1: swirl-wedge at gas-order 1, the cell's meridian-frame velocity rotated to the parcel's azimuth;
+# oracle: swirl-wedge's ODE with the cell-wise swirl W_c(j), switched at the radial face planes.
+igloo_e2e_case(swirl-wedge-ord1 standard/swirl-wedge-ord1 "e2e;standard;drag;gas;axisym")
 # no-exchange: drag = NoDrag and heat = NoHeat on the shared box, the inlet carrying both slips
 # (1 against 10 m/s, 300 against 600 K). Every trajectory row and every exit keeps the injection
 # u and T to the last printed digit, and the momentum/energy source is exactly 0.0 in every cell.
@@ -379,6 +406,11 @@ igloo_e2e_case(no-exchange standard/no-exchange "e2e;standard;drag;heat")
 # input taken with its half-ULP. RED when a step cut at a cell face adds its weight twice: every parcel
 # 2 to 3 markers above the bound (X about 10, about sixty cut steps per parcel).
 igloo_e2e_case(scatter-weight standard/scatter-weight "e2e;standard;scatter")
+# The output cadence on drag-stokes's case: print-dcell = 3 (rows a subset of the plain run's), print-dtime (the
+# time rule), out-traj/out-scatter off (no file, the exits and source unchanged); each plain run in ref-plain/.
+igloo_e2e_case(out-dcell3 standard/out-dcell3 "e2e;standard;io")
+igloo_e2e_case(out-dtime  standard/out-dtime  "e2e;standard;io")
+igloo_e2e_case(out-off    standard/out-off    "e2e;standard;io")
 # psd-*: the injected diameters follow bc.txt column 8 -- a size-distribution file (psd-table) or a
 # parametric law -- on a 200 x 100 inlet in the cell-centre mode (one parcel per cell, 20 000 parcels of
 # equal mass flow). Kolmogorov-Smirnov and Anderson-Darling at alpha = 1e-3 on each parcel's first
@@ -659,6 +691,9 @@ igloo_e2e_case(wedge-tiny infrastructure/wedge-tiny "e2e;infrastructure;axisym")
 # two-mat: the first nm = 2 case anywhere -- every per-material loop (solve, sourceMass slots, nfam,
 # per-material files, krho fan-out) executes at arity 2 here for the first time.
 igloo_e2e_case(two-mat infrastructure/two-mat "e2e;infrastructure")
+# inlet-402-403: drag-stokes's box with inlet rows coded 402 (absolute speed and temperature) and 403 (speed as a
+# factor on the gas): the first row of each parcel, the exit mass flow gp A and the Stokes relaxation from it.
+igloo_e2e_case(inlet-402-403 infrastructure/inlet-402-403 "e2e;infrastructure;injection")
 # two-fam-bc: two-mat's box with a bc.txt carrying one copy of the inlet table per family (ATLAS's
 # order, copy c = family c), the families differing in krho and radius. Fed copy 1 for both, B
 # injects A's diameter and both carry 0.34/(1 - 0.68) of the gas flow instead of their own share.
@@ -672,6 +707,10 @@ igloo_e2e_case(two-fam-bc-2blk infrastructure/two-fam-bc-2blk "e2e;infrastructur
 # holds the smoothed source and eulerian fields cell by cell to the box run as one block. RED while each
 # block is smoothed with zero flux at the 101 face: 400 of 1500 cells, E 9.1e-4 of the field scale.
 igloo_e2e_case(two-fam-bc-2blk-mollify infrastructure/two-fam-bc-2blk-mollify "e2e;infrastructure;bc;mollify")
+# rot-2blk: the box as two blocks, block 2 rotated 180 degrees about y, its boundary file written by ATLAS BCB
+# (orientation 1 0 0 -1 at the interface); check.py holds it to the box run as one block (rotated cell map). RED
+# with the smoothing halo taken at the own in-plane indices: euler T_p 2.0e-2 of the field scale.
+igloo_e2e_case(rot-2blk infrastructure/rot-2blk "e2e;infrastructure;bc;io")
 # chimera-2blk: drag-stokes's box as two overlapping blocks joined by chimera (102) faces (make_box_case.py
 # --overlap 4 --families 2), each family copy repeating the chimera payload: the file is read (the routing
 # line counts 50 facelets) and every parcel leaves at x = 0.15. RED on a reader without 102: pass 0 stops on
@@ -821,6 +860,30 @@ igloo_refusal_case(refuse-psd-radius-zero  infrastructure/refusals/psd-radius-ze
                    "IGLOO: size-distribution file: a radius is not positive" "e2e;refusal;injection")
 igloo_refusal_case(refuse-psd-mass-zero    infrastructure/refusals/psd-mass-zero
                    "IGLOO: size-distribution file: the mass fractions sum to zero" "e2e;refusal;injection")
+# The phase file's burn-law and breakup checks, the [IGLOO-Properties] vector sizes, a legacy-schema and an
+# empty-payload boundary file, a body acceleration of two components: each its own error stop.
+igloo_refusal_case(refuse-comb-brk         infrastructure/refusals/comb-brk
+                   "combustion=Beckstead with breakup is not supported" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-comb-kburn       infrastructure/refusals/comb-kburn
+                   "combustion=Beckstead requires K-burn > 0" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-comb-nburn       infrastructure/refusals/comb-nburn
+                   "combustion=Beckstead requires 0 < n-burn < 3" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-comb-xeff        infrastructure/refusals/comb-xeff
+                   "combustion=Beckstead requires 0 < X-eff <= 1" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-brk-sigma        infrastructure/refusals/brk-sigma
+                   "Breakup requires sigma" "e2e;refusal;breakup")
+igloo_refusal_case(refuse-brk-mu           infrastructure/refusals/brk-mu
+                   "Breakup requires mu" "e2e;refusal;breakup")
+igloo_refusal_case(refuse-sigma-size       infrastructure/refusals/sigma-size
+                   "sigma: size mismatch with other property vectors" "e2e;refusal;breakup")
+igloo_refusal_case(refuse-sigma-nm         infrastructure/refusals/sigma-nm
+                   "sigma: size /= number of materials" "e2e;refusal;breakup")
+igloo_refusal_case(refuse-bc-legacy        infrastructure/refusals/bc-legacy
+                   "IGLOO: bc.txt line is not six integers with a 3-digit code" "e2e;refusal;infrastructure;bc")
+igloo_refusal_case(refuse-bc-empty-payload infrastructure/refusals/bc-empty-payload
+                   "IGLOO: bc.txt inlet payload line is empty" "e2e;refusal;infrastructure;bc")
+igloo_refusal_case(refuse-body-accel       infrastructure/refusals/body-accel
+                   "body-accel: expected 3 values (gx gy gz)" "e2e;refusal;standard")
 # drag-stokes-dopri5: ode-solver = H-dopri5 on drag-stokes's own oracle -- the only exercise of the
 # explicit solver. RED at OSlo fb8255d (ledger O25: dopri5.f:512 called the eleven-argument SOLOUT,
 # IGLOO's interrupt never reached DOPRI5, every parcel lost at injection with exit 0); green since the
@@ -833,6 +896,12 @@ igloo_e2e_case(periodic-y infrastructure/periodic-y "e2e;infrastructure")
 # face is the fifth integer). RED on a reader taking four index integers there: the partner's k read as its face,
 # 18 of 25 parcels cycling to the outer iteration cap, the run not ending in 300 s.
 igloo_e2e_case(periodic-2d infrastructure/periodic-2d "e2e;infrastructure;bc")
+# periodic-2d-ord2: periodic-2d at gas-order 2 with a temperature wave across the 201 pair: T follows the periodic
+# extension of the cell-centre field (the 201 ghosts carry the partner side's gas). RED on the ring's linear fill.
+igloo_e2e_case(periodic-2d-ord2 infrastructure/periodic-2d-ord2 "e2e;infrastructure;bc;gas")
+# conn-103: drag-stokes's box with the outlet face coded 103, header only (no partner cell): the parcels leave as
+# through a 400 face (check.py runs the 400 case beside it into ref-400/) and the run reports its block changes.
+igloo_e2e_case(conn-103 infrastructure/conn-103 "e2e;infrastructure;bc")
 # A24 (2026-08-07): first coverage for pin_particles_bc_center. Every other case sets
 # `ds` (20) or injects an assigned/DB stream (3), and every other phase.txt declares one
 # group, so this routine ran in no test at all -- long enough to accumulate two
@@ -841,6 +910,12 @@ igloo_e2e_case(periodic-2d infrastructure/periodic-2d "e2e;infrastructure;bc")
 # neither trigger alone exposes both halves. INPUT/ symlinks standard/drag-stokes'.
 # Verified RED at d857aba^ (group 2: 13 particles, 12 of them ID 0) and GREEN at d857aba.
 igloo_e2e_case(bc-center-2grp infrastructure/bc-center-2grp "e2e;infrastructure;pinning")
+# Injection placement on drag-stokes's box: several parcels per cell at ds = 0.27 cm with a 402 row (inj-pack), a
+# cell's own spacing in bc.txt column 9 (inj-dscell), the degeneracy floor ds-degen on graded rows (inj-dsdegen):
+# the inlet plane, the spacing, the mass flow per cell, the populations.
+igloo_e2e_case(inj-pack    infrastructure/inj-pack    "e2e;infrastructure;injection")
+igloo_e2e_case(inj-dscell  infrastructure/inj-dscell  "e2e;infrastructure;injection")
+igloo_e2e_case(inj-dsdegen infrastructure/inj-dsdegen "e2e;infrastructure;injection")
 # O32 / O19 (2): an `=` inside an in-section `;` comment line must be inert. FiNeR before
 # 18fa207 parsed such a line as an option and DROPPED every option after it in the same
 # section, at exit 0 -- so the gate is drag-stokes's INI plus one comment line, and the
@@ -865,6 +940,9 @@ igloo_e2e_case(solver-fail-consumed infrastructure/solver-fail-consumed "e2e;inf
 # solver-fail-consumed-m4: the same failure exit under model 4 (breakup on, rate zero): the remnant must
 # reach the gas as for model 2. RED while model 4 is not a consumption model on that exit.
 igloo_e2e_case(solver-fail-consumed-m4 infrastructure/solver-fail-consumed-m4 "e2e;infrastructure;m4")
+# stuck-cell: parcels at rest in a gas at rest (402 inlet, |v| = 0): the residency guard ends each one once, at its
+# injection point, before the zero-progress guard or the outer cap.
+igloo_e2e_case(stuck-cell infrastructure/stuck-cell "e2e;infrastructure;guard")
 
 # ---------- mpi (registered only in a USE_MPI build) ----------------------------
 # See mpi/INFO.md. Each dir symlinks its parent case's INPUT/, input.ini and check.py, so the fixture
@@ -932,7 +1010,7 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
             TIMEOUT 900)
     endfunction()
     # every repeatability case at 2 ranks x 2 threads (children, RNG, evaporation, ord2 accumulator shape,
-    # two materials, the explicit solver, the gas-refresh cycle on drag-stokes and vie-plait)
+    # two materials, the explicit solver, the wedge, the gas-refresh cycle on drag-stokes, vie-plait and swirl-wedge)
     igloo_twosweep_case_mpi(mpi-repeat-drag-stokes        mpi/repeat-drag-stokes        2 2 "e2e;mpi;repeatability" "INPUT/solfile.tec")
     igloo_twosweep_case_mpi(mpi-repeat-drag-stokes-dopri5 mpi/repeat-drag-stokes-dopri5 2 2 "e2e;mpi;repeatability" "")
     igloo_twosweep_case_mpi(mpi-repeat-db-injection       mpi/repeat-db-injection       2 2 "e2e;mpi;repeatability" "")
@@ -945,6 +1023,7 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
     igloo_twosweep_case_mpi(mpi-repeat-tab-dopri5         mpi/repeat-tab-dopri5         2 2 "e2e;mpi;repeatability" "")
     igloo_twosweep_case_mpi(mpi-repeat-solid-box          mpi/repeat-solid-box          2 2 "e2e;mpi;repeatability" "")
     igloo_twosweep_case_mpi(mpi-repeat-evap-breakup       mpi/repeat-evap-breakup       2 2 "e2e;mpi;repeatability" "")
+    igloo_twosweep_case_mpi(mpi-repeat-swirl-wedge        mpi/repeat-swirl-wedge        2 2 "e2e;mpi;repeatability" "INPUT/solfile.tec")
 endif()
 
 # A7 resolved 2026-07-15 as source-faithful (Shimada2006 eq.45 quoting NASA-SP-8039
