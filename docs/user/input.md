@@ -156,6 +156,8 @@ Selects physical model closures.
 | `evaporation` | string | absent | Evaporation model (`d2-law`, `CEM`, `CEM-B`, `ASM`, `TC`); when present, enables phase change |
 | `interface` | string | `VLE` | Surface state: `VLE` equilibrium or `LK` Langmuir–Knudsen non-equilibrium |
 | `blowing` | string | `none` | Stefan-blowing reduction of the convective heat: `none` or `LK` |
+| `liquid-conduction` | string | `ITC` | Heat conduction inside an evaporating droplet: `ITC` (a uniform temperature) or `P2T` (a parabolic profile; the material line carries `k-liq` and, on a material that does not break, `mu-liq`); see [Evaporation](../theory/evaporation.md#heat-conduction-inside-the-droplet) |
+| `boiling` | string | `clamp` | An evaporating droplet at or above its boiling point at the gas pressure: `clamp` (the gas-side model with its surface fraction capped) or `ZGR` (the Zuo–Gomes–Rutland boiling branch); see [Evaporation](../theory/evaporation.md#boiling-of-a-superheated-droplet) |
 | `breakup` | string | absent | Breakup model (`Pilch-Erdman`, `Reitz-Diawakar`, `Reitz-KHRT`, `TAB`, `ETAB`); when present, enables secondary breakup. The default of every material: a material's `breakup=<model>` token on its phase-file line overrides it |
 
 Each breaking material reads the constants of its own model: its `<tag>-<key>` token on the phase-file line, else
@@ -171,7 +173,7 @@ each take their own `Comega`, `Cmu` and `WeCrit` tokens:
 | `ETAB` | `ETAB-k1`, `ETAB-k2`, `ETAB-WeCrit`, `ETAB-WeTrans`, `ETAB-Comega`, `ETAB-Cmu` |
 
 A token of a model the material does not run is accepted and unused; a material that carries a constant token
-logs its resolved set at setup. Unknown model tokens, and the reserved `evaporation = LEB`, are refused at setup.
+logs its resolved set at setup. Unknown model tokens are refused at setup.
 
 ### `[IGLOO-Properties]`
 

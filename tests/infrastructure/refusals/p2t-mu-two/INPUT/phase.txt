@@ -1,0 +1,2 @@
+condensed-dispersed phase
+A 1 k-liq=0.6 mu-liq=1.0e-3

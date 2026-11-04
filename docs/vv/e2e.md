@@ -201,6 +201,26 @@ stale density drifts by
 12.75 % (TAB, model 1) or moves the stream mass at every event ($\lvert\dot w\rvert$ 1.2e-9 of the flow; exit
 mass flow +3.68e-4).
 
+### temp-relax-p2t
+
+Verifies the parabolic temperature profile inside the droplet (`liquid-conduction = P2T`):
+`temp-relax`'s drop under `evaporation = d2-law` with a saturated far field (`Yinf = 1`, no mass
+transfer) and the liquid conductivity equal to the gas's, $k_l = k_g$.  At $\mathrm{Re} = 0$,
+$\mathrm{Nu} = 2$ and $\chi = 1$ the surface temperature is $T_s = (5\bar T + \zeta T_g)/(5 + \zeta)$
+with $\zeta = k_g/k_l = 1$, and the mean temperature relaxes in closed form over $1.2\,\tau$, $\tau$ the
+uniform-temperature drop's ([Heat conduction inside the droplet](../theory/evaporation.md#heat-conduction-inside-the-droplet)).
+`check.py` reads the trajectory by its header names.
+
+| Witness | Requirement |
+|---------|-------------|
+| Every row | $T(x)$ on the closed form with $1.2\,\tau$, within `temp-relax`'s F12.6 budget |
+| The `T<sub>s` column, every row | $(5T + T_g)/6$ within 1e-6 K (the two F12.6 prints and the solve's $4\varepsilon\,T_s$) |
+| Every row | $m = m_0$ within the E13.6 half-ULP; $u = u_g$, $v = w = 0$, $d = d_0$ |
+
+**Result:** 25/25 parcels, 1525 rows; $T$ worst at 0.016 of its tolerance, $T_s$ worst 8.3e-7 K,
+$\lvert m - m_0\rvert \le$ 2.3e-18 kg.  The gas-side terms taken at the mean temperature put $T$
+20.08 K off; the column written as the mean is off by 0.028 K to 50 K on every row.
+
 ### body-force
 
 Verifies the transverse body-force acceleration with exact linear Stokes drag
@@ -386,6 +406,58 @@ stalled at a phase boundary.
 **Result:** 25/25 parcels in all three regimes; exit temperature within 1.2e-4 K of the
 closed form (2611.7044 K); energy balance and plateau heat within the $\dot m$ print
 floor (3e-7).
+
+### boiling-zgr-flash
+
+The boiling branch (`boiling = ZGR`, [Boiling of a superheated droplet](../theory/evaporation.md#boiling-of-a-superheated-droplet))
+in its adiabatic limit.  Water drops ($d_0$ = 50 µm, $\rho$ 958, $c$ 4186, $L_v$ 2.26e6 J/kg) enter the
+600 K box gas at its velocity ($\mathrm{Re} = 0$, $\mathrm{Nu} = 2$) 40 K superheated, with
+`evaporation = CEM` and the boiling temperature at the gas pressure set to the gas temperature
+($A = 1.8\cdot10^{-11}$): the branch draws no heat from the gas, the superheat flashes the liquid
+through $\alpha_s$, and the vapour leaves at $T_B$, so $m\,(L_v - c\,(T - T_B))$ stays constant
+whatever $\alpha_s$.  The rate has no closed form: the second reference is the branch's equations
+integrated from the inputs alone, by scipy's LSODA at rtol 1e-12, independent of the Fortran.
+
+| Witness | Requirement |
+|---------|-------------|
+| Every row | $m/m_0 = (L_v - c\,(T_0 - T_B))/(L_v - c\,(T - T_B))$, within the E13.6 print of $m$ and the F12.6 print of $T$ |
+| Every row | $T(x)$ against the integrated branch, within the $T$ and $x$ prints + 1e-6 K |
+| Every parcel | leaves at the outlet; no non-finite state, no solver failure |
+
+**Result:** 25/25 parcels, 1525 rows; the identity worst at 0.967 of its tolerance, $T(x)$ at
+0.122.  The regime test bypassed (the clamp) leaves the drop at 468.07 K at the outlet against
+604.58 K ($1.5\cdot10^{7}$ times the $T$ tolerance); the vapour valued at the mean temperature (the
+carry dropped) misses the identity by $3.3\cdot10^{3}$ times its tolerance; the exponent 2.33 of
+$\alpha_s$ typed 2.3 moves $T(x)$ by $1.3\cdot10^{4}$ times.
+
+### boiling-zgr-hot
+
+`boiling-zgr-flash` with the drops at 490 K and the boiling temperature at the gas pressure 450 K,
+150 K below the gas ($A = 0.0667$): the flash and the boiling fed by the heat the gas conducts
+through the blown film, the film conductivity at the 1/3-rule film temperature.  $T(x)$ and $m(x)$
+on every row against the branch integrated from the inputs (scipy, as above), within the prints +
+1e-6 K and 1e-8 of $m$; no row below $T_B$.
+
+**Result:** 25/25 parcels; $T$ worst at 0.627 of its tolerance, $m$ at 0.598.  At the outlet the drop
+has shed 35.16 K and kept $m/m_0 = 0.829$, against 0.934 for the flash alone.  The step of
+$\alpha_s$ at 5 K of superheat leaves the integrated temperature 5.2e-6 K under the reference after
+the drop crosses it, inside the row tolerance.  The regime test bypassed puts $T$ $8.9\cdot10^{6}$
+times its tolerance off, the carry dropped $4.2\cdot10^{4}$ times, the gas conductivity in place of
+the film's $4.5\cdot10^{3}$ times, the blowing of the film dropped ($G = B\ln(1 + A)$) $9.0\cdot10^{3}$
+times.
+
+### boiling-zgr-switch
+
+`boiling-zgr-flash` with the gas at 1 m/s and $d_0$ = 20 µm: the drop flashes down to $T_B$
+($x$ = 0.0612 m, $m/m_0 = 0.926$), evaporates under CEM below it, cools to its wet bulb (463.8 K) and
+is consumed at $x$ = 0.0862 m.  The reference integrates the branch to $T_B$ and CEM from there to
+$m$ = 1e-15 kg (scipy, an event at $T_B$).  Witnesses: rows on both sides of $T_B$, every parcel
+consumed within 2.5e-4 m of the reference's burnout, no non-finite state or solver failure.  The
+absolute ODE tolerance is 1e-22, below the mass of the last rows.
+
+**Result:** 25/25 parcels; $T$ worst at 0.310 of its tolerance, $m$ at 0.967; the burnouts 2e-6 m
+from the reference's.  The regime test bypassed consumes every drop by $x$ = 0.025 m; the 0.5 K floor
+of the superheat dropped leaves the drop above $T_B$ to the outlet.
 
 ---
 

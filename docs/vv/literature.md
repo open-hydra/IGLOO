@@ -189,6 +189,25 @@ their Appendix and their Fig. 4 are mutually inconsistent.
   {% include "vv/images/unit-evaporation-mhb98-decane.svg" ignore missing %}
 </figure>
 
+### Parabolic temperature profile — P2T (`tests/evaporation/liquid-p2t`)
+
+`test_liquid_p2t` calls the production right-hand sides of models 2 and 4 with
+`liquid-conduction = P2T` at fixed states: F(7) and the surface temperature against the closed form
+at $\mathrm{Re} = 0$ (`[DS03]`), the uniform-temperature limit at $k_l \to \infty$, $\chi(\mathrm{Pe}_L)$
+against `[AS89]` eq. 39, the surface equation and the carry of the vapour leaving at $T_s$ under CEM
+at $\mathrm{Re} = 20$ (both state variables), model 4 and an event breakup model with the breakup
+viscosity, the conduction-fed flash in the boiling branch, radiation inside the surface balance, and
+a 673-state robustness grid over the gas-side models (every slope finite).
+
+### Boiling branch — ZGR (`tests/evaporation/boiling-zgr`)
+
+`test_boiling_zgr` calls `zgrBoiling`, `alphaBoil`, `boilingTemperatureCC`, `inverseTableValue` and
+the two right-hand sides with `boiling = ZGR` (`[ZGR00]`, `[OFLEB]`): the heat-fed rate against the
+root of its defining equation, the limits $A \le 0$ and $A = 0$, the three $\alpha_s$ laws and the
+0.5 K floor, the adiabatic-flash identity $\mathrm{d}m/\mathrm{d}\bar T = m\,c/(L_v - c\,\Delta T)$
+through models 2 and 4, $T_B(p)$ from Clausius–Clapeyron and from a `Psat` table, and the regime
+switch at $\bar T = T_B$.
+
 ---
 
 ## Breakup — family D (`tests/breakup`)

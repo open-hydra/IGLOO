@@ -8,12 +8,14 @@ module IGLOO_Lib_Evaporation
     public :: assign_blowing, blowingFactor
     public :: assign_combustion, assign_solidification
     public :: evaporation
+    public :: chiETC
+    public :: boilingTemperatureCC, alphaBoil, zgrBoiling
 
     !> Evaporation parameter array: contiguous layout (order mirrored by Lib_RHS ind_Mv..)
     integer(I4), parameter, public :: nep = 10
     integer(I4), parameter, public :: iMv=1, iLv=2, icpv=3, iLe=4
     integer(I4), parameter, public :: iYinf=5, iLvMvOverRu=6, iinvTboil=7
-    !> alphaE consumed by the Langmuir-Knudsen interface; liquid k / mu reserved for P2T.
+    !> alphaE consumed by the Langmuir-Knudsen interface; the liquid conductivity and viscosity by P2T.
     integer(I4), parameter, public :: ialphaE=8, ikLiq=9, imuLiq=10
 
     real(R8), parameter, public :: Ru   = 8314.46_R8  ! universal gas constant [J/(kmol·K)]
@@ -42,9 +44,6 @@ contains
             evapSelect = 4
         case('TC')
             evapSelect = 5
-        case('LEB')
-            write(*,*) "[ERROR] LEB evaporation model is not implemented"
-            error stop 'IGLOO: evaporation=LEB is not implemented'
         case default
             write(*,*)
             write(*,*)
@@ -63,7 +62,7 @@ contains
 
     !> Composable phase-change axes: word -> selector mappers (0 = default behavior).
 
-    !> Liquid-side conduction: 0 ITC (infinite conductivity), 1 P2T parabolic (not implemented).
+    !> Liquid-side conduction: 0 ITC (infinite conductivity), 1 P2T (parabolic temperature profile).
     subroutine assign_liquid(word, liqSelect)
         implicit none
         character(len=*), intent(in)  :: word
@@ -126,7 +125,7 @@ contains
         f2 = b/(exp(b)-1._R8)
     end function blowingFactor
 
-    !> Boiling: 0 Xs=1 clamp, 1 Zuo-Gomes-Rutland superheat branch (not implemented).
+    !> Boiling: 0 Xs=1 clamp, 1 Zuo-Gomes-Rutland branch above the boiling temperature at the local pressure.
     subroutine assign_boiling(word, boilSelect)
         implicit none
         character(len=*), intent(in)  :: word
@@ -176,7 +175,7 @@ contains
     !  model, optional LK interface.
     pure subroutine evaporation(rhog, Tg, gamma, Rg, mug, kg, &
                                  Tp, dp, Re, cpFactor, evapSelect, intfSelect, ep, &
-                                 mdot, Qdot_evap, override_Qdot, psatExt)
+                                 mdot, Qdot_evap, override_Qdot, psatExt, BMout)
         implicit none
         real(R8), intent(in)  :: rhog, Tg, gamma, Rg, mug, kg
         real(R8), intent(in)  :: Tp, dp, Re
@@ -186,11 +185,13 @@ contains
         real(R8), intent(out) :: mdot, Qdot_evap
         logical,  intent(out) :: override_Qdot
         real(R8), intent(in), optional :: psatExt   !> psat(Tp) from the properties table
+        real(R8), intent(out), optional :: BMout    !> the Spalding number of the surface state (before LK), 0 if none
         real(R8) :: cpg, p, Mg, Pr, Sc, Re05, psat, Xs, Ys, BM
 
         mdot = 0._R8
         Qdot_evap = 0._R8
         override_Qdot = .false.
+        if (present(BMout)) BMout = 0._R8
 
         !> Common gas properties (computed once)
         cpg  = gamma * Rg / (gamma - 1._R8)
@@ -217,6 +218,7 @@ contains
         if (Ys <= ep(iYinf)) return  ! no evaporation
         BM = (Ys - ep(iYinf)) / (1._R8 - Ys)
         if (BM <= 0._R8) return
+        if (present(BMout)) BMout = BM
 
         !> Re^0.5 (shared by Sh and Nu correlations)
         Re05 = sqrt(max(Re, 0._R8))
@@ -540,6 +542,155 @@ contains
         endif
 
     end function expm1S
+
+
+    !> Effective-conductivity factor chi(Pe_L) = 1.86 + 0.86 tanh(2.245 log10(Pe_L/30)) (Abramzon-Sirignano 1989 eq. 39);
+    !  1 with no internal circulation (Pe_L <= 1e-300).
+    pure function chiETC(PeL) result(chi)
+        implicit none
+        real(R8), intent(in) :: PeL
+        real(R8) :: chi
+
+        if (PeL <= 1.e-300_R8) then
+            chi = 1._R8
+        else
+            chi = 1.86_R8 + 0.86_R8*tanh(2.245_R8*log10(PeL/30._R8))
+        endif
+
+    end function chiETC
+
+
+    !> Boiling temperature at the pressure p on the Clausius-Clapeyron line: psat_CC(TB) = p.
+    pure function boilingTemperatureCC(p, LvMvOverRu, invTboil) result(TB)
+        implicit none
+        real(R8), intent(in) :: p, LvMvOverRu, invTboil
+        real(R8) :: TB
+
+        TB = 1._R8/(invTboil - log(p/Patm)/LvMvOverRu)
+
+    end function boilingTemperatureCC
+
+
+    !> Boiling heat-transfer coefficient alpha_s [W/m2/K] at the superheat dT, floored at 0.5 K (Adachi et al. 1997,
+    !  through Zuo-Gomes-Rutland 2000 eqs. 8-9 and OpenFOAM's LiquidEvaporationBoil).
+    pure function alphaBoil(dT) result(alpha)
+        implicit none
+        real(R8), intent(in) :: dT
+        real(R8) :: alpha, dTf
+
+        dTf = max(dT, 0.5_R8)
+        if (dTf < 5._R8) then
+            alpha = 760._R8*dTf**0.26_R8
+        elseif (dTf < 25._R8) then
+            alpha = 27._R8*dTf**2.33_R8
+        else
+            alpha = 13800._R8*dTf**0.39_R8
+        endif
+
+    end function alphaBoil
+
+
+    !> Zuo-Gomes-Rutland boiling of a drop at Tbar above its boiling temperature TB: the flash rate Gf fed by the
+    !  superheat (alpha_s, or the parabolic conduction 10 pi kCond d dT with kCond), the heat-fed rate G of
+    !  G (1 + Gf/G) = B ln(1 + A (1 + Gf/G)), A = cpg (Tg - TB)/Lv, B = pi kf d Nu/cpg with the 1/3-rule film
+    !  conductivity; mdot = -(G + Gf) and Qdot the heat through the blown film times cpFactor.
+    pure subroutine zgrBoiling(Tbar, TB, d, kg, cpg, Nu, Tg, Lv, cpFactor, mdot, Qdot, kCond)
+        implicit none
+        real(R8), intent(in)  :: Tbar, TB, d, kg, cpg, Nu, Tg, Lv, cpFactor
+        real(R8), intent(out) :: mdot, Qdot
+        real(R8), intent(in), optional :: kCond
+        real(R8) :: dTf, Gf, A, Tf, kf, B, G, S, Qs
+
+        dTf = max(Tbar - TB, 0.5_R8)
+        if (present(kCond)) then
+            Gf = 10._R8*pi*kCond*d*dTf/Lv
+        else
+            Gf = alphaBoil(Tbar - TB)*dTf*pi*d*d/Lv
+        endif
+        A  = cpg*(Tg - TB)/Lv
+        Tf = TB + (Tg - TB)/3._R8
+        kf = kg*(Tf/Tg)**0.7_R8
+        B  = pi*kf*d*Nu/cpg
+        if (A <= 0._R8) then
+            G = 0._R8
+        elseif (Gf == 0._R8) then
+            G = B*log1pS(A)
+        else
+            G = heatFedRate(Gf, A, B)
+        endif
+        S = G + Gf
+        if (S/B > 0._R8) then
+            Qs = S*cpg*(Tg - TB)/expm1S(S/B)
+        else
+            Qs = B*cpg*(Tg - TB)
+        endif
+        mdot = -S
+        Qdot = Qs*cpFactor
+
+    end subroutine zgrBoiling
+
+
+    !> The heat-fed rate G = Gf/x of zgrBoiling: x > 0 the root of H(x) = Gf (1 + x)/x - B ln(1 + A (1 + x)), strictly
+    !  decreasing, by Brent in u = ln x on [-60, 60] to 4 eps; G = B ln(1 + A) or 0 when the root lies beyond an end.
+    pure function heatFedRate(Gf, A, B) result(G)
+        implicit none
+        real(R8), intent(in) :: Gf, A, B
+        real(R8) :: G
+        integer,  parameter :: maxEval = 200
+        real(R8), parameter :: uLo = -60._R8, uHi = 60._R8, tol4 = 4._R8*epsilon(1._R8)
+        real(R8) :: ua, ub, uc, fa, fb, fc, dd, e, s, p, q, r, tol1, xm
+        integer  :: n
+
+        ua = uLo; fa = hRes(ua)
+        ub = uHi; fb = hRes(ub)
+        if (fa <= 0._R8) then; G = B*log1pS(A); return; endif   ! Gf negligible: the unblown heat-fed rate
+        if (fb >= 0._R8) then; G = 0._R8; return; endif        ! Gf dominant: no heat-fed vapour
+        uc = ua; fc = fa; dd = ub - ua; e = dd
+        do n = 1, maxEval
+            if (abs(fc) < abs(fb)) then
+                ua = ub; ub = uc; uc = ua; fa = fb; fb = fc; fc = fa
+            endif
+            tol1 = 0.5_R8*tol4*(abs(ub) + 1._R8)
+            xm   = 0.5_R8*(uc - ub)
+            if (abs(xm) <= tol1 .or. fb == 0._R8) exit
+            if (abs(e) >= tol1 .and. abs(fa) > abs(fb)) then
+                s = fb/fa
+                if (ua == uc) then
+                    p = 2._R8*xm*s; q = 1._R8 - s
+                else
+                    q = fa/fc; r = fb/fc
+                    p = s*(2._R8*xm*q*(q - r) - (ub - ua)*(r - 1._R8))
+                    q = (q - 1._R8)*(r - 1._R8)*(s - 1._R8)
+                endif
+                if (p > 0._R8) then; q = -q; else; p = -p; endif
+                s = e; e = dd
+                if (2._R8*p >= 3._R8*xm*q - abs(tol1*q) .or. p >= abs(0.5_R8*s*q)) then
+                    dd = xm; e = dd
+                else
+                    dd = p/q
+                endif
+            else
+                dd = xm; e = dd
+            endif
+            ua = ub; fa = fb
+            if (abs(dd) > tol1) then; ub = ub + dd; else; ub = ub + sign(tol1, xm); endif
+            fb = hRes(ub)
+            if ((fb > 0._R8 .and. fc > 0._R8) .or. (fb < 0._R8 .and. fc < 0._R8)) then
+                uc = ua; fc = fa; dd = ub - ua; e = dd
+            endif
+        enddo
+        G = Gf*exp(-ub)
+
+    contains
+
+        !> H at u = ln x, divided by B.
+        pure function hRes(u) result(h)
+            real(R8), intent(in) :: u
+            real(R8) :: h
+            h = (Gf/B)*(1._R8 + exp(-u)) - log1pS(A*(1._R8 + exp(u)))
+        end function hRes
+
+    end function heatFedRate
 
 
     !> Clausius-Clapeyron saturation pressure psat(T) = Patm exp(-LvMv/Ru (1/T - 1/Tboil)).
