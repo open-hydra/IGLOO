@@ -50,8 +50,8 @@ knobs are the main isolation switches used to decouple heat and momentum in the
 connection or by overlapping chimera faces, block 2 rotated about y, stretched cells
 along x, rows graded along y, translational periodic y faces, the outlet face's code,
 the gas temperature and x-velocity, linear temperature gradients along x and z and a
-cosine wave along y, the size law, and the families.  The defaults reproduce the
-`drag-stokes` box.
+cosine wave along y, the size law, one radius per inlet cell (`--rp-sweep`), and the families.  The
+defaults reproduce the `drag-stokes` box.
 
 ---
 
@@ -368,6 +368,37 @@ $X_\mathrm{eff}^{1.0}$ exponent is the paper's own.
 
 <figure>
   {% include "vv/images/burn-box.svg" ignore missing %}
+</figure>
+
+### beckstead-air
+
+Burnout times of aluminium in air at 1 atm and 300 K against Beckstead's Eq. 7, with the burning times
+of his Fig. 1 drawn beside them.  25 particles, $D_0$ = 10–1000 µm log-spaced, one per inlet cell
+(`make_box_case.py --rp-sweep`), burn from injection at zero slip and zero thermal slip with no heat
+release, so the $d^n$ law is the only dynamics.  The oracle codes Eq. 7 from the paper,
+$t_b = a\,D^n/(X_\mathrm{eff}\,p^{0.1}\,T_0^{0.2})$ with $a = 0.00735$, $n = 1.8$ and
+$X_\mathrm{eff} = 0.21$ (a mole fraction): $K_\mathrm{eff} = 1.416955\times10^{-6}$ m$^{1.8}$/s, and
+the case's `K-burn` $= K_\mathrm{eff}/X_\mathrm{eff}$ to nine digits.  A parcel ends at the step whose
+mass reaches the solver's floor of $10^{-15}$ kg ($d_\mathrm{floor} = 0.865$ µm); its exit record
+carries that state's time and diameter.  The gates: the input against Eq. 7; 25 burnouts inside the
+box, one per inlet cell, each at or below $d_\mathrm{floor}$; each exit time against
+$(D_0^n - d_p^n)/K_\mathrm{eff}$ to $10^{-5}$ and not before the floor's time; $d^n = D_0^n -
+K_\mathrm{eff}t$ on every trajectory row within its print budget; $T_p$ and $u_p$ unchanged.
+`T-ign = 250 K` is a switch, not a physical claim: Eq. 7's rate does not depend on the particle
+temperature above ignition, so ignition is set below the injection temperature.
+
+The figure, on Fig. 1's axes: the 183 markers digitized from Fig. 1 as one glyph (the source labels
+of its stacked markers are not recovered), Fig. 1's fit as drawn, $t = 0.00258\,D^{1.989}$ (its label
+prints the rounded $0.003\,D^{1.99}$, 16.5–16.8 % above the drawn line), Eq. 7 at the case's condition and
+IGLOO's 25 burnout times.  Eq. 7 at this condition lies 2.8× (10 µm) to 1.17× (1000 µm) above the
+drawn fit, inside the scatter of the 12 sources.  Plotted, not gated against the data.
+
+**Result:** 25/25 burnouts; exit times within $3.9\times10^{-8}$ of Eq. 7's, the last step's overshoot
+past the floor $+2.5\times10^{-7}$ to $+1.37\times10^{-3}$ of its time; 170 rows within their print
+budget (0.997 of it at most).
+
+<figure>
+  {% include "vv/images/beckstead-air.svg" ignore missing %}
 </figure>
 
 ### burn-box-cap
@@ -804,9 +835,12 @@ $t_\mathrm{life}=D_0^2/K$ from the LSQ slope, extrapolated to $D^2\!\to\!0$ rath
 the last sample, at $d^2/d_0^2\approx0.012$).  This sidesteps the paper's own inconsistency (its caption says
 $D_0=1.1$ mm $\Rightarrow D_0^2=1.21$, but its plot's M7 line starts at $D_0^2\approx1.10$ and
 the axis tops at 1.2); since $\beta$ (Eq. 28) is $D_0$-independent and matches to $<$1 %, the
-two normalized $d^2$-law lines **coincide**.  The experimental points are not overlaid: in the
-figure the experimental circles sit on M7 ($\approx6.5\times10^{-3}$), and an eyeball
-digitization of them is not reliable enough to plot.
+two normalized $d^2$-law lines **coincide**.  Panel (a) also draws the Ranz–Marshall
+experiment: the 23 circles of Fig. 2(a), re-digitized from the 1000-ppi page image (axes
+calibrated on 23 and 27 ticks, centres by a Hough transform; $t$ ±0.9 s, $D^2$ ±1.2e-3 mm²) and
+normalized by the M7 line's own $D_0^2$ and lifetime, so they keep their place relative to M7.
+Their slope gives $\beta_\mathrm{exp}\approx6.5\times10^{-3}$ (6.48e-3, 2.0 % steeper than M7);
+IGLOO's $\beta$ lies 3 % below it (2.8 %).  Not gated: the experiment is drawn.
 Note Fig. 2 is a weak discriminator (all eight models coincide inside 0.47 K, and a direct
 pixel measurement of the figure shows IGLOO's 282.33 K lands *on* one of the plotted curves).
 The strong one is Fig. 4 decane ($T_G=1000$ K), which spans ~200 K across the same eight

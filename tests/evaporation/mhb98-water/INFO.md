@@ -17,7 +17,7 @@ The rest of the suite is *verification* (IGLOO vs re-coded model equations). Thi
 Fig-2 conditions, against **MHB98's own model result** (their reported `β≈6×10⁻³`) and
 the re-coded LK kernel. Both the **kernel** and the
 **paper model β** are gated (tight, deterministic); the **experimental points are not
-gated**, and `verify.py` does not plot them (see Reference data).
+gated**: `verify.py` draws them, re-digitized from the figure (see Reference data).
 
 ## Case construction
 `tools/make_box_case.py` variant: uniform air at `T_G=298 K`; **`U=1.9e-4 m/s` is a pure
@@ -104,7 +104,10 @@ Normalized (not absolute) because the paper's caption `D0=1.1 mm`⇒`D0²=1.21` 
 own plot (M7 starts at D0²≈1.10; axis tops at 1.2); since β (Eq. 28) is D0-independent and
 matches to <1 %, the two normalized d²-law lines **coincide** (an honest presentation — the
 coincidence is partly tautological, so the β annotation + panel (b) carry the real evidence).
-The eyeball Ranz–Marshall experiment is **not plotted** (see below).
+Panel (a) also draws the **Ranz–Marshall experiment**, the 23 circles of Fig. 2(a) re-digitized
+from the page image, normalized by the M7 line's own `D0²` and lifetime (the paper's axes: the
+circles keep their place relative to M7; their own `D0` would be an extrapolation, the first
+circle being at 77 s), with `β_exp` in the annotation; Fig. 2(b) has no experimental points.
 
 **Lifetime matches too.** With the figure's `D0²` and the 0.17 m box, `t_life = D0²/K`
 is **825.3 s (IGLOO) vs 818.5 s (M7) — +0.8 %**, i.e. exactly the residual `β` difference; both
@@ -181,12 +184,12 @@ Wet-bulb **T_p = 282.33 K vs the M7 plateau 282.43 K (|ΔT| 0.10 K)**; D²-law r
 This is a genuine IGLOO-vs-paper-**model-curve** reproduction (both panels), tighter than an
 analytic-β proxy against the paper's rounded 6×10⁻³ (~7% with the generic constants).
 
-**Caveat on "~13% below EXPERIMENT".** With the generic constants IGLOO reads ~13% below
-the *eyeball* Ranz–Marshall CSV (β_exp≈7.4e-3, start 1.21). The WebPlotDigitizer M7 line
-extrapolates to D0²≈1.10 and in the figure the exp circles sit essentially **on M7**
-(β≈6.5e-3), so the "13% below exp" is likely **largely an eyeball-digitization artifact**, not
-a real model-vs-exp offset. Eyeball evidence alone does **not** decide it — that needs a
-proper exp re-digitization. The `k_g`-film-rule hypothesis is refuted either way. Not a bug.
+**Against the experiment (drawn, not gated).** The 23 Ranz–Marshall circles of Fig. 2(a),
+re-digitized from the 1000-ppi page image (`reference/mhb98_fig2_exp_d2.csv`), give
+**β_exp = 6.48×10⁻³** (their LSQ slope K = 1.3745×10⁻³ mm²/s, Eq. 28 with `check.py`'s
+coefficient). They sit 0.018 mm² below the M7 line on average (about 0.7 of a marker radius)
+and their slope is 2.0 % steeper than M7's; **IGLOO's β = 6.30×10⁻³ is 2.8 % below the
+experiment**. The experiment is drawn in panel (a); no gate reads it.
 
 **Scope note (out of this case):** Fig. 2 (water, Re=0) is a *weak* discriminator — all
 eight MHB98 models coincide. The strong model discriminator is **Fig. 4 decane**
@@ -197,7 +200,6 @@ track the experiment. That is a *convective* case, outside this one: `test_mhb98
 ## Reference data
 - `reference/mhb98_fig2_M7_d2.csv`, `..._Td.csv` — **WebPlotDigitizer** exports of the M7
   model line (Fig. 2a/2b). The **gated** references: β_M7 (LSQ slope) and the T_d plateau.
-- `reference/mhb98_fig2.csv` — Ranz–Marshall **experiment**, eyeball-digitized (±2–3%). Reads
-  high (β_exp≈7.4e-3 vs the figure's ≈6.5e-3); **not plotted or gated** (it needs a proper
-  re-digitization). Full provenance + the M7-vs-eyeball discrepancy in
-  `reference/PROVENANCE.md`.
+- `reference/mhb98_fig2_exp_d2.csv` — the Ranz–Marshall **experiment**, the 23 filled circles of
+  Fig. 2(a) re-digitized from the 1000-ppi page image (Hough transform; t ±0.9 s, D² ±1.2e-3 mm²);
+  **plotted, not gated**. Method, calibration and the numbers in `reference/PROVENANCE.md`.
