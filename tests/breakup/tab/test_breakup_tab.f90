@@ -1,6 +1,6 @@
 program test_breakup_tab
     !
-    ! D-family verification: TAB oscillator (Lib_Breakup, model 4) via the
+    ! TAB oscillator verification (Lib_Breakup, model 4) via the
     ! public breakupEvent entry, exitLoop=.false. (no resize, pure y-dynamics).
     !
     !   TAB1  code stepping vs independent analytic damped-oscillator solution
@@ -29,9 +29,9 @@ program test_breakup_tab
     use verif_dump,   only: dump_curve
     implicit none
 
-    !> One RNG stream for this test program. breakupEvent now takes the parcel's own stream
-    !  instead of drawing from the intrinsic random_number (which is thread-scheduled and so
-    !  irreproducible inside the solver's OMP region). Host-scope, not per-call: an ensemble of
+    !> One RNG stream for this test program. breakupEvent takes the parcel's own stream, not
+    !  the intrinsic random_number (which is thread-scheduled and so irreproducible inside the
+    !  solver's OMP region). Host-scope, not per-call: an ensemble of
     !  events must see DISTINCT draws, so the state has to advance across calls.
     integer(int64) :: tRng = 20260808_int64
 

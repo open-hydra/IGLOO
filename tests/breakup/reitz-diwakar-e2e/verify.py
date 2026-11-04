@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Overlay IGLOO vs Reitz-Diwakar [RD87] breakup rate (B-VAL-4, MOSE-style).
+"""Overlay IGLOO vs Reitz-Diwakar [RD87] breakup rate (MOSE-style).
 
 check.py is the GATE (initial breakup rate, bag+stripping); this only DRAWS and writes
 OUTPUT/reitz-diwakar-e2e.svg. matplotlib imported defensively.

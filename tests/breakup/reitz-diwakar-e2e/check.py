@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B-VAL-4 gate: Reitz-Diwakar breakup rate vs Reitz-Diwakar 1987 (Tier P).
+"""reitz-diwakar-e2e gate: Reitz-Diwakar breakup rate vs Reitz-Diwakar 1987 (Tier P).
 
 25-drop RADIUS-based Weber sweep (make_pe_case.py --we-convention rad) spanning BOTH RD
 regimes. RD is model 3 (ODE-path, no event): the shed rate reduces (mass conservation,
@@ -17,10 +17,10 @@ handoff sits at We_r=20, so the sweep exercises bag (We_r 8–18) and stripping 
 
 The four constants and both stable sizes were verified against `[RD87]` (SAE 870598): bag
 constant D=π (Eq. 7); stripping constant C=20 obtained "by curve-fitting" (p. 497 / Fig. 10);
-criteria We_r>6 (Eq. 5) and We_r/√Re>0.5 (Eq. 6). (`[RD86]`'s earlier "D₂ of order unity"
-was refined to the curve-fit C=20 in `[RD87]`, which production uses — no bug.)
+criteria We_r>6 (Eq. 5) and We_r/√Re>0.5 (Eq. 6). (`[RD86]`'s "D₂ of order unity" is
+refined to the curve-fit C=20 in `[RD87]`, which production uses.)
 
-Lockstep note (as for KHRT B-VAL-6): check.py codes the same RD correlation as production,
+Lockstep note (as for khrt-e2e): check.py codes the same RD correlation as production,
 so this validates the INTEGRATION path (cell crossings, the model-3 npdot→d reduction, the
 bag/stripping branch selection) end-to-end. The pointwise RD formula (both branches + the
 handoff) is independently pinned by the unit test `test_breakup_rd`.

@@ -2,7 +2,7 @@ program test_breakup_rd
     !
     ! D2 Reitz-Diwakar [RD86] via public breakupOde (brkupSelect=2).
     ! Oracle: OpenFOAM-form reference (constants repackaged: Cb=pi/4, Cs=10 =
-    ! bp(4)/2; verified in ../breakup_LITERATURE_TESTS.md). Radius Weber
+    ! bp(4)/2; verified in ../LITERATURE_TESTS.md). Radius Weber
     ! We_r = rho_g u^2 r/sigma; Re passed independently (gas diameter Re).
     !
     !   RD1  sub-critical We_r<=6 -> rate 0
