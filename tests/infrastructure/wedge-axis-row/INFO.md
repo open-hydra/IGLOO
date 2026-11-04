@@ -2,11 +2,12 @@
 
 **Purpose.** The converse of `planar-slab`: the slab/wedge classifier (`allocation.f90`) compares
 the k-plane span at the outermost node with the span at an inner node (a slab's decays as 1/r, a
-wedge's is constant). Its first version took "inner" as the smallest `r > 0`, and hydra's JPL
-nozzle mesh (ATLAS BCB) keeps its axis row at `r = 1e-8` with roundoff `z` — a node whose azimuth
-is noise. Measured on the JPL 3-solver case: the wedge was taken for a slab (no fold, no 2.5D gas
-sampling), IGLOO injected 1.85× its share and the centreline exit Mach went from 2.104 to 2.449.
-The inner node must be clearly off the axis (`r > 1e-3 r_max`).
+wedge's is constant). A classifier that takes "inner" as the smallest `r > 0` fails on hydra's
+JPL nozzle mesh (ATLAS BCB), which keeps its axis row at `r = 1e-8` with roundoff `z` — a node
+whose azimuth is noise. Measured on the JPL 3-solver case with such a classifier: the wedge was
+taken for a slab (no fold, no 2.5D gas sampling), IGLOO injected 1.85× its share and the
+centreline exit Mach went from 2.104 to 2.449. The inner node must be clearly off the axis
+(`r > 1e-3 r_max`).
 
 **Fixture (`make_fixture.py`, output committed).** 20 × 8 cells, 1-degree wedge about the x axis,
 k-planes at ∓delthe/2, j = 0 row at `r = 1e-8` with `z = 0`, uniform gas u = 5 m/s (`GAM`, `mil`,

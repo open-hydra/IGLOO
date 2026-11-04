@@ -31,5 +31,5 @@ on row `k` itself, so T1 counts a decrease on `k` as liquid and T3 starts at `k`
 ## RED (each measured by one mutation of the code)
 | mutation | what fails |
 |---|---|
-| the code before breakup was allowed on a solidifying material | setup refuses `solidification=on` with breakup, exit 128 |
+| a solver that refuses breakup on a solidifying material | setup refuses `solidification=on` with breakup, exit 128 |
 | the breakup event not gated by the phase | T2: 1500 of the 1525 family-2 rows, the frozen drops breaking up before their first face; T3 cannot see it (the breakup lands on row `k`) |

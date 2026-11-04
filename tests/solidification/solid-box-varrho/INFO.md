@@ -22,6 +22,6 @@ solver interpolates it (`tools/proptab.py table_value`). With `d` varying along 
 ## RED (each measured by one mutation of the code)
 | mutation | what fails |
 |---|---|
-| the code before a density table was allowed under solidification | setup refuses the material, exit 128 |
+| a solver that refuses a density table under solidification | setup refuses the material, exit 128 |
 | the trajectory diameter at the injection density (no table refresh) | V2: `d = 30 µm` against 29.93 µm at 2358 K (1409 × tol) |
 | the right-hand side's density at 2400 K whatever the drop's temperature | V3 (2.95 × tol), V4 (spread 1.6e-3, offset 1.3e-2), V5 (40 × tol): 126 violations |

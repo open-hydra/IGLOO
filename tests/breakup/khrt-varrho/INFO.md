@@ -6,7 +6,7 @@ heat toward the 300 K gas.
 
 ## What it verifies
 At a KH shed or an RT event the solver re-derives the parcel's stream mass flow from its number rate and the event
-diameter; the diameter was derived at the segment-end temperature, so the density must be that temperature's.
+diameter; the diameter is derived at the segment-end temperature, so the density must be that temperature's.
 `check.py` imports `khrt-e2e`'s checks:
 
 - the exit mass-flow total of all parcels and children against the injected flow, at 1e-5 (the E13.6 floor of the

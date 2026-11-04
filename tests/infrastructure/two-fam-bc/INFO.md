@@ -70,8 +70,7 @@ parsers from `two-mat/check.py`):
 | C2 | control | 25 exits per material, non-empty `scatter-<mat>.dat` |
 | C3 | control | `source.tec` carries `wdot(A)`, `wdot(B)`, both zero; the shared Fx and E slots balance both materials' parcels with each parcel's own ṁ to 1e-6 |
 
-**RED / GREEN.** Run on a reader that feeds copy 1 to every family (the frozen binary before the
-per-family read), T1–T4 fail with exactly the right-hand column: T1 `dp=1.1890e-05 != 2.3780e-05`
+**RED / GREEN.** Run on a reader that feeds copy 1 to every family, T1–T4 fail with exactly the right-hand column: T1 `dp=1.1890e-05 != 2.3780e-05`
 on all 25 parcels of B (0 verifiable relaxers), T2 ṁ = 1.275000e-03 on all 25 exits of both
 materials, T3 m_B/m_A = 0.338983 on 25 of 25 parcels, T4 ρ_p/n_p = 8.8012e-13 in 1500 of 1500
 cells of `euler2.tec`; C1–C3 pass (Σ Fx −0.573749, Σ E −3.155615 — two-mat's values, since that run

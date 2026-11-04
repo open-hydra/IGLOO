@@ -1,4 +1,4 @@
-# INFO — evaporation/lk-neq (F1: Langmuir–Knudsen non-equilibrium, e2e)
+# INFO — evaporation/lk-neq (Langmuir–Knudsen non-equilibrium, e2e)
 
 ## Reference paper
 - **Title:** Evaluation of equilibrium and non-equilibrium evaporation models for
@@ -11,7 +11,8 @@
 - **Reproduced:** the non-equilibrium surface-fraction correction — Eq. (15) `w_s,neq`,
   Eq. (16) Knudsen length `L_K`, Eq. (17) `β` — bolted onto the CEM (`M2`) rate. MHB98's
   comparison figures (equilibrium vs non-equilibrium `d²(t)` for `D₀ < 50 µm`) are the
-  paper's plotted data; a **digitized overlay is pending** (see Q-C).
+  paper's plotted data, not digitized here; the digitized MHB98 overlay of the suite is
+  [../mhb98-water/INFO.md](../mhb98-water/INFO.md)'s (Fig. 2).
 
 ## What it verifies
 `check.py` builds an independent oracle from the LITERATURE (not the code):

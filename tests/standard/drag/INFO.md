@@ -5,7 +5,6 @@ production RHS + production integrator path. Family A tests are driven through
 `Run_ODESolver` (L1, exact-solution correctness) and through the external
 `SDIRK4` directly at constant step (L2, tableau order).
 
-Schema: see verification-phase1-plan.md §2.5.
 Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
 
 ## Tests
@@ -20,9 +19,7 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
 | E6a | analytic | `[CGW78]` + derived | ISBN 0-12-176950-X | Stokes drag in the linear gas field u_g = G(x − x_c) + u₀, G = diag(100, −20, 200) s⁻¹, set at the 8 nodes of the unit cube and sampled by production's trilinear map (`nodes`, `verts` of the driver: gas-order 2, warm-started Newton); per axis X'' + X'/τ − (g/τ)X = 0 about the zero x* of u_g, X = A e^{λ₊t} + B e^{λ₋t}, λ± = (−1 ± √(1 + 4gτ))/(2τ) | `x`, `v`: relL∞ each at 10 end times (adaptive, rtol = atol = 1e-10); `p_obs ≈ 4 ± 0.3` over Δt/τ = {0.4, 0.2, 0.1} (fixed step) | x₀ = (0.51, 0.8, 0.495) m, v₀ = 0, u₀ = (0.3, −0.2, 0.1) m/s, x_c the cell centre, t ≤ 2τ (the parcel stays 0.20 m inside the cell); `NoHeat`; tolerances 10× the floors (x 3.2e-10, v 6.3e-9) | **PASS** (x 3.1e-11, v 6.3e-10; p = 3.890/3.954). RED with the sampler's Newton stopped at the absolute residual 1e-5 m (a warm start within 1e-5 m accepted without a step): x 1.1e-6, v 2.8e-5, p = −1.13/2.84 |
 | E6b | analytic | `[CGW78]` + derived | ISBN 0-12-176950-X | E6a's field on a distorted cell: vertex 7 moved 0.1 m (10 % of the edge) along (1, 1, 1); the nodes carry the linear field at their positions, so the trilinear map reproduces it exactly at the converged local coordinates and any error is the inverse map's | as E6a | as E6a | **PASS** (x 2.6e-11, v 5.2e-10; p = 3.890/3.954). RED as E6a: x 1.1e-6, v 2.9e-5, p = −1.04/2.86 |
 
-## Deferred
-
-Per plan OQ3 (resolved 2026-06-13):
+## Gated elsewhere
 
 | id | mode | reason |
 |---|---|---|
@@ -38,21 +35,20 @@ Per plan OQ3 (resolved 2026-06-13):
   `test_drag.f90::rhs_sn` and integrates with the self-contained RK4. This avoids
   the test passing for the wrong reason if both production and oracle share a bug.
 
-## Status (T2)
+## Driver
 
-All A-family PASS (clean `build_verif`, ctest green). The driver `verif_driver`
-(the sole production-touching module) is the architectural keystone reused by
-B/C families: it sets the IGLOO runtime flags, calls `setupRHS`/`packAuxVars`,
+The driver `verif_driver` (the sole production-touching module) is shared with
+the B/C families: it sets the IGLOO runtime flags, calls `setupRHS`/`packAuxVars`,
 and drives the production `rhsStandard` through either the adaptive
 `Run_ODESolver` or a fixed-step direct `SDIRK4`.
 
-**No production findings.** Two harness-side issues, both fixed in test code only:
-1. Fixed-step SDIRK4 first attempt grew the step (band-pin failed) — replaced by
-   one-step-per-call (`XEND=X+dt` caps H). Validated by a scratchpad spike.
-2. Order test contaminated (p=5.8/3.25) by SDIRK4's numerical Jacobian + loose
-   Newton stop. Root cause was my `WORK(1)=1.1e-19` (poor FD increment) + huge
-   RTOL ⇒ loose `FNEWT`. Fixed with default uround + `WORK(4)=1e-13`
-   (Newton ≪ truncation, per the task's own guidance) ⇒ clean p≈4.
+**Harness settings.**
+1. Fixed-step SDIRK4 runs one step per call (`XEND=X+dt` caps H): a call that
+   spans several steps grows the step and the band pin fails.
+2. The order legs use the default uround and `WORK(4)=1e-13` (Newton ≪ truncation)
+   ⇒ clean p≈4. With `WORK(1)=1.1e-19` (a poor FD increment) and a huge RTOL
+   (a loose `FNEWT`), SDIRK4's numerical Jacobian and the loose Newton stop
+   contaminate the order test (p=5.8/3.25).
 
 **Body acceleration.** The driver's optional `accel(3)` turns production's
 `bodyForce`/`bodyAccel` on (A4); the terminal velocity (A2) is gated end to end by
@@ -64,7 +60,7 @@ right-hand side to the next as in a run. The sampler stops its Newton on a resid
 cell; with an absolute stop of 1e-5 m a warm start that close is taken without a step and the gas is
 sampled where the parcel was: both legs then miss the closed form by 3·10³ to 5·10³ tolerances.
 
-## Unit tables (T5, 2026-07-02)
+## Unit tables
 
 - `test_drag_lit.f90` (ctest `test_drag_lit`, GREEN): DL1 Stokes Cd·Re=24 exact;
   DL2 Chang≡Clift-Gauvin identity (24·0.0175=0.42, 4.25e4=42500; forms differ
@@ -83,8 +79,8 @@ sampled where the parcel was: both legs then miss the closed form by 3·10³ to 
   The coded Morsi-Alexander fit jumps at its band edges (a property of the published fit, not gated): 8.3e-5
   (Re 0.1), 4.0e-4 (1), 5.3e-5 (10), 1.2e-4 (100), 4.0e-3 (1000), 5.6e-4 (5000), 2.3e-2 (10⁴), relative. The
   e2e cases `standard/drag-morsi` and `standard/drag-chang` hold the two laws along a slip relaxation.
-- `test_drag_probes.f90` (ctest `test_drag_probes`, ordinary gate — the bugs it transcribes are fixed, so it is a regression pin): XD1/XD2
-  Crowe/Hermsen Cd=3.2e20/3.6e20 at Re=1e3,Ma=2 (exp-in-denominator, bug A1);
-  XD3 Putnam 3.6% jump @Re=1000 (A5); XD4 Henderson blend-slope jump @Ma=1.75
-  (A6, 0.97% rel at Re=100); XD5 Wen-Yu 1.9% jump @Re=1000 (minor). Flips the
-  suite RED when ALL are fixed.
+- `test_drag_probes.f90` (ctest `test_drag_probes`, ordinary gate, a regression pin; a failing probe
+  turns it red): XD1/XD2 Crowe/Hermsen Cd finite at Re=1e3,Ma=2 (an exp coded in the denominator gives
+  Cd=3.2e20/3.6e20); XD3 Putnam 3.6% jump @Re=1000 (the published form's); XD4 Henderson continuity
+  @Ma=1.75 (a blend-slope jump there: 0.97% rel at Re=100); XD5 Wen-Yu 1.9% jump @Re=1000 (minor,
+  the published form's).

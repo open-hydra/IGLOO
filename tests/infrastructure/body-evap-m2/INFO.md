@@ -2,7 +2,7 @@
 
 **Purpose.** A body acceleration gives a parcel momentum and energy the gas never gave it, so the coupling source must
 take that share out: each segment's deposit carries P += ṅ J g and E += ṅ W, with J = ∫m dt and W = ∫m g·v dt
-integrated as extra ODE states for the models whose mass changes (2, 4 and 5; models 1 and 3 use a closed form). Model
+integrated as extra ODE states for the models whose mass changes (2, 4, 5 and 8; the other models use a closed form). Model
 2 keeps J and W at the last two slots, or W alone with the Eulerian output on, J then being the Eulerian mass moment.
 `coupled-body` covers model 1 only.
 
@@ -42,7 +42,7 @@ alone is about 10⁻⁶ of it, so B2 values the mass the parcels lost by the mas
 the 25 identical final states), the body work 1.08e-2 W being 15 tolerances; B3 0.47; B4 3167 B1 tolerances; B5 2.33e-7.
 
 **RED.**
-- Models 2 and 5 sent to the closed form of models 1 and 3 (`case(2,5)` of the deposit correction): B1 fails by
+- Models 2 and 5 sent to the closed form of models 1 and 3 (`case(2,5,8)` of the deposit correction): B1 fails by
   3167 tolerances and B2 by 3.7 in both runs.
 - The sign of W flipped in model 2's right-hand side: B2 fails by 28.8 tolerances in both runs.
 - Half the d2-law rate: B3 fails on 700 rows (1.4e4 tolerances); B0–B2 hold (they close for any mass law).

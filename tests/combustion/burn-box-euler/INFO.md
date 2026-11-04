@@ -5,11 +5,12 @@ No literature reference: the burn law is [`combustion/burn-box`](../burn-box/INF
 This case gates the **equivalent-Eulerian deposit of the burning material (ODE model 5)**.
 
 ## Why it exists
-`Lib_Integration::computeEulField` deposits, for models 2 and 5, the number density `npdot·Tstay/V` and the
+`Lib_Integration::computeEulField` deposits, for models 2, 5 and 8, the number density `npdot·Tstay/V` and the
 density `npdot·intE(5)/V`, where `intE(5) = ∫ m dt` is the mass integral of **one** droplet over its stay in
 the cell (`F(14) = m` in `rhsAlCombustion`); `finalizeEUL` divides the velocity and temperature moments by
-that density. `burn-box` writes the source field only, and `evaporation/tc-box-euler` covers model 2: no other
-fixture writes the Eulerian field of a burning material.
+that density. `burn-box` writes the source field only, `infrastructure/body-burn-m5` writes the Eulerian field
+without reading it, `evaporation/tc-box-euler` covers model 2 and `combustion/burn-box-cap` model 8: no other
+fixture gates model 5's Eulerian field.
 
 ## Fixture
 `INPUT/` is four per-file symlinks to `../../burn-box/INPUT/`; `input.ini` is burn-box's with two changes:
@@ -30,7 +31,7 @@ writes one row per cell entry and the exit row at the outlet):
 
 | id | gate | tolerance | measured |
 |---|---|---|---|
-| W1, W2 | `out-file = ALL` and `mollify = off` were read (log witnesses) | — | pass |
+| W1, W2 | `out-file = ALL` and `mollify = off` are read (log witnesses) | — | pass |
 | W3 | the droplets burn: mass lost by the last checked row | > 0.2 of m₀ | 0.650 |
 | N | cells checked | ≥ 1000 | 1500 |
 | E3 | `ρ_p/n_p` (the time-mean droplet mass in the cell) against `(m_in + m_out)/2` of the bounding rows | 1e-4 relative | 2.11e-5 |

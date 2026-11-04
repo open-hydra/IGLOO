@@ -10,7 +10,7 @@
   `solve_ivp`) to 1e-13.
 
 ## Configuration
-The **only** e2e case with a spatially varying gas field. Carrier phase
+A spatially varying gas field: the carrier phase
 (Eq. 5.1), symmetry axis at `y = 1`:
 
     u_g(x,y) = u_g0 = 0.2 m/s   (uniform axial)
@@ -61,8 +61,8 @@ the six IGLOO `y(x)` strands (markers) over the anchored analytic solution
 ## Gotchas
 - **`gas-order = 2` is required.** With `gas-order = 1` IGLOO samples the gas as
   the containing cell's value (piecewise constant), giving a staircase with error
-  `eps·dy/2` (~2e-2 here) and a trajectory that no single `tau` fits. Every other
-  e2e case has uniform gas, so this is the first where the rebuild order matters.
+  `eps·dy/2` (~2e-2 here) and a trajectory that no single `tau` fits. The rebuild
+  order matters wherever the gas varies in space.
 - Particle density is taken from `INPUT/properties.dat` (Density column), **not**
   `[GPB-Phase1] rho`; the local file sets 1620 to fix `tau = 5`.
 - Injection coordinates sit on cell centres to avoid the face-sliver containment

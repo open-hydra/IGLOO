@@ -21,4 +21,4 @@ its phase into a zero-length buffer. The release build runs green (the slot land
 array); ifx 2023.1 `-check bounds` and `-check all` do not flag an index past the end of a zero-size
 explicit-shape dummy; a gfortran build with `-fcheck=bounds` stops with `Index '1' of dimension 1 of array
 'auxst' above upper bound of 0` in `packAuxState`, exit 2, while the correct code under the same build passes
-this oracle. Before model 6 existed, setup refused `solidification=on`, exit 128.
+this oracle. On a solver without the solidification model, setup refuses `solidification=on`, exit 128.

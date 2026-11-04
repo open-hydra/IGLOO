@@ -1,11 +1,10 @@
 # INFO — rng_stream (per-particle RNG stream contract)
 
 Pins the contract of the per-particle random-number stream
-(`IGLOO_Lib_Statistics::rngSeedFor` / `rngNext`, splitmix64), which replaced the
-intrinsic `random_number` inside `!$OMP PARALLEL DO` (BUGS.md **O2**, closed 2026-08-08).
-Samplers reachable from the parallel region — TAB's child-size draw, ETAB's azimuth — used
-the intrinsic, whose state is per-thread, so which draw a parcel received depended on thread
-scheduling and `tab-e2e` was not reproducible run to run (measured as a trajectory MULTISET).
+(`IGLOO_Lib_Statistics::rngSeedFor` / `rngNext`, splitmix64) that the samplers reachable
+from `!$OMP PARALLEL DO` draw from — TAB's child-size draw, ETAB's azimuth. On the intrinsic
+`random_number`, whose state is per-thread, which draw a parcel receives depends on thread
+scheduling, and `tab-e2e` is not reproducible run to run (measured as a trajectory MULTISET).
 
 The three properties below are ones **no e2e gate can see**: a wrong-but-deterministic stream
 (every parcel sharing one seed) reproduces perfectly and passes every e2e oracle. `repeat-tab`
@@ -22,5 +21,4 @@ proves reproducibility at the solver level; this test proves the stream itself.
 ## Notes
 
 - Oracle is analytic (count collisions, replay, moments); no reference data.
-- Introduced with the O2 fix (`7c2a3ef`); the same commit promoted `tab-e2e` into the
-  repeatability suite as `repeat-tab`.
+- `repeat-tab` is `tab-e2e`'s case (`INPUT/` symlinked) in the repeatability suite.

@@ -16,6 +16,6 @@ B4 and B5 as in `body-evap-m2` (ODE size 15 with the Eulerian output, 10 without
 8.53e-3 W being 240 tolerances; B4 2669 B1 tolerances; B5 9.26e-8.
 
 **RED.**
-- Models 2 and 5 sent to the closed form of models 1 and 3 (`case(2,5)` of the deposit correction): B1 fails by
+- Models 2 and 5 sent to the closed form of models 1 and 3 (`case(2,5,8)` of the deposit correction): B1 fails by
   2669 tolerances and B2 by 66 in both runs.
 - The sign of W flipped in model 5's right-hand side: B2 fails by 479 tolerances in both runs.

@@ -1,4 +1,4 @@
-# INFO — combustion (family M1)
+# INFO — combustion (metal combustion)
 
 Verifies the metal-combustion track: the Beckstead d^n burn law (`model=5`,
 `rhsAlCombustion` / `IGLOO_Lib_Combustion::becksteadRate`), selected per material
@@ -26,8 +26,8 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
 |---|---|---|---|---|---|---|---|
 | CB1 | analytic | `[Beck05]` (differentiated regression) | 10.1007/s10573-005-0067-2 | closed-form `m(t) = rho·pi/6·(d0^n − Keff t)^(3/n)`; complex-step derivative vs `becksteadRate` | rel err at 4 epochs | constant Keff, Tp > T-ign | GREEN (1e-13) |
 | CB2 | analytic | derived | n/a | (a) `n·d^(n−1)·dd/dt == −Keff` identity ⇒ `t_b = d0^n/Keff` exact; (b) in-test RK4 of the production rate vs closed-form m(t) at 0.9·t_b | (a) 1e-14; (b) 1e-10 rel-to-m0 | same | GREEN |
-| CB3 | analytic | design (plan §3-M1) | n/a | ignition gate: `mdot == 0.0` BITWISE below `T-ign`, burning at/above; heat-release identity `qrel = −beta·q·mdot` | bitwise / 1e-15 | — | GREEN |
-| CB4 | correlation (DISCRIMINATOR) | `[Beck05]` | 10.1007/s10573-005-0067-2 | K-burn calibrated at the anchor (100 µm, X_eff=0.21, 1 atm, 300 K, a=0.0244 ms·µm^−1.8); other (D, X_eff) points predicted vs the published *linear* X_eff | 5% — RED unless the code's X_eff exponent is 1: err = abs(X_eff^(1−aXeff) − 1) = 14.4% at X_eff=0.21 if aXeff=0.9 | Beckstead final fit verified against source PDF (beck.txt line 501: t_b·X_eff·p^0.1·T0^0.2 = 0.00735·D^1.8) | GREEN by construction (aXeff=1.0; rerun on build host) |
+| CB3 | analytic | design | n/a | ignition gate: `mdot == 0.0` BITWISE below `T-ign`, burning at/above; heat-release identity `qrel = −beta·q·mdot` | bitwise / 1e-15 | — | GREEN |
+| CB4 | correlation (DISCRIMINATOR) | `[Beck05]` | 10.1007/s10573-005-0067-2 | K-burn calibrated at the anchor (100 µm, X_eff=0.21, 1 atm, 300 K, a=0.0244 ms·µm^−1.8); other (D, X_eff) points predicted vs the published *linear* X_eff | 5% — RED unless the code's X_eff exponent is 1: err = abs(X_eff^(1−aXeff) − 1) = 14.4% at X_eff=0.21 if aXeff=0.9 | Beckstead final fit verified against source PDF (beck.txt line 501: t_b·X_eff·p^0.1·T0^0.2 = 0.00735·D^1.8) | GREEN by construction (aXeff=1.0) |
 | E2E | e2e box | `[Beck05]` | — | `combustion/burn-box/`: uniform-gas box, kv=1 kt=1, T-ign < Tp0 ⇒ burning from injection; exact closed-form `d^n(x)` + independent RK4 of the heat-release energy balance (Nu=2) + mass-telescoping audit Σwdot = Σnpdot·Δm | truncation-budget tol on d^n; 0.1 K on Tp; 1% telescoping | make_box_case.py --kv 1.0 --kt 1.0 --rp 15e-6 | GREEN |
 | CB5 | analytic | design | n/a | the oxide cap (ODE model 8): one `rhsAlCap` call, `F(9) = −ξν F(8)` | 1e-15 rel.; RED `F(9) = 0`: 1.0 | ξ 0.2, ν typed from the molar masses | GREEN (1.7e-16) |
 | CB6 | analytic | `[Beck05]`, `[Gal21]` | 10.1016/j.combustflame.2021.01.039 | `rhsAlCap` at f_ox = 0.1, 0.3, 0.5, 0.9: `F(8)` = `becksteadRate`'s ṁ on the metal's diameter × F(f_ox)·c = 1.294539, 1.185062, 1.084161, 0.785019 | 3e-6 rel.; RED F·c skipped 0.274 | c = `capStretch(0.2, 1.8)` packed | GREEN (4.1e-7) |
@@ -53,5 +53,5 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
   the literature — exposed as an input, default 0 (see docs/theory/combustion.md
   sensitivity note); the e2e uses 0.3 with a reduced q-comb for a tame ~140 K
   signal.
-- Combustion is mutually exclusive with evaporation (warned, evaporation dropped)
-  and with breakup (hard error, coupling deferred) per material.
+- Combustion is mutually exclusive with evaporation (warned, evaporation disabled)
+  and with breakup (hard error: `combustion=Beckstead with breakup is not supported`) per material.

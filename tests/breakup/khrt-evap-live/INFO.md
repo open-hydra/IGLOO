@@ -24,7 +24,7 @@ far below the shed limit `mShedLim = 1e-5`, which the evaporated mass alone exce
 | solver | outcome |
 |---|---|
 | the shed counting the per-drop deficit `m0 − m` (the evaporated mass with the stripped) | 17 children born from evaporated mass (4.84e-6 kg/s); closure 4.5e-7 |
-| fixed | PASS: 0 children; evaporated 1.495e-4 of the injected flow; closure 5.3e-9 |
+| this solver | PASS: 0 children; evaporated 1.495e-4 of the injected flow; closure 5.3e-9 |
 
 ## Pass criterion
 All three oracles PASS. The closure tolerance `1e-5` covers the E13.6 print of the 25 exit flows (≤ 4e-6 of the

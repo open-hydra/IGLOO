@@ -1,4 +1,4 @@
-# INFO — evaporation/tc-box (F2: Tonini–Cossali analytical evaporation, e2e)
+# INFO — evaporation/tc-box (Tonini–Cossali analytical evaporation, e2e)
 
 ## Reference paper
 - **Primary:** Tonini, S.; Cossali, G. E. "An analytical model of liquid drop evaporation
@@ -9,9 +9,9 @@
   of Multiphase Flow*, **179**, 2024, 104922. DOI:10.1016/j.ijmultiphaseflow.2024.104922 —
   tag `[ATC24]` (the "Eq. 9" reference form).
 - **Tags:** `[TC2012]`, `[ATC24]` (see [../../REFERENCES.md](../../REFERENCES.md))
-- **Reproduced:** the variable-density Stefan–Fuchs first integral (derivation in
-  [../../../plan-bucket/f2-tc-derivation.md]). TC2012's rate-vs-molar-mass / profile figures
-  are the paper's plotted data; a **digitized overlay is pending** (see Q-C).
+- **Reproduced:** the variable-density Stefan–Fuchs first integral. TC2012's rate-vs-molar-mass
+  / profile figures are the paper's plotted data, not digitized here
+  ([../tc-hexadecane/INFO.md](../tc-hexadecane/INFO.md) reproduces its Fig. 11).
 
 ## What it verifies
 `check.py` builds an independent oracle from the LITERATURE (bisection, not the code's Newton):

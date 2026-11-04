@@ -1,4 +1,4 @@
-# INFO — breakup/khrt-stress (A23/S4-E: heavy-shedding robustness, **GREEN**)
+# INFO — breakup/khrt-stress (heavy-shedding robustness, **GREEN**)
 
 ## What this is — and is not
 
@@ -20,14 +20,14 @@ loss instead of 3 %.
 
 ## Why it exists
 
-The A23/S4 work replaced the single `gr%child(ip)` slot with a growable per-parent shed list,
-lifting a one-shed-per-parent cap that was a property of the data structure rather than of
+Each parent keeps its sheds in a growable per-parent shed list; a single `gr%child(ip)` slot
+would cap every parent at one shed, a property of the data structure rather than of
 Reitz-87. khrt-e2e exercises that path only shallowly — its deepest parent sheds ~22 times —
 so list growth under repeated `move_alloc` would otherwise go essentially untested, and any
 error in the per-shed strip/create pairing would be at its smallest exactly where the suite
 looks.
 
-Measured sensitivity of the fixture (2026-08-04, sprop2, all rc=0, all mass-exact):
+Measured sensitivity of the fixture (sprop2, all rc=0, all mass-exact):
 
 | `mShedLim` | children | deepest parcel | wall | peak RSS |
 |---|---|---|---|---|
@@ -36,7 +36,7 @@ Measured sensitivity of the fixture (2026-08-04, sprop2, all rc=0, all mass-exac
 | 0.003 | 2003 | 159 | 31.7 s | 32.3 MB |
 | 0.001 | 3673 | 420 | 51.6 s | 34.8 MB |
 
-0.01 was chosen for cost: it drives ~7 doublings of the shed list at a third of the runtime of
+0.01 is chosen for cost: it drives ~7 doublings of the shed list at a third of the runtime of
 0.003. The RSS column is the useful one — a 15× increase in children costs 6 MB, which is what
 "the growable lists do not thrash" means concretely.
 
@@ -44,8 +44,8 @@ Measured sensitivity of the fixture (2026-08-04, sprop2, all rc=0, all mass-exac
 
 1. **≥ 500 children** — a floor; a collapse of the shed path fails loudly rather than silently
    turning this into a duplicate of khrt-e2e.
-2. **deepest parcel ≥ 20 sheds** — proves the per-parent list actually grew. If a
-   one-shed-per-parent cap ever came back this is the assertion that catches it.
+2. **deepest parcel ≥ 20 sheds** — proves the per-parent list actually grew. A
+   one-shed-per-parent cap fails this assertion.
 3. **mass conservation to 1e-4** — the point of the case. Every shed both strips the parent and
    creates the child; an error in that pairing compounds with shed count, so it surfaces here
    long before it would at the default `mShedLim`.
@@ -59,5 +59,5 @@ fails independently of any assertion above.
 
 ## Related
 
-- Bug ledger: `tests/BUGS.md` **A23** (A23g, A23h, the one-shed cap).
+- The shed path's three pieces (cell-entry state, child origin, shed count): [breakup/khrt-e2e](../khrt-e2e/INFO.md).
 - Thread-invariance of this same path: `khrt-e2e-threads` (`../khrt-e2e/check_threads.py`).

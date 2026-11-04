@@ -817,8 +817,8 @@ size-distribution file named without `.` or `/`, every parcel at the table's sin
 
 The routine-level member of this category is the interpolation family
 `test_gas_reconstruction` (E1–E5, E7, E8), documented under
-[Literature tests](literature.md); `vie-plait` is its in-solver counterpart, the
-only case that exercises the 2nd-order gas rebuild inside the integration loop.
+[Literature tests](literature.md); `vie-plait` is its in-solver counterpart: its gas varies
+in space, so its closed form holds only with the 2nd-order gas rebuild inside the integration loop.
 
 **Proves:** the feature is live, self-consistent and does not perturb the
 trajectory physics.
@@ -830,7 +830,7 @@ closed-form case on the same physics wherever one exists.
 
 ### vie-plait
 
-The only e2e case with a **spatially varying** carrier field: the compressive
+A **spatially varying** carrier field: the compressive
 velocity $v_g = -\epsilon(y-1)$ of Vié et al. (2015, §5.1).  Inertial particles
 injected at $U_{p0}=u_{g0}$, $V_{p0}=0$ trace the damped transverse oscillator of
 Eq. 5.3; with Stokes number $\mathrm{St}=\epsilon\tau=5>\mathrm{St}_c=\tfrac14$

@@ -37,8 +37,8 @@ it sees only the liquid and solid branches; the plateau branch is seen per cell 
 | no metal parameter block for model 6 | E4 0.42, E4b 1.0, plateau length wrong on every parcel |
 | plateau rate taking `cp-solid` for `h-fus` | E4b 0.34, plateau length wrong on every parcel |
 | ODE-state count left at 7 | nothing here (the case writes only the source field); `solid-box-euler` sees it |
-| the code before model 6 existed | setup refuses `solidification=on`, exit 128 |
-| the particle files without `f` (the code before the column) | E6: no `f` column in the trajectory and exit headers |
+| a solver without the solidification model | setup refuses `solidification=on`, exit 128 |
+| particle files without an `f` column | E6: no `f` column in the trajectory and exit headers |
 | each row carrying the previous row's `f` (the segment-start value) | E6: the first plateau row of every parcel at `f = 0`; the plateau constant off by `−s dx = −0.0474` on all 25 parcels |
 | `solid_phase` ignoring `f` (`T < T_m` alone) | E6: the plateau rows read phase 0 (their printed `T` is `T_m`) instead of 2 on all 25 parcels; the doctest of `tests/tools/datcols.py` |
 

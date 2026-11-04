@@ -8,7 +8,7 @@ injects at 270 K, so the drops heat toward the 300 K gas and their density falls
 ## What it verifies
 A drop without mass exchange changes its mass only at a breakup event, where TAB resizes it and its number rate at
 constant stream mass. At the end of every segment the solver sets the drop's mass from the event diameter; that
-diameter was derived at the segment-end temperature, so the mass must be taken at the density of the same
+diameter is derived at the segment-end temperature, so the mass must be taken at the density of the same
 temperature. `check.py`:
 
 - **M** between consecutive trajectory rows of a parcel the printed mass is equal to print precision, or it changes

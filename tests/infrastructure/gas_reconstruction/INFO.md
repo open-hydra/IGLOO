@@ -1,10 +1,9 @@
-# INFO — gas_reconstruction (family E)
+# INFO — gas_reconstruction (in-cell gas sampling)
 
 Verifies the production interpolation / cell-location routines that reconstruct
 the gas state at an arbitrary point inside a hex cell. **Direct calls to
 production interp/location routines — no ODE integration involved.**
 
-Schema: see verification-phase1-plan.md §2.5.
 Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
 
 ## Tests
@@ -26,7 +25,7 @@ cells (E4 then fails too: residual 8.2e-6). E8 with the stop at 10⁻¹⁴ h, be
 reaches away from the origin: mean 9.2 and 10.0 steps, max 10 (the cap), on the cells at 2 m and
 20 m; E7 stays green there.
 
-## Status (T1)
+## Status
 
 E1–E5, E7 and E8 implemented in `test_gas_reconstruction.f90`, all PASS. Tolerances are
 theory-derived: parallelepiped cells are affine ⇒ machine precision; every gradient-bearing bound

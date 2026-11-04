@@ -42,7 +42,7 @@ V3 6.4e-9 of the gross (4.868e3 W), 25/25 parcels verified.
 - The temperature of a material without mass exchange left at its injection value while the enthalpy evolves.
   With the table extended down to 1 K (rows 1..249 continuing the first segment, so that no refusal fires),
   every row of every parcel prints `T₀`: all 1475 window rows and 25 exits off the closed form, the worst by 237 K
-  (3.7·10⁴ tolerances), and `Σ E` = −101.96 W against 0 from the printed exits. With the fix the same input gives the numbers above, residual for
+  (3.7·10⁴ tolerances), and `Σ E` = −101.96 W against 0 from the printed exits. On that input the solver gives the numbers above, residual for
   residual: the extended table and the table that starts at 250 K are one physics.
 - The inversion that searched the table from index 1, reading before a table that starts above 1 K: the 210 K
   group lands up to 1.87 K off (5/5 parcels, 300 rows; V1 142 tolerances, V2 0.013 K, 107 tolerances). The other

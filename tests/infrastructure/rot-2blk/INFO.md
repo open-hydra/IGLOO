@@ -11,8 +11,8 @@ matching in-plane indices would read the wrong partner cell.
 `drag-stokes`'s box, 0.15 × 0.05 × 0.05 m, as two blocks of 30 × 5 × 5 cells joined at x = 0.075 m, block 2
 rotated 180° about the y axis (`make_box_case.py --blocks 2 --rotate2 y`): its i runs along −x (i = 1 at
 x = 0.15), its k along −z, both blocks right-handed. The gas is drag-stokes's but for the temperature,
-T = 600 + 2000 z K at the cell centres (`--zgradient 2000`). `INPUT/drop-bc.txt` is ATLAS BCB's output (ATLAS
-`a3689c3`, gfortran build) on the deck `INPUT-atlas/`: the generator's `mesh.tec` (`--mesh-only`), a
+T = 600 + 2000 z K at the cell centres (`--zgradient 2000`). `INPUT/drop-bc.txt` is ATLAS BCB's output (a
+gfortran build; `make_fixture.sh` names the ATLAS commit) on the deck `INPUT-atlas/`: the generator's `mesh.tec` (`--mesh-only`), a
 one-material `drop-phase.txt`, and an `input.ini` with block 1's face 1 an inlet (`drop-krho = 0.34`,
 `drop-kV = 0.1`, `drop-kT = 0.5`, `drop-rp = 5.945e-6`, Dirac), both blocks' face 2 `connection`, block 2's
 face 1 an outlet, every other face a wall. ATLAS pairs the two faces 2 cell by cell — block 1's cell

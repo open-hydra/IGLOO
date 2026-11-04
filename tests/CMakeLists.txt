@@ -5,12 +5,12 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ rad-cool/ emissivity-cap/ rad-foreign-key/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-stokes-dopri5/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ rad-cool/ emissivity-cap/ rad-foreign-key/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/, liquid-p2t/, boiling-zgr/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ d2law-brk-dormant/ temp-relax-p2t/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-brk-tab-rhos/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ breakup-per-material/ khrt-plane/ pe-sigma-table/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x}
 #   repeatability/      two-sweep gates (twosweep driver): 14 cases
 #   mpi/                registered only under USE_MPI: 9 rank-count cases + 4 consistency + 1 determinism
 #                       + 13 two-sweep cases
@@ -75,10 +75,10 @@ endfunction()
 # (IGLOO_EXE names the executable for sibling runs).
 # Ordinary solver exit codes are deliberately NOT gated (benign ifort stderr warnings);
 # PASS == check_finite.py and check.py exit 0.
-# EXCEPT signals (rc >= 128): 2026-08-03 a SIGSEGV in the KHRT child-creation path still
-# reported PASS, because check.py happily read the PARTIAL trajectory written before the
-# crash. A crashed solver must never be green, so death-by-signal now fails the case
-# outright. This is the narrowest possible gate -- it does not touch the benign-stderr
+# EXCEPT signals (rc >= 128): check.py can read the PARTIAL
+# trajectory a crashed run leaves and pass on it. A crashed solver must
+# never be green, so death-by-signal fails the case outright. This is
+# the narrowest possible gate -- it does not touch the benign-stderr
 # tolerance that the comment above is about.
 function(igloo_e2e_case name casedir labels)
     add_test(NAME ${name}
@@ -98,7 +98,7 @@ endfunction()
 # Three deliberate departures from igloo_e2e_case:
 #  * rc gate is `!= 0`, not `>= 128`. Measured on this host (Intel MPI 2021.9.0): mpiexec returns
 #    255 when ANY rank dies on a signal and 0 on a clean run, so a `>=128` gate would work only by
-#    luck of that value. IGLOO never exits non-zero benignly (khrt-e2e-rt already relies on it).
+#    luck of that value. IGLOO never exits non-zero benignly (khrt-e2e-rt relies on it too).
 #  * OMP_NUM_THREADS is per-case, because ranks x threads must stay bounded.
 #  * each case gets its OWN directory rather than sharing the serial case's OUTPUT/ under a
 #    RESOURCE_LOCK -- the repeatability/ pattern. A private dir cannot race the serial variant at
@@ -126,7 +126,7 @@ igloo_unit_test(test_gas_reconstruction infrastructure/gas_reconstruction "unit;
 igloo_unit_test(test_ini_pipeline       infrastructure/ini_pipeline       "unit;infrastructure;ini;t9")
 # The properties.dat reader (read_cdp_properties) on its own fixtures, one working directory per leg set
 # (the reader loads input.ini from the working directory): hexadecane -- a table from 280 K against the
-# same rows from 1 K, the Psat column found by name in any order, both enthalpy datums; two-material -- a
+# same rows from 1 K, the Psat column looked up by name in any order, both enthalpy datums; two-material -- a
 # tabulated zone next to an all-zero one; atlas-water -- the bytes ATLAS GPB writes for water with
 # psat-vapour = H2O, so both repositories test the same file; sigma-mu -- the Sigma and Viscosity columns
 # of a breaking material next to an all-zero zone that keeps the [IGLOO-Properties] constants.
@@ -165,15 +165,15 @@ igloo_unit_test(test_slot_order         infrastructure/slot_order         "unit;
 # model word every allowed selector value, each breakup constant its own model's slot and nothing on the four
 # others, the defaults, T-nuc = 0.8 T-melt, combustion over evaporation, TAB's product-size scale.
 igloo_unit_test(test_material_tokens    infrastructure/material_tokens    "unit;infrastructure;ini;t1")
-# bcdef-200 dispatch must key off face GEOMETRY, not face index: the wedge is not pinned to
-# faces 5/6 by anything. Covers all six indices for wedges built on i, j and k, and pins the
-# equivalence with the retired `f==6` rule. No e2e case reaches bcDef's fold branch (axisymFold
-# re-sectors first), so this unit test is its only coverage.
+# bcdef-200 dispatch must key off face GEOMETRY, not face index: the wedge is not pinned to faces 5/6 by anything.
+# Covers all six indices for wedges built on i, j and k, and pins the dispatch's agreement with the face-index rule
+# (`f==6` -> -delthe, `f==5` -> +delthe) on the conventional k-ordering. No e2e case reaches bcDef's fold branch
+# (axisymFold re-sectors first), so this unit test is its only coverage.
 igloo_unit_test(test_axis_dispatch      infrastructure/axis_dispatch      "unit;infrastructure;bc;t1")
-# the grazing standoff is an absolute length whose "<< cell size" contract was unenforced.
-# It became load-bearing when the axis face started reflecting -- the axis is where meshes go
-# radially thin -- so grazeOffset caps it at a fraction of the cell. Pins the invariant across
-# 12 decades of cell thickness.
+# the grazing standoff is an absolute length that must stay "<< cell size". The axis
+# face reflects, and the axis is where meshes go radially thin, so grazeOffset caps
+# it at a fraction of the cell. Pins the invariant across 12 decades of cell
+# thickness.
 igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;infrastructure;bc;t1")
 # The boundary search's face: a ray along a triangle edge, in its plane or off it, is no hit (RT1; RED with the ratio
 # form of the parallel test, 0/0: NaN and +Inf hits); intersectPolyhedron returns the exit face at its distance for
@@ -182,10 +182,10 @@ igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;
 # point through, at a warped wall and in the tolerance band (BF1, BF2; RED when a face qualifies by one non-negative
 # triangle distance: the side face), controls and the fallback (BF3, BF4), 2e4 points on each of six cells (BF5).
 igloo_unit_test(test_geometry_rules     infrastructure/geometry_rules     "unit;infrastructure;geometry;t1")
-# O29: the ord2 gas ghost ring was filled by blind linear extrapolation on every face, so the
-# sampled normal velocity at a gas-solid plane was (3v1 - v2)/2 instead of 0 and a parcel in the
-# boundary dual row was dragged through it. The bc-aware fill existed but ran once at setup and
-# was overwritten before any read. Pins the mirror on 300/301 (faces, edges, corners), the
+# the ord2 gas ghost ring: a ring filled only by blind linear extrapolation on every face gives a
+# sampled normal velocity of (3v1 - v2)/2 instead of 0 at a gas-solid plane and drags a parcel in
+# the boundary dual row through it. The ring is filled at every solve, the linear fill first, then
+# the bc-aware mirror. Pins the mirror on 300/301 (faces, edges, corners), the
 # positivity guard, and the ghost nodes of connected faces (101/201/102) interpolated from the
 # connected block's gas: exact on a linear field across unequal and warped cells, the snap to a
 # partner centre bit for bit, order-free between blocks, within q h^2/4 on a quadratic 102 field;
@@ -198,18 +198,18 @@ igloo_unit_test(test_ghost_bc           infrastructure/ghost_bc           "unit;
 igloo_unit_test(test_bc_families        infrastructure/bc_families        "unit;infrastructure;bc;io;t1")
 # the ord2 dual must TILE the domain: its boundary cells straddle the boundary face, so an
 # unclipped one dilutes its deposited density by the outside fraction. Pins sum(dual cellVol)
-# == domain volume plus the per-cell 1/2, 1/4, 1/8 factors. The 3D branch had no clip at all
-# and NO e2e case GATES it (the box fixtures are Nk=5 but ord1, no dual; vie-plait runs it at
-# gas-order 2 with nothing reading the field) -- so this is its only coverage; the 2D cases in
-# it are the regression half.
+# == domain volume plus the per-cell 1/2, 1/4, 1/8 factors. NO e2e case GATES the 3D branch: the
+# 3D gas-order-2 cases that write the Eulerian field hold it to a run that clips alike (the box as
+# one block, or on one rank) or do not read it, and vie-plait runs it at gas-order 2 with nothing
+# reading the field -- so this is its only coverage; the 2D cases in it are the regression half.
 igloo_unit_test(test_dual_clip          infrastructure/dual_clip          "unit;infrastructure;euler;t1")
-# O28: the ord2 source reduction volume-AVERAGED extensive rates, so every boundary dual row
-# leaked most of its deposit (1/2 on a face row, 1/4 edge, 1/8 corner on a uniform Cartesian
-# mesh; the octant inequality elsewhere) and nothing printed a conservation total. Asserts
+# the ord2 source reduction must CONSERVE: one that volume-AVERAGES extensive rates makes every
+# boundary dual row leak most of its deposit (1/2 on a face row, 1/4 edge, 1/8 corner on a uniform
+# Cartesian mesh; the octant inequality elsewhere). Asserts
 # sum_geo == sum_dual on uniform 3D/2D, on single-cell deposits at interior/face/edge/corner,
 # and on a CURVILINEAR mesh -- the last is what separates "conserves on a nice mesh" from
 # "conserves by construction". Also pins the partition-of-unity invariant sum(dualW) ==
-# sum(subVol). RED on the pre-fix tree: 0.4000 / 0.2963 / 0.6000 / 0.4444 and 1, 1/2, 1/4, 1/8.
+# sum(subVol). RED on a volume-averaging reduction: 0.4000 / 0.2963 / 0.6000 / 0.4444 and 1, 1/2, 1/4, 1/8.
 igloo_unit_test(test_source_reduction  infrastructure/source_reduction   "unit;infrastructure;euler;t1")
 # The field mollifier over blocks joined by 101 links (mollifyBlocks): a random grid cut into blocks
 # smooths as the uncut grid (3D and 2D cuts, three blocks, 2 x 2 blocks, above the OpenMP threshold),
@@ -245,23 +245,23 @@ if(USE_OPENMP)
 endif()
 
 # Repeatability case: run the harness in an ISOLATED case dir, then the shared oracle.
-# The dirs under repeatability/ symlink INPUT to their parent e2e case (khrt-stress
-# precedent) and carry their own input.ini, so these tests never share an OUTPUT/ with the
+# The dirs under repeatability/ symlink INPUT to their parent e2e case (as khrt-stress
+# does) and carry their own input.ini, so these tests never share an OUTPUT/ with the
 # single-sweep cases -- which they otherwise would clobber under `ctest -j`.
 # A non-empty `gasfile` additionally runs the 3-sweep gas-refresh cycle.
-# Signal handling matches igloo_e2e_case: ordinary solver exit codes are not gated, death
-# by signal is.
+# Signal handling matches igloo_e2e_case: ordinary solver exit codes are not gated, death by signal is.
 # A case the solver must REFUSE at setup. The e2e helper cannot host one: ifx `error stop 'msg'`
 # exits 128, which its rc >= 128 test reads as "died on signal". tools/check_refusal.py needs
 # exit == IGLOO_ERROR_STOP_RC (below) AND the expected text in stderr (the error-stop payload that
 # ended the run) AND nothing set up past the choke point (no "Placing particles"/"Compute particles
-# dynamics", no OUTPUT/*.dat) -- a green solver fails it on every count (proven on drag-stokes,
-# refusals/INFO.md).
+# dynamics", no OUTPUT/*.dat) -- a green solver fails it on every count (as drag-stokes's own output
+# does, refusals/INFO.md).
 #
 # That exit code belongs to the compiler's runtime, not to IGLOO: measured 128 under ifx 2023.1,
-# ifx 2026.1 and ifort, 1 under gfortran 12.2 -- so a gfortran build failed every refusal on the
-# code alone, with the right payload in stderr. Probe it instead of tabulating it by compiler ID.
-# A code outside 1..128 could not be told apart from a clean run (0) or a signal death (128+N).
+# ifx 2026.1 and ifort, 1 under gfortran 12.2 -- so a gate that hard-codes 128 fails every refusal
+# of a gfortran build on the code alone, with the right payload in stderr. The code is probed, not
+# tabulated by compiler ID. A code outside 1..128 cannot be told apart from a clean run (0) or a
+# signal death (128+N).
 try_run(IGLOO_ERROR_STOP_RC _stop_code_probe_built
     "${CMAKE_CURRENT_BINARY_DIR}/stop_code_probe"
     "${CMAKE_CURRENT_SOURCE_DIR}/tools/stop_code_probe.f90"
@@ -311,27 +311,27 @@ function(igloo_threads_case name casedir labels)
         TIMEOUT 900)
 endfunction()
 
-# The five cases the plan calls for, each exercising a different leak:
-#   drag-stokes   simplest ord1 path -- was already repeatable, so this is a REGRESSION gate
-#   db-injection  assigned stream => the *Inj capture path (F4)
-#   d2law         evaporation destroys d (F3)
-#   khrt          children => counts + brkupVar (F2, F5)
-#   vie-plait     the suite's only gas-order=2 case => accumulator shape (F7)
+# Seven of the two-sweep cases and what each exercises:
+#   drag-stokes   simplest ord1 path, on none of the leak paths -- a REGRESSION gate
+#   db-injection  assigned stream => the *Inj capture path
+#   d2law         evaporation destroys d
+#   khrt          children => counts + brkupVar
+#   vie-plait     a gas-order=2 case => accumulator shape
 #   etab          ETAB event breakup, a second event model on the shed/resize path
-#   tab           TAB event breakup -- the RNG-consuming model (see below)
-# NOTHING is excluded any more. `tab-e2e` used to be, because TAB's child-size sampler drew from
-# the intrinsic random_number inside the OMP region, making it irreproducible run-to-run and so
-# ungateable. Per-particle RNG streams (Lib_Statistics::rngSeedFor/rngNext) fixed that at the
-# source, and `repeat-tab` is the gate that proves it. `test_rng_stream` covers the stream
-# contract itself -- distinctness, reproducibility, uniformity -- which no e2e case can see,
-# because one shared seed would reproduce perfectly and pass every e2e gate.
+#   tab           TAB event breakup -- its child-size sampler draws from the RNG stream (see below)
+# TAB's child-size sampler draws inside the OMP region from the parcel's own RNG stream
+# (Lib_Statistics::rngSeedFor/rngNext), so `tab-e2e` is reproducible run to run and gateable (the
+# intrinsic random_number there is neither), and `repeat-tab` is the gate that proves it.
+# `test_rng_stream` covers the stream contract itself -- distinctness, reproducibility,
+# uniformity -- which no e2e case can see, because one shared seed would reproduce perfectly
+# and pass every e2e gate.
 igloo_twosweep_case(repeat-drag-stokes  repeatability/drag-stokes
                     "e2e;repeatability;standard"       "INPUT/solfile.tec")
 # repeat-drag-stokes-dopri5: two sweeps at OMP 5 with the explicit solver. Gates the scatter
-# cloud's determinism on the DOPRI5 path (ledger O27): dopri5.f kept XOLD in COMMON /CONDO5/,
-# shared by every thread, and solout's scatter accumulator reads x - xold -- run-to-run
-# different scatter-A.dat at OMP 5 (372/366/348 rows), identical at OMP 1. Fixed in the OSlo
-# fork (thread-private XOLDS passed to SOLOUT); this twin was RED on the racy binary.
+# cloud's determinism on the DOPRI5 path: solout's scatter accumulator reads x - xold, and
+# dopri5.f keeps XOLD in COMMON /CONDO5/ (THREADPRIVATE), SOLOUT receiving the thread-private
+# copy XOLDS. RED on a DOPRI5 whose /CONDO5/ XOLD is shared by every thread: scatter-A.dat
+# differs run to run at OMP 5 (372/366/348 rows), identical at OMP 1.
 igloo_twosweep_case(repeat-drag-stokes-dopri5 repeatability/drag-stokes-dopri5
                     "e2e;repeatability;standard"       "")
 igloo_twosweep_case(repeat-db-injection repeatability/db-injection
@@ -348,10 +348,10 @@ igloo_twosweep_case(repeat-etab         repeatability/etab
                     "e2e;repeatability;breakup"        "")
 igloo_twosweep_case(repeat-tab          repeatability/tab
                     "e2e;repeatability;breakup"        "")
-# repeat-tab-dopri5: TAB breakup on the explicit solver at OMP 5 -- ledger O27's physically
-# consequential half: solout advances the TAB oscillator by x - xold, and DOPRI5's XOLD was a
-# COMMON block shared by every thread, so breakup timing depended on the other threads' steps.
-# Sweep 1 must reproduce sweep 0 (trajectories, exits, scatter, source); RED on the racy fork.
+# repeat-tab-dopri5: TAB breakup on the explicit solver at OMP 5 -- the physically consequential
+# half of a shared XOLD: solout advances the TAB oscillator by x - xold, so with DOPRI5's XOLD in a
+# COMMON block shared by every thread the breakup timing depends on the other threads' steps.
+# Sweep 1 must reproduce sweep 0 (trajectories, exits, scatter, source); RED on that shared XOLD.
 igloo_twosweep_case(repeat-tab-dopri5   repeatability/tab-dopri5
                     "e2e;repeatability;breakup"        "")
 # repeat-solid-box: model 6's phase and frozen fraction are re-derived at injection every sweep.
@@ -360,7 +360,7 @@ igloo_twosweep_case(repeat-solid-box    repeatability/solid-box
 # repeat-evap-breakup: ODE model 4's droplet mass and number rate are re-seeded at injection every sweep.
 igloo_twosweep_case(repeat-evap-breakup repeatability/evap-breakup
                     "e2e;repeatability;evaporation;breakup" "")
-# repeat-swirl-wedge: the first twin on a wedge (Nk = 1, the sector fold): the setup-time wedge state survives a
+# repeat-swirl-wedge: the twin on a wedge (Nk = 1, the sector fold): the setup-time wedge state survives a
 # solve, every DB parcel's azimuthal velocity is restored at injection; plus the gas-refresh cycle.
 igloo_twosweep_case(repeat-swirl-wedge  repeatability/swirl-wedge
                     "e2e;repeatability;axisym" "INPUT/solfile.tec")
@@ -368,7 +368,7 @@ igloo_twosweep_case(repeat-swirl-wedge  repeatability/swirl-wedge
 igloo_twosweep_case(repeat-burn-box-residue repeatability/burn-box-residue
                     "e2e;repeatability;combustion" "")
 # docs/user/registry.md is DocGen OUTPUT that is also TRACKED, so it can silently
-# disagree with the registry it documents (it did twice on 2026-07-30). Regenerate
+# disagree with the registry it documents. Regenerate
 # into the build tree and diff. Kind 8 (contract meta-test): no physics, no figure.
 add_test(NAME registry-docs COMMAND ${CMAKE_COMMAND}
     -DDOCGEN=$<TARGET_FILE:DocGen>
@@ -395,7 +395,7 @@ set_tests_properties(lint-test-inputs PROPERTIES
 # known in closed form (forward and net crossings, a disc and an annulus, a second plane it must not read).
 add_test(NAME psd-plane-tool COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_psd_plane.py)
 set_tests_properties(psd-plane-tool PROPERTIES LABELS "unit;infrastructure;output;t9")
-# DB ("assigned position") injection — regression gate for bug B1 (fixed 2026-07-08):
+# db-injection: DB ("assigned position") injection; RED on a DB pinning that writes unallocated stateVar(4:6): SIGSEGV
 igloo_e2e_case(db-injection infrastructure/db-injection "e2e;infrastructure;injection")
 configure_file(infrastructure/ini_pipeline/input.ini ${CMAKE_CURRENT_BINARY_DIR}/input.ini COPYONLY)
 
@@ -445,23 +445,23 @@ igloo_e2e_case(vie-plait   standard/vie-plait   "e2e;standard;drag;gas")
 # energy) against the strands' telescoped flows.
 igloo_e2e_case(vie-plait-dense standard/vie-plait-dense "e2e;standard;drag;gas;source")
 # swirl-wedge: solid-body swirl on an annular axisymmetric wedge (mesh2D + axisym), three DB
-# parcels with prescribed wp -- the quantitative gate on the 2.5D fold (W-plan item B): r, w_p,
+# parcels with prescribed wp -- the quantitative gate on the 2.5D fold: r, w_p,
 # v_r and the unwrapped azimuth against the exact cylindrical ODE, tolerances = the derived
 # 2.5D frame-error budget. RED with the fold rotating position only; omega = 0 fails G2.
 igloo_e2e_case(swirl-wedge standard/swirl-wedge "e2e;standard;drag;gas;axisym")
 # swirl-wedge-deposit: the same run with out-file ALL and mollify off -- the source and euler
-# fields under swirl (W-plan Q7, ledger O23 deposit half). Radial bands isolate P3 from P1+P2:
+# fields under swirl. Radial bands isolate P3 from P1+P2:
 # F_r/F_theta per band against the force integral mdot*int (v - g)/tau dt along the exact
 # trajectory, E against the kinetic drop, per-cell v_p/w_p against the path average, band mass.
 # RED on the Cartesian deposit (325/382 cells, v_p misses -w sin theta) and on a meridian-
 # COMPONENT difference (F_r sign flips: the frame terms w^2/r are not force on the gas).
 igloo_e2e_case(swirl-wedge-deposit standard/swirl-wedge-deposit "e2e;standard;drag;gas;axisym;euler")
-# swirl-wedge-spin: one over-spun parcel (wp = 2 at r = 0.2, up = 0.05) -- the many-sector case of
-# O23. The containment test carries the azimuth band (isPointInsideCell sectorOut), so every
-# segment ends at the sector edge and folds by ONE sector. Gates the run's fold witness against
-# the oracle sweep (79 sectors, no multi-sector fold), the trajectory (u is a state, not the
-# clock) and the eulerian mass per geo cell against the oracle residence projected with the
-# solver's dual-to-geo rule. RED on the pre-fix binary: no witness, first cells +33 % / -37 %.
+# swirl-wedge-spin: one over-spun parcel (wp = 2 at r = 0.2, up = 0.05) -- the fold's many-sector case. The
+# containment test carries the azimuth band (isPointInsideCell sectorOut), so every segment ends at the sector edge
+# and folds by ONE sector. Gates the run's fold witness against the oracle sweep (79 sectors, no multi-sector fold),
+# the trajectory (u is a state, not the clock) and the eulerian mass per geo cell against the oracle residence
+# projected with the solver's dual-to-geo rule. RED on an azimuth-blind point-in-cell test: no witness, first cells
+# +33 % / -37 %.
 igloo_e2e_case(swirl-wedge-spin standard/swirl-wedge-spin "e2e;standard;drag;gas;axisym;euler")
 # swirl-wedge-ord1: swirl-wedge at gas-order 1, the cell's meridian-frame velocity rotated to the parcel's azimuth;
 # oracle: swirl-wedge's ODE with the cell-wise swirl W_c(j), switched at the radial face planes.
@@ -520,10 +520,10 @@ set_tests_properties(vortex-cloud-3way PROPERTIES
 
 # ---------- evaporation --------------------------------------------------------
 igloo_unit_test(test_evaporation evaporation "unit;evaporation;c;t4")
-# E-VAL-2b: MHB98 Fig.4 decane — the case where their 8 models separate (f2 = eq.19).
+# test_mhb98_decane: MHB98 Fig.4 decane — the case where their 8 models separate (f2 = eq.19).
 # A unit test, not e2e: the paper's drop is at FIXED slip (see the file header).
 igloo_unit_test(test_mhb98_decane evaporation "unit;evaporation;val;mhb98;f2")
-# Promoted 2026-07-07 with the A3/A4/A9 production fixes (see BUGS.md):
+# test_evap_probes: XE1 the d2-law rate (a halved rate fails), XE2 rhsEvaporation's F(8) < 0, XE3 the ASM Q_G sign.
 igloo_unit_test(test_evap_probes evaporation "unit;evaporation;c;t8")
 # The Lv and Cpv columns at the droplet temperature: a table read at T_p acts as the scalar of that value.
 igloo_unit_test(test_vapour_tables evaporation "unit;evaporation;c;t8")
@@ -553,25 +553,25 @@ igloo_e2e_case(boiling-zgr-switch evaporation/boiling-zgr-switch "e2e;evaporatio
 igloo_e2e_case(d2law evaporation/d2law "e2e;evaporation")
 # threads-d2law: d2law at 1, 2 and 5 threads (evaporating parcels, the mass source).
 igloo_threads_case(threads-d2law evaporation/d2law "e2e;evaporation;omp")
-# E-VAL-1 (2026-07-22): Tier-V analytic line — cp_p x100 freezes B_T so K is a pure
+# d2law-line: Tier-V analytic line — cp_p x100 freezes B_T so K is a pure
 # closed form of the inputs (Godsave/Spalding); companion to the run-conditioned d2law.
 igloo_e2e_case(d2law-line evaporation/d2law-line "e2e;evaporation;val;d2line")
 # d2law-varcp: d2law with a varying cp (the enthalpy state under evaporation): d2law's mass-rate oracle, the enthalpy
 # history along the measured diameter, and the energy deposit at the table's enthalpy.
 igloo_e2e_case(d2law-varcp evaporation/d2law-varcp "e2e;evaporation;heat")
-# F1 (2026-07-10): Langmuir-Knudsen non-equilibrium interface (Miller-Harstad-Bellan 1998)
+# test_interface_lk, lk-neq: Langmuir-Knudsen non-equilibrium interface (Miller-Harstad-Bellan 1998)
 igloo_unit_test(test_interface_lk evaporation/interface-neq "unit;evaporation;lk;c;t9")
 igloo_e2e_case(lk-neq evaporation/lk-neq "e2e;evaporation")
 # cemb-box, asm-box: lk-neq's droplet at half the gas speed under CEM-B (the 1/3-rule film) and the
 # Abramzon-Sirignano model: d^2 (and, for ASM, T) against the models' rate laws along the measured state.
 igloo_e2e_case(cemb-box evaporation/cemb-box "e2e;evaporation")
 igloo_e2e_case(asm-box evaporation/asm-box "e2e;evaporation")
-# F2 (2026-07-11): Tonini-Cossali analytical evaporation (TC2012 Stefan-Fuchs; Antonov 2024 eq.9)
+# test_tc_analytic, tc-box: Tonini-Cossali analytical evaporation (TC2012 Stefan-Fuchs; Antonov 2024 eq.9)
 igloo_unit_test(test_tc_analytic evaporation/tc-analytic "unit;evaporation;tc;c;t5")
 igloo_e2e_case(tc-box evaporation/tc-box "e2e;evaporation")
 # datum-abs: tc-box with an ABSOLUTE (Enthalpy_abs) table -- the table datum hOff must reach the gas
 # energy source and nothing else (E_abs - E_rel == hOff*wdot; the gate runs the relative sibling
-# itself into ref-rel/). Proven RED on the pre-hOff binary (residual = 100 % of scale).
+# itself into ref-rel/). RED on a solver whose energy source leaves hOff out (residual = 100 % of scale).
 igloo_e2e_case(datum-abs evaporation/datum-abs "e2e;evaporation")
 # boiling-temperature-key: tc-box under the canonical key name; check.py runs tc-box (the alias Tboil)
 # as a sibling and requires identical source.tec and exit records. RED on a Tboil-only reader: setup stops.
@@ -583,7 +583,7 @@ igloo_e2e_case(no-psat evaporation/no-psat "e2e;evaporation")
 # state, the number rate constant). RED when a cut step adds its weight twice: 22 to 23 markers above the
 # bound on every parcel (X about 91).
 igloo_e2e_case(scatter-weight-evap evaporation/scatter-weight-evap "e2e;evaporation;scatter")
-# E-VAL-2 (2026-07-21): VALIDATION vs a paper's own case — single water droplet vs
+# mhb98-water: VALIDATION vs a paper's own case — single water droplet vs
 # Miller-Harstad-Bellan 1998 Fig.2 (exp. Ranz-Marshall 1952b). Gate = IGLOO-vs-LK-kernel
 # (tight); the digitized experiment is a NON-gating overlay in verify.py.
 igloo_e2e_case(mhb98-water evaporation/mhb98-water "e2e;evaporation;val;mhb98")
@@ -594,25 +594,25 @@ igloo_e2e_case(mhb98-water-psat evaporation/mhb98-water-psat "e2e;evaporation;mh
 # mhb98-water-blowing: mhb98-water with blowing = LK: the wet-bulb identity with MHB98's f2, the f2-free form off,
 # and the shifts of K and T_wb against a no-blowing sibling (ref-noblow/) and a coupled droplet kernel.
 igloo_e2e_case(mhb98-water-blowing evaporation/mhb98-water-blowing "e2e;evaporation;mhb98")
-# E-VAL-3 (2026-07-23): Tonini-Cossali n-hexadecane, TC2012 Fig.11 — first VARIABLE-density
-# case (thermal swelling). Found+fixed A20 (variable tabs never allocated) + A21 (lookupTab
-# OOB). Gate = variable-density TC mass rate + swelling; digitized paper curves non-gating.
+# tc-hexadecane: Tonini-Cossali n-hexadecane, TC2012 Fig.11 — a VARIABLE-density case (thermal swelling) on the
+# T-dependent-property path end to end. RED on variable-property tabs left unallocated (a segfault) and on a
+# lookupTab with no bounds guard (an out-of-bounds read). Gate = TC mass rate + swelling; digitized curves non-gating.
 igloo_e2e_case(tc-hexadecane evaporation/tc-hexadecane "e2e;evaporation;val;tc")
-# O31: the equivalent-Eulerian field of a MASS-LOSING material (ODE model 2). tc-box's case
-# with out-file = ALL and mollify = off -- nothing else in the suite covers the model-2/5 branch
-# of computeEulField, because every Euler writer here is model 1 and every model-2/5 fixture
-# writes out-file = S. Oracle is the per-cell ratio rho_p/n_p (the time-mean droplet mass, an
+# tc-box-euler: the equivalent-Eulerian field of a MASS-LOSING material (ODE model 2). tc-box's case
+# with out-file = ALL and mollify = off: the model-2/5/8 branch of computeEulField (burn-box-euler gates
+# model 5, burn-box-cap model 8; body-evap-m2 and body-burn-m5 write the field unread).
+# Oracle is the per-cell ratio rho_p/n_p (the time-mean droplet mass, an
 # INTENSIVE quantity) against the two trajectory rows bounding the cell. RED without the npdot
 # factor: E3 reads 1.0 (ratio is 1/npdot ~ 2e-8 of the truth), u_p = 5.0e8 m/s, T_p = 1.5e10 K.
 # Every oracle quantity is bit-stable at OMP 1/2/5 -- each parcel rides its own (j,k) column.
 igloo_e2e_case(tc-box-euler evaporation/tc-box-euler "e2e;evaporation;euler")
-# O28 end-to-end: the ord2 source reduction must CONSERVE. tc-box's case at gas-order = 2 with
-# mollify = off and four DB parcels placed INSIDE the j = 1 boundary dual row -- the row the
-# pre-fix volume-average handed on at 1/2. Telescoping oracle: sum(wdot) over source.tec vs
-# sum npdot*(m_inject - m_exit) from the trajectory rows, which never reads the field it
-# checks. RED on the pre-O28 binary: resid 5.015e-01. GREEN: 3.779e-06, OMP-invariant.
-# This is also the ONLY gate on the wiring -- test_source_reduction calls
-# precomputeDualWeights itself, so it cannot see a missing call in allocate_blocks.
+# tc-box-ord2-row: the ord2 source reduction must CONSERVE, end to end. tc-box's case at gas-order = 2 with
+# mollify = off and four DB parcels placed INSIDE the j = 1 boundary dual row -- the row a volume-averaging
+# reduction hands on at 1/2. Telescoping oracle: sum(wdot) over source.tec vs sum npdot*(m_inject - m_exit) from
+# the trajectory rows, which never reads the field it checks. RED on a volume-averaging reduction: resid 5.015e-01.
+# GREEN: 3.779e-06, OMP-invariant. test_source_reduction calls precomputeDualWeights itself, so it cannot see a
+# missing call in allocate_blocks; this case can, as can the other gates on a gas-order-2 source field
+# (finalizeSRC reads dualW).
 igloo_e2e_case(tc-box-ord2-row evaporation/tc-box-ord2-row "e2e;evaporation;gas")
 # ODE model 4 (evaporation + ODE breakup). test_evap_breakup: one production rhsEvapBreakup call per
 # state against the d2-law and Reitz-Diwakar rates typed from the papers (breakup dormant, evaporation
@@ -631,8 +631,8 @@ igloo_e2e_case(d2law-brk-dormant evaporation/d2law-brk-dormant "e2e;evaporation;
 # ---------- combustion (M1: Beckstead d^n burn law) -----------------------------
 igloo_unit_test(test_combustion combustion "unit;combustion;m1;t4")
 igloo_e2e_case(burn-box combustion/burn-box "e2e;combustion")
-# burn-box-euler: burn-box with out-file = ALL and mollify = off -- the equivalent-Eulerian field of a
-# burning material (ODE model 5), which no other fixture writes. Per cell rho_p/n_p against the mean
+# burn-box-euler: burn-box with out-file = ALL and mollify = off -- the equivalent-Eulerian field of
+# ODE model 5 (a burning material), which no other fixture gates. Per cell rho_p/n_p against the mean
 # droplet mass of the two bounding trajectory rows, u_p = u_g, T_p inside the rows' band. RED with model
 # 5's deposit missing the number rate (E3 1.000, T_p off by 1e10 K) while tc-box-euler stays green.
 igloo_e2e_case(burn-box-euler combustion/burn-box-euler "e2e;combustion;euler")
@@ -686,14 +686,14 @@ igloo_e2e_case(solid-box-varrho solidification/solid-box-varrho "e2e;solidificat
 # 19.4 % of its mass per segment.
 igloo_e2e_case(solid-brk-tab-rhos solidification/solid-brk-tab-rhos "e2e;solidification;breakup;tab")
 
-# ---------- breakup: KHRT (unblocked 2026-07-07 by the A2 fix) -----------------
+# ---------- breakup: KHRT ------------------------------------------------------
 igloo_unit_test(test_breakup_khrt breakup/reitz-khrt "unit;breakup;khrt;d;t7")
-# O7 (2026-08-03), part 1: KHRT is the only model live on BOTH paths at once, and each
-# path carries its own verbatim copy of the KH/RT blocks. Gates that ReitzKHRT (ODE) and
-# ReitzKHRTevent (event) agree on the RT predicate and on the tc/told accumulator, so the
-# duplication cannot drift. Also pins the unreachable KH-shed branch (A23).
+# test_khrt_interaction: KHRT is the only model live on BOTH paths at once, and each path carries its own verbatim
+# copy of the KH/RT blocks. Gates that ReitzKHRT (ODE) and ReitzKHRTevent (event) agree on the RT predicate and on
+# the tc/told accumulator, so the duplication cannot drift. Also pins that RT preempts an otherwise-firing KH shed,
+# the parcel mass conserved across the shed.
 igloo_unit_test(test_khrt_interaction breakup/reitz-khrt "unit;breakup;khrt;d;t7")
-# O7 part 2: the only KH reference that does NOT re-type the Reitz-87 fit — recovers
+# test_kh_rayleigh_limit: the only KH reference that does NOT re-type the Reitz-87 fit — recovers
 # lambda_KH/omega_KH from breakupOde by two-point inversion in B0, then checks the
 # We_g->0, Z->0 corner against Rayleigh's 1878 dispersion relation solved in-test.
 igloo_unit_test(test_kh_rayleigh_limit breakup/reitz-khrt "unit;breakup;khrt;val;d;t7")
@@ -704,16 +704,16 @@ igloo_unit_test(test_tab_moments  breakup/tab           "unit;breakup;tab;d;t5")
 igloo_unit_test(test_breakup_rd   breakup/reitz-diwakar "unit;breakup;rd;d;t6")
 igloo_unit_test(test_breakup_etab breakup/etab          "unit;breakup;etab;d;t6")
 igloo_unit_test(test_breakup_pe   breakup/pilch-erdman  "unit;breakup;pe;d;t7")
-# B-VAL-1 (2026-07-22): VALIDATION vs the paper's own published correlation — 25-drop
-# Weber sweep vs PE87 T*(We) (Fig. 7). Gated it: A16 (sign, FIXED); found A17 (bp zeroed,
-# deferred — gate scoped to We>=130, see BUGS.md).
+# pilch-erdman-e2e: VALIDATION vs PE87's own correlation T*(We) (Fig. 7), a 25-drop Weber sweep: the initial
+# breakup rate of the 22 drops with We >= 45 within 1 % (18-45: test_breakup_pe's), the d_stable plateau (We0 <= 60)
+# vs PE87's closed form within 12 %. RED: the 45 < We <= 351 branch +0.25 for -0.25; d_stable: bp zeroed at runtime.
 igloo_e2e_case(pilch-erdman-e2e breakup/pilch-erdman-e2e "e2e;breakup;val;pe")
 # The same sweep with sigma and mu from the Sigma and Viscosity columns of properties.dat (no
 # [IGLOO-Properties]): pilch-erdman-e2e's PE87 kernel at the columns' values at 300 K.
 igloo_e2e_case(pe-sigma-table breakup/pe-sigma-table "e2e;breakup;pe;io")
-# B-VAL-3 (2026-07-22): TAB vs the ORA87 damped-oscillator closed form (onset We_r=6 +
-# first-breakup time to sub-percent). Found + gated the A18 fix (event-breakup path was
-# dead; now live: TAB breaks on time, resized drops persist). GREEN.
+# tab-e2e: TAB vs the ORA87 damped-oscillator closed form (onset We_r=6 +
+# first-breakup time to sub-percent): TAB breaks on time and the resized drops persist (RED on
+# a dead event-breakup path).
 igloo_e2e_case(tab-e2e breakup/tab-e2e "e2e;breakup;val;tab")
 # threads-tab-e2e: tab-e2e at 1, 2 and 5 threads -- the child sizes of the TAB resize are drawn inside the parallel
 # region, from each parcel's own stream. RED with the intrinsic random_number there (RosinRammler).
@@ -723,7 +723,7 @@ igloo_threads_case(threads-tab-e2e breakup/tab-e2e "e2e;breakup;omp")
 # [HF93] (not gated). RED with the slip at 6 m/s (no drop breaks), a 5 cm box (still breaking), a 0.3 m box (out
 # before t_b).
 igloo_e2e_case(tab-hf92 breakup/tab-hf92 "e2e;breakup;val;tab")
-# B-VAL-5 (2026-07-22): ETAB vs Tanner 97/98 — shared TAB oscillator (onset + t_bu) plus
+# etab-e2e: ETAB vs Tanner 97/98 — shared TAB oscillator (onset + t_bu) plus
 # the deterministic exponential-cascade product size across the bag/stripping branches.
 igloo_e2e_case(etab-e2e breakup/etab-e2e "e2e;breakup;val;etab")
 # etab-e2e-dopri5: etab-e2e under the explicit solver (H-dopri5, INPUT symlinked): etab-e2e's oracles, and against
@@ -734,18 +734,18 @@ igloo_e2e_case(etab-e2e-dopri5 breakup/etab-e2e-dopri5 "e2e;breakup;etab")
 # etab-hf92: tab-hf92 under ETAB (INPUT symlinked, tab-hf92's oracle and figure). RED as tab-hf92, and with the
 # lateral faces coded 400: 46 of 714 parcels leave through them.
 igloo_e2e_case(etab-hf92 breakup/etab-hf92 "e2e;breakup;val;etab")
-# B-VAL-4 (2026-07-23): Reitz-Diwakar vs [RD87] (SAE 870598) — the bag + stripping breakup
+# reitz-diwakar-e2e: Reitz-Diwakar vs [RD87] (SAE 870598) — the bag + stripping breakup
 # rate across the We_r=0.5*sqrt(Re) handoff. Model 3 (ODE-path, no event). The RD model is
-# source-faithful to [RD87] (Cs=20 curve-fit, Cb=pi verified) — no production change. GREEN.
+# source-faithful to [RD87] (Cs=20 curve-fit, Cb=pi).
 igloo_e2e_case(reitz-diwakar-e2e breakup/reitz-diwakar-e2e "e2e;breakup;val;rd")
-# B-VAL-6 (2026-07-22): KHRT vs Reitz-87 — continuous KH-stripping rate (check.py) plus
-# the RT-shatter persistence gate (check_rt.py). The RT gate found bug A19 (the RT/shed
-# event reverted: model-3 event npdot never reached the ODE state y(8)); A19 FIXED
-# 2026-07-23 and check_rt.py promoted from a WILL_FAIL sentinel to a real gate (RT fires,
-# applies, and persists as a mass-consistent discontinuous shatter).
+# khrt-e2e: KHRT vs Reitz-87 — continuous KH-stripping rate (check.py) plus
+# the RT-shatter persistence gate (check_rt.py: RT fires, applies, and
+# persists as a mass-consistent discontinuous shatter). RED on an RT/shed
+# event whose npdot never reaches the model-3 ODE state y(8), so the event
+# reverts.
 igloo_e2e_case(khrt-e2e breakup/khrt-e2e "e2e;breakup;val;khrt")
-# The rc guard matches igloo_e2e_case: without it a solver that died on a signal reached
-# check_rt.py, which would then judge whatever partial OUTPUT survived (BUGS.md O13).
+# The rc guard is stricter than igloo_e2e_case's (any non-zero exit fails, a signal death among them): without it a
+# solver that dies on a signal reaches check_rt.py, which then judges whatever partial OUTPUT survives.
 add_test(NAME khrt-e2e-rt
     COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; $<TARGET_FILE:IGLOO> 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ne 0 ]; then echo \"[FAIL] solver exit $rc\"; exit 1; fi; python3 -B check_rt.py"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/breakup/khrt-e2e")
@@ -753,7 +753,7 @@ set_tests_properties(khrt-e2e-rt PROPERTIES
     LABELS "e2e;breakup;val;khrt;rt"
     ENVIRONMENT "OMP_NUM_THREADS=5;KMP_STACKSIZE=100M"
     TIMEOUT 300)
-# A23/S4-E robustness stress (NOT a validation case, no oracle): the khrt-e2e fixture with
+# khrt-stress: robustness stress (NOT a validation case, no oracle): the khrt-e2e fixture with
 # mShedLim at 0.01 instead of 0.03, so parents shed ~66 deep instead of ~22 and the growable
 # per-parent shed lists go through ~7 doublings. Gates mass exactness under heavy shedding
 # plus "the runaway guard did not fire". INPUT/ is a symlink to ../khrt-e2e/INPUT.
@@ -806,9 +806,9 @@ igloo_e2e_case(breakup-per-material breakup/breakup-per-material "e2e;breakup;in
 # every child's first trajectory row is its birth on its parent's path. RED while plane-x is not read.
 igloo_e2e_case(khrt-plane breakup/khrt-plane "e2e;breakup;khrt;output")
 
-# Thread-invariance of the KH-shed path (A23/S4-D1): the drain runs after an OMP region and
-# unitTraj/unitExit are written from inside it. Established green while the one-shed cap was
-# still on, so a later red result indicts the cap lift rather than a pre-existing defect.
+# khrt-e2e-threads: thread-invariance of the KH-shed path: the drain runs after an OMP region
+# and unitTraj/unitExit are written from inside it. Green on a solver capped at one shed per
+# parent too, so a red indicts the multiple sheds, not the single-shed drain.
 add_test(NAME khrt-e2e-threads
     COMMAND python3 -B check_threads.py "$<TARGET_FILE:IGLOO>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/breakup/khrt-e2e")
@@ -819,7 +819,7 @@ set_tests_properties(khrt-e2e-threads PROPERTIES
 set_tests_properties(khrt-e2e khrt-e2e-rt khrt-e2e-threads PROPERTIES RESOURCE_LOCK khrt_output)
 
 # ---------- infrastructure: combined output paths --------------------------------
-# euler+source+body accumulator combination (the 2026-07 merge's last untested path)
+# coupled-body: the euler, source and body-force accumulators combined in one run
 igloo_e2e_case(coupled-body infrastructure/coupled-body "e2e;infrastructure")
 # threads-coupled-body: coupled-body at 1, 2 and 5 threads (the Euler, source and body-force accumulators).
 igloo_threads_case(threads-coupled-body infrastructure/coupled-body "e2e;infrastructure;omp")
@@ -829,39 +829,39 @@ igloo_threads_case(threads-coupled-body infrastructure/coupled-body "e2e;infrast
 igloo_e2e_case(body-evap-m2 infrastructure/body-evap-m2 "e2e;infrastructure;evaporation;source")
 igloo_e2e_case(body-evap-m4 infrastructure/body-evap-m4 "e2e;infrastructure;evaporation;m4;source")
 igloo_e2e_case(body-burn-m5 infrastructure/body-burn-m5 "e2e;infrastructure;combustion;source")
-# promoted legacy test/assigned-pos: 2Daxi wedge + real MOSE solfile + DB injection
-# + euler-only output (the B5/B6 path); behavioral gate, md5 A/B stays manual
+# db-2daxi: 2Daxi wedge + real MOSE solfile (its header carries particle vars, rho_p) + DB injection
+# + euler-only output (out-file = e); behavioral gate, md5 A/B stays manual
 igloo_e2e_case(db-2daxi infrastructure/db-2daxi "e2e;infrastructure")
-# axis face tagged `axisymmetric` (bcdef 200) rather than `sym` (300) -- what ATLAS
-# emits and what the JPL nozzle cases use. db-2daxi tags face3 `sym` and injects both
-# particles far off-axis, so the axis path was covered by no test at all: bcDef's 200
-# branch rotates about x, which cannot change a particle's radius, so anything that
-# reached the axis was trapped in a period-2 rotation cycle and discarded.
-# Verified RED before the axis-face fix and GREEN after.
+# axis-200: axis face tagged `axisymmetric` (bcdef 200) rather than `sym` (300) -- what ATLAS
+# emits and what the JPL nozzle cases use (db-2daxi tags face3 `sym` and injects both
+# particles far off-axis). The axis face reflects.
+# RED on a 200 branch that rotates about x there: a rotation cannot change a particle's
+# radius, so a particle that reaches the axis is trapped in a period-2 rotation cycle and
+# discarded.
 igloo_e2e_case(axis-200 infrastructure/axis-200 "e2e;infrastructure")
 # threads-axis-200: axis-200 at 1, 2 and 5 threads (the gas-order-2 wedge and its deposits).
 igloo_threads_case(threads-axis-200 infrastructure/axis-200 "e2e;infrastructure;omp")
-# wedge-fold: axis-200 + wp on the near-axis parcel -- the only case in which the 200-face fold
-# ROTATES anything (every other wedge fixture has z == 0). Proven RED on the pre-O22 binary.
+# wedge-fold: axis-200 + wp on the near-axis parcel, so the 200-face fold ROTATES it (as on the swirl-wedge cases).
+# RED on a rotateVector that returns R(-theta) (the Rodrigues matrix transposed): the parcel folds out of the sector.
 igloo_e2e_case(wedge-fold infrastructure/wedge-fold "e2e;infrastructure")
 # planar-slab: a single-layer box of finite thickness is a planar 2D case, not a wedge -- the
-# detector must compare the k-plane span at two radii (a slab's decays as 1/r). Proven RED on
-# the pre-fix binary (refused as an off-centre wedge), GREEN after.
+# detector must compare the k-plane span at two radii (a slab's decays as 1/r). RED on a
+# detector that reads the span at the outermost node only (the slab refused as an off-centre wedge).
 igloo_e2e_case(planar-slab infrastructure/planar-slab "e2e;infrastructure;axisym")
-# O29: the ord2 gas ghost ring was filled by blind linear extrapolation on every face, so the gas
-# sampled in the boundary dual row kept a normal velocity INTO a solid wall and pushed parcels
-# through it. Three parcels drift onto a 301 wall; RED on the pre-B binary they all hit it, at
+# wall-approach: with the ord2 gas ghost ring filled only by blind linear extrapolation on every face,
+# the gas sampled in the boundary dual row keeps a normal velocity INTO a solid wall and pushes
+# parcels through it. Three parcels drift onto a 301 wall; RED on that fill they all hit it, at
 # exactly the predicted x = 0.37/0.42/0.47 m, GREEN they decay away from it at the tracer rate.
 igloo_e2e_case(wall-approach infrastructure/wall-approach "e2e;infrastructure;bc;gas")
-# wedge-axis-row: the converse -- a wedge whose axis row sits at r = 1e-8 with roundoff z (the JPL
-# nozzle layout) must stay a wedge: the classifier's inner node must be clearly off the axis
-# (r > 1e-3 r_max). Proven RED on the first classifier (JPL 3-solver centreline Mach 2.10 -> 2.45).
+# wedge-axis-row: the converse -- a wedge whose axis row sits at r = 1e-8 with roundoff z (the JPL nozzle layout)
+# must stay a wedge: the classifier's inner node must be clearly off the axis (r > 1e-3 r_max). RED on a classifier
+# that takes the smallest r > 0 as its inner node (JPL 3-solver centreline Mach 2.10 -> 2.45).
 igloo_e2e_case(wedge-axis-row infrastructure/wedge-axis-row "e2e;infrastructure;axisym")
 # wedge-tiny: a single-layer sector of 5e-7 rad (at or below 1e-6 rad) takes the planar path with one
 # notice, not the wedge fold; three parcels at the gas velocity leave at the outlet.
 igloo_e2e_case(wedge-tiny infrastructure/wedge-tiny "e2e;infrastructure;axisym")
-# two-mat: the first nm = 2 case anywhere -- every per-material loop (solve, sourceMass slots, nfam,
-# per-material files, krho fan-out) executes at arity 2 here for the first time.
+# two-mat: nm = 2 -- every per-material loop (solve, sourceMass slots, nfam, per-material files,
+# krho fan-out) executes at arity 2.
 igloo_e2e_case(two-mat infrastructure/two-mat "e2e;infrastructure")
 # inlet-402-403: drag-stokes's box with inlet rows coded 402 (absolute speed and temperature) and 403 (speed as a
 # factor on the gas): the first row of each parcel, the exit mass flow gp A and the Stokes relaxation from it.
@@ -936,9 +936,9 @@ igloo_e2e_case(chimera-2blk-shift-mollify infrastructure/chimera-2blk-shift-moll
 # varcp-tmin: a varying-cp table from 280 K, the parcels at 600 K on its extended last segment.
 igloo_e2e_case(varcp-tmin infrastructure/varcp-tmin "e2e;infrastructure;heat")
 
-# ---------- refusals (setup-time error stops, ledger O3/O4/O24; coverage G20) ----------------
-# Each is drag-stokes (or two-mat's phase.txt) plus ONE offending key/file. The expected text is
-# the solver's own message; check_refusal.py also requires exit /= 0 and that nothing integrated.
+# ---------- refusals (setup-time error stops) ------------------------------------------------
+# Each is drag-stokes (or two-mat's phase.txt) plus ONE offending key/file. The expected text is the solver's own
+# message; check_refusal.py also requires exit == IGLOO_ERROR_STOP_RC and that nothing integrated.
 igloo_refusal_case(refuse-p2t              infrastructure/refusals/p2t
                    "liquid-conduction=P2T requires an evaporating material" "e2e;refusal;infrastructure")
 # liquid-conduction = P2T's inputs: the liquid conductivity, and one liquid viscosity (mu-liq, or the breakup
@@ -1002,7 +1002,7 @@ igloo_refusal_case(refuse-chimera-weights  infrastructure/refusals/chimera-weigh
 igloo_refusal_case(refuse-chimera-copies   infrastructure/refusals/chimera-copies
                    "IGLOO: bc.txt family copies do not repeat the chimera donor counts of copy 1" "e2e;refusal;infrastructure;bc;chimera")
 # A one-sided periodic (201) face (refusals/make_periodic.py: face 3 names face-4 partners whose records are 400):
-# the field mollifier's link table refuses it. RED before that table took 201: the run integrates and exits 0.
+# the field mollifier's link table refuses it. RED on a link table without 201 records: the run integrates, exit 0.
 igloo_refusal_case(refuse-periodic-not-mutual infrastructure/refusals/periodic-not-mutual
                    "IGLOO: a 101/201 connection is not mutual: the partner cell does not name this cell" "e2e;refusal;infrastructure;bc")
 # The gas-order-2 dual across 101 faces (refusals/make_ord2.py): one record's orientation reversed in m, and
@@ -1011,8 +1011,8 @@ igloo_refusal_case(refuse-ord2-orient infrastructure/refusals/ord2-orient
                    "IGLOO: 101 orientation disagrees with the partner cells" "e2e;refusal;infrastructure;bc")
 igloo_refusal_case(refuse-ord2-slab   infrastructure/refusals/ord2-slab
                    "IGLOO: 101 orientation mixes the slab direction on a one-layer mesh" "e2e;refusal;infrastructure;bc")
-# Unknown model tokens (ledger O26): the selectors used to print the menu and execute a plain
-# `stop`, exit 0 -- invisible to any harness or embedding parent. Now error stops.
+# Unknown model tokens are error stops: a selector that prints the menu and executes a plain
+# `stop` exits 0, invisible to any harness or embedding parent.
 igloo_refusal_case(refuse-drag-token        infrastructure/refusals/drag-token
                    "IGLOO: unknown drag model"                          "e2e;refusal;standard")
 igloo_refusal_case(refuse-heat-token        infrastructure/refusals/heat-token
@@ -1030,9 +1030,9 @@ igloo_refusal_case(refuse-phase-token-real  infrastructure/refusals/phase-token-
 # An unknown breakup model on a material line goes through the model's own reader and its stop.
 igloo_refusal_case(refuse-breakup-token-material infrastructure/refusals/breakup-token-material
                    "IGLOO: unknown breakup model"                       "e2e;refusal;breakup")
-# INI-contract refusals (ledger O20/O21/O26 last site): each was RED on the pre-fix binary --
-# method=3 ran to non-finite states, gas-order=3 silently became 2, out-file=nonsense meant both
-# with a warning, ode-solver=H-radau5 was a plain `stop`.
+# INI-contract refusals, each RED on the reader without its check: method=3 runs to non-finite
+# states, gas-order=3 silently becomes 2, out-file=nonsense means both with a warning,
+# ode-solver=H-radau5 ends in a plain `stop`.
 igloo_refusal_case(refuse-tab-method       infrastructure/refusals/tab-method
                    "IGLOO: TAB method must be 1 or 2"                   "e2e;refusal;breakup")
 igloo_refusal_case(refuse-gas-order        infrastructure/refusals/gas-order
@@ -1041,8 +1041,8 @@ igloo_refusal_case(refuse-out-file         infrastructure/refusals/out-file
                    "IGLOO: unknown out-file token"                      "e2e;refusal;infrastructure")
 igloo_refusal_case(refuse-ode-solver       infrastructure/refusals/ode-solver
                    "IGLOO: unknown ode-solver"                          "e2e;refusal;infrastructure")
-# boiling-temperature and its alias Tboil are one key: both given is ambiguous. RED before the alias: the
-# second name was ignored and the run went through (exit 0).
+# boiling-temperature and its alias Tboil are one key: both given is ambiguous. RED on a reader that
+# ignores the second name: the run goes through (exit 0).
 igloo_refusal_case(refuse-boiling-temperature-both infrastructure/refusals/boiling-temperature-both
                    "give boiling-temperature or its alias Tboil, not both" "e2e;refusal;evaporation")
 # Solidification (ODE models 6 and 7): the latent heat and the solid heat capacity have no default, T-nuc must
@@ -1067,8 +1067,8 @@ igloo_refusal_case(refuse-rho-solid        infrastructure/refusals/rho-solid
 igloo_refusal_case(refuse-wedge-offcentre  infrastructure/refusals/wedge-offcentre
                    "IGLOO: wedge sector must be centred"                "e2e;refusal;infrastructure;axisym")
 # bc.txt column 8 and size-distribution files: drag-stokes with one offending inlet payload or table. RED
-# before the tokenizer: a list-directed read ended a path at its slash (unsupported law "tables", exit 1),
-# cut a 600-character line to 512 silently and ran it as Dirac (exit 0), and lawCode stopped with code 1.
+# on a list-directed reader: it ends a path at its slash (unsupported law "tables", exit 1), cuts a
+# 600-character line to 512 silently and runs it as Dirac (exit 0), and lawCode stops with code 1.
 igloo_refusal_case(refuse-psd-missing      infrastructure/refusals/psd-missing
                    "IGLOO: size-distribution file not found"            "e2e;refusal;injection")
 igloo_refusal_case(refuse-psd-line-long    infrastructure/refusals/psd-line-long
@@ -1126,11 +1126,11 @@ igloo_refusal_case(refuse-body-accel       infrastructure/refusals/body-accel
                    "body-accel: expected 3 values (gx gy gz)" "e2e;refusal;standard")
 igloo_refusal_case(refuse-plane-x          infrastructure/refusals/plane-x
                    "IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]" "e2e;refusal;infrastructure")
-# drag-stokes-dopri5: ode-solver = H-dopri5 on drag-stokes's own oracle -- the only exercise of the
-# explicit solver. RED at OSlo fb8255d (ledger O25: dopri5.f:512 called the eleven-argument SOLOUT,
-# IGLOO's interrupt never reached DOPRI5, every parcel lost at injection with exit 0); green since the
-# fork's fix/dopri5-solout (six-argument call, silent label 79). Needs BOTH OSlo checkouts (IGLOO's
-# lib/OSLO, hydra's lib/OSLO) on that commit.
+# drag-stokes-dopri5: the explicit solver (ode-solver = H-dopri5) on drag-stokes's own oracle.
+# RED on a DOPRI5 whose per-step SOLOUT call has the eleven-argument form: IGLOO's interrupt
+# never reaches DOPRI5 and every parcel is lost at injection with exit 0. Needs BOTH OSlo
+# checkouts (IGLOO's lib/OSLO, hydra's lib/OSLO) on a DOPRI5 with the six-argument call and a
+# silent label 79.
 igloo_e2e_case(drag-stokes-dopri5 standard/drag-stokes-dopri5 "e2e;standard")
 # translational periodic pair (bcdef 201): closed-form v(x) across wraps + modular-y; the source smoothed across the
 # pair (S-P: unsmoothed siblings smoothed by check.py, periodic in y). S-P RED with zero flux at the 201 faces:
@@ -1147,13 +1147,13 @@ igloo_e2e_case(periodic-2d-ord2 infrastructure/periodic-2d-ord2 "e2e;infrastruct
 # conn-103: drag-stokes's box with the outlet face coded 103, header only (no partner cell): the parcels leave as
 # through a 400 face (check.py runs the 400 case beside it into ref-400/) and the run reports its block changes.
 igloo_e2e_case(conn-103 infrastructure/conn-103 "e2e;infrastructure;bc")
-# A24 (2026-08-07): first coverage for pin_particles_bc_center. Every other case sets
-# `ds` (20) or injects an assigned/DB stream (3), and every other phase.txt declares one
-# group, so this routine ran in no test at all -- long enough to accumulate two
-# implicit-SAVE counters and a silent out-of-bounds write. Needs BOTH `A 2` (>=2 groups,
-# for the particle-index carry) and `fsample = 2` (for the cell-counter phase shift);
-# neither trigger alone exposes both halves. INPUT/ symlinks standard/drag-stokes'.
-# Verified RED at d857aba^ (group 2: 13 particles, 12 of them ID 0) and GREEN at d857aba.
+# bc-center-2grp: pin_particles_bc_center, the one serial case that runs it with two groups
+# (psd-* run it with one group; mpi-bc-center-2grp shares this INPUT/). Needs BOTH `A 2` (>=2
+# groups, for the particle-index carry) and `fsample = 2` (for the cell-counter phase shift);
+# neither trigger alone exposes both halves. INPUT/ symlinks standard/drag-stokes' bc.txt and
+# solfile.tec.
+# RED on particle-index and cell counters carried between calls (implicit SAVE):
+# group 2: 13 particles, 12 of them ID 0.
 igloo_e2e_case(bc-center-2grp infrastructure/bc-center-2grp "e2e;infrastructure;pinning")
 # Injection placement on drag-stokes's box: several parcels per cell at ds = 0.25 cm with a 402 row, points on the
 # face-cell edges each with its own cell's payload (inj-pack), the spacing from mdot-max at N_pmin = 3 (inj-mdotmax),
@@ -1165,34 +1165,34 @@ igloo_e2e_case(inj-dscell  infrastructure/inj-dscell  "e2e;infrastructure;inject
 igloo_e2e_case(inj-dsdegen infrastructure/inj-dsdegen "e2e;infrastructure;injection")
 # inj-edge: drag-stokes's box injected with ds = 0.25 cm, whose advancing front pins lattice points on the inlet
 # cells' edges, the domain's outer edge y = 0 among them (a few 1e-18 m outside the face): every parcel takes its
-# own inlet cell and leaves at x = 0.15. RED while the search rejected the point that the pinning test accepted:
+# own inlet cell and leaves at x = 0.15. RED on a search that rejects the point the pinning test accepts:
 # no cell, block index 0, SIGSEGV after 5 of 472 exits.
 igloo_e2e_case(inj-edge infrastructure/inj-edge "e2e;infrastructure;pinning")
 # inj-edge-payload: drag-stokes's box with the inlet rows 1 and 3 at krho 0.68, kV 0.2 and a 2.5 mm lattice in row
 # 2 only, whose points reach the edges it shares with rows 1 and 3: every parcel carries its own cell's payload
-# (first-row velocity, total mass flow). RED while the search moved edge points into the neighbouring row: 9
+# (first-row velocity, total mass flow). RED on a search that moves edge points into the neighbouring row: 9
 # parcels at 2 m/s instead of 1, the exit mass flow 2.8 % above the inlet's.
 igloo_e2e_case(inj-edge-payload infrastructure/inj-edge-payload "e2e;infrastructure;pinning")
-# O32 / O19 (2): an `=` inside an in-section `;` comment line must be inert. FiNeR before
-# 18fa207 parsed such a line as an option and DROPPED every option after it in the same
-# section, at exit 0 -- so the gate is drag-stokes's INI plus one comment line, and the
-# oracle is the three [IGLOO-General] keys that follow it (gas-order, print-dcell, out-file).
-# c1 is a POSITIVE witness (` >> Output field: gas coupling source`): an absence-only check
-# would pass on a run that never read the file. RED at gitlink aab8f72 (stderr `ERROR: parse
-# "..." failed!`, `Defaulting to 2nd order`, the E+S default, euler1.tec written; a/b/c1/c2
-# FAIL, d PASS); GREEN at 18fa207 (strip_inline_comment blanks the line before the `=` test).
+# ini-comment-eq: an `=` inside an in-section `;` comment line must be inert. A FiNeR that parses
+# such a line as an option DROPS every option after it in the same section, at exit 0 -- so the
+# gate is drag-stokes's INI plus one comment line, and the oracle is the three [IGLOO-General]
+# keys that follow it (gas-order, print-dcell, out-file). c1 is a POSITIVE witness
+# (` >> Output field: gas coupling source`): an absence-only check would pass on a run that
+# never reads the file. RED on that FiNeR (stderr `ERROR: parse "..." failed!`,
+# `Defaulting to 2nd order`, the E+S default, euler1.tec written; a/b/c1/c2 FAIL, d PASS);
+# GREEN on a FiNeR whose strip_inline_comment blanks the line before the `=` test.
 igloo_e2e_case(ini-comment-eq infrastructure/ini-comment-eq "e2e;infrastructure;ini")
 # [IGLOO-General] timing = on: the [IGLOO-timing] report's phases, thread/rank lines, parcel counts
 # (strided ownership) and allocated sizes (closed form of the mesh). INPUT/ symlinks vie-plait's.
 igloo_e2e_case(timing-report infrastructure/timing-report "e2e;infrastructure;timing")
-# O30 step 4b: a parcel deleted because the ODE solver gave up (`err < 0`, Lib_Integration)
-# must still hand its remaining mass to the gas for consumption models 2/5, as the
-# non-finite exit beside it already does. NO other fixture reaches that branch -- after the
-# rhsEvaporation scrub even tc-hexadecane burns out cleanly -- so this is its only coverage.
+# solver-fail-consumed: a parcel deleted because the ODE solver gives up (`err < 0`, Lib_Integration) must still
+# hand its remaining mass to the gas for the consumption models (2, 4, 5, 8), as the non-finite exit beside it does.
+# tc-hexadecane itself burns out cleanly (the rhsEvaporation scrub), so the case forces the branch;
+# solver-fail-consumed-m4 and solver-fail-midway force the same exit under models 4 and 1.
 # tc-hexadecane's case with the ODE tolerances at 1e-30, unreachable in double precision:
 # SDIRK4 fails on the first step of every parcel, so all 25 die at injection carrying their
-# FULL mass and the source total is all-or-nothing. RED on a tree without step 4b:
-# sum(wdot) = 0, resid 1.0; GREEN: the whole injected stream, resid 2.9e-7.
+# FULL mass and the source total is all-or-nothing. RED on a failure exit that hands the gas
+# nothing: sum(wdot) = 0, resid 1.0; GREEN: the whole injected stream, resid 2.9e-7.
 igloo_e2e_case(solver-fail-consumed infrastructure/solver-fail-consumed "e2e;infrastructure;evaporation")
 # solver-fail-consumed-m4: the same failure exit under model 4 (breakup on, rate zero): the remnant must
 # reach the gas as for model 2. RED while model 4 is not a consumption model on that exit.
@@ -1257,13 +1257,13 @@ set_tests_properties(check-order PROPERTIES
 if(USE_MPI AND MPIEXEC_EXECUTABLE)
     igloo_e2e_case_mpi(mpi-drag-stokes    mpi/drag-stokes    2 2 "e2e;mpi;standard")
     igloo_e2e_case_mpi(mpi-conv-nu        mpi/conv-nu        4 2 "e2e;mpi;standard")
-    # children: 241 of them, and the only oracle that reads the child count out of the solver log
+    # children: 241 of them, which the oracle counts out of the solver log
     igloo_e2e_case_mpi(mpi-khrt           mpi/khrt           4 2 "e2e;mpi;breakup")
     # the planes file merged from four shards, and the birth rows of children born on their parent's rank
     igloo_e2e_case_mpi(mpi-khrt-plane     mpi/khrt-plane     4 2 "e2e;mpi;breakup;output")
-    # the suite's ONLY ngroups=2 case, so the only real exercise of the merge's per-zone loop
+    # two groups (ngroups=2): the merge's per-zone loop, which mpi-two-fam-bc-2blk-ord2-dual-np3 runs too
     igloo_e2e_case_mpi(mpi-bc-center-2grp mpi/bc-center-2grp 4 2 "e2e;mpi;infrastructure")
-    # the suite's ONLY nm=2 case: six shards merged per sweep, two sourceMass slots, two euler families
+    # nm=2, as the other mpi-*-two-mat cases: six shards merged per sweep, two sourceMass slots, two euler families
     igloo_e2e_case_mpi(mpi-two-mat        mpi/two-mat        4 2 "e2e;mpi;infrastructure")
     # the [IGLOO-timing] report at four ranks: the per-rank gather, one line and the strided parcel count per rank
     igloo_e2e_case_mpi(mpi-timing-report  mpi/timing-report  4 2 "e2e;mpi;infrastructure;timing")
@@ -1273,7 +1273,7 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
     # gas-order 2 across a 101 face on 3 ranks against the same binary on one (its own check.py, ref-serial/)
     igloo_e2e_case_mpi(mpi-two-fam-bc-2blk-ord2-dual-np3 mpi/two-fam-bc-2blk-ord2-dual-np3 3 2 "e2e;mpi")
     # n=1 vs n=4 of the same binary: witness, file layout, .dat multisets, .tec fields. Launches
-    # mpiexec itself (khrt-e2e-threads precedent), so it is not an igloo_e2e_case_mpi.
+    # mpiexec itself (as khrt-e2e-threads launches its own runs), so it is not an igloo_e2e_case_mpi.
     add_test(NAME mpi-consistency
         COMMAND python3 -B check.py "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}"
                                    "$<TARGET_FILE:IGLOO>"
@@ -1360,8 +1360,8 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
     igloo_twosweep_case_mpi(mpi-repeat-swirl-wedge        mpi/repeat-swirl-wedge        2 2 "e2e;mpi;repeatability" "INPUT/solfile.tec")
 endif()
 
-# A7 resolved 2026-07-15 as source-faithful (Shimada2006 eq.45 quoting NASA-SP-8039
-# has no +2 floor): the xfail probe is promoted to a positive transcription pin.
+# test_heat_probes: XH1, a positive transcription pin: JAXA1 is source-faithful to Shimada2006 eq.45
+# (quoting NASA-SP-8039), Nu = 2.5 Re^0.15 + 0.04 Re with no +2 floor (Nu -> 0 as Re -> 0).
 igloo_unit_test(test_heat_probes standard/temperature "unit;standard;heat;a")
-# Promoted 2026-07-07 with the A1/A5/A6 (+Wen-Yu C-flag) production fixes:
+# test_drag_probes: XD1/XD2 Crowe/Hermsen Cd finite, XD3/XD5 Putnam/Wen-Yu plateaus, XD4 Henderson continuous at Ma 1.75
 igloo_unit_test(test_drag_probes standard/drag "unit;standard;drag;a;t8")

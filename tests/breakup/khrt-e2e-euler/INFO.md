@@ -22,9 +22,9 @@ the RT persistence), no solver failure or non-finite state in `run_out.txt`, and
 ## Falsification (measured)
 | solver | outcome |
 |---|---|
-| the solver before both fixes (a breakup child keeping the default state count 7) | 241 children lost to a solver failure at their first step, none flies; RT shatters 8; Eulerian mass 2.7e-3 from `Σ F t` |
+| a breakup child keeping the default state count 7, and a shed segment deposited at the parent's lowered flow | 241 children lost to a solver failure at their first step, none flies; RT shatters 8; Eulerian mass 2.7e-3 from `Σ F t` |
 | a shed segment deposited at the parent's lowered flow | every other oracle PASS; Eulerian mass **2.4e-3** short of `Σ F t` (the shed flow times the shed segments' residence) |
-| fixed | PASS: KH rate, 266 exits carrying the injected flow (6.5e-7), 241 children (238 fly), 137 RT shatters, no bad exit; Eulerian mass 4.082462e-4 kg, 7.5e-7 from `Σ F t` |
+| this solver | PASS: KH rate, 266 exits carrying the injected flow (6.5e-7), 241 children (238 fly), 187 RT shatters, no bad exit; Eulerian mass 4.082462e-4 kg, 7.5e-7 from `Σ F t` |
 
 ## Pass criterion
 All oracles PASS. The Eulerian-mass tolerance `1e-5` is `khrt-evap-frozen-euler`'s (measured 7.5e-7 here too).

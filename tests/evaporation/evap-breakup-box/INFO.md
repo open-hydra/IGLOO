@@ -68,10 +68,10 @@ column 7. The rate gates C1/C2 and the witnesses B3/W1 are the ones that see a w
 ## Falsification (measured)
 | solver | outcome |
 |---|---|
-| unfixed (`F(8) = n·ṁ_evap`, no breakup share) | every parcel lost at injection: SDIRK4 gives up at t = 1.88e-10 s (predicted 1.9e-10 s), 25 `Run_ODESolver err=-1` lines; B1 Σ `wdot` = 0, resid **1.000**; B2 no deposit; B3 0/25 in band; W1 0/25; C1, C2 0 parcels |
+| `F(8) = n·ṁ_evap` (no breakup share) | every parcel lost at injection: SDIRK4 gives up at t = 1.88e-10 s (predicted 1.9e-10 s), 25 `Run_ODESolver err=-1` lines; B1 Σ `wdot` = 0, resid **1.000**; B2 no deposit; B3 0/25 in band; W1 0/25; C1, C2 0 parcels |
 | breakup share dropped (`F(8) = ṁ_evap`) | B1 Σ `wdot` = −1.112 kg/s (the gas loses mass to the breakup cells), B2 min/max **−8.5**, W1 d/d0 = 0.966, B3 parcels leave alive at x = 0.8, C1 **0.881** (predicted 0.68 on a shorter window) |
 | model 4 left out of the burnout test | B3 only: 25 `Run_ODESolver err=-1` lines at t = 12.3 ms, x = 0.6025 m; B1 still closes (the failure exit hands the remnant to the gas) |
-| fixed | all seven PASS |
+| this solver | all seven PASS |
 
 ## Pass criterion
 All seven gates PASS. The witness bands (G0 anchors, B3's x band, W1's 0.55) are centred on the measured

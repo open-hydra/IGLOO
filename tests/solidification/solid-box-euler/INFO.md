@@ -24,4 +24,4 @@ defect; coverage, `u_p` and `T_p` can.
 | ODE-state count left at 7 (the tail read one slot early, the path length from `f`) | N: 100 of 1500 cells covered; U: `u_p` off by 0.9999, `v_p`/`w_p` 3.9e-2; T: 1887 K outside the band, no plateau cell |
 | in-step event detection removed (the jump applied at the next segment start) | T: the nucleation cell holds a liquid-only mean, 1856.0 K, below its entry row (1865.2 K); worst 12.6 K |
 | no event at all | T: plateau cells off `T_m` by 0.30 |
-| the code before model 6 existed | setup refuses `solidification=on`, exit 128 |
+| a solver without the solidification model | setup refuses `solidification=on`, exit 128 |

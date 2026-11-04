@@ -1,11 +1,9 @@
-# INFO — evaporation/tc-analytic (F2: Tonini-Cossali analytical evaporation)
+# INFO — evaporation/tc-analytic (Tonini-Cossali analytical evaporation)
 
-Verifies the `evaporation = TC` selector (`Lib_Evaporation.f90::TC_model`,
-phase F2 of plan-bucket/evaporation-models-implementation-plan.md): the TC2012
+Verifies the `evaporation = TC` selector (`Lib_Evaporation.f90::TC_model`): the TC2012
 variable-density Stefan-Fuchs analytical single-droplet rate, referenced as
 "Eq (9)" in `[ATC24]`. The production Newton residual and the coded rate are
-checked against an independently transcribed form of the pinned equation
-(plan-bucket/f2-tc-derivation.md):
+checked against an independently transcribed form of the pinned equation:
 
     rhs0 = (Mv/Minf)·ln[(1−Xinf)/(1−Xs)]                 (molar Stefan driver)
     G(m) = m + (Ts/Tg − 1)·Lev·(f(m/Lev) − 1) − rhs0,   f(x)=x/(1−e^−x)
@@ -34,6 +32,6 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
 
 - The unit test and the tc-box oracle both solve the same implicit G, so the
   suite proves plumbing + limits, not the closure itself. The non-circular
-  anchor for F2 is the independent Stefan-Fuchs re-derivation
-  (plan-bucket/f2-tc-derivation.md) + the four analytic limits above, verified
-  against the `[TC2012]`/`[ATC24]` primaries (source PDFs read 2026-07-13).
+  anchor of the model is the independent Stefan-Fuchs re-derivation
+  + the four analytic limits above, verified
+  against the `[TC2012]`/`[ATC24]` primaries (source PDFs).
