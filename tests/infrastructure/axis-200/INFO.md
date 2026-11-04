@@ -37,7 +37,7 @@ dp; and the ord2 eulerian deposit (`out-file = e`, `euler1.tec`): **E1** total m
 retention Σρ_p V / Σṁ t = 1.000787 ± 1e-3, **E2** the near-axis band's deposit (y < 0.05)
 over ID 1's own ṁ t = 0.999005 ± 1e-3 (a dual ghost reflected across the axis reads
 0.931625 / 0.499505), **E3** the per-drop mass ρ_p/n_p = ρπd³/6 in every depositing cell to
-1e-12 (worst measured 9.1e-15). Their floor is zero: `euler1.tec` is bit-identical across
+1e-12 (worst measured 9.4e-15). Their floor is zero: `euler1.tec` is bit-identical across
 repeats and across 1, 2 and 5 threads.
 
 The coverage radius is read from the trajectory file's F12.6 columns, so it floors at ~5e-7 m and

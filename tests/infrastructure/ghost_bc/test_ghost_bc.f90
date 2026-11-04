@@ -4,17 +4,17 @@ program test_ghost_bc
     !
     ! Under gas-order 2 the gas is sampled on a DUAL mesh whose first and last cell in every
     ! direction straddle the domain boundary: half of each lies outside, on a ring of ghost
-    ! nodes. fillGhostGradient fills that ring, and until this gate existed it filled it by
+    ! nodes. fillGhostGradient fills that ring by each face's condition; the failure mode is a
     ! blind linear extrapolation, 2q1 - q2, on every face regardless of what the face IS.
     !
     ! At a gas-solid plane that is wrong in the one way that matters to a parcel: the sampled
     ! normal velocity at the plane is (v_ghost + v_1)/2 = (3 v_1 - v_2)/2, not 0, so a parcel
-    ! in the boundary dual row is dragged through a plane the gas cannot cross. The bc-aware
-    ! fill had been written (ghostState, in the setup-time post-pass of read_cdp_bc_file) but
-    ! was overwritten by fillGhostGradient before any parcel read it, and it never ran again
-    ! on sweeps >= 1 at all -- import_gas rewrites only the interior.
+    ! in the boundary dual row is dragged through a plane the gas cannot cross. A bc-aware
+    ! fill must live in fillGhostGradient itself: a setup-time fill (a post-pass of
+    ! read_cdp_bc_file) is overwritten by fillGhostGradient before any parcel reads it, and
+    ! does not run on sweeps >= 1 -- import_gas rewrites only the interior.
     !
-    ! The fix mirrors the INTERIOR partner's normal component into the ghost,
+    ! The 300/301 fill mirrors the INTERIOR partner's normal component into the ghost,
     !
     !     v_g <- v_g - ((v_g + v_i).n) n        =>   v_g.n = -v_i.n
     !
@@ -61,8 +61,8 @@ program test_ghost_bc
     ! and the guard must fall back to zero-gradient.
     !
     ! ord2 = .true. must be set before any gasProperties call: without it gasProperties reads
-    ! the CELL value and every case samples cell (2,1,1), so G1 would read -0.1 both before
-    ! and after the fix and the gate could never go green.
+    ! the CELL value and every case samples cell (2,1,1), so G1 reads -0.1 with either fill
+    ! and the gate cannot separate them.
     !
     use, intrinsic :: iso_fortran_env, only: real64
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_bc_cell, fillGhostPartners, buildGhostLinks, &
@@ -178,9 +178,10 @@ contains
         call freeAll(geo, sol)
     end subroutine g4_corner2D
 
-    !> G5 -- 201 partner copy. No ord2 fixture in the tree carries 101 or 201, so this is the
-    !  only coverage the partner branch has. The ghost itself is the observable: a partner copy
-    !  is not a plane condition and shows up nowhere in a sample at the boundary.
+    !> G5 -- 201 partner copy. The ord2 fixtures with 101/201 faces (periodic-2d-ord2*,
+    !  two-fam-bc-2blk-*ord2*, swirl-wedge-2blk-ord2-dual) see the partner branch only through
+    !  their fields. The ghost itself is the observable here: a partner copy is not a plane
+    !  condition and shows up nowhere in a sample at the boundary.
     subroutine g5_partner
         type(obj_block)     :: geo(1)
         type(obj_flowblock) :: sol(1)
@@ -206,7 +207,7 @@ contains
     !> G6 -- the positivity guard. A steep near-wall density makes the linear ghost negative;
     !  a negative density in the sample is worse than a first-order one, so 300/301 falls back
     !  to zero-gradient for the scalars. Only 300/301 does: every other code keeps the linear
-    !  fill it has always had.
+    !  fill.
     subroutine g6_guard
         type(obj_block)     :: geo
         type(obj_flowblock) :: sol

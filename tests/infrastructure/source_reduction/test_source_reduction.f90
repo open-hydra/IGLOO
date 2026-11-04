@@ -1,30 +1,30 @@
 program test_source_reduction
     !
     ! The ord2 source reduction must CONSERVE. Under gas-order = 2 the source accumulators
-    ! live on the dual mesh (1..N+1) and finalizeSRC reduces them to geo cells. The shipped
-    ! rule was a volume AVERAGE of EXTENSIVE rates,
+    ! live on the dual mesh (1..N+1) and finalizeSRC reduces them to geo cells. A volume
+    ! AVERAGE of EXTENSIVE rates,
     !
     !     S_geo(c) = sum_oct subVol(oct,c) * S_dual(c+oct) / sum_oct subVol(oct,c),
     !
-    ! which hands each dual cell on with total weight sum_{c touching d} subVol/V_geo(c).
+    ! hands each dual cell on with total weight sum_{c touching d} subVol/V_geo(c).
     ! On a uniform Cartesian mesh that is 1 for an interior dual cell but 1/2 on a face row,
-    ! 1/4 on an edge and 1/8 on a corner -- so every boundary row leaked most of its
-    ! deposit, and the loss scales with how much of the source sits near a boundary. Nothing
-    ! printed a conservation total and every telescoping gate ran at gas-order = 1.
+    ! 1/4 on an edge and 1/8 on a corner -- so every boundary row leaks most of its
+    ! deposit, and the loss scales with how much of the source sits near a boundary; a
+    ! gate that prints no conservation total, or runs at gas-order = 1, cannot see it.
     !
-    ! The fix divides by the ASSEMBLED dual weight instead:
+    ! The reduction divides by the ASSEMBLED dual weight instead:
     !
     !     dualW(d) = sum over every (cell, octant) pair that touches d of subVol,
     !     S_geo(c) = sum_oct subVol(oct,c)/dualW(c+oct) * S_dual(c+oct),
     !
     ! whose octant weights form a partition of unity over the geo cells sharing each dual
     ! cell. Then sum_c S_geo = sum_d S_dual EXACTLY, on any mesh -- the bracket is dualW(d)
-    ! by construction. The clipped physical dual volume is deliberately NOT used: enforcing
-    ! conservation through an approximate geometry is what bug O15 was.
+    ! by construction. The clipped physical dual volume is deliberately NOT used: it would
+    ! enforce conservation through an approximate geometry.
     !
-    ! S1-S6 are uniform Cartesian, where the pre-fix weights are the exact rationals above.
-    ! S7 is curvilinear, where the pre-fix error is instead the octant inequality and the
-    ! post-fix identity must STILL be exact -- that is the case that separates "conserves on
+    ! S1-S6 are uniform Cartesian, where the averaging weights are the exact rationals above.
+    ! S7 is curvilinear, where the averaging error is instead the octant inequality and the
+    ! identity must STILL be exact -- that is the case that separates "conserves on
     ! a nice mesh" from "conserves by construction".
     !
     ! The partition-of-unity invariant is asserted as sum_d dualW == sum_c sum_oct subVol.
@@ -46,7 +46,7 @@ program test_source_reduction
     implicit none
 
     real(real64), parameter :: H   = 0.25_real64     ! uniform spacing
-    real(real64), parameter :: TOL = 1.0e-12_real64  ! post-fix residual measured at <= 2.2e-16
+    real(real64), parameter :: TOL = 1.0e-12_real64  ! residual measured at <= 2.2e-16
     real(real64), parameter :: TOL14 = 1.0e-14_real64
     integer :: nfail
 

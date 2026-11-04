@@ -6,8 +6,8 @@ program test_axis_dispatch
     ! ATLAS emits 200 for BOTH the wedge faces and the axis face of an axisymmetric wedge
     ! block. They need opposite treatment -- the wedge folds by a rotation about the axis, the
     ! axis face must reflect, because a rotation about the axis cannot change a particle's
-    ! radius -- and the old code told them apart by face index (`f==5 .or. f==6`) while
-    ! rotating about a hardcoded x. Neither is guaranteed: the block may be built with the
+    ! radius -- and telling them apart by face index (`f==5 .or. f==6`) while rotating about
+    ! a hardcoded x assumes two things, neither guaranteed: the block may be built with the
     ! azimuthal direction along i or j, and the symmetry axis need not be x.
     !
     ! Production `faceAzimuth` decides from the face's own geometry, projected on the
@@ -21,13 +21,13 @@ program test_axis_dispatch
     ! correct SIGN (+ on the +theta side, which selects the -delthe fold), and the other four
     ! -- axis face, outer radial face, and the two axial faces -- must classify as reflect.
     !
-    ! D4 pins the equivalence the refactor must preserve: on the conventional k-ordering about
-    ! x, the geometric rule must agree with the retired `f==6 -> -delthe, f==5 -> +delthe`.
+    ! D4 pins the equivalence with the index rule: on the conventional k-ordering about
+    ! x, the geometric rule must agree with `f==6 -> -delthe, f==5 -> +delthe`.
     ! No e2e case covers the fold branch: axisymFold re-sectors the particle every outer step,
     ! so bcDef sees zero wedge-face 200 calls on both db-2daxi and JPL (measured). This is it.
     !
-    ! D8-D11 pin the ROTATION itself, which D1-D7 never exercised (they check the scalar sign
-    ! only, and every e2e fixture has z == 0, so the fold never rotated anything on the suite):
+    ! D8-D11 pin the ROTATION itself, which D1-D7 do not exercise (they check the scalar sign
+    ! only; on the suite the fold rotates parcels in wedge-fold and the swirl-wedge cases):
     !   D8   rotateVector is right-handed w.r.t. `cross`: R(x, +dth) y has z = +sin(dth)
     !   D9   axisymFold brings a state at theta = +-0.75 dth to -+0.25 dth in ONE rotation,
     !        turning position AND velocity by -+dth, leaving r, |v| and the axial parts alone
@@ -37,9 +37,9 @@ program test_axis_dispatch
     !        at the face whose azim it came from brings a state 0.75 dth outside back inside
     ! D8 is the ONLY assertion that pins handedness (against `cross`, which faceAzimuth and the
     ! fold's own atan2 frame share); D9-D11 pin the fold's consistency with it, and would pass
-    ! a left-handed rotation paired with a left-handed frame. Proven RED (ledger O22):
-    ! rotateVector's row-major literal was reshaped column-major, i.e. it returned R(-theta),
-    ! and the old fold loop walked the state to +-180 deg.
+    ! a left-handed rotation paired with a left-handed frame. RED on a build whose rotateVector
+    ! reshapes its row-major literal column-major (it returns R(-theta)); the fold loop of that
+    ! build walks the state to +-180 deg.
     !
     ! Oracle is analytic throughout: face normals are built from the cylindrical frame, never
     ! read back from the routine under test. Tolerances are machine-precision because every
@@ -78,13 +78,13 @@ program test_axis_dispatch
     call runFrame('D2 axis=x  wedge on i', 2, 3, 1, aX, eX)
     call runFrame('D3 axis=x  wedge on j', 3, 1, 2, aX, eX)
 
-    ! ---- D4: reproduce the retired index rule on the conventional ordering -----------------
+    ! ---- D4: reproduce the index rule on the conventional ordering -------------------------
     axisDir = aX
     call buildWedge(1, 2, 3, aX, eX, vert, nrm, wedgeLo, wedgeHi)
     do f = 5, 6
         azim = faceAzimuth(vert, f, nrm(:,f))
-        ! retired rule: f==6 -> -delthe, f==5 -> +delthe.  new rule: -sign(delthe, azim)
-        call expect('D4 fold sign matches the retired index rule', f,                        &
+        ! index rule: f==6 -> -delthe, f==5 -> +delthe.  geometric rule: -sign(delthe, azim)
+        call expect('D4 fold sign matches the index rule', f,                        &
                     -sign(DTH, azim) - merge(-DTH, DTH, f==6), TOL*DTH)
     enddo
 

@@ -1,7 +1,7 @@
 program test_ini_pipeline
     !
-    ! INI -> module-variable pipeline check (completes D1's "read coded bp"
-    ! requirement). Loads the fixture input.ini (a copy of the working e2e
+    ! INI -> module-variable pipeline check (the INI -> bp reader of the TAB test
+    ! D1). Loads the fixture input.ini (a copy of the working e2e
     ! conv-nu case + `breakup = TAB` with all model options defaulted) through
     ! the PRODUCTION reader read_IGLOO_input, then asserts what landed:
     !
@@ -9,9 +9,9 @@ program test_ini_pipeline
     !        bpScale = gamma(1+2/n)/gamma(1+3/n)  (the WeCrit doubling is the
     !        intentional rest-drop->equilibrium mapping, see breakup/tab/INFO.md)
     !   IP2  selectors: drag=Stokes(2), heat=Ranz-Marshall(5), blowing=LK(1) -- the
-    !        ONLY gate on the f2 selector's parse path (registry slot d_s(20) ->
-    !        fini%get -> assign_blowing); every other case leaves the key absent, so
-    !        without this the non-default branch is exercised by nothing.
+    !        unit gate on the f2 selector's parse path (registry slot d_s(20) ->
+    !        fini%get -> assign_blowing); mhb98-water-blowing runs the same key end to
+    !        end, every other case leaves it absent.
     !   IP3  body-accel = (0,-200,0) and bodyForce switch on
     !   IP4  [IGLOO-ODE] rtol=atol=1e-11; [IGLOO-BC] ds=10 cm -> 0.1 m
     !   IP5  seed default 42 (option absent)
@@ -38,7 +38,7 @@ program test_ini_pipeline
     nbad = 0
 
     ! IP1 — TAB parameter block
-    ! A17 fix: bp is allocated+filled in read_models (nbp retired); pin the size contract
+    ! bp is allocated and filled in read_models; pin the size contract
     call check(allocated(bp) .and. size(bp) == 4, 'IP1 bp allocated, size 4', nbad)
     call check(bp(1) == 8._R8,           'IP1 Comega=8', nbad)
     call check(bp(2) == 5._R8,           'IP1 Cmu=5', nbad)
@@ -60,10 +60,9 @@ program test_ini_pipeline
 
     ! IP4 — ODE tolerances and BC spacing (cm -> m conversion)
     call check(rtol == 1e-11_R8 .and. atol == 1e-11_R8, 'IP4 rtol=atol=1e-11', nbad)
-    ! Lib_INI.f90:320 converts with a SINGLE-precision literal (ds*1e-2), so ds
-    ! carries a 2.2e-9 abs error (0.0999999977... not 0.1). Minor known issue;
-    ! asserted here at the intended-semantics level.
-    call check(abs(ds-0.1_R8) <= 1e-7_R8, 'IP4 ds=10cm -> 0.1 m (to sp-literal error)', nbad)
+    ! Lib_INI converts ds from cm to m with a double literal (ds*1e-2_R8); the
+    ! check keeps a 1e-7 margin.
+    call check(abs(ds-0.1_R8) <= 1e-7_R8, 'IP4 ds=10cm -> 0.1 m (to 1e-7)', nbad)
 
     ! IP5 — RNG seed default
     call check(rng_seed == 42,           'IP5 seed default 42', nbad)

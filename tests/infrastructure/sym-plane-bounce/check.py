@@ -98,7 +98,7 @@ def main():
     per_cell = collections.Counter((r["ID"], min(int(r["X"] / DX), NX - 1)) for r in tr)
     (pid, cell), most = min(per_cell.items(), key=lambda kv: (-kv[1], kv[0]))
     if most <= N_MAX_CELL + 1:
-        rc |= fail(f"B4 at most {most} rows in one cell: the fixture no longer keeps a parcel in a cell for more "
+        rc |= fail(f"B4 at most {most} rows in one cell: the fixture does not keep a parcel in a cell for more "
                    f"than {N_MAX_CELL} reflections")
     else:
         print(f"B4 (gas order {gas_order()}) parcel {pid} has {most} rows in cell {cell + 1} along x, more than "
