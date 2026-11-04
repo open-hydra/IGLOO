@@ -16,6 +16,5 @@ cell of rows 1–2, exactly one in every other cell.
 **RED.** Column 9 ignored (`compute_ds` takes the global ds): every cell takes one parcel; J5 fails on the ten
 cells of rows 1–2.
 
-The spacing is 2.7 mm rather than 2.5 mm: at 2.5 mm the lattice reaches the face's outer edge and the run stops
-with a segmentation fault (see `inj-pack/INFO.md`); reproduce with column 9 = 2.5e-3 in `make_fixture.py`
-(`DS_CELL`).
+The spacing 2.7 mm keeps every pinned point off the face-cell edges, so J0 takes its off-edge form and a parcel's
+cell is the cell holding its first row; points on the edges are `inj-pack`'s and `inj-mdotmax`'s.

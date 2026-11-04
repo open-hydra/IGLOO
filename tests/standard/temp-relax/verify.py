@@ -49,8 +49,8 @@ def best_particle(path, vcol):
             except ValueError:
                 continue
             parts.setdefault(pid, []).append((x, y))
-    best = max((sorted(r) for r in parts.values() if len(r) >= MIN_PTS),
-               key=len, default=None)
+    best = max((sorted(parts[k]) for k in sorted(parts) if len(parts[k]) >= MIN_PTS),
+               key=len, default=None)  # a tie: the lowest ID
     if best is None:
         return None
     return best[0][0], [r[0] for r in best], [r[1] for r in best]

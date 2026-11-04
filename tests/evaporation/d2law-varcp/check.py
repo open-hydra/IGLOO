@@ -129,7 +129,8 @@ def main():
     worst_tab = max(abs(lookup(cols["h"], tmin, tmax, T + 0.37) - h_table(T + 0.37)) for T in range(tmin, tmax))
     if (tmin, tmax) != (TMIN, TMAX) or worst_tab > 1.0e-6:
         fails.append("the table is not make_table.py's (span %d..%d, h off by %.3e)" % (tmin, tmax, worst_tab))
-    parts = {pid: sorted(rows) for pid, rows in d2.load_trajectories(TRAJ).items()}
+    # ID order: the reference parcel and every tie are the lowest ID
+    parts = {pid: sorted(rows) for pid, rows in sorted(d2.load_trajectories(TRAJ).items())}
     exits = [l.split() for l in open(EXITS).read().splitlines()[2:] if len(l.split()) == 11]
     texit = [float(c[3]) for c in exits]
     ref = next(iter(parts.values()))
@@ -178,7 +179,7 @@ def main():
     wdot, _, _, _, esum = source_totals(SRC)
     m0 = d2.RHO_P * math.pi / 6.0 * d2.D0 ** 3
     ndot = d2.MDOT_PARCEL / m0
-    t_exit = sum(texit) / len(texit)
+    t_exit = math.fsum(texit) / len(texit)
     e_in = N_PARCELS * ndot * m0 * (h_table(d2.TP0) + 0.5 * d2.U_G ** 2)
     m_out = N_PARCELS * ndot * m0 - wdot
     e_out = m_out * (h_table(t_exit) + 0.5 * d2.U_G ** 2)

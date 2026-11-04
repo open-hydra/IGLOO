@@ -9,6 +9,10 @@ program test_drag
     !       x = x0 + v0 t + g t^2/2, v = v0 + g t, exact for SDIRK4 (fixed steps)
     !   AO  order-of-accuracy on the LINEAR Stokes RHS (fixed-step) -> p_obs ~ 4
     !   A3  Schiller-Naumann (nonlinear) -> independent RK4 oracle
+    !   E6a Stokes drag in the linear gas field u_g = G(x - x0) + u0 sampled by
+    !       the trilinear map of one cell (the unit cube) -> per-axis closed form
+    !   E6b the same field on a distorted cell (one vertex moved by 10 % of the
+    !       edge): the field is exact at the converged local coordinates
     !
     ! Tier-1 oracles are closed form (Stokes is linear: dv/dt=(u-v)/tau_p).
     ! Tier-2 (A3) uses an INDEPENDENT RK4 reimplementation of the SN law.
@@ -35,6 +39,12 @@ program test_drag
     real(R8), parameter :: Tg    = 300.0_R8
     real(R8), parameter :: cp_p  = 4180.0_R8
     real(R8) :: mass, taup, gas9(9)
+    ! E6 scenario: u_g = E6_G (x - E6_XC) + E6_U0 on one cell, from (E6_X0, E6_V0)
+    real(R8), parameter :: E6_G(3)  = [100.0_R8, -20.0_R8, 200.0_R8]   ! diagonal of G [1/s]
+    real(R8), parameter :: E6_XC(3) = [0.5_R8, 0.5_R8, 0.5_R8]         ! [m]
+    real(R8), parameter :: E6_U0(3) = [0.3_R8, -0.2_R8, 0.1_R8]        ! [m/s]
+    real(R8), parameter :: E6_X0(3) = [0.51_R8, 0.8_R8, 0.495_R8]      ! [m]
+    real(R8), parameter :: E6_V0(3) = [0.0_R8, 0.0_R8, 0.0_R8]         ! [m/s]
 
     ! oracle params (host-associated by rhs_sn)
     real(R8) :: o_k, o_tau, o_u, o_rho, o_d, o_mu
@@ -55,6 +65,8 @@ program test_drag
     call run_A4_ballistic(ok_all)
     call run_AO(ok_all)
     call run_A3(ok_all)
+    call run_E6(ok_all, .false.)
+    call run_E6(ok_all, .true.)
 
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then
@@ -209,6 +221,96 @@ contains
         ok = ok .and. pass
         call append_row('A3_schiller_naumann', 'vx,x', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_A3
+
+    !---------------------------------------------------------------!
+    ! E6: Stokes drag in u_g = G (x - XC) + U0 (G diagonal) set at the !
+    !     nodes of one cell, sampled by production's trilinear map.   !
+    !     E6a the unit cube, E6b vertex 7 moved 0.1 m along (1,1,1).  !
+    !---------------------------------------------------------------!
+    subroutine run_E6(ok, distorted)
+        logical, intent(inout) :: ok
+        logical, intent(in)    :: distorted
+        ! 10x the floors measured on the unit cube and the distorted cell (x 3.15e-11, v 6.27e-10)
+        real(R8), parameter :: TOL_X = 3.2e-10_R8, TOL_V = 6.3e-9_R8, TOL_P = 0.3_R8
+        integer,  parameter :: NOUT = 10
+        real(R8) :: verts(3,8), nodes(9,8), y0(NEQ), y(NEQ), xe(3), ve(3), dt, tend
+        real(R8) :: num_x(3*NOUT), ex_x(3*NOUT), num_v(3*NOUT), ex_v(3*NOUT)
+        real(R8) :: errx, errv, err(3), p1, p2, inside
+        integer  :: i, k, lvl, nstep, ierr, ierr_all
+        logical  :: pass, passx, passv
+        character(len=3) :: leg
+
+        leg = merge('E6b', 'E6a', distorted)
+        verts(:,1) = [0._R8, 0._R8, 0._R8];  verts(:,2) = [0._R8, 0._R8, 1._R8]
+        verts(:,3) = [0._R8, 1._R8, 1._R8];  verts(:,4) = [0._R8, 1._R8, 0._R8]
+        verts(:,5) = [1._R8, 0._R8, 0._R8];  verts(:,6) = [1._R8, 0._R8, 1._R8]
+        verts(:,7) = [1._R8, 1._R8, 1._R8];  verts(:,8) = [1._R8, 1._R8, 0._R8]
+        if (distorted) verts(:,7) = verts(:,7) + 0.1_R8/sqrt(3._R8)
+        do i = 1, 8
+            nodes(:,i)   = gas9
+            nodes(2:4,i) = E6_G*(verts(:,i) - E6_XC) + E6_U0
+        end do
+        y0 = 0._R8;  y0(1:3) = E6_X0;  y0(4:6) = E6_V0;  y0(7) = Tg
+
+        ! adaptive (production path): end states at t = 0.2k tau, k = 1..NOUT, each from t = 0
+        ierr_all = 0;  inside = huge(1._R8)
+        dt = 0.1_R8*taup
+        do k = 1, NOUT
+            nstep = 2*k
+            call advance(gas9, cp_p, rho_p, dp, mass, DRAG_STOKES, HEAT_NONE, y0, NEQ, &
+                         MODE_WRAPPER_ADAPTIVE, dt, nstep, y, ierr, nodes=nodes, verts=verts)
+            if (ierr < 0) ierr_all = ierr
+            call e6_exact(real(nstep, R8)*dt, xe, ve)
+            num_x(3*k-2:3*k) = y(1:3);  ex_x(3*k-2:3*k) = xe
+            num_v(3*k-2:3*k) = y(4:6);  ex_v(3*k-2:3*k) = ve
+            inside = min(inside, minval(y(1:3)), minval(1._R8 - y(1:3)))
+        end do
+        errx = relLinf(num_x, ex_x);  errv = relLinf(num_v, ex_v)
+        write(*,'(a,a,2es11.3,a,f7.4)') '   [', leg//'] adaptive relLinf x, v =', errx, errv, &
+                                        '  closest approach to a cell face [m]:', inside
+        passx = assert_lt(leg//' Stokes in a linear field, adaptive (x)', errx, TOL_X) .and. &
+                (ierr_all >= 0) .and. (inside > 0.05_R8)
+        passv = assert_lt(leg//' Stokes in a linear field, adaptive (v)', errv, TOL_V) .and. (ierr_all >= 0)
+        ok = ok .and. passx .and. passv
+        call append_row(leg//'_stokes_linear_x', 'x', errx, errx, 0._R8, 0._R8, TOL_X, passx)
+        call append_row(leg//'_stokes_linear_v', 'v', errv, errv, 0._R8, 0._R8, TOL_V, passv)
+
+        ! fixed step: order of accuracy over dt/tau = 0.4, 0.2, 0.1 (tend = 2 tau)
+        tend = 2.0_R8*taup
+        do lvl = 1, 3
+            nstep = 5 * 2**(lvl-1)
+            dt    = tend / real(nstep, R8)
+            call advance(gas9, cp_p, rho_p, dp, mass, DRAG_STOKES, HEAT_NONE, y0, NEQ, &
+                         MODE_SDIRK_FIXEDSTEP, dt, nstep, y, ierr, nodes=nodes, verts=verts)
+            call e6_exact(tend, xe, ve)
+            err(lvl) = max(relLinf(y(1:3), xe), relLinf(y(4:6), ve))
+        end do
+        p1 = observed_order(err(1), err(2))
+        p2 = observed_order(err(2), err(3))
+        pass = assert_lt(leg//' order |p-4| (coarse pair)', abs(p1-4._R8), TOL_P) .and. &
+               assert_lt(leg//' order |p-4| (fine pair)',   abs(p2-4._R8), TOL_P)
+        ok = ok .and. pass
+        call append_row(leg//'_order_linear', 'x,v', err(3), err(3), p2, 4._R8, TOL_P, pass)
+        write(*,'(a,a,3es11.3,a,2f7.3)') '   [', leg//'] err=', err, '  p=', p1, p2
+
+    end subroutine run_E6
+
+    !> E6's per-axis closed form: x - x* = A e^{l+ t} + B e^{l- t}, l = (-1 +- sqrt(1 + 4 g tau))/(2 tau).
+    subroutine e6_exact(t, x, v)
+        real(R8), intent(in)  :: t
+        real(R8), intent(out) :: x(3), v(3)
+        real(R8) :: s, lp, lm, a, b, xs, X0
+        integer  :: ax
+        do ax = 1, 3
+            s  = sqrt(1._R8 + 4._R8*E6_G(ax)*taup)
+            lp = (-1._R8 + s)/(2._R8*taup);  lm = (-1._R8 - s)/(2._R8*taup)
+            xs = E6_XC(ax) - E6_U0(ax)/E6_G(ax)
+            X0 = E6_X0(ax) - xs
+            a  = (E6_V0(ax) - lm*X0)/(lp - lm);  b = (lp*X0 - E6_V0(ax))/(lp - lm)
+            x(ax) = xs + a*exp(lp*t) + b*exp(lm*t)
+            v(ax) = lp*a*exp(lp*t) + lm*b*exp(lm*t)
+        end do
+    end subroutine e6_exact
 
     !> Independent SN drag RHS for the oracle: y=(x,y,z,vx,vy,vz).
     pure subroutine rhs_sn(t, yv, dydt)

@@ -5,12 +5,12 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
 #   repeatability/      two-sweep gates (twosweep driver): 13 cases
 #   mpi/                registered only under USE_MPI: 7 rank-count cases + 3 consistency + 1 determinism
 #                       + 13 two-sweep cases
@@ -419,6 +419,10 @@ igloo_e2e_case(conv-nu-jaxa3 standard/conv-nu-jaxa3 "e2e;standard;heat")
 igloo_e2e_case(conv-nu-jaxa4 standard/conv-nu-jaxa4 "e2e;standard;heat")
 igloo_e2e_case(conv-nu-kd    standard/conv-nu-kd    "e2e;standard;heat")
 igloo_e2e_case(vie-plait   standard/vie-plait   "e2e;standard;drag;gas")
+# vie-plait-dense: vie-plait's field with 250 strands from the inlet face (gas-order 2, 3D): vie-plait's closed
+# form on every row of every strand, the side-face exits it predicts, and the source totals (momentum, kinetic
+# energy) against the strands' telescoped flows.
+igloo_e2e_case(vie-plait-dense standard/vie-plait-dense "e2e;standard;drag;gas;source")
 # swirl-wedge: solid-body swirl on an annular axisymmetric wedge (mesh2D + axisym), three DB
 # parcels with prescribed wp -- the quantitative gate on the 2.5D fold (W-plan item B): r, w_p,
 # v_r and the unwrapped azimuth against the exact cylindrical ODE, tolerances = the derived
@@ -636,19 +640,6 @@ igloo_e2e_case(tab-e2e breakup/tab-e2e "e2e;breakup;val;tab")
 # threads-tab-e2e: tab-e2e at 1, 2 and 5 threads -- the child sizes of the TAB resize are drawn inside the parallel
 # region, from each parcel's own stream. RED with the intrinsic random_number there (RosinRammler).
 igloo_threads_case(threads-tab-e2e breakup/tab-e2e "e2e;breakup;omp")
-# vv-order: the tab-e2e and burn-box figures (verify.py) are the same bytes whatever order an OpenMP run gives the
-# records of each zone of their .dat files; it reads those cases' fresh OUTPUT/, which both start by removing.
-set_tests_properties(tab-e2e PROPERTIES FIXTURES_SETUP vv_order_tab RESOURCE_LOCK tab_e2e_output)
-set_tests_properties(burn-box PROPERTIES FIXTURES_SETUP vv_order_burn RESOURCE_LOCK burn_box_output)
-add_test(NAME vv-order COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/vv_order_check.py
-    ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/vv-order breakup/tab-e2e combustion/burn-box)
-set_tests_properties(vv-order PROPERTIES
-    LABELS "e2e;infrastructure;vv"
-    FIXTURES_REQUIRED "vv_order_tab;vv_order_burn"
-    RESOURCE_LOCK "tab_e2e_output;burn_box_output"
-    SKIP_RETURN_CODE 77
-    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    TIMEOUT 300)
 # B-VAL-5 (2026-07-22): ETAB vs Tanner 97/98 — shared TAB oscillator (onset + t_bu) plus
 # the deterministic exponential-cascade product size across the bag/stripping branches.
 igloo_e2e_case(etab-e2e breakup/etab-e2e "e2e;breakup;val;etab")
@@ -1022,10 +1013,12 @@ igloo_e2e_case(conn-103 infrastructure/conn-103 "e2e;infrastructure;bc")
 # neither trigger alone exposes both halves. INPUT/ symlinks standard/drag-stokes'.
 # Verified RED at d857aba^ (group 2: 13 particles, 12 of them ID 0) and GREEN at d857aba.
 igloo_e2e_case(bc-center-2grp infrastructure/bc-center-2grp "e2e;infrastructure;pinning")
-# Injection placement on drag-stokes's box: several parcels per cell at ds = 0.27 cm with a 402 row (inj-pack), a
-# cell's own spacing in bc.txt column 9 (inj-dscell), the degeneracy floor ds-degen on graded rows (inj-dsdegen):
+# Injection placement on drag-stokes's box: several parcels per cell at ds = 0.25 cm with a 402 row, points on the
+# face-cell edges each with its own cell's payload (inj-pack), the spacing from mdot-max at N_pmin = 3 (inj-mdotmax),
+# a cell's own spacing in bc.txt column 9 (inj-dscell), the degeneracy floor ds-degen on graded rows (inj-dsdegen):
 # the inlet plane, the spacing, the mass flow per cell, the populations.
 igloo_e2e_case(inj-pack    infrastructure/inj-pack    "e2e;infrastructure;injection")
+igloo_e2e_case(inj-mdotmax infrastructure/inj-mdotmax "e2e;infrastructure;injection")
 igloo_e2e_case(inj-dscell  infrastructure/inj-dscell  "e2e;infrastructure;injection")
 igloo_e2e_case(inj-dsdegen infrastructure/inj-dsdegen "e2e;infrastructure;injection")
 # inj-edge: drag-stokes's box injected with ds = 0.25 cm, whose advancing front pins lattice points on the inlet
@@ -1086,6 +1079,34 @@ igloo_e2e_case(sym-plane-bounce-ord2 infrastructure/sym-plane-bounce-ord2 "e2e;i
 # leaves one exit record, code 0 where the integration stopped inside. RED with no record for the time-end and
 # never-integrated stops: records for IDs 1-3 only.
 igloo_e2e_case(exit-census infrastructure/exit-census "e2e;infrastructure;io")
+
+# vv-order, check-order: the V&V figures (verify.py) and the printouts of the gates that pick parcels (check.py) are
+# the same whatever order an OpenMP run gives the records of each zone of the .dat files (vv_order_check.py). Both
+# read the cases' fresh OUTPUT/, which each case starts by removing: each case is a fixture, its output a lock.
+foreach(_c tab-e2e burn-box solid-box conv-nu temp-relax drag-stokes body-force coupled-body periodic-y
+        d2law-varcp body-evap-m2 body-evap-m4 body-burn-m5)
+    set_tests_properties(${_c} PROPERTIES FIXTURES_SETUP order_${_c} RESOURCE_LOCK ${_c}_output)
+endforeach()
+add_test(NAME vv-order COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/vv_order_check.py
+    ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/vv-order breakup/tab-e2e combustion/burn-box
+    solidification/solid-box standard/conv-nu standard/temp-relax standard/drag-stokes standard/body-force
+    infrastructure/coupled-body infrastructure/periodic-y)
+set_tests_properties(vv-order PROPERTIES
+    LABELS "e2e;infrastructure;vv"
+    FIXTURES_REQUIRED "order_tab-e2e;order_burn-box;order_solid-box;order_conv-nu;order_temp-relax;order_drag-stokes;order_body-force;order_coupled-body;order_periodic-y"
+    RESOURCE_LOCK "tab-e2e_output;burn-box_output;solid-box_output;conv-nu_output;temp-relax_output;drag-stokes_output;body-force_output;coupled-body_output;periodic-y_output"
+    SKIP_RETURN_CODE 77
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    TIMEOUT 900)
+add_test(NAME check-order COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/vv_order_check.py --printout
+    ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/check-order evaporation/d2law-varcp
+    infrastructure/body-evap-m2 infrastructure/body-evap-m4 infrastructure/body-burn-m5)
+set_tests_properties(check-order PROPERTIES
+    LABELS "e2e;infrastructure"
+    FIXTURES_REQUIRED "order_d2law-varcp;order_body-evap-m2;order_body-evap-m4;order_body-burn-m5"
+    RESOURCE_LOCK "d2law-varcp_output;body-evap-m2_output;body-evap-m4_output;body-burn-m5_output"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    TIMEOUT 900)
 
 # ---------- mpi (registered only in a USE_MPI build) ----------------------------
 # See mpi/INFO.md. Each dir symlinks its parent case's INPUT/, input.ini and check.py, so the fixture
