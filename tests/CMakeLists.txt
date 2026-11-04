@@ -9,7 +9,7 @@
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ (e2e)
-#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
+#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
 #   repeatability/      two-sweep gates (twosweep driver): 13 cases
 #   mpi/                registered only under USE_MPI: 8 rank-count cases + 3 consistency + 1 determinism
@@ -651,6 +651,11 @@ igloo_e2e_case(tab-e2e breakup/tab-e2e "e2e;breakup;val;tab")
 # threads-tab-e2e: tab-e2e at 1, 2 and 5 threads -- the child sizes of the TAB resize are drawn inside the parallel
 # region, from each parcel's own stream. RED with the intrinsic random_number there (RosinRammler).
 igloo_threads_case(threads-tab-e2e breakup/tab-e2e "e2e;breakup;omp")
+# tab-hf92: TAB on Hsiang & Faeth's water series (d0 = 1 mm, We 15-600, 25 classes): every drop breaks, the
+# cascade ends in the first half of the box, every parcel is in it at t_b = 5 t*; verify.py draws [HF92] eq. [14] and
+# [HF93] (not gated). RED with the slip at 6 m/s (no drop breaks), a 5 cm box (still breaking), a 0.3 m box (out
+# before t_b).
+igloo_e2e_case(tab-hf92 breakup/tab-hf92 "e2e;breakup;val;tab")
 # B-VAL-5 (2026-07-22): ETAB vs Tanner 97/98 — shared TAB oscillator (onset + t_bu) plus
 # the deterministic exponential-cascade product size across the bag/stripping branches.
 igloo_e2e_case(etab-e2e breakup/etab-e2e "e2e;breakup;val;etab")
@@ -659,6 +664,9 @@ igloo_e2e_case(etab-e2e breakup/etab-e2e "e2e;breakup;val;etab")
 # lateral speed within 1e-4: the product kick reaches the parcel once. RED with the kick also written into the
 # solver's state: ratio 1.9992-2.0010 on all 15 kicked drops.
 igloo_e2e_case(etab-e2e-dopri5 breakup/etab-e2e-dopri5 "e2e;breakup;etab")
+# etab-hf92: tab-hf92 under ETAB (INPUT symlinked, tab-hf92's oracle and figure). RED as tab-hf92, and with the
+# lateral faces coded 400: 46 of 714 parcels leave through them.
+igloo_e2e_case(etab-hf92 breakup/etab-hf92 "e2e;breakup;val;etab")
 # B-VAL-4 (2026-07-23): Reitz-Diwakar vs [RD87] (SAE 870598) — the bag + stripping breakup
 # rate across the We_r=0.5*sqrt(Re) handoff. Model 3 (ODE-path, no event). The RD model is
 # source-faithful to [RD87] (Cs=20 curve-fit, Cb=pi verified) — no production change. GREEN.
@@ -1119,17 +1127,17 @@ igloo_e2e_case(exit-census infrastructure/exit-census "e2e;infrastructure;io")
 # the same whatever order an OpenMP run gives the records of each zone of the .dat files (vv_order_check.py). Both
 # read the cases' fresh OUTPUT/, which each case starts by removing: each case is a fixture, its output a lock.
 foreach(_c tab-e2e burn-box solid-box conv-nu temp-relax drag-stokes body-force coupled-body periodic-y
-        d2law-varcp body-evap-m2 body-evap-m4 body-burn-m5)
+        tab-hf92 etab-hf92 d2law-varcp body-evap-m2 body-evap-m4 body-burn-m5)
     set_tests_properties(${_c} PROPERTIES FIXTURES_SETUP order_${_c} RESOURCE_LOCK ${_c}_output)
 endforeach()
 add_test(NAME vv-order COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/vv_order_check.py
     ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/vv-order breakup/tab-e2e combustion/burn-box
     solidification/solid-box standard/conv-nu standard/temp-relax standard/drag-stokes standard/body-force
-    infrastructure/coupled-body infrastructure/periodic-y)
+    infrastructure/coupled-body infrastructure/periodic-y breakup/tab-hf92 breakup/etab-hf92)
 set_tests_properties(vv-order PROPERTIES
     LABELS "e2e;infrastructure;vv"
-    FIXTURES_REQUIRED "order_tab-e2e;order_burn-box;order_solid-box;order_conv-nu;order_temp-relax;order_drag-stokes;order_body-force;order_coupled-body;order_periodic-y"
-    RESOURCE_LOCK "tab-e2e_output;burn-box_output;solid-box_output;conv-nu_output;temp-relax_output;drag-stokes_output;body-force_output;coupled-body_output;periodic-y_output"
+    FIXTURES_REQUIRED "order_tab-e2e;order_burn-box;order_solid-box;order_conv-nu;order_temp-relax;order_drag-stokes;order_body-force;order_coupled-body;order_periodic-y;order_tab-hf92;order_etab-hf92"
+    RESOURCE_LOCK "tab-e2e_output;burn-box_output;solid-box_output;conv-nu_output;temp-relax_output;drag-stokes_output;body-force_output;coupled-body_output;periodic-y_output;tab-hf92_output;etab-hf92_output"
     SKIP_RETURN_CODE 77
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     TIMEOUT 900)

@@ -225,5 +225,6 @@ do not depend on thread scheduling or MPI rank count.
 
 Routine-level comparisons of all five models with their source papers, and the
 end-to-end Weber-sweep cases (`tab-e2e`, `etab-e2e`, `pilch-erdman-e2e`,
-`reitz-diwakar-e2e`, `khrt-e2e`): [../vv/literature.md](../vv/literature.md),
+`reitz-diwakar-e2e`, `khrt-e2e`, and `tab-hf92`/`etab-hf92`, the TAB and ETAB products
+beside Hsiang & Faeth's correlations): [../vv/literature.md](../vv/literature.md),
 [../vv/e2e.md](../vv/e2e.md).
