@@ -1,6 +1,6 @@
 program test_heat_probes
     !
-    ! A7 RESOLVED 2026-07-15 as SOURCE-FAITHFUL (was an xfail bug probe):
+    ! JAXA1 is SOURCE-FAITHFUL:
     ! Shimada2006 eq. 45 (quoting NASA-SP-8039) IS  Nu = 2.5 Re^0.15 + 0.04 Re,
     ! with no +2 conduction floor — the code transcribes the source exactly.
     ! The missing stagnant-sphere limit is a property of the PUBLISHED

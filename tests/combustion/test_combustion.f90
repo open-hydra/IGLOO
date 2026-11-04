@@ -1,7 +1,7 @@
 program test_combustion
     !
-    ! M-family unit checks on IGLOO_Lib_Combustion::becksteadRate — the M1
-    ! Beckstead d^n burn-law closure, called DIRECTLY with the metal parameter
+    ! Unit checks on IGLOO_Lib_Combustion::becksteadRate — the Beckstead
+    ! d^n burn-law closure, called DIRECTLY with the metal parameter
     ! block laid out as Lib_RHS packs it (imKb..imQc).
     !
     !   CB1  closed-form oracle: m(t) = rho*pi/6*(d0^n - Keff*t)^(3/n) has an

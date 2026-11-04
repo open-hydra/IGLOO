@@ -71,7 +71,7 @@ self-contained: `input.ini`, `INPUT/`, independent oracle `check.py`
 (PASS == exit 0, after `tools/check_finite.py` found every number of `OUTPUT/*.tec` and `*.dat`
 finite; the solver's stderr is NOT the gate).
 
-ctest labels: category (`standard`/`evaporation`/`breakup`/`combustion`/`infrastructure`)
+ctest labels: category (`standard`/`evaporation`/`combustion`/`solidification`/`breakup`/`infrastructure`/`repeatability`/`mpi`)
 + kind (`unit`/`e2e`) + family tags (`drag`, `heat`, `tab`, …). There is **no `xfail`
 label and no `WILL_FAIL` property** anywhere in the registry — every entry is a real
 gate. The `test_*_probes` trio are value pins: they assert the value of specific

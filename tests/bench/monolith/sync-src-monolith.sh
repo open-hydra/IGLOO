@@ -10,7 +10,7 @@
 # CMakeLists.txt), so they travel as checkouts at their pins. The three library submodules travel as plain files
 # (their CMakeLists.txt is all the configure asks), each checked first to be a checkout of its own at its gitlink.
 # OSLO's tracked lib/Intel-ODE/lib/intel64/libiode_intel64.a travels too (OSLO links it; *.a is excluded otherwise).
-# IGLOO-commit.txt (ignored by git) names the commits and dirty-file counts of what was shipped.
+# IGLOO-commit.txt (ignored by git) names the commits and dirty-file counts of the tree it ships.
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd -P)
 SRC=$(cd "$HERE/../../.." && pwd -P)

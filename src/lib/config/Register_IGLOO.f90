@@ -32,11 +32,11 @@ contains
       'DEBUG: integrate only the listed particle IDs, space-separated, a-b intervals allowed (e.g. 1 2 6 496-497); absent or empty = all','',.false.)
     call reg%add('IGLOO-General','print-dcell',d_s(14),'-', &
       'Diagnostic trajectory cadence: when set, a row at every print-dcell-th cell crossing, at time-end and at a '// &
-      'boundary exit, besides print-dtime''s multiples; print-ds is then ignored; absent = off','',.false.)
+      'boundary exit, besides print-dtime''s rows; print-ds is then ignored; absent = off','',.false.)
     call reg%add('IGLOO-General','print-dtime',d_r(1),'-1', &
       'Trajectory row interval [s]: a row at a segment end when the time since the parcel''s last row reaches it; '// &
-      'ignored when print-ds is set; with print-dcell set, a row at the first segment end past each multiple of it; '// &
-      '<=0 = off','',.false.)
+      'ignored when print-ds is set; with print-dcell set, a row at the first segment end at or past a target time '// &
+      'starting one print-dtime after the parcel''s start, moved on by print-dtime at every row written; <=0 = off','',.false.)
     call reg%add('IGLOO-General','print-ds',d_r(28),'-1', &
       'Trajectory row distance [m]: a row at a segment end when the parcel is this far from its last row; ignored '// &
       'when print-dcell is set; <=0 = off','',.false.)

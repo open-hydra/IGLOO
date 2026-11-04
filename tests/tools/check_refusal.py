@@ -11,7 +11,7 @@ PASS requires ALL of:
      ifx/ifort (and why the e2e harness, which reads rc >= 128 as "died on signal", cannot host
      a refusal), 1 under gfortran. Unset (a hand-run outside ctest) means 128. 0 = did not
      refuse; 129-255 = a signal death (a SIGSEGV after the message is not a refusal); a plain
-     `stop` exits 0 and is therefore also caught (ledger O26);
+     `stop` exits 0 and is therefore also caught;
   2. every expected substring in run_err.txt -- the `error stop` PAYLOAD, i.e. the string
      of the stop that actually ended the run. A message merely printed to stdout before some
      other death does not count, so key the expected text on the stop string, not on the

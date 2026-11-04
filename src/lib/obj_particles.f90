@@ -86,7 +86,7 @@ module IGLOO_particles
     integer      :: model       = 1    !> RHS model (1-8)
     integer      :: neq         = 7    !> number of ODE equations
     integer      :: nOde        = 7    !> number of ODE state variables
-    logical      :: bodyAccum = .false. !> body-force J/W accumulators present (only models 2,4,5 & srcBodyForce)
+    logical      :: bodyAccum = .false. !> body-force J/W accumulators present (only models 2,4,5,8 & srcBodyForce)
     !> Basic properties       (per-material, constant)
     real(R8)     :: cp        !> specific heat
     real(R8)     :: hOff = 0._R8 !> enthalpy datum of the table for cp=const: h(T) = cp*T + hOff

@@ -8,7 +8,7 @@ reals. An inflow data line is recognised by its two leading reals and its column
 distribution-law name (default 'Dirac') or the name of a size-distribution file; the
 preceding header line (b i j k <ci> bcdef) is left untouched.
 
-For a 401 inlet cell, initializePart sets v0 = kV*|u_gas|*dir (obj_particles.f90:189),
+For a 401 inlet cell, initializePart sets v0 = kV*|u_gas|*dir (obj_particles.f90),
 so kV<1 injects the particle with slip into the gas and it relaxes by Stokes drag.
 The particle diameter is d = 2*rp (sampleDiameter, Dirac law); enlarging rp grows
 the Stokes relaxation length L = u_g*tau (tau = rho_p*(2rp)^2/(18 mu)) so it spans

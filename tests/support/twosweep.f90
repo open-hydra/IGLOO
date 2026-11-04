@@ -1,7 +1,7 @@
 !>
-!> Two-sweep repeatability harness (work package C).
+!> Two-sweep repeatability harness.
 !>
-!> The 49-entry suite performs exactly ONE sweep, so it can never detect a state leak
+!> The rest of the suite runs one sweep per case, so it can never detect a state leak
 !> across a second solve(). This driver does what an embedding does -- integrate the same
 !> pinned population twice -- and the gate is:
 !>

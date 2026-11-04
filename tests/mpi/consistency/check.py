@@ -16,8 +16,8 @@ run, on four axes:
      after-the-fact file check then passes while nothing was decomposed.
   2. LAYOUT -- no `*.rank<r>.dat` shard survives (the in-code merge ran and deleted them), and the
      merged files carry the same total line count and the same number of `Zone` records as the
-     1-rank run. A content-only check does NOT cover this: duplicating the zone header per rank left
-     a case's own check.py passing (measured 2026-08-10, Phase 4).
+     1-rank run. A content-only check does NOT cover this: a zone header duplicated per rank leaves
+     a case's own check.py passing (measured).
   3. PARTICLE STREAMS -- every merged `.dat` byte for byte the 1-rank run's: each rank writes its parcels'
      blocks in parcel order and the merge places them by group and parcel ID, so the files do not depend on
      the rank or thread count (a dropped, duplicated or misplaced block changes the bytes).
@@ -35,7 +35,7 @@ sampler that drew from a shared stream inside the parallel region would break th
 at a fixed thread count the rank axis cannot see that.
 
 PASS stdout is deliberately reproducible -- no `.tec` residuals or diff counts, which vary with
-thread interleaving (BUGS.md O2: an irreproducible gate stdout pollutes every future byte-inert A/B).
+thread interleaving (an irreproducible gate stdout pollutes every future byte-inert A/B).
 Fully verbose on FAIL, which is when the numbers are wanted.
 """
 import collections
@@ -130,7 +130,7 @@ def run(mpiexec, npflag, exe, arm, keep):
               f"comparison would have been vacuous.")
         return None
     if n == 1 and "MPI ranks" in text:
-        print(f"[FAIL] n=1: solver printed an 'MPI ranks' banner, so the serial path is no longer "
+        print(f"[FAIL] n=1: solver printed an 'MPI ranks' banner, so the serial path is not "
               f"byte-identical to a single-rank run.")
         return None
 

@@ -1,20 +1,19 @@
 program test_drag_probes
     !
-    ! Bug-transcription pins. Written as xfail probes (exit 1 while a bug is live),
-    ! but A1/A5/A6 + the Wen-Yu C-flag are all FIXED, so this exits 0 and ctest runs
-    ! it as an ORDINARY gate: no WILL_FAIL property is set, and a regression turns it
+    ! Transcription pins of five drag forms (LITERATURE_TESTS.md §2). An ORDINARY
+    ! gate: no WILL_FAIL property is set, and a form that leaves its pin turns it
     ! red the normal way.
     !
-    !   XD1  Crowe finite value  (bug A1): exp coded in the denominator ->
-    !        Cd ~ hfun/toll ~ 1e20 at Re=1000, Ma=2 (literature: Cd = O(1))
-    !   XD2  Hermsen finite value (A1, same coded term)
-    !   XD3  Putnam plateau = 0.4392 SOURCE-FAITHFUL (Shimada2006 eq. 17; user
-    !        decision 2026-07-16: originals unavailable, Shimada authoritative).
+    !   XD1  Crowe finite value: Cd = O(1) at Re=1000, Ma=2 (literature); with
+    !        exp(-Re/2Ma) in the denominator Cd ~ hfun/toll ~ 1e20
+    !   XD2  Hermsen finite value (the same term)
+    !   XD3  Putnam plateau = 0.4392 SOURCE-FAITHFUL (Shimada2006 eq. 17; the
+    !        originals are unavailable, Shimada is authoritative).
     !        The 3.6% C0 jump at Re=1000 is a property of the published form.
-    !   XD4  Henderson C0 continuity at Ma=1.75 (A6): blend slope 4/3 kept --
+    !   XD4  Henderson C0 continuity at Ma=1.75: blend slope 4/3 --
     !        Shimada eq. 22's 3/4 cannot reach the M>=1.75 branch (typo)
     !   XD5  Wen-Yu high-Re plateau = 0.43 SOURCE-FAITHFUL (Shimada eq. 16; same
-    !        decision; the ~2% step at Re=1000 is inherent to the published form)
+    !        source; the ~2% step at Re=1000 is inherent to the published form)
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_Lib_Drag, only: drag
@@ -49,10 +48,10 @@ program test_drag_probes
                abs(chi-0.43_R8) < 1.0e-12_R8 .and. jump < 2.0e-2_R8, nbad)
 
     if (nbad > 0) then
-        write(*,'(a,i0,a)') 'test_drag_probes: ', nbad, ' known bug(s) still present (expected)'
+        write(*,'(a,i0,a)') 'test_drag_probes: ', nbad, ' pin(s) failed'
         stop 1
     else
-        write(*,'(a)') 'test_drag_probes: all known bugs FIXED — promote probes to the gate'
+        write(*,'(a)') 'test_drag_probes: OVERALL PASS'
         stop 0
     end if
 
@@ -70,10 +69,10 @@ contains
         logical,          intent(in)    :: fixed
         integer,          intent(inout) :: nbad
         if (fixed) then
-            write(*,'(a,a,es12.4)') '  [FIXED]        ', name//' =', val
+            write(*,'(a,a,es12.4)') '  [PASS]         ', name//' =', val
         else
             nbad = nbad + 1
-            write(*,'(a,a,es12.4)') '  [STILL-BROKEN] ', name//' =', val
+            write(*,'(a,a,es12.4)') '  [FAIL]         ', name//' =', val
         end if
     end subroutine probe
 

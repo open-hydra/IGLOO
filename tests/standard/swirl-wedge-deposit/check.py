@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deposit gate for the swirl-wedge fixture (W-plan Q7 / ledger O23, the deposit half).
+"""Deposit gate for the swirl-wedge fixture (the deposit half of the wedge-frame checks).
 
 The fields IGLOO hands a parent axisymmetric solver live in the MERIDIAN plane: a cell (x, r)
 carries (axial, radial, azimuthal) components. A parcel on the wedge sits at an azimuth theta
@@ -28,8 +28,8 @@ Per-cell euler oracle: the ord2 deposit lands on the dual cell and finalizeEUL p
 onto the four neighbouring geo cells with sub-octant volume weights, Favre-averaged; for
 this uniform mesh those weights are equal to 3 % and the neighbouring dual averages differ
 by ~2 %, so the geo value is the time average of (v_r, w) over the 2dx x 2dr window about
-the geo cell centre to ~1e-4 relative. Measured floor (this binary): |dv_p| 9e-7,
-|dw_p| 1.5e-5. Pre-fix (Cartesian deposit, ee4482a): |dv_p| up to 9.9e-4, median 2.9e-4.
+the geo cell centre to ~1e-4 relative. Measured floor: |dv_p| 9e-7,
+|dw_p| 1.5e-5. With a Cartesian deposit (no toMeridian): |dv_p| up to 9.9e-4, median 2.9e-4.
 
 Cell-volume mass check: sum rho_p V over the P3 band = mdot * T_P3 (the tiling invariant
 of the dual, cf. axis-200 E1), V from the tec nodes: dx * delthe * (r_j+1^2 - r_j^2) / 2.
@@ -54,8 +54,8 @@ TOL_FX = 1.0e-12        # D1  |sum F_x| (u == U0: no axial force; measured 1e-18
 TOL_E = 0.02            # D2  band E vs mdot*(|v0|^2-|vT|^2)/2, relative
 F_MIN = 1.0e-6          # D1  non-vacuity: each band exchanges azimuthal momentum
 R_BAND = (0.28, 0.56)   # D3  every non-zero source/euler cell lies in the parcels' radial band
-TOL_VP = 1.0e-4         # D4  |v_p - <v_r>|  floor 9e-7; pre-fix 9.9e-4 max, 2.9e-4 median
-TOL_WP = 1.0e-4         # D4  |w_p - <w>|    floor 1.5e-5; pre-fix 2.7e-4 max
+TOL_VP = 1.0e-4         # D4  |v_p - <v_r>|  floor 9e-7; Cartesian deposit 9.9e-4 max, 2.9e-4 median
+TOL_WP = 1.0e-4         # D4  |w_p - <w>|    floor 1.5e-5; Cartesian deposit 2.7e-4 max
 TOL_UP = 1.0e-9         # D4  |u_p - U0|
 RHO_FRAC = 1.0e-2       # D4  gate cells holding >= 1 % of the band's peak density
 MIN_SAMP = 100          # D4  ... whose oracle window holds at least half a cell of path
@@ -192,7 +192,7 @@ def main():
         got_t = sum(fz[c] for c in cells_in[b])
         e_r, e_t = exp[b][0], exp[b][1]
         if abs(e_t) < F_MIN:
-            rc |= fail(f"D1 {b}: oracle F_theta = {e_t:.3e} < {F_MIN} (fixture no longer swirls)")
+            rc |= fail(f"D1 {b}: oracle F_theta = {e_t:.3e} < {F_MIN} (the fixture does not swirl)")
         for name, got, ref in (("F_r", got_r, e_r), ("F_theta", got_t, e_t)):
             err = abs(got - ref) / max(abs(ref), F_MIN)
             if err > TOL_SRC:

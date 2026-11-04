@@ -3,8 +3,7 @@
 a uniform-gas solfile.tec (which embeds the nodal mesh -- IGLOO reads the geometry
 from the solfile, not from MESH/, see obj_IGLOO setup) plus a matching bc.txt.
 
-Why a box: on the production nozzle mesh, FB injection mis-places the majority of
-inlet particles into the domain interior. An
+Why a box (not the production nozzle mesh): an
 axis-aligned box makes the injection-placement geometry trivial (perfect rectangular
 cells, planar inlet) so injection lands cleanly on the inlet plane and the case runs
 in seconds. The gas field is spatially uniform, so the per-particle trajectory is an
@@ -108,7 +107,7 @@ import os
 LX, LY, LZ = 0.15, 0.05, 0.05
 NX, NY, NZ = 60, 5, 5                    # cells per direction (Nz>=2 => 3D, no axisym)
 
-# ---- uniform gas state (SI); names match import_gas (allocation.f90:228) ----
+# ---- uniform gas state (SI); names match import_gas (allocation.f90) ----
 # Order matches the reused VARIABLES line: vars 4..21.
 GAS_VARS = [
     ("Roi( 1 )", 1.2),       # density   [kg/m^3]
@@ -144,7 +143,7 @@ DS_COL9 = 0.0                            # per-cell ds disabled (use global [IGL
 
 
 def inlet_data(kv, kt, rp, alpha=None, krho=KRHO, beta=None):
-    # default path stays byte-identical to the original 3 cases; the alpha path
+    # the default path keeps its short columns; the alpha path
     # needs 10 digits on kv/alpha (terminal-velocity injection is precision-set)
     if alpha is None:
         direc, kvs = "normal,   normal,", f"{kv:.5E}"
@@ -352,8 +351,8 @@ def write_bc(path, kv, kt, rp, alpha=None, periodic_y=False, blocks=1, nx=NX, ny
                             code = bcdef
                             if code == BCDEF_CHIM and m > layout[2 - b][2]:
                                 code = BCDEF_UNRES     # no donor row in the other block (rim)
-                            # header: b i j k <ci> bcdef. Fields 1-5 are read as dummies (cell
-                            # identity comes from loop position), so they are cosmetic.
+                            # header: b face m n 1 bcdef. Cell identity comes from the loop position; fields 1-5
+                            # must be integers and, in a family copy, equal copy 1's (IO.f90 read_cdp_bc_file).
                             f.write(f"   {b:6d}{face:6d}{m:6d}{n:6d}{1:6d}{code:6d}\n")
                             if code == BCDEF_INLET:
                                 if rp_sweep is None:

@@ -1,7 +1,7 @@
 module verif_dump
     ! Curve dumps for the (non-gating) unit-family plot pipeline.
     ! Files land in curves/<family>/<id>.dat under the ctest working dir
-    ! (build_verif) and are rendered by tools/plot_curves.py into one SVG per
+    ! (build/verif/tests), rendered by tools/plot_curves.py into one SVG per
     ! family. Column 1 is x; data column 1 is the PRODUCTION curve (drawn as
     ! markers), the rest are references (lines). Labels are |-separated
     ! (mathtext allowed). Best-effort: any I/O problem is reported and skipped,

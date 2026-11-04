@@ -1,6 +1,6 @@
 program test_drag
     !
-    ! A-family verification: production drag RHS (Lib_RHS::rhsStandard, model 1)
+    ! Verification of the production drag RHS (Lib_RHS::rhsStandard, model 1)
     ! integrated by the production SDIRK4, driven through verif_driver.
     !
     !   A1  Stokes drag, uniform gas -> exact exponential velocity relaxation
@@ -14,8 +14,8 @@ program test_drag
     !   E6b the same field on a distorted cell (one vertex moved by 10 % of the
     !       edge): the field is exact at the converged local coordinates
     !
-    ! Tier-1 oracles are closed form (Stokes is linear: dv/dt=(u-v)/tau_p).
-    ! Tier-2 (A3) uses an INDEPENDENT RK4 reimplementation of the SN law.
+    ! Closed-form oracles (Stokes is linear: dv/dt=(u-v)/tau_p); A3 uses an
+    ! INDEPENDENT RK4 reimplementation of the SN law.
     ! Tolerances are theory-derived (adaptive rtol=1e-10 -> global ~1e-6;
     ! order gate |p-4|<0.3). Heat is neutralised by Tg=Tp (Qdot=0, T const).
     !
