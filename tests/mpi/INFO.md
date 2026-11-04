@@ -41,8 +41,10 @@ green, nothing decomposed. Without the witness this whole directory would be a v
 | `mpi-bc-center-2grp` | 4 | the suite's **only** `ngroups=2` case, so the only real exercise of the rank-file merge's per-zone loop |
 | `mpi-two-mat` | 4 | the suite's **only** `nm=2` case: six shards merged per sweep, two `sourceMass` slots, two euler families reduced |
 | `mpi-timing-report` | 4 | the `[IGLOO-timing]` report (`timing = on`): the per-rank gather, one line and the strided parcel count per rank |
+| `mpi-psd-table` | 4 | `psd-table`'s Kolmogorov-Smirnov and Anderson-Darling oracle on the merged output: the size-distribution file loaded and sampled on every rank |
 | `mpi-consistency` | 1 vs 4; 4 at 1 and 5 threads | the cross-rank-count and cross-thread-count gate (below) |
 | `mpi-consistency-two-mat` | 1 vs 4; 4 at 1 and 5 threads | the same gate (same `check.py`, symlinked) on the `nm=2` fixture |
+| `mpi-consistency-psd` | 1 vs 4; 4 at 1 and 5 threads | the same gate on `psd-table`'s 20 000 parcels, whose diameters are drawn from a tabulated law (below) |
 | `mpi-determinism` | 1, 3, 4 | the rank-order cross-rank sum: grid bytes at n = 3 and 4 independent of the collective algorithm (below) |
 | `mpi-repeat-<case>` (13) | 2 | every `repeatability/` case under `mpiexec`: the two-sweep harness (`setup_static`, then `reset_state` + `solve` + `writeout` per sweep) with the rank witness on every log, `check_twosweep.py` unchanged; the gas-refresh cycle on `drag-stokes`, `vie-plait` and `swirl-wedge` |
 
@@ -69,13 +71,27 @@ with 1 and with 5 threads per rank, and compares every run with the 1-rank run o
 4. **Grid fields** — `.tec` on **scale-relative** error via [`tools/compare_tec.py`](../tools/compare_tec.py),
    never a per-value relative error. See that file for the measurement behind the choice.
 
-Plus an integration criterion, because two runs that both produced nothing would agree perfectly.
+Plus an integration criterion, because two runs that both produced nothing would agree perfectly: the
+records of all of a run's `.dat` files together must span more than 1e-9 m in x (on a fixture one cell
+long, a parcel's injection row and its exit lie in different files).
 
 The thread arms exist because rank invariance holds by construction (per-parcel RNG streams), and a
 defect that depends on the thread count would leave every rank-count arm at a fixed thread count
 green. Measured: a deposit perturbation keyed on the team size (identity at 2 threads) fails the
 4 x 1 and 4 x 5 arms on every `.dat` multiset and both `.tec` fields while 1 x 2 and 4 x 2 stay
 identical.
+
+## A tabulated injection law under MPI
+
+Every rank pins the whole population at setup and draws each parcel's injection diameter from the
+size-distribution law at pin time (one stream, seeded identically on every rank); the ownership filter
+acts later, at integration. A per-rank seed would give every rank a valid sample of the law, but a
+different one: the merged output would still pass `psd-table`'s statistical oracle, and only a comparison
+with the 1-rank run sees it. Hence both: `mpi-psd-table` (the oracle on four ranks) and
+`mpi-consistency-psd` (the multisets against one rank). RED with the seed offset by the rank
+(`initRandomSeed(rng_seed + mpi_rank_)`): `mpi-consistency-psd` fails at every 4-rank arm on the
+trajectory multiset (the first rows of the 15 000 parcels owned by ranks 1 to 3 differ; the exit records
+carry no diameter), while `mpi-psd-table` stays green (D_n 5.1e-3 against 1.4e-2, A² 0.33 against 5.97).
 
 ## The two-sweep cases under MPI
 

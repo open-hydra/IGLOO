@@ -5,14 +5,14 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ temp-relax/ temp-relax-varcp/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
 #   repeatability/      two-sweep gates (twosweep driver): 13 cases
-#   mpi/                registered only under USE_MPI: 6 rank-count cases + 2 consistency + 1 determinism
+#   mpi/                registered only under USE_MPI: 7 rank-count cases + 3 consistency + 1 determinism
 #                       + 13 two-sweep cases
 #
 # Run everything via ../test.sh (it builds this tree's IGLOO, which every e2e case runs, and publishes it to bin/).
@@ -158,6 +158,10 @@ igloo_unit_test(test_psd_table          infrastructure/psd_table          "unit;
 # name through the readers' indices (IGLOO_Lib_Evaporation iMv..imuLiq, IGLOO_Lib_Combustion imKb..imQc)
 # for models 2, 4, 5 and 6. RED with two slots of either block exchanged in packAuxVars.
 igloo_unit_test(test_slot_order         infrastructure/slot_order         "unit;infrastructure;rhs;t1")
+# The twenty material-line tokens of the phase file through apply_material_key, set_material_defaults and
+# finalize_material_models on a material built in the test: each real token sets its own field and no other,
+# each model word every allowed selector value, the defaults, T-nuc = 0.8 T-melt, combustion over evaporation.
+igloo_unit_test(test_material_tokens    infrastructure/material_tokens    "unit;infrastructure;ini;t1")
 # bcdef-200 dispatch must key off face GEOMETRY, not face index: the wedge is not pinned to
 # faces 5/6 by anything. Covers all six indices for wedges built on i, j and k, and pins the
 # equivalence with the retired `f==6` rule. No e2e case reaches bcDef's fold branch (axisymFold
@@ -274,6 +278,19 @@ function(igloo_twosweep_case name casedir labels gasfile)
         ENVIRONMENT "OMP_NUM_THREADS=5;KMP_STACKSIZE=100M"
         TIMEOUT 900)
 endfunction()
+# Thread-count invariance of a serial case (tools/check_threads_case.py): its input.ini run at 1, 2 and 5 threads in
+# <case>/threads-omp<N>/ (never the case's own OUTPUT/), the thread witness, every .dat an exact multiset, every .tec
+# within 1e-12 of the field scale, the case's check.py on the 1-thread run.
+function(igloo_threads_case name casedir labels)
+    add_test(NAME ${name}
+        COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_threads_case.py
+                ${CMAKE_CURRENT_SOURCE_DIR}/${casedir} $<TARGET_FILE:IGLOO>
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
+    set_tests_properties(${name} PROPERTIES
+        LABELS "${labels}"
+        ENVIRONMENT "KMP_STACKSIZE=100M;IGLOO_EXE=$<TARGET_FILE:IGLOO>"
+        TIMEOUT 900)
+endfunction()
 
 # The five cases the plan calls for, each exercising a different leak:
 #   drag-stokes   simplest ord1 path -- was already repeatable, so this is a REGRESSION gate
@@ -363,6 +380,12 @@ igloo_unit_test(test_temperature standard/temperature "unit;standard;heat;b;t3")
 igloo_unit_test(test_heat_nu     standard/temperature "unit;standard;heat;b;t5")
 
 igloo_e2e_case(drag-stokes standard/drag-stokes "e2e;standard;drag")
+# drag-morsi, drag-chang: drag-stokes's box with 100 um particles (Re 60 -> 22 across the box), drag = Morsi-Alexander
+# or Chang: every printed row against an RK4 quadrature of the slip ODE with the law typed in check.py (Chang =
+# Clift-Gauvin, [Shim06] eq. 18; Morsi-Alexander's coded table, a regression pin). RED: Morsi-Alexander's band-4
+# a2 46.5 -> 45.6 (3.9e-2 m/s), the law swapped to Schiller-Naumann (5.3e-2 and 1.3e-3 m/s against about 5e-7).
+igloo_e2e_case(drag-morsi  standard/drag-morsi  "e2e;standard;drag")
+igloo_e2e_case(drag-chang  standard/drag-chang  "e2e;standard;drag")
 igloo_e2e_case(temp-relax  standard/temp-relax  "e2e;standard;heat")
 # temp-relax-varcp: the enthalpy state on a varying-cp table from 250 K; heating and cooling below, inside and above it.
 igloo_e2e_case(temp-relax-varcp standard/temp-relax-varcp "e2e;standard;heat")
@@ -452,6 +475,8 @@ igloo_unit_test(test_mhb98_decane evaporation "unit;evaporation;val;mhb98;f2")
 # Promoted 2026-07-07 with the A3/A4/A9 production fixes (see BUGS.md):
 igloo_unit_test(test_evap_probes evaporation "unit;evaporation;c;t8")
 igloo_e2e_case(d2law evaporation/d2law "e2e;evaporation")
+# threads-d2law: d2law at 1, 2 and 5 threads (evaporating parcels, the mass source).
+igloo_threads_case(threads-d2law evaporation/d2law "e2e;evaporation;omp")
 # E-VAL-1 (2026-07-22): Tier-V analytic line — cp_p x100 freezes B_T so K is a pure
 # closed form of the inputs (Godsave/Spalding); companion to the run-conditioned d2law.
 igloo_e2e_case(d2law-line evaporation/d2law-line "e2e;evaporation;val;d2line")
@@ -570,6 +595,9 @@ igloo_e2e_case(pilch-erdman-e2e breakup/pilch-erdman-e2e "e2e;breakup;val;pe")
 # first-breakup time to sub-percent). Found + gated the A18 fix (event-breakup path was
 # dead; now live: TAB breaks on time, resized drops persist). GREEN.
 igloo_e2e_case(tab-e2e breakup/tab-e2e "e2e;breakup;val;tab")
+# threads-tab-e2e: tab-e2e at 1, 2 and 5 threads -- the child sizes of the TAB resize are drawn inside the parallel
+# region, from each parcel's own stream. RED with the intrinsic random_number there (RosinRammler).
+igloo_threads_case(threads-tab-e2e breakup/tab-e2e "e2e;breakup;omp")
 # vv-order: the tab-e2e and burn-box figures (verify.py) are the same bytes whatever order an OpenMP run gives the
 # records of each zone of their .dat files; it reads those cases' fresh OUTPUT/, which both start by removing.
 set_tests_properties(tab-e2e PROPERTIES FIXTURES_SETUP vv_order_tab RESOURCE_LOCK tab_e2e_output)
@@ -659,6 +687,8 @@ set_tests_properties(khrt-e2e khrt-e2e-rt khrt-e2e-threads PROPERTIES RESOURCE_L
 # ---------- infrastructure: combined output paths --------------------------------
 # euler+source+body accumulator combination (the 2026-07 merge's last untested path)
 igloo_e2e_case(coupled-body infrastructure/coupled-body "e2e;infrastructure")
+# threads-coupled-body: coupled-body at 1, 2 and 5 threads (the Euler, source and body-force accumulators).
+igloo_threads_case(threads-coupled-body infrastructure/coupled-body "e2e;infrastructure;omp")
 # promoted legacy test/assigned-pos: 2Daxi wedge + real MOSE solfile + DB injection
 # + euler-only output (the B5/B6 path); behavioral gate, md5 A/B stays manual
 igloo_e2e_case(db-2daxi infrastructure/db-2daxi "e2e;infrastructure")
@@ -669,6 +699,8 @@ igloo_e2e_case(db-2daxi infrastructure/db-2daxi "e2e;infrastructure")
 # reached the axis was trapped in a period-2 rotation cycle and discarded.
 # Verified RED before the axis-face fix and GREEN after.
 igloo_e2e_case(axis-200 infrastructure/axis-200 "e2e;infrastructure")
+# threads-axis-200: axis-200 at 1, 2 and 5 threads (the gas-order-2 wedge and its deposits).
+igloo_threads_case(threads-axis-200 infrastructure/axis-200 "e2e;infrastructure;omp")
 # wedge-fold: axis-200 + wp on the near-axis parcel -- the only case in which the 200-face fold
 # ROTATES anything (every other wedge fixture has z == 0). Proven RED on the pre-O22 binary.
 igloo_e2e_case(wedge-fold infrastructure/wedge-fold "e2e;infrastructure")
@@ -959,6 +991,9 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
     igloo_e2e_case_mpi(mpi-two-mat        mpi/two-mat        4 2 "e2e;mpi;infrastructure")
     # the [IGLOO-timing] report at four ranks: the per-rank gather, one line and the strided parcel count per rank
     igloo_e2e_case_mpi(mpi-timing-report  mpi/timing-report  4 2 "e2e;mpi;infrastructure;timing")
+    # a tabulated injection law at four ranks: psd-table's Kolmogorov-Smirnov and Anderson-Darling oracle on the
+    # merged output (the size-distribution file loaded on every rank)
+    igloo_e2e_case_mpi(mpi-psd-table      mpi/psd-table      4 2 "e2e;mpi;injection")
     # n=1 vs n=4 of the same binary: witness, file layout, .dat multisets, .tec fields. Launches
     # mpiexec itself (khrt-e2e-threads precedent), so it is not an igloo_e2e_case_mpi.
     add_test(NAME mpi-consistency
@@ -977,6 +1012,16 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mpi/consistency-two-mat")
     set_tests_properties(mpi-consistency-two-mat PROPERTIES
         LABELS "e2e;mpi;infrastructure;consistency"
+        ENVIRONMENT "OMP_NUM_THREADS=2;KMP_STACKSIZE=100M"
+        TIMEOUT 900)
+    # the same gate on psd-table's 20 000 parcels, whose diameters every rank draws at pin time from the tabulated
+    # law: a per-rank stream would pass the statistical oracle at every rank count and differ from the 1-rank run here
+    add_test(NAME mpi-consistency-psd
+        COMMAND python3 -B check.py "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}"
+                                   "$<TARGET_FILE:IGLOO>"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mpi/consistency-psd")
+    set_tests_properties(mpi-consistency-psd PROPERTIES
+        LABELS "e2e;mpi;injection;consistency"
         ENVIRONMENT "OMP_NUM_THREADS=2;KMP_STACKSIZE=100M"
         TIMEOUT 900)
     # the cross-rank sum in rank order: at n = 3 and 4 the grid fields are the same bytes with the library's

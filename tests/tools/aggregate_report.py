@@ -21,6 +21,7 @@ FAMILY_DIRS = [
     "infrastructure/gas_reconstruction", "infrastructure/ini_pipeline",
     "infrastructure/properties_reader",
     "infrastructure/rng_stream", "infrastructure/psd_table", "infrastructure/slot_order",
+    "infrastructure/material_tokens",
     "infrastructure/axis_dispatch",
     "infrastructure/graze_standoff", "infrastructure/dual_clip",
     "infrastructure/mollify_blocks", "infrastructure/host_assoc",

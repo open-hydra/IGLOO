@@ -43,10 +43,10 @@ if [[ "${TARGET}" == clean ]]; then
     # every directory a test runs in holds an input.ini; remove what the runs and their checks write there
     while IFS= read -r d; do
         rm -rf "${d}/OUTPUT" "${d}"/run_out*.txt "${d}"/run_err*.txt "${d}/rc.txt" "${d}"/run_n*.txt \
-               "${d}"/err_n*.txt "${d}"/tec_n*/ "${d}"/ref-*/ "${d}/diag_threads.txt"
+               "${d}"/err_n*.txt "${d}"/tec_n*/ "${d}"/ref-*/ "${d}"/threads-omp*/ "${d}/diag_threads.txt"
         echo "cleaned ${d#"${SCRIPT_DIR}"/}"
     done < <(find "${SCRIPT_DIR}" -name input.ini -not -path '*/OUTPUT/*' -not -path '*/ref-*/*' \
-                  -not -path '*/_run-*/*' -printf '%h\n' | sort -u)
+                  -not -path '*/_run-*/*' -not -path '*/threads-omp*/*' -printf '%h\n' | sort -u)
     rm -rf "${BUILD_DIR}"
     exit 0
 fi

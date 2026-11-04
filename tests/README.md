@@ -36,7 +36,7 @@ tests/
 ├── common/                       # shared phase.txt and properties.dat + the MOSE nozzle solfile (db-2daxi, axis-200)
 ├── tools/                        # make_box_case.py make_pe_case.py make_vie_case.py make_vortex_case.py make_wedge_case.py make_uniform_gas.py
 │                                 # make_psat_table.py proptab.py set_kv.py ks_ad.py
-│                                 # aggregate_report.py check_twosweep.py check_refusal.py compare_tec.py check_registry.cmake plot_curves.py mpi_scaling_smoke.sh
+│                                 # aggregate_report.py check_twosweep.py check_refusal.py check_threads_case.py compare_tec.py check_registry.cmake plot_curves.py mpi_scaling_smoke.sh
 ├── support/                      # shared Fortran library (NOT a test family)
 │   ├── verif_norms.f90  verif_report.f90  verif_oracle.f90  verif_interp.f90  verif_dump.f90
 │   ├── verif_driver.f90          # the only module that touches IGLOO production
@@ -44,18 +44,18 @@ tests/
 │   └── twosweep.f90              # the two-sweep repeatability driver
 ├── standard/                     # drag + heat
 │   ├── drag/  temperature/       #   unit families
-│   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ temp-relax-varcp/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/   # e2e
+│   └── drag-stokes/ drag-stokes-dopri5/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/   # e2e
 ├── evaporation/                  # unit families: (root)  interface-neq/  tc-analytic/  evap-breakup/
 │   └── d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/     # e2e
 ├── combustion/                   # unit family (root) + burn-box/ burn-box-euler/ (e2e)
 ├── solidification/               # unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 ├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
 │   └── tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/   # e2e
-├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/
+├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/
 │   └── db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ periodic-y/ periodic-2d/ periodic-2d-ord2/ conn-103/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ varcp-tmin/ psd-bare-token/   # e2e
 │   └── refusals/{p2t,zgr,lk-d2law,properties-*,bc-copies,bc-copy-order,chimera-*,*-token,phase-token-real,evaporation-leb,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre,psd-*,comb-*,brk-*,sigma-*,bc-legacy,bc-empty-payload,body-accel}/   # setup-refusal gates
 ├── repeatability/                # two-sweep gates: drag-stokes/ drag-stokes-dopri5/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/ tab-dopri5/ solid-box/ evap-breakup/ swirl-wedge/
-└── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ bc-center-2grp/ two-mat/ timing-report/ consistency/ consistency-two-mat/ determinism/ repeat-*/ (13)
+└── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ bc-center-2grp/ two-mat/ timing-report/ psd-table/ consistency/ consistency-two-mat/ consistency-psd/ determinism/ repeat-*/ (13)
 ```
 
 Each unit family carries an `INFO.md` cataloguing its tests; `tools/aggregate_report.py`
@@ -100,11 +100,11 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 216/216 in a serial build (173 e2e + 42 unit, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, and the
+ctest 223/223 in a serial build (179 e2e + 43 unit, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 22 more `mpi-*` cases, 238 in all (the 22 `mpi-*` pass). The e2e entries are 98 solver cases, two further
-oracles on `khrt-e2e`'s run, the thirteen two-sweep gates, the fifty-nine setup refusals and `vv-order` (two V&V
-figures independent of the record order; skipped without matplotlib); the unit entries are 35
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 24 more `mpi-*` cases, 247 in all (the 24 `mpi-*` pass). The e2e entries are 100 solver cases, two further
+oracles on `khrt-e2e`'s run, the four thread-count gates, the thirteen two-sweep gates, the fifty-nine setup refusals and `vv-order` (two V&V
+figures independent of the record order; skipped without matplotlib); the unit entries are 36
 compiled unit tests, the property-table reader on three fixtures, `self_test`, `registry-docs`, `exe-per-tree` and `lint-test-inputs`. Evaporation with
 ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,
 `evap-breakup-box`, `d2law-brk-dormant`, `rd-evap-frozen`, `tab-evap-frozen`, `etab-evap-frozen`, `khrt-evap-frozen`,

@@ -8,6 +8,11 @@ module verif_driver
     ! vector is never re-interpolated). No geometry, no I/O, no time loop from
     ! production -- this isolates the ODE kernel + integrator.
     !
+    ! Optional: nodes(9,8) + verts(3,8) give one hexahedral cell whose nodes carry
+    ! the gas; then ord2=.true. and production's trilinear sampler (interp2ndOrder,
+    ! warm start from the persisted local coordinates, zeroed at entry) sets the gas
+    ! at each RHS call. accel(3) turns production's body acceleration on.
+    !
     ! Two integration modes:
     !   MODE_WRAPPER_ADAPTIVE : oslo Run_ODESolver (adaptive H-sdirk4, the exact
     !                           path production uses). For exact-solution and
@@ -47,10 +52,13 @@ contains
     !   y0(neq)   : initial ODE state (neq=7: x(3),v(3),T)               !
     !   mode      : MODE_WRAPPER_ADAPTIVE | MODE_SDIRK_FIXEDSTEP         !
     !   y_out(neq): final state                                          !
-    !   ierr      : 0 on success                                         !
+    !   ierr      : 0 on success (-98: nodes without verts or vice versa) !
+    !   nodes,verts (optional): gas at the 8 nodes of one hex cell, and   !
+    !               the cell's vertices -> ord2 trilinear sampling        !
+    !   accel(3)  (optional): body acceleration (bodyForce on)           !
     !-------------------------------------------------------------------!
     subroutine advance(gas9, cp, rho, d, m, dragSel, heatSel, &
-                       y0, neq, mode, dt, nstep, y_out, ierr)
+                       y0, neq, mode, dt, nstep, y_out, ierr, nodes, verts, accel)
         use IGLOO_variables, only: ord2, mesh2D, eulerSwitch, bodyForce, bodyAccel, &
                                    srcBodyForce, sourceSwitch, phaseChange,         &
                                    dragSelect, heatSelect
@@ -61,6 +69,7 @@ contains
         real(R8),    intent(in)  :: y0(neq), dt
         real(R8),    intent(out) :: y_out(neq)
         integer(I4), intent(out) :: ierr
+        real(R8),    intent(in), optional :: nodes(NSP,8), verts(3,8), accel(3)
 
         type(obj_particle) :: p
         integer(I4) :: nAux, nAuxSt, nEvV
@@ -71,6 +80,14 @@ contains
         eulerSwitch = .false.;  bodyForce    = .false.;  bodyAccel = 0._R8
         srcBodyForce= .false.;  sourceSwitch = .false.;  phaseChange = .false.
         dragSelect  = dragSel;  heatSelect   = heatSel
+        if (present(nodes) .neqv. present(verts)) then
+            y_out = y0;  ierr = -98
+            return
+        end if
+        ord2 = present(nodes)                      ! before setupRHS: it sizes the warm-start slots
+        if (present(accel)) then
+            bodyForce = .true.;  bodyAccel = accel
+        end if
 
         ! --- configure model 1 (constant mass, no breakup/evap, const props) ---
         propFlags = .false.
@@ -84,7 +101,7 @@ contains
         m_state = 0._R8
         call packAuxVars(p, nauxvar, m_aux)
 
-        ! --- constant uniform gas; dummy node arrays (unused when ord2=.false.) ---
+        ! --- gas: uniform gas9, or the cell's nodes (dummy node arrays when ord2=.false.) ---
         m_gas9   = gas9
         m_nNodes = 8
         if (allocated(m_gasNodes)) deallocate(m_gasNodes)
@@ -92,7 +109,11 @@ contains
         if (allocated(m_hTab))     deallocate(m_hTab)
         if (allocated(m_rhoTab))   deallocate(m_rhoTab)
         allocate(m_gasNodes(NSP, m_nNodes)); allocate(m_gasVert(3, m_nNodes))
-        m_gasNodes = spread(gas9, 2, m_nNodes); m_gasVert = 0._R8
+        if (present(nodes)) then
+            m_gasNodes = nodes;  m_gasVert = verts
+        else
+            m_gasNodes = spread(gas9, 2, m_nNodes); m_gasVert = 0._R8
+        end if
         allocate(m_hTab(1)); allocate(m_rhoTab(1)); m_hTab = 0._R8; m_rhoTab = 0._R8
 
         y_out = y0
@@ -109,7 +130,7 @@ contains
     !-------------------------------------------------------------------!
     ! Production RHS wrapper -- matches both Run_ODESolver's fcn and      !
     ! SDIRK4's FCN(N,X,Y,F). Reads module gas/aux; gas is copied fresh    !
-    ! each call so the constant field is guaranteed (ord2=.false.).       !
+    ! each call (ord2=.false.) or sampled from the nodes (ord2=.true.).   !
     !-------------------------------------------------------------------!
     subroutine rhs_drag(neq, time, Z, F)
         use Lib_RHS, only: rhsStandard, nauxvar, nauxstate

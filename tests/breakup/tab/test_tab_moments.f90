@@ -20,6 +20,10 @@ program test_tab_moments
     !      the production fixed-point's own 1e-4 rel stop (absorbed, ~50x
     !      smaller). Also gates: every child in [2*rMin, dp), npdot scaling
     !      npdot_new = npdot_old*(d_old/d_new)^3 per event.
+    !   TABM1 the same events with method = 1: the child radius is chi-square with n = nint(k) degrees
+    !      of freedom times rSize = rs/(n + 4) (untruncated Sauter radius rs: E[X^3]/E[X^2] = n + 4),
+    !      rejected into [0.01*rs, r); oracle the chi-square pdf on that window by the same Simpson
+    !      quadrature, n from the oracle's own k; tolerance as above.
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64, int64
     use IGLOO_Lib_Breakup, only: breakupEvent
@@ -47,7 +51,8 @@ program test_tab_moments
     real(R8) :: scaleFactor, u, wd, lam, yeq, tb, ydot_tb, kfac, rs, rMin
     real(R8) :: rSizeO, m0o, m1o, m2o, m3o, mean_o, sd_r, sd_r2, mean2_o
     real(R8) :: s1, s2, rch, dpn, err1, err2, tol1, tol2, npd
-    integer  :: i, nout, exit_code
+    real(R8) :: rSizeC, c0, c1, c2, c4, meanC, mean2C, sdC, sd2C
+    integer  :: i, nout, exit_code, nchi
     logical  :: ok_all, pass
 
     ok_all = .true.
@@ -80,7 +85,7 @@ program test_tab_moments
     scaleFactor = gamma(1._R8+2._R8/nSpread)/gamma(1._R8+3._R8/nSpread)
     s1 = 0._R8;  s2 = 0._R8;  nout = 0
     do i = 1, NEV
-        call tab_break(dpn, npd)
+        call tab_break(2, dpn, npd)
         rch = 0.5_R8*dpn
         if (rch < rMin .or. rch >= radius) nout = nout + 1
         if (abs(npd - (dp0/dpn)**3) > 1e-9_R8*(dp0/dpn)**3) nout = nout + 1
@@ -99,6 +104,35 @@ program test_tab_moments
     if (nout > 0) write(*,'(a,i0)') '   [TABM] bound/npdot violations: ', nout
     ok_all = ok_all .and. pass
     call append_row('TABM_child_moments', 'r,r2', max(err1/tol1,err2/tol2), err1, &
+                    0._R8, 0._R8, 1._R8, pass)
+
+    ! ---- TABM1: method 1, chi-square children --------------------------------------
+    nchi   = nint(kfac)
+    rSizeC = rs/real(nchi + 4, R8)
+    call chi2_trunc_moments(rSizeC, nchi, rMin, radius, c0, c1, c2, c4)
+    meanC  = c1/c0
+    mean2C = c2/c0
+    sdC    = sqrt(max(mean2C - meanC**2, 0._R8))
+    sd2C   = sqrt(max(c4/c0 - mean2C**2, 0._R8))
+    write(*,'(a,f8.5,a,i0,a,es12.5,a,es12.5,a,es12.5)') '   oracle TABM1: k=', kfac, '  n=', nchi, &
+        '  rSize=', rSizeC, '  E[r]=', meanC, '  E[r2]=', mean2C
+    s1 = 0._R8;  s2 = 0._R8;  nout = 0
+    do i = 1, NEV
+        call tab_break(1, dpn, npd)
+        rch = 0.5_R8*dpn
+        if (rch < rMin .or. rch >= radius) nout = nout + 1
+        if (abs(npd - (dp0/dpn)**3) > 1e-9_R8*(dp0/dpn)**3) nout = nout + 1
+        s1 = s1 + rch;  s2 = s2 + rch*rch
+    end do
+    s1 = s1/NEV;  s2 = s2/NEV
+    err1 = abs(s1 - meanC);   tol1 = 5._R8*sdC/sqrt(real(NEV,R8))  + 1.5e-4_R8*meanC
+    err2 = abs(s2 - mean2C);  tol2 = 5._R8*sd2C/sqrt(real(NEV,R8)) + 3.0e-4_R8*mean2C
+    pass = assert_lt('TABM1 E[r_child] vs truncated chi-square oracle',   err1, tol1) .and. &
+           assert_lt('TABM1 E[r_child^2] vs truncated chi-square oracle', err2, tol2) .and. &
+           (nout == 0)
+    if (nout > 0) write(*,'(a,i0)') '   [TABM1] bound/npdot violations: ', nout
+    ok_all = ok_all .and. pass
+    call append_row('TABM1_child_moments_chi2', 'r,r2', max(err1/tol1,err2/tol2), err1, &
                     0._R8, 0._R8, 1._R8, pass)
 
     call finalize_report(exit_code)
@@ -120,15 +154,16 @@ contains
         call random_seed(put=put)
     end subroutine seed_rng
 
-    !> one from-rest TAB breakup event; returns child dp and npdot factor
-    subroutine tab_break(dp_new, npd_fac)
+    !> one from-rest TAB breakup event with the given resize method; returns child dp and npdot factor
+    subroutine tab_break(method, dp_new, npd_fac)
+        integer,  intent(in)  :: method
         real(R8), intent(out) :: dp_new, npd_fac
         real(R8) :: ev(4), brkst(1), child(5), zero3(3), dt
         logical  :: event, addChild
         dt = 20._R8*(2._R8*PI/wd)
         ev = [dp0, 1.0_R8, 0._R8, 0._R8];  brkst = 0._R8;  zero3 = 0._R8
         call breakupEvent(ev, 4, brkst, 0, sigma, mu_l, rho_l, rho_g, u, &
-                          0._R8, 0._R8, zero3, zero3, dt, 4, bp_tab, 2, &
+                          0._R8, 0._R8, zero3, zero3, dt, 4, bp_tab, method, &
                           scaleFactor, event, child, addChild, .true., tRng)
         if (.not. event) error stop 'tab_break: event did not fire'
         dp_new  = ev(1)
@@ -181,6 +216,40 @@ contains
         end do
         m4 = m4*h/3._R8
     end function rr_mom4
+
+    !> chi-square(n) pdf of x = r/x0, as a density in r
+    pure function chi2_pdf(r, x0, n) result(p)
+        real(R8), intent(in) :: r, x0
+        integer,  intent(in) :: n
+        real(R8) :: p, x, h
+        x = r/x0
+        h = 0.5_R8*real(n, R8)
+        p = x**(h - 1._R8)*exp(-0.5_R8*x)/(2._R8**h*gamma(h))/x0
+    end function chi2_pdf
+
+    !> truncated moments m_k = int r^k pdf dr on [a,b] of the scaled chi-square, Simpson
+    subroutine chi2_trunc_moments(x0, n, a, b, m0, m1, m2, m4)
+        real(R8), intent(in)  :: x0, a, b
+        integer,  intent(in)  :: n
+        real(R8), intent(out) :: m0, m1, m2, m4
+        real(R8) :: h, r, w, p
+        integer  :: j
+        m0 = 0._R8; m1 = 0._R8; m2 = 0._R8; m4 = 0._R8
+        h = (b-a)/real(NQ,R8)
+        do j = 0, NQ
+            r = a + h*real(j,R8)
+            if (j == 0 .or. j == NQ) then; w = 1._R8
+            elseif (mod(j,2) == 1) then;   w = 4._R8
+            else;                          w = 2._R8
+            end if
+            p  = w*chi2_pdf(r, x0, n)
+            m0 = m0 + p
+            m1 = m1 + p*r
+            m2 = m2 + p*r*r
+            m4 = m4 + p*r**4
+        end do
+        m0 = m0*h/3._R8; m1 = m1*h/3._R8; m2 = m2*h/3._R8; m4 = m4*h/3._R8
+    end subroutine chi2_trunc_moments
 
     !> bisection on rSize: truncated D32(rSize) = rs
     subroutine solve_rsize(rs_t, a, b, n, x0)

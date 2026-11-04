@@ -10,7 +10,7 @@ file). Fails on
   (3) a tests/**/*.py that builds the path bin/IGLOO anywhere but in the default of an IGLOO_EXE read
       (os.environ.get("IGLOO_EXE", <path>) or os.getenv("IGLOO_EXE", <path>)).
 The MPI gates that take the executable as an argument (mpi-consistency, mpi-consistency-two-mat,
-mpi-determinism) are not helper registrations and need no IGLOO_EXE.
+mpi-consistency-psd, mpi-determinism) are not helper registrations and need no IGLOO_EXE.
 
 Usage: check_exe_per_tree.py <build>/tests/CTestTestfile.cmake <source dir>
 """

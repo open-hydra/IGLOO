@@ -27,7 +27,8 @@ run, on four axes:
      run-to-run.
 
 Plus an integration criterion: two runs that both produced nothing would agree perfectly. Every run
-must show particles that actually moved.
+must show particles that actually moved: the records of all its .dat files together span more than
+MIN_MOVE in x (on a fixture one cell long a parcel's injection row and its exit lie in different files).
 
 The thread axis exists because rank invariance holds "by construction" (per-parcel RNG streams), and a
 sampler that drew from a shared stream inside the parallel region would break the thread count first;
@@ -81,12 +82,13 @@ def multiset_hash(recs):
     return h.hexdigest()[:12]
 
 
-def moved(recs):
-    """Max spread in x over all records -- proves the population is not frozen at injection."""
+def x_range(recs):
+    """(min x, max x) over the records, None without records: the spread over a run's files proves the
+    population was not frozen at injection."""
     if not recs:
-        return 0.0
+        return None
     xs = [r[0] for r in recs]
-    return max(xs) - min(xs)
+    return min(xs), max(xs)
 
 
 def tag(arm):
@@ -138,7 +140,7 @@ def run(mpiexec, npflag, exe, arm, keep):
     snap = {}
     for p in sorted(glob.glob("OUTPUT/*.dat")):
         recs, nline, nzone = data_lines(p)
-        snap[os.path.basename(p)] = (multiset_hash(recs), len(recs), nline, nzone, moved(recs))
+        snap[os.path.basename(p)] = (multiset_hash(recs), len(recs), nline, nzone, x_range(recs))
     for p in sorted(glob.glob("OUTPUT/*.tec")):
         dst = os.path.join(keep, os.path.basename(p))
         shutil.copyfile(p, dst)
@@ -176,7 +178,8 @@ def main():
         tot = sum(nr for _, nr, _, _, _ in snaps[arm].values())
         if tot < MIN_RECORDS:
             bad.append(f"{label(arm)} produced only {tot} records (< {MIN_RECORDS}) -- too thin to compare")
-        if not any(mv > MIN_MOVE for *_, mv in snaps[arm].values()):
+        spans = [xr for *_, xr in snaps[arm].values() if xr is not None]
+        if not spans or max(hi for _, hi in spans) - min(lo for lo, _ in spans) <= MIN_MOVE:
             bad.append(f"{label(arm)}: no particle moved more than {MIN_MOVE} m -- the population never "
                        f"integrated, so any agreement here is vacuous")
 
