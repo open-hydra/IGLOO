@@ -21,9 +21,17 @@ program test_rng_stream
     !   RS3  RANGE + UNIFORMITY. Draws lie strictly in (0,1) -- RosinRammler takes log(x), so a
     !        0 would be fatal -- and the mean/variance match U(0,1) closely enough that the
     !        stream is not degenerate.
+    !   RS4  KNOWN ANSWERS. The stream's values equal splitmix64 computed modulo 2**64 by
+    !        oracle.py: two pin-time seeds; the state and the last draw after 1000 draws; from two
+    !        states, the state after 1000 NormalStandardS and after 300 ChiSquareS(3) calls,
+    !        exactly, and the sums of those draws within 1e-12 of the sum of their magnitudes
+    !        (the last bits of log, sqrt and fused multiply-adds: at most (N + 8) eps of it).
+    !        NormalStandardS and ChiSquareS draw inside the module, where a compiler inlines the
+    !        stream: the wrong draws of an overflowing implementation show there first.
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64, int64
-    use IGLOO_Lib_Statistics, only: rngSeedFor, rngNext
+    use IGLOO_Lib_Statistics, only: rngSeedFor, rngNext, NormalStandardS, ChiSquareS
+    use IGLOO_variables,      only: rng_seed
     implicit none
 
     integer, parameter :: NFAM = 8, NID = 4000, NDRAW = 200000
@@ -85,9 +93,24 @@ program test_rng_stream
     write(*,'(a,es12.5,a,es12.5,a,f10.7,a,f10.7)') '        (min=', umin, ' max=', umax, &
             ' mean=', mean, ' var=', var
 
+    ! ---- RS4: known answers (oracle.py) ------------------------------------------------------
+    rng_seed = 42
+    call check(rngSeedFor(1, 1) == 4131674908039162206_int64 .and. &
+               rngSeedFor(4, 200000) == 281516083681871558_int64, 'RS4 pin-time seeds equal oracle.py''s', nbad)
+    st = rngSeedFor(1, 1)
+    do k = 1, 1000
+        u = rngNext(st)
+    enddo
+    call check(st == 4758656678734748518_int64 .and. u == 0.678200604500425_R8, &
+               'RS4 1000 draws: the state and the last draw equal oracle.py''s', nbad)
+    call knownDraws(rngSeedFor(1, 1), 6184485952954457094_int64, -2.4038165225300188_R8, &
+                    6541741417261645616_int64, 833.4085025724584_R8, 'rngSeedFor(1, 1)', nbad)
+    call knownDraws(-1_int64, 5622173104978134595_int64, 6.553948705759249_R8, &
+                    -673938932664027191_int64, 867.6209996193038_R8, '-1', nbad)
+
     write(*,*)
     if (nbad == 0) then
-        write(*,'(a)') '[PASS] per-particle RNG streams are distinct, reproducible and uniform'
+        write(*,'(a)') '[PASS] per-particle RNG streams are distinct, reproducible, uniform and equal to oracle.py'
     else
         write(*,'(a,i0,a)') '[FAIL] ', nbad, ' RNG stream check(s) failed'
         error stop 1
@@ -106,6 +129,33 @@ contains
             nbad = nbad + 1
         end if
     end subroutine check
+
+    !> RS4 from state s0: 1000 NormalStandardS and 300 ChiSquareS(3) draws against oracle.py's state and sum.
+    subroutine knownDraws(s0, stN, sumN, stC, sumC, label, nbad)
+        integer(int64),   intent(in)    :: s0, stN, stC
+        real(R8),         intent(in)    :: sumN, sumC
+        character(len=*), intent(in)    :: label
+        integer,          intent(inout) :: nbad
+        integer(int64) :: s
+        real(R8) :: x, tot, mag
+        integer  :: k
+        s = s0; tot = 0._R8; mag = 0._R8
+        do k = 1, 1000
+            x = NormalStandardS(s)
+            tot = tot + x; mag = mag + abs(x)
+        enddo
+        call check(s == stN .and. abs(tot - sumN) <= 1.e-12_R8*mag, &
+                   'RS4 1000 NormalStandardS from '//label//': the state and the sum equal oracle.py''s', nbad)
+        write(*,'(a,i0,a,es24.16,a)') '        (state ', s, ', sum ', tot, ')'
+        s = s0; tot = 0._R8; mag = 0._R8
+        do k = 1, 300
+            x = ChiSquareS(3, s)
+            tot = tot + x; mag = mag + x
+        enddo
+        call check(s == stC .and. abs(tot - sumC) <= 1.e-12_R8*mag, &
+                   'RS4 300 ChiSquareS(3) from '//label//': the state and the sum equal oracle.py''s', nbad)
+        write(*,'(a,i0,a,es24.16,a)') '        (state ', s, ', sum ', tot, ')'
+    end subroutine knownDraws
 
     !> Plain heapsort: only used to find duplicates, so O(n log n) with no allocation.
     subroutine sort_i8(a)

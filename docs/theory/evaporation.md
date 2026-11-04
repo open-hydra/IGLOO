@@ -174,7 +174,7 @@ B_T = (1 + B_M)^\phi - 1, \qquad
 $$
 
 ASM overrides the heat flux from `interphase` (`override_Qdot = .true.`).  The gas-side
-heat supplied to the droplet is (Abramzon & Sirignano 1989, eq. 20/24):
+heat supplied to the droplet is (Abramzon & Sirignano 1989, eq. 24, the latent term excluded; $B_T$ by their eqs. 13, 22-23):
 
 $$
 \dot{Q}_\mathrm{evap} = -\dot{m}\,\frac{c_{p,v,\mathrm{eff}}\,(T_g - T_p)}{B_T}\,f_\mathrm{cp}

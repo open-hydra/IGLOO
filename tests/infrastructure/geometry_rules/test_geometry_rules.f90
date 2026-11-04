@@ -64,7 +64,10 @@ program test_geometry_rules
     do c = 1, 8
         box(:, c) = H*CORN(:, c)
     enddo
-    warp = box
+    !> node by node: gfortran 12 -O3 with AVX-512 miscompiles warp = box followed by one store
+    do c = 1, 8
+        warp(:, c) = H*CORN(:, c)
+    enddo
     warp(1, 7) = H + DW
 
     call parallelRays()

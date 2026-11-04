@@ -57,7 +57,7 @@ program test_evap_probes
         write(*,'(a,es12.4)') '  [XE2 STILL-BROKEN] rhsEvaporation F(8) =', F8
     end if
 
-    ! --- XE3: ASM Q_G sign (A-S 1989 eq. 20) ---------------------------------
+    ! --- XE3: ASM Q_G sign (A-S 1989 eq. 24) ---------------------------------
     ! Gas-side heat entering an evaporating droplet in hot gas must be POSITIVE
     ! (the F(7) assembly adds the latent sink itself); the pre-fix code returned
     ! mdot*(Lv + cpv*dT/BT) < 0 (Lv double-count + sign flip).

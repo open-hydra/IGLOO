@@ -40,6 +40,11 @@ USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # rank-count gates, built in
 ./tests/test.sh clean
 ```
 
+**Requirements.** Python 3 (the suite runs on 3.6) with its standard library runs every check. scipy is required by
+the three boiling checks (`boiling-zgr-flash`, `-hot`, `-switch`: their oracle integrates with `solve_ivp`), which
+fail without it. matplotlib with numpy draws the V&V figures (`verify.py`, `tools/plot_curves.py`) and runs
+`vv-order`, which is skipped without them.
+
 `test.sh` configures a **separate `build/verif/`** (`build/mpi/` when `USE_MPI=ON`) with
 `-DBUILD_VERIFICATION=ON` (default OFF, so the production build is unchanged) and builds it (same
 source, RELEASE, in-tree `lib/` dependencies). Each build tree links its own `IGLOO` and `DocGen` into
