@@ -69,6 +69,16 @@ The three options are independent: any dependency left out comes from the in-tre
 
 The `build` command wipes `build/`, runs a clean CMake configure and build, then writes `CMakePresets.json` from the populated `CMakeCache.txt`. The executable is placed at `bin/IGLOO`.
 
+### The target CPU of a GNU build
+
+A GNU build compiles for the build host's CPU (`-march=native`). The CMake cache variable `IGLOO_GNU_MARCH` names another target, any value gfortran's `-march` accepts: `x86-64-v3` (AVX2 and FMA, no AVX-512), for one, gives the same code on every CPU that has them. Set it on the configure line, or reconfigure a tree with it; the tree keeps the value until another is given, and `./install.sh build`, which starts a new tree, is back at `native`:
+
+```bash
+cmake -B build -DIGLOO_GNU_MARCH=x86-64-v3 && cmake --build build
+```
+
+A fresh configure stops on a value gfortran rejects. A reconfigure takes it unchecked: gfortran then rejects it at the first compile (in a tree with the tests, the configure itself stops, at the suite's exit-code probe). The Intel compilers take `-xHost` and do not read the variable; on macOS a GNU build keeps `-mtune=native`.
+
 ---
 
 ## Incremental rebuild
