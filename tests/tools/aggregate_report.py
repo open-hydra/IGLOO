@@ -29,6 +29,7 @@ FAMILY_DIRS = [
     "evaporation", "evaporation/interface-neq", "evaporation/tc-analytic",
     "evaporation/evap-breakup", "evaporation/liquid-p2t", "evaporation/boiling-zgr",
     "combustion",
+    "erosion/laws",
     "solidification",
     "breakup/tab", "breakup/etab", "breakup/pilch-erdman",
     "breakup/reitz-diwakar", "breakup/reitz-khrt",

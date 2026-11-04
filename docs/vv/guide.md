@@ -48,7 +48,7 @@ A healthy run ends like:
 | Command | Runs |
 |---|---|
 | `./tests/test.sh all` | everything + aggregated report + consistency gate |
-| `./tests/test.sh standard` | one model category: `standard`, `evaporation`, `combustion`, `breakup`, `infrastructure`, `repeatability`, `mpi` |
+| `./tests/test.sh standard` | one model category: `standard`, `evaporation`, `combustion`, `solidification`, `breakup`, `infrastructure`, `erosion`, `repeatability`, `mpi` |
 | `./tests/test.sh unit` / `e2e` | by kind: compiled unit tests / end-to-end solver cases |
 | `./tests/test.sh conv-nu` | a single test by its CTest name (e.g. `test_breakup_tab`, `drag-stokes`) |
 | `./tests/test.sh clean` | wipe what the tests write in their directories (`OUTPUT/`, run logs, sibling runs) + `build/verif/` |

@@ -35,12 +35,16 @@ flowchart TB
 
 `integrate` is **write-only** with respect to the grid accumulators — `srcblock` and
 `eulblock` appear only as arguments — so a parcel's trajectory never depends on another
-parcel's deposition. The only shared writes in the entire tree are **15 `!$OMP ATOMIC` updates** in
-`src/lib/Lib_Integration.f90`: 11 grid accumulations (5 for the source field in
-`computeSrcField`, 6 for the euler field in `computeEulField`) and 4 wedge-fold counters.
+parcel's deposition. The shared writes are `!$OMP ATOMIC` updates: **19** in
+`src/lib/Lib_Integration.f90` — 11 grid accumulations (5 for the source field in
+`computeSrcField`, 6 for the euler field in `computeEulField`), the 2 wall-impact sums of
+`depositErosion` (with `[IGLOO-Erosion]`: the incident flow and the eroded flow of the cell and
+material), 4 wedge-fold counters and the counters of injections without a cell and of stencil
+refreshes — and 7 elsewhere, all diagnostic: the KH-RT warning count (`Lib_Breakup.f90`), the
+block-change counters (`obj_particles.f90`) and the MPI failure flag (`IGLOO_Mod_MPI.f90`).
 
 Consequence: any partition of the parcel set produces the same trajectories. Only the
-*grid* accumulators need combining, and summation is associative up to floating-point
+*grid* accumulators and the wall sums need combining (`reduce_accumulators`), and summation is associative up to floating-point
 re-association — which is why the grid `.tec` is compared with a tolerance while the
 particle `.dat` files, written in parcel order ([Output model](#output-model)), are compared
 byte for byte.

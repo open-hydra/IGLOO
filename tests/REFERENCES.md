@@ -56,6 +56,10 @@ any test's `INFO.md` must resolve here; no gate checks it.
 | `[AD54]` | Anderson, T. W.; Darling, D. A. "A Test of Goodness of Fit." *J. Am. Stat. Assoc.*, 49(268), 1954, pp. 765–769. | DOI:10.1080/01621459.1954.10501232 | no (the A² statistic and its limiting distribution: the case-0 points 2.492 / 3.878 / 5.969) |
 | `[Ste74]` | Stephens, M. A. "EDF Statistics for Goodness of Fit and Some Comparisons." *J. Am. Stat. Assoc.*, 69(347), 1974, pp. 730–737. | DOI:10.1080/01621459.1974.10480196 | no (case 0, fully specified F: the asymptotic points apply from n ≈ 10) |
 | `[MM04]` | Marsaglia, G.; Marsaglia, J. "Evaluating the Anderson-Darling Distribution." *J. Stat. Softw.*, 9(2), 2004, pp. 1–5. | DOI:10.18637/jss.v009.i02 | no (the `ADinf` approximation transcribed in `tools/ks_ad.py`, within 3e-3 of the series at the points used) |
+| `[Oka05a]` | Oka, Y. I.; Okamura, K.; Yoshida, T. "Practical estimation of erosion damage caused by solid particle impact. Part 1: Effects of impact parameters on a predictive equation." *Wear*, 259, 2005, pp. 95–101. | DOI:10.1016/j.wear.2005.01.039 | yes (against the PDF: eqs. 1–4, Tables 1–3, Fig. 2; DOI printed on the first page) |
+| `[Oka05b]` | Oka, Y. I.; Yoshida, T. "Practical estimation of erosion damage caused by solid particle impact. Part 2: Mechanical properties of materials directly associated with erosion damage." *Wear*, 259, 2005, pp. 102–109. | DOI:10.1016/j.wear.2005.01.040 | yes (against the PDF: eqs. 1–4, Table 1; DOI printed on the first page) |
+| `[Oka09]` | Oka, Y. I.; Mihara, S.; Yoshida, T. "Impact-angle dependence and estimation of erosion damage to ceramic materials caused by solid particle impact." *Wear*, 267, 2009, pp. 129–135. | DOI:10.1016/j.wear.2008.12.091 | yes (against the PDF: eqs. 1–2 on ceramic targets; DOI printed on the first page) |
+| `[NG68]` | Neilson, J. H.; Gilchrist, A. "Erosion by a stream of solid particles." *Wear*, 11, 1968, pp. 111–122. | DOI:10.1016/0043-1648(68)90591-7 | no (citation and eqs. 3–7, Table I, Figs. 5 and 11 against the scanned PDF; the DOI not printed on it) |
 
 ## Adding a new reference
 

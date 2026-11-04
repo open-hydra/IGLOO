@@ -10,7 +10,7 @@ Registry of record: [`CMakeLists.txt`](CMakeLists.txt) (every gate) and
 
 ```bash
 ./tests/test.sh all              # build (build/verif/, publishing its IGLOO and DocGen to bin/) + full ctest + aggregated report
-./tests/test.sh standard         # one category: standard|evaporation|combustion|solidification|breakup|infrastructure|repeatability|mpi
+./tests/test.sh standard         # one category: standard|evaporation|combustion|solidification|breakup|infrastructure|erosion|repeatability|mpi
 ./tests/test.sh e2e              # by kind: unit|e2e
 USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # the rank-count gates, built in build/mpi/
 ./tests/test.sh conv-nu          # single test by ctest name
@@ -38,7 +38,7 @@ static, as without OpenMP), so an internal procedure always addresses the main p
 tests/
 ├── README.md  REFERENCES.md  VERIFICATION_MATRIX.md
 ├── CMakeLists.txt                # single ctest registry (unit + e2e, labeled)
-├── test.sh                       # MOSE-style runner: standard evaporation combustion solidification breakup infrastructure repeatability mpi unit e2e
+├── test.sh                       # MOSE-style runner: standard evaporation combustion solidification breakup infrastructure erosion repeatability mpi unit e2e
 ├── vv_style.py                   # the single plot-style source for every SVG
 ├── common/                       # shared phase.txt and properties.dat + the MOSE nozzle solfile (db-2daxi, axis-200)
 ├── tools/                        # make_box_case.py make_pe_case.py make_vie_case.py make_vortex_case.py make_wedge_case.py make_uniform_gas.py
@@ -62,6 +62,9 @@ tests/
 ├── infrastructure/               # unit families: gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ geometry_rules/ tec_read/ tec_write/ fmt/
 │   └── db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ periodic-y/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ sym-plane-creep/ sym-plane-creep-ord2/ exit-census/ wall-approach/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/   # e2e
 │   └── refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-*,vapour-*,pure2d-*,bc-copies,bc-copy-order,chimera-*,periodic-not-mutual,ord2-*,*-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre,psd-*,comb-*,cap-*,ox0-*,brk-*,sigma-*,bc-legacy,bc-empty-payload,body-accel,plane-x,plane-x-empty,krho-*,gas-no-density}/   # setup-refusal gates
+├── erosion/                      # wall erosion by particle impact ([IGLOO-Erosion], OUTPUT/wall.tec): unit family laws/
+│   └── wall-flux/ wall-laws/ (e2e)
+│   └── refusals/{model-*,density-*,oka-wall-missing,oka-missing,ng-missing,form-both,form-partial,count,range,not-number,wall-count}/   # setup-refusal gates
 ├── repeatability/                # two-sweep gates: drag-stokes/ drag-stokes-time-end/ drag-stokes-dopri5/ db-injection/ two-mat/ d2law/ khrt/ vie-plait/ etab/ tab/ tab-dopri5/ solid-box/ evap-breakup/ swirl-wedge/ burn-box-residue/
 └── mpi/                          # USE_MPI build only: drag-stokes/ conv-nu/ khrt/ khrt-plane/ bc-center-2grp/ two-mat/ timing-report/ psd-table/ two-fam-bc-2blk-ord2-dual-np3/ consistency/ consistency-two-mat/ consistency-psd/ consistency-residue/ determinism/ repeat-*/ (14)
 ```
@@ -73,7 +76,7 @@ self-contained: `input.ini`, `INPUT/`, independent oracle `check.py`
 (PASS == exit 0, after `tools/check_finite.py` found every number of `OUTPUT/*.tec` and `*.dat`
 finite; the solver's stderr is NOT the gate).
 
-ctest labels: category (`standard`/`evaporation`/`combustion`/`solidification`/`breakup`/`infrastructure`/`repeatability`/`mpi`)
+ctest labels: category (`standard`/`evaporation`/`combustion`/`solidification`/`breakup`/`infrastructure`/`erosion`/`repeatability`/`mpi`)
 + kind (`unit`/`e2e`) + family tags (`drag`, `heat`, `tab`, …). There is **no `xfail`
 label and no `WILL_FAIL` property** anywhere in the registry — every entry is a real
 gate. The `test_*_probes` trio are value pins: they assert the value of specific
@@ -108,11 +111,11 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 327/327 in a serial build (271 e2e + 55 unit, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs`, `psd-plane-tool` and `history-census` among the latter, and the
+ctest 345/345 in a serial build (288 e2e + 56 unit, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs`, `psd-plane-tool` and `history-census` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 28 more `mpi-*` cases, 355 in all (the 28 `mpi-*` pass). The e2e entries are 165 solver cases, two further
-oracles on `khrt-e2e`'s run, the five thread-count gates, the ordered-window gate, the fifteen two-sweep gates, the eighty-one setup refusals, `vv-order` (thirteen V&V
-figures independent of the record and zone order; skipped without matplotlib) and `check-order` (nine gate printouts independent of it); the unit entries are 45
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 28 more `mpi-*` cases, 373 in all (the 28 `mpi-*` pass). The e2e entries are 167 solver cases, two further
+oracles on `khrt-e2e`'s run, the five thread-count gates, the ordered-window gate, the fifteen two-sweep gates, the ninety-six setup refusals, `vv-order` (thirteen V&V
+figures independent of the record and zone order; skipped without matplotlib) and `check-order` (nine gate printouts independent of it); the unit entries are 46
 compiled unit tests, the property-table reader on four fixtures, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs`, `psd-plane-tool` and `history-census`. Evaporation with
 ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,
 `evap-breakup-box`, `d2law-brk-dormant`, `rd-evap-frozen`, `tab-evap-frozen`, `etab-evap-frozen`, `khrt-evap-frozen`,

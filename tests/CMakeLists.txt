@@ -1052,6 +1052,56 @@ igloo_e2e_case(chimera-2blk-shift-mollify infrastructure/chimera-2blk-shift-moll
 # varcp-tmin: a varying-cp table from 280 K, the parcels at 600 K on its extended last segment.
 igloo_e2e_case(varcp-tmin infrastructure/varcp-tmin "e2e;infrastructure;heat")
 
+# ---------- erosion (wall erosion by particle impact: [IGLOO-Erosion], OUTPUT/wall.tec) ------------------------
+# test_erosion_laws: Oka et al. (2005) and Neilson-Gilchrist (1968) as production computes them, against their
+# closed forms and the anchors of the papers (the maxima of g(alpha), eq. 7, the 35 deg threshold of Fig. 11).
+igloo_unit_test(test_erosion_laws erosion/laws "unit;erosion")
+# wall-flux: a box whose outlet face is a dispersed-phase wall (301), five assigned NoDrag streams on straight lines,
+# material A in two groups and B in one, model none: wall.tec's zone and nodes, g-<mat> per wall cell from the
+# streams' lines and from the bc-301 exit records, er and rdot zero, no wall file without the section.
+igloo_e2e_case(wall-flux erosion/wall-flux "e2e;erosion;io")
+# wall-laws: the same box, eight straight NoDrag streams hitting the wall at 10-90 deg; material A Oka (silica's
+# constants, n1 n2 k2 from their correlations), B Neilson-Gilchrist (Table I, k = 20 m/s): er-A, er-B, g, rdot per
+# cell against an independent oracle of the two laws; ref-direct/ gives n1, n2, k2 as values: the same wall.tec.
+igloo_e2e_case(wall-laws erosion/wall-laws "e2e;erosion;io")
+# [IGLOO-Erosion] refusals on wall-flux's case (INPUT symlinked, materials A and B), each RED on the reader without
+# its check: the missing and the empty model stop at the next check (another payload), one token for two materials
+# reads past its list and stops at the unknown-token check, an unknown token and the missing or negative
+# wall-density run to the end with exit 0 (the missing density writes rdot = NaN; see erosion/refusals/INFO.md).
+igloo_refusal_case(refuse-erosion-model-missing    erosion/refusals/model-missing
+                   "IGLOO: [IGLOO-Erosion] model is missing"                   "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-model-empty      erosion/refusals/model-empty
+                   "IGLOO: [IGLOO-Erosion] model is empty"                     "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-model-count      erosion/refusals/model-count
+                   "IGLOO: [IGLOO-Erosion] model needs one token per material" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-model-token      erosion/refusals/model-token
+                   "IGLOO: unknown [IGLOO-Erosion] model"                      "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-density-missing  erosion/refusals/density-missing
+                   "IGLOO: [IGLOO-Erosion] wall-density [kg/m^3] is missing or not positive" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-density-negative erosion/refusals/density-negative
+                   "IGLOO: [IGLOO-Erosion] wall-density [kg/m^3] is missing or not positive" "e2e;refusal;erosion")
+# The constants of the laws, on wall-laws's deck: a wall constant, an Oka constant, a Neilson-Gilchrist constant
+# missing; n1 as a value and as s, q; k2-s without k2-q; one k for two materials; phi = 0; a token that is not a
+# number; two values of Hv (RED without each check: erosion/refusals/INFO.md).
+igloo_refusal_case(refuse-erosion-oka-wall-missing erosion/refusals/oka-wall-missing
+                   "IGLOO: [IGLOO-Erosion] a constant of the models in use is missing" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-oka-missing      erosion/refusals/oka-missing
+                   "IGLOO: [IGLOO-Erosion] a constant of the models in use is missing" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-ng-missing       erosion/refusals/ng-missing
+                   "IGLOO: [IGLOO-Erosion] a constant of the models in use is missing" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-form-both        erosion/refusals/form-both
+                   "IGLOO: [IGLOO-Erosion] give k2, n1 and n2 each as a value or as its s and q, once" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-form-partial     erosion/refusals/form-partial
+                   "IGLOO: [IGLOO-Erosion] give k2, n1 and n2 each as a value or as its s and q, once" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-count            erosion/refusals/count
+                   "IGLOO: [IGLOO-Erosion] a constant needs one value per material" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-range            erosion/refusals/range
+                   "IGLOO: [IGLOO-Erosion] a constant out of its range" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-not-number       erosion/refusals/not-number
+                   "IGLOO: [IGLOO-Erosion] a constant that is not a number" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-wall-count       erosion/refusals/wall-count
+                   "IGLOO: [IGLOO-Erosion] a wall constant takes one value" "e2e;refusal;erosion")
+
 # ---------- refusals (setup-time error stops) ------------------------------------------------
 # Each is drag-stokes (or two-mat's phase.txt) plus ONE offending key/file. The expected text is the solver's own
 # message; check_refusal.py also requires exit == IGLOO_ERROR_STOP_RC and that nothing integrated.

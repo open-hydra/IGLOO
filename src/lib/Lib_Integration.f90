@@ -9,9 +9,10 @@ module Lib_Integration
 contains
 
   !> Integrate one particle from its current state to domain exit (or burnout) through the
-  !  steady gas field, one cell segment at a time, depositing source and Eulerian moments.
+  !  steady gas field, one cell segment at a time, depositing source and Eulerian moments and, at the exit
+  !  through a wall cell, its wall impact.
   subroutine integrate(part,geoblock,gasblock,srcblock,eulblock,     &
-                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, slot,shed,noShed,resid)
+                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, slot,shed,noShed,resid,wallblock)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
     use IGLOO_variables,  only: iprint,dtprint,dsprint,dcellSet,tEnd,timeOn,snapOn,frozenOn, &
@@ -24,7 +25,8 @@ contains
                                 planeOn, planeX, failAfter
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs, grazeStandoff
-    use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock
+    use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock, obj_wallblock
+    use IGLOO_Lib_Erosion, only: isWallCode, erosionRatio
     use IGLOO_Lib_Properties
     use Lib_Equations
     use Lib_RHS, only: packAuxVars, nauxvar, packAuxState, unpackAuxState,     &
@@ -64,6 +66,8 @@ contains
     logical,               intent(in),    optional :: noShed
     !> This parent's burnout-residue list (a capped material with residue = on).
     type(shedList),        intent(inout), optional :: resid
+    !> [IGLOO-Erosion]: the wall-impact sums of every block.
+    type(obj_wallblock),   intent(inout), optional :: wallblock(nb)
     !> local variables
     type(obj_shed) :: shedRec   !> staged child record, pushed once complete
     type(obj_shed) :: resRec    !> the burnout residue's record
@@ -491,6 +495,8 @@ contains
         endif
       endif
       if (part%gone) then
+        !> A parcel that left through a wall cell: its impact joins the cell's wall sums.
+        if (present(wallblock) .and. part%exitCode /= 0) call depositErosion()
         !> The residue's record: the state its parent's exit record prints.
         if (resBorn) then
           resRec%pos    = part%stateVar(1:3)
@@ -664,7 +670,7 @@ contains
     subroutine writeStartRecord()
       part%stateVar(1:3) = part%pInj
       part%stateVar(4:6) = 0._R8
-      part%angle = 0._R8; part%Af = 0._R8; part%exitCode = 0
+      part%angle = 0._R8; part%Af = 0._R8; part%exitCode = 0; part%exitCell = 0
       !> A boundary-face stream derives its temperature and flow at injection, which did not take place.
       if (.not. all(part%iInj == [0,0,0,0])) then; part%tp = 0._R8; part%mdot = 0._R8; endif
       call writeExitRow(started=.false.)
@@ -1247,6 +1253,31 @@ contains
         call setAtGasBoundary()
       endif
     end subroutine handleGeoEvent
+
+
+    !> The wall impact of a parcel that left through an eroding wall cell: its flow npdot*m and its eroded flow, the flow
+    !  times its erosion ratio at its speed and angle from the surface at the crossing point, join the cell's sums.
+    subroutine depositErosion()
+      integer  :: wb, wf, wm, wn, wmat
+      real(R8) :: mdotW, ermW, vmag, nmag, sinA, nn(3)
+
+      wb = part%exitCell(1); wf = part%exitCell(2); wm = part%exitCell(3); wn = part%exitCell(4)
+      if (wb < 1 .or. wf < 1) return
+      if (.not. wallblock(wb)%on(wf)) return
+      if (.not. isWallCode(geoblock(wb)%face(wf)%cell(wm,wn))) return
+      wmat  = part%mID
+      mdotW = part%npdot*part%m
+      vmag  = norm2(part%vImp)
+      nn    = geoblock(wb)%face(wf)%cell(wm,wn)%normal
+      nmag  = norm2(nn)
+      sinA  = 0._R8
+      if (vmag > 0._R8 .and. nmag > 0._R8) sinA = min(1._R8, abs(dot_product(part%vImp, nn))/(vmag*nmag))
+      ermW  = mdotW*erosionRatio(wmat, vmag, asin(sinA), part%d, part%rho)
+      !$OMP ATOMIC UPDATE
+      wallblock(wb)%face(wf)%acc(1,wmat,wm,wn) = wallblock(wb)%face(wf)%acc(1,wmat,wm,wn) + ermW
+      !$OMP ATOMIC UPDATE
+      wallblock(wb)%face(wf)%acc(2,wmat,wm,wn) = wallblock(wb)%face(wf)%acc(2,wmat,wm,wn) + mdotW
+    end subroutine depositErosion
 
 
 

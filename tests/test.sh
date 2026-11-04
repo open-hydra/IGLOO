@@ -6,13 +6,13 @@
 #               build/verif/ (build/mpi/ when USE_MPI=ON), whose tests run that
 #               tree's own IGLOO, publishes its IGLOO and DocGen to bin/, then
 #               dispatches to ctest by label or name.
-#               Categories: standard evaporation combustion solidification breakup infrastructure repeatability mpi unit e2e
+#               Categories: standard evaporation combustion solidification breakup infrastructure erosion repeatability mpi unit e2e
 #===============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IGLOO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-CATEGORIES="standard evaporation combustion solidification breakup infrastructure repeatability mpi unit e2e"
+CATEGORIES="standard evaporation combustion solidification breakup infrastructure erosion repeatability mpi unit e2e"
 
 usage() {
     echo "Usage: ./test.sh [all|<category>|<test-name>|clean] [-- <extra cmake args>]"

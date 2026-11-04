@@ -1,8 +1,8 @@
 # Verification & Validation
 
 IGLOO's V&V suite lives in a single model-first tree under `tests/`, categorized
-by physics: `standard/` (drag + heat), `evaporation/`, `combustion/`, `solidification/`, `breakup/` and
-`infrastructure/`, plus two harness categories, `repeatability/` (two-sweep gates) and
+by physics: `standard/` (drag + heat), `evaporation/`, `combustion/`, `solidification/`, `breakup/`,
+`infrastructure/` and `erosion/`, plus two harness categories, `repeatability/` (two-sweep gates) and
 `mpi/` (rank-count gates, `USE_MPI` builds only).  Each category holds tests of two kinds, all registered in
 CTest (opt-in via `-DBUILD_VERIFICATION=ON`).
 
@@ -63,7 +63,7 @@ to overlook when counting coverage:
   `test_tec_write` (the grid files' stream writer writes ORION's writer's bytes on the fields `write_outfield`
   makes, at three chunk sizes and four thread counts, over a longer file),
   `test_host_assoc` (a test program's internal procedures address its arrays, not a static copy),
-  the eighty-one `refusals/*` cases (inputs the solver must refuse at setup with exit
+  the ninety-six `refusals/*` cases (inputs the solver must refuse at setup with exit
   128 and nothing integrated), and `self_test` (which exercises the verification
   support library itself).  No physics, no curve, by design.
 
