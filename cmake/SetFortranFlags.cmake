@@ -35,6 +35,13 @@ ENDIF(BT STREQUAL "RELEASE")
 STRING(REPLACE " -fno-underscoring" "" FFLAGS_STRIPPED "${CMAKE_Fortran_FLAGS}")
 SET(CMAKE_Fortran_FLAGS "${FFLAGS_STRIPPED}" CACHE STRING "Set the CMAKE_Fortran_FLAGS flags" FORCE)
 
+# GNU target CPU; a reconfigure writes a new value into the cached -march
+SET(IGLOO_GNU_MARCH "native" CACHE STRING "GNU -march value (native: the build host's CPU; not used on macOS)")
+IF(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" AND NOT APPLE)
+    STRING(REGEX REPLACE "(^| )-march=[^ ]*" "\\1-march=${IGLOO_GNU_MARCH}" FFLAGS_MARCH "${CMAKE_Fortran_FLAGS}")
+    SET(CMAKE_Fortran_FLAGS "${FFLAGS_MARCH}" CACHE STRING "Set the CMAKE_Fortran_FLAGS flags" FORCE)
+ENDIF()
+
 #########################################################
 # If the compiler flags have already been set, return now
 #########################################################
@@ -59,15 +66,22 @@ ENDIF(CMAKE_Fortran_FLAGS_RELEASE AND CMAKE_Fortran_FLAGS_TESTING AND CMAKE_Fort
 IF(APPLE)
     SET(GNUNATIVE "-mtune=native")
 ELSE()
-    SET(GNUNATIVE "-march=native")
+    SET(GNUNATIVE "-march=${IGLOO_GNU_MARCH}")
 ENDIF()
-# Optimize for the host's architecture
+# Optimize for the build host's CPU (GNU: the IGLOO_GNU_MARCH target)
 SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
                  Fortran "-xHost"        # Intel
                          "/QxHost"       # Intel Windows
                          ${GNUNATIVE}    # GNU
                          "-ta=host"      # Portland Group
                 )
+# A value gfortran rejects would otherwise leave the build without -march
+IF(NOT "${IGLOO_GNU_MARCH}" STREQUAL "native" AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" AND NOT APPLE)
+    STRING(FIND "${CMAKE_Fortran_FLAGS}" "-march=${IGLOO_GNU_MARCH}" MARCH_AT)
+    IF(MARCH_AT EQUAL -1)
+        MESSAGE(FATAL_ERROR "gfortran rejects -march=${IGLOO_GNU_MARCH} (IGLOO_GNU_MARCH)")
+    ENDIF()
+ENDIF()
 # Add preprocessor flag
 SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
                  Fortran "-cpp"        # Intel or GNU
