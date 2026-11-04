@@ -1,4 +1,4 @@
-# INFO — breakup_reitz_diwakar (family D, test D2)
+# INFO — breakup_reitz_diwakar
 
 Verifies the Reitz–Diwakar breakup model (selector 2). This is an
 ODE-rate model (`breakupOde` integrates `npdot`); since parcel mass·npdot

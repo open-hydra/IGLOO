@@ -1,6 +1,6 @@
 program test_temperature
     !
-    ! B-family verification: production heat RHS (Lib_RHS::rhsStandard, model 1,
+    ! Verification of the production heat RHS (Lib_RHS::rhsStandard, model 1,
     ! the F(7)=Qdot/m equation) integrated by the production SDIRK4.
     !
     !   B1  zero slip -> Nu=2 -> exact exponential T relaxation

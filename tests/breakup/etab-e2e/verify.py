@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Overlay IGLOO vs Tanner ETAB (B-VAL-5, MOSE-style): child-size ratio vs We.
+"""Overlay IGLOO vs Tanner ETAB (MOSE-style): child-size ratio vs We.
 
 check.py is the GATE (onset + t_bu + cascade product size); this only DRAWS and writes
 OUTPUT/etab-e2e.svg. matplotlib imported defensively.
@@ -43,7 +43,7 @@ def main():
 
     meas = []
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:

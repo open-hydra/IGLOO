@@ -28,10 +28,22 @@ which writes the 3D connection lines `block i j k face + 4 weights`).
    about 1e-6, so the pair is run again with only face 1's first row injecting
    (`ref-row/`, `ref-row-raw/`): there periodic and zero-flux smoothing differ by
    0.55 of the scale, and the same comparison holds to 1.1e-14.
+6. **G3, one trajectory zone per parcel image**: `trajectories-A.dat` holds one
+   zone per parcel and image (`ZONE T="Mat A Group  1 ID <id> parent 0[ image
+   <k>]"`, `I` its rows); a parcel's images are numbered 0, 1, 2, …, and a wrap
+   (a jump in y of more than Ly/2 between consecutive rows) sits at each image
+   boundary (70) and inside none. `check.py` also runs the case with
+   `print-ds = 2e-3` and `out-time = on` in place of `print-dcell` (`ref-ds/`):
+   there each image ends on its exit row on a y face and the next begins on the
+   partner face, Ly away, at the same time, every other column alike (70
+   boundaries).
 
 **RED (S-P).** With zero flux at the 201 faces the case's own source differs
 from the periodic smoothing by 2.5e-8 of the scale (2.5e4 tolerances) and the
 first-row run's by 0.36.
+
+**RED (G3).** One trajectory zone per group: no parcel title. Without the image
+split: 25 zones with 70 wraps inside them, in the run and in `ref-ds/`.
 
 **Notes.** The `[BCB-*]`/`[per]` ini patches are ATLAS-side only — the solver
 reads the 201 codes from `bc.txt`. MOSE's translational-periodic convention

@@ -1,28 +1,26 @@
 #!/usr/bin/env python3
 """Scatter-cloud oracle: every parcel's number of scatter markers against its residence time.
 
-The scatter cloud writes one marker per weight quantum dNscat of number flow. Each parcel carries an
+The scatter cloud writes markers at a parcel's constant rate npdot/dNscat. Each parcel carries an
 accumulator seeded at dNscat*frac(ID*phi); every solver step the trajectory keeps adds npdot*dt to it,
-and every kept step that ends inside the cell writes one marker when the accumulator holds a full
-quantum, carrying the remainder. A parcel with a constant npdot therefore accumulates exactly
-npdot*t_exit on top of its seed, whatever path it takes, and with
+and every crossing of a multiple of dNscat writes a marker inside its step, the exit face's included.
+A parcel with a constant npdot therefore accumulates exactly npdot*t_exit on top of its seed, whatever
+path it takes, and with
 
     X = frac(ID*phi) + npdot*t_exit/dNscat
 
-its marker count N obeys floor(X) - 1 <= N <= floor(X): no marker is written for weight not yet
-accumulated, and only the parcel's last step (cut at the exit face or at burnout, never followed by an
-emission) can leave a full quantum unwritten. A step that is cut at a cell face and integrated again
-must add its weight once; adding it twice raises N above floor(X).
+its marker count is N = floor(X). A step that is cut at a cell face and integrated again must add its
+weight once: adding it twice raises N above floor(X); a crossing left unwritten at the exit face
+lowers it.
 
 Measured inputs, read by the names of each file's variables= header: OUTPUT/outloc-A.dat with
 out-time (mdot, t_exit per ID), the injection row of OUTPUT/trajectories-A.dat (m0 per ID,
 npdot = mdot/m0), OUTPUT/scatter-A.dat (N per ID) and the dNscat line of run_out.txt. Every printed
-value enters with its half-ULP, so floor(X) is taken over the whole interval X can span; dNscat's
-ES10.3 dominates it.
+value enters with its half-ULP, so floor(X) is taken over the whole interval X can span (a parcel
+whose interval holds an integer accepts either floor); dNscat's ES10.3 dominates it.
 
-Non-vacuous: every injected parcel exits with a positive residence time and writes markers, and the
-upper bound is attained by at least MIN_CEIL parcels, so a +1 bias on any of them fails, and so does a
-marker lost on every parcel.
+Non-vacuous: every injected parcel exits with a positive residence time and writes markers, and at
+least MIN_ONE parcels have a window of one value, so a marker more or less on any of them fails.
 """
 import math
 import os
@@ -35,7 +33,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
 import datcols                                  # noqa: E402
 
 PHI = 0.6180339887498949   # the accumulator's per-ID phase (Lib_Integration.f90, integrate)
-MIN_CEIL = 10              # parcels at N = floor(X) (measured 25 of 25 on both legs)
+MIN_ONE = 10               # parcels whose window holds one value (measured 25 of 25 on each leg)
 
 
 def half_ulp_e(v):
@@ -71,7 +69,7 @@ def main():
             m0[i] = (t, r["m<sub>p"])
     n = Counter(r["ID"] for r in datcols.rows("OUTPUT/scatter-A.dat"))
 
-    fails, ceil, excess = [], 0, []
+    fails, one, excess = [], 0, []
     if npart == 0 or len(exits) != npart:
         fails.append("%d exit records for %d injected parcels (out-time on?)" % (len(exits), npart))
     for i in sorted(exits):
@@ -86,20 +84,20 @@ def main():
         seed = math.fmod(i * PHI, 1.0)
         x_lo = seed + np_lo * (t - t_h) / (dn + dn_h)
         x_hi = seed + np_hi * (t + t_h) / (dn - dn_h)
-        lo, hi = math.floor(x_lo) - 1, math.floor(x_hi)
+        lo, hi = math.floor(x_lo), math.floor(x_hi)
         excess.append(n[i] - hi)
-        if n[i] == hi:
-            ceil += 1
+        if lo == hi:
+            one += 1
         if not lo <= n[i] <= hi:
             fails.append("ID %d: %d markers, bounds [%d, %d] (X in [%.4f, %.4f], t_exit %s s)"
                          % (i, n[i], lo, hi, x_lo, x_hi, ttxt))
-    if ceil < MIN_CEIL:
-        fails.append("only %d parcels at N = floor(X) (need %d): the upper bound would not see a +1 bias"
-                     % (ceil, MIN_CEIL))
+    if one < MIN_ONE:
+        fails.append("only %d parcels with a window of one value (need %d): a marker more or less would pass"
+                     % (one, MIN_ONE))
 
-    print("dNscat %s +- %.1e; %d parcels, %d markers; N - floor(X) from %+d to %+d; %d at the upper bound"
+    print("dNscat %s +- %.1e; %d parcels, %d markers; N - floor(X) from %+d to %+d; %d windows of one value"
           % (m.group(1), dn_h, len(exits), sum(n[i] for i in exits), min(excess, default=0),
-             max(excess, default=0), ceil))
+             max(excess, default=0), one))
     for f in fails:
         print("[FAIL] " + f)
     print("PASS" if not fails else "FAIL: %d problem(s)" % len(fails))

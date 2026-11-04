@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Gate for the bc-awareness of the ord2 gas ghost ring at a solid wall (ledger O29).
+"""Gate for the bc-awareness of the ord2 gas ghost ring at a solid wall.
 
-The defect: fillGhostGradient filled the ghost ring by blind linear extrapolation, 2q1 - q2,
-on every face, whatever the face was. At a gas-solid plane the sampled normal velocity in the
-boundary dual row is then (v_ghost + v_1)/2 = (3 v_1 - v_2)/2 instead of 0, so the gas keeps
-pushing a parcel into a plane it cannot itself cross. A bc-aware fill existed (ghostState, in
-read_cdp_bc_file's setup-time post-pass) but was overwritten by fillGhostGradient before any
-parcel read it, and on sweeps >= 1 it never ran at all.
+The failure mode: a ghost ring filled by blind linear extrapolation, 2q1 - q2, on every face,
+whatever the face is. At a gas-solid plane the sampled normal velocity in the boundary dual
+row is then (v_ghost + v_1)/2 = (3 v_1 - v_2)/2 instead of 0, so the gas keeps pushing a
+parcel into a plane it cannot itself cross. The bc-aware fill lives in fillGhostGradient
+itself: a setup-time fill is overwritten by fillGhostGradient before any parcel reads it, and
+does not run on sweeps >= 1.
 
 Fixture: a 100 x 20 x 1 slab, 0.5 x 0.1 x 0.005 m (dx = dy = 5 mm), uniform gas u = 5,
 v = -0.5, face 3 tagged 301 (the wall code ATLAS writes for a dispersed phase). Three 4 um
@@ -18,7 +18,7 @@ x_s = 0.010 + 10 (y_0 - 0.0025) = 0.345, 0.395, 0.445 m.
 
   RED  (bc-blind ghost): v_y stays -0.5 down to y = 0, so each parcel reaches the wall at
        x = 0.010 + 10 y_0 = 0.370, 0.420, 0.470 m, all inside the domain, and is `gone` on
-       contact. Measured on bin/IGLOO.pre-B: exactly those three x, to six digits.
+       contact. Measured on a build with the bc-blind ghost: exactly those three x, to six digits.
   GREEN (mirror on 301): the ghost carries +V, the first interior node -V, so the sampled
        profile through the row is v_y(y) = -(2V/dy) y = -200 y, k = 200 1/s. With
        tau_p = rho_p d^2 / (18 mu) = 2950 * 1.6e-11 / 3.6e-4 = 1.31e-4 s and

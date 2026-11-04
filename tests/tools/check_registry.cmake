@@ -3,9 +3,8 @@
 # and diff against the committed file.
 #
 # Invoked by ctest with -DDOCGEN=<exe> -DTRACKED=<path> -DGENERATED=<path>.
-# Twice in one session (2026-07-30) the tracked file drifted: once when a new
-# `blowing` key was added without re-running DocGen, and the same regeneration
-# exposed `TC` missing from the `evaporation` allowed list since the F2 merge.
+# The tracked file drifts whenever a key or an allowed value enters the registry
+# without a DocGen run.
 
 execute_process(COMMAND "${DOCGEN}" "${GENERATED}" RESULT_VARIABLE rc
                 OUTPUT_VARIABLE out ERROR_VARIABLE err)

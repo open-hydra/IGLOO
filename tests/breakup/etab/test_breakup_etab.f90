@@ -1,12 +1,12 @@
 program test_breakup_etab
     !
-    ! D-family ETAB (Tanner 1997 extension of TAB) via public breakupEvent
+    ! ETAB (Tanner 1997 extension of TAB) via public breakupEvent
     ! (brkupSelect=5). The oscillator half re-uses YupdateTAB (covered by
     ! test_breakup_tab); here the product-size law is exercised — it is
     ! DETERMINISTIC (no sampling), so dp after the event is directly checkable.
     !
     !   Kbr = k1*omega*(AWe*We^4+1) for We<=WeTrans, k2*omega*sqrt(We) above
-    !   (Tanner Eq.6; A15 fixed the stripping branch: was k1),
+    !   (Tanner Eq.6: the stripping branch uses k2),
     !   AWe = (k2/k1*sqrt(WeTrans)-1)/WeTrans^4  -- reaches k2*sqrt(WeTrans) at
     !   WeTrans BY DESIGN, so Kbr is continuous even for k1 /= k2,
     !   r_new = r*exp(-(Kbr/omega)*acos(1-1/WeCr)).
@@ -14,8 +14,7 @@ program test_breakup_etab
     !   ET1  sub-threshold We_r=5 (a+WeCr = We_r/6 < 1) -> no event
     !   ET2  Kbr continuity at We=WeTrans for default k1=k2: rel jump -> O(eps)
     !   ET3  k1/=k2 continuity: the AWe smoother meets the k2*sqrt(We) branch at
-    !        WeTrans, so ln(rNew/r) ratio across WeTrans = 1 exactly (pre-A15 the
-    !        coded k1 branch produced the k1/k2 jump this probe used to pin)
+    !        WeTrans, so ln(rNew/r) ratio across WeTrans = 1 exactly
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64, int64
     use IGLOO_Lib_Breakup, only: breakupEvent
@@ -24,9 +23,9 @@ program test_breakup_etab
     use verif_dump,   only: dump_curve
     implicit none
 
-    !> One RNG stream for this test program. breakupEvent now takes the parcel's own stream
-    !  instead of drawing from the intrinsic random_number (which is thread-scheduled and so
-    !  irreproducible inside the solver's OMP region). Host-scope, not per-call: an ensemble of
+    !> One RNG stream for this test program. breakupEvent takes the parcel's own stream, not
+    !  the intrinsic random_number (which is thread-scheduled and so irreproducible inside the
+    !  solver's OMP region). Host-scope, not per-call: an ensemble of
     !  events must see DISTINCT draws, so the state has to advance across calls.
     integer(int64) :: tRng = 20260808_int64
 
@@ -175,8 +174,8 @@ contains
 
         ! --- ET4d: magnitude by an INDEPENDENT derivation (anti-lockstep) ---------------
         ! ET4a above re-types Tanner's A^2 from the same lines ETABmodel was written from,
-        ! so a shared misreading of the paper passes BOTH sides -- exactly how bug A13 got
-        ! through. Re-derive the same quantity from energy per unit mass instead: the
+        ! so a shared misreading of the paper passes BOTH sides (the lockstep blind spot).
+        ! Re-derive the same quantity from energy per unit mass instead: the
         ! products' radial kinetic energy equals the surface energy released plus the drag
         ! deformation input,
         !     v_perp^2/2 = 3*sigma/(rho_l*a) - 3*sigma/(rho_l*r') + (5/24)*Cd*We*sigma/(rho_l*a)

@@ -9,25 +9,25 @@ THE METRIC IS SCALE-RELATIVE, and that choice is load-bearing rather than stylis
     err = max|a_i - b_i| / max|a_i|
 
 i.e. each difference is normalised by the FIELD's magnitude, not by the local value. A per-value
-relative error `|a-b|/|a|` is ill-conditioned on these fields. Measured 2026-08-10 on `vie-plait`:
+relative error `|a-b|/|a|` is ill-conditioned on these fields. Measured on `vie-plait`:
 one cell holds 6.03e-12 against a field scale of 6.0, and an absolute difference of 7.3e-24 there
 reads as a 1.2e-12 "relative" error — apparently at tolerance, actually 24 orders below the field.
-Field-wide the worst absolute difference on that comparison was 1.06e-22, i.e. 1.8e-23 of scale.
+Field-wide the worst absolute difference on that comparison is 1.06e-22, i.e. 1.8e-23 of scale.
 
 Both wrong moves are available with the per-value metric: calling 1.2e-12 a regression (a false
 positive), or loosening the tolerance to swallow it — which would then hide a REAL defect of the
 same magnitude somewhere the local value is O(1). Normalising by field scale removes the choice.
 
 Why any tolerance at all: these fields are accumulated with `!$OMP ATOMIC UPDATE`, and floating
-point addition is not associative, so the value depends on thread interleaving — and, once MPI is
-live, on how the rank count partitions the sum. Both are the same FP-reassociation class. Measured
+point addition is not associative, so the value depends on thread interleaving — and, under MPI,
+on how the rank count partitions the sum. Both are the same FP-reassociation class. Measured
 floors on this host: run-to-run at fixed thread count <= 4e-15; across rank counts, bit-identical on
 coupled-body / khrt-e2e / db-2daxi and 1.8e-23 on vie-plait. DEFAULT_TOL sits decades above those and
-decades below the 5.2e-11 that the F7 accumulator-shape bug produced.
+decades below the 5.2e-11 of accumulators that keep the previous sweep's shape.
 
 `tests/tools/check_twosweep.py` carries its own equivalent comparator. It is deliberately NOT
 refactored to import this one: its PASS stdout is byte-stable on purpose (see the note at its
-`cmp_tec`, and BUGS.md O2), and seven green gates depend on that. Duplicating ~20 lines is the
+`cmp_tec`), and every two-sweep gate, serial and MPI, depends on that. Duplicating ~20 lines is the
 cheaper side of that trade.
 """
 import sys

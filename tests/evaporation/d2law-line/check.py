@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E-VAL-1 gate: d2-law ANALYTIC LINE (Tier V — analytic-law verification).
+"""Gate: d2-law ANALYTIC LINE (Tier V — analytic-law verification).
 
 Unlike ../d2law (run-conditioned: kernel integrated along the MEASURED Tp), this case
 gates IGLOO against the textbook closed form built from CASE INPUTS ONLY:

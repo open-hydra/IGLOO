@@ -18,7 +18,7 @@ and the rate law is the model's, typed here (never read from the code):
   ASM    MHB98 eqs. 4, 6, 11-13 and Table 1: Sh_0 = 2 + 0.552 Re^1/2 Sc^1/3, Nu_0 = 2 + 0.552 Re^1/2 Pr^1/3,
          F(B) = (1 + B)^0.7 ln(1 + B)/B, Sh* = 2 + (Sh_0 - 2)/F(B_M), mdot = -pi d rho_g D_v Sh* ln(1 + B_M),
          B_T = (1 + B_M)^phi - 1, phi = (c_p,v/c_p,g)(Sh*/Nu*)/Le, Nu* = 2 + (Nu_0 - 2)/F(B_T) (to convergence);
-         the gas-side heat into the drop Q = -mdot c_p,v (T_g - T)/B_T, Abramzon & Sirignano's own form (eq. 20,
+         the gas-side heat into the drop Q = -mdot c_p,v (T_g - T)/B_T, Abramzon & Sirignano's own form (eq. 24,
          the vapour's c_p), and m c_L dT/dt = Q + mdot L_v
 
 Gates

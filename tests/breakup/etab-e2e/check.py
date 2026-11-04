@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""B-VAL-5 gate: ETAB breakup vs Tanner (1997/98) — shared TAB oscillator + cascade size.
+"""etab-e2e gate: ETAB breakup vs Tanner (1997/98) — shared TAB oscillator + cascade size.
 
 25-drop RADIUS-based Weber sweep (make_pe_case.py --we-convention rad) across the onset
 We_r = WeCrit/2 = 6 AND the bag->stripping transition WeTrans = 80. ETAB reuses the TAB
 damped oscillator, so the ONSET and the first-breakup TIME are the same closed form as
-B-VAL-3 (ORA87). Its distinct physics is the DETERMINISTIC exponential-cascade product
+tab-e2e's (ORA87). Its distinct physics is the DETERMINISTIC exponential-cascade product
 size (Tanner eq. 6/8, no RNG on the size):
 
     d_child/d_parent = r'/r = exp( -(Kbr/omega) * acos(1 - 1/WeCr) )
@@ -24,9 +24,9 @@ Three gates, all from the paper's closed forms:
                 so injection-We != break-We and the bag ratio is steeply We-dependent),
                 tol TOL_R.
 
-This case (with tab-e2e) exercises the A18 event-path fix for ETAB; the child-size gate
-is the ETAB-specific check. The v-perp product kick (Tanner eq. 8-10) is azimuth-random
-and NOT gated here (only the deterministic size is).
+This case (with tab-e2e) exercises the event-breakup path under ETAB; the child-size gate
+is the ETAB-specific check. The v-perp product kick (Tanner eq. 8-10) is azimuth-random:
+gate D (in main) checks that it reaches the parcel state, not its value.
 """
 import math
 import os
@@ -48,10 +48,10 @@ WE_NOBRK = 5.75         # gate A scope (onset is exactly 6; margin for slip drif
 WE_BRK   = 6.5          # gate B/C scope
 TOL_T    = 0.05         # timing slack (fraction of t_bu)
 TOL_R    = 0.01         # child-size ratio tol (observed ~3e-4; 30x margin)
-# Gate D (v_perp transport). Floor MEASURED 2026-08-29: three runs of the fixed binary are
-# byte-identical (1663/6002 rows, max|V|=0.53732, max|W|=0.370132), so the rule is EXACT --
-# no tolerance. Signal is structural: with the kick discarded, V and W are exactly zero in
-# every row. LAT_MAX is a sanity envelope only; measured ratio is 0.0215 (0.537 / 25).
+# Gate D (v_perp transport). Floor MEASURED: runs are byte-identical (1678 of 6027 rows
+# with a lateral speed, max|V|=0.53732, max|W|=0.370132), so the rule is EXACT -- no
+# tolerance. Signal is structural: with the kick discarded, V and W are exactly zero in
+# every row. LAT_MAX is a sanity envelope only; the gate's max|v_lat|/max|U| reads 0.0168.
 LAT_MAX  = 0.10         # max lateral speed as a fraction of axial speed
 N_BRK    = 18           # of the 20 swept drops with We_r >= 6.5
 
@@ -105,7 +105,7 @@ def load_lateral(path):
     """Per-ID [max|V|, max|W|, max|U|, d_max, d_min] for the v_perp transport gate.
 
     Separate from load_trajectories, which keeps only (x, U, d). Uses max/min of d rather
-    than first/last so it is independent of record order (OMP-nondeterministic).
+    than first/last, independent of the rows' order.
     """
     lat = {}
     for line in open(path):
@@ -150,7 +150,7 @@ def main():
 
     n_nobrk_bad = n_brk = n_time_bad = n_size_bad = 0
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:
@@ -189,9 +189,9 @@ def main():
     # Tanner-97 eqs 8-10 give the products a normal velocity. ET4a/b in
     # tests/breakup/etab/test_breakup_etab.f90 already verify the MAGNITUDE and that it is
     # perpendicular -- but they call breakupEvent directly and read the test's own vp, so
-    # they pass whether or not the kick ever reaches the particle. It did not: bug O12 left
-    # V and W exactly zero in all 6000 rows while ET4 stayed green. A routine-level gate
-    # cannot see a transport bug; this leg is the one that can.
+    # they pass whether or not the kick ever reaches the particle: with the kick discarded,
+    # V and W are exactly zero in all 6000 rows while ET4 stays green. A routine-level gate
+    # cannot see a transport defect; this leg is the one that can.
     lat = load_lateral(TRAJ)
     kicked = {pid for pid, e in lat.items() if e[0] > 0.0 or e[1] > 0.0}
     broke_d = {pid for pid, e in lat.items() if e[4] < e[3] * 0.999}
@@ -207,7 +207,7 @@ def main():
           f"velocity; max|v_lat|/max|U| = {ratio:.4f} (< {LAT_MAX})")
     if not d1:
         print("  [FAIL] D1: NO drop carries lateral velocity -- the kick is computed and "
-              "discarded (bug O12), or breakup never fired")
+              "discarded, or breakup never fired")
     if not d2:
         print(f"  [FAIL] D2: lateral velocity on drops that never broke: {leaked}")
     if not d3:

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Gate for E-VAL-2: single WATER droplet vs Miller-Harstad-Bellan (1998) Fig. 2.
+"""Gate: single WATER droplet vs Miller-Harstad-Bellan (1998) Fig. 2.
 
 Validation case (experimental data: Ranz & Marshall 1952b): D0=1.1 mm, Td0=282 K,
-TG=298 K, Re_d=0 (quiescent). Per the validation plan's gating rule, the GATE here is
+TG=298 K, Re_d=0 (quiescent). The GATE here is
 IGLOO-vs-the-model (deterministic, tight); the *experimental* points are an
 informational, NON-GATING overlay drawn by the sibling verify.py.
 
@@ -26,23 +26,30 @@ the rows, where the droplet sits on the plateau; the identity must hold to TOL_W
 this pins the drag-off / Nu=Sh=2 / CEM coupling self-consistency and, with blowing on,
 the blowing factor in the energy equation.
 
-Tier-P paper-reproduction gate (the E-VAL-2 point), now built on the DIGITIZED M7 model
+Tier-P paper-reproduction gate, built on the DIGITIZED M7 model
 line (reference/mhb98_fig2_M7_*.csv, WebPlotDigitizer). IGLOO runs CEM+LK = the uniform-
 temperature Langmuir-Knudsen model = MHB98's M7. Two panels:
   (a) IGLOO's integrated beta = (rho_d Pr / 8 mu_G)*|dD^2/dt| (Eq.28) vs beta_M7 = the LSQ
-      slope of the digitized M7 D^2(t), *10%. beta_M7 ~ 6.5e-3, consistent with the paper's
+      slope of the digitized M7 D^2(t), *10%. beta_M7 ~ 6.35e-3, consistent with the paper's
       stated ~6e-3 for all M1-M8 at Re_d=0 (p.1038, kept as a guard + missing-file fallback).
   (b) IGLOO wet-bulb vs the M7 temperature plateau (Fig.2b), *0.5 K.
-IGLOO lands on M7 (beta 6.44 vs 6.51e-3, ~1%) -- it reproduces MHB98's own model, not just
-our re-coded kernel. NOTE the older eyeball experiment overlay (reference/mhb98_fig2.csv,
-start 1.21, beta_exp~7.4e-3) reads systematically high; in the figure the exp points sit on
-M7 (~6.5e-3), so the earlier "~13% below experiment" is largely an eyeball-digitization
-artifact -- confirming needs a proper exp re-digitization (follow-up), not gated here.
+IGLOO lands on M7 (beta 6.295 vs 6.35e-3, 0.8%) -- it reproduces MHB98's own model, not just
+our re-coded kernel. The experiment (reference/mhb98_fig2_exp_d2.csv: the Ranz & Marshall
+circles of Fig. 2(a), re-digitized from the page image, beta_exp = 6.48e-3) is drawn by
+verify.py, not gated here.
+
+L1, this case's own run only (mhb98-water-blowing calls main() without it): the parcel rule's last row at the
+burnout (tools/lastrow.py), on a sibling in ref-last/ without row keys and with out-time on, run with the IGLOO_EXE
+executable; each droplet's trajectory is its injection row and a last row at its exit record's state (X, Y, Z within
+half the F12.6 quantum, t within the ES16.8 half-unit), once.
 """
 import math
 import os
 import re
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+import lastrow  # noqa: E402
 
 TRAJ   = "OUTPUT/trajectories-A.dat"
 OUTLOC = "OUTPUT/outloc-A.dat"
@@ -51,12 +58,12 @@ HERE   = os.path.dirname(os.path.abspath(__file__))   # the references are this 
 REF_M7_D2 = os.path.join(HERE, "reference", "mhb98_fig2_M7_d2.csv")   # digitized MHB98 Fig.2a M7 model line
 REF_M7_TD = os.path.join(HERE, "reference", "mhb98_fig2_M7_Td.csv")   # digitized MHB98 Fig.2b M7 model line
 TELESCOPE_TOL = 0.02
-TOL_CONSERV   = 0.01   # two-phase mass closure (A22 burnout deposit)
+TOL_CONSERV   = 0.01   # two-phase mass closure (the burnout deposit)
 
 # ---- known test inputs (SI). NOT read from production output. ----------------
 # Every property below is MHB98's OWN Appendix A (air + water: Harpole 1981), evaluated at
 # their constant-property reference temperature T_R = T_WB(eq.27) = 293.9676 K -- the paper
-# publishes all of it, so the case runs the paper's numbers, not stand-ins (2026-07-29).
+# publishes all of it, so the case runs the paper's numbers, not stand-ins.
 RU     = 8314.46    # universal gas constant  [J/kmol/K]
 PATM   = 101325.0   # psat_CC reference pressure [Pa]
 RHO_G  = 1.184727   # gas density [kg/m^3]: set so p = rho*R*T_G is exactly 1 atm = MHB98's
@@ -131,10 +138,10 @@ def read_blowing(path="input.ini"):
 
 
 BLOWING = read_blowing()
-# Tier-P paper-reproduction gate (E-VAL-2). IGLOO runs CEM+LK = the uniform-temperature
+# Tier-P paper-reproduction gate. IGLOO runs CEM+LK = the uniform-temperature
 # Langmuir-Knudsen model = MHB98's M7 (M8 is the finite-conductivity variant). The gate
 # compares IGLOO's integrated beta (Eq.28) to the DIGITIZED M7 model line (Fig.2a): beta_M7
-# is the LSQ slope of reference/mhb98_fig2_M7_d2.csv, times BETA_COEF. beta_M7 ~ 6.5e-3,
+# is the LSQ slope of reference/mhb98_fig2_M7_d2.csv, times BETA_COEF. beta_M7 ~ 6.35e-3,
 # consistent with the paper's stated ~6e-3 for all M1-M8 at Re_d=0 (p.1038). The paper number
 # is kept as a guard (the digitized slope must land near it) and as a fallback if the file is
 # absent. Panel (b): IGLOO wet-bulb vs the M7 temperature plateau (Fig.2b).
@@ -163,8 +170,8 @@ def cem_mdot(Xs, d):
 def lk_mdot(Tp, d):
     """LK fixed-point mass rate (the model IGLOO runs). At 1.1 mm the correction is
     only ~L_K/d~2e-4, but it accumulates over the path, so the kernel must carry it
-    to match production to the E13.6 floor -- 'vacuous' referred to LK-vs-VLE
-    EXPERIMENTAL discrimination, not to IGLOO-vs-kernel."""
+    to match production to the E13.6 floor -- 'vacuous' means LK-vs-VLE
+    EXPERIMENTAL discrimination, not IGLOO-vs-kernel."""
     XsE = xs_eq(Tp)
     md = cem_mdot(XsE, d)
     if md == 0.0:
@@ -295,7 +302,7 @@ def check_mass_telescoping(parts):
                 slope = (rows[-2][8] - rows[-1][8]) / (rows[-1][0] - rows[-2][0])
                 # The tail term accounts for mass that evaporates between the last recorded
                 # point and the domain exit. CAP it by the mass actually LEFT: a drop that
-                # burns out INSIDE the domain (m_last -> 0, A22 burnout termination) has
+                # burns out INSIDE the domain (m_last -> 0, the burnout termination) has
                 # nothing further to evaporate, so extrapolating to Lx is a phantom (worth
                 # 2.1% here). The cap is inert when the drop exits the domain still alive.
                 lost += min(slope * max(0.0, Lx - rows[-1][0]), m_last)
@@ -309,7 +316,7 @@ def check_mass_telescoping(parts):
     print(f"mass telescoping: sum(wdot)={src_total:.6e} kg/s vs traj evap flow={evap_total:.6e} "
           f"kg/s  resid={resid:.2e} (tol {TELESCOPE_TOL})  [{'PASS' if ok else 'FAIL'}]")
 
-    # ---- TWO-PHASE MASS CONSERVATION (A22 burnout deposit) -------------------------------
+    # ---- TWO-PHASE MASS CONSERVATION (the burnout deposit) -------------------------------
     # In this case EVERY droplet is consumed inside the domain (the box is long enough), so
     # all injected droplet mass must reach the gas: sum(wdot) == sum(mdot_inj). This is the
     # direct assertion that the burnout remnant is handed to the Eulerian source instead of
@@ -330,7 +337,7 @@ def check_mass_telescoping(parts):
     return 0 if ok else 1
 
 
-def main():
+def main(last_row=False):
     try:
         parts = load_trajectories(TRAJ)
     except FileNotFoundError:
@@ -356,13 +363,13 @@ def main():
     twbs = []
 
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:
                 rows.append(r)
             else:
-                n_artifact += 1          # B4 corner-exit phantom row
+                n_artifact += 1          # a row repeating an x
         xa, _, _, _, _, _, Ta, da, ma = rows[0]
 
         if xa < INLET_X:
@@ -476,7 +483,7 @@ def main():
     print(f"\ninjection placement: inlet(x<{INLET_X})={n_inlet}  mid-domain={n_mid}  "
           f"dead(1-row)={n_dead}  of {len(parts)} total")
     if n_artifact:
-        print(f"[NOTE] dropped {n_artifact} non-monotone-x phantom row(s) (B4 artifact)")
+        print(f"[NOTE] dropped {n_artifact} row(s) repeating an x (not evaporation physics)")
     print(f"max relative d^2 loss over a particle: {worst_loss*100:.2f}%  "
           f"(need >= {LOSS_MIN_REL*100:.0f}% to count; {n_noevap} below)")
     print(f"worst kernel point: {worst[1]}  (resid/tol = {worst[0]:.3f})")
@@ -520,6 +527,9 @@ def main():
             n_violation += 1
 
     n_violation += check_mass_telescoping(parts)
+    if last_row:
+        n_violation += lastrow.gate(HERE, os.environ.get(
+            "IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO"))))
 
     if n_violation == 0 and verified >= N_GOOD:
         print(f"\n[PASS] {verified} water droplets' d^2 histories match the CEM rate law "
@@ -533,4 +543,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(last_row=True))

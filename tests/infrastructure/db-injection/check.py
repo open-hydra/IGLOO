@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""DB ("assigned position") injection oracle — regression gate for bug B1.
+"""DB ("assigned position") injection oracle: placement and the pin-time velocity hand-off.
 
-Pre-fix, pin_particles' DB branch wrote stateVar(4:6) before allocation ->
-SIGSEGV in setup: the case could not even start. Post-fix (vInj hand-off),
-this verifies end-to-end:
+pin_particles' DB branch stores the requested velocity in the particle's vInj field
+(stateVar(4:6) is allocated later, at setup_particleODE: a write before it is a SIGSEGV
+in setup), and integrate's init hands it off. This verifies end-to-end:
   P1  exactly N=5 particles, each with >= MIN_PTS trajectory rows (no crash,
       no dead particles);
   P2  placement fidelity: first row at the requested (x,y,z) (F12.6 floor);
   P3  vInj hand-off: first-row u == up = 1.0 exactly (the requested DB
-      velocity reaches stateVar(4:6) through the new field, not garbage);
+      velocity reaches stateVar(4:6) through vInj, not garbage);
   P4  physics sanity: u relaxes monotonically (Stokes) and exceeds U_MIN by
       the outlet; exit recorded at x = LX (outloc).
 """
@@ -38,7 +38,7 @@ def rows_of(path, ncol):
                     continue
                 parts.setdefault(pid, []).append(vals)
     except FileNotFoundError:
-        print(f"[FAIL] {path} not found -- did the solver crash? (B1 regression)")
+        print(f"[FAIL] {path} not found -- did the solver crash in setup?")
         sys.exit(1)
     return parts
 
@@ -64,7 +64,7 @@ def main():
         if abs(u0 - UP) > TOL_U:
             print(f"[FAIL] P3: ID={pid} first-row u={u0} != up={UP} (vInj hand-off broken)")
             nbad += 1
-        us = [r[3] for r in rows if r[0] >= x0]   # monotone-x filter (B4 guard)
+        us = [r[3] for r in rows if r[0] >= x0]   # monotone-x filter (a corner-exit row out of x order)
         if any(us[k+1] < us[k] - TOL_U for k in range(len(us) - 1)):
             print(f"[FAIL] P4: ID={pid} u not monotone (Stokes relaxation broken)")
             nbad += 1

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Overlay IGLOO vs Reitz-87 KH stripping (B-VAL-6, MOSE-style).
+"""Overlay IGLOO vs Reitz-87 KH stripping (MOSE-style).
 
 check.py is the GATE (initial KH-stripping rate, We_r >= 340); this only DRAWS and writes
 OUTPUT/khrt-e2e.svg. matplotlib imported defensively.
 
 One panel: initial dd/dt vs We_r — the Reitz-87 KH-stripping rate (gated) and IGLOO's
-measured initial rates. The RT/shed shatter (bug A19, fixed 2026-07-23) is gated
+measured initial rates. The RT/shed shatter is gated
 separately by check_rt.py; this panel is the continuous KH-stripping rate.
 """
 import argparse
@@ -46,16 +46,16 @@ def main():
         ref.append((we, check.kh_rate(d, slip)))
     ref = [(w, r) for w, r in ref if r < 0.0]
 
-    # Three series, not two. Since A23/S4 lifted the one-shed cap this case emits ~241 KH-shed
+    # Three series, not two. This case emits ~241 KH-shed
     # children alongside the 25 injected parcels, and they are small => low We_r => they all land
-    # left of the gate cut. Lumping them into `ungated` put 248 open circles on a panel whose
+    # left of the gate cut. Lumping them into `ungated` puts 248 open circles on a panel whose
     # subject is 14 points: the children have to be drawn separately or not at all. They are a
     # different population — born mid-domain at dStable, not injected — so they are shown
     # subdued, as context for the gated comparison rather than part of it. The GATE is unaffected
     # either way: no child clears We_r >= WE_MIN.
     gated, ungated, kids = [], [], []
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:

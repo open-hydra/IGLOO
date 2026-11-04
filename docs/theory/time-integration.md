@@ -95,11 +95,15 @@ Each outer iteration covers one cell transit:
 
 The OSlo solver calls `solout` at every accepted step.  It performs:
 
-1. **Scatter cloud** — accumulates the npdot-weight of the accepted interval; a step that
-   stays in its cell emits one scatter marker when the running total reaches `dNscat`,
-   carrying the remainder. The total is latched with the state, so a step that `ODEsystem`
-   cuts at a face and integrates again adds its weight once, and a model-6 phase event keeps
-   the fraction of the step it keeps.
+1. **Scatter cloud** — adds `npRef·h` to the parcel's accumulator, `npRef` the number rate
+   the parcel entered with (a breakup child's is its parent's), and, as the step is latched,
+   writes a marker at each multiple of `dNscat` the accumulator crosses on it, at the fraction
+   of the step where it does: the position on the cubic Hermite interpolant of the step's end
+   positions and velocities, the other columns linear, the weight `dNscat·ṅ_p/npRef`. A step
+   that ends a segment writes its markers at the segment's finalize, over the part of the step
+   it keeps, before the phase jump and the breakup event. The total is latched with the state,
+   so a step that `ODEsystem` cuts at a face and integrates again adds its weight once, and a
+   model-6 phase event keeps the fraction of the step it keeps.
 2. **Cell-crossing detection** — `isPointInsideCell(y(1:3), vert, ...)` sets `IamOut`
    (and `sectorOut` when the point left the wedge sector); for `ord2` mode a separate
    gas-dual-cell test sets `newGas`.
@@ -138,13 +142,17 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
 | models 6, 7 | no clamp or penalty on the frozen fraction $f$ within a phase: the solidification events own its crossings of 0 and 1; a transition lands inside the new phase (a freezing plateau at no more than `T-melt`, a melting solid at no more than $f = 1$) |
 
 !!! note "Stuck-particle detection"
-    Four guards end a particle's integration. A particle that stays in the same cell for more
+    Five guards end a particle's integration. A particle that stays in the same cell for more
     than `nMaxCell = 10` outer iterations without a crossing (a segment that ends in a reflection
-    at a boundary face is not counted) is flagged `gone` with a diagnostic message. A particle
-    that makes no net displacement for more than `nMaxStall = 100` iterations is flagged `gone`
-    with a diagnostic message. A segment whose solver loop runs more than `maxInnerIter = 10`
-    times flags the particle `gone` with a warning, and that segment deposits nothing. A particle
-    that reaches `maxIter = 500000` outer iterations is flagged `gone` with its exit record written.
+    at a boundary face is not counted) is flagged `gone` with a diagnostic message. Every
+    `nMaxStall = 100` reflections at boundary faces along its path, in any cell, a particle's
+    position is compared with the previous checkpoint (its injection or birth point for the first
+    one): closer than `nMaxStall × grazeStandoff` = 1e-4 m, a bounce that makes no progress, it is
+    flagged `gone` with the same message. A particle that makes no net displacement for more than
+    `nMaxStall = 100` iterations is flagged `gone` with a diagnostic message. A segment whose
+    solver loop runs more than `maxInnerIter = 10` times flags the particle `gone` with a warning,
+    and that segment deposits nothing. A particle that reaches `maxIter = 500000` outer iterations
+    is flagged `gone` with its exit record written.
 
 ---
 

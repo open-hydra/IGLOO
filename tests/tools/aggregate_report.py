@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""T8/T9 closure for the IGLOO verification suite.
+"""Aggregated report and consistency gate of the IGLOO verification suite.
 
-T8 — aggregate every per-test verif_*.csv (written into the ctest working dir)
-     into a single markdown report with a per-row PASS/FAIL table and totals.
-T9 — consistency gate, nonzero exit if:
-     (a) any CSV row is FAIL;
-     (b) any test executable's family directory lacks an INFO.md;
-     (c) any CSV exists with zero parsed rows (report corruption).
+report — aggregate every per-test verif_*.csv (written into the ctest working dir)
+         into a single markdown report with a per-row PASS/FAIL table and totals.
+gate   — consistency, nonzero exit if:
+         (a) any CSV row is FAIL;
+         (b) any test executable's family directory lacks an INFO.md;
+         (c) any CSV exists with zero parsed rows (report corruption).
 
 Usage: aggregate_report.py <build_tests_dir> <source_tests_dir> [-o report.md]
 """
@@ -24,7 +24,7 @@ FAMILY_DIRS = [
     "infrastructure/material_tokens",
     "infrastructure/axis_dispatch",
     "infrastructure/graze_standoff", "infrastructure/dual_clip",
-    "infrastructure/mollify_blocks", "infrastructure/host_assoc",
+    "infrastructure/mollify_blocks", "infrastructure/host_assoc", "infrastructure/fmt",
     "standard/drag", "standard/temperature",
     "evaporation", "evaporation/interface-neq", "evaporation/tc-analytic",
     "evaporation/evap-breakup", "evaporation/liquid-p2t", "evaporation/boiling-zgr",
@@ -65,7 +65,7 @@ def main():
 
     bad = []
 
-    # ---- T9(b): every family dir carries an INFO.md (support exempt) ----
+    # ---- gate (b): every family dir carries an INFO.md (support exempt) ----
     for d in FAMILY_DIRS:
         if d == "support":
             continue
@@ -73,7 +73,7 @@ def main():
         if not os.path.isfile(info):
             bad.append(f"missing INFO.md: {d}/")
 
-    # ---- T8: aggregate ----
+    # ---- report: aggregate ----
     csvs = sorted(glob.glob(os.path.join(a.build_dir, "verif_*.csv")))
     lines = ["# IGLOO verification suite — aggregated report", ""]
     total = passed = 0
@@ -93,10 +93,9 @@ def main():
             lines.append(f"| {os.path.basename(path)} | {r['case']} | "
                          f"{r['variable']} | {r['Linf']} | {r['tol']} | {r['result']} |")
     lines += ["", f"**{passed}/{total} rows PASS** across {len(csvs)} report files.",
-              "", "Bug-transcription pins emit no CSV: test_drag_probes, "
-              "test_heat_probes, test_evap_probes. They were written as xfail probes, "
-              "but every bug they cover is fixed, so they exit 0 and run as ORDINARY "
-              "gates — no WILL_FAIL property is set on any test.", ""]
+              "", "Transcription pins emit no CSV: test_drag_probes, "
+              "test_heat_probes, test_evap_probes. Each is an ORDINARY gate "
+              "(a failing pin turns it red) — no WILL_FAIL property is set on any test.", ""]
     if bad:
         lines += ["## CONSISTENCY FAILURES", ""] + [f"- {b}" for b in bad]
 

@@ -16,9 +16,9 @@ Gas (cell-centred, meridian frame theta = 0, i.e. the Cartesian components AT z 
     U = U0,  V = 0,  W = Om * y_c,   y_c = IGLOO's vertex-mean cell centre = rbar_j cos(d/2)
 W is linear in y and is sampled exactly at the dual nodes, so the 2nd-order bilinear
 rebuild returns Om*y at any interior point (gas_reconstruction E2). The TRUE swirl at a
-point (y, z) is (U0, -Om z, +Om y); the code samples the theta=0 components unrotated, so
-the ONLY difference between the code's field and the true one is the missing -Om z (the
-2.5D frame error the W-plan quantifies, item E removes). Everything else uniform.
+point (y, z) is (U0, -Om z, +Om y); the code samples the meridian field at the parcel's
+(x, r) and rotates the velocity to its azimuth (exact 2.5D sampling), which is that swirl.
+Everything else uniform.
 
 bc.txt (reader order f=1..6, n outer, m inner; 6 integer columns, 3-digit code in col 6):
     f1 (x=0) 400 outlet, f2 (x=LX) 400 outlet, f3 (r=R0) 301 wall, f4 (r=R1) 301 wall,

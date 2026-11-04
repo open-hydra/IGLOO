@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-swirl-wedge-spin -- one OVER-SPUN parcel on the axisymmetric wedge: the many-sector case of
-ledger O23. Same fixture as swirl-wedge (INPUT is a symlink); the parcel starts at r = 0.2
+swirl-wedge-spin -- one OVER-SPUN parcel on the axisymmetric wedge: the many-sector case.
+Same fixture as swirl-wedge (INPUT is a symlink); the parcel starts at r = 0.2
 with up = 0.05 and wp = 2.0, so its azimuth advances ~10 rad/s at injection and it would sweep
 ~34 degrees (34 sectors of 1 degree) inside its first (x, r) cell.
 
-What is pinned. The containment test now carries the azimuth band (isPointInsideCell's
+What is pinned. The containment test carries the azimuth band (isPointInsideCell's
 `sectorOut`), so every ODE segment ends at a sector edge, the fold rotates by exactly ONE
 sector, and each segment's eulerian deposit lands in the dual cell the parcel is actually in.
-Before the fix a segment could sweep any number of sectors and its whole deposit went to the
-cell located by (x, r cos theta) at the segment start -- a row INWARD of the true radius.
+A segment that swept several sectors would put its whole deposit in the cell located by
+(x, r cos theta) at the segment start -- a row INWARD of the true radius.
 
 Gates (all derived from the injection row, input.ini constants and the tec nodes):
   S0  run_out.txt carries the fold witness `wedge sector folds: N (multi-sector: M)`; M == 0;
@@ -24,11 +24,11 @@ Gates (all derived from the injection row, input.ini constants and the tec nodes
       residence time per dual cell projected with the solver's own dual-to-geo rule
       (sub-quadrant volume weights; obj_block.f90::finalizeEUL), relative, on every cell
       holding >= RHO_FRAC of the peak; plus the tiling total sum(rho V) = mdot T_wall.
-Measured on the fix binary: 79 folds (oracle 79), S2 max|dw| 3.8e-6, |dv_r| 7.0e-6, |du| 5.8e-7,
-S3 worst 4.0e-3 over 97 cells, mass ratio 1.000044. Proven RED on the pre-fix binary
-(fc6c5f4): S0 (no witness line) and S3 on 11 of 97 cells -- +33 % at r = 0.20 and -37 % at
+Measured: 79 folds (oracle 79), S2 max|dw| 3.8e-6, |dv_r| 7.0e-6, |du| 5.8e-7,
+S3 worst 4.0e-3 over 97 cells, mass ratio 1.000044. RED on a build whose segments sweep any
+number of sectors: S0 (no witness line) and S3 on 11 of 97 cells -- +33 % at r = 0.20 and -37 % at
 r = 0.24 in the injection column, the first segment's deposit a row inward (the mass total
-is 1.000044 on both binaries: the tiling invariant cannot see where the mass went).
+is 1.000044 on both builds: the tiling invariant cannot see where the mass went).
 """
 import math
 import os
@@ -59,7 +59,7 @@ TOL_R = 3.0e-6                # S2  as the parent (floor: F12.6 half-ULP 5e-7)
 TOL_W = 2.0e-5                # S2  floor |a| dx / |v| = 20 * 5e-7 / 2 = 5e-6: the parcel accelerates
 TOL_VR = 2.0e-5               #     at w^2/r = 20 m/s^2, so the row's position floor is a 2.5e-7 s clock error
 TOL_U = 3.0e-6                # S2  u is a state here, not the clock
-TOL_ATT = 2.0e-2              # S3  per-cell mass vs the projected oracle (measured 4e-3; pre-fix ~1e-1)
+TOL_ATT = 2.0e-2              # S3  per-cell mass vs the projected oracle (measured 4e-3; multi-sector ~1e-1)
 RHO_FRAC = 1.0e-2             # S3  gate cells holding >= 1 % of the peak mass
 MIN_CELLS = 30                # S3  non-vacuity (path spans ~40 dual rows)
 TOL_MASS = 5.0e-3             # S3  sum(rho V) / (mdot T_wall) - 1

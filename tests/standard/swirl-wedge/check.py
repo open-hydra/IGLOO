@@ -21,33 +21,50 @@ input.ini (no transcribed constant), with two in-file refutations run before any
 system with the true field agrees with the cylindrical form to < RK_SELF in r and w. Two
 formulations of one physics guard the oracle against a transcription slip.
 
-What the code does (W-plan item E, exact 2.5D sampling): the 2D dual holds the theta=0
+What the code does (exact 2.5D sampling): the 2D dual holds the theta=0
 Cartesian components (U0, 0, Om y); Lib_Equations::sampleGas2D evaluates them at the
 parcel's (x, r) and rotates the velocity to the parcel's azimuth, so the sampled field is
 the true (U0, -Om z, +Om y) at every RHS call and the fold (segment ends) is an exact
 isometry of the problem. The residual against the oracle is then the F12.6 print floor
-(half-ULP 5e-7 on r, v_r, w; ~5e-7/r on theta) plus the ODE tolerance: measured 2026-09-17
+(half-ULP 5e-7 on r, v_r, w; ~5e-7/r on theta) plus the ODE tolerance: measured
 max|dr| 5.0e-7, max|dw| 5.2e-7, max|dv_r| 5.9e-7, max|dtheta| 1.7e-6 (P3, r = 0.3). The
-tolerances below sit ~6x above that floor. Before E the code sampled the theta=0 components
-UNROTATED at (x, y) (the 2.5D approximation of W-plan section 2): a frame error first
-order in theta, an outward radial bias dt_seg/(2 tau) = 2.5e-3 on the centrifugal drift,
-max|dr| 6.75e-5 / 5.80e-5 / 7.52e-5 for P1/P2/P3 (within 3 % of the segment-wise model,
-scratch swirl_design.py) -- this gate's first cut absorbed that as a derived budget
-(2.5e-4 / 3.0e-5 / 2.5e-4 / 2.0e-4). Proven RED (INFO.md): E reverted (the unrotated
-sampling) breaks G3/G6 on every parcel by 19-25x, G5 on every parcel (1.6-10x) and G4 on
-P1/P3 (2-3x); the fold rotating position only breaks G3-G6 by 10-200x the OLD tolerances;
+tolerances below sit ~6x above that floor. A sampler that takes the theta=0 components
+UNROTATED at (x, y) makes a frame error first order in theta: an outward radial bias
+dt_seg/(2 tau) = 2.5e-3 on the centrifugal drift, max|dr| 6.75e-5 / 5.80e-5 / 7.52e-5 for P1/P2/P3
+(within 3 % of the segment-wise model, scratch swirl_design.py); a derived budget for that error
+is (2.5e-4 / 3.0e-5 / 2.5e-4 / 2.0e-4). RED (INFO.md) on a build with the unrotated sampling:
+G3/G6 fail on every parcel by 19-25x, G5 on every parcel (1.6-10x) and G4 on P1/P3 (2-3x); a
+fold that rotates position only breaks G3-G6 by 10-200x the derived-budget tolerances;
 omega = 0 breaks G2.
 
 Measured from OUTPUT/trajectories-A.dat (7F12.6,2E13.6E2,I8 = x y z u v w Tp d m ID; no
 time column): r = hypot(y, z), v_r = (y v + z w)/r, w_p = (y w - z v)/r,
-theta_raw = atan2(z, y), theta_unwrapped = theta_raw + delthe per detected fold (a jump
-< -delthe/2 between consecutive rows, n = round(-jump/delthe); rows are ~0.002 rad apart
-so no fold is skipped). F12.6 floors: dr ~ 7e-7, dv_r, dw ~ 1e-6, dtheta ~ 1e-6/r.
+theta_raw = atan2(z, y), theta_unwrapped = theta_raw + n delthe summed over consecutive rows,
+n = round((oracle sweep - raw jump)/delthe) the folds between the two rows: no fold is skipped
+whatever the spacing of the rows (here up to 6e-3 rad), an error short of a whole sector stays in
+theta, and a whole sector puts the row outside the sector (G1). F12.6 floors: dr ~ 7e-7,
+dv_r, dw ~ 1e-6, dtheta ~ 1e-6/r.
+
+G7, in swirl-wedge's own directory only (the check is shared by name with three variants): the fold rows of the
+parcel rule. A sibling in ref-ds/ runs with the IGLOO_EXE executable, print-ds = 8e-3 m in place of print-dcell and
+out-time = on; every sector fold writes two rows at one t, the segment end outside the sector and its re-entry n
+sectors back (n >= 1, r unchanged), so the parcels' pairs of consecutive rows at one t are as many as the log's
+'wedge sector folds' count, those of n > 1 its multi-sector count, and every one of them is such a pair.
 """
 import math
+import os
+import re
+import shutil
+import subprocess
 import sys
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
+import datcols  # noqa: E402
+
 TRAJ = "OUTPUT/trajectories-A.dat"
+IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
+G7_DS = 8.0e-3                                 # m, the fold-row sibling's print-ds
 
 # --- fixture constants (must match input.ini + tools/make_wedge_case.py) ---
 U0, OMEGA = 1.0, 0.2
@@ -66,11 +83,11 @@ U_TOL = 1e-6                                   # zero-slip clock
 RK_H = T_FLIGHT / 20000.0                      # RK4 step (self-checked below)
 RK_SELF = 1e-12                                # step-halving and cyl-vs-cart agreement
 
-# --- gate tolerances: ~6x the F12.6 print floor (exact 2.5D sampling, W-plan item E) ---
-TOL_R = 3.0e-6      # G3  |r - r_or|          floor 5.0e-7; pre-E residual 5.8e-5..7.5e-5
-TOL_W = 3.0e-6      # G4  |w_p - w_or|        floor 5.2e-7; pre-E 1.9e-6..9.8e-6 (P2 inside)
-TOL_TH = 8.0e-6     # G5  |theta_unw - th_or| floor 1.7e-6; pre-E 1.3e-5..8.2e-5
-TOL_VR = 3.0e-6     # G6  |v_r - v_r,or|      floor 5.9e-7; pre-E 5.8e-5..6.4e-5
+# --- gate tolerances: ~6x the F12.6 print floor (exact 2.5D sampling) ------------------
+TOL_R = 3.0e-6      # G3  |r - r_or|          floor 5.0e-7; unrotated sampling 5.8e-5..7.5e-5
+TOL_W = 3.0e-6      # G4  |w_p - w_or|        floor 5.2e-7; unrotated 1.9e-6..9.8e-6 (P2 inside)
+TOL_TH = 8.0e-6     # G5  |theta_unw - th_or| floor 1.7e-6; unrotated 1.3e-5..8.2e-5
+TOL_VR = 3.0e-6     # G6  |v_r - v_r,or|      floor 5.9e-7; unrotated 5.8e-5..6.4e-5
 
 
 def fail(msg):
@@ -144,6 +161,47 @@ def oracle_self_check(r0, vr0, w0):
     return a, d_half, d_form
 
 
+def fold_rows():
+    """G7: the sibling ref-ds/'s pairs of rows at one t against its log's fold counts."""
+    d = os.path.join(os.getcwd(), "ref-ds")
+    shutil.rmtree(d, ignore_errors=True)
+    os.makedirs(os.path.join(d, "OUTPUT"))
+    os.symlink(os.path.join("..", "INPUT"), os.path.join(d, "INPUT"))
+    ini = re.sub(r"^print-dcell\s*=.*$", "print-ds    = %g\nout-time    = on" % G7_DS, open("input.ini").read(),
+                 count=1, flags=re.M)
+    open(os.path.join(d, "input.ini"), "w").write(ini)
+    with open(os.path.join(d, "run_out.txt"), "w") as out, open(os.path.join(d, "run_err.txt"), "w") as err:
+        code = subprocess.run([IGLOO], cwd=d, stdout=out, stderr=err).returncode
+    m = re.search(r"wedge sector folds: (\d+) \(multi-sector: (\d+)\)", open(os.path.join(d, "run_out.txt")).read())
+    if code != 0 or m is None:
+        return fail(f"G7 the ref-ds run exited {code}; fold count line {'found' if m else 'MISSING'}")
+    n_log, n_multi_log = int(m.group(1)), int(m.group(2))
+    pairs, multi, bad, nrow = 0, 0, [], []
+    for z in datcols.zones(os.path.join(d, TRAJ)):
+        rows = z["rows"]
+        nrow.append(len(rows))
+        for a, b in zip(rows, rows[1:]):
+            if b["t"] != a["t"]:
+                continue
+            ra, rb = math.hypot(a["Y"], a["Z"]), math.hypot(b["Y"], b["Z"])
+            ta, tb = math.atan2(a["Z"], a["Y"]), math.atan2(b["Z"], b["Y"])
+            n = int(round((ta - tb) / DELTHE))
+            tol = 4.0e-6 / min(ra, rb)
+            if (n == 0 or abs(ta - tb - n * DELTHE) > tol or abs(ra - rb) > 2.0 * DELTA
+                    or abs(ta) < 0.5 * DELTHE - tol or abs(tb) > 0.5 * DELTHE + tol):
+                bad.append((z["title"], a["t"], round(ta, 6), round(tb, 6)))
+                continue
+            pairs += 1
+            multi += abs(n) > 1
+    if bad or pairs != n_log or multi != n_multi_log or not n_log:
+        return fail(f"G7 ref-ds (print-ds {G7_DS:g}): {pairs} fold row pairs ({multi} multi-sector) against the log's "
+                    f"{n_log} ({n_multi_log}); pairs at one t that are not a fold (zone, t, theta before, after): "
+                    f"{bad[:3]}")
+    print(f"G7 ref-ds (print-ds {G7_DS:g}): {sum(nrow)} rows ({min(nrow)}..{max(nrow)} per parcel), {pairs} pairs at "
+          f"one t, each a fold one sector back = the log's {n_log} sector folds ({n_multi_log} multi-sector) PASS")
+    return 0
+
+
 # ------------------------------------------------------------------ gates
 def main():
     try:
@@ -200,17 +258,17 @@ def main():
             if abs(th_raw) > 0.5 * DELTHE + 1e-6 / r:
                 rc |= fail(f"ID{pid} x={x:.3f}: |theta_raw| = {abs(th_raw):.3e} > delthe/2 "
                            f"(fold did not re-sector)")
-            jump = th_raw - th_prev
-            if jump < -0.5 * DELTHE:
-                n = int(round(-jump / DELTHE))
-                nfold += n
-                th_off += n * DELTHE
-            th_prev = th_raw
-            th_unw = th_raw + th_off
             t = (x - X0) / U0
+            th_or_prev = s[1]
             s = rk4(cyl_rhs, s, t_prev, t, RK_H)
             t_prev = t
             r_or, th_or, vr_or, w_or = s
+            # the folds between two rows: the integer that makes the raw advance the oracle's sweep
+            n = int(round(((th_or - th_or_prev) - (th_raw - th_prev)) / DELTHE))
+            nfold += n
+            th_off += n * DELTHE
+            th_prev = th_raw
+            th_unw = th_raw + th_off
             dr, dw, dth, dvr = r - r_or, wp - w_or, th_unw - th_or, vr - vr_or
             worst["r"] = max(worst["r"], abs(dr))
             worst["w"] = max(worst["w"], abs(dw))
@@ -246,6 +304,8 @@ def main():
         print(f"ID{pid} r0={r0:.2f} w0={wp0:.3f}: {nrow} rows, {nfold} folds (oracle {n_exp}); "
               f"max|dr|={worst['r']:.2e} (end {end_dr:+.2e}) max|dw|={worst['w']:.2e} "
               f"max|dtheta|={worst['th']:.2e} max|dv_r|={worst['vr']:.2e}")
+    if os.path.basename(os.getcwd()) == "swirl-wedge" and fold_rows():
+        return 1
     print(f"[PASS] swirl-wedge: {len(parts)} parcels, tau={TAU:.3f} St={OMEGA*TAU:.2f}, "
           f"delthe={DELTHE:.6f}; r/w/theta/v_r at the print floor "
           f"({TOL_R:.1e}/{TOL_W:.1e}/{TOL_TH:.1e}/{TOL_VR:.1e})")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent oracle for the LANGMUIR-KNUDSEN NON-EQUILIBRIUM (F1) e2e case.
+"""Independent oracle for the LANGMUIR-KNUDSEN NON-EQUILIBRIUM e2e case.
 
 Companion to d2law/check.py. Verifies the production particle DIAMETER output (col 8)
 against the LK-corrected CEM rate law written from the LITERATURE (Miller, Harstad &
@@ -23,7 +23,7 @@ Tolerance model mirrors d2law: (a) E13.6 truncation on d^2 at point+anchor;
 other row; the RK4 step error is dominated by the O(h^2) linear-Tp interpolation);
 (c) Tp truncation propagated through the kernel; (d) SDIRK4 integrator floor.
 
-Non-vacuousness: the gate must be able to CATCH a Phase-0 (VLE) regression. The same
+Non-vacuousness: the gate must be able to CATCH a VLE (equilibrium) regression. The same
 oracle run with the equilibrium chain plays the "regressed production": if measured
 d^2 sat on the VLE path, the residual vs the LK prediction would be |pf - pv|, so the
 case discriminates iff |pf[k] - pv[k]| exceeds the tolerance band at some row with
@@ -104,7 +104,7 @@ def cem_mdot(Xs, d):
 
 
 def lk_mdot(Tp, d, equilibrium=False):
-    """LK fixed-point mass rate; equilibrium=True gives the VLE (Phase-0) rate."""
+    """LK fixed-point mass rate; equilibrium=True gives the VLE rate."""
     XsE = xs_eq(Tp)
     md = cem_mdot(XsE, d)
     if equilibrium or md == 0.0:
@@ -239,13 +239,13 @@ def main():
     max_split_ratio = 0.0
 
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:
                 rows.append(r)
             else:
-                n_artifact += 1          # B4 corner-exit phantom row (see d2law/check.py)
+                n_artifact += 1          # a row repeating an x (see d2law/check.py)
         xa, _, _, _, _, _, Ta, da, ma = rows[0]
 
         if xa < INLET_X:
@@ -347,7 +347,7 @@ def main():
     print(f"\ninjection placement: inlet(x<{INLET_X})={n_inlet}  mid-domain={n_mid}  "
           f"dead(1-row)={n_dead}  of {len(parts)} total")
     if n_artifact:
-        print(f"[NOTE] dropped {n_artifact} non-monotone-x phantom row(s) (B4 artifact)")
+        print(f"[NOTE] dropped {n_artifact} row(s) repeating an x (not evaporation physics)")
     print(f"max relative d^2 loss over a particle: {worst_loss*100:.2f}%  "
           f"(need >= {LOSS_MIN_REL*100:.0f}% to count; {n_noevap} below)")
     print(f"worst point: {worst[1]}  (resid/tol = {worst[0]:.3f})")
@@ -369,7 +369,7 @@ def main():
         print(f"\n[FAIL] only {verified} verifiable evaporators (< {N_GOOD}).")
     if n_signal < N_GOOD:
         print(f"\n[FAIL] LK signal indistinguishable from VLE on {N_GOOD - n_signal} "
-              f"needed particle(s) -- case is vacuous for F1, retune the regime.")
+              f"needed particle(s) -- case is vacuous for LK, retune the regime.")
     return 1
 
 

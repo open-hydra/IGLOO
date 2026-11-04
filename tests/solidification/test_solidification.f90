@@ -1,6 +1,6 @@
 program test_solidification
     !
-    ! SG-family unit checks on IGLOO_Lib_Solidification, the closures of ODE models 6 and 7
+    ! Unit checks on IGLOO_Lib_Solidification, the closures of ODE models 6 and 7
     ! (supercooling, adiabatic recalescence, freezing plateau at T-melt, solid cooling),
     ! called directly with an alumina-like particle.
     !

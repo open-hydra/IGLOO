@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Write INPUT/bc.txt for tc-box-ord2-row.
 
-The shared generator tests/tools/make_box_case.py cannot be reused: its write_bc
-hardcodes bcdef 401 on face 1 (an inlet, with a properties line after every header)
-and 400 elsewhere. This fixture injects through [IGLOO-BC] x/y/z instead, so it wants
+The shared generator tests/tools/make_box_case.py writes face 1 as an inlet (bcdef 401,
+a properties line after every header) unless --no-inlet; this fixture writes the file
+itself. It injects through [IGLOO-BC] x/y/z instead, so it wants
 NO inlet face at all -- every face is 400, ATLAS's dispersed-outlet code, which IGLOO's
 bcDef treats as the `else` branch: the parcel is marked gone with its position snapped
 to the face intersection. One code on all six faces: nothing here distinguishes them.

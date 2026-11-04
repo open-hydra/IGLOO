@@ -27,13 +27,19 @@ contains
     call reg%add('IGLOO-General','out-file',d_s(2),'E+S', &
       'Output field: E = equivalent eulerian, S = coupling source, E+S or ALL = both (also absent/blank); any other token is refused','E, S, E+S, ALL',.false.)
     call reg%add('IGLOO-General','fsample-traj',d_i(2),'100', &
-      'Scatter-cloud density: nominal points per injection stream; sets the droplets-per-point quantum dNscat = Ndot*tauRef/(fsample-traj*nStreams). Not a trajectory sampling frequency (trajectory rows follow print-dcell/print-dtime)','',.false.)
+      'Scatter-cloud density: nominal markers per injection stream; sets the quantum dNscat = Ndot*tauRef/(fsample-traj*nStreams), a parcel writing npRef/dNscat markers per second (npRef its number rate at entry; a breakup child keeps the rate of its parent). Not a trajectory sampling frequency (trajectory rows follow print-ds, print-dtime and print-dcell)','',.false.)
     call reg%add('IGLOO-General','probe-ids',d_s(21),'-', &
       'DEBUG: integrate only the listed particle IDs, space-separated, a-b intervals allowed (e.g. 1 2 6 496-497); absent or empty = all','',.false.)
-    call reg%add('IGLOO-General','print-dcell',d_i(3),'1', &
-      'Trajectory print frequency in cell crossings','',.false.)
+    call reg%add('IGLOO-General','print-dcell',d_s(14),'-', &
+      'Diagnostic trajectory cadence: when set, a row at every print-dcell-th cell crossing, at time-end and at a '// &
+      'boundary exit, besides print-dtime''s rows; print-ds is then ignored; absent = off','',.false.)
     call reg%add('IGLOO-General','print-dtime',d_r(1),'-1', &
-      'Trajectory print interval [s]: a row also at the first segment end at or past each multiple of it, besides the print-dcell rows; <0 = off','',.false.)
+      'Trajectory row interval [s]: a row at a segment end when the time since the parcel''s last row reaches it; '// &
+      'ignored when print-ds is set; with print-dcell set, a row at the first segment end at or past a target time '// &
+      'starting one print-dtime after the parcel''s start, moved on by print-dtime at every row written; <=0 = off','',.false.)
+    call reg%add('IGLOO-General','print-ds',d_r(28),'-1', &
+      'Trajectory row distance [m]: a row at a segment end when the parcel is this far from its last row; ignored '// &
+      'when print-dcell is set; <=0 = off','',.false.)
     call reg%add('IGLOO-General','time-end',d_r(26),'-1', &
       'Parcel end time [s]: every parcel still in the domain stops there, with a last trajectory row at that time '// &
       'and its state in snapshot-<mat>.dat; <=0 = off (integrate until the parcel leaves the domain)','',.false.)

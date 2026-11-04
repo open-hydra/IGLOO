@@ -1,4 +1,4 @@
-# INFO — breakup_etab (family D)
+# INFO — breakup_etab
 
 Verifies the ETAB (Enhanced TAB, Tanner 1997) product-size law via public
 `breakupEvent` (brkupSelect=5). The oscillator half re-uses `YupdateTAB`,

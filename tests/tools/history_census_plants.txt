@@ -1,0 +1,171 @@
+# Plants of tests/tools/history_census.py: python3 -B tests/tools/history_census.py --plants <this file>; every plant
+# must print ok. One plant per line, <class>TAB<file>TAB<text>. A page plant is checked as a line of the page it names;
+# a source plant is passed through its file's extraction first (a .py text is tokenized, a .f90 text scanned for its
+# comments and strings, ...), so it must be written as the code it plants. In the text, \n is a line break and \\ a
+# backslash. <class> is the drop class that must catch the text, or none: caught by no class. This file is a .txt,
+# outside both scopes: its planted markers are never counted.
+# Pages: one plant per drop class, and a ledger id in a ledger sentence
+date	tests/standard/drag-stokes/INFO.md	Measured 2026-10-17 on the release build.
+hash	tests/standard/drag-stokes/INFO.md	Green at 3fb668d with the six-argument call.
+ledger	tests/standard/drag-stokes/INFO.md	The fold cadence is the one O27 recorded.
+ledger	tests/standard/drag-stokes/INFO.md	See ledger row O27 for the cadence.
+plantag	tests/standard/drag-stokes/INFO.md	The design is in plan-bucket/inert-fixes-housekeeping-plan.md.
+chrono	tests/standard/drag-stokes/INFO.md	The gate is RED on the base and green at the tip.
+# Pages: the chronology phrases
+chrono	tests/standard/drag-stokes/INFO.md	Measured on the previous binary: 25 of 25 parcels.
+chrono	tests/standard/drag-stokes/INFO.md	The pre-fix exit read 3.99106e-01.
+chrono	tests/standard/drag-stokes/INFO.md	The sign of the right-hand side was fixed.
+chrono	tests/standard/drag-stokes/INFO.md	The selector used to print a menu.
+chrono	tests/standard/drag-stokes/INFO.md	The guard no longer fires on this fixture.
+chrono	tests/infrastructure/periodic-y/INFO.md	**Purpose.** First validation of the 201 periodic transport path.
+chrono	tests/infrastructure/periodic-y/INFO.md	The path had shipped unexercised (no case had a periodic pair).
+chrono	tests/breakup/tab-e2e/INFO.md	This case found the dead event path.
+# Pages: more chronology phrases
+chrono	tests/breakup/khrt-e2e/INFO.md	Historically the cut was We_r >= 340.
+chrono	tests/standard/temperature/INFO.md	The probe is promoted to a gate.
+chrono	tests/repeatability/INFO.md	The mismatch was found when psi was pinned.
+chrono	tests/infrastructure/two-mat/INFO.md	nm = 2 runs here for the first time.
+# Pages: a matrix row and a CMake comment line
+chrono	tests/VERIFICATION_MATRIX.md	| **drag-stokes** | `[CGW78]` | RED on the base, green at the tip | as `drag-stokes` | as `drag-stokes` |
+chrono	tests/CMakeLists.txt	# drag-stokes: RED on the base, green at the tip.
+date	tests/CMakeLists.txt	# drag-stokes: measured 2026-10-17.
+# Pages: ledger-style ids in prose (the families admit their ids in their own tables only; the never-exempt rules)
+ledger	tests/standard/drag-stokes/INFO.md	The B1 fix moved the injection velocity hand-off.
+ledger	tests/standard/drag-stokes/INFO.md	B1 holds the hand-off of the injection velocity.
+ledger	tests/infrastructure/body-evap-m2/INFO.md	The B1 fix moved the injection velocity hand-off.
+ledger	tests/infrastructure/body-evap-m2/INFO.md	B5 is one of the closed ledger rows.
+ledger	tests/standard/drag/INFO.md	The A1 fix restored the Stokes law.
+ledger	tests/standard/drag-stokes/INFO.md	The O2 closure applies to oxygen.
+ledger	tests/standard/out-off/INFO.md	The O2 fix closed the stream defect.
+ledger	tests/VERIFICATION_MATRIX.md	| **test_drag** | `[CGW78]` | The A1 fix restored the Stokes law | analytic | n/a |
+ledger	tests/CMakeLists.txt	# test_drag: the A1 fix restored the Stokes law.
+# Pages: kept facts that must not be caught
+none	tests/breakup/khrt-evap-live/INFO.md	stripping time is 5·10⁶ times the default (`B1 = 1e8`) and RT is off
+none	tests/breakup/khrt-e2e/INFO.md	dd/dt = (dStable − d)/τ_KH,   dStable = 2·B0·λ_KH
+none	tests/standard/drag-stokes/INFO.md	the carrier is an N2/O2 mixture at 300 K
+none	tests/standard/drag/INFO.md	| A1 | analytic | `[CGW78]` | ISBN 0-12-176950-X | Stokes drag closure |
+none	tests/infrastructure/body-evap-m2/INFO.md	- B2 ΣE = Σ_p ṅ[(m(h + |v|²/2))_first − (…)_last]
+none	tests/standard/drag-stokes/INFO.md	The scale is 2.462478e6 and the tolerance 1e-12.
+# Pages: the check ids of plane-back and beckstead-air on their own pages and matrix rows, and elsewhere
+none	tests/infrastructure/plane-back/INFO.md	| B0 | every trajectory row on the closed form | exact |
+none	tests/combustion/beckstead-air/INFO.md	| B4 | T_p = 300 K and u_p = (u_g, 0, 0) on every row | exact |
+none	tests/VERIFICATION_MATRIX.md	| **plane-back** | — | B0 every row on the closed form; B4 25 exit records |
+ledger	tests/standard/drag-stokes/INFO.md	| B0 | every trajectory row on the closed form | exact |
+ledger	tests/VERIFICATION_MATRIX.md	| **drag-stokes** | — | B0 every row on the closed form |
+ledger	tests/combustion/beckstead-air/INFO.md	The B2 fix moved the floor.
+# Sources: a .py comment, one plant per drop class
+ledger	tests/standard/drag-stokes/check.py	x = 1  # the O27 cadence
+plantag	tests/standard/drag-stokes/check.py	x = 1  # see plan-bucket/notes
+date	tests/standard/drag-stokes/check.py	x = 1  # measured 2026-10-17
+hash	tests/standard/drag-stokes/check.py	x = 1  # green at 3fb668d
+chrono	tests/standard/drag-stokes/check.py	x = 1  # the pre-fix exit
+# Sources: a .py docstring, the marker on its second line, one plant per drop class
+ledger	tests/standard/drag-stokes/check.py	"""Gate.\nthe O27 cadence."""
+plantag	tests/standard/drag-stokes/check.py	"""Gate.\nsee plan-bucket/notes."""
+date	tests/standard/drag-stokes/check.py	"""Gate.\nmeasured 2026-10-17."""
+hash	tests/standard/drag-stokes/check.py	"""Gate.\ngreen at 3fb668d."""
+chrono	tests/standard/drag-stokes/check.py	"""Gate.\nthe pre-fix exit."""
+# Sources: a .py printed string, one plant per drop class
+ledger	tests/standard/drag-stokes/check.py	print("the O27 cadence")
+plantag	tests/standard/drag-stokes/check.py	print("see plan-bucket/notes")
+date	tests/standard/drag-stokes/check.py	print("measured 2026-10-17")
+hash	tests/standard/drag-stokes/check.py	print("green at 3fb668d")
+chrono	tests/standard/drag-stokes/check.py	print("the pre-fix exit")
+# Sources: a .py f-string's text, one plant per drop class
+ledger	tests/standard/drag-stokes/check.py	print(f"{n} rows: the O27 cadence")
+plantag	tests/standard/drag-stokes/check.py	print(f"{n} rows: see plan-bucket/notes")
+date	tests/standard/drag-stokes/check.py	print(f"{n} rows: measured 2026-10-17")
+hash	tests/standard/drag-stokes/check.py	print(f"{n} rows: green at 3fb668d")
+chrono	tests/standard/drag-stokes/check.py	print(f"{n} rows: the pre-fix exit")
+# Sources: a .f90 comment, one plant per drop class
+ledger	tests/evaporation/test_evap_probes.f90	x = 1 ! the O27 cadence
+plantag	tests/evaporation/test_evap_probes.f90	x = 1 ! see plan-bucket/notes
+date	tests/evaporation/test_evap_probes.f90	x = 1 ! measured 2026-10-17
+hash	tests/evaporation/test_evap_probes.f90	x = 1 ! green at 3fb668d
+chrono	tests/evaporation/test_evap_probes.f90	x = 1 ! the pre-fix exit
+# Sources: a .f90 string literal, one plant per drop class
+ledger	tests/evaporation/test_evap_probes.f90	write(*,*) 'the O27 cadence'
+plantag	tests/evaporation/test_evap_probes.f90	write(*,*) 'see plan-bucket/notes'
+date	tests/evaporation/test_evap_probes.f90	write(*,*) 'measured 2026-10-17'
+hash	tests/evaporation/test_evap_probes.f90	write(*,*) 'green at 3fb668d'
+chrono	tests/evaporation/test_evap_probes.f90	write(*,*) 'the pre-fix exit'
+# Sources: a .f90 string continued by &, the marker on its second line, one plant per drop class
+ledger	tests/evaporation/test_evap_probes.f90	write(*,*) 'the probe &\n    &the O27 cadence'
+plantag	tests/evaporation/test_evap_probes.f90	write(*,*) 'the probe &\n    &see plan-bucket/notes'
+date	tests/evaporation/test_evap_probes.f90	write(*,*) 'the probe &\n    &measured 2026-10-17'
+hash	tests/evaporation/test_evap_probes.f90	write(*,*) 'the probe &\n    &green at 3fb668d'
+chrono	tests/evaporation/test_evap_probes.f90	write(*,*) 'the probe &\n    &the pre-fix exit'
+# Sources: a .sh comment, one plant per drop class
+ledger	tests/tools/mpi_scaling_smoke.sh	echo ok  # the O27 cadence
+plantag	tests/tools/mpi_scaling_smoke.sh	echo ok  # see plan-bucket/notes
+date	tests/tools/mpi_scaling_smoke.sh	echo ok  # measured 2026-10-17
+hash	tests/tools/mpi_scaling_smoke.sh	echo ok  # green at 3fb668d
+chrono	tests/tools/mpi_scaling_smoke.sh	echo ok  # the pre-fix exit
+# Sources: a .sh quoted string, one plant per drop class
+ledger	tests/tools/mpi_scaling_smoke.sh	echo "the O27 cadence"
+plantag	tests/tools/mpi_scaling_smoke.sh	echo "see plan-bucket/notes"
+date	tests/tools/mpi_scaling_smoke.sh	echo "measured 2026-10-17"
+hash	tests/tools/mpi_scaling_smoke.sh	echo "green at 3fb668d"
+chrono	tests/tools/mpi_scaling_smoke.sh	echo "the pre-fix exit"
+# Sources: a .cmake comment, one plant per drop class
+ledger	tests/tools/check_registry.cmake	set(X 1)  # the O27 cadence
+plantag	tests/tools/check_registry.cmake	set(X 1)  # see plan-bucket/notes
+date	tests/tools/check_registry.cmake	set(X 1)  # measured 2026-10-17
+hash	tests/tools/check_registry.cmake	set(X 1)  # green at 3fb668d
+chrono	tests/tools/check_registry.cmake	set(X 1)  # the pre-fix exit
+# Sources: an .ini comment line, one plant per drop class
+ledger	tests/standard/drag-stokes/input.ini	; the O27 cadence
+plantag	tests/standard/drag-stokes/input.ini	; see plan-bucket/notes
+date	tests/standard/drag-stokes/input.ini	; measured 2026-10-17
+hash	tests/standard/drag-stokes/input.ini	; green at 3fb668d
+chrono	tests/standard/drag-stokes/input.ini	; the pre-fix exit
+# Sources: an .ini inline comment, one plant per drop class
+ledger	tests/standard/drag-stokes/input.ini	rp = 1e-5  ; the O27 cadence
+plantag	tests/standard/drag-stokes/input.ini	rp = 1e-5  ; see plan-bucket/notes
+date	tests/standard/drag-stokes/input.ini	rp = 1e-5  ; measured 2026-10-17
+hash	tests/standard/drag-stokes/input.ini	rp = 1e-5  ; green at 3fb668d
+chrono	tests/standard/drag-stokes/input.ini	rp = 1e-5  ; the pre-fix exit
+# Sources: a non-page .md line, one plant per drop class
+ledger	tests/REFERENCES.md	the O27 cadence.
+plantag	tests/REFERENCES.md	see plan-bucket/notes.
+date	tests/REFERENCES.md	measured 2026-10-17.
+hash	tests/REFERENCES.md	green at 3fb668d.
+chrono	tests/REFERENCES.md	the pre-fix exit.
+# Sources: the reading of each kind
+ledger	tests/standard/drag-stokes/input.ini	! cadence = the O27 one
+chrono	tests/standard/drag-stokes/check.py	# the list is used to find duplicates
+hash	tests/standard/drag-stokes/check.py	print("µ ±", f"{n} rows at 3fb668d")
+hash	tests/standard/drag-stokes/check.py	print(f"{{3fb668d}} {n}")
+chrono	tests/standard/drag-stokes/check.py	print(f"""{n} rows\nthe pre-fix exit""")
+hash	tests/evaporation/test_evap_probes.f90	! PARALLEL DO PRIVATE(deadbeef1)
+# Sources: code is not read
+none	tests/standard/drag-stokes/check.py	B1 = 3  # the drop count
+none	tests/standard/drag-stokes/check.py	print(f"A^2 = {A2:.4f}")
+none	tests/standard/drag-stokes/check.py	print(f"{d['B12']} rows")
+none	tests/standard/drag-stokes/check.py	print("#", B12)
+none	tests/evaporation/test_evap_probes.f90	write(*,*) 'a!b', A12
+none	tests/evaporation/test_evap_probes.f90	!$OMP PARALLEL DO PRIVATE(deadbeef1)
+none	tests/tools/mpi_scaling_smoke.sh	echo $# ${#ARR[@]} B12
+none	tests/tools/check_registry.cmake	message("# B12 found")
+none	tests/standard/drag-stokes/input.ini	seed = B12
+# Sources: the allow rules of the sources, each with a twin no rule admits
+none	tests/tools/body_source_check.py	# B5 the energy book of the parcels
+ledger	tests/tools/check_twosweep.py	# B5 the energy book of the parcels
+none	tests/breakup/reitz-khrt/test_breakup_khrt.f90	! tau = 3.726*B1*r/(L*W)
+ledger	tests/standard/drag-stokes/check.py	# tau = 3.726*B1*r/(L*W)
+none	tests/REFERENCES.md	| x | DOI:10.1021/acsomega.1c03502 |
+hash	tests/REFERENCES.md	the acsomega.1c03502 build
+none	tests/breakup/reitz-khrt/test_khrt_interaction.f90	write(*,*) 'Q1: RT before KH'
+plantag	tests/breakup/reitz-khrt/test_breakup_khrt.f90	write(*,*) 'Q1: RT before KH'
+none	tests/tools/body_source_check.py	"""Half a unit of the last digit of an ES16.8 print (d.dddddddd E+xx)."""
+hash	tests/tools/body_source_check.py	"""Half a unit of the last digit of an ES16.8 print (3fb668d4 E+xx)."""
+hash	tests/combustion/beckstead-air/check.py	"""v printed ES16.8 (d.dddddddd x 10^e), as at 3fb668d4."""
+none	tests/bench/monolith/sync-src-monolith.sh	FILTERS=(--exclude='/plan-bucket' --exclude='/site')
+plantag	tests/bench/monolith/sync-src-monolith.sh	rsync -a "$SRC/" "$D/"  # the notes stay in /plan-bucket
+plantag	tests/bench/monolith/sync-src-monolith.sh	echo "skipped /plan-bucket"
+plantag	tests/tools/mpi_scaling_smoke.sh	FILTERS=(--exclude='/plan-bucket' --exclude='/site')
+# Sources: a check id admitted through its directory's INFO.md, its twin elsewhere, and the never-exempt rules
+none	tests/infrastructure/sym-plane-bounce/check.py	# B4 at most N_MAX_CELL + 1 rows in one cell
+ledger	tests/standard/drag-stokes/check.py	# B4 at most N_MAX_CELL + 1 rows in one cell
+ledger	tests/infrastructure/sym-plane-bounce/check.py	# the B4 fix moved the cell guard
+ledger	tests/infrastructure/sym-plane-bounce/check.py	# B4 as in BUGS

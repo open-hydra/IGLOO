@@ -134,9 +134,10 @@ Controls the gas field source, output modes, and miscellaneous run-time options.
 | `phase` | string | `''` | ATLAS name of the condensed phase to read (`[GPB-Phase*] name`): the files become `INPUT/<phase>-{phase.txt,properties.dat,bc.txt}` and every output gets the `<phase>-` prefix. Absent keeps the prefix in force (unnamed `INPUT/phase.txt` standalone; the parent app's assignment under hydra-MI2). Must not contain `-` |
 | `gas-order` | integer | `2` | Gas interpolation order: `1` = cell-center value, `2` = second-order reconstruction |
 | `out-file` | string | `E+S` | Output fields: `E` = Eulerian only, `S` = source only, `E+S` (also `S+E`, `ES`, `SE`, `ALL`, `both`, case-insensitive; or absent) = both; any other token is refused |
-| `fsample-traj` | integer | `100` | Scatter-cloud density: nominal points per injection stream (sets the droplets-per-point quantum); trajectory rows follow `print-dcell`/`print-dtime`, not this key |
-| `print-dcell` | integer | `1` | Trajectory row frequency in cell crossings |
-| `print-dtime` | real | `−1` | Trajectory row interval [s]; `−1` disables time-based rows |
+| `fsample-traj` | integer | `100` | Scatter-cloud density: nominal markers per injection stream (sets the quantum `dNscat`: a parcel writes `ṅ_ref/dNscat` markers per second, `ṅ_ref` its number rate at entry); trajectory rows follow `print-ds`, `print-dtime` and `print-dcell`, not this key |
+| `print-ds` | real | `−1` | Trajectory row distance [m]: a row at a segment end when the parcel is this far from its last row; `≤ 0` = off; ignored when `print-dcell` is set. The rows fall on segment ends: a value equal to their spacing (a cell edge) is decided by each step's overshoot, one clear of it is not (see [Trajectories](using.md#trajectories)) |
+| `print-dtime` | real | `−1` | Trajectory row interval [s]: a row at a segment end when the time since the parcel's last row reaches it; ignored when `print-ds` is set; with `print-dcell` set, a row at the first segment end at or past a target time that starts one `print-dtime` after the parcel's start and moves on by `print-dtime` at every row written, `print-dcell`'s rows included; `≤ 0` = off |
+| `print-dcell` | integer | — | Diagnostic crossing cadence: when set, a row at every `print-dcell`-th cell crossing, at `time-end` and at a boundary exit, besides `print-dtime`'s rows, and `print-ds` is ignored; absent = off. A value below 1 stops the run, and so does a `print-ds`, `print-dtime` or `print-dcell` that does not read as a number |
 | `time-end` | real | `−1` | Parcel end time [s]: every parcel still in the domain stops there, gets a last trajectory row at that time, and its state goes to `snapshot-<mat>.dat`; `≤ 0` or absent = off (integrate until the parcel leaves the domain) |
 | `out-time` | string | `off` | `on` appends the parcel time [s] as the last column of every trajectory and exit row |
 | `plane-x` | real list | — | Planes normal to x at the listed positions [m], space-separated (`plane-x = 0.001 0.18`): `planes-<mat>.dat` holds one record per crossing of each plane ([Plane crossings](using.md#plane-crossings)); absent = no file. A token that is not a finite number stops the run, and so does the key without a value (`IGLOO: [IGLOO-General] plane-x is empty`) |
@@ -236,6 +237,24 @@ Selects and tunes the ODE integrator.
 | `fail-after` | real | `0` | Forces the solver failure of the oxide-cap model (ODE model 8) once a parcel's last accepted time reaches this value [s]: the failure path of the [burnout residue](../theory/combustion.md#the-burnout-residue); 0 = off |
 
 `H-sdirk4` is recommended for stiff cases (evaporation, small Stokes number). `H-dopri5` is faster for non-stiff drag-only cases.
+
+---
+
+## The gas file (`gas-file`)
+
+The gas field is an ASCII Tecplot file of ordered zones in BLOCK packing: a `VARIABLES` line (its names may continue
+on the following lines, up to the first `ZONE` record), then per block a `ZONE` record with `I`, `J` and `K` (its
+header may continue over several lines; the first line that starts with a number starts the values), the coordinates
+at the nodes, then the variables, at the nodes or at the cells (`VARLOCATION=([...]=CELLCENTERED)`), one centring for
+every zone. Values are separated by blanks, tabs, commas or line ends, and a data line is read whole, whatever its
+length. Each value is converted as the Fortran runtime's list-directed READ converts it, as ORION's reader converts
+it: on a file whose lines are shorter than 1000 characters the field is ORION's reader's, bit for bit. Rank 0 reads
+the file, its values converted on rank 0's OpenMP threads, and broadcasts the field.
+
+A file with POINT packing, CR line ends, a value longer than 100 characters or a null value (`/`, `r*`) is read by
+ORION's reader, which cuts every line at 1000 characters, and so is a file the reader refuses; the run then prints
+`[IGLOO] gas file read by ORION's reader:` and the reason. `IGLOO_TEC_FAST=0` in the environment reads every gas file
+with ORION's reader (and writes the grid files with ORION's writer: [Field output](using.md#field-output)). Under hydra-MI2 the gas comes from memory (`external_gas`): no file is read.
 
 ---
 

@@ -1,28 +1,29 @@
 program test_khrt_interaction
     !
-    ! O7 — KHRT KH<->RT PATH AGREEMENT.
+    ! KHRT KH<->RT PATH AGREEMENT.
     !
     ! KHRT is the only breakup model that runs on BOTH integration paths at once:
     !   * ReitzKHRT      (continuous, via breakupOde)   — the KH stripping rate
     !   * ReitzKHRTevent (discrete,   via breakupEvent) — the RT shatter / KH shed
     ! Each path carries its OWN verbatim copy of the KH block (lambdaKH/omegaKH/
     ! tauKH/dStable), the RT block (omegaRT/lambdaRT/tauRT) and the tc/told
-    ! accumulator. Nothing gated that the two copies agree, so they were free to
-    ! drift — the ungated interaction filed as BUGS.md O7.
+    ! accumulator. Nothing else gates that the two copies agree, so they are free to
+    ! drift.
     !
     ! The shared predicate is
     !     RT_due  ==  (tc > tauRT) .and. (lambdaRT < dp)
     ! but the two paths CONSUME it differently, and both readings must hold:
-    !   ODE   (L203-204): RT_due SUPPRESSES the KH rate  (noRTbreakup gate) -> rate == 0
-    !   EVENT (L293/303): RT_due PREEMPTS the KH shed    (if / elseif)      -> RT branch
+    !   ODE   (ReitzKHRT):      RT_due SUPPRESSES the KH rate (noRTbreakup gate) -> rate == 0
+    !   EVENT (ReitzKHRTevent): RT_due PREEMPTS the KH shed   (if / elseif)      -> RT branch
     ! So the invariant is: **the ODE's KH rate is exactly zero iff the event path
     ! takes the RT branch**, at identical state. That is what this test pins.
     !
     ! Deliberately NOT tested here (covered elsewhere, do not duplicate):
     !   * the KH correlation values          -> test_breakup_khrt (vs Reitz-87 Eqs 4-5)
     !   * the Rayleigh limit of that fit     -> test_kh_rayleigh_limit
-    !   * lambda_RT child dia / cubic count  -> test_breakup_khrt (A14, Beale-Reitz Eq 11)
-    !   * that the RT event PERSISTS e2e     -> khrt-e2e-rt/check_rt.py (A19)
+    !   * that the RT event PERSISTS e2e     -> khrt-e2e/check_rt.py (ctest khrt-e2e-rt)
+    ! The RT branch landing the parcel on lambda_RT IS pinned here (run_quadrant); the
+    ! cubic child count (dp/lambda_RT)^3 (Beale-Reitz Eq 11) has no pointwise test.
     ! This test is about the two paths agreeing, not about either being right.
     !
     ! Quadrants (Q1/Q2 RT-free, Q3/Q4 RT due) are reached by moving the drag-scale
@@ -48,9 +49,9 @@ program test_khrt_interaction
     use verif_report, only: init_report, append_row, finalize_report
     implicit none
 
-    !> One RNG stream for this test program. breakupEvent now takes the parcel's own stream
-    !  instead of drawing from the intrinsic random_number (which is thread-scheduled and so
-    !  irreproducible inside the solver's OMP region). Host-scope, not per-call: an ensemble of
+    !> One RNG stream for this test program. breakupEvent takes the parcel's own stream, not
+    !  the intrinsic random_number (which is thread-scheduled and so irreproducible inside the
+    !  solver's OMP region). Host-scope, not per-call: an ensemble of
     !  events must see DISTINCT draws, so the state has to advance across calls.
     integer(int64) :: tRng = 20260808_int64
 
@@ -61,8 +62,7 @@ program test_khrt_interaction
     real(R8), parameter :: bp_kh(6) = [0.61_R8, 20._R8, 1._R8, 0.1_R8, 0.03_R8, 6._R8]
     !> m0 = per-drop mass at the last event; 10% above the current drop mass, so
     !> mShed/m0 = 0.0909 clears mShedLim = 0.03 and the KH-shed branch FIRES in the
-    !> RT-free quadrants. (Before the A23 fix it could never fire at all, which is what
-    !> made the RT-preempts-shed case vacuous.)
+    !> RT-free quadrants, which keeps the RT-preempts-shed case from being vacuous.
     real(R8), parameter :: m0_fac = 1.10_R8
     !> accelerations bracketing lambda_RT = dp (drag scale for this drop is ~1.8e5 m/s^2)
     real(R8), parameter :: acc_noRT = 1.0e3_R8, acc_RT = 1.0e6_R8
@@ -190,7 +190,7 @@ contains
         end if
 
         !> ---- duplicated tc/told accumulator: identical on both paths ----
-        !> EXCEPT when RT fires: the event path RESETS tc (L294) and the ODE path does
+        !> EXCEPT when RT fires: the event path RESETS tc (ReitzKHRTevent) and the ODE path does
         !> not. That asymmetry is by design, so pin it explicitly rather than skipping.
         gated = (tc_in > 0._R8) .or. (lambdaRT < dp0)
         if (rt_taken) then
@@ -205,11 +205,10 @@ contains
             if (.not. gated) pass_acc = pass_acc .and. (tc_o == tc_in) .and. (told_o == 0._R8)
         end if
 
-        !> ---- O7-SHED: RT PREEMPTS an otherwise-firing KH shed (A23 FIXED) ----
+        !> ---- SHED: RT PREEMPTS an otherwise-firing KH shed ----
         !> The bp/m0 setup clears mShedLim and the product-count guard in EVERY quadrant, so
         !> the shed is "due" throughout. It must therefore fire exactly when RT does NOT --
-        !> that is the `if`/`elseif` preemption, and it only became a real test once A23a
-        !> replaced the spurious Cardano dParent solve with the [Reitz87] p.322 rule
+        !> that is the `if`/`elseif` preemption. The shed follows the [Reitz87] p.322 rule
         !> (restore N0, keep the parent's diameter). Mass must balance across the shed.
         pass_shed = (shed_taken .eqv. (.not. expect_rt))
         if (.not. pass_shed) write(*,'(a,a,a,l2,a,l2)') &

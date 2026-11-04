@@ -207,7 +207,7 @@ both = out + "\n" + err
 
 def cpus(s):
     got = set()
-    for part in s.replace(" ", "").split(","):
+    for part in re.sub(r"\s+", "", s).split(","):
         if not part:
             continue
         if "-" in part:
@@ -361,7 +361,9 @@ PY
 # Tags are <workload>-<R>x<T>[-<variant>]. Each rank runs under igloo-stamp.sh (launch_s, life_s, teardown_s).
 # Environment: IGLOO_WRAP wraps the binary (numactl --interleave=all); IGLOO_OUTPUT=shm puts OUTPUT/ on /dev/shm;
 # IGLOO_INI_SET="key=value ..." edits [IGLOO-General] of the run's input.ini; IGLOO_AA=1 runs the twin snapshot
-# (the A/A pair); IGLOO_LAUNCH_RES_OPTIONS is handed to mpirun as RES_OPTIONS (README.md, "Launch cost").
+# (the A/A pair); IGLOO_LAUNCH_RES_OPTIONS is handed to mpirun as RES_OPTIONS (README.md, "Launch cost");
+# IGLOO_PRE_REP and IGLOO_POST_REP name functions called with <tag> <rep> <case directory>, the first right before
+# the launch, the second once the log is kept and before the output is removed.
 igloo_run () {
   local tag=$1 wl=$2 R=$3 T=$4 ppn=$5 mc reps chk
   if [ $# -ge 6 ]; then
@@ -412,6 +414,7 @@ igloo_run () {
     fi
     echo "IPIN tag=$tag rep=$rep I_MPI_PIN_DOMAIN=$I_MPI_PIN_DOMAIN"
     igloo_wait_clear
+    [ -n "${IGLOO_PRE_REP:-}" ] && "$IGLOO_PRE_REP" "$tag" "$rep" "$C"
 
     lenv=(I_MPI_DEBUG=4 OMP_DISPLAY_AFFINITY=TRUE "IGLOO_STAMPS=$D/stamps")
     [ -n "${IGLOO_LAUNCH_RES_OPTIONS:-}" ] && lenv+=("RES_OPTIONS=$IGLOO_LAUNCH_RES_OPTIONS")
@@ -432,6 +435,7 @@ igloo_run () {
     rss_rank=$(awk '{printf "%.3f", $1/1048576}' rss.txt 2>/dev/null); rss_rank=${rss_rank:-0.000}
     rss_node=$(awk '{printf "%.3f", $2/1048576}' rss.txt 2>/dev/null); rss_node=${rss_node:-0.000}
     { cat run_out.txt; echo "---- stderr ----"; cat run_err.txt; } > "$LOGS/$tag-r$rep.log"
+    [ -n "${IGLOO_POST_REP:-}" ] && "$IGLOO_POST_REP" "$tag" "$rep" "$C"
 
     # Scored only after a clean end: exit 0, the normal end line, the report, and the rank witness (a serial
     # binary under mpirun passes every other test while decomposing nothing).

@@ -102,7 +102,7 @@ class Drop:
         return T + h * (k1 + 2.0 * k2 + 2.0 * k3 + k4) / 6.0
 
     def advance(self, T, dt, c, h=H_RK4):
-        """T after dt, in equal steps no longer than h."""
+        """T after dt, in equal steps of at most h."""
         if dt <= 0.0:
             return T
         n = max(1, math.ceil(dt / h - 1.0e-9))

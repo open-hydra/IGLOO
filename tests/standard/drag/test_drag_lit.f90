@@ -1,8 +1,8 @@
 program test_drag_lit
     !
-    ! A-family unit checks on the Cd(Re,Ma,G,Tr) correlations (Lib_Drag::drag).
-    ! Positive (gated) checks only — the known-broken models live in
-    ! test_drag_probes (ctest WILL_FAIL).
+    ! Unit checks on the Cd(Re,Ma,G,Tr) correlations (Lib_Drag::drag).
+    ! The pins of the Crowe, Hermsen, Putnam, Henderson and Wen-Yu forms live in
+    ! test_drag_probes (an ordinary gate).
     !
     !   DL1  Stokes exactness: Cd*(Re+1e-20) = 24 at any Re
     !   DL2  Chang == Clift-Gauvin identity (24*0.0175=0.42, 4.25e4=42500);

@@ -3,17 +3,17 @@ program test_graze_standoff
     ! The grazing-reflection standoff must never exceed the cell it is placing a particle into.
     !
     ! `grazeStandoff` is an absolute 1e-6 m whose stated contract is ">> roundoff, << cell
-    ! size", and nothing enforced the second half. That became load-bearing when the
-    ! axisymmetric AXIS face started taking the reflection path: the axis is precisely where a
-    ! mesh is radially thin. On a block whose first radial cell is thinner than 1e-6 m the
-    ! standoff would push the particle clean through cell j=1 into j=2 -- a silent teleport
+    ! size"; the second half is load-bearing on the axisymmetric AXIS face, which takes the
+    ! reflection path: the axis is precisely where a mesh is radially thin. On a block whose
+    ! first radial cell is thinner than 1e-6 m a bare standoff pushes the particle clean
+    ! through cell j=1 into j=2 -- a silent teleport
     ! across a cell boundary, with no error and no give-up message.
     !
     ! Production `grazeOffset(vertices, nn)` caps the standoff at grazeCellFrac of the cell's
     ! own extent along the face normal. Assertions:
     !
     !   G1  thick cell (JPL's first radial cell, 5.7e-4 m)  -> exactly grazeStandoff, i.e. the
-    !       shipped behaviour is unchanged wherever the old constant was already valid
+    !       cap leaves the standoff alone wherever the bare constant is valid
     !   G2  thin cell (1e-7 m)                              -> capped, and strictly inside
     !   G3  sweep over 12 decades of thickness              -> invariants hold everywhere:
     !         0 < offset <= grazeStandoff  and  offset <= grazeCellFrac*thickness

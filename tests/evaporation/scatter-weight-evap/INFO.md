@@ -6,12 +6,12 @@ mass is an ODE state, the number rate `ṅ_p` is constant), so every trajectory 
 faces.
 
 ## What it verifies
-The marker-count bound of [`standard/scatter-weight`](../../standard/scatter-weight/INFO.md), whose
-`check.py` is symlinked here, on the evaporation path: `⌊X⌋ − 1 ≤ N ≤ ⌊X⌋` per parcel with
+The marker count of [`standard/scatter-weight`](../../standard/scatter-weight/INFO.md), whose `check.py`
+is symlinked here, on the evaporation path: `N = ⌊X⌋` per parcel with
 `X = frac(ID·φ) + ṅ_p·t_exit/dNscat`, `ṅ_p = ṁ/m0` from the exit record and the injection row.
 
 ## Pass criterion
-As `scatter-weight`. Measured: 25/25 parcels at `N = ⌊X⌋` (2262 markers, `X` ≈ 91, `dNscat` = 8.296·10³
+As `scatter-weight`. Measured: 25/25 parcels at `N = ⌊X⌋`, every window of one value (2262 markers, `X` ≈ 91, `dNscat` = 8.296·10³
 ± 0.5).
 
 ## Falsification

@@ -871,33 +871,44 @@ contains
   end subroutine checkChimera
 
 
-  !> Read the background gas field from an ASCII Tecplot multiblock file: rank 0 parses it, the
-  !  other ranks receive rank 0's copy.
+  !> Read the background gas field from an ASCII Tecplot multiblock file: rank 0 parses it (the one-pass
+  !  reader, ORION's reader for a file it declines or under IGLOO_TEC_FAST=0), the other ranks receive
+  !  rank 0's copy.
   subroutine read_TECsolfile(filename,orion)
     use Lib_Tecplot
     use Lib_ORION_data
     use IGLOO_Mod_MPI, only: mpi_is_root, mpi_bcast_orion
+    use IGLOO_Mod_TecASCII, only: tec_read_ascii_fast, tec_fast_enabled
     implicit none
     character(len=*), intent(in) :: filename
     type(orion_data) :: orion
     integer          :: error
+    character(len=96) :: why
 
     orion%tec%node = .false.
     orion%tec%bc = .false.
 
     orion%tec%format = 'ascii'
-    if (mpi_is_root) error = tec_read_structured_multiblock(orion=orion,filename=filename)
+    if (mpi_is_root) then
+      error = 1
+      if (tec_fast_enabled() .and. (index(filename,'.dat')>0 .or. index(filename,'.tec')>0)) then
+        error = tec_read_ascii_fast(orion, filename, why=why)
+        if (error /= 0) write(*,'(A)') ' [IGLOO] gas file read by ORION''s reader: '//trim(why)
+      endif
+      if (error /= 0) error = tec_read_structured_multiblock(orion=orion,filename=filename)
+    endif
     call mpi_bcast_orion(orion)
 
   end subroutine read_TECsolfile
 
 
-  !> Write the source (source.tec) and per-family eulerian (euler<fam>.tec) grid fields;
-  !  `tag` is the sweep suffix appended to the file names.
+  !> Write the source (source.tec) and per-family eulerian (euler<fam>.tec) grid fields (the stream writer, ORION's
+  !  writer under IGLOO_TEC_FAST=0 or when the stream writer fails); `tag` is the sweep suffix appended to the file names.
   subroutine write_outfield(material,geoblock,sourceblock,eulerblock,srcSwitch,eulSwitch,tag)
     use IR_Precision
     use Lib_Tecplot
     use Lib_ORION_data
+    use IGLOO_Mod_TecASCII, only: tec_write_ascii_fast, tec_fast_enabled
     use IGLOO_variables, only: llen, nb, nm, nfam, IGLOO_phase_prefix
     use IGLOO_data_block, only: obj_block, obj_sourceblock, obj_eulerblock
     use IGLOO_data_phases, only: obj_material
@@ -911,7 +922,7 @@ contains
     type(orion_data)    :: orion
     integer(I4P)        :: E_IO, b, i, j, k, fam
     character(len=llen) :: file, varnames
-    character(len=:), allocatable :: sfx
+    character(len=:), allocatable :: sfx, fname
 
     sfx = ''
     if (present(tag)) sfx = tag
@@ -949,7 +960,13 @@ contains
       write(*,*)
       write(*,*)' Writing tec-fomat file: ',trim(file),'.tec'
       write(*,*)
-      E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename='OUTPUT/'//trim(IGLOO_phase_prefix)//trim(file)//sfx//'.tec')
+      fname = 'OUTPUT/'//trim(IGLOO_phase_prefix)//trim(file)//sfx//'.tec'
+      E_IO = 1
+      if (tec_fast_enabled()) then
+        E_IO = tec_write_ascii_fast(orion, varnames, fname)
+        if (E_IO /= 0) write(*,'(A)') ' [IGLOO] '//fname//' written by ORION''s writer: the stream writer failed'
+      endif
+      if (E_IO /= 0) E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename=fname)
     endif
 
     if (allocated(orion%block)) deallocate(orion%block)
@@ -979,21 +996,29 @@ contains
         enddo
         varnames = ''
         varnames = trim(varnames)//trim('"rho<sub>p" "u<sub>p" "v<sub>p" "w<sub>p" "T<sub>p" "n<sub>p"')
-        E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename='OUTPUT/'//trim(IGLOO_phase_prefix)//trim(file)//sfx//'.tec')
+        fname = 'OUTPUT/'//trim(IGLOO_phase_prefix)//trim(file)//sfx//'.tec'
+        E_IO = 1
+        if (tec_fast_enabled()) then
+          E_IO = tec_write_ascii_fast(orion, varnames, fname)
+          if (E_IO /= 0) write(*,'(A)') ' [IGLOO] '//fname//' written by ORION''s writer: the stream writer failed'
+        endif
+        if (E_IO /= 0) E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename=fname)
       enddo
     endif
 
   end subroutine write_outfield
 
 
-  !> Merge this sweep's per-rank particle-output shards into the serial file layout and delete
-  !  them (root only; no-op at one rank).
-  subroutine merge_rank_particle_files(material, tag)
+  !> Merge the last solve's per-rank particle-output shards into the serial file layout, from the shards' block indices
+  !  (pidx(stream, material), gathered on the root rank), and delete them (root only; no-op at one rank).
+  subroutine merge_rank_particle_files(material, pidx, tag)
     use IGLOO_variables,   only: IGLOO_phase_prefix, trajOn, scatOn, snapOn, planeOn
     use IGLOO_data_phases, only: obj_material
     use IGLOO_Mod_MPI,     only: mpi_size_
+    use IGLOO_records,     only: partIndex, STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT
     implicit none
     type(obj_material), intent(in) :: material(:)
+    type(partIndex),    intent(in) :: pidx(:,:)
     character(len=*), intent(in), optional :: tag
     character(len=:), allocatable :: sfx, stem
     integer :: m
@@ -1006,209 +1031,124 @@ contains
     do m = 1, size(material)
       stem = 'OUTPUT/'//trim(IGLOO_phase_prefix)
       !> same streams and switches as the opens in solve
-      if (trajOn) call merge_one_stream(stem//'trajectories-'//trim(material(m)%matName)//sfx)
-      call merge_one_stream(stem//'outloc-'//trim(material(m)%matName)//sfx)
-      if (scatOn) call merge_one_stream(stem//'scatter-'//trim(material(m)%matName)//sfx)
-      if (snapOn) call merge_one_stream(stem//'snapshot-'//trim(material(m)%matName)//sfx)
-      if (planeOn) call merge_one_stream(stem//'planes-'//trim(material(m)%matName)//sfx)
+      if (trajOn) call merge_one_stream(stem//'trajectories-'//trim(material(m)%matName)//sfx, pidx(STR_TRAJ, m))
+      call merge_one_stream(stem//'outloc-'//trim(material(m)%matName)//sfx, pidx(STR_EXIT, m))
+      if (scatOn) call merge_one_stream(stem//'scatter-'//trim(material(m)%matName)//sfx, pidx(STR_SCAT, m))
+      if (snapOn) call merge_one_stream(stem//'snapshot-'//trim(material(m)%matName)//sfx, pidx(STR_SNAP, m))
+      if (planeOn) call merge_one_stream(stem//'planes-'//trim(material(m)%matName)//sfx, pidx(STR_PLANE, m))
     enddo
 
   end subroutine merge_rank_particle_files
 
 
-  !> Merge `<base>.rank0.dat` … `<base>.rank<N-1>.dat` into `<base>.dat` zone by zone (each header
-  !  once, data blocks rank-interleaved as byte blocks) and delete the shards.
-  subroutine merge_one_stream(base)
+  !> Merge `<base>.rank0.dat` ... `<base>.rank<N-1>.dat` into `<base>.dat` in (group, key) order, the order of the
+  !  one-rank file: a k-way merge over the shards' indices, each shard read once in its own order. A line every shard
+  !  holds (group 0 or key 0: the `variables=` line, the zone lines) is written once, from rank 0, and checked against
+  !  every shard; a parcel block (key = its ID) comes from the one rank that integrated it. Each index must tile its
+  !  shard and ascend in (group, key). The shards are deleted.
+  subroutine merge_one_stream(base, idx)
+    use, intrinsic :: iso_fortran_env, only: I8 => int64
     use IGLOO_Mod_MPI, only: mpi_size_, mpi_abort_all
+    use IGLOO_records, only: partIndex
     implicit none
     character(len=*), intent(in) :: base
-    character(len=1), parameter  :: NL = char(10)
-    integer, allocatable :: u(:), nz(:), vlo(:), vhi(:)
-    integer, allocatable :: hlo(:,:), hhi(:,:), dlo(:,:), dhi(:,:)
-    logical, allocatable :: needNL(:)
-    character(len=:), allocatable :: blk, hdr0
-    integer :: r, z, uo, ios, nzone
+    type(partIndex),  intent(in) :: idx
+    integer, allocatable :: u(:), head(:), last(:)
+    integer(I8), allocatable :: next(:), pg(:), pk(:)
+    character(len=:), allocatable :: blk, ref
+    integer(I8) :: g, k, gb, kb, sz
+    integer :: r, b, uo, ios, j
 
-    allocate(u(0:mpi_size_-1), nz(0:mpi_size_-1), vlo(0:mpi_size_-1), vhi(0:mpi_size_-1), &
-             needNL(0:mpi_size_-1))
-    nz = 0; needNL = .false.
-
-    !> Pass 1: index each shard.
-    do r = 0, mpi_size_-1
-      call scan_shard(base, r, u(r), nz(r), vlo(r), vhi(r), hlo, hhi, dlo, dhi, needNL(r), &
-                      (r == 0))
-      if (r > 0 .and. nz(r) /= nz(0)) &
-        call mpi_abort_all('rank-file merge: shards disagree on zone count, '//base)
+    allocate(u(0:mpi_size_-1), head(0:mpi_size_-1), last(0:mpi_size_-1), next(0:mpi_size_-1), &
+             pg(0:mpi_size_-1), pk(0:mpi_size_-1))
+    !> rank r's items: head(r)..last(r), item j at idx%rows(4*j-3:4*j)
+    last(0) = idx%cnt(0)/4
+    head(0) = 1
+    do r = 1, mpi_size_-1
+      head(r) = last(r-1) + 1
+      last(r) = last(r-1) + idx%cnt(r)/4
     enddo
-    nzone = nz(0)
-
+    next = 1; pg = -1; pk = -1
+    do r = 0, mpi_size_-1
+      !> opened without action='read' so the unit can later be closed with status='delete'
+      open(newunit=u(r), file=shard_name(base,r), access='stream', form='unformatted', status='old', iostat=ios)
+      if (ios /= 0) call mpi_abort_all('rank-file merge: cannot open shard '//shard_name(base,r))
+      inquire(unit=u(r), size=sz)
+      if (sz /= sum(idx%rows(4*head(r):4*last(r):4))) &
+        call mpi_abort_all('rank-file merge: the index does not tile the shard '//shard_name(base,r))
+    enddo
     open(newunit=uo, file=base//'.dat', access='stream', form='unformatted', status='replace', &
          action='write', iostat=ios)
     if (ios /= 0) call mpi_abort_all('rank-file merge: cannot write '//base//'.dat')
 
-    !> `variables=` line: rank 0's once, checked against the other shards
-    call read_block(u(0), vlo(0), vhi(0), hdr0)
-    write(uo) hdr0
-    do r = 1, mpi_size_-1
-      call read_block(u(r), vlo(r), vhi(r), blk)
-      if (blk /= hdr0) &
-        call mpi_abort_all('rank-file merge: shards disagree on the variables header, '//base)
-    enddo
-
-    do z = 1, nzone
-      !> zone header once, from rank 0, checked against every shard
-      call read_block(u(0), hlo(0,z), hhi(0,z), hdr0)
-      do r = 1, mpi_size_-1
-        call read_block(u(r), hlo(r,z), hhi(r,z), blk)
-        if (blk /= hdr0) &
-          call mpi_abort_all('rank-file merge: shards disagree on a zone header, '//base)
-      enddo
-      write(uo) hdr0
-      !> this zone's data, rank-blocked (an empty segment is normal)
+    do
+      !> the smallest (group, key) at the ranks' heads; rank 0 first on a tie
+      b = -1
       do r = 0, mpi_size_-1
-        if (dhi(r,z) < dlo(r,z)) cycle
-        call read_block(u(r), dlo(r,z), dhi(r,z), blk)
-        write(uo) blk
-        !> newline-terminate a shard's final record
-        if (needNL(r) .and. z == nzone) write(uo) NL
+        if (head(r) > last(r)) cycle
+        j = head(r)
+        g = idx%rows(4*j-3); k = idx%rows(4*j-2)
+        if (b < 0) then
+          b = r; gb = g; kb = k
+        elseif (g < gb .or. (g == gb .and. k < kb)) then
+          b = r; gb = g; kb = k
+        endif
       enddo
+      if (b < 0) exit
+      call take(b, ref)
+      write(uo) ref
+      if (gb == 0 .or. kb == 0) then
+        !> a line every shard holds: the same bytes at every rank's head
+        do r = 0, mpi_size_-1
+          if (r == b) cycle
+          j = head(r)
+          if (j > last(r)) call mpi_abort_all('rank-file merge: shards disagree on a header line, '//base)
+          if (idx%rows(4*j-3) /= gb .or. idx%rows(4*j-2) /= kb) &
+            call mpi_abort_all('rank-file merge: shards disagree on a header line, '//base)
+          call take(r, blk)
+          if (len(blk) /= len(ref) .or. blk /= ref) &
+            call mpi_abort_all('rank-file merge: shards disagree on a header line, '//base)
+        enddo
+      else
+        !> a parcel block: no other rank holds this parcel
+        do r = 0, mpi_size_-1
+          if (r == b .or. head(r) > last(r)) cycle
+          j = head(r)
+          if (idx%rows(4*j-3) == gb .and. idx%rows(4*j-2) == kb) &
+            call mpi_abort_all('rank-file merge: one parcel''s block in two shards, '//base)
+        enddo
+      endif
     enddo
 
     do r = 0, mpi_size_-1
       close(u(r), status='delete')
     enddo
     close(uo)
-    deallocate(u, nz, vlo, vhi, needNL, hlo, hhi, dlo, dhi)
+
+  contains
+
+    !> Read rank r's head item into blk and advance; the item must start where the previous one ended and follow it
+    !  in (group, key).
+    subroutine take(r, blk)
+      integer, intent(in) :: r
+      character(len=:), allocatable, intent(out) :: blk
+      integer :: j, ios
+      integer(I8) :: g, k
+      j = head(r)
+      g = idx%rows(4*j-3); k = idx%rows(4*j-2)
+      if (idx%rows(4*j-1) /= next(r)) &
+        call mpi_abort_all('rank-file merge: the index does not tile the shard '//shard_name(base,r))
+      if (g < pg(r) .or. (g == pg(r) .and. k <= pk(r))) &
+        call mpi_abort_all('rank-file merge: a shard out of (group, ID) order, '//shard_name(base,r))
+      pg(r) = g; pk(r) = k
+      allocate(character(len=idx%rows(4*j)) :: blk)
+      read(u(r), pos=idx%rows(4*j-1), iostat=ios) blk
+      if (ios /= 0) call mpi_abort_all('rank-file merge: block read failed, '//shard_name(base,r))
+      next(r) = next(r) + idx%rows(4*j)
+      head(r) = j + 1
+    end subroutine take
 
   end subroutine merge_one_stream
-
-
-  !> Index one shard: byte ranges of its `variables=` line, each zone header and each zone's data
-  !  block; leaves the unit open. `alloc` sizes the per-zone index arrays from this shard.
-  subroutine scan_shard(base, r, u, nzone, vlo, vhi, hlo, hhi, dlo, dhi, needNL, alloc)
-    use, intrinsic :: iso_fortran_env, only: I8 => int64
-    use IGLOO_Mod_MPI, only: mpi_size_, mpi_abort_all
-    implicit none
-    character(len=*), intent(in)  :: base
-    integer,          intent(in)  :: r
-    integer,          intent(out) :: u, nzone, vlo, vhi
-    integer, allocatable, intent(inout) :: hlo(:,:), hhi(:,:), dlo(:,:), dhi(:,:)
-    logical,          intent(out) :: needNL
-    logical,          intent(in)  :: alloc
-    character(len=1), parameter   :: NL = char(10)
-    character(len=:), allocatable :: buf
-    integer, allocatable :: hs(:), he(:), tmp(:)
-    integer :: nbytes, i, ls, le, ios, z, cap
-    integer(I8) :: nbytes64
-
-    !> shard size in int64; whole-shard buffers above 1 GB are refused
-    inquire(file=shard_name(base,r), size=nbytes64)
-    if (nbytes64 <= 0_I8) call mpi_abort_all('rank-file merge: empty shard '//shard_name(base,r))
-    if (nbytes64 > int(huge(1)/2, I8)) &
-      call mpi_abort_all('rank-file merge: shard exceeds the 1 GB whole-buffer limit, ' &
-                         //shard_name(base,r)//' -- use more ranks, or turn scatter output off')
-    nbytes = int(nbytes64)
-    !> opened without action='read' so the unit can later be closed with status='delete'
-    open(newunit=u, file=shard_name(base,r), access='stream', form='unformatted', status='old', &
-         iostat=ios)
-    if (ios /= 0) call mpi_abort_all('rank-file merge: cannot open shard '//shard_name(base,r))
-    allocate(character(len=nbytes) :: buf)
-    read(u, pos=1, iostat=ios) buf
-    if (ios /= 0) call mpi_abort_all('rank-file merge: short read on '//shard_name(base,r))
-    !> a shard must end in a newline
-    if (buf(nbytes:nbytes) /= NL) &
-      call mpi_abort_all('rank-file merge: shard does not end in a newline, '//shard_name(base,r))
-    needNL = .false.
-
-    !> First record is the `variables=` line.
-    le = 0
-    do i = 1, nbytes
-      if (buf(i:i) == NL) then; le = i; exit; endif
-    enddo
-    if (le == 0) le = nbytes
-    vlo = 1; vhi = le
-
-    cap = 16; allocate(hs(cap), he(cap)); nzone = 0
-    ls = le + 1
-    do i = ls, nbytes
-      if (buf(i:i) /= NL) cycle
-      if (line_is_zone(buf, ls, i)) then
-        nzone = nzone + 1
-        if (nzone > cap) then                     !> grow
-          allocate(tmp(2*cap)); tmp(1:cap) = hs; call move_alloc(tmp, hs)
-          allocate(tmp(2*cap)); tmp(1:cap) = he; call move_alloc(tmp, he)
-          cap = 2*cap
-        endif
-        hs(nzone) = ls; he(nzone) = i
-      endif
-      ls = i + 1
-    enddo
-    if (ls <= nbytes) then                        !> final record carrying no newline
-      if (line_is_zone(buf, ls, nbytes)) then
-        nzone = nzone + 1
-        if (nzone <= cap) then; hs(nzone) = ls; he(nzone) = nbytes; endif
-      endif
-    endif
-    if (nzone < 1) call mpi_abort_all('rank-file merge: no zone header in '//shard_name(base,r))
-    if (hs(1) /= vhi + 1) &
-      call mpi_abort_all('rank-file merge: data before the first zone header in ' &
-                         //shard_name(base,r))
-
-    if (alloc) then
-      if (allocated(hlo)) deallocate(hlo, hhi, dlo, dhi)
-      allocate(hlo(0:mpi_size_-1, nzone), hhi(0:mpi_size_-1, nzone), &
-               dlo(0:mpi_size_-1, nzone), dhi(0:mpi_size_-1, nzone))
-      hlo = 0; hhi = 0; dlo = 1; dhi = 0
-    endif
-    if (nzone > size(hlo,2)) &
-      call mpi_abort_all('rank-file merge: shards disagree on zone count, '//shard_name(base,r))
-
-    !> zone data = bytes between its header and the next one (dhi < dlo: no parcel owned)
-    do z = 1, nzone
-      hlo(r,z) = hs(z); hhi(r,z) = he(z)
-      dlo(r,z) = he(z) + 1
-      if (z < nzone) then; dhi(r,z) = hs(z+1) - 1; else; dhi(r,z) = nbytes; endif
-    enddo
-    deallocate(buf, hs, he)
-
-  end subroutine scan_shard
-
-
-  !> True when the record buf(a:b) starts with the `Zone` keyword (allocation-free scan).
-  pure logical function line_is_zone(buf, a, b)
-    implicit none
-    character(len=*), intent(in) :: buf
-    integer,          intent(in) :: a, b
-    integer :: j
-
-    line_is_zone = .false.
-    j = a
-    do while (j <= b)
-      if (buf(j:j) /= ' ') exit
-      j = j + 1
-    enddo
-    if (j + 3 > b) return
-    line_is_zone = (buf(j:j+3) == 'Zone')
-  end function line_is_zone
-
-
-  !> Read bytes [lo,hi] of an open stream unit into an allocatable buffer.
-  subroutine read_block(u, lo, hi, blk)
-    use IGLOO_Mod_MPI, only: mpi_abort_all
-    implicit none
-    integer,                       intent(in)  :: u, lo, hi
-    character(len=:), allocatable, intent(out) :: blk
-    integer :: ios
-
-    if (hi < lo) then
-      blk = ''
-      return
-    endif
-    allocate(character(len=hi-lo+1) :: blk)
-    read(u, pos=lo, iostat=ios) blk
-    if (ios /= 0) call mpi_abort_all('rank-file merge: block read failed')
-
-  end subroutine read_block
 
 
   !> Per-rank shard file name `<base>.rank<r>.dat`.

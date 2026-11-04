@@ -16,12 +16,12 @@ module verif_driver
     ! Two integration modes:
     !   MODE_WRAPPER_ADAPTIVE : oslo Run_ODESolver (adaptive H-sdirk4, the exact
     !                           path production uses). For exact-solution and
-    !                           Tier-2 oracle comparisons (A1/A3/A4, B...).
+    !                           RK4-oracle checks (test_drag, test_temperature).
     !   MODE_SDIRK_FIXEDSTEP  : Hairer SDIRK4 called directly, ONE fixed step of
     !                           size dt per call (XEND=X+dt caps H; large tol =>
     !                           no rejection/subdivision). For order-of-accuracy
-    !                           (p_obs->4) on a linear RHS. Mechanism validated
-    !                           in scratchpad spike (p(1)=4.09, p(2)=3.99).
+    !                           (p_obs->4) on a linear RHS (measured p(1)=4.09,
+    !                           p(2)=3.99).
     !
     use, intrinsic :: iso_fortran_env, only: I4 => int32, R8 => real64
     implicit none

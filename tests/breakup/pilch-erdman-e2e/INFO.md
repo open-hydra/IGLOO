@@ -70,9 +70,10 @@ larger `d`); `check.py::bval2_gate` gates the measured plateau against the close
 form, tol 12 % — observed 0.91–1.07. The tolerance covers the asymptotic-approach
 tail plus the convention difference (production re-evaluates `d_stable` with the
 *current* slip along the path; the paper folds the velocity history into `(1−VdV)`
-at the *initial* `U0`). Discrimination: a solver with `bp` zeroed reads 1.48–1.50
-(printed as a diagnostic column), ~4× outside tolerance; the `+0.25` sign on the 45–351
-branch far worse.
+at the *initial* `U0`). Discrimination: the plateau sits 1.48–1.50 times the zero-`bp`
+fixed point (`VdV = 0`, printed as a diagnostic column); a solver with `bp` zeroed plateaus
+near that point (1.04–1.09 of it) and reads 0.63–0.93 of the closed form (7 of its 8
+plateaus outside the tolerance); the `+0.25` sign on the 45–351 branch far worse.
 
 ## Result
 Both gates GREEN: rate 22/22 within 1 % (worst 1.1e-4); d_stable 5/5 within 12 %.

@@ -16,6 +16,7 @@ module IGLOO_data_phases
     integer  :: phase   = 0       !> the parent's solidification phase at the shed
     integer  :: parent  = 0       !> the shedding parcel's ID
     real(R8) :: mass    = 0._R8   !> a burnout residue's mass: its parent's cap
+    real(R8) :: npRef   = 0._R8   !> the parent's npRef: a breakup child keeps its parent's scatter-marker rate
   end type
 
   !> Growable shed list, one per parent index (reserve + double via move_alloc). Dummies take it
@@ -197,6 +198,7 @@ contains
     kid%m0    = kid%m
     kid%npold = kid%npdot
     kid%n0    = kid%npdot
+    kid%npRef = -1._R8   !> its own number rate at entry, against the product's quantum
     kid%stateVar(7) = kid%tp
     if (kid%model == 6) then
       kid%solidPhase  = merge(phLiquid, phUndercooled, kid%tp >= kid%Tmelt)

@@ -6,12 +6,12 @@ OUTPUT/source.tec, whatever mesh row the parcel happened to be in:
 
     sum over cells of wdot  ==  sum over parcels of npdot * (m_inject - m_exit)
 
-Before O28 the ord2 reduction volume-AVERAGED the dual accumulators onto the geo mesh, so a
-dual cell was handed on with total weight sum(subVol)/V_geo -- 1 in the interior but 1/2 on a
-face row, 1/4 on an edge, 1/8 on a corner. These four parcels ride the j = 1 dual row for
-their whole path, so essentially the whole deposit was halved: resid ~ 0.50 against this
-oracle. After the fix the weights are a partition of unity and the identity is exact up to
-the print truncation.
+The ord2 reduction hands each dual cell on with weights that are a partition of unity
+(finalizeSRC), so the identity is exact up to the print truncation. A reduction that
+volume-AVERAGED the dual accumulators onto the geo mesh would hand a dual cell on with total
+weight sum(subVol)/V_geo -- 1 in the interior but 1/2 on a face row, 1/4 on an edge, 1/8 on a
+corner. These four parcels ride the j = 1 dual row for their whole path, so such a reduction
+halves essentially the whole deposit: resid ~ 0.50 against this oracle.
 
 The oracle reads only trajectory rows and the injected mass flow; it never reads the
 Eulerian field it is checking.
@@ -32,8 +32,8 @@ NPART = 4
 LX    = 0.15          # box length; the parcels exit through face 2
 DX    = 0.0025        # geo cell size in x
 #> Measured: GREEN resid 3.779e-06, identical at OMP 1/2/5 (the four parcels ride separate
-#> (j,k) columns, so no two threads accumulate into one cell); RED on the pre-O28 binary
-#> 5.015e-01. This bound sits 265x above the floor and 500x below the signature. The floor
+#> (j,k) columns, so no two threads accumulate into one cell); a volume-averaging reduction
+#> gives 5.015e-01. This bound sits 265x above the floor and 500x below the signature. The floor
 #> is the E13.6 mass print plus the last-segment closure, both second order on the wet-bulb
 #> plateau -- do not loosen past ~1e-2, where the gate stops separating half from whole.
 TELESCOPE_TOL = 1.0e-3
@@ -112,7 +112,7 @@ def main():
         print(f"[{'PASS' if ok else 'FAIL'}] {name}")
         fail += (not ok)
     print(f"       mesh {nx}x{ny}x{nz}; parcels ride dual row j = 1 (a FACE row), "
-          f"which the pre-O28 reduction handed on at 1/2 => resid ~ 0.50")
+          f"which a volume-averaging reduction would hand on at 1/2 => resid ~ 0.50")
     return 1 if fail else 0
 
 

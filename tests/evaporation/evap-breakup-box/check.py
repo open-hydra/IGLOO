@@ -104,7 +104,7 @@ def load_traj():
                 continue
     out = {}
     for pid, raw in parts.items():
-        raw.sort()                               # record order is OMP-nondeterministic
+        raw.sort()                               # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:

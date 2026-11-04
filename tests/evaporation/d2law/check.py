@@ -14,10 +14,9 @@ Combustion* Eq. 3.57, Law *Combustion Physics* ch.13, Lefebvre *Atomization & Sp
   mdot = -4*pi*r_s*(kg/cp_g)*ln(1+BT) = -2*pi*d*(kg/cp_g)*ln(1+BT),  BT = cp_g*(Tg-Tp)/Lv.
 With m = rho_p*(pi/6)*d^3, dm/dt = -mdot gives (d cancels)
   d(d^2)/dt = -8*kg/(cp_g*rho_p)*ln(1+BT)   ==>  K = 8*kg/(cp_g*rho_p)*ln(1+BT)  [classic]
-NOTE (FINDINGS 2026-07-01, D-EVAP-1): production `d2law` codes mdot = -pi*d*(kg/cp_g)*ln,
-i.e. HALF this (Nu=1, missing the stagnant-film factor 2), so its K = 4*kg/(...). This
-oracle deliberately uses the LITERATURE 8 (not the code's 4) so it tests the paper; a
-correct `d2law` must satisfy it, a half-rate `d2law` correctly FAILS it. The rate depends
+This oracle uses the LITERATURE 8 so it tests the paper: production `d2law` codes the
+Nu=2 film (mdot = -2*pi*d*(kg/cp_g)*ln) and must satisfy it, a half-rate `d2law`
+(Nu=1, K = 4*kg/(...)) correctly FAILS it. The rate depends
 on Re only through
 the stagnant-film Sh=Nu=2 assumption baked into d2law, i.e. NOT at all on slip; we set
 kV=1 (v0=u_g => Re=0 => particle coasts at u_g, pure +x) ONLY so that x = u_g*t and the
@@ -34,7 +33,7 @@ reads the MEASURED Tp(x) (col 7) and integrates the literature rate kernel along
   d^2(x) = d_a^2 - integral_{x_a}^{x} [ 8 kg/(cp_g rho_p) ln(1 + BT(Tp(x'))) ] / u_g dx'
 anchored at each particle's first recorded point (x_a, d_a, Tp_a). SCOPE: this verifies
 the EVAPORATIVE MASS-RATE LAW given the temperature history; it does NOT verify the
-temperature evolution itself (a separate concern; see report-verification.md). If
+temperature evolution itself (a separate concern: ../INFO.md, C2). If
 production's mdot did not equal the Godsave kernel, the integrated d^2(x) would diverge
 from the measured diameter regardless of what Tp does.
 
@@ -48,8 +47,7 @@ The residual |d^2_meas(x) - d^2_pred(x)| is bounded by:
       recorded rows, while production integrated Tp continuously. Estimated by Richardson
       (fine = all rows, coarse = every other row); for O(h^2) trapezoid the true error is
       ~|I_fine - I_coarse|/3, so |I_fine - I_coarse| is a ~3x-conservative bound. This is
-      genuine sampling uncertainty, not a loosening: the dense-droplet/slow-Tp-drift regime
-      is chosen precisely to keep it small so the test stays sharp;
+      genuine sampling uncertainty, not a loosening;
   (c) Tp truncation propagated through the kernel: |d(ln(1+BT))/dTp| = cp_g/(Lv*(1+BT)),
       times EPS_T integrated -- negligible, included for completeness;
   (d) an integrator floor INT_FLOOR_REL*d_a^2 (SDIRK4 rtol=atol=1e-11, non-binding).
@@ -66,7 +64,7 @@ import sys
 TRAJ   = "OUTPUT/trajectories-A.dat"
 OUTLOC = "OUTPUT/outloc-A.dat"
 SRC    = "OUTPUT/source.tec"
-TELESCOPE_TOL = 0.01   # measured residual ~2e-4 (final-cell truncation of the last traj row)
+TELESCOPE_TOL = 0.01   # measured residual 2.3e-7
 TELESCOPE_TOL_M4 = 1.0e-6  # model 4 (d2law-brk-dormant): the exit flow closes it (measured 5.0e-8)
 
 # ---- known test inputs (SI). NOT read from production output. ----------------
@@ -78,7 +76,7 @@ R_G   = 287.0      # gas specific gas const  [J/kg/K] (make_box_case GAS 'R')
 RHO_P = 2950.0     # particle density        [kg/m^3] (properties.dat Density column;
                    #                                  NOTE: [GPB-Phase1] rho is ignored --
                    #                                  density comes from the property table)
-CP_P  = 1250.0     # particle heat capacity  [J/kg/K] (input.ini [GPB-Phase1] cp)
+CP_P  = 1250.0     # particle heat capacity  [J/kg/K] (properties.dat Cp column)
 LV    = 2.0e5      # latent heat of vaporiz. [J/kg]   (input.ini [IGLOO-Properties] Lv)
 KT    = 0.5        # inlet temperature scaling        (bc.txt col 5) => Tp0 = KT*T_G
 D0    = 3.0e-5     # injection diameter      [m]      (bc.txt rp=1.5e-5 => d=2*rp)
@@ -89,7 +87,7 @@ MDOT_PARCEL = KRHO / (1.0 - KRHO) * RHO_G * U_G * A_IN   # 401 inlet: krho/(1-kr
 
 CP_G  = GAM * R_G / (GAM - 1.0)               # gas cp [J/kg/K]
 APRE  = 8.0 * KG / (CP_G * RHO_P)             # d(d^2)/dt = -APRE*ln(1+BT); K=8 LITERATURE
-                                             # (Nu=2 stagnant film); code d2law uses 4 -> D-EVAP-1
+                                             # (Nu=2 stagnant film), as production d2law codes it
 TP0   = KT * T_G
 
 # ---- error model ----
@@ -151,14 +149,14 @@ def model4():
 
 
 def check_mass_telescoping(parts):
-    """Telescoping audit of the evaporation MASS SOURCE (plan Phase 0, pre-phase audit 1):
+    """Telescoping audit of the evaporation MASS SOURCE:
     sum over cells of the deposited wdot [kg/s] must equal the total evaporated stream flow
     sum_p npdot*(m_inj - m_last), with npdot = outloc column 7 / m_inj (model 2 prints the injected
     flow). Under model 4 the column is the stream's flow at exit, so the evaporated flow is
-    sum_p (MDOT_PARCEL - column 7), exact to the print. Guards the computeSource mdot-deposit bug class (the
-    constant stored self%mdot made the evaporation mass source identically zero).
-    Uses RAW trajectory rows: the B4 phantom row carries the exit-time state, so its mass
-    makes m_last MORE accurate here. Returns 0 on pass, 1 on violation."""
+    sum_p (MDOT_PARCEL - column 7), exact to the print. Guards computeSource's mdot deposit: a
+    zero evaporation mass source fails it.
+    Uses RAW trajectory rows: the last row is the exit row, at the exit-time state, so its mass
+    is m_last. Returns 0 on pass, 1 on violation."""
     try:
         lines = open(SRC).read().splitlines()
     except FileNotFoundError:
@@ -224,15 +222,13 @@ def main():
     n_noevap = 0             # particles that did not evaporate enough to count
     worst_loss = 0.0         # max relative d^2 loss seen (signal strength)
 
-    n_artifact = 0           # dropped corner-exit artifact rows (FINDINGS 2026-07-07, B4)
+    n_artifact = 0           # rows dropped by the monotone-x dedupe below
 
     for pid in sorted(parts):
-        # File order IS time order for one particle. A coasting +x particle must be
-        # strictly monotone in x; the known corner-exit bug (B4: position reset to the
-        # injection point at the final crossing) appends one non-monotone phantom row
-        # carrying the exit-time state. Drop such rows LOUDLY -- they are a tracking
-        # artifact, not evaporation physics (this oracle's scope is the rate law).
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        # A coasting +x particle is strictly monotone in x: its rows are sorted by x and
+        # each x is kept once; a row repeating an x is dropped LOUDLY (the [NOTE] below)
+        # -- it is not evaporation physics (this oracle's scope is the rate law).
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:
@@ -337,8 +333,8 @@ def main():
     print(f"\ninjection placement: inlet(x<{INLET_X})={n_inlet}  mid-domain={n_mid}  "
           f"dead(1-row)={n_dead}  of {len(parts)} total")
     if n_artifact:
-        print(f"[NOTE] dropped {n_artifact} non-monotone-x phantom row(s) "
-              f"(corner-exit tracking bug, FINDINGS 2026-07-07 B4 -- not evaporation physics)")
+        print(f"[NOTE] dropped {n_artifact} row(s) repeating an x "
+              f"(not evaporation physics)")
     print(f"max relative d^2 loss over a particle: {worst_loss*100:.2f}%  "
           f"(need >= {LOSS_MIN_REL*100:.0f}% to count; {n_noevap} below)")
     print(f"worst point: {worst[1]}  (resid/tol = {worst[0]:.3f})")

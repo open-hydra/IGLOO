@@ -1,7 +1,7 @@
-# INFO — drag (family A)
+# INFO — drag
 
 Verifies the per-particle momentum ODE under various drag closures, using the
-production RHS + production integrator path. Family A tests are driven through
+production RHS + production integrator path. The drag tests are driven through
 `Run_ODESolver` (L1, exact-solution correctness) and through the external
 `SDIRK4` directly at constant step (L2, tableau order).
 

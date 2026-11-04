@@ -1,15 +1,15 @@
 program test_heat_nu
     !
-    ! B-family unit checks on the Nu(Re,Pr,Ma) correlations (Lib_Heat::heat).
+    ! Unit checks on the Nu(Re,Pr,Ma) correlations (Lib_Heat::heat).
     !
     !   HN1  Ranz-Marshall table: Nu = 2 + 0.6 Re^0.5 Pr^(1/3)  [RM52]
-    !        (the only IGLOO Nu correlation with CONFIRMED literature coeffs)
+    !        (Ranz & Marshall's printed coefficients)
     !   HN2  conduction floor Nu(Re=0) = 2 EXACTLY for RM / JAXA2 / JAXA3.
     !        NOT applied to JAXA4/Kavanau-Drake (their sub-2 low-Re limit is
-    !        physical rarefaction) nor JAXA1 (fails it -> xfail probe driver).
+    !        physical rarefaction) nor JAXA1 (no +2 floor as published: test_heat_probes).
     !   HN3  Kavanau-Drake at Ma=0 collapses to 2 + 0.459 Re^0.55 Pr^0.33
-    !        (transcription pin; 0.33-vs-1/3 and explicit-vs-implicit are
-    !        documented flags D-HEAT-2/3, not gated here)
+    !        (transcription pin; [Shim06] eq. 49 prints Pr^0.33 and the explicit
+    !        form: HN7)
     !   HN4  JAXA2 = [SP8039] Table II ref. 82, 2 + 0.370 Re^0.6 Pr^(1/3), at any Ma
     !   HN5  JAXA3 = [SP8039] Table II ref. 42, 2 + 0.459 Re^0.55 Pr^(1/3), at any Ma
     !   HN6  JAXA4 = [SP8039] Table II, last row, [(2 + 0.654 Re^(1/2) Pr^(1/2))^-1 + 3.42 Ma/(Re Pr)]^-1

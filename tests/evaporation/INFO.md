@@ -1,4 +1,4 @@
-# INFO — evaporation (family C)
+# INFO — evaporation
 
 Verifies the evaporation mass ODE (and coupled heat) under the production
 closures: d²-law=1, CEM=2, CEM-B=3, ASM=4, TC=5. All property-freeze
@@ -24,7 +24,7 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
 - **C3 source:** the ASM/A–S family combines several papers (Abramzon &
   Sirignano 1989 for the core formulation, `[AS89]`; Sazhin reviews for compact summaries).
   `asm-box` types the rate law from `[MHB98]`'s statement of the model and the gas-side heat
-  from `[AS89]` eq. 20.
+  from `[AS89]` eq. 24.
 - **C1 frozen-`T_p`:** the d²-law closed form assumes `T_p` constant;
   `d2law-line` realizes it with a particle `cp` 100× and a density 2.7× the `d2law` table's
   (`ρ_p·cp_p` 271×; `T_p` drifts 0.77 K over the residence), and `d2law` integrates the law
@@ -45,7 +45,8 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
 - `test_evap_probes.f90` (ctest `test_evap_probes`, ordinary gate — transcription pin; a failing
   probe turns it red): XE1 d2law/literature ratio = 1 within 1e-6 (a d2law that codes half the
   rate gives exactly 0.5); XE2 single REAL `rhsEvaporation` evaluation (production call site, gas
-  packed per contract) → F(8)=mdot < 0 (a scrambled call site gives F(8)=mdot≡0); XE3 ASM
+  packed per contract) → F(8)=mdot < 0 (a scrambled pack gives cpg ≤ 0, and evaporation stops
+  on its cpg guard); XE3 ASM
   gas-side heat Q_G > 0 with the heat override set and mdot < 0 (a Q_G = mdot·(Lv + cpv·dT/BT),
   the latent heat counted twice, is negative).
 - `test_vapour_tables.f90` (ctest `test_vapour_tables`): the `Lv` and `Cpv` columns of

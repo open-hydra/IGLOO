@@ -5,7 +5,7 @@ program test_properties_reader
     !
     !   hexadecane    PR1 legacy- (T 280..620) against legacy1- (T 1..620): same cp, rho(T), h(T)
     !                 PR2 psat-: the Psat column tabulated on [Tmin, Tmax], psat(560 K) = 1 atm
-    !                 PR3 perm-: columns found by name, in any order
+    !                 PR3 perm-: columns read by name, in any order
     !                 PR6 legacy-: relative enthalpy datum, hOff = 0
     !                 PR7 abs-: "Enthalpy_abs" is the enthalpy column, with its datum
     !                 PR4 validate_psat_column, PR5 check_table_nodes, PR8 classify_table_tokens,
@@ -87,7 +87,7 @@ contains
         real(R8), allocatable :: rho1(:), h1(:), rhoL(:), hL(:), psatP(:), rhoP(:), hP(:)
         character(len=32) :: prefix
 
-        ! regression half: the table from 1 K, as every e2e fixture
+        ! reference half: the table from 1 K, as in most e2e fixtures
         prefix = 'legacy1-'
         call read_cdp_properties(prefix, mat)
         call check(Tmin == 1 .and. Tmax == 620,                  'PR1 legacy1-: Tmin = 1, Tmax = 620', nbad)
@@ -151,8 +151,8 @@ contains
         call check(mat(1)%psatVariable .and. allocated(psatP),   'PR3 perm-: psat tabulated', nbad)
         if (mat(1)%psatVariable .and. allocated(psatP)) &
             call check(all(mat(1)%psatTab == psatP),             'PR3 perm-: psat(T) = psat-, bitwise', nbad)
-        call check(.not. mat(1)%cpVariable .and. mat(1)%cp == 2800._R8, 'PR3 perm-: cp found by name', nbad)
-        call check(mat(1)%rhoVariable,                           'PR3 perm-: rho found by name', nbad)
+        call check(.not. mat(1)%cpVariable .and. mat(1)%cp == 2800._R8, 'PR3 perm-: cp read by name', nbad)
+        call check(mat(1)%rhoVariable,                           'PR3 perm-: rho read by name', nbad)
         if (mat(1)%rhoVariable .and. allocated(rhoP)) &
             call check(all(mat(1)%rhoTab == rhoP),               'PR3 perm-: rho(T) = psat-, bitwise', nbad)
         call check(all(mat(1)%hTab == hP),                       'PR3 perm-: h(T) = psat-, bitwise', nbad)
@@ -214,7 +214,7 @@ contains
     end subroutine atlas_water_legs
 
 
-    !> PR-V1: Lv, Mv, Cpv found by name; Lv and cpv through tableValue at six temperatures (below the table,
+    !> PR-V1: Lv, Mv, Cpv read by name; Lv and cpv through tableValue at six temperatures (below the table,
     !  the datum temperature, a node, between nodes, the boiling temperature, above) equal to the file's
     !  own numbers by the same formula (exact on a node and outside, 4 eps between nodes); Lv(298.15 K)
     !  the material's scalar latent heat.

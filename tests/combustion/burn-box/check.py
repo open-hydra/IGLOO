@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent oracle for the uniform-gas METAL COMBUSTION (M1 Beckstead) e2e case.
+"""Independent oracle for the uniform-gas METAL COMBUSTION (Beckstead d^n burn law) e2e case.
 
 Companion to evaporation/d2law/check.py. Verifies the production model-5 burn
 rate against the Beckstead d^n regression written from the LITERATURE (Beckstead
@@ -148,8 +148,7 @@ def check_mass_telescoping(parts):
         if len(c) == 11:
             mdot_inj[int(c[8])] = float(c[6])
     # m at the true domain exit (x=Lx) from the closed form anchored at the first
-    # row -- the last trajectory row lags the exit by up to one cell of burning
-    # (~1%/cell here), unlike d2law where the last-row truncation was ~2e-4.
+    # row (the trajectory's last row is its exit row, at x=Lx).
     # The d^n(x) law itself is gated independently above.
     LX = 0.15
     burn_total = 0.0
@@ -194,8 +193,8 @@ def main():
     loss_max = 0.0
 
     for pid in sorted(parts):
-        # drop non-monotone-x phantom rows (corner-exit artifact, FINDINGS B4)
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        # drop the rows that repeat an x (a coaster at u_g moves strictly in +x)
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:
@@ -286,7 +285,7 @@ def main():
             n_noburn += 1
 
     if n_artifact:
-        print(f"[NOTE] dropped {n_artifact} non-monotone-x phantom row(s) (B4 artifact)")
+        print(f"[NOTE] dropped {n_artifact} row(s) repeating an x (not combustion physics)")
     print(f"\nmax relative d^n loss: {loss_max*100:.1f}%  (need >= {LOSS_MIN_REL*100:.0f}%; "
           f"{n_noburn} below)  dead(1-row)={n_dead}")
     print(f"max Tp seen: {tp_max:.2f} K (Tg={T_G} K -- any excess is combustion heat release)")

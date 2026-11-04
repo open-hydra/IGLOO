@@ -34,7 +34,7 @@ The full bibliography (citation tags `[CGW78]`, `[RM52]`, etc.) is in
 
 ---
 
-## Drag — family A (`tests/standard/drag`)
+## Drag (`tests/standard/drag`)
 
 Tests the 13 drag closures in `Lib_Drag.f90`, exercised through the production
 `rhsStandard` path via `verif_driver`.
@@ -63,7 +63,7 @@ for the compressible correlations and the plateaus.
 
 ---
 
-## Temperature — family B (`tests/standard/temperature`)
+## Temperature (`tests/standard/temperature`)
 
 Tests the six Nusselt correlations in `Lib_Heat.f90`, exercised through the
 production `rhsStandard` path.
@@ -97,7 +97,7 @@ source-faithful transcription, see [Heat transfer](../theory/heat.md)).
 
 ---
 
-## Evaporation — family C (`tests/evaporation`)
+## Evaporation (`tests/evaporation`)
 
 Tests the evaporation closures in `Lib_Evaporation.f90` at function level.
 
@@ -114,7 +114,7 @@ override.
 (source-free).
 
 **Literature references.** `[RM52]`; `[Lef89]` (Lefebvre 1989 — d²-law canonical
-constant $K = 8 k_g \ln(1+B_T)/(\rho_l c_{pg})$); Abramzon & Sirignano (1989) eq. 20/24.
+constant $K = 8 k_g \ln(1+B_T)/(\rho_l c_{pg})$); Abramzon & Sirignano (1989) eqs. 17 ($F(B)$), 20 (Frössling's $\mathrm{Sh}_0$, $\mathrm{Nu}_0$) and 24 (the heat term).
 
 **Gates.** `test_evaporation`; `test_evap_probes` (XE1/XE2/XE3).  The end-to-end
 d²-law case (`evaporation/d2law`) is described in [Evaporation](evaporation.md).
@@ -209,7 +209,7 @@ switch at $\bar T = T_B$.
 
 ---
 
-## Breakup — family D (`tests/breakup`)
+## Breakup (`tests/breakup`)
 
 Tests the five secondary-breakup models in `Lib_Breakup.f90`.  Each sub-family has
 its own directory and `INFO.md`.
@@ -317,7 +317,7 @@ the event path takes the RT branch, at identical state).
 
 ---
 
-## Combustion — family M (`tests/combustion`)
+## Combustion (`tests/combustion`)
 
 Tests the Beckstead $d^n$ aluminium burn law (`Lib_Combustion.f90::becksteadRate`,
 model 5): closed-form mass evolution $m(t)$ with complex-step derivative checks
@@ -333,7 +333,7 @@ $X_\mathrm{eff}^{1.0}$ is the paper's final correlation.  `[Gal21]` (Gallier et 
 exposed-surface factor of an oxide lobe, its geometry and property laws.
 
 **Gates.** `test_combustion` (CB1–CB11); e2e companions `burn-box`, `burn-box-cap`,
-`burn-box-residue`, `burn-box-ox0` — see [End-to-End Cases](e2e.md).
+`burn-box-residue`, `burn-box-ox0`, `beckstead-air` — see [End-to-End Cases](e2e.md).
 
 <figure>
   {% include "vv/images/unit-combustion-beckstead.svg" ignore missing %}
@@ -341,7 +341,7 @@ exposed-surface factor of an oxide lobe, its geometry and property laws.
 
 ---
 
-## Solidification — family SG (`tests/solidification`)
+## Solidification (`tests/solidification`)
 
 Tests the closures of the solidification model (`Lib_Solidification.f90`, models 6 and 7): the
 recalescence jump in both branches (partial freeze back to $T_m$, whole freeze at the
@@ -375,7 +375,7 @@ closed form of its own inputs.
 
 ---
 
-## Infrastructure — family E
+## Infrastructure
 
 ### Gas reconstruction (`tests/infrastructure/gas_reconstruction`)
 

@@ -17,6 +17,9 @@ Gates
   F2  the Eulerian mass, sum over cells of rho_p * V_cell (V_cell from euler1.tec's nodes), equals the exit
       records' sum of mdot * t within TOL
   F3  the run ends normally ('Stop condition', nothing in run_err.txt)
+  L1  the parcel rule's last row at the failure (tools/lastrow.py): a sibling in ref-last/ without row keys and with
+      out-time on, run with the IGLOO_EXE executable; each parcel's trajectory is its injection row and a last row at
+      its exit record's state (X, Y, Z within half the F12.6 quantum, t within the ES16.8 half-unit), once
 """
 import os
 import re
@@ -25,6 +28,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
 import datcols  # noqa: E402
+import lastrow  # noqa: E402
+
+IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
 
 EUL, EXIT, TRAJ, LOG = "OUTPUT/euler1.tec", "OUTPUT/outloc-A.dat", "OUTPUT/trajectories-A.dat", "run_out.txt"
 N_PARCELS = 25
@@ -105,6 +111,7 @@ def main():
         rc |= fail("F3 the run did not end normally")
     else:
         print("F3 the run ended normally PASS")
+    rc |= lastrow.gate(HERE, IGLOO)
     print("\n[PASS] solver-fail-midway: a segment the solver gives up on is deposited up to its last accepted step"
           if rc == 0
           else "\n[FAIL] solver-fail-midway violation(s) -- see above.")

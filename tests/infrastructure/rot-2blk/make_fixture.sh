@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # rot-2blk fixture. Gas of the rotated two-block box (INPUT/solfile.tec) and of its one-block sibling (INPUT-1blk/),
 # the ATLAS BCB deck's mesh (INPUT-atlas/mesh.tec), all from tools/make_box_case.py; INPUT/drop-bc.txt is ATLAS BCB's
-# output on INPUT-atlas/ (ATLAS a3689c3, open-hydra/ATLAS main, gfortran build), regenerated only when ATLASDIR
+# output on INPUT-atlas/ (a gfortran build of open-hydra/ATLAS; md5 4f7e9c0d0a37b75aa57c9e94805a6f9c), regenerated only when ATLASDIR
 # names an ATLAS tree:  ATLASDIR=<atlas> ./make_fixture.sh
 set -euo pipefail
 cd "$(dirname "$0")"

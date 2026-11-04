@@ -3,8 +3,8 @@
 
 Same box/physics as standard/body-force (see its check.py for the full error
 model); this case additionally switches BOTH output fields on (out-file absent
-=> euler AND source) with bodyForce active — the accumulator combination the
-2026-07 merge shipped untested. Four gates:
+=> euler AND source) with bodyForce active -- the accumulator combination this
+case gates. Three gates:
 
   1. v(x) closed-form oracle (verbatim from standard/body-force): the extra
      euler slots and the deposition-side body-force correction must leave the
@@ -203,11 +203,10 @@ def check_source():
 def check_euler():
     """Gate 3: euler field parses and is finite; density/np non-negative.
 
-    The non-negativity half of that sentence used to be documented but not coded --
-    every value was lumped into one list and only tested for NaN/Inf. It cannot be
-    restored as a blanket `all >= 0`: this case runs g_y = -200, so v_p is
-    legitimately negative over the whole field. So the BLOCK layout is unpacked
-    per-variable (3 NODAL coords, then 6 CELLCENTERED) and the bound is applied to
+    The non-negativity half cannot be a blanket `all >= 0`: this case runs
+    g_y = -200, so v_p is legitimately negative over the whole field. So the
+    BLOCK layout is unpacked per-variable (3 NODAL coords, then 6 CELLCENTERED)
+    and the bound is applied to
     rho_p and n_p only, which are pure += accumulations of positive quantities in
     computeEulField and therefore cannot go negative for any physical reason.
     """

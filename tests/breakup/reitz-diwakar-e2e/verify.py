@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Overlay IGLOO vs Reitz-Diwakar [RD87] breakup rate (B-VAL-4, MOSE-style).
+"""Overlay IGLOO vs Reitz-Diwakar [RD87] breakup rate (MOSE-style).
 
 check.py is the GATE (initial breakup rate, bag+stripping); this only DRAWS and writes
 OUTPUT/reitz-diwakar-e2e.svg. matplotlib imported defensively.
@@ -46,7 +46,7 @@ def main():
 
     bag, strip = [], []
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:

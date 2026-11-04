@@ -15,8 +15,9 @@ p = ρ_g R_g T_g). The rate law is typed from `[MHB98]`'s statement of the model
 Sh₀ = 2 + 0.552 Re^½ Sc^⅓, Nu₀ = 2 + 0.552 Re^½ Pr^⅓, F(B) = (1 + B)^0.7 ln(1 + B)/B, Sh* = 2 + (Sh₀ − 2)/F(B_M),
 ṁ = −π d ρ_g D_v Sh* ln(1 + B_M), B_T = (1 + B_M)^φ − 1 with φ = (c_p,v/c_p,g)(Sh*/Nu*)/Le and
 Nu* = 2 + (Nu₀ − 2)/F(B_T), iterated to convergence. The gas-side heat into the drop is Abramzon and Sirignano's
-own form, Q = −ṁ c_p,v (T_g − T)/B_T with the vapour's c_p (their eq. 20, as the code and the theory page take it;
-MHB98's restatement writes the gas c_p there, a factor 2 with these inputs), and m c_L dT/dt = Q + ṁ L_v.
+own form, Q = −ṁ c_p,v (T_g − T)/B_T with the vapour's c_p (their eq. 24, as the code and the theory page take it;
+MHB98's restatement writes the gas c_p there, a factor 2 with these inputs, and fails the Stefan-free limit that
+test_evaporation's EV11 pins), and m c_L dT/dt = Q + ṁ L_v.
 
 **Gates.**
 - G0 every first row is the injection state.

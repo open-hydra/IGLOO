@@ -1,6 +1,6 @@
 module verif_interp
     !
-    ! Independent oracle for the E-family (gas_reconstruction).
+    ! Independent oracle for the gas-reconstruction tests (gas_reconstruction).
     !
     ! Production `Lib_Equations::interp2ndOrder` is trilinear on the unit cube
     ! [0,1]^3 with corner numbering

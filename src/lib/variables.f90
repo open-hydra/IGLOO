@@ -39,6 +39,9 @@ module IGLOO_variables
   integer  :: fsample, nb, nm, nfam, iprint, trajSample
   integer, allocatable :: nspecies(:)
   real(R8) :: ds, mdotMax, dtprint
+  !> [IGLOO-General] print-ds [m] (<= 0 = off); dcellSet: print-dcell is present (the diagnostic crossing cadence)
+  real(R8) :: dsprint = -1._R8
+  logical  :: dcellSet = .false.
   !> [IGLOO-General] time-end [s]: every parcel stops there (huge = off); out-time appends the
   !  parcel time to every trajectory and exit row.
   real(R8) :: tEnd = huge(1._R8)
@@ -85,7 +88,7 @@ module IGLOO_variables
   integer :: unitTraj, unitScat, unitExit, unitSnap, unitPlane
 
   !> [IGLOO-General] out-traj / out-scatter output switches (default on); dNscat is the
-  !  per-material scatter weight quantum (droplets per point), auto-sized.
+  !  per-material scatter quantum (a parcel writes npRef/dNscat markers per second), auto-sized.
   logical  :: trajOn=.true., scatOn=.true.
   !> snapshot-<mat>.dat: each parcel's state at time-end (on when time-end is set).
   logical  :: snapOn=.false.

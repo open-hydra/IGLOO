@@ -4,9 +4,8 @@ program test_self
     ! Exercises verif_norms (relLinf, relL2, observed_order, assert_lt),
     ! verif_oracle (exp_relax, rk4_ref), and verif_report (CSV + exit code).
     !
-    ! This is the T0 acceptance gate per verification-phase1-plan.md §4.
-    ! Passes ⇒ the support layer is sound; nothing here exercises IGLOO
-    ! production code.
+    ! The support library's own gate: passing it ⇒ the support layer is sound;
+    ! nothing here exercises IGLOO production code.
     !
     use, intrinsic :: iso_fortran_env, only: real64
     use verif_norms,  only: relLinf, relL2, observed_order, assert_lt

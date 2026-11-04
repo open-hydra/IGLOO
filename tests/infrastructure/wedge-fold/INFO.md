@@ -42,7 +42,7 @@ looping fold, GREEN on this one):
 lost that way fails G2 (never reaches the outlet).
 
 **Measured** (OMP 1 and 5, three runs each): every output identical as
-a sorted multiset (record order is the only OMP effect); ID 1: 337 rows (349 without the
+a sorted multiset (the particle files byte for byte: they are in parcel order); ID 1: 337 rows (349 without the
 sector-edge segments, 347 without them and without the meridian-frame deposits), 10 z-sign
 flips (18 without the sector-edge segments),
 min y = 4.5e-5 (its closest approach to the axis, at |p × v̂| = 1e-4·0.5/√1.25 = 4.47e-5),

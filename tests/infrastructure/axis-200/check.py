@@ -2,14 +2,13 @@
 """Gate for the axisymmetric AXIS face tagged `axisymmetric` (bcdef 200), and for
 the ord2 eulerian projection this case writes.
 
-The defect this exists to catch (diagnosed 2026-09-03, JPL-Lagrangian-20micron):
-`bcDef`'s 200 branch was written for the wedge k-faces (5/6) and rotates the
-particle by +-delthe about x. ATLAS also emits 200 for the AXIS face, and a
-rotation about x is an isometry -- it cannot change hypot(y,z). So a particle
-that reached the axis exited through the same face every iteration, unchanged:
-`bcDef` rotated +delthe, `axisymFold` rotated -delthe back, forever. An exact
-period-2 cycle with zero net displacement, terminated only by the nStall
-displacement guard, which discarded the particle.
+The defect this exists to catch: a 200 branch written for the wedge k-faces (5/6)
+alone rotates the particle by +-delthe about x. ATLAS also emits 200 for the AXIS
+face, and a rotation about x is an isometry -- it cannot change hypot(y,z). So a
+particle that reaches the axis exits through the same face every iteration,
+unchanged: `bcDef` rotates +delthe, `axisymFold` rotates -delthe back, forever. An
+exact period-2 cycle with zero net displacement, ended only by the nStall
+displacement guard, which discards the particle.
 
 db-2daxi cannot see this: it tags face3 `sym` (bcdef 300) and injects both
 particles far off-axis. This case is db-2daxi's mesh and solfile with face3
@@ -28,28 +27,27 @@ The gate asserts, in order of directness:
      R_NEAR = 1e-5: the margin is set by the print format, not by grazeStandoff, so it
      does not track that constant if it is ever retuned.
      ⚠ This assertion is load-bearing, and it is why input.ini gives ID 1 an INWARD
-     `vp`. With the axis dual ghost corrected (2026-09-11) the gas radial velocity
-     vanishes ON the axis, as it must, so an equilibrium parcel only approaches
-     asymptotically -- measured r_min ~ 0.24 * y0 at EVERY injection radius tried --
-     and never touches the bcdef-200 face at all. Measured axis-face reflection events:
-     25 before that fix (driven by the defect's own spurious v_r at r = 0), 0 after it
-     without `vp`, 1 after it with `vp` -- one encounter, after which the graze branch
-     projects the parcel and it slides along the axis instead of bouncing. Stable at 1
+     `vp`. The axis dual ghost keeps only the axial gas velocity (axisGhost), so the
+     gas radial velocity vanishes ON the axis, as it must, and an equilibrium parcel
+     only approaches asymptotically -- measured r_min ~ 0.24 * y0 at EVERY injection
+     radius tried -- and never touches the bcdef-200 face at all. Measured axis-face
+     reflection events: 0 without `vp`, 1 with `vp` (25 on a solver that reflects the
+     dual ghost across the axis, driven by that defect's spurious v_r at r = 0) -- one
+     encounter, after which the graze branch projects the parcel and it slides along
+     the axis instead of bouncing. Stable at 1
      across vp = -0.5 .. -5.0. Remove `vp` and this case passes every assertion below
      while exercising none of the axis path;
   3. both particles exit through the outlet (x > X_EXIT);
   4. trajectory rows finite, T and dp physical;
-  5. the EULERIAN projection (bug O14) -- see below.
+  5. the EULERIAN projection -- see below.
 
---- 5. the eulerian deposit audit (O14) -------------------------------------
+--- 5. the eulerian deposit audit ---------------------------------------------
 
 This case sets `out-file = e`, so it writes euler1.tec every run on the default
-`gas-order = 2` (Lib_INI defaults gasOrder to 2 when the key is absent). Until
-2026-09-11 nothing here opened that file, and `b4fd7d0` (the boundary dual clip)
-was measured to HALVE the near-axis deposit with this gate passing unchanged and
-byte-identical stdout. db-2daxi does open euler1.tec but only asserts it parses
-finite and non-empty, and coupled-body is ord1 -- so quantitative coverage of the
-ord2 eulerian projection was ZERO, not "db-2daxi alone" as BUGS.md O14 recorded.
+`gas-order = 2` (Lib_INI defaults gasOrder to 2 when the key is absent). The particle
+files do not see the deposit, so this section is what gates it. db-2daxi/check.py runs
+E1 and E3 of it (and an outlet-band E4) on its own euler1.tec; coupled-body's euler field
+is ord1.
 
 Cell volumes are recomputed here from the tec NODES by exact hexahedron
 decomposition (6 tets on the n0-n6 diagonal). That is deliberately NOT production's
@@ -70,22 +68,21 @@ Three assertions, each with its measured provenance:
      deposited mass. The residual is the ORACLE's residence quadrature, not solver
      error -- cross-checked at `gas-order = 1`, where no dual->geo remap runs at all
      and the same audit reads 0.99964.
-     ⚠ This read 0.931625 until 2026-09-11. That was NOT a discretization artifact to
-     be pinned, which is what an earlier version of this gate assumed and documented:
-     it was the axis ghost defect below, and the 6.8% was real lost mass.
+     ⚠ With the dual ghost reflected across the axis it reads 0.931625: NOT a
+     discretization artifact to be pinned but the axis ghost defect below, and the
+     6.8% is real lost mass.
      Detects: the axis-ghost regression (0.931625, 69x outside the band).
      Does NOT detect: removal of the boundary dual clip, measured 1.000228 with the
-     axis ghost correct -- INSIDE the band. Said plainly because the earlier version
-     of this file claimed the opposite. The clip has its own direct unit gate in
+     axis ghost correct -- INSIDE the band. The clip has its own direct unit gate in
      tests/infrastructure/dual_clip (the tiling invariant, 2D and 3D, proven RED);
      this case is not, and should not be treated as, the clip's detector.
 
   E2 AXIS_SHARE -- the near-axis band's share, sum(rho_p*V | y < Y_BAND) divided by
      the axis particle's own mdot*t. MEASURED 0.999005, and this one is the sharp
      physical statement: the axis rider deposits its entire mass through the axis
-     dual ring, so this ratio IS that parcel's mass conservation. It read 0.499505
-     before the axis-ghost fix -- exactly half, because the dual cell straddling the
-     axis had twice the radial extent of the physical region.
+     dual ring, so this ratio IS that parcel's mass conservation. With the dual ghost
+     reflected across the axis it reads 0.499505 -- exactly half, because the dual cell
+     straddling the axis has twice the radial extent of the physical region.
      Detects: the axis-ghost regression (0.499505, 500x outside), and the clip
      removal too (0.997116, 1.9x outside -- thin, and E1 misses that case entirely).
 
@@ -94,27 +91,27 @@ Three assertions, each with its measured provenance:
      number density are deposited with the same 1/vol factor and pass through the
      same linear reduction and smoother, so their ratio is volume-free and survives
      both. Constant dp here (no evaporation, no breakup). MEASURED worst deviation
-     9.1e-15 -- pure round-off -- so the tolerance is 1e-12, not a fitted number.
+     9.4e-15 -- pure round-off -- so the tolerance is 1e-12, not a fitted number.
      E3 is blind to the clip by construction (the volume cancels); it is the guard
      against rho/np desync, a wrong model branch, or a mis-sized deposit.
 
 Floor for all three is EXACTLY ZERO, and measured twice over: euler1.tec is bit-identical
 across repeat runs at 5 threads AND across OMP_NUM_THREADS = 1 / 2 / 5 (max |rel| on
-rho_p = 0.000e+00 between 1 and 5 threads; only the trajectory RECORD ORDER moves, which
-is the documented OMP behaviour and is not read here). So none of these tolerances is
+rho_p = 0.000e+00 between 1 and 5 threads; the particle files are in parcel order, the
+same bytes at every thread count). So none of these tolerances is
 absorbing nondeterminism -- there is none to absorb. 1e-3 is headroom for cross-compiler
-and configure-generation drift ONLY, which this host cannot measure (ifx only); the repo's
-recorded experience is ~1 ULP on trajectory bytes, which reaches these ratios at ~1e-15.
-Tighten to 1e-5 if a gnu baseline is ever taken.
+and configure-generation drift ONLY: a gfortran 12 build and an ifx 2023 build agree on E1
+to 5e-10 and on E2 to 2e-10 (E3 worst 9.6e-15 against 9.4e-15), so 1e-5 would hold too.
 
-The axis-ghost defect these two now guard (O15, fixed 2026-09-11 in fill_dual_nodes):
-the dual ghost outside a boundary face is placed by `2*faceCentre - interiorCentre`.
-On the AXIS face the face centre sits at r ~ 1e-8, so that reflection threw the ghost
-to r = -2.81965e-03 -- across the axis. The first dual cell then spanned [-r_c, +r_c]
-instead of [0, r_c], and because axisRadius() is an UNSIGNED distance the wedge slab
-thickness was taken at r_c for a cell whose centroid sits on the axis. insideFrac
-could not see it either: it is a length ratio along the node-to-ghost line and returns
-exactly 0.50000 for any reflected ghost, however illegal the reflection.
+The axis-ghost defect these two guard, which fill_dual_nodes repairs (it projects a
+ghost that lands across the axis back onto it): the dual ghost outside a boundary face
+is placed by `2*faceCentre - interiorCentre`. On the AXIS face the face centre sits at
+r ~ 1e-8, so that reflection alone throws the ghost to r = -2.81965e-03 -- across the
+axis. The first dual cell then spans [-r_c, +r_c] instead of [0, r_c], and because
+axisRadius() is an UNSIGNED distance the wedge slab thickness is taken at r_c for a cell
+whose centroid sits on the axis. insideFrac cannot see it either: it is a length ratio
+along the node-to-ghost line and returns exactly 0.50000 for any reflected ghost, however
+illegal the reflection.
 
 Y_BAND = 0.05 is chosen from a measured sweep, not picked: with the axis ghost correct
 the complementary band closes on ID 2's own mdot*t (M_out/m2 = 1.00107) while the inner
@@ -122,11 +119,11 @@ band closes on ID 1's. Past y ~ 0.2 the off-axis particle starts contributing an
 split stops meaning anything. Move it only with a fresh sweep and a re-measured
 AXIS_SHARE.
 
-Verified RED before the bcdef-200 axis fix (particle 1 discarded at the axis, never
-reaches the outlet) and GREEN after. E1/E2 verified RED against the axis-ghost defect
-by reverting the fill_dual_nodes repair and rebuilding (0.931625 / 0.499505). E3 stays
-GREEN under both, the expected behaviour of a volume-free identity, which is why it is
-documented as a guard rather than a detector.
+RED on a solver whose 200 branch only rotates (particle 1 discarded at the axis, never
+reaches the outlet), GREEN on this one. E1/E2 are RED on a build without the
+fill_dual_nodes axis repair (0.931625 / 0.499505). E3 stays GREEN on both, the expected
+behaviour of a volume-free identity, which is why it is documented as a guard rather
+than a detector.
 """
 import math
 import re
@@ -148,12 +145,12 @@ DP_MAX   = 1.2e-4
 # --- eulerian audit (section 5). All three MEASURED; see the module docstring. ---
 RHO_LIQ     = 2500.0      # [GPB-Phase1] rho in input.ini
 DP_INJ      = 2.0e-5      # [IGLOO-BC] diam in input.ini (constant: no evap/breakup)
-RETAIN      = 1.000787    # E1: measured total mass retention. ~1 BY PHYSICS now (see docstring)
+RETAIN      = 1.000787    # E1: measured total mass retention, ~1 BY PHYSICS (see docstring)
 RETAIN_TOL  = 1.0e-3      # 69x the 0.069163 axis-ghost signal; floor is ZERO (see below)
 Y_BAND      = 0.05        # E2: near-axis band; ID 2 sits at y = 0.55
-AXIS_SHARE  = 0.999005    # E2: measured near-axis share. ~1 BY PHYSICS now
+AXIS_SHARE  = 0.999005    # E2: measured near-axis share, ~1 BY PHYSICS
 SHARE_TOL   = 1.0e-3      # 500x the axis-ghost signal (0.499505)
-MDROP_TOL   = 1.0e-12     # E3: measured worst deviation 9.1e-15 (round-off)
+MDROP_TOL   = 1.0e-12     # E3: measured worst deviation 9.4e-15 (round-off)
 MIN_DEPOSIT_CELLS = 100   # vacuous-pass guard: measured 6213
 
 GIVE_UP = ("no net progress", "stuck in cell", "Inner loop", "outer maxIter",
@@ -244,7 +241,7 @@ def residence(rows):
 
 
 def check_euler(traj, mdot):
-    """Section 5: the ord2 eulerian deposit audit (O14)."""
+    """Section 5: the ord2 eulerian deposit audit."""
     try:
         I, J, K, x, y, z, rho, npd = read_tec_block(EUL)
     except FileNotFoundError:
@@ -277,9 +274,9 @@ def check_euler(traj, mdot):
                    f"imposed sum(mdot*t)={m_imposed:.6e} kg. This is a CONSERVATION "
                    f"statement -- the projection must return the mass it was given -- so "
                    f"~1.0 is the physical value and a drop is lost mass, not a new "
-                   f"discretization constant to pin. A reading near 0.9316 means the "
-                   f"fill_dual_nodes axis-ghost repair was lost: the dual ghost is being "
-                   f"reflected ACROSS the symmetry axis again, giving the first dual cell "
+                   f"discretization constant to pin. A reading near 0.9316 means "
+                   f"fill_dual_nodes leaves the dual ghost reflected ACROSS the symmetry "
+                   f"axis, giving the first dual cell "
                    f"twice its physical radial extent. Re-measure only after confirming "
                    f"the mesh or injection actually changed.")
 
@@ -292,8 +289,8 @@ def check_euler(traj, mdot):
                    f"{AXIS_SHARE} +- {SHARE_TOL} (band y < {Y_BAND}). This is the axis "
                    f"parcel's own mass conservation: it deposits entirely through the "
                    f"axis dual ring, so ~1.0 is physical. ~0.4995 means the axis ghost is "
-                   f"reflected across the axis again (the cell spans [-r_c,+r_c] instead "
-                   f"of [0,r_c]); ~0.9971 means the boundary dual clip was removed.")
+                   f"reflected across the axis (the cell spans [-r_c,+r_c] instead "
+                   f"of [0,r_c]); ~0.9971 means the boundary dual clip is missing.")
 
     # E3 -- volume-free per-drop mass identity (exact physics, no pinned constant)
     m_drop = RHO_LIQ * math.pi / 6.0 * DP_INJ**3
@@ -372,8 +369,8 @@ def main():
         rc |= fail(f"ID={AXIS_ID} (the near-axis particle) absent from {TRAJ}")
     elif rmin[AXIS_ID] >= R_NEAR:
         rc |= fail(f"COVERAGE LOST: ID={AXIS_ID} min radius {rmin[AXIS_ID]:.3e} "
-                   f">= {R_NEAR:.0e} -- it never reached the axis, so this case no "
-                   f"longer exercises the axis-face path. Move the injection "
+                   f">= {R_NEAR:.0e} -- it never reached the axis, so this case does "
+                   f"not exercise the axis-face path. Move the injection "
                    f"closer to the axis rather than relaxing R_NEAR.")
 
     # 3. exits ----------------------------------------------------------------
@@ -393,7 +390,7 @@ def main():
         if x < X_EXIT:
             rc |= fail(f"ID={pid}: exit x={x:.4f} < {X_EXIT} -- did not reach the outlet")
 
-    # 5. eulerian projection (O14) --------------------------------------------
+    # 5. eulerian projection --------------------------------------------------
     rc |= check_euler(traj, mdot)
 
     if rc == 0:

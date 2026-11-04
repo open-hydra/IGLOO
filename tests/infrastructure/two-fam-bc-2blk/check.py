@@ -39,6 +39,8 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
+import datcols                                                # noqa: E402
 SIB = os.path.join(HERE, "..", "two-fam-bc")
 IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
 
@@ -165,7 +167,7 @@ def main():
             rc |= fail(f"T2 material {mat}: {len(bad)} of {len(ex[mat])} exit records off mdot {want:.6e}")
         else:
             print(f"T2 material {mat}: every exit record carries mdot = {want:.6e} PASS")
-        nscat = sum(1 for ln in open(f"OUTPUT/scatter-{mat}.dat") if len(ln.split()) == 10)
+        nscat = len(datcols.rows(f"OUTPUT/scatter-{mat}.dat"))
         if len(ex[mat]) != N_PARCELS or nscat == 0:
             rc |= fail(f"C2 material {mat}: {len(ex[mat])} exits (expected {N_PARCELS}), {nscat} scatter rows")
         else:

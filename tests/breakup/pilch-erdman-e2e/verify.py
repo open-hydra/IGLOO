@@ -10,7 +10,7 @@ One panel: dimensionless total breakup time T* vs We (log-x, PE87 Fig. 7 layout)
   - the PE87 published correlation (5 regimes, continuous) -- the gated reference;
   - IGLOO points: each drop's measured initial rate inverted through the paper model
     (the T* that reproduces the measured dd/dt at the injection (d0, slip0)). All
-    We>=45 points are gated post-A17-fix (2026-07-22).
+    We>=45 points are gated.
 No experimental shock-tube scatter is overlaid (PE87 Fig. 7 not digitized; the gate is
 the closed form, so digitization would add provenance cost for a non-gating layer).
 """
@@ -60,7 +60,7 @@ def igloo_points(parts):
     """[(We0, T*_implied, gated?)] per drop, same selection rules as the gate."""
     pts = []
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:

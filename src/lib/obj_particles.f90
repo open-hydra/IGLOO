@@ -28,6 +28,7 @@ module IGLOO_particles
     real(R8)     :: mdot      !> mass flow rate of the self stream (stationary conditions)
     real(R8)     :: npdot     !> number of single particles flowing per unit time 
     real(R8)     :: npold
+    real(R8)     :: npRef = -1._R8 !> the number rate of the scatter-marker rate npRef/dNscat; < 0: its own at entry
     real(R8)     :: time=0.   !> integration time (coordinate)
     real(R8)     :: Tstay     !> time spent within the cell
     real(R8)     :: deltaL    !> path length within the cell
@@ -85,7 +86,7 @@ module IGLOO_particles
     integer      :: model       = 1    !> RHS model (1-8)
     integer      :: neq         = 7    !> number of ODE equations
     integer      :: nOde        = 7    !> number of ODE state variables
-    logical      :: bodyAccum = .false. !> body-force J/W accumulators present (only models 2,4,5 & srcBodyForce)
+    logical      :: bodyAccum = .false. !> body-force J/W accumulators present (only models 2,4,5,8 & srcBodyForce)
     !> Basic properties       (per-material, constant)
     real(R8)     :: cp        !> specific heat
     real(R8)     :: hOff = 0._R8 !> enthalpy datum of the table for cp=const: h(T) = cp*T + hOff
@@ -581,21 +582,28 @@ contains
   !> Relocates the particle after a cell crossing: the connected cell of a connected block face,
   !  the cell search, then boundary handling (periodic transport, BC definitions) with a flip-flop
   !  cycle breaker.
-  subroutine updateCell(self,block,lookGas)
+  subroutine updateCell(self,block,lookGas,reflected,wrapped)
     implicit none
     class(obj_particle), intent(inout) :: self
     class(obj_block),    intent(in)    :: block(nb)
     logical, optional,   intent(in)    :: lookGas
+    logical, optional,   intent(out)   :: reflected   !> a bcDef call of this relocation reflected the particle
+    logical, optional,   intent(out)   :: wrapped     !> this relocation transported the particle through a 201 face
     real(R8), dimension(3) :: psave, p, v, pold, vold, intersectionPoint
     real(R8)     :: vertices(3,8)
     integer      :: b, f, m, n, prevTry(4,2), ind(4), iold(4), loc(3)
-    logical      :: found, retry, noBC, gasGeo
+    logical      :: found, retry, noBC, gasGeo, refl, wrp
 
     gasGeo = .false.   !> no declaration initializer: it would imply SAVE
     if (present(lookGas)) gasGeo = lookGas
+    if (present(reflected)) reflected = .false.
+    if (present(wrapped)) wrapped = .false.
 
     if (.not.gasGeo) then
-      if (self%connectedExit(block) == 1) return
+      if (self%connectedExit(block, wrapped=wrp) == 1) then
+        if (present(wrapped)) wrapped = wrp
+        return
+      endif
     endif
     if (self%findParticle(block)) then
       if (self%iold(1) > 0 .and. self%i(1) /= self%iold(1)) then
@@ -627,12 +635,14 @@ contains
         if (blk%face(f)%cell(m,n)%bcdef == 201) then
           !> Periodic: transport to the partner face and relocate.
           call periodicTransport(block, blk%face(f)%cell(m,n), p, iold)
+          if (present(wrapped)) wrapped = .true.
           if (searchInBlock(block(iold(1)), p, iold(2:4), 0, .false., pold, vold, loc)) iold = [iold(1), loc]
           ind = iold; retry = .false.
         else
           call bcDef(blk%face(f)%cell(m,n),vertices,pold,vold,  &
                       intersectionPoint,f,p,v,self%time,iold,   &
-                      self%angle,self%Af,found,self%gone,retry)
+                      self%angle,self%Af,found,self%gone,retry,refl)
+          if (present(reflected)) reflected = reflected .or. refl
           if (self%gone) self%exitCode = blk%face(f)%cell(m,n)%bcdef
           !> a rim: an unresolved connection (100) or a chimera face no donor holds the particle in
           if (self%gone .and. (blk%face(f)%cell(m,n)%bcdef == 100 .or. blk%face(f)%cell(m,n)%bcdef == 102)) then
@@ -678,15 +688,17 @@ contains
   !  cell, 201, 102), searches the connected cell first: the partner cell, the partner cell after the
   !  periodic transport, or the layer-1 donors by decreasing weight. 1 = found (self%i set), 0 = not
   !  such an exit, -1 = not found.
-  integer function connectedExit(self, block)
+  integer function connectedExit(self, block, wrapped)
     implicit none
     class(obj_particle), intent(inout) :: self
     class(obj_block),    intent(in)    :: block(nb)
+    logical, optional,   intent(out)   :: wrapped   !> the exit was a 201 transport
     real(R8) :: verts(3,8), p(3), pt(3), ipt(3)
     integer  :: b, m, n, f, ci, cj, ck, d, k, loc(3), partner(4)
     logical  :: noB, hit
     logical, allocatable :: tried(:)
 
+    if (present(wrapped)) wrapped = .false.
     connectedExit = 0
     if (self%exitFace <= 0 .or. self%i(1) <= 0) return
     b = self%i(1)
@@ -722,6 +734,7 @@ contains
         self%i = [partner(1), loc]
         self%iold = self%i
         connectedExit = 1
+        if (present(wrapped)) wrapped = .true.
       endif
     case (102)
       allocate(tried(cell%chimN(1)))

@@ -48,7 +48,7 @@ my_case/
 │   ├── phase.txt         ← material name and group count per material
 │   └── properties.dat    ← thermodynamic property tables (Tecplot format: cp, rho, h vs T)
 └── OUTPUT/               ← created at run time
-    ├── trajectories-<mat>.dat   ← per-cell-crossing state (X Y Z U V W T d_p m_p ID)
+    ├── trajectories-<mat>.dat   ← one zone per parcel trajectory (X Y Z U V W T d_p m_p ID)
     ├── outloc-<mat>.dat         ← exit or stop location, speed, angle, area, boundary code, diameter per particle
     ├── scatter-<mat>.dat        ← number-density scatter cloud
     ├── snapshot-<mat>.dat       ← each particle's state at time-end (only when time-end is set)
@@ -79,6 +79,8 @@ mkdir -p OUTPUT
 !!! warning "Stack size"
     Always set `ulimit -s unlimited` (or `KMP_STACKSIZE=100M` for Intel compilers) before launching the solver. Large automatic arrays in the per-particle integration (cell-crossing ray tests and the ODE-solver work arrays) requires more stack than the default system limit.
 
+With the Intel runtime, `FORT_BUFFERED=true` in the environment buffers the grid files written under `IGLOO_TEC_FAST=0` (`source.tec`, `euler<fam>.tec`), which otherwise make one system call per line. The particle files are written one block per parcel and file ([Output Files](#output-files)).
+
 Output is written to `OUTPUT/` on completion. The solver prints progress to stdout; any fatal errors go to stderr.
 
 ### Running a verification case
@@ -96,22 +98,29 @@ python3 check.py                          # oracle gate
 
 ## Output Files
 
+A parcel's rows reach the particle files (trajectories, scatter cloud, exit locations, snapshot, plane crossings) when its integration ends, one block per file, and every file holds the blocks in parcel order: by group, then parcel ID. A block that is ready before the blocks of the parcels ahead of it waits for them, in memory within a budget over all the files (64 MiB; `IGLOO_IOBUF_BYTES` in the environment sets it, an integer ≥ 0 in bytes) and beyond it in a scratch file deleted when the file closes. The files are therefore the same bytes at every thread count and, merged, at every MPI rank count, for one executable and one input. A run that crashes leaves no rows for the parcels it was integrating, nor for those whose blocks were waiting.
+
 ### Trajectories
 
-`OUTPUT/trajectories-<mat>.dat` records particle state at every cell crossing (one row per crossing). Columns (Tecplot ASCII variables header):
+`OUTPUT/trajectories-<mat>.dat` holds the parcels' trajectories, one Tecplot ordered zone per parcel and periodic image. Columns (Tecplot ASCII variables header):
 
 ```
 "X" "Y" "Z" "U" "V" "W" "T" "d_p" "m_p" "ID"
 ```
 
-Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). Rows are written every `print-dcell` cell crossings (default 1) and, when `print-dtime` is positive, also at the first segment end at or past each multiple of that interval (for time rows only, set `print-dcell` above the number of crossings). A parcel that leaves the domain through a boundary face also writes a row at its exit point, whatever the cadence, so its trajectory ends where its exit record is. With `out-time = on` every row carries the particle time [s] as an eleventh column, `"t"`. The rows of a solidifying material end with `"f"`. The rows of a material with `liquid-conduction = P2T` end with `"T<sub>s"`: the surface temperature [K] of the parabolic profile at the row's state (the boiling temperature in the boiling branch of `boiling = ZGR`), with six decimals; the column `T` is the droplet's mean temperature. No other file carries the surface temperature. A breakup child's first row is its birth state, written before its first step: its parent's position, velocity and temperature at the shed, and its own diameter and mass.
+Output is controlled by `out-traj` in `[IGLOO-General]` (default: `on`). A trajectory starts with the parcel's injection row and ends with a row at its stop (a boundary exit, a burnout, a solver failure, a guard, `time-end`) that holds the state of its exit record. Between them a row is written at a segment end when the parcel is `print-ds` [m] from its last row or, when `print-ds` is not set, when `print-dtime` [s] has passed since its last row; with neither key, the trajectory holds its first and last rows. A periodic (201) wrap and a wedge's sector fold each write two rows at the same time: the parcel's state before the transport and after it. The rows fall on segment ends, and a segment ends where the parcel leaves its cell (with `gas-order = 2` also its dual cell), reflects or folds, or at an event of the solver (a breakup, a phase change): a row is written at the first segment end that reaches the limit. A limit equal to the spacing of those ends is therefore decided at each one by how far the step overshot it, and one clear of that spacing is not: in `out-exit-row`'s box (cells of 2.5 mm along the path) `print-ds = 2.5e-3` writes 35 to 37 rows per parcel at gas order 1 and 39 to 49 at gas order 2, `print-ds = 2.25e-3` 61 at both, a row at every crossing. A parcel that is never integrated, no cell holding its injection point, writes no row and no zone. With `print-dcell` set, the rows follow the diagnostic crossing cadence instead: a row every `print-dcell` cell crossings and, when `print-dtime` is positive, at the first segment end at or past a target time that starts one interval after the parcel's start and moves on by the interval at every row written (the crossing rows included), a row at `time-end`, and a row at the exit point of a parcel that leaves through a boundary face; `print-ds` is then ignored. With `out-time = on` every row carries the particle time [s] as an eleventh column, `"t"`. The rows of a solidifying material end with `"f"`. The rows of a material with `liquid-conduction = P2T` end with `"T<sub>s"`: the surface temperature [K] of the parabolic profile at the row's state (the boiling temperature in the boiling branch of `boiling = ZGR`), with six decimals; the column `T` is the droplet's mean temperature. No other file carries the surface temperature. A breakup child's first row is its birth state, written before its first step: its parent's position, velocity and temperature at the shed, and its own diameter and mass. A combustion residue's first row is its birth state too, in the product material's file: its parent's position, velocity and temperature at the burnout, and its own diameter and mass.
 
-!!! warning "Non-deterministic ordering"
-    With OpenMP enabled, the row order within a zone is non-deterministic across runs (different thread scheduling). Verification scripts must sort by particle ID and position before comparing, not rely on byte-identical output.
+Each zone holds one parcel's rows in time order:
+
+```
+ZONE T="Mat <mat> Group <g> ID <id> parent <pid>", I=<rows>, ZONETYPE=ORDERED, DATAPACKING=POINT
+```
+
+`parent` is the ID of the parcel a breakup child was shed from or a combustion residue was born of (in the burning material), 0 for an injected parcel. A periodic (201) wrap ends the parcel's zone and continues the parcel in a new one, titled `… parent <pid> image <k>` with k the number of wraps so far, so that no line of a plot crosses the domain: the zone ends on the exit row and the next begins with the re-entry row (with `print-dcell`, with the first row written after the wrap; an image without rows is left out). A wedge's sector fold does not split the zone. The zones follow by group, then parcel ID, then image, whatever the thread and rank counts.
 
 ### Scatter cloud
 
-`OUTPUT/scatter-<mat>.dat` is a number-density point cloud: each point represents `dNscat` real droplets, where `dNscat` is auto-sized so the cloud holds approximately `fsample-traj` points per injection stream. Controlled by `out-scatter` in `[IGLOO-General]` (default: `on`).
+`OUTPUT/scatter-<mat>.dat` is a cloud of markers along the parcels' paths. A parcel writes markers at a constant rate `ṅ_ref/dNscat` per second of its residence, `ṅ_ref` the number rate it entered with (a breakup child keeps its parent's; a combustion residue takes its own at birth, against its material's `dNscat`): its k-th marker falls at `t_b + (k − frac(ID·φ))·dNscat/ṅ_ref`, with `t_b` its birth time and φ = 0.618… the golden ratio's fractional part, inside the solver's step, at the position of the step's cubic Hermite interpolant, the other columns linear in the step. The columns are `X Y Z U V W T d_p m_p ID`, then `f` for a solidifying material, then `weight`: the real droplets the marker stands for, `dNscat·ṅ_p/ṅ_ref` with `ṅ_p` the parcel's number rate at the marker (`dNscat` while the rate is the entry one). In the steady state the run describes, the weights of the markers inside a region sum, approximately, to the droplets the region holds, as `n_p·V` does cell by cell with the Eulerian number density `n_p` of `euler<fam>.tec`. A breakup child writes at its lineage's rate, so a short-lived child holds few markers or none: 278 of the 726 parcels of `scatter-placement` hold none, and its summed weight is 2.85 % below its Eulerian moment. Such a child's expected weight is right, its phase `frac(ID·φ)` being one of an equidistributed sequence, but the child is resolved coarsely. `dNscat` is auto-sized so that the cloud holds about `fsample-traj` markers per injection stream, and the run prints it (`scatter cloud [<mat>]: dNscat=`). Controlled by `out-scatter` in `[IGLOO-General]` (default: `on`).
 
 ### Exit locations
 
@@ -147,7 +156,7 @@ Every step the integration keeps is checked against every plane: a step from $x_
 
 `mdot` and `npdot` follow the ODE model. For models 3 and 7 the number rate is an ODE state and `mdot` is the stream's flow over the step; for models 2, 4, 5 and 8 `mdot = npdot·m_p` (metal and cap for model 8), with the number rate the stream's (2, 5, 8) or the state (4); for models 1 and 6 both are the stream's. The forward records' `mdot` minus the backward ones' is the mass flow through the plane: a breakup child carries the flow its parent shed, and its `parent` names that parcel.
 
-Records are written from the OpenMP region, as trajectory rows are: their order within a zone is not deterministic. Under MPI each rank writes its own file and the merge leaves one `planes-<mat>.dat`, as for the other particle files.
+A zone's records follow by parcel ID, each parcel's in the order of its crossings, whatever the thread and rank counts; under MPI the ranks' files are merged into one `planes-<mat>.dat`, as for the other particle files.
 
 `scripts/psd_plane.py` prints the size statistics of one plane:
 
@@ -180,6 +189,8 @@ After `solve`, `obj_IGLOO%writeout` writes the mesh-projected fields:
 | `euler<fam>.tec` | Equivalent Eulerian fields per particle family: density, velocity, temperature, number density (`rho_p u_p v_p w_p T_p n_p`) |
 
 Both outputs are mollified by a local binomial smoother (controlled by `mollify` and `mollify-passes` in `[IGLOO-General]`) to reduce deposition noise.
+
+Both are ASCII Tecplot files in BLOCK packing: the coordinates at the nodes, then the variables at the cells, one value per line in `E23.15E3`, the bytes ORION's writer writes. A stream writer formats the values many at a time on every OpenMP thread and writes them in large blocks; `IGLOO_TEC_FAST=0` in the environment writes them with ORION's writer; so does a run whose stream writer fails, which prints `[IGLOO] <file> written by ORION's writer`.
 
 ---
 

@@ -27,7 +27,7 @@ module IGLOO_Mod_Timing
     'accumulators', 'ghost-fill', 'solve-other', 'parcel-loop', 'census', &
     'reduce', 'finalize', 'smoothing', 'writeout+merge']
 
-  public :: tm_phase, tm_nest, tm_unnest, tm_parcel_begin, tm_parcel_end, tm_sizes, tm_report
+  public :: tm_phase, tm_nest, tm_unnest, tm_parcel_begin, tm_parcel_end, tm_sizes, tm_window, tm_report
 
   real(R8) :: tAcc(NPH) = 0._R8       !> accumulated seconds per phase
   real(R8) :: tOpen = 0._R8           !> start of the open phase
@@ -41,6 +41,9 @@ module IGLOO_Mod_Timing
 
   !> Allocated values per rank: gas fields, geometry arrays, accumulators (solve shape).
   integer(I8) :: szGas = 0, szGeo = 0, szAcc = 0
+
+  !> The particle files' ordered windows since the last report [bytes]: budget, held high-water, spilled, largest block.
+  integer(I8) :: winBudget = 0, winHeld = 0, winSpill = 0, winLarge = 0
 
   !> User-mode core cycles per phase, summed over this rank's threads (igloo_cycles.c, one counter per thread).
   real(R8)    :: cyc(NPH) = 0._R8
@@ -216,11 +219,22 @@ contains
   end subroutine tm_sizes
 
 
+  !> A parcel loop's ordered window [bytes]: the budget, its held high-water, spilled bytes and largest block.
+  subroutine tm_window(budget, heldMax, spilled, largest)
+    integer(I8), intent(in) :: budget, heldMax, spilled, largest
+    winBudget = budget
+    winHeld   = max(winHeld, heldMax)
+    winSpill  = winSpill + spilled
+    winLarge  = max(winLarge, largest)
+  end subroutine tm_window
+
+
   !> Prints the [IGLOO-timing] report of the solves since the last one and clears the sweep phases.
   !  Every rank calls it; one gather to rank 0 when decomposed; rank 0 prints.
   subroutine tm_report(sweep)
     integer, intent(in) :: sweep
-    integer, parameter :: NREC = 2*NPH + 9 + NFAIL
+    integer, parameter :: NREC = 2*NPH + 9 + NFAIL + 3
+    integer, parameter :: IW = 2*NPH + 9 + NFAIL   !> offset of the window figures in the record
     integer, parameter :: IC = NPH + 7        !> offset of the cycle block in the record
     real(R8), allocatable :: recs(:,:)
     real(R8) :: rec(NREC), busyMean, loopMean, ctot, cmin, cmax, cSweep, cSetup, tSweep
@@ -253,7 +267,8 @@ contains
     nthr = size(thr, 2)
 
     !> This rank's record: phase times, busy sum/min/max, parcels sum/min/max, threads; then the phase
-    !  cycles, the counters, the team, and up to NFAIL slots without a counter (4*slot + class, -1 none).
+    !  cycles, the counters, the team, up to NFAIL slots without a counter (4*slot + class, -1 none), and the
+    !  particle files' window figures (held high-water, spilled bytes, largest block).
     rec(1:NPH)   = tAcc
     rec(NPH+1)   = sum(thr(1, :))
     rec(NPH+2)   = minval(thr(1, :))
@@ -276,6 +291,7 @@ contains
       endif
     enddo
 #endif
+    rec(IW+1:IW+3) = real([winHeld, winSpill, winLarge], R8)
 
     allocate(recs(NREC, 0:nranks-1))
     recs(:, 0) = rec
@@ -309,6 +325,9 @@ contains
       write(*,'(A,I0,A,I0,A,I0,A,F12.3,A)') ' [IGLOO-timing] sizes per rank (values)  gas ', szGas, &
         '  geometry ', szGeo, '  accumulators ', szAcc, '  total ', &
         real(szGas + szGeo + szAcc, R8) * 8._R8 / 1048576._R8, ' MiB'
+      write(*,'(A,I0,A,I0,A,I0,A,I0,A)') ' [IGLOO-timing] particle files  window budget ', winBudget, &
+        ' B  held max ', nint(maxval(recs(IW+1, :)), I8), ' B  spilled ', nint(sum(recs(IW+2, :)), I8), &
+        ' B  largest block ', nint(maxval(recs(IW+3, :)), I8), ' B'
 
       !> Core cycles: a state line, then (counters on every thread of every rank) one line per phase and the totals.
       notBuilt = any(recs(IC+NPH+1, :) < 0._R8)
@@ -380,6 +399,7 @@ contains
 
     tAcc(NSETUP+1:NPH) = 0._R8
     cyc(NSETUP+1:NPH)  = 0._R8
+    winHeld = 0; winSpill = 0; winLarge = 0
     thr = 0._R8
     nSolve = 0
   end subroutine tm_report

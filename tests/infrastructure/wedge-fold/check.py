@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
 wedge-fold -- the axisymmetric 200-face FOLD must rotate a swirling parcel back INTO the
-wedge sector (ledger O22).
+wedge sector.
 
 Fixture: axis-200's nozzle field and its two DB parcels; the near-axis parcel (ID 1,
 r0 = 1e-4) additionally carries wp = 0.5. It leaves the 1-degree sector within its first
 ODE segment, so every crossing exercises the fold -- position and velocity rotated by
--+delthe about the axis. Nothing else in the suite has z /= 0 on a wedge.
+-+delthe about the axis, here next to it (the swirl-wedge cases fold parcels on an annulus).
 
-Gates (all proven RED on the pre-fix binary, where rotateVector returned R(-theta) and the
-fold walked the parcel to the far side of the axis):
-  G1  no give-up message in run_out.txt ("outer maxIter" was the O22 signature: 500000
+Gates (all RED on a build whose rotateVector returns R(-theta), whose fold walks the parcel to
+the far side of the axis):
+  G1  no give-up message in run_out.txt ("outer maxIter" is that build's signature: 500000
       iterations, flagged gone)
   G2  both parcels leave through the outlet (last row x > X_OUT)
   G3  every trajectory row is INSIDE the sector (rows are written after the fold, so an

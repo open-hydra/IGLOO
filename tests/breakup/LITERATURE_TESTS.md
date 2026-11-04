@@ -1,24 +1,22 @@
 # Breakup — Literature-Grounded Verification Tests
 
 Scope: secondary breakup models in [Lib_Breakup.f90](../../src/lib/Lib_Breakup.f90).
-Selector `assign_breakup` ([L28](../../src/lib/Lib_Breakup.f90#L28)):
+Selector `assign_breakup` ([L58](../../src/lib/Lib_Breakup.f90#L58)):
 Pilch-Erdman(1), Reitz-Diwakar(2), Reitz-KHRT(3), TAB(4), ETAB(5).
-Defaults read in [Lib_INI.f90 L160-231](../../src/lib/Lib_INI.f90#L160).
+Defaults read in [Lib_INI.f90 L308-402](../../src/lib/Lib_INI.f90#L308) (`read_breakup_constants`).
 
-Theory-only deliverable (no code run). "Coded ≠ paper" flagged as ⚠ CODE-VS-PAPER — NOT fixed here.
+A theory review: each model's coded form against its paper; each section names its unit test.
 
-**UPDATE 2026-07-15 — all five models re-verified against the PRIMARY PDFs the user put in
-`papers/` (full symbol-by-symbol tables: `plan-bucket/breakup-litcheck-report-2026-07-15.md`;
-outcome ledger: A13/A14/A15):** Pilch-Erdman and TAB CLOSED as fully
-verified (every previously-inferred constant confirmed, incl. PE87's 0.75/3 velocity poly,
+**Verified against the primary PDFs** (`papers/`): Pilch-Erdman and TAB fully verified (every
+constant confirmed, incl. PE87's 0.75/3 velocity poly,
 4.5/1.2/1.64 Oh-override, and TAB's K=10/3 child energy balance). KHRT: KH curve fits and RT
-structure confirmed; **A13** (Z/T definitions — wrong fluid/length/Weber, ~29× on T) and
-**A14** (RT child count missing cube) found & FIXED. ETAB: oscillator/Kbr/size law confirmed;
-**A15** (stripping branch k1→k2 + Tanner-1998 defaults 0.2222/We_t=80) FIXED; child
-v⊥=A·ẋ spray-cone component ~~NOT-IN-CODE~~ **IMPLEMENTED 2026-07-16** (Tanner Eqs 8–10,
+structure confirmed; the Ohnesorge Z and the Taylor T on the paper's fluid, length and Weber
+(Reitz-87 Eqs 4-5) and the RT child count with its cube (Beale-Reitz Eq. 11). ETAB:
+oscillator/Kbr/size law confirmed; the stripping branch uses k2, with the Tanner-1998 defaults
+0.2222/We_t=80; the child v⊥=A·ẋ spray-cone component is in the code (Tanner Eqs 8–10,
 gated ET4a/b/c: closed-form magnitude, orthogonality, A²<0 no-kick). Reitz-Diwakar: criteria, forms,
-stable sizes confirmed; time-scale defaults follow the Reitz-1987 lineage — its primary
-("Structure of High-Pressure Fuel Sprays", 1987) is still missing (Cs=20 unverifiable).
+stable sizes confirmed; time-scale defaults follow the Reitz-1987 lineage, whose primary
+("Structure of High-Pressure Fuel Sprays", 1987, `[RD87]`) gives the bag D=π (Eq. 7) and Cs=20.
 
 ---
 
@@ -27,7 +25,7 @@ stable sizes confirmed; time-scale defaults follow the Reitz-1987 lineage — it
 | Tag | Paper | DOI | Resolves? |
 |---|---|---|---|
 | `[ORA87]` | O'Rourke & Amsden, TAB Method, SAE 872089 (1987) | 10.4271/872089 | **verified** — SAE page + OSTI biblio 6118786 confirm title/authors |
-| `[RD86]` | Reitz & Diwakar, Effect of Drop Breakup on Fuel Sprays, SAE 860469 (1986) | 10.4271/860469 | **verified (title)** — SAE Mobilus lists 860469 w/ matching title; DOI format canonical, PDF not opened |
+| `[RD86]` | Reitz & Diwakar, Effect of Drop Breakup on Fuel Sprays, SAE 860469 (1986) | 10.4271/860469 | **verified** — SAE Mobilus lists 860469 w/ matching title; the source PDF is read (`../REFERENCES.md`) |
 | `[PE87]` | Pilch & Erdman, IJMF 13(6) 741-757 (1987) | 10.1016/0301-9322(87)90063-2 | **verified** — ScienceDirect PII 0301932287900632 = this DOI, title/pages match |
 
 Cross-check implementations used as secondary authorities (not citable primaries):
@@ -50,45 +48,45 @@ Grouped forms:
 - equilibrium (steady, ÿ=ẏ=0) `y_eq = (Cf/(Cb·Ck))·We_r` with radius Weber `We_r = ρg·u²·r/σ`.
   With the constants `Cf/(Cb·Ck) = (1/3)/((1/2)·8) = 1/12` ⇒ **y_eq = We_r/12**.
 
-> ⚠ Task-brief note: the hint `We_eff = Cf/Ck·(…)` omits the `1/Cb`. Correct grouping is `Cf/(Cb·Ck)=1/12`, NOT `Cf/Ck=1/24`. Code reproduces 1/12 (below), so the code is right and the hint was under-specified.
+> ⚠ Grouping: `We_eff = Cf/Ck·(…)` omits the `1/Cb`. Correct grouping is `Cf/(Cb·Ck)=1/12`, NOT `Cf/Ck=1/24`; the code reproduces 1/12 (below).
 
 Closed form at constant forcing (heavy/fixed-velocity drop ⇒ `u`,`r` const ⇒ constant coeffs), with `We_eff ≡ y_eq`:
 
     y(t) = We_eff + e^(−t/td)·[ (y0−We_eff)·cos ωt + ( (y0−We_eff)/td + ẏ0 )·sin(ωt)/ω ]
 
 ### Code cross-check — MATCHES
-[TABmodel L372-373](../../src/lib/Lib_Breakup.f90#L372):
+[TABmodel L440-441](../../src/lib/Lib_Breakup.f90#L440):
 `rdt = 0.5·bp(2)·mup/(rhop·radius²)` = `(Cd/2)μl/(ρl r²) = 1/td`, with `bp(2)=Cmu=5=Cd` ✓
 `omega = bp(1)·sigma/(rhop·radius³) − rdt²` = `Ck σ/(ρl r³) − 1/td²`, with `bp(1)=Comega=8=Ck` ✓ (stored SQUARED).
-[L377-378](../../src/lib/Lib_Breakup.f90#L377): `We = radius·vel²/sigma·rhog` = We_r ✓; `WeCr = We/bp(3)`.
-[YupdateTAB L554-555](../../src/lib/Lib_Breakup.f90#L554):
+[L445-446](../../src/lib/Lib_Breakup.f90#L445): `We = radius·vel²/sigma·rhog` = We_r ✓; `WeCr = We/bp(3)`.
+[YupdateTAB L644-645](../../src/lib/Lib_Breakup.f90#L644):
 `y = WeCr + exp(−dt·rdt)·(y1·cost + (yDot+y1·rdt)·sint/omega)` with `y1=y−WeCr`, `cost=cos(ω dt)`, `sint=sin(ω dt)`.
 ⇒ term-for-term identical to the closed form with `We_eff=WeCr`. **EXACT MATCH.** `yDot` line is the analytic derivative — also exact.
 
-Product-drop size [L405](../../src/lib/Lib_Breakup.f90#L405): `k = 1 + 4/3 + ρl r³/(8σ)·ẏ²`, `rs=r/k`.
+Product-drop size [L473](../../src/lib/Lib_Breakup.f90#L473): `k = 1 + 4/3 + ρl r³/(8σ)·ẏ²`, `rs=r/k`.
 ORA87 energy balance: `r/r_new = 1 + (8K/20) + (ρl r³ ẏ²/σ)·(6K−5)/120`. With **K=10/3**: `8K/20=4/3` ✓ and `(6K−5)/120=1/8` ✓. **K=10/3 confirmed, MATCHES.**
 
-`bp(3)` doubling — CORRECT DESIGN, not a bug. [Lib_INI.f90 L205-206](../../src/lib/Lib_INI.f90#L205): `WeCrit` default 6, then `bp(3)=2·bp(3)` (the `if(err) x=6; x=2*x` semicolon-guard makes the ×2 unconditional — INTENTIONAL). So `bp(3)=12` = the equilibrium denominator `Cb·Ck/Cf`. `WeCr = We_r/12 = y_eq` ✓. A drop from rest (y0=ẏ0=0) has amplitude `a=WeCr`, first peak `y_max = WeCr+a = 2·WeCr`; breakup gate `a+WeCr>1` ⇒ `We_r > bp(3)/2 = 6` = canonical TAB rest-drop critical Weber. User-facing `WeCrit` IS that rest threshold; ×2 maps it to the equilibrium factor. Self-consistent — no discrepancy.
+`bp(3)` doubling — CORRECT DESIGN, not a bug. [Lib_INI.f90 L367-368](../../src/lib/Lib_INI.f90#L367): `WeCrit` default 6, then `bp(3)=2·bp(3)` (the `if(err) x=6; x=2*x` semicolon-guard makes the ×2 unconditional — INTENTIONAL). So `bp(3)=12` = the equilibrium denominator `Cb·Ck/Cf`. `WeCr = We_r/12 = y_eq` ✓. A drop from rest (y0=ẏ0=0) has amplitude `a=WeCr`, first peak `y_max = WeCr+a = 2·WeCr`; breakup gate `a+WeCr>1` ⇒ `We_r > bp(3)/2 = 6` = canonical TAB rest-drop critical Weber. User-facing `WeCrit` IS that rest threshold; ×2 maps it to the equilibrium factor. Self-consistent — no discrepancy.
 
-### Verification test T-TAB (rank #1)
-Non-tautological triangulation (YupdateTAB is literally the closed form, so code-vs-formula alone only checks transcription):
-- **Inputs**: fixed slip `u` (heavy drop, drag→0 so `u`≈const), constant `r`, `μl`,`ρl`,`ρg`,`σ`. Choose `We_r` in [8,30] so `2·We_r/12 > 1` ⇒ oscillation reaches `y=1`. Seed `y0`,`ẏ0`.
-- **Oracle A**: derive `ω, td, We_eff=We_r/12` *independently* from {Ck=8,Cd=5,Cf=1/3,Cb=1/2}; evaluate analytic `y(t)`.
-- **Oracle B**: RK4-integrate the raw ODE `ÿ = (Cf/Cb)(ρg/ρl)(u²/r²) − (Ck σ/ρl r³)y − (Cd μl/ρl r²)ẏ` with small `h`. Confirms A *solves* the ODE (guards against a mistranscribed constant that would agree between code and A but not B).
-- **Compare**: IGLOO YupdateTAB stepping vs A and B; and predicted breakup time `tb` (analytic first crossing `y=1`) vs code's `tb` at [L398](../../src/lib/Lib_Breakup.f90#L398).
-- **Tolerance**: A-vs-code ≤ 1e-12 (arithmetic). B-vs-A ≤ O(h⁴)·(sim length) RK4 truncation. Constant-`u` approximation error bounded by `Δu/u` over the window (make drag negligible: large `ρl d²`).
-- **Rest-drop threshold sub-test**: `y0=ẏ0=0`, sweep `We_r` across 6 ⇒ breakup fires iff `We_r>6` (checks the `bp(3)` design above).
+### Verification test T-TAB (`tab/test_breakup_tab.f90`, TAB1-TAB4)
+Non-tautological triangulation (YupdateTAB is literally the closed form, so code-vs-formula alone only checks transcription), through the public `breakupEvent` entry at a fixed slip `u` and radius `r`:
+- **Oracle A**: the analytic damped oscillator, with `ω, td, We_eff=We_r/12` derived *independently* from {Ck=8,Cd=5,Cf=1/3,Cb=1/2}.
+- **Oracle B**: RK4 of the raw ODE `ÿ = (Cf/Cb)(ρg/ρl)(u²/r²) − (Ck σ/ρl r³)y − (Cd μl/ρl r²)ẏ`. Confirms A *solves* the ODE (guards against a mistranscribed constant that would agree between code and A but not B).
+- **TAB1**: the code's stepping vs A over 500 steps at `We_r = 4` (sub-critical, no event), `y` and `ẏ/ω` within 1e-9 (round-off bound).
+- **TAB2**: B vs A on the same drop, within 1e-8 (RK4 truncation plus round-off).
+- **TAB3**: rest drop (`y0=ẏ0=0`), `We_r ∈ {5, 5.9, 6.1, 12}` ⇒ the event fires iff `We_r>6` (checks the `bp(3)` design above).
+- **TAB4**: breakup time at `We_r = 9`, weak damping: the code's `tb` ([L466](../../src/lib/Lib_Breakup.f90#L466)), bisected on the event flag, vs B's first `y=1` crossing, within the damping-neglect bound plus the bisection width.
 
 ---
 
 ## 2. ETAB — model (5)
 
 [ORA87 §ETAB extension / Tanner 1997]. Same oscillator (`bp(5)=Comega=8`, `bp(6)=Cmu=5`, `bp(3)=WeCrit×2=12`), but product size from exponential mass-rate law instead of energy sampling.
-[L472](../../src/lib/Lib_Breakup.f90#L472): `AWe = (k2/k1·√WeTrans − 1)/WeTrans⁴`, defaults `k1=k2=0.2`, `WeTrans=100`.
-[L509-512](../../src/lib/Lib_Breakup.f90#L509): `Kbr = k1·ω·(AWe·We⁴+1)` for `We≤WeTrans`, `Kbr = k1·ω·√We` for `We>WeTrans`; `r_new = r·exp(−(Kbr/ω)·acos(1−1/WeCr))`.
+[L543](../../src/lib/Lib_Breakup.f90#L543): `AWe = (k2/k1·√WeTrans − 1)/WeTrans⁴`, defaults `k1=k2=0.2222`, `WeTrans=80` ([Lib_INI.f90 L389-396](../../src/lib/Lib_INI.f90#L389)).
+[L580-584](../../src/lib/Lib_Breakup.f90#L580): `Kbr = k1·ω·(AWe·We⁴+1)` for `We≤WeTrans`, `Kbr = k2·ω·√We` for `We>WeTrans`; `r_new = r·exp(−(Kbr/ω)·acos(1−1/WeCr))`.
 
-### Verification test T-ETAB (rank #5)
-**Continuity of `Kbr` at `We=WeTrans`.** Below: `Kbr = k1·ω·(AWe·WeTrans⁴+1) = k1·ω·(k2/k1·√WeTrans) = k2·ω·√WeTrans`. Above: `k1·ω·√WeTrans`. Continuous **iff k1=k2** (true at default). Test: sweep `We` through `WeTrans`, assert `Kbr` continuous to machine eps for k1=k2, and assert the designed jump `k2/k1` for k1≠k2. Pure unit check; oscillator half re-uses T-TAB. ⚠ minor: AWe branch is only continuous at default constants — document, don't fix.
+### Verification test T-ETAB (`etab/test_breakup_etab.f90`, ET1-ET4)
+**Continuity of `Kbr` at `We=WeTrans`.** Below: `Kbr = k1·ω·(AWe·WeTrans⁴+1) = k1·ω·(k2/k1·√WeTrans) = k2·ω·√WeTrans`. Above: `k2·ω·√WeTrans`. Continuous for any k1, k2: ET2 asserts it at the default k1=k2, ET3 for k1≠k2 (the ln(r_new/r) ratio across WeTrans is 1 to 1e-6); ET1 is the sub-threshold drop, ET4 the product kick. Oscillator half re-uses T-TAB.
 
 ---
 
@@ -101,23 +99,23 @@ Non-tautological triangulation (YupdateTAB is literally the closed form, so code
 |---|---|
 | 12 < We ≤ 18 | 6·(We−12)^(−0.25) |
 | 18 < We ≤ 45 | 2.45·(We−12)^(0.25) |
-| 45 < We ≤ 351 | 14.1·(We−12)^(0.25) |
+| 45 < We ≤ 351 | 14.1·(We−12)^(−0.25) |
 | 351 < We ≤ 2670 | 0.766·(We−12)^(0.25) |
 | We > 2670 | 5.5 |
 
 Critical Weber (Oh-corrected): `Wc = 12·(1 + 1.077·Oh^1.6)`, `Oh = μl/√(ρl d σ)`.
 Max stable fragment: `d_stable = Wc·σ / (ρg·((1−V)·u)²)` where `V` = accumulated dimensionless drop velocity at breakup.
 
-### Code cross-check — T(We) & Wc(Oh) MATCH; d_stable structure MATCHES, V-coeffs UNVERIFIED
-[PilchErdman L118-139](../../src/lib/Lib_Breakup.f90#L118): `We = dp·rhog·vel²/sigma` (diameter ✓, unlike the other models which use radius). `Wec = 12(1+1.077·Oh^1.6)` ✓ [L120]. Branch table [L125-137] = paper table **exactly** (5.5 / 0.766 / 14.1 / 2.45 / 6, with (We−12)^±0.25, breakpoints 2670/351/45/18/12) ✓.
-`tau = TBT·dp/(vel·√(ρg/ρl))` [L145] = `T·t*` ✓.
-Oh-override [L139]: `Oh>0.1 & We<228 ⇒ T = 4.5(1+1.2·Oh^1.64)` — this is the PE87 viscous-drop breakup-time correction; ⚠ coefficients (4.5, 1.2, 1.64) plausible but NOT re-read from PE87 PDF — mark **inferred**.
-`VdV = √(ρg/ρl)·(0.75·Cd·T + 3·B·T²)` [L140], `dStable = Wec·σ/(ρg v²(1−VdV)²+toll)` [L141]. The `d_stable` *structure* matches PE87. The velocity polynomial coefficients (0.75, 3) with `Cd=bp(1)=1`, `B=bp(2)=0.116` are a truncated 2-term velocity-history fit; ⚠ **NOT verified against PE87** (PE87 gives a higher-order poly in normalized time). Treat as inferred.
+### Code cross-check — T(We), Wc(Oh) and d_stable MATCH
+[PilchErdman L142-163](../../src/lib/Lib_Breakup.f90#L142): `We = dp·rhog·vel²/sigma` (diameter ✓, unlike the other models which use radius). `Wec = 12(1+1.077·Oh^1.6)` ✓ [L144]. Branch table [L149-161] = paper table **exactly** (5.5 / 0.766 / 14.1 / 2.45 / 6, with (We−12)^±0.25, breakpoints 2670/351/45/18/12) ✓.
+`tau = TBT·dp/(vel·√(ρg/ρl))` [L169] = `T·t*` ✓.
+Oh-override [L163]: `Oh>0.1 & We<228 ⇒ T = 4.5(1+1.2·Oh^1.64)` — the PE87 viscous-drop breakup-time correction; coefficients (4.5, 1.2, 1.64) verified against the PE87 PDF.
+`VdV = √(ρg/ρl)·(0.75·Cd·T + 3·B·T²)` [L164], `dStable = Wec·σ/(ρg v²(1−VdV)²+toll)` [L165]. The `d_stable` structure matches PE87, and so does the truncated 2-term velocity-history fit (0.75, 3), with the defaults `Cd=bp(1)=1`, `B=bp(2)=0.116` ([Lib_INI.f90 L322-326](../../src/lib/Lib_INI.f90#L322)).
 
-### Verification tests
-- **T-PE-time (rank #2)**: tabulate `T(We)` at We ∈ {13,20,50,400,3000} and just inside each break (17.9/18.1, 44.9/45.1, …); assert continuity is *not* required (paper table is discontinuous at 18/45 by design — 2.45 vs 14.1) but each branch value matches the formula to 1e-12. Confirms transcription + branch bounds (`>` vs `≥`). Oracle = the table above.
-- **T-PE-Wec (rank #3)**: `Wc(Oh)` at Oh ∈ {0, 0.1, 1}: expect {12, 12·(1+1.077·0.1^1.6), 12·2.077}. 1e-12.
-- **T-PE-dStable (rank #6, low)**: only after PE87 velocity-poly confirmed. Blocked on the ⚠ above.
+### Verification tests (`pilch-erdman/test_breakup_pe.f90`, PE1-PE4)
+- **T-PE-time** (PE2): the rate at 12 Weber numbers, inside the branches and just inside each break (17.9/18.1, 44.9/45.1, 350/352, 2669/2671), each matching the table to 1e-12 (with `B` = 0.01, so that the low branches break); continuity is not asserted (the table's rounded constants meet to 0.2 % at the breaks). Confirms transcription + branch bounds (`>` vs `≥`). Oracle = the table above.
+- **T-PE-Wec**: `Wc(Oh)` enters the PE2-PE3 rates through the oracle's own Wec (Oh ≈ 0.01 and 0.2); no separate sweep at Oh ∈ {0, 0.1, 1} (expect {12, 12·(1+1.077·0.1^1.6), 12·2.077}).
+- **T-PE-dStable**: PE4 pins the `dp < dStable` guard (We = 20, default B); the d_stable plateau against PE87's closed form is gate 2 of [pilch-erdman-e2e](pilch-erdman-e2e/INFO.md) (tol 12 %).
 
 ---
 
@@ -129,57 +127,44 @@ Oh-override [L139]: `Oh>0.1 & We<228 ⇒ T = 4.5(1+1.2·Oh^1.64)` — this is th
 - **Stripping**: `We > Cstrip·√Re` (Cstrip=0.5). `d_stable = (2 Cstrip σ)²/(ρg u³ μg)`. `τ_strip = Cs·d·√(ρl/ρg)/u`, OpenFOAM Cs=10.
 
 ### Code cross-check — MATCHES (constant repackaging)
-[ReitzDiwakar L158-168](../../src/lib/Lib_Breakup.f90#L158): `We = radius·ρg·vel²/σ` = OpenFOAM's `0.5·ρg u² d/σ` ✓.
+[ReitzDiwakar L182-192](../../src/lib/Lib_Breakup.f90#L182): `We = radius·ρg·vel²/σ` = OpenFOAM's `0.5·ρg u² d/σ` ✓.
 Bag: `We>bp(1)=6` ✓; `dStable = 2σ·bp(1)/(ρg vel²) = 12σ/(ρg u²)` ✓; `τ = bp(2)·dp·√(0.0625·ρl dp/σ) = (π/4)·dp·√(ρl dp/σ) = 0.785·dp√(ρl dp/σ)` (bp(2)=π, √0.0625=1/4 ⇒ π/4=0.785=OpenFOAM Cb) ✓.
-Stripping: `We>bp(3)√Re`, bp(3)=0.5 ✓; `τ = bp(4)·0.5·dp·√(ρl/ρg)/u = 10·dp√(ρl/ρg)/u` (bp(4)=Cs=20, ×0.5 ⇒ 10=OpenFOAM Cs) ✓; `dStable=(2·bp(3)σ)²·Re/(dp ρg² u⁴)` = OpenFOAM `(2 Cstrip σ)²/(ρg u³ μg)` **iff `Re = ρg u dp/μg`** (gas Reynolds). ⚠ verify the `Re` passed into `breakupOde` is gas-based diameter Reynolds; if it is particle/other, `dStable` scales wrong. **All RD constants match once repackaged; ⚠ single open item = which Re.**
+Stripping: `We>bp(3)√Re`, bp(3)=0.5 ✓; `τ = bp(4)·0.5·dp·√(ρl/ρg)/u = 10·dp√(ρl/ρg)/u` (bp(4)=Cs=20, ×0.5 ⇒ 10=OpenFOAM Cs) ✓; `dStable=(2·bp(3)σ)²·Re/(dp ρg² u⁴)` = OpenFOAM `(2 Cstrip σ)²/(ρg u³ μg)` **iff `Re = ρg u dp/μg`** (gas Reynolds), which is the `Re` `breakupOde` receives ([Lib_RHS.f90 L804](../../src/lib/Lib_RHS.f90#L804): `Re = gas(1)·slip·d/gas(6)`). **All RD constants match once repackaged.**
 
-### Verification test T-RD (rank #4)
-Unit checks: (i) bag regime `We_r∈(6, 0.5√Re)` ⇒ `dStable=12σ/(ρg u²)`, `τ` per formula; (ii) stripping `We_r>0.5√Re` ⇒ stripping branch; (iii) sub-critical `We_r<6` ⇒ `npdotDot=0`. Oracle = OpenFOAM formulas above. Confirm `Re` convention first (blocks dStable-strip check).
+### Verification test T-RD (`reitz-diwakar/test_breakup_rd.f90`, RD1-RD4)
+Unit checks: (i) bag regime `We_r∈(6, 0.5√Re)` ⇒ `dStable=12σ/(ρg u²)`, `τ` per formula; (ii) stripping `We_r>0.5√Re` ⇒ stripping branch; (iii) sub-critical `We_r<6` ⇒ `npdotDot=0`; (iv) both sides of the handoff at `We_r=0.5√Re`. Oracle = OpenFOAM formulas above.
 
 ---
 
-## 5. Reitz-KHRT — model (3) — ⚠ CONTAINS A DIMENSIONAL BUG
+## 5. Reitz-KHRT — model (3)
 
 ### Paper
-[RD86 KH] Reitz 1987 KH linear stability: max growth rate and wavelength
+`[Reitz87]` Reitz 1987 KH linear stability: max growth rate and wavelength
 `Ω_KH·√(ρl a³/σ) = (0.34 + 0.38 We_g^1.5)/((1+Oh)(1+1.4 T^0.6))` ⇒ `Ω_KH = […]·√(σ/(ρl a³))` [units 1/s];
 `Λ_KH/a = 9.02(1+0.45 Oh^0.5)(1+0.4 T^0.7)/(1+0.87 We_g^1.67)^0.6`.
 RT: `Ω_RT = √[2·(g_t(ρl−ρg))^1.5 / (3√(3σ)·(ρl+ρg))]`, `Λ_RT = 2π C_RT/√(g_t(ρl−ρg)/(3σ))`.
 
 ### Code cross-check
-`lambdaKH` [L194](../../src/lib/Lib_Breakup.f90#L194): matches Reitz KH wavelength **exactly** ✓.
-`omegaRT` [L201](../../src/lib/Lib_Breakup.f90#L201), `lambdaRT` [L202](../../src/lib/Lib_Breakup.f90#L202), `tauRT=bp(3)/omegaRT` (Ctau=1): match ✓.
+`lambdaKH` [L225](../../src/lib/Lib_Breakup.f90#L225): matches Reitz KH wavelength **exactly** ✓.
+`omegaRT` [L232](../../src/lib/Lib_Breakup.f90#L232), `lambdaRT` [L233](../../src/lib/Lib_Breakup.f90#L233), `tauRT=bp(3)/omegaRT` (Ctau=1): match ✓.
+`omegaKH` [L223-224](../../src/lib/Lib_Breakup.f90#L223) (and its copy on the event path, [L331-332](../../src/lib/Lib_Breakup.f90#L331)):
+`(0.34+0.38·WeGas^1.5)/((1+Oh)(1+1.4·Tay^0.6)) * sqrt(sigma/(rhop*radius**3))` = the Reitz growth rate, units 1/s ✓.
+Consequently `tauKH = 3.726·B1·r/(Λ_KH·omegaKH)` [L227] and `dStable=2·B0·Λ_KH` [L228] are dimensionally sound ✓.
 
-> ⚠ **CODE-VS-PAPER DISCREPANCY (correctness-breaking, KHRT only).**
-> [L192-193](../../src/lib/Lib_Breakup.f90#L192) (and duplicated [L280-281](../../src/lib/Lib_Breakup.f90#L280)):
-> `omegaKH = (0.34+0.38·WeGas^1.5)/((1+Oh)(1+1.4·Tay^0.6)) * (sigma/rhop*radius**3)`
-> The trailing factor parses as `(σ/ρl)·r³` → units **m⁶/s²**, NOT a frequency. The Reitz growth rate needs `sqrt(σ/(ρl·r³))` → units 1/s.
-> So `omegaKH` is off by both a missing `sqrt` AND `r³` inverted (numerator vs denominator). Consequently `tauKH = 3.726·B1·r/(Λ_KH·omegaKH)` [L196] is dimensionally garbage, and `dStable=2·B0·Λ_KH` [L197] (which is dimensionally fine, ✓) is the only sound KH quantity. **Do NOT fix — flag only.** This is the direct analogue of the evaporation factor-2 the task warned about; it must be corrected before KHRT is trusted, in a separate change.
-
-### Verification test T-KHRT (rank #7, BLOCKED)
-A literature oracle for `Ω_KH`, `Λ_KH` exists (dimensionless plateau values at high We: `Ω_KH√(ρl a³/σ)→0.9`, etc.), but the coded `omegaKH` cannot pass any dimensional oracle as written. **Blocked pending the ⚠ fix.** `Λ_KH`, `Ω_RT`, `Λ_RT`, `Λ_RT<d` RT-trigger and child-drop cubic [L308-322] are independently testable and correct; defer to a KHRT-specific pass. Note KH-mass-shed branch [L337-346] is commented out.
+### Verification test T-KHRT (`reitz-khrt/`)
+`test_breakup_khrt.f90` (KH1-KH3: the pure-KH rate against the Reitz-87 paper chain, Z and T as the paper defines them, 1e-12), `test_kh_rayleigh_limit.f90` (the fit's `We_g→0, Z→0` corner against Rayleigh's 1878 dispersion relation), `test_khrt_interaction.f90` (the ODE and event copies of the KH and RT blocks agree on the RT predicate `Λ_RT<d`, `tc>τ_RT`; the RT branch lands the parcel on `Λ_RT`; the KH shed's stripped-mass partition). The cubic child count has no pointwise test. The KH-mass-shed branch is live code ([L357-401](../../src/lib/Lib_Breakup.f90#L357)).
 
 ---
 
-## Ranked shortlist — implement first
+## The tests, strongest oracle first
 
-1. **T-TAB (TAB closed-form oscillator)** — exact analytic oracle, all constants (Ck,Cd,Cf,Cb,K) verified vs [ORA87]/ANSYS Eq.24, triangulated code↔analytic↔RK4. Cleanest, strongest. **START HERE.**
+1. **T-TAB (TAB closed-form oscillator)** — exact analytic oracle, all constants (Ck,Cd,Cf,Cb,K) verified vs [ORA87]/ANSYS Eq.24, triangulated code↔analytic↔RK4. Cleanest, strongest.
 2. **T-PE-time** — PE87 table verified exactly; pure branch/transcription unit check, trivial oracle.
-3. **T-PE-Wec** — `Wc(Oh)` closed form, 3-point check.
-4. **T-RD** — matches OpenFOAM after repackaging; blocks only on Re convention.
-5. **T-ETAB** — Kbr continuity at WeTrans (exact at default k1=k2).
-6. **T-PE-dStable** — LOW: depends on unverified PE87 velocity poly (0.75,3).
-7. **T-KHRT** — BLOCKED by omegaKH ⚠ dimensional bug.
-
-Confirmed: TAB closed-form is the right #1 (task's expected winner).
-
----
-
-## Open questions for the user
-1. **KHRT omegaKH** ⚠ (L192/L280): confirm you want this logged as CODE-VS-PAPER only (no fix), and whether KHRT is in active use — if so it warrants a follow-up fix task. It should be `sqrt(sigma/(rhop*radius**3))`.
-2. **RD `Re`**: which Reynolds is passed into `breakupOde` (gas-based `ρg u d/μg`?)? Determines whether the stripping `dStable` matches [RD86]/OpenFOAM.
-3. **PE87 velocity poly**: do you have the PE87 PDF? Need to confirm the `VdV` coefficients (0.75·Cd·T + 3·B·T²) and the viscous-time override (4.5,1.2,1.64) before T-PE-dStable is trustworthy.
-4. Should these tests live under `tests/breakup/{tab,pilch-erdman,reitz-diwakar}/` (where they now live) with the harness in `test.sh`?
+3. **T-PE-Wec** — `Wc(Oh)` closed form, inside the PE rate checks.
+4. **T-RD** — matches OpenFOAM after repackaging, with the gas Reynolds number on the diameter.
+5. **T-ETAB** — Kbr continuity at WeTrans (for any k1, k2) and the product kick.
+6. **T-PE-dStable** — the `dp < dStable` guard; the d_stable plateau end to end.
+7. **T-KHRT** — the paper chain, the Rayleigh limit and the KH↔RT path agreement.
 
 ---
 

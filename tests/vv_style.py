@@ -16,13 +16,13 @@ still recolors plot text with the theme via
 `docs/stylesheets/extra.css` (`svg g[id^="text_"] { fill: currentColor }`) without
 touching the data lines/markers.
 
-Output is BYTE-REPRODUCIBLE: the 34 overlays are tracked in git, so a re-render
+Output is BYTE-REPRODUCIBLE: the overlays in docs/vv/images/ are tracked in git, so a re-render
 must not show up as a diff unless a curve actually moved. Two sources of per-run
 churn are pinned here -- `svg.hashsalt` (matplotlib otherwise seeds clip-path and
 glyph-def ids from a random uuid, ~180 changed lines per figure) and the embedded
 `<dc:date>` (suppressed by defaulting `metadata={'Date': None}` on savefig, see
-`_patch_savefig`). Without both, every `tests/test.sh all` dirtied all 34 files
-and a real change was invisible in the noise.
+`_patch_savefig`). Without both, every `tests/test.sh all` would dirty every tracked
+overlay and hide a real change in the noise.
 """
 import matplotlib as mpl
 
@@ -53,8 +53,8 @@ STYLE = {
     "xtick.labelsize": 10,
     "ytick.labelsize": 10,
     "legend.fontsize": 10,
-    # Opaque WHITE legend box (was transparent: legends inherited axes.facecolor
-    # "none"). The docs recolor plot text to the theme, so extra.css pins legend
+    # Opaque WHITE legend box (without it legends inherit axes.facecolor "none",
+    # transparent). The docs recolor plot text to the theme, so extra.css pins legend
     # text dark to stay readable on the white fill in dark mode.
     "legend.frameon": True,
     "legend.facecolor": "white",
@@ -70,7 +70,7 @@ def _patch_savefig():
     """Default `metadata={'Date': None}` on SVG saves -- kills the `<dc:date>` line.
 
     There is no rcParam for it, and patching once here beats threading the kwarg
-    through 22 identical `fig.savefig(out, ...)` call sites (and every future one).
+    through every `fig.savefig(out, ...)` call site (and every future one).
     Only SVG targets are touched: PNG metadata takes different keys.
     """
     global _savefig_patched

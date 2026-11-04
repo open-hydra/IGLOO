@@ -1,8 +1,8 @@
 program test_tc_analytic
     !
-    ! F2 unit family: Tonini-Cossali analytical gas-side model (TC2012), called
+    ! Unit checks of the Tonini-Cossali analytical gas-side model (TC2012), called
     ! DIRECTLY with correctly-ordered gas args. Independent transcription of the
-    ! pinned Eq (9*) chain (plan-bucket/f2-tc-derivation.md):
+    ! TC2012 rate in [ATC24]'s one-equation form, its Eq (9) (docs/theory/evaporation.md):
     !   rhs0 = (Mv/Minf)*ln[(1-Xinf)/(1-Xs)]   (molar Stefan driver)
     !   G(m) = m + (Ts/Tg - 1)*Lev*(f(m/Lev)-1) - rhs0,  f(x)=x/(1-e^-x)
     !   mdot = -pi*d*rho*Dv*Sh*m,  Sh = 2+0.6*Re^1/2*Sc^1/3 (bolt-on)
@@ -252,7 +252,7 @@ contains
         logical  :: pass, ovr
         ep = make_ep(Mv, Lv, cpv, Le0, Tboil)
         !> cold drop (Tts<1): variable density RAISES mhat above isothermal rhs0,
-        !  bounded by rhs0/Tts (exact bracket theorem, f2-tc-derivation.md)
+        !  bounded by rhs0/Tts (exact bracket theorem)
         call code_tc(rho0, Tg0, Tp0, dp0, 0._R8, ep, md, qd, ovr, mhat, Dv, Sh)
         call ora_surface(rho0, Tg0, Tp0, Mv, Lv, Tboil, Xs_c, YsO)
         rhs0 = ora_rhs0(Xs_c, Mv)

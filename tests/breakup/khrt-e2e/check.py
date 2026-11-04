@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""B-VAL-6 gate: KHRT continuous KH-stripping rate vs Reitz-1987 (Tier V/P).
+"""khrt-e2e gate: KHRT continuous KH-stripping rate vs Reitz-1987 (Tier V/P).
 
 25-drop RADIUS-based Weber sweep (make_pe_case.py --we-convention rad). KHRT (model 3)
 has TWO mechanisms: a continuous Kelvin-Helmholtz stripping ODE (npdot integrated, d
 relaxes toward dStable) and a Rayleigh-Taylor child/shed EVENT. This case gates the
-**KH-stripping rate** — the plan's Tier-V primary (`r(t)=r_s+(r0-r_s)e^{-t/τ_KH}`) — via
-the same initial-rate method as PE (B-VAL-1): the model-3 rate reduces to
+**KH-stripping rate** — its Tier-V closed form (`r(t)=r_s+(r0-r_s)e^{-t/τ_KH}`) — via
+the same initial-rate method as pilch-erdman-e2e: the model-3 rate reduces to
     dd/dt = (dStable - d)/τ_KH,  dStable = 2·B0·λ_KH,  τ_KH = 3.726·B1·r/(λ_KH·Ω_KH)
 with the Reitz-87 KH growth-rate Ω_KH and wavelength λ_KH correlations (Reitz 1987
 Atomization; Beale-Reitz 1999 hybrid). We code that closed form and require IGLOO's
@@ -15,19 +15,15 @@ SCOPE — the gate is the INITIAL rate (first ~3% diameter loss) on RT-FREE drop
 `We_r >= WE_MIN` (340). Restricting to the leading window keeps this gate measuring KH
 stripping and nothing else: a full-trajectory match would blend in the RT shatter.
 
-  History: WE_MIN was originally chosen while bug A19 was open (the RT event fired but
-  was reverted by updatePart, so every trajectory was pure KH). A19 was FIXED 2026-07-23,
-  which invalidated that reasoning, so the RT-freeness of the window was RE-MEASURED
-  against the fixed code on 2026-08-03: across all 14 gated drops the largest
+  The RT-freeness of the window is MEASURED: across all 14 gated drops the largest
   single-interval diameter ratio inside the window is 1.001 (an RT shatter is >= 1.8x),
-  i.e. zero RT events intrude. The threshold stands, now on evidence rather than on the
-  bug. `check_rt.py` is no longer a WILL_FAIL sentinel — it is a live gate asserting the
-  RT shatter fires AND PERSISTS (the A19 property).
+  i.e. zero RT events intrude; the threshold stands on that measurement. `check_rt.py`
+  gates the RT shatter: it fires AND PERSISTS.
 
 Lockstep note: check.py codes the SAME λ_KH/Ω_KH correlation as production, so this
 validates the *integration* path (cell crossings, the model-3 npdot→d reduction)
-end-to-end — NOT the Reitz-87 correlation itself. That independence gap is O7, closed
-unit-side on 2026-08-03 by:
+end-to-end — NOT the Reitz-87 correlation itself. That independence gap is closed
+unit-side by:
   * `test_kh_rayleigh_limit` — recovers λ_KH/Ω_KH from breakupOde by two-point inversion
     in B0 and checks the We→0, Z→0 corner against Rayleigh's 1878 dispersion relation,
     sharing no constant with the fit;
@@ -36,6 +32,9 @@ unit-side on 2026-08-03 by:
 
 SCATTER — every row of scatter-A.dat carries the diameter of its mass: |m - RHOP pi d^3/6|/m within the E13.6 prints
 of m and d, h(m)/m + 3 h(d)/d + 1e-9 (check_scatter_diameter); at least 1000 rows of at least 10 parcels.
+
+ZONES (G3) — one trajectory zone per parcel, its title's parent the injected parcel on the child's (Y, Z) line
+(check_zones).
 """
 import math
 import os
@@ -51,7 +50,7 @@ OUTLOC = "OUTPUT/outloc-A.dat"
 RUN_OUT = "run_out.txt"        # solver stdout: carries the per-pass child counts
 
 # Injected parcel mass-flow for this fixture: 25 inlet cells x 1.23636364e-02 kg/s each,
-# measured at injection (Lib_Integration sets part%mdot once, before any breakup).
+# measured at injection (initializePart, obj_particles.f90, sets part%mdot before any breakup).
 # A parcel's mdot is constant along its trajectory EXCEPT at breakup events, and every
 # breakup event is mass-conserving by construction, so the exit total must equal this.
 MDOT_INJECTED = 3.0909090909e-01
@@ -63,11 +62,11 @@ MUP, RHOP = 1.0e-3, 1000.0
 B0, B1, WELIM = 0.61, 20.0, 6.0        # Reitz-87 defaults (Lib_INI case 3)
 
 # ---- gate params ----
-WE_MIN  = 340.0      # RT-free initial window above this (re-measured 2026-08-03; see docstring)
+WE_MIN  = 340.0      # RT-free initial window above this (measured; see docstring)
 TOL_REL = 0.02       # initial-rate tol (observed <0.03% for the gated drops)
 N_GOOD  = 12         # of the 14 swept drops with We_r >= 340
 
-# ---- A23h "shed children actually fly" gate ----
+# ---- "shed children actually fly" gate ----
 N_INJECTED = 25      # inlet cells; IDs 1..25 are injected, higher IDs are KH-shed children
 MIN_TRAJ   = 5       # trajectory records a genuinely-integrated parcel must leave: its birth row and four more
 MIN_TRAVEL = 1.0e-3  # x-distance it must cover between birth and exit (domain is 0.15 long)
@@ -105,12 +104,12 @@ def kh_rate(d, slip):
 
 
 def check_mass_conservation():
-    """A23: total parcel mass-flow out == mass-flow in.
+    """Total parcel mass-flow out == mass-flow in.
 
-    This gate exists because a 29% mass-CREATION bug lived in KHRT undetected: the event
-    path re-derived mdot = npdot*rho*d^3*pi/6 from a current d paired with a STALE npdot
-    (and, before A23b, a stale d too), so parcel mass jumped at every breakup event. No
-    gate looked at mass, so the suite stayed green. Never remove this without replacing it.
+    An event path that re-derives mdot = npdot*rho*d^3*pi/6 from a current d paired with a
+    STALE npdot (or a stale d) makes parcel mass jump at every breakup event (29% mass
+    CREATED on this case); khrt-stress checks the same balance under heavy shedding. Never
+    remove this without replacing it.
     """
     try:
         rows = [l.split() for l in open(OUTLOC)]
@@ -131,27 +130,27 @@ def check_mass_conservation():
           f"mdot_in={MDOT_INJECTED:.8e}, rel={rel:.2e} (tol {MDOT_TOL:.0e}) "
           f"{'PASS' if ok else 'FAIL'}")
     if not ok:
-        print("[FAIL] KHRT does not conserve parcel mass-flow -- see BUGS.md A23.")
+        print("[FAIL] KHRT does not conserve parcel mass-flow (an event's mdot from a stale npdot or d).")
     return 0 if ok else 1
 
 
 def check_children_integrate():
-    """A23h: the KH-shed children must actually fly, not be born on the exit plane.
+    """The KH-shed children must actually fly, not be born on the exit plane.
 
-    The child origin capture used to sit in the outer cell-crossing loop guarded only by the
-    LATCHED `addChild`, so it re-ran on every later iteration and walked the child record
-    forward to the parent's then-current state. Children were therefore born ON the exit plane
-    and left without integrating at all: ZERO trajectory records, every one of them. Nothing
-    else in the suite can see this — `check_mass_conservation` is blind because the shed mass
-    is correct wherever the child is placed, and the KH-rate gate selects parents by We_r and
-    never looks at a child.
+    A child origin captured outside the finalize of the shed step (e.g. in the outer
+    cell-crossing loop, guarded only by the LATCHED `addChild`) re-runs on every later
+    iteration and walks the child record forward to the parent's current state: the children
+    are born ON the exit plane and leave without integrating at all, ZERO trajectory records
+    each. Nothing else in the suite can see this — `check_mass_conservation` is blind because
+    the shed mass is correct wherever the child is placed, and the KH-rate gate selects
+    parents by We_r and never looks at a child.
 
     Two framings this gate deliberately avoids, both of which look reasonable and are wrong:
 
       * "child exit x == parent exit x" — every parcel leaves through the same x = 0.15 plane,
         so that equality holds for CORRECT output too. It is not a signature of anything.
       * any parent<->child ID pairing — `kid%ID` follows the drain order over shed lists, not
-        the parent index. The apparent "+25" mapping only held while every parent shed once.
+        the parent index. The apparent "+25" mapping holds only when every parent sheds once.
 
     It is a POPULATION test, not a per-parcel one, because a parent may legitimately shed in
     its last cells: that child exits before the periodic trajectory print has fired four times
@@ -186,7 +185,7 @@ def check_children_integrate():
     kids = sorted(i for i in exit_x if i > N_INJECTED)
     if not kids:
         print("\n[FAIL] no KH-shed children were created -- this gate would be vacuous; "
-              "the shed path is the thing under test (see BUGS.md A23).")
+              "the shed path is the thing under test.")
         return 1
 
     grounded = []
@@ -204,7 +203,7 @@ def check_children_integrate():
     for pid, why in grounded[:5]:
         print(f"  [{'note' if ok else 'FAIL'}] child {pid}: {why}")
     if not ok:
-        print("[FAIL] shed children reach the exit without integrating -- see BUGS.md A23h.")
+        print("[FAIL] shed children reach the exit without integrating (born on the exit plane).")
         return 1
     return 0
 
@@ -212,10 +211,9 @@ def check_children_integrate():
 def check_multiple_sheds():
     """The per-parent shed list is unbounded — prove at least one parent used it twice.
 
-    Before this, `gr%child(ip)` was a single slot per parent and the pass window advanced, so
-    a parent was integrated once and could shed exactly once — a limit imposed by the data
-    structure, not by Reitz-87. With growable per-parent lists that cap is gone, but nothing
-    downstream would notice if it silently came back: mass still balances, children still fly,
+    A single shed slot per parent (with the pass window advancing) lets a parent shed exactly
+    once — a limit of the data structure, not of Reitz-87. The per-parent lists grow, but
+    nothing downstream would notice a one-shed cap: mass still balances, children still fly,
     and the KH-rate gate only looks at parents. The only observable is the count itself.
 
     Pass 1 integrates the N_INJECTED parents and nothing else, so more than N_INJECTED children
@@ -227,7 +225,7 @@ def check_multiple_sheds():
             if "number of children" in line:
                 counts.append(int(line.split("=")[-1]))
     except FileNotFoundError:
-        print(f"\n[FAIL] {RUN_OUT} not found -- cannot confirm the shed cap is lifted")
+        print(f"\n[FAIL] {RUN_OUT} not found -- cannot confirm that a parent sheds more than once")
         return 1
     if not counts:
         print("\n[FAIL] solver reported no children at all; the shed path did not run")
@@ -236,10 +234,43 @@ def check_multiple_sheds():
     print(f"\nunbounded shedding: pass-1 children = {counts[0]} from {N_INJECTED} parents "
           f"(need > {N_INJECTED}) {'PASS' if ok else 'FAIL'}; per-pass counts {counts}")
     if not ok:
-        print("[FAIL] no parent shed more than once -- the one-shed cap is back "
+        print("[FAIL] no parent shed more than once -- a one-shed cap "
               "(single slot per parent, or childDone latched at the capture).")
         return 1
     return 0
+
+
+def check_zones():
+    """G3: the trajectory file holds one zone per parcel, titled `Mat A Group  1 ID <id> parent <pid>` with I= its
+    rows, in parcel order (datcols.parcel_zones). The flow is along x, so the 25 injected parcels (IDs 1-25,
+    parent 0) ride 25 distinct (Y, Z) lines and a child stays on the line it was born on: its parent is the injected
+    parcel on that line, whose x range holds the child's birth row. One zone per child the log counts."""
+    try:
+        zs = datcols.parcel_zones(TRAJ)
+        nlog = sum(int(ln.split("=")[-1]) for ln in open(RUN_OUT) if "number of children" in ln)
+    except (OSError, ValueError) as e:
+        print(f"\n[FAIL] G3 {e}")
+        return 1
+    inj = {z["id"]: z for z in zs if z["parent"] == 0}
+    lines = {}
+    for z in inj.values():
+        lines.setdefault((z["rows"][0]["Y"], z["rows"][0]["Z"]), []).append(z["id"])
+    kids = [z for z in zs if z["parent"] != 0]
+    bad = [z["title"] for z in zs if z["image"] != 0 or (z["parent"] == 0) != (z["id"] <= N_INJECTED)]
+    for z in kids:
+        b, p = z["rows"][0], inj.get(z["parent"])
+        if (p is None or lines.get((b["Y"], b["Z"])) != [z["parent"]]
+                or not min(r["X"] for r in p["rows"]) <= b["X"] <= max(r["X"] for r in p["rows"])
+                or any((r["Y"], r["Z"]) != (b["Y"], b["Z"]) for r in z["rows"])):
+            bad.append(z["title"])
+    ok = (not bad and sorted(inj) == list(range(1, N_INJECTED + 1)) and len(lines) == N_INJECTED
+          and 0 < len(kids) == nlog)
+    print(f"\nG3 one zone per parcel: {len(inj)} injected (parent 0) on {len(lines)} distinct (Y, Z) lines; "
+          f"{len(kids)} children ({nlog} in the log), each titled with the injected parcel on its line and born in "
+          f"its x range: {len(bad)} off {'PASS' if ok else 'FAIL'}")
+    for t in bad[:3]:
+        print(f"  [FAIL] {t}")
+    return 0 if ok else 1
 
 
 def load_trajectories(path):
@@ -313,7 +344,7 @@ def gate_kh_rate(parts):
     n_good = n_viol = 0
     worst = 0.0
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:
@@ -338,7 +369,7 @@ def gate_kh_rate(parts):
 
     print(f"\ndrops gated (We_r >= {WE_MIN:.0f}): {n_good} (need >= {N_GOOD}); "
           f"violations (rel > {TOL_REL:.0%}): {n_viol}; worst rel {worst:.2e}")
-    print("[note] RT shatter is gated separately by check_rt.py (A19 fixed 2026-07-23); "
+    print("[note] RT shatter is gated separately by check_rt.py; "
           "window measured RT-free.")
     return n_good, n_viol
 
@@ -438,7 +469,7 @@ def check_scatter_diameter():
     """Every scatter row's d is the diameter of its m: |m - RHOP pi d^3/6|/m <= h(m)/m + 3 h(d)/d + SCAT_SECOND.
 
     The bound is the two prints' worst case: a d computed from m in double precision satisfies it on every row. A row
-    whose d lags its mass (a per-droplet diameter the state no longer carries) does not.
+    whose d lags its mass (a per-droplet diameter out of step with the state) does not.
     """
     try:
         zs = datcols.zones(SCAT)
@@ -488,12 +519,13 @@ def main():
     rc_shed = check_multiple_sheds()
     rc_src = check_source_budget()
     rc_scat = check_scatter_diameter()
+    rc_zone = check_zones()
 
     if n_good >= N_GOOD and n_viol == 0 and rc_mass == 0 and rc_kids == 0 and rc_shed == 0 \
-            and rc_src == 0 and rc_scat == 0:
+            and rc_src == 0 and rc_scat == 0 and rc_zone == 0:
         print("\n[PASS] IGLOO reproduces the Reitz-87 KH-stripping rate at every gated We_r, "
-              "conserves parcel mass-flow, sheds children that integrate, and writes scatter rows whose "
-              "diameter is that of their mass.")
+              "conserves parcel mass-flow, sheds children that integrate, writes scatter rows whose "
+              "diameter is that of their mass and one trajectory zone per parcel, a child's titled with its parent.")
         return 0
     if n_viol:
         print(f"\n[FAIL] {n_viol} drop(s) deviate from the Reitz-87 KH-stripping rate.")

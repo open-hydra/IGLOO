@@ -30,10 +30,17 @@ fails. F1 then fails, by design.
   records' Σ ṁ t within 1e-5 (model 1 deposits ṁ over the residence; the E13.6 `mdot` column bounds the
   exit side at 8e-7; measured −2.9e-7).
 - F3 the run ends normally.
+- L1 the parcel rule's last row at the failure (`tools/lastrow.py`): `check.py` runs a sibling in `ref-last/` with
+  the `IGLOO_EXE` executable, the input without `print-dcell` (no row key: the first and last rows) and with
+  `out-time = on`; each parcel's trajectory is its injection row and a last row at its exit record's state (X, Y, Z
+  within half the F12.6 quantum, t within the ES16.8 half-unit), its only row there: 50 rows.
 
 **RED.** Without the revert to the last accepted step on a solver failure, every exit record keeps the state and
 the time of its entry into the failing cell: F1' fails on all 25 parcels (margin 0: the same time printed twice);
-F1, F2 and F3 hold (that segment then deposits nothing and the exit record carries no residence in it).
+F1, F2 and F3 hold (that segment then deposits nothing and the exit record carries no residence in it). L1 on a
+binary from before the parcel rule (where no key means a row at every crossing): every parcel's trajectory ends at
+its entry into the failing cell (t = 7.4999e-3 against the exit's 7.5287e-3 s, 31 rows); with the last row left
+out of the rule (a mutant): the injection row alone.
 
 **The other exits, by mutation.** No fixture of the suite reaches the inner-loop cap or the non-finite exit (no
 run log holds an `Inner loop >` or a `non-finite state` line). Each is forced by

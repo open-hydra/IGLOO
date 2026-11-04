@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Gate for B-VAL-1: Pilch-Erdman breakup vs the PAPER'S published T*(We) correlation.
+"""Gate for pilch-erdman-e2e: Pilch-Erdman breakup vs the PAPER'S published T*(We) correlation.
 
-25-drop Weber sweep (make_pe_case.py). Per the re-scoped validation plan, the gate is
+25-drop Weber sweep (make_pe_case.py). The gate is
 IGLOO vs the PAPER's own model output: PE87's total-breakup-time correlation `T*(We)`
 (a closed-form model result, NOT our re-coding of the code, NOT experiment). We code
 PE87's correlation from the paper (Fig. 7 / p.748, continuous) and integrate the
@@ -11,28 +11,26 @@ IGLOO's measured d(t) to match that reference.
 PE87 total breakup time (dimensionless), CONTINUOUS at 18/45/351/2670:
   12<We<=18 : 6.0 (We-12)^-0.25
   18<We<=45 : 2.45(We-12)^+0.25
-  45<We<=351: 14.1(We-12)^-0.25      <-- was coded +0.25 (bug A16, FIXED 2026-07-22)
+  45<We<=351: 14.1(We-12)^-0.25
   351<We<=2670: 0.766(We-12)^+0.25
   We>2670   : 5.5
 
-Reduction (see FINDINGS 2026-07-21): model 3 integrates npdot; with m=aux/npdot and
+Reduction: model 3 integrates npdot; with m=aux/npdot and
 d^3 ~ 1/npdot the PilchErdman rate npdotDot=-3 npdot/d (dStable-d)/tau reduces to the
 diameter relaxation  d(d)/dt = (dStable - d)/tau,  tau = T* d/(slip sqrt(rho_g/rho_p)),
 dStable = Wec sigma/(rho_g slip^2 (1-VdV)^2),  VdV = sqrt(rho_g/rho_p)(0.75 Cd T*+3 B T*^2),
 Wec = 12(1+1.077 Oh^1.6),  Oh = mu_p/sqrt(rho_p d sigma).
 
-A16 (Lib_Breakup:130 sign) FIXED 2026-07-22 — this case gated it end-to-end.
-
-A17 (found 2026-07-22 by this gate; FIXED same day): the per-material assign_breakup
-call used to re-allocate and ZERO the module-level bp AFTER read_models() parsed
-[IGLOO-Models] Cd/B, so production integrated with Cd=B=0 (VdV=0). Fix: bp is now
-allocated+filled once in read_models(); assign_breakup no longer touches it
-(temporary — pending the per-material breakup generalization). With the fix all 25
-drops match the paper kernel to ~1e-4, so the gate is UN-SCOPED to We >= 45 with a
+The [IGLOO-Models] Cd/B reach the kernel through the material's breakup constants
+(assign_breakup sets the model flags only); with Cd=B=0 (VdV=0) the plateau below fails.
+All 25 drops match the paper kernel to ~1e-4, so the gate covers We >= 45 with a
 tight 1% tolerance (same-window LSQ on both sides cancels the finite-window bias of
-the decelerating rate). GATE 2: the d_stable plateau (B-VAL-2) vs PE87's closed form,
-tol 12% (asymptotic-approach tail + current-slip-vs-initial-U0 convention; the A17
-failure mode read 1.48-1.50 and the A16 one far worse — cleanly discriminated).
+the decelerating rate). GATE 2: the d_stable plateau vs PE87's closed form,
+tol 12% (asymptotic-approach tail + current-slip-vs-initial-U0 convention). The plateau
+sits 1.48-1.50 times the zero-bp fixed point (the r_zero-bp column); a solver with
+Cd=B=0 plateaus near that point (column 1.04-1.09) at 0.63-0.93 of the paper's d_stable,
+7 of its 8 plateaus outside the band; a +0.25 exponent on the 45-351 branch is far
+worse — cleanly discriminated.
 """
 import math
 import os
@@ -53,7 +51,7 @@ WE_SWEEP = [20, 30, 40, 50, 60, 75, 90, 110, 130, 150, 175, 200, 230, 260,
 
 # ---- gate params ----
 TOL_REL     = 0.01      # max relative rate error (observed agreement ~1e-4, 100x margin)
-WE_MIN_GATE = 45.0      # full sweep post-A17-fix; We<45 stays with the unit test
+WE_MIN_GATE = 45.0      # every drop of We >= 45; We<45 stays with the unit test
 N_GOOD      = 12        # of the 25 (some low/high-We drops break little in-domain)
 TOL_DST     = 0.12      # d_stable plateau vs PE87 closed form (see docstring GATE 2)
 N_PLATEAU   = 4         # min plateaued drops for the d_stable gate to be non-vacuous
@@ -66,7 +64,7 @@ def pe87_tstar(we):
     x = we - 12.0
     if   we <= 18.0:   return 6.0   * x**(-0.25)
     elif we <= 45.0:   return 2.45  * x**( 0.25)
-    elif we <= 351.0:  return 14.1  * x**(-0.25)     # NEGATIVE (A16 branch, fixed)
+    elif we <= 351.0:  return 14.1  * x**(-0.25)     # NEGATIVE exponent (PE87 Fig. 7)
     elif we <= 2670.0: return 0.766 * x**( 0.25)
     else:              return 5.5
 
@@ -81,7 +79,7 @@ def rate_dd(d, slip):
     if we <= wec:
         return 0.0
     ts = pe87_tstar(we)
-    if oh > 0.1 and we < 228.0:                       # Oh-override branch (Lib_Breakup:139)
+    if oh > 0.1 and we < 228.0:                       # Oh-override branch (Lib_Breakup PilchErdman)
         ts = 4.5 * (1.0 + 1.2 * oh**1.64)
     if not math.isfinite(ts):
         return 0.0
@@ -161,22 +159,23 @@ def wec_of(d):
 
 
 def bval2_gate(parts):
-    """B-VAL-2 GATE: maximum stable fragment d_stable (the paper's stated purpose).
+    """GATE 2: maximum stable fragment d_stable (the paper's stated purpose).
 
     For drops that plateau in-domain, gate the measured plateau d_end against PE87's
     published closed form d_stable(We0) = Wec*sigma/(rho_g*U0^2*(1-VdV)^2) at the
-    INITIAL conditions, tol TOL_DST. The zero-bp fixed point at plateau-onset slip is
-    printed as a diagnostic: the A17 failure mode read 1.48-1.50 there while deviating
-    ~50% from the paper; post-fix the paper ratio is 0.91-1.07 (asymptotic-approach
-    tail + production's current-slip vs the paper's initial-U0 convention).
+    INITIAL conditions, tol TOL_DST. The zero-bp fixed point (VdV = 0) at plateau-onset
+    slip is printed as a diagnostic: the plateau sits 1.48-1.50 times it, while a solver
+    with Cd=B=0 plateaus near it (1.04-1.09) at 0.63-0.93 of the paper's d_stable (7 of 8
+    plateaus outside TOL_DST). The paper ratio is 0.91-1.07 (asymptotic-approach tail +
+    production's current-slip vs the paper's initial-U0 convention).
     Returns (n_plateau, n_violations).
     """
-    print("\n[B-VAL-2] d_stable plateau vs PE87 closed form (gated, tol "
+    print("\n[GATE 2] d_stable plateau vs PE87 closed form (gated, tol "
           f"{TOL_DST:.0%}):")
     print(f"{'ID':>3} {'We0':>5} {'d_end(mm)':>9} {'r_zero-bp':>9} {'r_PE87':>7}  verdict")
     n_pl = n_bad = 0
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:
@@ -250,7 +249,7 @@ def main():
     n_good = n_viol = 0
     worst = 0.0
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:

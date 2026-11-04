@@ -26,7 +26,7 @@ The tight check of K lives on the runs at one d: the children and the parents be
 continuous KH stripping changes d on every interval and is checked by the bracket alone. The bracket is a bound by
 comparison: the heating rate falls with d and rises with the slip, and both only fall along a path. K's velocity is
 the oracle's premise, not the property under test: a failure of its U part alone means the Schiller-Naumann solution
-no longer reproduces the rows, not that the enthalpy state is wrong.
+does not reproduce the rows, not that the enthalpy state is wrong.
 
 ## Falsification (each a mutation of the code, measured)
 | mutation | what fails |

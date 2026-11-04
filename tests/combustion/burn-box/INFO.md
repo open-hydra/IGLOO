@@ -8,8 +8,10 @@
 - **DOI:** 10.1007/s10573-005-0067-2
 - **Tag:** `[Beck05]` (see [../../REFERENCES.md](../../REFERENCES.md))
 - **Reproduced:** the final burn-time correlation `t_b·X_eff·p^0.1·T0^0.2 = 0.00735·D^1.8`
-  (X_eff **linear**). Beckstead's Fig. 1 is the experimental `t_b`-vs-`D` scatter across
-  many datasets; it is **not digitized**, so no overlay of Fig. 1 is drawn.
+  (X_eff **linear**). Beckstead's Fig. 1, the experimental `t_b`-vs-`D` scatter across
+  many datasets, is digitized and drawn by [../beckstead-air/](../beckstead-air/INFO.md) beside its
+  burnout times; this case's `K-burn` is a verification constant, 15× below Eq. 7's at 1 atm and 300 K
+  (4.5e-7 against 6.747e-6 m^1.8/s), so its parcels leave the box half burned.
 
 ## What it verifies
 Uniform-gas box, `kv=1 kt=1`, `T-ign < Tp0` ⇒ burning from injection. `check.py` builds an
@@ -26,8 +28,8 @@ plus an independent RK4 of the lumped heat-release energy balance (Nu=2 stagnant
 particle it overlays the **IGLOO output** (markers) against the **Beckstead correlation curve**
 from `reference/beckstead.txt` (line) for `d(x)` and the RK4 energy-balance oracle for `Tp(x)`.
 A match visualises that IGLOO integrates the published `d^1.8` law and the heat-release balance.
-The **experimental Fig. 1** overlay (`t_b` vs `D`) would be the higher-fidelity paper
-comparison; Fig. 1 is not digitized.
+The **experimental Fig. 1** (`t_b` vs `D`) is drawn by `beckstead-air`, beside the burnout times of
+25 particles at a stated condition (air, 1 atm, 300 K) against Eq. 7.
 
 ## Pass criterion
 Truncation-budget tol on `d^n`; 0.1 K on `Tp`; 1% mass telescoping; ≥ 20 verified burners.

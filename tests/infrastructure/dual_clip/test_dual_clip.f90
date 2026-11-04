@@ -4,13 +4,13 @@ program test_dual_clip
     ! volume, no more.
     !
     ! The dual node ring is the geo cell CENTRES plus a ghost node reflected through each
-    ! boundary face centre (allocation.f90:110-125). So the dual has Nx+1 cells across Nx geo
+    ! boundary face centre (fill_dual_nodes in allocation.f90). So the dual has Nx+1 cells across Nx geo
     ! cells, and the first and last cell in every direction STRADDLE the boundary: half of
     ! each lies outside the domain, where no parcel can deposit. computeEulField divides a
     ! parcel's deposited mass by that volume, so an unclipped boundary cell reports a density
-    ! diluted by exactly the outside fraction. Measured on the JPL nozzle, the boundary geo
-    ! cells carried only 0.74 of the condensed mass flux -- at the inlet, where that flux is
-    ! imposed and must be reproduced exactly.
+    ! diluted by exactly the outside fraction. Measured on the JPL nozzle, an unclipped dual
+    ! leaves the boundary geo cells only 0.74 of the condensed mass flux -- at the inlet, where
+    ! that flux is imposed and must be reproduced exactly.
     !
     ! precomputeDualMetric clips each boundary cell by the fraction of its extent that lies
     ! inside, MEASURED from the mesh via insideFrac. On a uniform mesh with a reflected ghost
@@ -23,15 +23,15 @@ program test_dual_clip
     !   corner cell  = h^3/8      three
     !   interior     = h^3        none
     !
-    ! Unclipped, the sum overshoots by (Nx+1)(Ny+1)(Nz+1)/(Nx*Ny*Nz). Measured against the
-    ! 2D-only clip: D1 2.500x (60/24), D2 3.375x (27/8), and the corner cell is off by exactly
-    ! 8. That factor IS the historical bug -- and it is worst on a COARSE mesh, so a 3D case
-    ! small enough to iterate on is where it would have bitten hardest.
+    ! Unclipped, the sum overshoots by (Nx+1)(Ny+1)(Nz+1)/(Nx*Ny*Nz). Measured on a build that
+    ! clips the 2D branch only: D1 2.500x (60/24), D2 3.375x (27/8), and the corner cell is off
+    ! by exactly 8. The overshoot is worst on a COARSE mesh, so a 3D case small enough to iterate
+    ! on is where it bites hardest.
     !
-    ! D1/D2 run the 3D branch, which had no clip at all until this test was written and which
-    ! no e2e case GATES (box fixtures are Nk=5 but ord1, no dual; vie-plait runs the 3D dual at
-    ! gas-order 2 with nothing reading its field). D3/D4 run the 2D branch, which shipped
-    ! clipped -- they are the regression half, and they also pin that adding k did not disturb i/j.
+    ! D1/D2 run the 3D branch, which no e2e case GATES (the 3D gas-order-2 cases hold their
+    ! fields to a sibling run that clips alike, or read no eulerian field). D3/D4 run the 2D
+    ! branch -- the regression half -- and also pin that the third direction does not disturb
+    ! i/j.
     !
     ! The fixture is a uniform Cartesian box built through the PRODUCTION geometry path
     ! (compute_geometry + precomputeMetric), with the dual assembled exactly as
@@ -147,7 +147,7 @@ contains
                                                     ! H-thick layer is what it assumes
     end subroutine buildGeo
 
-    !> Dual block assembled exactly as allocation.f90:102-125 does it: interior nodes are geo
+    !> Dual block assembled exactly as fill_dual_nodes (allocation.f90) does it: interior nodes are geo
     !  cell centres, face ghosts are reflections through the boundary face centre.
     subroutine buildDual(dl, geo, is2D)
         type(obj_block), intent(out) :: dl
@@ -181,12 +181,11 @@ contains
         call fillEdges(dl, is2D)
     end subroutine buildDual
 
-    !> Edge/corner ghosts by the same cascading extrapolation as allocation.f90:127-155.
+    !> Edge/corner ghosts by the same cascading extrapolation as fill_dual_nodes (allocation.f90).
     !  computeVolume (3D) and getVertices (2D) read them for the boundary dual cells, so they
     !  must exist. ⚠ The i/j corner block runs in BOTH modes -- see `fill_dual_nodes` in
     !  allocation.f90, whose header spells the three groups out. Omitting it in 2D leaves
-    !  node(0,0) undefined and the boundary quad area is then garbage; this test caught
-    !  exactly that in its own fixture, which is why that header now exists.
+    !  node(0,0) undefined and the boundary quad area is then garbage.
     subroutine fillEdges(dl, is2D)
         type(obj_block), intent(inout) :: dl
         logical,         intent(in)    :: is2D

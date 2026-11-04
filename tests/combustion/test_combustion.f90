@@ -1,7 +1,7 @@
 program test_combustion
     !
-    ! M-family unit checks on IGLOO_Lib_Combustion::becksteadRate — the M1
-    ! Beckstead d^n burn-law closure, called DIRECTLY with the metal parameter
+    ! Unit checks on IGLOO_Lib_Combustion::becksteadRate — the Beckstead
+    ! d^n burn-law closure, called DIRECTLY with the metal parameter
     ! block laid out as Lib_RHS packs it (imKb..imQc).
     !
     !   CB1  closed-form oracle: m(t) = rho*pi/6*(d0^n - Keff*t)^(3/n) has an
@@ -187,7 +187,7 @@ contains
         !  anchor (100 um, X_eff=0.21, 1 atm, 300 K); the X_eff=0.21 points fail unless the
         !  code's X_eff exponent is 1 (linear, Beckstead final fit). p/T0 folded into K-burn.
         logical, intent(inout) :: ok
-        real(R8), parameter :: aC = 0.0244_R8    ! correlation coeff (ms, um, atm, K)
+        real(R8), parameter :: aC = 0.00735_R8   ! Eq. 7's a for n = 1.8 (ms, um, atm, K)
         real(R8), parameter :: dum(4)  = [100._R8, 50._R8, 200._R8, 100._R8]
         real(R8), parameter :: xe(4)   = [0.21_R8, 0.21_R8, 0.21_R8, 1.0_R8]
         real(R8) :: kb, keffA, tcorr, timpl, mdot, qrel, dm, err, tol

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-two-mat -- the first case in the suite with MORE THAN ONE MATERIAL (nm = 2).
+two-mat -- a case with MORE THAN ONE MATERIAL (nm = 2).
 
 Same box, gas, inlet and parcels as standard/drag-stokes, integrated for two materials that
 differ only by density (A: 2950 kg/m3, B: 1000 kg/m3), so each material's parcels relax on
@@ -33,8 +33,8 @@ Gates
       (0.68), so every parcel of either material carries mdot = krho/(1-krhoTot) * mdot_gas
       = 0.34/0.32 * 1.2e-3 = 1.275e-3 kg/s (drag-stokes: 0.618e-3) -- the arity-2 path of the
       krho fan-out, pinned from the outloc mdot column
-All of this ran for the first time on 2026-09-16; nothing here is a regression pin of a fixed
-bug -- it is the arity-2 execution of every per-material loop that had only ever seen nm = 1.
+These gates are the arity-2 execution of every per-material loop (nm = 2), not the pin of one
+defect.
 """
 import importlib.util
 import math
@@ -42,6 +42,8 @@ import os
 import sys
 
 HERE   = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
+import datcols                          # noqa: E402
 ORACLE = os.path.join(HERE, "..", "..", "standard", "drag-stokes", "check.py")
 MATS   = {"A": 2950.0, "B": 1000.0}     # kg/m3, properties.dat zones 1 and 2
 FAMILY = {"A": 1, "B": 2}               # euler<fam>.tec: families are numbered in material order
@@ -235,8 +237,8 @@ def main():
     # M6 / M7 ---------------------------------------------------------------------
     for mat in MATS:
         try:
-            nscat = sum(1 for ln in open(f"OUTPUT/scatter-{mat}.dat") if len(ln.split()) == 10)
-        except FileNotFoundError as e:
+            nscat = len(datcols.rows(f"OUTPUT/scatter-{mat}.dat"))
+        except (FileNotFoundError, ValueError) as e:
             rc |= fail(f"M6 {e}"); continue
         nexit = len(exits[mat])
         if nexit != N_PARCELS or nscat == 0:

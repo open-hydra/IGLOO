@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Gate for the planar-slab classification of a single-layer (Nk = 1) mesh.
 
-The defect (hydra test/evap-box-* since the wedge fold was introduced, refused outright since
-the 2026-09-17 sector-centring check): the axisymmetric detector in allocation.f90 measured
-the angular span of the two k-planes at the OUTERMOST node only. A planar slab of thickness
-t also spans atan(t/r) there, so every finite-thickness slab was taken for a wedge: the
-parcels were folded about the x axis on their first step (hydra's evap boxes logged dozens
-of "stuck in cell" events per run, the fold fighting the k-face reflection), and once the
-centring check landed the run stopped at setup ("wedge sector must be centred").
+The failure mode: an axisymmetric detector that measures the angular span of the two
+k-planes at the OUTERMOST node only. A planar slab of thickness t also spans atan(t/r) there,
+so such a detector takes every finite-thickness slab for a wedge: the sector-centring check
+then stops the run at setup ("wedge sector must be centred"), and without that check the
+parcels are folded about the x axis on their first step (on hydra's evap boxes such a fold
+logs dozens of "stuck in cell" events per run, the fold fighting the k-face reflection).
 
-A wedge spans the SAME angle at every radius; a slab's span decays as 1/r. The detector now
+A wedge spans the SAME angle at every radius; a slab's span decays as 1/r. The detector
 compares the innermost off-axis node with the outermost one and takes the 2D planar path
 when they disagree.
 
@@ -25,9 +24,10 @@ Asserts:
   4. y and z stay at their injection values to Y_TOL on every trajectory row (a fold would
      rotate z, and reflection off a mis-oriented k-face would move y).
 
-Verified RED with the pre-fix binary: exit 128, "Axisymmetric wedge: delthe = 0.04995840",
-"wedge sector must be centred on the azimuth origin". GREEN after: 21 rows per parcel, y and
-z bit-identical to the injection values, both exits at x = 0.1.
+RED on a build whose detector measures the span at the outermost node only: exit 128,
+"Axisymmetric wedge: delthe = 0.04995840", "wedge sector must be centred on the azimuth
+origin". GREEN on this one: 21 rows per parcel, y and z bit-identical to the injection
+values, both exits at x = 0.1.
 """
 import math
 import sys
