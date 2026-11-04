@@ -1,4 +1,4 @@
-# INFO — solidification (ODE model 6)
+# INFO — solidification (ODE models 6 and 7)
 
 Verifies the solidification track: a molten droplet (alumina) cooling through its melting point,
 **supercooling** to a nucleation temperature `T-nuc`, freezing abruptly with an adiabatic
@@ -24,6 +24,17 @@ recalescence is adiabatic and the latent heat passes between droplet and gas onl
 found strictly passed at a segment start is applied there; every transition lands inside the new phase (a
 freezing plateau at `T ≤ T_m`, a melting solid at `f ≤ 1`).
 
+Breakup acts on the liquid only (phases 0 and 1). TAB and ETAB are event models: the material stays ODE model 6
+and the breakup event is gated by the phase in force over the step. Pilch-Erdman, Reitz-Diwakar and KH-RT carry
+a number-rate ODE and make **ODE model 7**: `Z(9) = ṅ`, the drop mass `m = ṁ/ṅ` from the stream flow,
+`d = (6m/(πρ))^{1/3}`, the energy equation of the table above, and `dṅ/dt` the breakup model's rate in the liquid
+phases, 0 on the plateau and in the solid. A KH-RT child is born in its parent's phase.
+
+The drop's volume is its liquid part at the liquid density and its frozen fraction at the solid density, at
+constant mass: `d = (6m ((1 − f)/ρ_l(T) + f/ρ_s)/π)^{1/3}`. `ρ_l` is the material's density, constant or the
+`Density` column of the property table at the drop's temperature; `ρ_s` is the `rho-solid` token of the material
+line, the liquid density when absent. The mass changes only at a breakup event.
+
 ## Tests
 
 Unit family `test_solidification.f90`: an alumina-like particle, `ρ = 3970`, `d = 50 µm`, `c_l = 1888`,
@@ -43,6 +54,9 @@ at 1500 K in a 3000 K gas (`T_m` at `t_m = 9.41e-3 s`, molten at `2.28e-2 s`).
 | SG7 | independent integration | SG4's RK4 and event rule from a solid at 1500 K in a 3000 K gas: solid heating to `T_m` at `t_m = 9.412991e-3 s`, the melting plateau (`f` from 1 to 0 at 74.65 /s) to `2.280855e-2 s`, then liquid heating; vs the piecewise closed form at 14 solid, 12 plateau and 14 liquid epochs; the 12 plateau epochs at `T_m` exactly | closed form | SG4's: 1e-10 relative on `T`, 5e-12 on `f` | measured, no melt event: a solid at 2493.9669 / 2619.5104 / 2713.9074 K where `f` should be 3/4, 1/2, 1/4, 2784.8851 K at the end of the melt, `T` off by 0.188, no epoch at `T_m`, `f` off by 1.0 |
 | SG8 | landing | `solidTransition` from a state rounded past its threshold: freezing from `f = 1 − 1e-15` lands a solid at `T_m` exactly, melting from `T = T_m − 1e-12` the plateau at `f = 1` exactly; the new phase's event function `≥ 0`; the enthalpy kept | definition | bitwise; 4 ULP of `c_l T_m + |h_off|` | measured, landing clamps removed: `T − T_m = 9.1e-13 K` (a solid past its melt threshold) and `f − 1 = 1.1e-15` (a plateau past `f = 1`) |
 | SG9 | rule | `eventCrossed(gOld, gEnd)`: (1, −1) and (0, −1) cross, (0, 1), (1, 0) and (−1, −2) do not; on a 5 × 5 grid of event values the 6 crossings interpolate at `s = gOld/(gOld − gEnd)` in [0, 1], at 0 only from a start on the threshold; `eventPassed`: 0 no, −1e-300 yes, 1e-300 no | definition | exact | measured, the non-strict rule (a crossing at `gEnd ≤ 0` from `gOld > 0`, the catch-up at `g ≤ 0`): SG9a and SG9b fail |
+| SG10 | layout | `setupRHS(7, …)` for Pilch-Erdman, Reitz-Diwakar and KH-RT: the stream flow, `d`, `ρ`, `σ`, `μ`, the metal block and the phase slot (15 auxiliary slots), the KH-RT timer before the phase slot (3 state slots, 4 event variables; 1 and 0 for the other two); 9 equations, 15 with the Eulerian moments; a solidifying material is model 7 with a breakup ODE, model 6 without | definition | exact | — |
+| SG11 | production RHS | one model-7 `rhsSolidification` call per phase and breakup model at a 100 m/s slip (Stokes, Ranz-Marshall), `σ = 5e-3`, `μ = 1e-3`, `Z(9) = 1.5 ṁ/m_0` (rebuilt `d = 43.68 µm` against the injection 50 µm); `F(1:8)` against a model-6 call on the rebuilt `m` and `d`; `F(9)` against a direct `breakupOde` call (the RHS's acceleration, the KH-RT timer started); the Eulerian tail; the timer in the auxiliary state | model 6; the breakup routine | 1e-13 relative on `F(1:8)` (measured 3.6e-16), 1e-12 on `F(9)` (2.4e-16): two compilation units; exact on the zeros, on `F(9) = 0` on the plateau and in the solid (the direct rate non-zero there), on the tail (model 6's shifted by one slot, `F(15) = Z(9)`) and on the timer (written back in the liquid phases, kept in the frozen ones) | measured: the rate not gated by the phase fails SG11d and SG11f; model 7's `d` taken from the injection slot fails SG11a (0.145 = 50/43.68 − 1), SG11b and SG11c |
+| SG12 | analytic + production RHS | `rho-solid = 4600` on SG6's drop: `solidDiameter` at `f` ∈ {0, 0.3, 1} against `d0 (1 − f + f ρ_l/ρ_s)^{1/3}`; `setupRHS(6, …)` puts the solid-density slot right after the metal block (the emissivity after it with radiation); one `rhsSolidification` call per phase, `F(7)` or `F(8)` at that diameter, the other zero; a material set up without `rho-solid` after one with it has no such slot (13 auxiliary slots); with `emissivity = 0.5`, the solid's convective plus radiative heat at its diameter | closed form | 1e-14 relative (measured 5.7e-16 on `d`, 4.5e-16 on `F`, 5.3e-16 with radiation); exact on the layout | measured: the slot ignored in the RHS (`ρ_s = ρ_l`) fails SG12c by 5.0e-2; the reset removed fails SG12d; the radiation at the stored diameter fails SG12f by 1.1e-2 |
 
 `dump_curve('solidification-recalescence', 'SG4', …)` writes the unit figure `unit-solidification-recalescence.svg`.
 
@@ -50,11 +64,16 @@ at 1500 K in a 3000 K gas (`T_m` at `t_m = 9.41e-3 s`, molten at `2.28e-2 s`).
 
 | case | what it gates |
 |---|---|
-| [`solid-box`](solid-box/INFO.md) | the three regimes against their closed forms on the shared box, the event position, the energy deposit (global telescoping and the per-cell plateau heat) |
-| [`solid-melt`](solid-melt/INFO.md) | a solid heated to `T-melt` in a hotter gas: the solid, melting-plateau and liquid regimes against their closed forms, the event positions, the heat taken from the gas per plateau cell, no parcel lost at a phase boundary |
+| [`solid-box`](solid-box/INFO.md) | the three regimes against their closed forms on the shared box, the event position, the energy deposit (global telescoping and the per-cell plateau heat), the frozen fraction of every row |
+| [`solid-melt`](solid-melt/INFO.md) | a solid heated to `T-melt` in a hotter gas: the solid, melting-plateau and liquid regimes against their closed forms, the event positions, the heat taken from the gas per plateau cell, the frozen fraction of every row, no parcel lost at a phase boundary |
 | [`solid-box-euler`](solid-box-euler/INFO.md) | the equivalent-Eulerian field of model 6: coverage, `ρ_p/n_p = m`, `u_p`, `T_p` per cell |
 | [`solid-box-2mat`](solid-box-2mat/INFO.md) | a model-6 material followed by a model-1 one in one run |
 | [`solid-box-rad`](solid-box-rad/INFO.md) | the three regimes under radiation alone (`NoHeat`, `emissivity = 0.8`) against their closed forms, the plateau rows, the energy deposit |
 | [`scatter-weight-solid`](scatter-weight-solid/INFO.md) | the scatter cloud's marker count per parcel across the phase events: an event keeps the scatter weight of the part of the step it keeps |
+| [`solid-brk-tab`](solid-brk-tab/INFO.md) | TAB on a solidifying material (model 6): a family that nucleates before its first breakup never breaks up, one that breaks up while liquid keeps its size once frozen; flows and energy |
+| [`solid-brk-khrt`](solid-brk-khrt/INFO.md) | KH-RT on a solidifying material (model 7): stripping and RT on the liquid only, KH children born in their parent's phase and reaching the outlet; flows, energy, the Eulerian mass, the scatter rows |
+| [`solid-box-rhos`](solid-box-rhos/INFO.md) | `rho-solid` on solid-box: the mass on every row, the diameter of every row from its `f`, the plateau `f(x)` and the solid cooling against their closed forms, the energy deposit, the scatter rows |
+| [`solid-box-varrho`](solid-box-varrho/INFO.md) | a density table on solid-box: the mass on every row, the diameter of every row from the table at its `T`, the liquid and solid cooling against an independent integration, the plateau, the energy deposit |
+| [`solid-brk-tab-rhos`](solid-brk-tab-rhos/INFO.md) | TAB with `rho-solid`: a frozen drop keeps the mass of its last breakup, the diameter of every row from its `m` and `f`; flows and energy |
 | `repeatability/solid-box` | two sweeps reproduce each other: the phase and the frozen fraction are re-derived at injection |
-| `infrastructure/refusals/solid-*` | the eight setup refusals of the input contract (`h-fus`, `cp-solid`, `T-nuc < T-melt`, no evaporation, combustion or breakup, constant `cp` and density) |
+| `infrastructure/refusals/solid-*`, `rho-solid` | the seven setup refusals of the input contract (`h-fus`, `cp-solid`, `T-nuc < T-melt`, no evaporation or combustion, a constant `cp`, `rho-solid` not negative) |

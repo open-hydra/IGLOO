@@ -18,7 +18,7 @@
 - `tools/make_pe_case.py --we-convention rad --u-gas 200` + 25-point radius-based sweep
   `We_r ∈ {30 … 1000}` (d 0.36–12 mm), slip = 100 m/s (`κ_v=0.5`), σ=0.072, μ_l=1e-3,
   water drops (ATLAS-GPB fixtures). Validity: Oh≈0.005<1 and ρg/ρp≈0.0012<0.1 (the KHRT
-  hypothesis holds; no `[WARNING] ReitzKHRT hypothesis falling`).
+  hypotheses hold; no `[WARNING] Reitz-KHRT outside its hypotheses` line).
 - **Weber convention:** radius-based (KHRT/Reitz and production `Lib_Breakup.f90:182`).
 
 ## KH-shed children (A23g/A23h **CLOSED** 2026-08-04, one-shed cap lifted)
@@ -60,10 +60,11 @@ this gate without replacing it** — nothing else in the suite looks at mass.
 Three gates cover the KH-shed path, none of which the older ones could see:
 
 - **`check.py::check_children_integrate`** (A23h). A *population* test: ≥90 % of the shed
-  children must leave ≥4 trajectory records and cover ≥1e-3 in x between birth and exit.
-  Observed 98.8 %; the broken state scores 0 %. It is a population test on purpose — a parent
-  may legitimately shed in its final segment, giving a child that exits before the periodic
-  trajectory print fires (measured: 1 such child in 241). Requiring 100 % would be flaky.
+  children must leave ≥5 trajectory records (the birth row and four more) and cover ≥1e-3 in x
+  between birth and exit. Observed 98.8 %; the broken state scores 0 %. It is a population test on
+  purpose — a parent may legitimately shed in its last cells, giving a child that exits before the
+  periodic trajectory print has fired four times (measured: 3 such children in 241, born in the
+  last three cells). Requiring 100 % would be flaky.
   Deliberately **pairing-free**: `kid%ID` follows the drain order over shed lists, not the
   parent index, so the apparent `+25` parent↔child mapping is not a real invariant.
 - **`check.py::check_multiple_sheds`** (the cap lift). Pass-1 children (241) must exceed the

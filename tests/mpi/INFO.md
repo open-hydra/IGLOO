@@ -38,6 +38,7 @@ green, nothing decomposed. Without the witness this whole directory would be a v
 | `mpi-drag-stokes` | 2 | simplest path; closed-form oracle |
 | `mpi-conv-nu` | 4 | heat transfer, 4 ranks |
 | `mpi-khrt` | 4 | 241 children — the child-ID census, and the only oracle that reads the child count out of the solver log |
+| `mpi-khrt-plane` | 4 | `khrt-plane`'s oracle on the merged planes file: a child is born, integrated and recorded on its parent's rank, the four planes shards are merged into one `planes-A.dat`. RED with the planes stream left out of the merge: no `planes-A.dat`, four shards; rank 0's shard alone carries 7/25 of the flow through every plane (P1 rel 0.72) |
 | `mpi-bc-center-2grp` | 4 | the suite's **only** `ngroups=2` case, so the only real exercise of the rank-file merge's per-zone loop |
 | `mpi-two-mat` | 4 | the suite's **only** `nm=2` case: six shards merged per sweep, two `sourceMass` slots, two euler families reduced |
 | `mpi-timing-report` | 4 | the `[IGLOO-timing]` report (`timing = on`): the per-rank gather, one line and the strided parcel count per rank |

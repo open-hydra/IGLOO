@@ -61,9 +61,9 @@ def check_B(parts):
 
 def main():
     try:
-        pa, pb = sb.load_rows(TRAJ_A, 10), sb.load_rows(TRAJ_B, 10)
+        pa, pb = sb.load_rows(TRAJ_A, sb.TRAJ_COLS), sb.load_rows(TRAJ_B, sb.TRAJ_COLS)
         log = open(LOG, errors="replace").read()
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError, KeyError) as e:
         print(f"[FAIL] {e}")
         return 1
     fa, good_a, worst_a = sb.check_regimes(pa)

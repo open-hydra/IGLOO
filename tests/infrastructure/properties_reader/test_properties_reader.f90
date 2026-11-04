@@ -13,9 +13,12 @@ program test_properties_reader
     !                 PR14 comp_TfromTab: the inverse of lookupTab on tables from 250 K, 300 K and 1 K
     !                 PR15 lookupTab at a non-finite temperature: NaN, and no invalid flag
     !                 PR-V2 validate_vapour_columns: each code once
+    !                 PR-S2 validate_positive_column (Sigma, Viscosity): each code once
     !   two-material  PR9 nm-: zone A tabulated, zone B all zero (Clausius-Clapeyron)
     !   atlas-water   PR10 atlas-: the table ATLAS GPB writes for water with psat-vapour = H2O
     !                 PR-V1 atlas-: its Lv, Mv, Cpv columns by name, Lv(T) and cpv(T) through tableValue
+    !   sigma-mu      PR-S1 sm-: zone A's Sigma and Viscosity columns tabulated, zone B all zero (the
+    !                 [IGLOO-Properties] constants)
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_IO_INI,         only: read_IGLOO_input
@@ -31,7 +34,9 @@ program test_properties_reader
                                     PSAT_OK, PSAT_ABSENT, PSAT_NONFINITE, PSAT_NEGATIVE, PSAT_NONMONOTONE, &
                                     PSAT_CONSTANT, PSAT_TBOIL_RANGE, PSAT_TBOIL_MISMATCH, &
                                     validate_vapour_columns, VAP_OK, VAP_ABSENT, VAP_NONFINITE, VAP_PARTIAL, &
-                                    VAP_NONPOSITIVE, VAP_MV_VARIES, VAP_WITHOUT_PSAT, VAP_CC_MISMATCH
+                                    VAP_NONPOSITIVE, VAP_MV_VARIES, VAP_WITHOUT_PSAT, VAP_CC_MISMATCH, &
+                                    validate_positive_column, COL_OK, COL_ABSENT, COL_NONFINITE, COL_PARTIAL, &
+                                    COL_NONPOSITIVE
     use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_nan, ieee_positive_inf, &
                                              ieee_negative_inf
     use, intrinsic :: ieee_exceptions, only: ieee_set_flag, ieee_get_flag, ieee_invalid
@@ -60,6 +65,8 @@ program test_properties_reader
         call two_material_legs(nbad)
     case ('atlas-water')
         call atlas_water_legs(nbad)
+    case ('sigma-mu')
+        call sigma_mu_legs(nbad)
     case default
         write(*,'(a)') 'test_properties_reader: unknown mode "'//trim(mode)//'"'
         nbad = 1
@@ -251,6 +258,61 @@ contains
     end subroutine atlas_vapour_legs
 
 
+    !> PR-S1: a breaking material with Sigma and Viscosity columns takes them as its tables, bitwise at
+    !  every node, the end values outside the table and NaN at a NaN temperature; one whose columns are
+    !  zero keeps the [IGLOO-Properties] constants.
+    subroutine sigma_mu_legs(nbad)
+        integer, intent(inout) :: nbad
+        type(obj_material), allocatable :: mat(:)
+        character(len=32) :: prefix
+        real(R8) :: T(200), sig(200), mu(200), row(6), nan
+        integer  :: u, ios, n
+        character(len=512) :: line
+
+        prefix = 'sm-'
+        call read_cdp_properties(prefix, mat)
+        call check(mat(1)%sigVariable .and. mat(1)%mupVariable,  'PR-S1 sm-: zone A sigma and mu tabulated', nbad)
+        call check(nm == 2 .and. Tmin == 270 .and. Tmax == 370,   'PR-S1 sm-: two materials, Tmin = 270, Tmax = 370', nbad)
+        if (allocated(mat(1)%sigTab) .and. allocated(mat(1)%mupTab)) then
+            open(newunit=u, file='INPUT/sm-properties.dat', status='old', action='read')
+            n = 0
+            do
+                read(u, '(a)', iostat=ios) line
+                if (ios /= 0) exit
+                read(line, *, iostat=ios) row
+                if (ios /= 0) then
+                    if (n > 0) exit
+                    cycle
+                endif
+                n = n + 1
+                T(n) = row(1); sig(n) = row(5); mu(n) = row(6)
+            enddo
+            close(u)
+            call check(n == 101 .and. nint(T(1)) == Tmin,         'PR-S1 sm-: zone A read here spans the table', nbad)
+            call check(lbound(mat(1)%sigTab,1) == Tmin .and. ubound(mat(1)%sigTab,1) == Tmax .and. &
+                       lbound(mat(1)%mupTab,1) == Tmin .and. ubound(mat(1)%mupTab,1) == Tmax, &
+                       'PR-S1 sm-: sigma and mu tables on [270, 370]', nbad)
+            call check(all(mat(1)%sigTab == sig(1:n)),           'PR-S1 sm-: sigma(T) = the column, bitwise at the 101 nodes', nbad)
+            call check(all(mat(1)%mupTab == mu(1:n)),            'PR-S1 sm-: mu(T) = the column, bitwise at the 101 nodes', nbad)
+            call check(tableValue(mat(1)%sigTab, Tmin, Tmax, 200._R8) == sig(1) .and. &
+                       tableValue(mat(1)%sigTab, Tmin, Tmax, 400._R8) == sig(n) .and. &
+                       tableValue(mat(1)%mupTab, Tmin, Tmax, 200._R8) == mu(1) .and. &
+                       tableValue(mat(1)%mupTab, Tmin, Tmax, 400._R8) == mu(n), &
+                       'PR-S1 sm-: sigma and mu at 200 K and 400 K = the end nodes', nbad)
+            nan = ieee_value(1._R8, ieee_quiet_nan)
+            call check(ieee_is_nan(tableValue(mat(1)%sigTab, Tmin, Tmax, nan)) .and. &
+                       ieee_is_nan(tableValue(mat(1)%mupTab, Tmin, Tmax, nan)), 'PR-S1 sm-: a NaN temperature: NaN', nbad)
+        else
+            call check(.false.,                                   'PR-S1 sm-: sigma and mu tables allocated', nbad)
+        endif
+        call check(.not. mat(2)%sigVariable .and. .not. mat(2)%mupVariable .and. &
+                   .not. allocated(mat(2)%sigTab) .and. .not. allocated(mat(2)%mupTab), &
+                   'PR-S1 sm-: zone B all zero, no tables', nbad)
+        call check(mat(2)%sigma == 0.05_R8 .and. mat(2)%mup == 1.e-3_R8, &
+                   'PR-S1 sm-: zone B sigma = 0.05, mu = 1e-3 from [IGLOO-Properties]', nbad)
+    end subroutine sigma_mu_legs
+
+
     !> A column read from the file at T: linear between the nodes, the end value outside (tableValue's rule).
     pure function file_value(col, Tx) result(v)
         real(R8), intent(in) :: col(:), Tx
@@ -276,9 +338,9 @@ contains
     !> The table checks and the psat lookup on synthetic input, one outcome per code.
     subroutine function_legs(nbad)
         integer, intent(inout) :: nbad
-        real(R8) :: tab(100:110), bad(100:110), T(11), cp(11), rho(11), h(11), nan
-        character(len=64) :: tok4(4), tok5(5)
-        integer :: k, icp, irho, ih, ips, code, ilv, imv, icpv
+        real(R8) :: tab(100:110), bad(100:110), T(11), cp(11), rho(11), h(11), nan, col(5)
+        character(len=64) :: tok4(4), tok5(5), tok6(6)
+        integer :: k, icp, irho, ih, ips, code, ilv, imv, icpv, isig, imu
         integer :: nzone, nsize, ndata, ntrail, badline, nannounced(nzone_max), nrows(nzone_max)
         logical :: relative
 
@@ -324,31 +386,52 @@ contains
 
         ! PR8: the header names
         tok4 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy']
-        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
-        call check(code == TAB_OK .and. icp == 1 .and. irho == 2 .and. ih == 3 .and. ips == 0 .and. relative, &
-                   'PR8 the 4-column header: OK, relative, no Psat', nbad)
+        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
+        call check(code == TAB_OK .and. icp == 1 .and. irho == 2 .and. ih == 3 .and. ips == 0 .and. relative .and. &
+                   isig == 0 .and. imu == 0, 'PR8 the 4-column header: OK, relative, no Psat, no Sigma or Viscosity', nbad)
         tok5 = [character(len=64) :: 'temperature', 'PSAT', 'enthalpy_abs', 'cp', 'density']
-        call classify_table_tokens(tok5, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
+        call classify_table_tokens(tok5, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
         call check(code == TAB_OK .and. icp == 3 .and. irho == 4 .and. ih == 2 .and. ips == 1 .and. .not. relative, &
                    'PR8 aliases in another order: OK, absolute, Psat first', nbad)
         tok5 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'Enthalpy_abs']
-        call classify_table_tokens(tok5, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
+        call classify_table_tokens(tok5, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
         call check(code == TAB_TWO_ENTHALPY,                                     'PR8 both enthalpy names: TWO_ENTHALPY', nbad)
         tok5 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'Cp']
-        call classify_table_tokens(tok5, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
+        call classify_table_tokens(tok5, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
         call check(code == TAB_DUPLICATE,                                        'PR8 Cp twice: DUPLICATE', nbad)
         tok4 = [character(len=64) :: 'Cp', 'Temperature', 'Density', 'Enthalpy']
-        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
+        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
         call check(code == TAB_NO_TEMPERATURE,                                   'PR8 Temperature not first: NO_TEMPERATURE', nbad)
         tok4 = [character(len=64) :: 'Temperature', 'Density', 'Enthalpy', 'Psat']
-        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
+        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
         call check(code == TAB_NO_CP,                                            'PR8 no Cp: NO_CP', nbad)
         tok4 = [character(len=64) :: 'Temperature', 'Cp', 'Enthalpy', 'Psat']
-        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
+        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
         call check(code == TAB_NO_DENSITY,                                       'PR8 no Density: NO_DENSITY', nbad)
         tok4 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Psat']
-        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
+        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
         call check(code == TAB_NO_ENTHALPY,                                      'PR8 no enthalpy: NO_ENTHALPY', nbad)
+        tok6 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'VISCOSITY', 'sigma']
+        call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
+        call check(code == TAB_OK .and. isig == 5 .and. imu == 4 .and. ips == 0 .and. ilv == 0 .and. icpv == 0, &
+                   'PR8 VISCOSITY and sigma: their columns, by name', nbad)
+        tok6 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'Sigma', 'SIGMA']
+        call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
+        call check(code == TAB_DUPLICATE,                                        'PR8 Sigma twice: DUPLICATE', nbad)
+        tok6 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'viscosity', 'Viscosity']
+        call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
+        call check(code == TAB_DUPLICATE,                                        'PR8 Viscosity twice: DUPLICATE', nbad)
+
+        ! PR-S2: the Sigma and Viscosity column check, in its order of precedence
+        col = [0.07_R8, 0.06_R8, 0.05_R8, 0.04_R8, 0.03_R8]
+        call check(validate_positive_column(col) == COL_OK,                      'PR-S2 a positive column: OK', nbad)
+        call check(validate_positive_column(0._R8*col) == COL_ABSENT,            'PR-S2 all zero: ABSENT', nbad)
+        call check(validate_positive_column([col(1:2), nan, 0._R8, -1._R8]) == COL_NONFINITE, &
+                   'PR-S2 a NaN beside a zero and a negative value: NONFINITE', nbad)
+        call check(validate_positive_column([col(1:2), 0._R8, -1._R8, col(5)]) == COL_PARTIAL, &
+                   'PR-S2 a zero among non-zero rows (and a negative value): PARTIAL', nbad)
+        call check(validate_positive_column([col(1:2), -1.e-2_R8, col(4:5)]) == COL_NONPOSITIVE, &
+                   'PR-S2 a negative value: NONPOSITIVE', nbad)
 
         ! PR11: the columns
         cp = 2800._R8; rho = 700._R8; h = cp*T

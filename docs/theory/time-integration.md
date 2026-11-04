@@ -107,8 +107,9 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
 4. **NaN / tiny-step guard** — `exitLoop` is set if `any(y/=y)`, `deltat < dtMin`, or the
    step moved the particle by less than the containment tolerance.
 5. **Event breakup** — `breakupEvent` (TAB/ETAB/KHRT) detects and applies discrete
-   breakup events; `addChild` flag triggers child-parcel spawning.
-6. **Solidification event** (model 6) — the step ends strictly past the threshold of the
+   breakup events; `addChild` flag triggers child-parcel spawning.  On a solidifying material
+   they act only on a step taken in a liquid phase.
+6. **Solidification event** (models 6 and 7) — the step ends strictly past the threshold of the
    current phase (event function `T - T-nuc` before nucleation, `1 - f` or `f` on the plateau,
    `T-melt - T` for the solid) from a start at or before it; the step is aborted, and
    `ODEsystem` interpolates the state linearly to the crossing and applies the phase change
@@ -131,8 +132,8 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
 | `solout::exitLoop` | `any(y /= y)` or `deltat /= deltat` interrupts the solver |
 | `ODEsystem` | a non-finite state after the solver returns is reverted to the last good accepted step and the particle marked `gone`; on this exit and on a solver failure (`err < 0`) a consuming droplet (models 2, 4, 5) hands its remnant to the gas |
 | `ODEsystem` | a `deltat` update outside `[dtMin, huge)` is a hard error |
-| RHS routines (models 2–6) | any non-finite RHS entry (unphysical Newton trial: $m \le 0$, $\dot n_p \le 0$) is replaced by a `1e30` penalty so SDIRK4 rejects the step |
-| model 6 | no clamp or penalty on the frozen fraction $f$ within a phase: the solidification events own its crossings of 0 and 1; a transition lands inside the new phase (a freezing plateau at no more than `T-melt`, a melting solid at no more than $f = 1$) |
+| RHS routines (models 2–7) | any non-finite RHS entry (unphysical Newton trial: $m \le 0$, $\dot n_p \le 0$) is replaced by a `1e30` penalty so SDIRK4 rejects the step |
+| models 6, 7 | no clamp or penalty on the frozen fraction $f$ within a phase: the solidification events own its crossings of 0 and 1; a transition lands inside the new phase (a freezing plateau at no more than `T-melt`, a melting solid at no more than $f = 1$) |
 
 !!! note "Stuck-particle detection"
     A particle that stays in the same cell for more than `nMaxCell = 10` outer

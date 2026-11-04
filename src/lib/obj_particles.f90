@@ -6,7 +6,7 @@ module IGLOO_particles
   use IGLOO_Lib_Drag
   use IGLOO_Lib_Heat
   use IGLOO_Lib_Properties, only: tableValue, comp_TfromTab, Tmin, Tmax
-  use IGLOO_Lib_Solidification, only: hSolid
+  use IGLOO_Lib_Solidification, only: hSolid, solidDiameter
   use IGLOO_bcBox
   use IGLOO_data_block, only: obj_block, obj_flowblock, obj_bc_cell
   use IGLOO_RayFaceIntersection3D
@@ -57,6 +57,7 @@ module IGLOO_particles
     integer      :: Ninj      !> number of particle from the same cell
     integer      :: Ncell     !> number of integration loops in the same cell
     integer      :: ID        !> ID number
+    integer      :: parentID = 0   !> ID of the parcel that shed this one; 0 = injected
     integer      :: mID       !> material ID number
     integer      :: gID       !> group ID number
     integer      :: famID     !> family ID number
@@ -69,6 +70,7 @@ module IGLOO_particles
     logical      :: varSig    !> ODE system switch for sigma=sigma(T)
     logical      :: varPsat   !> ODE system switch for pSat=pSat(T)
     logical      :: brkupEvent=.false. !> flag active when breakup model is of type "event"
+    logical      :: newborn=.false.    !> a breakup child not yet integrated: its birth row is due
     !> ODE system configuration (set by assign_group2particle)
     integer      :: evapSelect  = 0    !> evaporation gas-side selector
     integer      :: brkupSelect = 0    !> breakup model selector
@@ -79,8 +81,8 @@ module IGLOO_particles
     integer      :: combSelect  = 0    !> metal combustion: 0 off, 1 Beckstead
     integer      :: solidSelect = 0    !> solidification:   0 off, 1 supercool + recalescence
     integer      :: solidPhase  = 0    !> solidification phase: 0 liquid, 1 undercooled, 2 plateau, 3 solid
-    real(R8)     :: fSolid      = 0._R8 !> frozen mass fraction, copy of stateVar(8) (model 6)
-    integer      :: model       = 1    !> RHS model (1-6)
+    real(R8)     :: fSolid      = 0._R8 !> frozen mass fraction, copy of stateVar(8) (models 6, 7)
+    integer      :: model       = 1    !> RHS model (1-7)
     integer      :: neq         = 7    !> number of ODE equations
     integer      :: nOde        = 7    !> number of ODE state variables
     logical      :: bodyAccum = .false. !> body-force J/W accumulators present (only models 2,4,5 & srcBodyForce)
@@ -114,6 +116,7 @@ module IGLOO_particles
     real(R8)     :: hFus       = 0._R8  !> heat of fusion [J/kg] (solidification)
     real(R8)     :: Tnuc       = 0._R8  !> nucleation temperature [K]; 0 => 0.8*Tmelt (solidification)
     real(R8)     :: cpSol      = 0._R8  !> solid specific heat [J/kg/K] (solidification)
+    real(R8)     :: rhoSol     = 0._R8  !> solid density [kg/m3]; 0 => the liquid density (solidification)
     real(R8)     :: qComb      = 0._R8  !> heat of combustion [J/kg]
     real(R8)     :: emissivity = 0._R8  !> grey-body surface emissivity; 0 = no radiation
   contains
@@ -179,9 +182,9 @@ contains
     !  the T state (cp=const) needs cp*T + hOff (hOff = 0 for a relative table)
     enthalpy = self%stateVar(7)
     if (.not.self%varCp) enthalpy = self%cp*enthalpy + self%hOff
-    !> model 6: the latent heat of fusion is part of the enthalpy
-    if (self%model == 6) enthalpy = hSolid(self%stateVar(7), self%stateVar(8), self%solidPhase, self%cp, &
-                                           self%cpSol, self%hFus, self%Tmelt, self%hOff)
+    !> solidification: the latent heat of fusion is part of the enthalpy
+    if (self%solidSelect > 0) enthalpy = hSolid(self%stateVar(7), self%stateVar(8), self%solidPhase, self%cp, &
+                                                self%cpSol, self%hFus, self%Tmelt, self%hOff)
     select case (self%model)
     case (2,4,5); mdot_inst = self%npdot * self%m
     case default; mdot_inst = self%mdot
@@ -306,10 +309,17 @@ contains
     case(4); self%m     = self%stateVar(8)
              self%npdot = self%stateVar(9)
     case(6); self%fSolid = self%stateVar(8)
+    case(7); self%fSolid = self%stateVar(8)
+             self%npdot  = self%stateVar(9)
+             self%m      = self%mdot/self%npdot
     end select
     if (self%model/=1 .or. self%varRho) then
       if (self%varRho) self%rho = tableValue(rhoTab, Tmin, Tmax, self%Tp)
-      self%d = (sixOverPi*self%m/self%rho)**oneThird
+      if (self%rhoSol > 0._R8) then
+        self%d = solidDiameter(self%m, self%fSolid, self%rho, self%rhoSol)
+      else
+        self%d = (sixOverPi*self%m/self%rho)**oneThird
+      endif
     endif
 
     if (eulerSwitch) then

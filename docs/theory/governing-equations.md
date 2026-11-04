@@ -15,18 +15,18 @@ depend on the active physics model (see [Model selection](index.md#model-selecti
 | 7 | $T_p$ (or $h_p$) | Temperature (K), or enthalpy when the material carries a $c_p(T)$ table | all |
 | 8 | $m$ | Droplet mass (kg); its rate is $\dot{m}$ | 2, 4, 5 |
 | 8 | $\dot{n}_p$ | Droplet-number rate of the parcel; its rate is the continuous breakup rate | 3 |
-| 8 | $f$ | Frozen mass fraction of a solidifying droplet (the temperature stays at index 7) | 6 |
-| 9 | $\dot{n}_p$ | Droplet-number rate for combined evap+breakup | 4 |
+| 8 | $f$ | Frozen mass fraction of a solidifying droplet (the temperature stays at index 7) | 6, 7 |
+| 9 | $\dot{n}_p$ | Droplet-number rate for combined evap+breakup, and for breakup on a solidifying droplet | 4, 7 |
 | +1 | $\ell$ | Arc-length integrand $|\mathbf{v}_p|$ | euler on |
-| +2–4 | $\mathbf{v}_p\,\ell$ | Momentum integrand $\mathbf{v}_p|\mathbf{v}_p|$ (weighted by the parcel mass $m$ for models 2 and 5 and by the stream mass $m\,\dot n_p$ for model 4; unweighted for models 1, 3 and 6; in the meridian frame on a wedge) | euler on |
-| +5 | $T_p\,\ell$ | Energy integrand (weighted by the parcel mass $m$ for models 2 and 5 and by the stream mass $m\,\dot n_p$ for model 4; unweighted for models 1, 3 and 6) | euler on |
-| +6 | $m$ or $\dot{n}_p$ | Mass moment (models 2, 4, 5) or number moment (model 3) | euler on, models 2–5 |
+| +2–4 | $\mathbf{v}_p\,\ell$ | Momentum integrand $\mathbf{v}_p|\mathbf{v}_p|$ (weighted by the parcel mass $m$ for models 2 and 5 and by the stream mass $m\,\dot n_p$ for model 4; unweighted for models 1, 3, 6 and 7; in the meridian frame on a wedge) | euler on |
+| +5 | $T_p\,\ell$ | Energy integrand (weighted by the parcel mass $m$ for models 2 and 5 and by the stream mass $m\,\dot n_p$ for model 4; unweighted for models 1, 3, 6 and 7) | euler on |
+| +6 | $m$ or $\dot{n}_p$ | Mass moment (models 2, 4, 5) or number moment (models 3 and 7) | euler on, models 2–5 and 7 |
 | +7 | $\dot{n}_p$ | Number moment | euler on, model 4 |
 | tail | $J$, $W$ | Body-force reaction accumulators $\int\dot m\,dt$ and $\int\dot m\,\mathbf{g}\cdot\mathbf{v}\,dt$ (models 2, 4, 5 with a body force and source output; $J$ reuses the euler mass moment when both are on) | see [Eulerian feedback](eulerian-feedback.md) |
 
-The state dimension is therefore 7 (model 1), 8 (models 2, 3, 5, 6) or 9 (model 4), plus
-5, 6 or 7 euler slots when `eulerSwitch` is on (5 for models 1 and 6; 6 for models 2, 3 and 5, whose sixth
-slot is the mass moment — the number moment $\dot n_p$ for model 3 —; 7 for model 4).
+The state dimension is therefore 7 (model 1), 8 (models 2, 3, 5, 6) or 9 (models 4 and 7), plus
+5, 6 or 7 euler slots when `eulerSwitch` is on (5 for models 1 and 6; 6 for models 2, 3, 5 and 7, whose sixth
+slot is the mass moment — the number moment $\dot n_p$ for models 3 and 7 —; 7 for model 4).
 
 The type `obj_particle` (defined in `obj_particles.f90`) stores the state in the allocatable
 `stateVar` array together with auxiliary fields: `m`, `d` (diameter), `npdot` (parcel rate),
@@ -92,8 +92,9 @@ the default, removes it).  With $c = c_{p,\mathrm{factor}}$ the energy equation 
 | 2, 4 | $F(7) = (f_2\,\dot Q_c + \dot Q_r + \dot m_\mathrm{evap}\,L_v)\,c/m$, with $f_2$ the Stefan-blowing factor (1 unless `blowing = LK`); under ASM and TC the model's own heat rate replaces $f_2\,\dot Q_c$ ([Evaporation](evaporation.md#droplet-energy-equation)) |
 | 5 | $F(7) = (\dot Q_c + \dot Q_r + \beta_\mathrm{part}\,q_\mathrm{comb}\,\lvert\dot m\rvert)\,c/m$ ([Combustion](combustion.md#heat-release)) |
 | 6 | $\dot Q = \dot Q_c + \dot Q_r$: liquid $F(7) = \dot Q/(m\,c_l)$, plateau $F(8) = -\dot Q/(m\,h_\mathrm{fus})$, solid $F(7) = \dot Q/(m\,c_s)$ ([Solidification](solidification.md)) |
+| 7 | as model 6, with the droplet mass $m = \dot m/\dot n_p$ from the stream flow ([Solidification](solidification.md#breakup-on-the-liquid)) |
 
-Where the gas viscosity vanishes (a degenerate gas), models 1 and 6 set $\dot Q_c = \dot Q_r = 0$.
+Where the gas viscosity vanishes (a degenerate gas), models 1, 6 and 7 set $\dot Q_c = \dot Q_r = 0$.
 
 ---
 

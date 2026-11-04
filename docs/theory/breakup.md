@@ -1,18 +1,25 @@
 # Breakup
 
-Five breakup models are available, selected by `[IGLOO-Models] breakup` in
-`input.ini` and assigned by `assign_breakup` in `src/lib/Lib_Breakup.f90`.  They split
-into two mechanistic classes:
+Five breakup models are available, selected per material — by the `breakup=<model>` token of
+the material's line in the phase file, else by `[IGLOO-Models] breakup` in `input.ini` — and
+assigned by `assign_breakup` in `src/lib/Lib_Breakup.f90`.  They split into two mechanistic
+classes:
 
 - **Continuous-rate (ODE)**: add a $\dot{n}_p$ equation to the ODE system; active models set
-  `brkupEqOde = .true.` → model 3 or 4.  `breakupOde` is evaluated inside the RHS.
+  `brkupEqOde = .true.` → model 3, 4 or 7.  `breakupOde` is evaluated inside the RHS.
 - **Event-based (solout callback)**: modify parcel diameter/count at a discrete breakup
   event detected in the `solout` callback.  These set `brkupEvent = .true.` and run under
-  model 1 or 2; they do **not** set `brkupEqOde`.
+  model 1, 2 or 6; they do **not** set `brkupEqOde`.
 
 With evaporation on, an event model runs as model 2 and Reitz-KHRT as model 4: both keep the
 droplet mass as an ODE state, and an event writes its new diameter into it together with the
 rescaled number rate (and, for model 4, the number-rate state), at constant stream mass.
+
+On a solidifying material breakup acts on the liquid only, in the liquid and undercooled-liquid
+phases, and stops at nucleation: an event model keeps model 6 with its event applied only in
+those phases, and a continuous-rate model runs as model 7, whose number-rate equation is off from
+the nucleation to a complete re-melt; a KH child is born in its parent's phase (see
+[Solidification](solidification.md#breakup-on-the-liquid)).
 
 | Model | Keyword | `brkupEqOde` | `brkupEvent` | Spawns children |
 | :--- | :--- | :---: | :---: | :---: |
@@ -22,10 +29,17 @@ rescaled number rate (and, for model 4, the number-rate state), at constant stre
 | TAB | `TAB` | no | yes | no |
 | ETAB | `ETAB` | no | yes | no |
 
-Model constants are read from `[IGLOO-Models]` under the names listed per model below
-(defaults in the [registry](../user/registry.md)); the same set applies to every material.
-The liquid properties they need — surface tension $\sigma$ and viscosity $\mu_p$ — come
-from `INPUT/properties.dat` or the `[IGLOO-Properties] sigma` / `mu` overrides.
+Each constant of a material's model is, in order of precedence, the material's own
+`<tag>-<key>` token on its phase-file line (tags `PE`, `RD`, `KHRT`, `TAB`, `ETAB`; the key is
+the name listed per model below, as in `TAB-Comega=10` or `KHRT-B1=40`), the `[IGLOO-Models]`
+key of that name, or its default (in the [registry](../user/registry.md)). TAB and ETAB each
+take their own `Comega`, `Cmu` and `WeCrit` tokens; a token of a model the material does not
+run is accepted and unused. The liquid properties the models need — surface tension
+$\sigma$ and viscosity $\mu_p$ — are, per material, either the `Sigma` / `Viscosity` columns of
+`INPUT/properties.dat` at the droplet temperature (linear between the nodes, the end values
+outside the table) or the `[IGLOO-Properties] sigma` / `mu` constants, not both, and are
+required (> 0) only for a material that breaks (see
+[Property tables](../user/input.md#property-tables-inputpropertiesdat)).
 
 ---
 
@@ -144,6 +158,11 @@ Two discrete events ride on top of it in the `solout` callback:
   never enters the gas source: the parent's outgoing flux in the shed segment includes the
   child's birth flux, which the child deposits along its own path (see
   [Eulerian feedback](eulerian-feedback.md)).
+
+The solver checks the model's validity range, $\mathrm{Oh} \le 1$ and $\rho_g/\rho_p \le 0.1$, at
+every evaluation, and runs the model outside it too. It counts the evaluations that leave the
+range, over threads and ranks, and when the count N is not zero the sweep ends with one line,
+`[WARNING] Reitz-KHRT outside its hypotheses (Oh > 1 or rho_g/rho_p > 0.1) in N model evaluations`.
 
 ---
 

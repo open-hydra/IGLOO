@@ -44,7 +44,7 @@ def main():
             return 1
     log = open(LOG, errors="replace").read()
     rho_p, u_p, v_p, w_p, T_p, n_p = read_euler(EUL)
-    parts = sb.load_rows(TRAJ, 10)
+    parts = sb.load_rows(TRAJ, sb.TRAJ_COLS)
 
     n_cells = n_band = n_plat = 0
     uncovered, worst_m, worst_u, worst_vw, worst_T, worst_pl = [], 0.0, 0.0, 0.0, 0.0, 0.0

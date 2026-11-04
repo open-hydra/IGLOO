@@ -1,8 +1,10 @@
 program test_material_tokens
     !
-    ! The twenty material-line tokens of the phase file (key=value after "<name> <groups>", read by
-    ! IGLOO_IO_INI::apply_material_key), their defaults (set_material_defaults) and the finalize rules
-    ! (finalize_material_models), driven on an obj_material built here: no input file.
+    ! The material-line tokens of the phase file (key=value after "<name> <groups>", read by
+    ! IGLOO_IO_INI::apply_material_key): six model words, the breakup word, fourteen reals and the
+    ! twenty-three breakup constants; their defaults (set_material_defaults), the finalize rules
+    ! (finalize_material_models) and the breakup constants' resolution (apply_breakup_tokens), driven on
+    ! an obj_material built here: no input file.
     !
     !   MT1  the 14 reals after set_material_defaults + finalize, on a material whose 14 reals were
     !        poisoned first (a dropped default cannot hide behind the type's initializer)
@@ -12,13 +14,19 @@ program test_material_tokens
     !   MT4  finalize: T-nuc = 0.8 T-melt from T-melt alone; an explicit T-nuc kept; combustion with
     !        evaporation disables the evaporation, in either token order
     !   MT5  a repeated key: the last value wins
+    !   MT6  each breakup constant token alone, on a material of each of the five models (its constants
+    !        poisoned, bpMethod 2): on its own model exactly its slot takes the value (the two WeCrit
+    !        doubled, TAB-method sets bpMethod), on the four others nothing moves; the 14 reals and the
+    !        selectors keep theirs. The token table is this test's own, never Lib_Breakup's
+    !   MT7  TAB's product-size scale: TAB-n=4 gives Gamma(1.5)/Gamma(1.75), with TAB-method=1 it is 1
     !
     ! Equality is exact: the reader's list-directed read and the compiler's literal both round the same
     ! decimal string correctly.
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_data_phases, only: obj_material
-    use IGLOO_IO_INI,      only: set_material_defaults, apply_material_key, finalize_material_models
+    use IGLOO_IO_INI,      only: set_material_defaults, apply_material_key, finalize_material_models, &
+                                 apply_breakup_tokens
     implicit none
 
     integer,  parameter :: NR = 14
@@ -46,10 +54,30 @@ program test_material_tokens
     integer, parameter :: WEXP(NW) = [0, 1, 2, 3, 4, 5, 0, 1, 0, 1, 0, 1, 1, 1, 0]
     integer, parameter :: SENT(6)  = [-11, -12, -13, -14, -15, -16]
 
+    !> breakup constant tokens: key, model (1 Pilch-Erdman, 2 Reitz-Diawakar, 3 Reitz-KHRT, 4 TAB, 5 ETAB),
+    !  slot of the model's constants (0: bpMethod), value, stored value (the two WeCrit doubled)
+    integer, parameter :: NT = 23
+    character(len=13), parameter :: TKEY(NT) = [character(len=13) :: 'PE-Cd', 'PE-B', 'RD-WeBag', 'RD-Cb', &
+        'RD-Cstrip', 'RD-Cs', 'KHRT-B0', 'KHRT-B1', 'KHRT-Ctau', 'KHRT-CRT', 'KHRT-mShedLim', 'KHRT-WeLimit', &
+        'TAB-Comega', 'TAB-Cmu', 'TAB-WeCrit', 'TAB-method', 'TAB-n', 'ETAB-k1', 'ETAB-k2', 'ETAB-WeCrit', &
+        'ETAB-WeTrans', 'ETAB-Comega', 'ETAB-Cmu']
+    integer, parameter :: TMOD(NT)  = [1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5]
+    integer, parameter :: TSLOT(NT) = [1, 2, 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 1, 2, 3, 0, 4, 1, 2, 3, 4, 5, 6]
+    character(len=6), parameter :: TVAL(NT) = [character(len=6) :: '1.25', '0.125', '7.5', '3.25', '0.625', &
+        '8', '0.5', '40', '1.5', '0.25', '0.0625', '12', '10', '4.5', '7', '1', '2.75', '0.3', '0.15', '9', &
+        '100', '6.5', '3.5']
+    real(R8), parameter :: TEXP(NT) = [1.25_R8, 0.125_R8, 7.5_R8, 3.25_R8, 0.625_R8, 8._R8, 0.5_R8, 40._R8, &
+        1.5_R8, 0.25_R8, 0.0625_R8, 12._R8, 10._R8, 4.5_R8, 14._R8, 1._R8, 2.75_R8, 0.3_R8, 0.15_R8, 18._R8, &
+        100._R8, 6.5_R8, 3.5_R8]
+    character(len=14), parameter :: MWORD(5) = [character(len=14) :: 'Pilch-Erdman', 'Reitz-Diawakar', &
+        'Reitz-KHRT', 'TAB', 'ETAB']
+    integer, parameter :: NBP(5) = [2, 4, 6, 4, 6]
+
     type(obj_material) :: mat
     real(R8) :: v(NR), ex(NR), tmelt, tnuc
-    integer  :: nbad, i, k
-    logical  :: ok
+    real(R8), allocatable :: bpex(:)
+    integer  :: nbad, i, k, s, mex
+    logical  :: ok, okAll
 
     nbad = 0
 
@@ -137,6 +165,49 @@ program test_material_tokens
     call check(mat%evapSelect == 4 .and. trim(mat%evapWord) == 'ASM', &
                'MT5 evaporation=CEM then evaporation=ASM: the last wins', nbad)
 
+    ! ---- MT6: each breakup constant token alone, on a material of each model -----------------------
+    do i = 1, NT
+        okAll = .true.
+        do s = 1, 5
+            call breaking(mat, s)
+            call apply_material_key(1, mat, trim(TKEY(i)), trim(TVAL(i)))
+            call apply_breakup_tokens(1, mat)
+            bpex = spread(POISON, 1, NBP(s))
+            mex  = 2
+            if (TMOD(i) == s) then
+                if (TSLOT(i) == 0) then
+                    mex = nint(TEXP(i))
+                else
+                    bpex(TSLOT(i)) = TEXP(i)
+                end if
+            end if
+            ok = size(mat%bp) == NBP(s)
+            if (ok) ok = all(mat%bp == bpex)
+            ok = ok .and. mat%bpMethod == mex .and. mat%brkupSelect == s .and. all(reals(mat) == DEF0)
+            do k = 1, 6
+                ok = ok .and. getSel(mat, k) == 0
+            end do
+            if (.not. ok) write(*,'(3a,*(1x,es12.4))') '        on ', trim(MWORD(s)), ': bp =', mat%bp
+            okAll = okAll .and. ok
+        end do
+        call check(okAll, 'MT6 '//trim(TKEY(i))//'='//trim(TVAL(i))//': its slot of '//trim(MWORD(TMOD(i)))// &
+                   ' only, the four other models unmoved', nbad)
+    end do
+
+    ! ---- MT7: TAB's product-size scale ------------------------------------------------------------
+    call breaking(mat, 4)
+    mat%bpScale = POISON
+    call apply_material_key(1, mat, 'TAB-n', '4')
+    call apply_breakup_tokens(1, mat)
+    call check(abs(mat%bpScale - gamma(1.5_R8)/gamma(1.75_R8)) <= 1e-15_R8, &
+               'MT7 TAB-n=4 under method 2: bpScale = Gamma(1.5)/Gamma(1.75)', nbad)
+    call breaking(mat, 4)
+    mat%bpScale = POISON
+    call apply_material_key(1, mat, 'TAB-n', '4')
+    call apply_material_key(1, mat, 'TAB-method', '1')
+    call apply_breakup_tokens(1, mat)
+    call check(mat%bpScale == 1._R8 .and. mat%bpMethod == 1, 'MT7 TAB-n=4 with TAB-method=1: bpScale = 1', nbad)
+
     write(*,*)
     if (nbad == 0) then
         write(*,'(a)') '[PASS] test_material_tokens: every token sets its own field, defaults and finalize as pinned'
@@ -155,8 +226,23 @@ contains
         m%evapSelect = 0;  m%liqSelect = 0;  m%intfSelect = 0
         m%boilSelect = 0;  m%combSelect = 0; m%solidSelect = 0
         m%evapWord = ' '
+        m%brkupSelect = 0;  m%brkupWord = ' '
+        m%bpGiven = .false.;  m%bpTok = 0._R8
+        if (allocated(m%bp)) deallocate(m%bp)
+        m%bpMethod = 1;  m%bpScale = 1._R8
         call set_material_defaults(m)
     end subroutine fresh
+
+    !> A fresh material of breakup model s (by its token), its constants poisoned and bpMethod 2.
+    subroutine breaking(m, s)
+        type(obj_material), intent(inout) :: m
+        integer,            intent(in)    :: s
+        call fresh(m)
+        call apply_material_key(1, m, 'breakup', trim(MWORD(s)))
+        allocate(m%bp(NBP(s)))
+        m%bp = POISON
+        m%bpMethod = 2
+    end subroutine breaking
 
     !> The 14 reals in the reader's token order.
     function reals(m) result(r)

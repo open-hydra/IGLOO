@@ -40,8 +40,10 @@ Parameters not specified take their default values. Unknown sections are silentl
 IGLOO reads only the `[IGLOO-*]` sections above. The sections below are the *preprocessor's* input:
 whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase.txt`,
 `properties.dat`, `bc.txt`). The per-material model keys (`evaporation`, `combustion`, `solidification`,
-`alpha-e`, ...) are `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after `<name> <groups>`
-on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
+`breakup`, `alpha-e`, ...), the solidification constants (`h-fus`, `cp-solid`, `T-melt`, `T-nuc`, `rho-solid`; see
+[Solidification](../theory/solidification.md#inputs)) and the breakup constants (`<tag>-<key>`, as `KHRT-B1`; table under
+[`[IGLOO-Models]`](#igloo-models)) are `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after
+`<name> <groups>` on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
 The `<groups>` summed over the material lines is the family count, and therefore the number of table
 copies `bc.txt` may carry (one copy feeds every family; see [Several families](boundary-conditions.md#several-families)).
 
@@ -130,6 +132,7 @@ Controls the gas field source, output modes, and miscellaneous run-time options.
 | `print-dtime` | real | `−1` | Trajectory row interval [s]; `−1` disables time-based rows |
 | `time-end` | real | `−1` | Parcel end time [s]: every parcel still in the domain stops there, gets a last trajectory row at that time, and its state goes to `snapshot-<mat>.dat`; `≤ 0` or absent = off (integrate until the parcel leaves the domain) |
 | `out-time` | string | `off` | `on` appends the parcel time [s] as the last column of every trajectory and exit row |
+| `plane-x` | real list | — | Planes normal to x at the listed positions [m], space-separated (`plane-x = 0.001 0.18`): `planes-<mat>.dat` holds one record per crossing of each plane ([Plane crossings](using.md#plane-crossings)); absent = no file. A token that is not a finite number stops the run |
 | `mdot-max` | real | `0` | Maximum mass flow rate per particle [g/s]; used to auto-size injection spacing |
 | `out-traj` | string | `on` | Enable trajectory output (`off` to disable) |
 | `out-scatter` | string | `on` | Enable scatter-cloud output (`off` to disable) |
@@ -153,13 +156,26 @@ Selects physical model closures.
 | `evaporation` | string | absent | Evaporation model (`d2-law`, `CEM`, `CEM-B`, `ASM`, `TC`); when present, enables phase change |
 | `interface` | string | `VLE` | Surface state: `VLE` equilibrium or `LK` Langmuir–Knudsen non-equilibrium |
 | `blowing` | string | `none` | Stefan-blowing reduction of the convective heat: `none` or `LK` |
-| `breakup` | string | absent | Breakup model (`Pilch-Erdman`, `Reitz-Diawakar`, `Reitz-KHRT`, `TAB`, `ETAB`); when present, enables secondary breakup |
+| `breakup` | string | absent | Breakup model (`Pilch-Erdman`, `Reitz-Diawakar`, `Reitz-KHRT`, `TAB`, `ETAB`); when present, enables secondary breakup. The default of every material: a material's `breakup=<model>` token on its phase-file line overrides it |
 
-Breakup model–specific tuning constants (`B0`, `B1`, `Cs`, etc.) are also read from `[IGLOO-Models]` when a breakup model is active; see the [Parameter Registry](registry.md) for per-model keys. Unknown model tokens, and the reserved `evaporation = LEB`, are refused at setup.
+Each breaking material reads the constants of its own model: its `<tag>-<key>` token on the phase-file line, else
+the `[IGLOO-Models]` key of that name, else the default (see the [Parameter Registry](registry.md)). TAB and ETAB
+each take their own `Comega`, `Cmu` and `WeCrit` tokens:
+
+| `breakup=` | constant tokens |
+|---|---|
+| `Pilch-Erdman` | `PE-Cd`, `PE-B` |
+| `Reitz-Diawakar` | `RD-WeBag`, `RD-Cb`, `RD-Cstrip`, `RD-Cs` |
+| `Reitz-KHRT` | `KHRT-B0`, `KHRT-B1`, `KHRT-Ctau`, `KHRT-CRT`, `KHRT-mShedLim`, `KHRT-WeLimit` |
+| `TAB` | `TAB-Comega`, `TAB-Cmu`, `TAB-WeCrit`, `TAB-method` (1 or 2), `TAB-n` |
+| `ETAB` | `ETAB-k1`, `ETAB-k2`, `ETAB-WeCrit`, `ETAB-WeTrans`, `ETAB-Comega`, `ETAB-Cmu` |
+
+A token of a model the material does not run is accepted and unused; a material that carries a constant token
+logs its resolved set at setup. Unknown model tokens, and the reserved `evaporation = LEB`, are refused at setup.
 
 ### `[IGLOO-Properties]`
 
-Constant evaporation and breakup properties and the emissivity of the radiative exchange, one value per material in the order they appear in `INPUT/phase.txt`. The evaporation and breakup properties are required only when the corresponding model is active and the property is not already in `INPUT/properties.dat`.
+Constant evaporation and breakup properties and the emissivity of the radiative exchange, one value per material in the order they appear in `INPUT/phase.txt`. The evaporation properties are required only when evaporation is active and the property is not already in `INPUT/properties.dat`; `sigma` and `mu` only when a material breaks and its zone of `properties.dat` has no `Sigma` / `Viscosity` column (the entry of a material that does not break is unused).
 
 | Key | Description |
 |-----|-------------|
@@ -170,8 +186,8 @@ Constant evaporation and breakup properties and the emissivity of the radiative 
 | `cpv` | Vapor specific heat [J/(kg·K)], or the `Cpv` column of `properties.dat`; 0 for a material that has the column |
 | `Le` | Lewis number |
 | `Yinf` | Far-field vapor mass fraction |
-| `sigma` | Surface tension [N/m] (breakup) |
-| `mu` | Dynamic viscosity [Pa·s] (breakup) |
+| `sigma` | Surface tension [N/m] of a breaking material, or the `Sigma` column of `properties.dat`; 0 for a material that has the column |
+| `mu` | Liquid dynamic viscosity [Pa·s] of a breaking material, or the `Viscosity` column of `properties.dat`; 0 for a material that has the column |
 | `emissivity` | Surface emissivity of the grey-body exchange with the gas temperature, $\varepsilon\,\sigma\,\pi d^2 (T_g^4 - T_p^4)$ (see [Radiation](../theory/heat.md#radiation)); default 0 = off; refused below 0, cut to 1.0 with a warning above 1 |
 
 IGLOO reads `emissivity` from `[IGLOO-Properties]` only. ICE models the same exchange through `[ICE-Physics] emissivity`: a hydra case that runs both condensed solvers sets the two keys together, with the same value for a material both phases carry; ICE's key alone leaves IGLOO's exchange off.
@@ -220,22 +236,24 @@ the same temperatures, one row per integer kelvin (`T = Tmin, Tmin+1, ..., Tmax`
 holding `VARIABLES` names the columns:
 
 ```text
-VARIABLES = "Temperature", "Cp", "Density", "Enthalpy", "Psat", "Lv", "Mv", "Cpv"
+VARIABLES = "Temperature", "Cp", "Density", "Enthalpy", "Psat", "Lv", "Mv", "Cpv", "Sigma", "Viscosity"
 ```
 
 | column | unit | |
 |---|---|---|
 | `Temperature` | K | first; the nodes |
 | `Cp` | J/(kg K) | required |
-| `Density` | kg/m³ | required |
+| `Density` | kg/m³ | required; the liquid's for a solidifying material (the solid's is its `rho-solid` token, when given) |
 | `Enthalpy` or `Enthalpy_abs` | J/kg | required, exactly one: `Enthalpy` is relative (`cp·T`, or the integral of cp), `Enthalpy_abs` includes the formation enthalpy (the datum, see below) |
 | `Psat` | Pa, absolute | optional: the saturation pressure of an evaporating material |
 | `Lv` | J/kg | optional, with `Psat`: the latent heat of vaporization |
 | `Mv` | kg/kmol | optional, with `Psat`: the vapour molar mass, the same on every row |
 | `Cpv` | J/(kg K) | optional, with `Psat`: the vapour specific heat |
+| `Sigma` | N/m | optional: the surface tension of a breaking material |
+| `Viscosity` | Pa s | optional: the liquid dynamic viscosity of a breaking material |
 
 After `Temperature` the columns may come in any order; the lowercase names are accepted too
-(`PSAT`, `LV`, `MV`, `CPV` as well). A column whose property is constant in T is read as a constant; one that varies
+(`PSAT`, `LV`, `MV`, `CPV`, `SIGMA`, `VISCOSITY` as well). A column whose property is constant in T is read as a constant; one that varies
 becomes a table, linear between the nodes. Outside the table the density holds its end values and
 the enthalpy continues its first and last segments, both as in ICE. With a varying `Cp` the particle
 state is the enthalpy, and its temperature is read back through the same table, so the table may
@@ -260,6 +278,15 @@ material's scalar latent heat is `Lv(298.15 K)` (the enthalpy datum's temperatur
 `vapour data tabulated from properties.dat: Lv, Mv, Cpv (Lv(298.15 K) = ..., Lv(boiling-temperature) = ...)`
 per material that uses them; a material that does not evaporate ignores them.
 
+**`Sigma`, `Viscosity`.** A breaking material takes its surface tension and its liquid viscosity
+from these columns at the droplet temperature, in every right-hand side and at every breakup event
+(linear between the nodes, the end values outside the table, as `Psat`); a column of zeros is
+absent, and a material that does not break ignores them. Each column replaces its
+`[IGLOO-Properties]` key: a material whose column is non-zero must give 0 (or nothing) for that
+key, and a breaking material without the column needs the key > 0. Setup prints
+`sigma tabulated from properties.dat (Tmin..Tmax K)` and `mu tabulated from properties.dat (Tmin..Tmax K)`
+per material that uses them.
+
 A table is refused at setup, with the reason and the expected header, when: there is no
 `VARIABLES` line, the first column is not `Temperature`, `Cp`, `Density` or an enthalpy column is
 missing, a column is named twice, both `Enthalpy` and `Enthalpy_abs` appear, a data row does not
@@ -278,7 +305,10 @@ differs between rows, any of them without a valid `Psat` column, or an `Lv` whos
 slope at `boiling-temperature` is more than a factor 2 from the `Psat` column's
 (`ln(p(i0+1)/p(i0))` against `½(Lv(i0)+Lv(i0+1))·Mv/Ru·(1/i0 − 1/(i0+1))`, `i0 = int(boiling-temperature)`,
 `Mv` from its column or else from the key: `Lv` in kJ/kg is a factor 1000); a non-zero key beside a
-non-zero column of the same quantity is refused as well.
+non-zero column of the same quantity is refused as well. The `Sigma` and `Viscosity` columns of a
+breaking material are refused for a value that is not finite, a column zero on some rows and not on
+others, or a value that is not positive; a non-zero key beside a non-zero column is refused as well,
+and so is a breaking material with neither a column nor a key > 0.
 
 ---
 

@@ -37,7 +37,7 @@ S_\mathrm{en}(i,j,k)  \mathrel{+}= E_\mathrm{in} - E_\mathrm{out}
 $$
 
 The energy carried is $\dot m\,(h + |\mathbf{v}_p|^2/2)$ with $h$ the specific enthalpy of the
-material at the parcel's state (`computeSource`); for a solidifying material (model 6) $h$ includes
+material at the parcel's state (`computeSource`); for a solidifying material (models 6 and 7) $h$ includes
 the latent heat of fusion (`hSolid`, see [Solidification](solidification.md)), so a freezing
 parcel deposits the heat it loses on the plateau.
 

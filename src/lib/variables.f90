@@ -16,7 +16,7 @@ module IGLOO_variables
   integer  :: liqSelect=0, intfSelect=0, boilSelect=0
   integer  :: blowSelect=0            !> evaporative heat-transfer reduction f2: 0 none, 1 MHB98 eq.19
   logical  :: phaseChange=.false.
-  logical  :: brkupSwitch=.false., brkupEqOde=.false., brkupEvent=.false., brkupHasChild=.false.
+  logical  :: brkupEqOde=.false., brkupEvent=.false., brkupHasChild=.false.
   logical  :: eulerSwitch=.false.
   logical  :: sourceSwitch=.false.
   logical  :: dsSwitch=.false.        !> any inflow cell carries a per-cell ds>0 (from bc.txt col 9)
@@ -35,6 +35,7 @@ module IGLOO_variables
   !> per-sweep block changes: through the connected cell of a connected face, through the block sweep, rim exits
   integer  :: nConnHit = 0, nSweepHit = 0, nRimExit = 0
   integer  :: nInjNoCell = 0  !> per-sweep: parcels whose injection point no cell holds (not integrated)
+  integer  :: nKHRTwarn = 0   !> per-sweep: KH-RT evaluations outside the model's hypotheses
   integer  :: fsample, nb, nm, nfam, iprint, trajSample
   integer, allocatable :: nspecies(:)
   real(R8) :: ds, mdotMax, dtprint
@@ -60,6 +61,10 @@ module IGLOO_variables
   integer, allocatable :: probeIDs(:)
   logical  :: probeOn = .false.
 
+  !> [IGLOO-General] plane-x: positions [m] of the planes normal to x whose crossings planes-<mat>.dat records.
+  real(R8), allocatable :: planeX(:)
+  logical  :: planeOn = .false.
+
   !> General ode parameters
   character(len=100) :: ode_word
   real(R8) :: rtol, atol
@@ -74,13 +79,15 @@ module IGLOO_variables
   real(R8), parameter :: threshold = 1.0e29_R8
 
   !> Output files units
-  integer :: unitTraj, unitScat, unitExit, unitSnap
+  integer :: unitTraj, unitScat, unitExit, unitSnap, unitPlane
 
   !> [IGLOO-General] out-traj / out-scatter output switches (default on); dNscat is the
   !  per-material scatter weight quantum (droplets per point), auto-sized.
   logical  :: trajOn=.true., scatOn=.true.
   !> snapshot-<mat>.dat: each parcel's state at time-end (on when time-end is set).
   logical  :: snapOn=.false.
+  !> The current material's particle files end with the frozen fraction f (a group of it solidifies).
+  logical  :: frozenOn=.false.
   real(R8) :: dNscat=0._R8
 
 end module IGLOO_variables 

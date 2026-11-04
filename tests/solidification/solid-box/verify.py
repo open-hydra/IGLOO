@@ -46,7 +46,7 @@ def main():
     if not os.path.isfile(traj):
         print(f"[verify] {traj} not found -- run the case first")
         return 0
-    parts = check.load_rows(traj, 10)
+    parts = check.load_rows(traj, check.TRAJ_COLS)
     if not parts:
         print("[verify] no trajectory rows to plot")
         return 0

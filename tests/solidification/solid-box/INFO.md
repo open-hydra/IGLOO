@@ -20,6 +20,7 @@ relaxation length `L_s = 0.051058 m`, exit at 907.3 K.
 | E4 | `Σ E` of `source.tec` = `Σ ṁ [c_l T_0 − h_solid(T_exit)]` (global telescoping) | 1e-5 | 2.9e-7 (the E13.6 print of `ṁ`) |
 | E4b | every cell with both faces in `(x_n, x_s)` holds `(ṁ/m) π d k_g Nu (T_m − T_g) dx/u_g`; no crossed cell has `E < 0` | 1e-5 | 200 cells, 2.9e-7; no negative cell |
 | E5 | `u = u_g`, `v = w = 0`, `d` and `m` constant, the mollify-off and model-6 witnesses, ≥ 20 parcels with ≥ 3 rows per regime | as temp-relax | 25 parcels |
+| E6 | the frozen fraction `f` of the trajectory rows and exit records: `f = 0` on the liquid rows, `f = 1` on the solid rows and every exit; on the plateau `0 < f < 1` and `f − s x` one constant per parcel, `s = π d k_g Nu (T_m − T_g)/(m h_fus u_g) = 18.967 /m`, equal to `f0 − s x_n`; the phase `solid_phase(f, T, T_m)` of every row the closed form's (0 liquid at or above `T_m`, 1 undercooled, 2 plateau, 3 solid) | spread of the constant `2 × 9.98e-6` (the F10.6 half-ULP of `f` plus `s` × the F12.6 half-ULP of `x`); the constant within `1.39e-4 + 9.98e-6` of `f0 − s x_n` (the event located within `h²/(8 τ_l)` over a cell transit `h = dx/u_g`); liquid and solid values exact | spread 5.1e-7, offset 3.8e-6 over 225 plateau rows; the phase on 1525 rows; 25 parcels |
 
 The global energy balance telescopes (the deposit of every segment is a difference of one enthalpy function), so
 it sees only the liquid and solid branches; the plateau branch is seen per cell (E4b).
@@ -37,6 +38,9 @@ it sees only the liquid and solid branches; the plateau branch is seen per cell 
 | plateau rate taking `cp-solid` for `h-fus` | E4b 0.34, plateau length wrong on every parcel |
 | ODE-state count left at 7 | nothing here (the case writes only the source field); `solid-box-euler` sees it |
 | the code before model 6 existed | setup refuses `solidification=on`, exit 128 |
+| the particle files without `f` (the code before the column) | E6: no `f` column in the trajectory and exit headers |
+| each row carrying the previous row's `f` (the segment-start value) | E6: the first plateau row of every parcel at `f = 0`; the plateau constant off by `−s dx = −0.0474` on all 25 parcels |
+| `solid_phase` ignoring `f` (`T < T_m` alone) | E6: the plateau rows read phase 0 (their printed `T` is `T_m`) instead of 2 on all 25 parcels; the doctest of `tests/tools/datcols.py` |
 
 ## Comparison plot
 `verify.py` writes `OUTPUT/solid-box.svg` (non-gating): the best-sampled parcel's `T_p(x)` against the piecewise

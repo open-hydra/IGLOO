@@ -2,7 +2,7 @@ module IGLOO_Lib_Breakup
     use, intrinsic :: iso_fortran_env, only : I4 => int32, I8 => int64, R8 => real64
     implicit none
     private
-    public :: assign_breakup, assign_scaleFactor
+    public :: assign_breakup, tabScale, breakup_token
     public :: breakupOde
     public :: breakupEvent
 
@@ -15,16 +15,44 @@ module IGLOO_Lib_Breakup
     !> childState layout (fixed): [vel(3), diam, npdot]
     integer(I4), parameter, public :: nchild = 5
 
+    !> Breakup constant tokens of a phase-file material line (<tag>-<key>): model (brkupSelect), bp slot (0: bpMethod)
+    integer, parameter, public :: NBRKTOK = 23
+    character(len=13), parameter, public :: BRKTOK(NBRKTOK) = [character(len=13) :: 'PE-Cd', 'PE-B', &
+        'RD-WeBag', 'RD-Cb', 'RD-Cstrip', 'RD-Cs', 'KHRT-B0', 'KHRT-B1', 'KHRT-Ctau', 'KHRT-CRT', &
+        'KHRT-mShedLim', 'KHRT-WeLimit', 'TAB-Comega', 'TAB-Cmu', 'TAB-WeCrit', 'TAB-method', 'TAB-n', &
+        'ETAB-k1', 'ETAB-k2', 'ETAB-WeCrit', 'ETAB-WeTrans', 'ETAB-Comega', 'ETAB-Cmu']
+    integer, parameter, public :: BRKTOK_MODEL(NBRKTOK) = [1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, &
+        5, 5, 5, 5, 5, 5]
+    integer, parameter, public :: BRKTOK_SLOT(NBRKTOK)  = [1, 2, 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 1, 2, 3, 0, 4, &
+        1, 2, 3, 4, 5, 6]
+
 contains
 
-    !> TAB Rosin-Rammler scale factor from the spread parameter.
-    subroutine assign_scaleFactor()
+    !> TAB product-size scale factor: Rosin-Rammler (method 2) from the spread parameter, else 1.
+    pure function tabScale(method, nSpread) result(scale)
         implicit none
-        select case (bpMethod)
-        case (2); bpScale = gamma(1._R8 + 2._R8/bp(4)) / gamma(1._R8 + 3._R8/bp(4))
-        case default; bpScale = 1._R8
+        integer,  intent(in) :: method
+        real(R8), intent(in) :: nSpread
+        real(R8) :: scale
+        select case (method)
+        case (2); scale = gamma(1._R8 + 2._R8/nSpread) / gamma(1._R8 + 3._R8/nSpread)
+        case default; scale = 1._R8
         end select
-    end subroutine assign_scaleFactor
+    end function tabScale
+
+    !> Index of a breakup constant token in BRKTOK, 0 for any other key.
+    pure integer function breakup_token(key)
+        implicit none
+        character(len=*), intent(in) :: key
+        integer :: k
+        breakup_token = 0
+        do k = 1, NBRKTOK
+            if (trim(key) == BRKTOK(k)) then
+                breakup_token = k
+                return
+            endif
+        enddo
+    end function breakup_token
 
     !> Map the breakup model word to brkupSelect and the ODE/event/child flags.
     subroutine assign_breakup(breakup_word,brkupSelect,brkupEqOde,brkupEvent,brkupHasChild)
@@ -170,7 +198,7 @@ contains
     !> Reitz KH-RT breakup rate: KH stripping toward dStable = 2 B0 lambda_KH, gated by the RT
     !  breakup time; told/tc carry the RT timer.
     function ReitzKHRT(dp,sigma,mup,rhop,npdot,rhog,vel,time,acc,vp,told,tc, bp) result(npdotDot)
-        use IGLOO_variables, only: pi, toll
+        use IGLOO_variables, only: pi, toll, nKHRTwarn
         implicit none
         real(R8), intent(in)    :: dp, sigma, mup, rhop, npdot, rhog, vel, time, acc(3), vp(3)
         real(R8), intent(inout) :: told, tc
@@ -187,7 +215,10 @@ contains
         !> Z = sqrt(We_l)/Re_l = mu_l/sqrt(rho_l sigma r); T = Z sqrt(We_g) (Reitz-87 Eqs 4-5)
         Oh  = mup/sqrt(rhop*sigma*radius)
         Tay = Oh*sqrt(WeGas)
-        if (Oh>1 .or. rhog/rhop>0.1_R8) write(*,*) ' [WARNING] ReitzKHRT hypothesis falling'
+        if (Oh>1 .or. rhog/rhop>0.1_R8) then
+            !$OMP ATOMIC
+            nKHRTwarn = nKHRTwarn + 1
+        endif
 
         omegaKH  = (0.34_R8 + 0.38_R8*WeGas**1.5_R8)/((1._R8 + Oh)*(1._R8 + 1.4_R8*Tay**0.6_R8)) &
                     *sqrt(sigma/(rhop*radius**3))   ! Reitz 1987 KH growth rate [1/s]
@@ -269,7 +300,7 @@ contains
     !  mass into a child parcel once it exceeds mShedLim of the parent drop mass.
     subroutine ReitzKHRTevent(dp,sigma,mup,rhop,npdot,rhog,vel,time,acc,vp,m0,told,tc,KHindex, &
                                bp, event,childState,addChild,exitLoop,childPending,n0)
-        use IGLOO_variables, only: pi, toll
+        use IGLOO_variables, only: pi, toll, nKHRTwarn
         implicit none
         real(R8), intent(in)    :: sigma, mup, rhop, rhog, vel, time, acc(3), vp(3)
         real(R8), intent(inout) :: dp, npdot, m0, told, tc, KHindex
@@ -292,7 +323,10 @@ contains
         !> Z/T per Reitz-87 Eqs 4-5
         Oh  = mup/sqrt(rhop*sigma*radius)
         Tay = Oh*sqrt(WeGas)
-        if (Oh>1 .or. rhog/rhop>0.1_R8) write(*,*) ' [WARNING] ReitzKHRT hypothesis falling'
+        if (Oh>1 .or. rhog/rhop>0.1_R8) then
+            !$OMP ATOMIC
+            nKHRTwarn = nKHRTwarn + 1
+        endif
 
         omegaKH  = (0.34_R8 + 0.38_R8*WeGas**1.5_R8)/((1._R8 + Oh)*(1._R8 + 1.4_R8*Tay**0.6_R8)) &
                     *sqrt(sigma/(rhop*radius**3))   ! Reitz 1987 KH growth rate [1/s]

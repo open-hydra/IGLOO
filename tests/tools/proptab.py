@@ -3,12 +3,12 @@
 
     from proptab import load_properties, lookup, table_value
     Tmin, Tmax, cols = load_properties("INPUT/properties.dat")   # zone 1
-    h = lookup(cols["h"], Tmin, Tmax, Tp)                        # lookupTab: h, sigma, mu
-    rho = table_value(cols["rho"], Tmin, Tmax, Tp)               # tableValue: rho, psat, Lv, cpv
+    h = lookup(cols["h"], Tmin, Tmax, Tp)                        # lookupTab: h
+    rho = table_value(cols["rho"], Tmin, Tmax, Tp)               # tableValue: rho, psat, Lv, cpv, sigma, mu
 
 The header is the first line holding VARIABLES; its double-quoted names name the columns, the
 first being the temperature. Known names map to the slots IGLOO reads (T, cp, rho, h, psat, Lv, Mv,
-cpv) with the alias set of the solver's reader; any other column keeps its own name. Rows are consecutive
+cpv, sigma, mu) with the alias set of the solver's reader; any other column keeps its own name. Rows are consecutive
 integer kelvins, one zone per material in phase-file order.
 
 The two interpolations replicate the solver statement for statement: `lookup` clamps the INDEX to
@@ -27,6 +27,8 @@ SLOTS = {
     "Lv": "Lv", "lv": "Lv", "LV": "Lv",
     "Mv": "Mv", "mv": "Mv", "MV": "Mv",
     "Cpv": "cpv", "cpv": "cpv", "CPV": "cpv",
+    "Sigma": "sigma", "sigma": "sigma", "SIGMA": "sigma",
+    "Viscosity": "mu", "viscosity": "mu", "VISCOSITY": "mu",
 }
 
 
@@ -67,7 +69,7 @@ def load_properties(path, zone=1):
 
 
 def lookup(tab, Tmin, Tmax, T):
-    """lookupTab (enthalpy, sigma, mu): the node index clamped to [Tmin, Tmax-1], linear in T from it."""
+    """lookupTab (enthalpy): the node index clamped to [Tmin, Tmax-1], linear in T from it."""
     Ti = min(max(int(T), Tmin), Tmax - 1)
     v0 = tab[Ti - Tmin]
     v1 = tab[Ti + 1 - Tmin]
@@ -75,7 +77,8 @@ def lookup(tab, Tmin, Tmax, T):
 
 
 def table_value(tab, Tmin, Tmax, T):
-    """tableValue (density, psat): linear between the nodes, the end value outside, NaN for a NaN temperature."""
+    """tableValue (density, psat, Lv, cpv, sigma, mu): linear between the nodes, the end value outside, NaN for a
+    NaN temperature."""
     if math.isnan(T):
         return T
     Tc = min(max(T, float(Tmin)), float(Tmax))

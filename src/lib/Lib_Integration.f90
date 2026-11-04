@@ -14,13 +14,14 @@ contains
                         hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, shed,noShed)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
-    use IGLOO_variables,  only: unitTraj,unitExit,unitScat,unitSnap,iprint,dtprint,tEnd,timeOn,snapOn, &
+    use IGLOO_variables,  only: unitTraj,unitExit,unitScat,unitSnap,iprint,dtprint,tEnd,timeOn,snapOn,frozenOn, &
                                 nb,toll,ord2,mesh2D,threshold,            &
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
                                 nInjNoCell,                                &
-                                trajOn, scatOn, dNscat, sixOverPi, pi
+                                trajOn, scatOn, dNscat, sixOverPi, pi,    &
+                                planeOn, planeX, unitPlane
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock
@@ -30,16 +31,16 @@ contains
                        packEventVar, unpackEventVar,                           &
                        rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, &
                        rhsAlCombustion, rhsSolidification,                          &
-                       ind_d, ind_rho, ind_sig, ind_mup, ind_m,                     &
+                       ind_d, ind_rho, ind_sig, ind_mup, ind_m, ind_rs,             &
                        ind_sb1, ind_sb2, ind_sph,                                   &
-                       ind_evd, ind_evn,                                            &
+                       ind_evd, ind_evn, ind_ev1, ind_ev2,                          &
                        nauxstate, neventvar, nbrkst,                                &
-                       mod_brkSelect, mod_propFlags, mod_model,                     &
+                       mod_brkSelect, mod_propFlags, mod_model, mod_isSolid,        &
                        mod_bp, mod_bpMethod, mod_bpScale
     use oslo,              only: Run_ODESolver, no_jacobian
     use IGLOO_Lib_Breakup, only: nchild
     use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, eventCrossed, &
-                                        eventPassed, solidTransition
+                                        eventPassed, solidTransition, solidDiameter, phUndercooled
     use IGLOO_Mod_MPI,     only: mpi_size_, region_fail, region_failed
     implicit none
     class(obj_particle),   intent(inout) :: part
@@ -63,7 +64,7 @@ contains
     real(R8) :: wAcc          ! scatter-cloud npdot-weight accumulator (host-associated into solout)
     real(R8) :: wAccOld       ! wAcc at the last latched state, restored when a cut step is integrated again
     !> Scatter-cloud output buffer, flushed by flushScat in one write. No initializer: it would imply SAVE.
-    integer, parameter :: SCATLEN = 128, SCATCAP = 4096
+    integer, parameter :: SCATLEN = 144, SCATCAP = 4096
     character(len=SCATLEN) :: scatBuf(SCATCAP)
     integer  :: nScat, iScat
     integer  :: neq, nsp, ng, b, i, j, k, ngVert, iu, iw, it, iter, nCross, nE, nStall
@@ -177,13 +178,24 @@ contains
       case(3); part%stateVar(8) = part%npdot
       case(4); part%stateVar(8) = part%m
                part%stateVar(9) = part%npdot
-      case(6); call solidPhaseAtInjection(part%tp, part%Tmelt, part%Tnuc, part%solidPhase, part%stateVar(8))
-               part%fSolid = part%stateVar(8)
+      case(6,7); call solidPhaseAtInjection(part%tp, part%Tmelt, part%Tnuc, part%solidPhase, part%stateVar(8))
+                 part%fSolid = part%stateVar(8)
+                 !> an injected frozen fraction at rho-solid: the mass of the injected diameter
+                 if (part%rhoSol > 0._R8 .and. part%fSolid > 0._R8) then
+                   part%m  = pi/6._R8*part%d**3._R8/((1._R8 - part%fSolid)/part%rho + part%fSolid/part%rhoSol)
+                   part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot; part%n0 = part%npdot
+                 endif
+                 if (part%model == 7) part%stateVar(9) = part%npdot
       end select
       if (eulerSwitch)    part%stateVar(part%nOde+1:part%neq) = 0._R8
       if (part%bodyAccum) part%stateVar(part%neq-1 :part%neq) = 0._R8
 
       if (trajOn) call writeTrajRow()
+    endif
+    !> A breakup child's first row: its birth state, before its first step.
+    if (part%newborn) then
+      if (trajOn) call writeTrajRow()
+      part%newborn = .false.
     endif
     !> Block index and cell-entry state for every entry (children enter with time /= 0).
     b = part%i(1)
@@ -395,8 +407,15 @@ contains
         call writeTrajRow()
       endif
       !> time-end reached inside the domain: the parcel's state at the stop.
-      if (snapOn .and. part%time>=tEnd .and. .not.part%gone) &
-        write(unit=unitSnap,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, part%time
+      if (snapOn .and. part%time>=tEnd .and. .not.part%gone) then
+        if (frozenOn) then
+          write(unit=unitSnap,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2,F10.6)') part%stateVar(1:6), part%tp, part%d, part%m, &
+                                                                           part%ID, part%time, part%fSolid
+        else
+          write(unit=unitSnap,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, &
+                                                                    part%time
+        endif
+      endif
       if (region_failed()) part%gone = .true.   !> MPI: end every parcel in flight after a failure
       if (part%gone) then
         call writeExitRow()
@@ -421,11 +440,17 @@ contains
 
   contains
 
-    !> One trajectory row; out-time appends the parcel time.
+    !> One trajectory row; out-time appends the parcel time, a solidifying material the frozen fraction.
     subroutine writeTrajRow()
-      if (timeOn) then
+      if (timeOn .and. frozenOn) then
+        write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2,F10.6)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, &
+                                                                         part%time, part%fSolid
+      elseif (timeOn) then
         write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, &
                                                                   part%time
+      elseif (frozenOn) then
+        write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,F10.6)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, &
+                                                                part%fSolid
       else
         write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID
       endif
@@ -440,9 +465,16 @@ contains
       mdotOut = part%mdot
       if (part%model == 4) mdotOut = part%npdot*part%m
       if (present(started)) then; if (.not.started) mdotOut = part%mdot; endif
-      if (timeOn) then
+      if (timeOn .and. frozenOn) then
+        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,ES16.8E2,I5,E13.6E2,F10.6)') part%stateVar(1:3), part%tp, &
+              norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%time, part%exitCode, part%d, &
+              part%fSolid
+      elseif (timeOn) then
         write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,ES16.8E2,I5,E13.6E2)') part%stateVar(1:3), part%tp, &
               norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%time, part%exitCode, part%d
+      elseif (frozenOn) then
+        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,I5,E13.6E2,F10.6)') part%stateVar(1:3), part%tp, &
+              norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%exitCode, part%d, part%fSolid
       else
         write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,I5,E13.6E2)') part%stateVar(1:3), part%tp, &
               norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%exitCode, part%d
@@ -461,6 +493,54 @@ contains
     end subroutine writeStartRecord
 
 
+    !> One planes record per plane the step (ta,ya)-(tb,yb) crosses: forward x_a < X <= x_b, backward x_a >= X > x_b.
+    subroutine emitPlanes(ta, ya, tb, yb)
+      use IGLOO_variables, only: oneThird
+      real(R8), intent(in) :: ta, tb, ya(:), yb(:)
+      real(R8) :: s, pos(2), vel(3), z7, tp, rho, m, d, np, mdotR, f, tc
+      integer  :: kp, idir
+      do kp = 1, size(planeX)
+        if (ya(1) < planeX(kp) .and. planeX(kp) <= yb(1)) then
+          idir = 1
+        elseif (ya(1) >= planeX(kp) .and. planeX(kp) > yb(1)) then
+          idir = -1
+        else
+          cycle
+        endif
+        s   = (planeX(kp) - ya(1))/(yb(1) - ya(1))
+        pos = ya(2:3) + s*(yb(2:3) - ya(2:3))
+        vel = ya(4:6) + s*(yb(4:6) - ya(4:6))
+        z7  = ya(7) + s*(yb(7) - ya(7))
+        tc  = ta + s*(tb - ta)
+        if (mod_propFlags(1)) then; tp = comp_TfromTab(hTab, z7); else; tp = z7; endif
+        if (mod_propFlags(2)) then; rho = tableValue(rhoTab, Tmin, Tmax, tp); else; rho = auxLocal(ind_rho); endif
+        !> The stream's number rate, droplet mass and mass flow at the crossing.
+        select case(mod_model)
+        case(3)
+          np = ya(8) + s*(yb(8) - ya(8)); m = mdotSeg/np; mdotR = mdotSeg
+        case(7)
+          np = ya(9) + s*(yb(9) - ya(9)); m = mdotSeg/np; mdotR = mdotSeg
+        case(2,5)
+          np = part%npdot; m = ya(8) + s*(yb(8) - ya(8)); mdotR = np*m
+        case(4)
+          np = ya(9) + s*(yb(9) - ya(9)); m = ya(8) + s*(yb(8) - ya(8)); mdotR = np*m
+        case default
+          np = part%npdot; m = auxLocal(ind_m); mdotR = part%mdot
+        end select
+        f = 0._R8
+        if (mod_isSolid) f = ya(8) + s*(yb(8) - ya(8))
+        if (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7 .and. ind_rs == 0) then
+          d = auxLocal(ind_d)
+        else
+          d = (sixOverPi*m/rho)**oneThird
+        endif
+        if (ind_rs > 0) d = solidDiameter(m, f, rho, auxLocal(ind_rs))
+        write(unit=unitPlane,fmt='(I3,7F12.6,2E13.6E2,2ES16.8E2,F10.6,2I10,ES16.8E2,I3)') kp, planeX(kp), pos, vel, tp, &
+              d, m, mdotR, np, f, part%ID, part%parentID, tc, idir
+      enddo
+    end subroutine emitPlanes
+
+
     !> Emit the buffered scatter records in one write statement.
     subroutine flushScat()
       if (nScat <= 0) return
@@ -474,7 +554,7 @@ contains
     subroutine ODEsystem()
       implicit none
       real(R8) :: dtNew, dtSafe
-      integer  :: phaseEv
+      integer  :: phaseEv, iNp
 
       deltat = safety*deltat
       newGas = .false.; IamOut = .false.; exitLoop = .false.; eventFlag = .false.; startedOut = .false.
@@ -484,8 +564,8 @@ contains
       eventType = part%brkupEvent
       addChildLocal = .false.; childState = 0._R8
       !> childDone is reset at integrate entry only, never per segment.
-      !> Model 6: a threshold the segment-start state has strictly passed is applied here.
-      if (mod_model == 6) call solidCatchUp()
+      !> Models 6, 7: a threshold the segment-start state has strictly passed is applied here.
+      if (mod_isSolid) call solidCatchUp()
       y = part%oldState
       timeLocal = part%time
       oldLocal  = y
@@ -509,6 +589,7 @@ contains
       case(4); nDL = 10; call Run_ODESolver(neq, t1, t2, y, rhs4, no_jacobian, 0, err, deltat, solout)
       case(5); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs5, no_jacobian, 0, err, deltat, solout)
       case(6); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs6, no_jacobian, 0, err, deltat, solout)
+      case(7); nDL = 10; call Run_ODESolver(neq, t1, t2, y, rhs6, no_jacobian, 0, err, deltat, solout)
       end select
       if (err < 0) then
         write(*,'(a,i0,a,i0,a,es12.4,a)')                                   &
@@ -565,9 +646,19 @@ contains
           y  = oldLocal + sEv*(y - oldLocal)
           t1 = timeLocal + sEv*(t1 - timeLocal)
           wAcc = wAccOld + sEv*(wAcc - wAccOld)
+        endif
+        !> Planes the finalized step crosses, before the phase jump and the breakup event.
+        if (planeOn) call emitPlanes(timeLocal, oldLocal, t1, y)
+        if (solidEv .and. .not.(IamOut .or. newGas .or. sectorOut)) then
           phaseEv = nint(stateLocal(ind_sph))
           call solidTransition(whichEv, part%cp, part%cpSol, part%Tmelt, part%hFus, y(7), y(8), phaseEv)
           stateLocal(ind_sph) = real(phaseEv, R8)
+          !> Breakup state at the switch: a nucleated TAB/ETAB oscillator at rest, the KH-RT timer restarted at a re-melt.
+          if (whichEv == 1 .and. (mod_brkSelect == 4 .or. mod_brkSelect == 5) .and. allocated(eventLocal)) &
+            eventLocal(ind_ev1:ind_ev2) = 0._R8
+          if (whichEv == 3 .and. ind_sb1 > 0) then
+            stateLocal(ind_sb1) = t1; stateLocal(ind_sb2) = 0._R8
+          endif
           part%stateVar = y
           part%oldState = y
         endif
@@ -583,14 +674,17 @@ contains
             endif
             !> Resync the frozen per-droplet d and m in auxLocal after an event.
             if (ind_d > 0) auxLocal(ind_d) = part%d
-            if (ind_m > 0 .and. mod_model /= 3) then
+            !> A solidifying drop whose density varies (rho-solid, a table) changes mass only at a breakup event.
+            if (ind_m > 0 .and. mod_model /= 3 .and. mod_model /= 7 .and. &
+                (eventFlag .or. .not. mod_isSolid .or. (ind_rs == 0 .and. .not. mod_propFlags(2)))) then
               part%m          = rhoEvt * part%d**3 / sixOverPi
               auxLocal(ind_m) = part%m
             endif
-            !> Model 3: push the event's npdot into y(8) and re-derive mdot from (d, npdot).
-            if (eventFlag .and. mod_model == 3 .and. part%d > 0._R8 .and. ind_m > 0) then
-              part%stateVar(8) = part%npdot
-              part%oldState(8) = part%npdot
+            !> Models 3, 7: push the event's npdot into the number slot and re-derive mdot from (d, npdot).
+            if (eventFlag .and. (mod_model == 3 .or. mod_model == 7) .and. part%d > 0._R8 .and. ind_m > 0) then
+              iNp = 8; if (mod_model == 7) iNp = 9
+              part%stateVar(iNp) = part%npdot
+              part%oldState(iNp) = part%npdot
               part%mdot        = part%npdot * rhoEvt * part%d**3 / sixOverPi
               auxLocal(ind_m)  = part%mdot
             endif
@@ -628,6 +722,8 @@ contains
             shedRec%pos   = part%stateVar(1:3)
             shedRec%temp  = part%tp
             shedRec%time  = t1
+            shedRec%phase = part%solidPhase
+            shedRec%parent = part%ID
             call shed%push(shedRec)
             !> the child's birth mass flow, in its computeMass/computeSource operation order
             shedM = shedRec%npdot * (pi/6._R8*part%rho*shedRec%diam**3._R8)
@@ -681,7 +777,7 @@ contains
 
     end subroutine ODEsystem
 
-    !> Model 6: apply the phase change whose threshold the segment-start state has strictly passed.
+    !> Models 6, 7: apply the phase change whose threshold the segment-start state has strictly passed.
     subroutine solidCatchUp()
       implicit none
       real(R8) :: g
@@ -692,9 +788,14 @@ contains
       call solidTransition(which, part%cp, part%cpSol, part%Tmelt, part%hFus, &
                            part%oldState(7), part%oldState(8), part%solidPhase)
       part%stateVar(7:8) = part%oldState(7:8)
+      !> Breakup state at the switch, as the segment finalize sets it.
+      if (which == 1 .and. (mod_brkSelect == 4 .or. mod_brkSelect == 5)) part%brkupVar(1:2) = 0._R8
+      if (which == 3 .and. mod_brkSelect == 3) then
+        part%brkupVar(1) = part%time; part%brkupVar(2) = 0._R8
+      endif
     end subroutine solidCatchUp
 
-    !> ODE right-hand sides for models 1-6, forwarding integrate's host-associated state.
+    !> ODE right-hand sides for models 1-7, forwarding integrate's host-associated state.
     subroutine rhs1(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
       call rhsStandard(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab, gas,gasVert,gasState, ng,ngVert)
@@ -719,7 +820,8 @@ contains
     end subroutine rhs5
     subroutine rhs6(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
-      call rhsSolidification(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, gas,gasVert,gasState, ng,ngVert)
+      call rhsSolidification(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, rhoTab,mupTab,sigTab, &
+                             gas,gasVert,gasState, ng,ngVert)
     end subroutine rhs6
 
 
@@ -734,10 +836,11 @@ contains
       integer  :: NR, N
       real(R8) :: X, XOLD, Y(N)
       integer  :: IRTRN
-      real(R8) :: Vdif(3), vel, Re, Fdrag(3), Qdot, tp, acc(3), d, rho, sigma, mup, m, np
+      real(R8) :: Vdif(3), vel, Re, Fdrag(3), Qdot, tp, acc(3), d, rho, sigma, mup, m, np, fScat
       real(R8) :: brkupState(max(nbrkst,1))
       real(R8) :: gOld, gEnd
       real(R8) :: vEvt(3)   !> the velocity breakupEvent works on (Y stays the solver's)
+      logical  :: brkOn     !> the breakup event acts on this step
       real(R8), parameter :: oneThird=0.3333333333333333_R8, sixOverPi=1.90985931710274403_R8
 
       IRTRN = 1
@@ -746,7 +849,7 @@ contains
       if (scatOn .and. dNscat>0._R8) then
         select case(mod_model)
         case(3);      np = y(8)            ! model 3: npdot is stateVar(8)
-        case(4);      np = y(9)            ! model 4: npdot is stateVar(9)
+        case(4,7);    np = y(9)            ! models 4, 7: npdot is stateVar(9)
         case default; np = part%npdot      ! models 1,2: npdot constant
         end select
         wAcc = wAcc + np*(x - xold)
@@ -774,7 +877,7 @@ contains
       endif
 
       !> Solidification: the step ends strictly past the phase's threshold from a start at or before it.
-      if (mod_model == 6) then
+      if (mod_isSolid) then
         call eventFunction(nint(stateLocal(ind_sph)), y(7), y(8), part%Tnuc, part%Tmelt, gEnd, whichEv)
         if (whichEv > 0) then
           gOld = eventValue(whichEv, oldLocal(7), oldLocal(8), part%Tnuc, part%Tmelt)
@@ -787,18 +890,22 @@ contains
 
       exitLoop = (norm2(y(1:3)-oldLocal(1:3))<eps).or.(deltat<dtMin).or.any(y/=y).or.(deltat /= deltat)
 
-      if (eventType) then
+      !> Breakup acts on the liquid only: the phase in force over the step gates the event.
+      brkOn = eventType
+      if (brkOn .and. mod_isSolid) brkOn = nint(stateLocal(ind_sph)) <= phUndercooled
+      if (brkOn) then
         if (mod_propFlags(1)) then; tp = comp_TfromTab(hTab,y(7)); else; tp = y(7);                 endif
         if (mod_propFlags(2)) then; rho   = tableValue(rhoTab, Tmin, Tmax, tp); else; rho   = auxLocal(ind_rho); endif
-        if (mod_propFlags(3)) then; sigma = lookupTab(sigTab, tp); else; sigma = auxLocal(ind_sig); endif
-        if (mod_propFlags(4)) then; mup   = lookupTab(mupTab, tp); else; mup   = auxLocal(ind_mup); endif
+        if (mod_propFlags(3)) then; sigma = tableValue(sigTab, Tmin, Tmax, tp); else; sigma = auxLocal(ind_sig); endif
+        if (mod_propFlags(4)) then; mup   = tableValue(mupTab, Tmin, Tmax, tp); else; mup   = auxLocal(ind_mup); endif
         select case(mod_model)
         case(3);      m = auxLocal(ind_m)/y(8)
+        case(7);      m = auxLocal(ind_m)/y(9)
         case(2,4,5);  m = y(8)
         case default; m = auxLocal(ind_m)
         end select
-        !> Model 3 derives d from the current ODE state.
-        if (ind_d > 0 .and. mod_model /= 3) then
+        !> Models 3, 7 and a rho-solid material derive d from the current ODE state.
+        if (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7 .and. ind_rs == 0) then
           d = auxLocal(ind_d)
         else
           d = (sixOverPi*m/rho)**oneThird
@@ -814,8 +921,8 @@ contains
         !> Refresh npdot from the ODE state alongside d.
         if (ind_evn > 0) then
           select case (mod_model)
-          case(3); eventLocal(ind_evn) = y(8)
-          case(4); eventLocal(ind_evn) = y(9)
+          case(3);   eventLocal(ind_evn) = y(8)
+          case(4,7); eventLocal(ind_evn) = y(9)
           end select
         endif
         if (ind_sb1 > 0) brkupState(1:nbrkst) = stateLocal(ind_sb1:ind_sb2)
@@ -839,6 +946,9 @@ contains
       !> Never latch a non-finite state as the last good one.
       if (any(y/=y)) return
 
+      !> Planes the accepted step crosses, emitted once as it is latched.
+      if (planeOn) call emitPlanes(timeLocal, oldLocal, x, y)
+
       timeLocal  = x
       oldLocal   = y
       if (allocated(stateLocal)) oldStLocal = stateLocal
@@ -850,12 +960,19 @@ contains
         if (mod_propFlags(2)) then; rho = tableValue(rhoTab, Tmin, Tmax, tp); else; rho = auxLocal(ind_rho); endif
         select case(mod_model)
         case(3);      m = auxLocal(ind_m)/y(8)
+        case(7);      m = auxLocal(ind_m)/y(9)
         case(2,4,5);  m = y(8)
         case default; m = auxLocal(ind_m)
         end select
-        if (ind_d > 0) then; d = auxLocal(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
+        if (ind_d > 0 .and. mod_model /= 7) then; d = auxLocal(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
+        if (ind_rs > 0) d = solidDiameter(m, y(8), rho, auxLocal(ind_rs))
         nScat = nScat + 1
-        write(scatBuf(nScat),'(7F12.6,2E13.6E2,I8)') y(1:3), y(4:6), tp, d, m, part%ID
+        if (frozenOn) then
+          fScat = 0._R8; if (mod_isSolid) fScat = y(8)
+          write(scatBuf(nScat),'(7F12.6,2E13.6E2,I8,F10.6)') y(1:3), y(4:6), tp, d, m, part%ID, fScat
+        else
+          write(scatBuf(nScat),'(7F12.6,2E13.6E2,I8)') y(1:3), y(4:6), tp, d, m, part%ID
+        endif
         if (nScat == SCATCAP) call flushScat()
         wAcc = wAcc - dNscat
       endif
@@ -961,7 +1078,7 @@ contains
         np  = particle%intE(6)*factor
         rho = particle%intE(5)*factor
         factor = factor*particle%Tstay/particle%deltaL
-      case(3)
+      case(3,7)
         np  = particle%intE(5)            *factor
         rho = mdotSeg*particle%Tstay*factor
         factor = rho/particle%deltaL

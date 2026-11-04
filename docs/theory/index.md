@@ -16,7 +16,7 @@ system is assembled by `determineModel` in `Lib_RHS.f90`:
 - **`phaseChange`** — evaporation is active (requires an evaporation model and species data).
 - **`brkupEqOde`** — at least one continuous-rate breakup model is active (Pilch-Erdman,
   Reitz-Diwakar, or Reitz-KHRT).  TAB and ETAB do *not* set this flag; they inject a discrete
-  breakup event through the `solout` callback while the particle advances under model 1 or 2.
+  breakup event through the `solout` callback while the particle advances under model 1, 2 or 6.
 
 | `phaseChange` | `brkupEqOde` | Model | RHS routine | State dimension |
 | :---: | :---: | :---: | :--- | :---: |
@@ -29,17 +29,18 @@ A material with `combustion = Beckstead` overrides this matrix and is routed to
 model 5, `rhsAlCombustion` (state dimension 8 + 6 euler, model-2 layout) — see
 [Metal Combustion](combustion.md).  A material with `solidification = on` is routed to
 model 6, `rhsSolidification` (state dimension 8 + 5 euler: temperature and frozen fraction,
-constant mass) — see [Solidification](solidification.md).
+constant mass), and with a continuous-rate breakup model to model 7, the same routine with the
+number rate at index 9 (state dimension 9 + 6 euler) — see [Solidification](solidification.md).
 
 The euler extra equations (arc length $\ell$, the momentum, energy and mass moments) are
 appended only when eulerian output is requested (`out-file` includes `E`); they do not
 change the model index.
 
-!!! note "TAB and ETAB use model 1 or 2"
+!!! note "TAB and ETAB use model 1, 2 or 6"
     The Taylor Analogy Breakup (TAB) and Enhanced TAB (ETAB) models treat breakup as a
     discrete event detected in the `solout` callback rather than adding an ODE equation.
-    They therefore run under model 1 (no evaporation) or model 2 (with evaporation) and
-    do not appear in the `brkupEqOde` column of the table above.
+    They therefore run under model 1 (no evaporation), model 2 (with evaporation) or model 6
+    (solidification) and do not appear in the `brkupEqOde` column of the table above.
 
 ---
 

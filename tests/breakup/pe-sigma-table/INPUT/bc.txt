@@ -1,0 +1,1 @@
+../../pilch-erdman-e2e/INPUT/bc.txt

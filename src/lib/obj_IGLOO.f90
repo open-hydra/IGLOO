@@ -245,6 +245,8 @@ contains
         do ip = 1, gr%nInjected
           associate(part => gr%particle(ip))
           part%ID = ip
+          part%parentID = 0
+          part%newborn  = .false.
           !> Re-seed the particle's RNG stream from (rng_seed, famID, ID).
           part%rngState = rngSeedFor(gr%famID, ip)
           part%d  = part%dInj
@@ -327,8 +329,8 @@ contains
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
                                 trajOn, scatOn, dNscat, trajSample, threshold, &
                                 probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
-                                nConnHit, nSweepHit, nRimExit, nInjNoCell, &
-                                unitSnap, snapOn, timeOn, tEnd
+                                nConnHit, nSweepHit, nRimExit, nInjNoCell, nKHRTwarn, &
+                                unitSnap, snapOn, timeOn, tEnd, frozenOn, unitPlane, planeOn
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
     use IGLOO_Lib_Properties, only: lookupTab   !> child hand-off (enthalpy slot)
@@ -350,7 +352,7 @@ contains
     integer :: loopCounter, maxShedSeen
     !> Child-ID band of the current generation. No initializer here: it would imply SAVE.
     integer :: curBase, curCount, newBase, childLocal, childGlobal, pidx, idBase
-    integer :: foldStat(2), noCell(1)
+    integer :: foldStat(2), noCell(1), khrtWarn(1)
     integer, allocatable :: nShedAll(:), shedOff(:)
     ! logical, allocatable :: famDone(:)
     real(R8), allocatable :: relTol(:), absTol(:), exch(:,:)
@@ -358,6 +360,7 @@ contains
     integer  :: c, nStreams, nValid
     real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp
     type(obj_particle) :: ptmp   ! throwaway copy for the inject-only pre-pass
+    character(len=4) :: fHead    !> the frozen-fraction header entry, blank for a material that does not solidify
 
     !> Refuse to run on a stale particle state.
     if (.not. self%stateIsFresh) then
@@ -367,7 +370,7 @@ contains
     endif
     self%stateIsFresh = .false.
     nSectorFold = 0; nMultiFold = 0; nStencilRefresh = 0; nConnHit = 0; nSweepHit = 0; nRimExit = 0
-    nInjNoCell = 0
+    nInjNoCell = 0; nKHRTwarn = 0
 
     sourceSwitch = self%srcSwitch
     eulerSwitch  = self%eulSwitch
@@ -397,34 +400,43 @@ contains
 
     do m = 1, nm
       material: associate(mat => self%material(m))
+      !> A material of which a group solidifies ends every particle-file row with f.
+      frozenOn = any(mat%group(1:mat%ngroups)%solidSelect > 0)
+      fHead = ''; if (frozenOn) fHead = ',"f"'
       !> Per-material output files: <kind>-<material><sweeptag><ranksuffix>.dat (rank suffix empty at one rank).
       if (trajOn) then
         open(newunit=unitTraj,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'trajectories-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
         if (timeOn) then
-          write(unitTraj,'(1X,A)') 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'
+          write(unitTraj,'(1X,A)') 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)
         else
-          write(unitTraj,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'
+          write(unitTraj,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)
         endif
       endif
       open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
       if (timeOn) then
         write(unitExit,'(1X,A)') 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","t",'// &
-                                 '"bc","d<sub>p</sub>"'
+                                 '"bc","d<sub>p</sub>"'//trim(fHead)
       else
         write(unitExit,'(1X,A)') 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID",'// &
-                                 '"bc","d<sub>p</sub>"'
+                                 '"bc","d<sub>p</sub>"'//trim(fHead)
+      endif
+      !> One record per plane crossing.
+      if (planeOn) then
+        open(newunit=unitPlane,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'planes-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
+        write(unitPlane,'(1X,A)') 'variables="plane","X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","mdot","npdot",'// &
+                                  '"f","ID","parent","t","dir"'
       endif
       !> Parcels still in the domain at time-end, one record each.
       if (snapOn) then
         open(newunit=unitSnap,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'snapshot-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
-        write(unitSnap,'(1X,A)') 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'
+        write(unitSnap,'(1X,A)') 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)
       endif
 
       !> Scatter cloud: one zone per material; auto-size the weight quantum dNscat to ~trajSample points per stream.
       dNscat = 0._R8
       if (scatOn) then
         open(newunit=unitScat,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'scatter-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
-        write(unitScat,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'
+        write(unitScat,*) 'variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)
         write(unitScat,'(A,A,A)')'Zone T="Mat ',trim(mat%matName),' scatter"'
         !> Serial inject-only pre-pass over ALL particles (replicated on every rank so dNscat is
         !  identical everywhere): resolves each stream's npdot and injection speed.
@@ -480,7 +492,10 @@ contains
           write(*,'(A,I2,A)') '     >> ODE system (neq=', gr%particle(1)%neq, '):'
           if (gr%evapSelect/=0) write(*,*) '       - evaporation --> ', trim(gr%evapWord)
           if (gr%combSelect/=0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
-          if (gr%solidSelect/=0) write(*,*) '       - solidification --> supercooling + recalescence (model 6)'
+          if (gr%solidSelect/=0 .and. .not.gr%brkupEqOde) &
+            write(*,*) '       - solidification --> supercooling + recalescence (model 6)'
+          if (gr%solidSelect/=0 .and. gr%brkupEqOde) &
+            write(*,*) '       - solidification --> supercooling + recalescence (model 7)'
           if (gr%brkupEqOde   ) write(*,*) '       - breakup     --> ', trim(gr%brkupWord)
           if (gr%evapSelect==0 .and. gr%combSelect==0 .and. .not.gr%brkupEqOde) &
             write(*,*) '       - constant particle mass and size'
@@ -490,6 +505,7 @@ contains
         if (trajOn) write(unitTraj,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
         write(unitExit ,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
         if (snapOn) write(unitSnap,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
+        if (planeOn) write(unitPlane,'(A,A,A,I3,A)')'Zone T="Mat ',trim(mat%matName),' Group',g,'"'
 
         if (gr%brkupHasChild) then
           if (allocated(gr%shed)) deallocate(gr%shed)
@@ -607,6 +623,8 @@ contains
                 kid%d             = src%diam
                 kid%npdot         = src%npdot
                 kid%time          = src%time
+                kid%parentID      = src%parent
+                kid%newborn       = .true.
                 !> cell/gas locators inherited from the parent at the shed point
                 kid%i       = src%ipos
                 kid%igas    = src%igas
@@ -630,6 +648,9 @@ contains
                 case(2,5); kid%stateVar(8) = kid%m
                 case(3);   kid%stateVar(8) = kid%npdot
                 case(4);   kid%stateVar(8) = kid%m; kid%stateVar(9) = kid%npdot
+                !> model 7: the parent's phase carried, never re-derived from the temperature
+                case(7);   kid%solidPhase = src%phase; kid%fSolid = 0._R8
+                           kid%stateVar(8) = 0._R8; kid%stateVar(9) = kid%npdot
                 end select
                 if (eulerSwitch)    kid%stateVar(kid%nOde+1:kid%neq) = 0._R8
                 if (kid%bodyAccum)  kid%stateVar(kid%neq-1 :kid%neq) = 0._R8
@@ -676,6 +697,7 @@ contains
       if (trajOn) close(unitTraj)
       if (scatOn) close(unitScat)
       if (snapOn) close(unitSnap)
+      if (planeOn) close(unitPlane)
       close(unitExit)
     enddo
 
@@ -744,6 +766,13 @@ contains
     call mpi_allreduce_sum_i4_array(noCell, 1)
     if (mpi_is_root .and. noCell(1) > 0) write(*,'(A,I0,A)') ' [WARNING] ', noCell(1), &
       ' parcel(s) whose injection point no cell holds: not integrated'
+    if (any(self%material(:)%brkupSelect == 3)) then
+      khrtWarn = [nKHRTwarn]
+      call mpi_allreduce_sum_i4_array(khrtWarn, 1)
+      if (mpi_is_root .and. khrtWarn(1) > 0) write(*,'(A,I0,A)') &
+        ' [WARNING] Reitz-KHRT outside its hypotheses (Oh > 1 or rho_g/rho_p > 0.1) in ', khrtWarn(1), &
+        ' model evaluations'
+    endif
     if (mpi_is_root) then
       if (snapOn) then
         write(*,'(A,ES16.8E2,A)') '  Stop condition : time-end = ', tEnd, ' s reached, or the particle left the domain'

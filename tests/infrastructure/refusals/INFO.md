@@ -48,6 +48,7 @@ output written).
 | `refuse-evaporation-leb` | `evaporation = LEB` (parsed, declared not implemented) | `IGLOO: evaporation=LEB is not implemented` |
 | `refuse-phase-token` | own `INPUT/phase.txt` (`A 1 no-such-key=1`), drag-token's `bc.txt`/`solfile.tec` symlinked | `IGLOO: unknown per-material key in the phase file` |
 | `refuse-phase-token-real` | own `INPUT/phase.txt` (`A 1 alpha-e=one`) | `IGLOO: non-numeric per-material value in the phase file` |
+| `refuse-breakup-token-material` | own `INPUT/phase.txt` (`A 1 breakup=Foo`), drag-stokes's `bc.txt`/`solfile.tec` symlinked, no `breakup` key in `[IGLOO-Models]` | `IGLOO: unknown breakup model` |
 | `refuse-tab-method` | tab-e2e (`INPUT/` symlinked) with `method = 3` | `IGLOO: TAB method must be 1 or 2` |
 | `refuse-gas-order` | `gas-order = 3` | `IGLOO: gas-order must be 1 or 2` |
 | `refuse-out-file` | `out-file = nonsense` | `IGLOO: unknown out-file token` (accepted: E, S, E+S, ALL -- `ALL` is what hydra's MI2 cases write; `two-mat` runs it) |
@@ -58,9 +59,8 @@ output written).
 | `refuse-solid-tnuc` | the valid solidification line plus `T-nuc=2400` (above the 2327 K default `T-melt`) | `solidification=on requires T-nuc < T-melt` |
 | `refuse-solid-evap` | the valid line plus `[IGLOO-Models] evaporation = CEM` | `solidification=on is exclusive with evaporation` |
 | `refuse-solid-comb` | the valid line plus `combustion=Beckstead K-burn=4.5e-7` | `solidification=on with combustion is not supported` |
-| `refuse-solid-brk` | the valid line plus `[IGLOO-Models] breakup = TAB` | `solidification=on with breakup is not supported` |
 | `refuse-solid-varcp` | the valid line plus an own 10-row `properties.dat` whose `Cp` column varies (the enthalpy its trapezoid sum, so the table itself is valid) | `solidification=on requires a constant-cp material` |
-| `refuse-solid-varrho` | the valid line plus an own 10-row `properties.dat` whose `Density` column varies | `solidification=on requires a constant-density material` |
+| `refuse-rho-solid` | the valid line plus `rho-solid=-1` | `IGLOO: rho-solid must be positive` |
 | `refuse-wedge-offcentre` | a generated wedge whose k-planes sit at 0 and +1° (`tools/make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`) | `IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)` — refused at mesh import (`allocation.f90`), not at the properties choke point |
 | `refuse-psd-missing` | own `INPUT/bc.txt` (`tools/make_box_case.py --law 0.0 tables/psd.dat`, shared by the six table cases below), no table | `IGLOO: size-distribution file not found` — after trying `tables/psd.dat` and `INPUT/psd.dat` (both printed) |
 | `refuse-psd-line-long` | own `bc.txt`: every inlet payload line padded to 600 characters with blanks between columns 7 and 8 | `IGLOO: bc.txt inlet payload line too long` — a line that fills the 512-character buffer |
@@ -80,19 +80,24 @@ output written).
 | `refuse-brk-mu` | `tab-e2e` without `mu` | `Breakup requires mu` |
 | `refuse-sigma-size` | `tab-e2e` with `Le = 1.0` added and `sigma = 0.072 0.072`, `mu = 1.0e-3 1.0e-3`: the vectors are read in the order psat, Mv, Lv, Tboil, cpv, Le, Yinf, sigma, mu and the first present (`Le`, one value) sets the length | `sigma: size mismatch with other property vectors` |
 | `refuse-sigma-nm` | `tab-e2e` with `sigma = 0.072 0.072`, `mu = 1.0e-3 1.0e-3` for its one material | `sigma: size /= number of materials` |
+| `refuse-sigma-both` | `pe-sigma-table` (`INPUT/` symlinked: its `Sigma` and `Viscosity` columns) with `[IGLOO-Properties] sigma = 0.072` | `IGLOO: sigma given both in [IGLOO-Properties] and as a properties.dat column` |
+| `refuse-sigma-column` | `pe-sigma-table`'s case with its own `properties.dat`, the `Sigma` column at −0.01 N/m on the 320 K row (`bc.txt`, `solfile.tec` symlinked to `pilch-erdman-e2e`'s) | `Sigma column: a value that is not positive` |
 | `refuse-bc-legacy` | own `INPUT/bc.txt`: `drag-stokes`'s with every code in the legacy single-digit schema (401 → 4, 400 → 1; `python3 make_bc_refusals.py`, run from this directory) | `IGLOO: bc.txt line is not six integers with a 3-digit code` |
 | `refuse-bc-empty-payload` | own `INPUT/bc.txt`: `drag-stokes`'s with the first inlet payload line empty (`make_bc_refusals.py`) | `IGLOO: bc.txt inlet payload line is empty` |
 | `refuse-body-accel` | `body-force` (`INPUT/` symlinked) with `body-accel = 0.0 -200.0` | `body-accel: expected 3 values (gx gy gz)` |
+| `refuse-plane-x` | `INPUT/` symlinked; `plane-x = abc` | `IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]` |
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All sixty-four exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All sixty-seven exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
 line) — neither is their payload. **The two vapour-column cases are RED**
 on a reader that does not know the `Lv`, `Mv`, `Cpv` columns: both stop at `Evaporation requires Mv` (exit 128,
-not their payload). **The ten size-distribution cases are
+not their payload). **The two `Sigma` cases are RED** on a reader that does not know the `Sigma` and
+`Viscosity` columns: `refuse-sigma-both` stops at `Breakup requires mu` (its only key is `sigma`),
+`refuse-sigma-column` at `Breakup requires sigma` (exit 128, not their payload). **The ten size-distribution cases are
 RED** on a reader that splits the inlet line with a list-directed read: a path ends at its slash (`tables`,
 `INPUT`), so nine of them stop at `unsupported distribution law` with exit 1 and no payload, and the
 600-character line is cut to 512 characters and run as a Dirac (exit 0, output written). The six table
@@ -107,7 +112,7 @@ pass, which never reads the orientation integers: both run to "Stop condition" w
 RED first**: the reader that took three columns by position ran each of them to "All particles out of
 domain" with exit 0 — the two-enthalpy header as an absolute datum with `hOff = 0`, the typed row with
 its enthalpy undefined (ORION keeps only the last row's read status), and the decreasing `Psat` column
-unread. **The eight solidification cases were
+unread. **The seven solidification cases were
 RED first**: the binary before the solidification model stopped each of them with `solidification=on parsed but
 not implemented yet`, not their payload. **The four INI-contract
 cases were RED first** (ledger O20/O21/O26, recorded on the pre-fix binary): `method = 3` ran to
@@ -132,6 +137,10 @@ its three families of A on copy 1's `krho` 0.34, i.e. `krhoTot` = 1.02 and ṁ =
 and `body-accel` are RED** on the solver with each of their error stops turned into a plain write: eight run on
 to "Stop condition" with exit 0 and write their output, and `sigma-size`, `sigma-nm` and `bc-legacy` end on a
 later stop with another payload (`mu: size mismatch`, `mu: size /= number of materials`, the record count).
+**`refuse-breakup-token-material` is RED** on a reader that knows no `breakup` token on a material line: it stops
+at `IGLOO: unknown per-material key in the phase file`, not its payload. **`refuse-plane-x` is RED** on a solver that
+does not read `plane-x` (an unknown `[IGLOO-General]` key is ignored): it runs to "Stop condition" with exit 0, no
+payload, and writes three `.dat` files.
 
 **Not here.** A mixed-Nk mesh (`allocation.f90`, `af307dd`) needs a two-zone `solfile.tec`; exercised in a
 throwaway only. `refuse-dopri5` (the interim `H-dopri5` refusal of ledger O25) was dropped with the

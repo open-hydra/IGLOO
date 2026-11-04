@@ -56,6 +56,9 @@ contains
     call reg%add('IGLOO-General','timing',d_s(24),'off', &
       'Print [IGLOO-timing] lines after each output write: wall time per phase, parcel count and '// &
       'integration time per thread and per rank, rank imbalance, allocated array sizes','on, off',.false.)
+    call reg%add('IGLOO-General','plane-x',d_s(25),'-', &
+      'Planes normal to x at the listed positions [m], space-separated: planes-<mat>.dat holds one record per '// &
+      'crossing, with the stream''s state, flow, number rate, ID, parent ID and direction; absent = no file','',.false.)
 
     ! --- [IGLOO-Models] ---
     call reg%add('IGLOO-Models','drag',d_s(6),'-', &
@@ -79,7 +82,9 @@ contains
     call reg%add('IGLOO-Models','boiling',d_s(13),'clamp', &
       'Boiling branch, global default (per-material override: key=value on the material line of the phase file, from [GPB-Phase*]); ZGR not implemented: refused at setup','clamp, ZGR',.false.)
     call reg%add('IGLOO-Models','breakup',d_s(9),'NoBreakup', &
-      'Breakup model','Pilch-Erdman, Reitz-Diawakar, Reitz-KHRT, TAB, ETAB',.false.)
+      'Breakup model, global default; a material overrides it with the `breakup=<model>` token of its '// &
+      'phase-file line, and each constant below with its `<tag>-<key>` token', &
+      'Pilch-Erdman, Reitz-Diawakar, Reitz-KHRT, TAB, ETAB',.false.)
     call reg%add('IGLOO-Models','Cd',d_r(3),'1.0', &
       'Pilch-Erdman: drag constant','',.false.)
     call reg%add('IGLOO-Models','B',d_r(4),'0.116', &
@@ -114,11 +119,11 @@ contains
       'TAB: product-size selection method (2 = Rosin-Rammler sampling)','1, 2',.false.)
     call reg%add('IGLOO-Models','n',d_r(18),'3.5', &
       'TAB: Rosin-Rammler spread parameter (method 2)','',.false.)
-    call reg%add('IGLOO-Models','k1',d_r(19),'0.2', &
+    call reg%add('IGLOO-Models','k1',d_r(19),'0.2222', &
       'ETAB: bag-regime rate constant','',.false.)
-    call reg%add('IGLOO-Models','k2',d_r(20),'0.2', &
+    call reg%add('IGLOO-Models','k2',d_r(20),'0.2222', &
       'ETAB: stripping-regime rate constant','',.false.)
-    call reg%add('IGLOO-Models','WeTrans',d_r(21),'100', &
+    call reg%add('IGLOO-Models','WeTrans',d_r(21),'80', &
       'ETAB: bag-to-stripping transition Weber number','',.false.)
 
     ! --- [IGLOO-Properties] --- one value per material; overrides properties.dat
@@ -143,9 +148,11 @@ contains
     call reg%add('IGLOO-Properties','Yinf',d_a(8,:),'0', &
       'Far-field vapour mass fraction; one value per material, overrides properties.dat','',.false.)
     call reg%add('IGLOO-Properties','sigma',d_a(9,:),'0', &
-      'Surface tension; one value per material, overrides properties.dat','',.false.)
+      'Surface tension of a breaking material; one value per material; a material whose properties.dat '// &
+      'carries the Sigma column takes it from there (give 0 here)','',.false.)
     call reg%add('IGLOO-Properties','mu',d_a(10,:),'0', &
-      'Particle dynamic viscosity; one value per material, overrides properties.dat','',.false.)
+      'Particle dynamic viscosity of a breaking material; one value per material; a material whose '// &
+      'properties.dat carries the Viscosity column takes it from there (give 0 here)','',.false.)
     call reg%add('IGLOO-Properties','emissivity',d_a(20,:),'0', &
       'Particle surface emissivity of the grey-body exchange with the gas temperature; one value per material; '// &
       '0 = off (default)','',.false.)

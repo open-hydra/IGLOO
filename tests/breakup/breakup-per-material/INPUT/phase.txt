@@ -1,0 +1,5 @@
+condensed-dispersed phase
+A 1 TAB-Comega=10 breakup=TAB
+B 1 breakup=Reitz-KHRT KHRT-B1=40
+C 1
+D 1 breakup=Reitz-KHRT TAB-Comega=10

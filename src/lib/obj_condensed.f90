@@ -2,6 +2,7 @@
 module IGLOO_data_phases
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_particles
+  use IGLOO_Lib_Breakup, only: NBRKTOK
   implicit none
   private
 
@@ -10,6 +11,8 @@ module IGLOO_data_phases
     integer  :: ipos(4) = 0,      igas(3) = 0
     real(R8) :: pos(3)  = 0._R8,  vel(3)  = 0._R8
     real(R8) :: temp    = 0._R8,  diam    = 0._R8, npdot = 0._R8, time = 0._R8
+    integer  :: phase   = 0       !> the parent's solidification phase at the shed
+    integer  :: parent  = 0       !> the shedding parcel's ID
   end type
 
   !> Growable shed list, one per parent index (reserve + double via move_alloc). Dummies take it
@@ -42,6 +45,9 @@ module IGLOO_data_phases
     logical  :: mupVariable
     real(R8) :: mup   !> liquid material viscosity (defined if mup=const)
     real(R8) :: sigma !> liquid material surface tension (defined if sigma=const)
+    real(R8), allocatable :: bp(:)        !> the breakup model's constants
+    integer  :: bpMethod = 1              !> TAB product-size method
+    real(R8) :: bpScale  = 1._R8          !> TAB product-size scale factor
     !> Evaporation properties (per-material, constant)
     character(len=50) :: evapWord
     integer  :: evapSelect=0
@@ -62,6 +68,7 @@ module IGLOO_data_phases
     real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8
     real(R8) :: Tign = 0._R8, Tmelt = 2327._R8, hFus = 0._R8, Tnuc = 0._R8, cpSol = 0._R8
     real(R8) :: qComb = 0._R8
+    real(R8) :: rhoSol = 0._R8       !> solid density [kg/m3]; 0 = the liquid density
     real(R8) :: emissivity = 0._R8   !> grey-body surface emissivity; 0 = no radiation
     integer  :: nactive = 0
     type(obj_particle), allocatable :: particle(:)
@@ -90,6 +97,11 @@ module IGLOO_data_phases
     logical  :: mupVariable=.false.
     real(R8) :: mup   = 0._R8 !> liquid material viscosity       (defined if mup=const)
     real(R8) :: sigma = 0._R8 !> liquid material surface tension (defined if sigma=const)
+    real(R8), allocatable :: bp(:)        !> the breakup model's constants: [IGLOO-Models], then the tokens
+    integer  :: bpMethod = 1              !> TAB product-size method
+    real(R8) :: bpScale  = 1._R8          !> TAB product-size scale factor
+    real(R8) :: bpTok(NBRKTOK) = 0._R8    !> breakup constant tokens of the material line
+    logical  :: bpGiven(NBRKTOK) = .false.
     !> Evaporation properties (per-material, constant)
     character(len=50) :: evapWord
     integer  :: evapSelect=0
@@ -110,6 +122,7 @@ module IGLOO_data_phases
     real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8
     real(R8) :: Tign = 0._R8, Tmelt = 2327._R8, hFus = 0._R8, Tnuc = 0._R8, cpSol = 0._R8
     real(R8) :: qComb = 0._R8
+    real(R8) :: rhoSol = 0._R8       !> rho-solid [kg/m3]; 0 = the liquid density
     real(R8) :: emissivity = 0._R8   !> [IGLOO-Properties] emissivity; 0 = no radiation
     !> sub-objects
     type(obj_group), allocatable :: group(:)
@@ -177,6 +190,9 @@ contains
         gr%sigVariable = self%sigVariable
         if (.not.self%mupVariable) gr%mup   = self%mup
         if (.not.self%sigVariable) gr%sigma = self%sigma
+        if (allocated(self%bp)) gr%bp = self%bp
+        gr%bpMethod = self%bpMethod
+        gr%bpScale  = self%bpScale
       endif
       !> Evaporation properties
       if (self%evapSelect > 0) then
@@ -205,6 +221,7 @@ contains
         gr%Tmelt = self%Tmelt; gr%hFus = self%hFus; gr%Tnuc = self%Tnuc; gr%cpSol = self%cpSol
         gr%qComb = self%qComb
       endif
+      if (self%solidSelect > 0) gr%rhoSol = self%rhoSol
       gr%emissivity = self%emissivity
       end associate
     enddo
@@ -216,7 +233,6 @@ contains
   subroutine setup_particleODE(self,rangeStart,rangeEnd)
     use IGLOO_variables,  only: eulerSwitch, srcBodyForce
     use Lib_RHS,          only: determineModel, computeNeq, computeNode, setupRHS
-    use IGLOO_Lib_Breakup, only: bp, bpMethod, bpScale
     implicit none
     class(obj_group),  intent(inout) :: self
     integer, optional, intent(in)    :: rangeStart, rangeEnd
@@ -246,11 +262,13 @@ contains
     if (self%brkupSelect > 0) then
       call setupRHS(mdl, self%brkupSelect, self%evapSelect, self%liqSelect, self%intfSelect, &
                     self%boilSelect, self%combSelect, propFlags, &
-                    bp, bpMethod, bpScale, nAux, nAuxSt, nEvV, radiation=self%emissivity > 0._R8)
+                    self%bp, self%bpMethod, self%bpScale, nAux, nAuxSt, nEvV, radiation=self%emissivity > 0._R8, &
+                    solidDensity=self%rhoSol > 0._R8)
     else
       call setupRHS(mdl, self%brkupSelect, self%evapSelect, self%liqSelect, self%intfSelect, &
                     self%boilSelect, self%combSelect, propFlags, &
-                    bp_empty, 1, 1._R8, nAux, nAuxSt, nEvV, radiation=self%emissivity > 0._R8)
+                    bp_empty, 1, 1._R8, nAux, nAuxSt, nEvV, radiation=self%emissivity > 0._R8, &
+                    solidDensity=self%rhoSol > 0._R8)
     endif
 
     do i = start, end
@@ -261,7 +279,7 @@ contains
       if (eulerSwitch) then
         select case(mdl)
         case(2,5);    call sizeTo(part%intE, 5)
-        case(3,4);    call sizeTo(part%intE, 6)
+        case(3,4,7);  call sizeTo(part%intE, 6)
         case default; call sizeTo(part%intE, 4)
         end select
       endif
@@ -364,6 +382,7 @@ contains
         part%Tmelt = self%Tmelt; part%hFus = self%hFus; part%Tnuc = self%Tnuc; part%cpSol = self%cpSol
         part%qComb = self%qComb
       endif
+      if (self%solidSelect > 0) part%rhoSol = self%rhoSol
       part%emissivity = self%emissivity
       end associate
     enddo

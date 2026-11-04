@@ -8,14 +8,15 @@ program test_radiation
     !        Tg - Tp both ways; eps = 0 and Tg = Tp give exactly 0
     !   RU3  the aux layout: with radiation one slot after every other block (nAux + 1, ind_eps = nAux);
     !        without it, set up after a material with it, no slot (ind_eps = 0) and the nAux of the layout
-    !        without the feature; models 1-6
-    !   RU2  one production right-hand side per ODE model 1-6 at zero slip under NoDrag and NoHeat: F of a
+    !        without the feature; models 1-7
+    !   RU2  one production right-hand side per ODE model 1-7 at zero slip under NoDrag and NoHeat: F of a
     !        material with eps = 0.8 minus F of the same material with eps = 0 is Qr*cpFactor/m in the energy
-    !        equation (model 6 by phase: Qr/(m c_l), -Qr/(m h_fus) in F(8), Qr/(m c_s)) within 8 ULP of the
-    !        larger F, and 0 in every other component; model 1 again on a varying-cp table (cpFactor = 1);
-    !        model 2 again with blowing = LK on the d2-law (mdot /= 0): the term is not multiplied by f2.
-    !        d and m are the ones the right-hand side holds (aux for models 1 and 6, rebuilt from the mass
-    !        for models 2-5, typed as the right-hand side rebuilds them)
+    !        equation (models 6 and 7 by phase: Qr/(m c_l), -Qr/(m h_fus) in F(8), Qr/(m c_s)) within 8 ULP
+    !        of the larger F, and 0 in every other component; model 1 again on a varying-cp table
+    !        (cpFactor = 1); model 2 again with blowing = LK on the d2-law (mdot /= 0): the term is not
+    !        multiplied by f2. d and m are the ones the right-hand side holds (aux for models 1 and 6, rebuilt
+    !        from the mass for models 2-5 and 7, typed as the right-hand side rebuilds them; model 7 at a
+    !        Z(9) off the injection rate, so its d is not the injection one)
     !   RU4  getSourceTerms at zero slip under NoDrag and NoHeat: the energy component equals
     !        np*eps*sigma*pi*d^2*(Tg^4 - Tp^4), d = (6 rhop/(pi rho np))^(1/3): 1e-14 relative; eps = 0 gives 0
     !
@@ -132,11 +133,11 @@ contains
     subroutine run_RU3(ok)
         use Lib_RHS, only: ind_eps
         logical, intent(inout) :: ok
-        integer, parameter :: NM = 7
+        integer, parameter :: NM = 8
         !                                 model brk evap comb varcp
         integer, parameter :: cfg(5, NM) = reshape([1, 0, 0, 0, 0,  1, 0, 0, 0, 1,  2, 0, 1, 0, 0, &
                                                     3, 2, 0, 0, 0,  4, 2, 1, 0, 0,  5, 0, 0, 1, 0, &
-                                                    6, 0, 0, 0, 0], [5, NM])
+                                                    6, 0, 0, 0, 0,  7, 2, 0, 0, 0], [5, NM])
         integer :: i, nA0, nA1, nA2, nA3, e0, e1, e2, e3
         logical :: pass, all_ok
         call set_switches(0)
@@ -178,8 +179,8 @@ contains
                                       htab, dtab, dtab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8)
         case (5); call rhsAlCombustion(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
                                        htab, dtab, gasNodes, gasVert, gas, 9, 8)
-        case (6); call rhsSolidification(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
-                                         gasNodes, gasVert, gas, 9, 8)
+        case (6, 7); call rhsSolidification(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
+                                            dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8)
         end select
     end subroutine call_rhs
 
@@ -253,7 +254,7 @@ contains
         use IGLOO_Lib_Solidification, only: phLiquid, phUndercooled, phPlateau, phSolid
         logical, intent(inout) :: ok
         real(R8), parameter :: PI = 4._R8*atan(1._R8), UG = 10._R8, Ru = 8314.46_R8
-        type(obj_particle) :: p1, p6, p2, p3, p4, p5
+        type(obj_particle) :: p1, p6, p7, p2, p3, p4, p5
         real(R8), allocatable :: htab(:)
         real(R8) :: Z7(7), Z8(8), Z9(9), F1(9), F0(9), m, d, Tg, Tp, f2
         real(R16) :: ref
@@ -308,6 +309,28 @@ contains
             case (phSolid)
                 call judge('model 6 solid, F(7) = Qr/(m c_s)', 'RU2_model6_solid', 7, F1(1:8), F0(1:8), &
                            ref/600._R16, ok)
+            end select
+        end do
+
+        !> model 7: model 6's material with Reitz-Diwakar at zero slip (no breakup), Z(9) = 1.5 mdot/m
+        p7 = p6;  p7%sigma = 6.0e-5_R8;  p7%mup = 1.0e-3_R8;  p7%mdot = 1.0e-3_R8
+        do ph = phLiquid, phSolid
+            Z9 = [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, Tph(ph), fph(ph), 1.5_R8*p7%mdot/p7%m]
+            m = p7%mdot/Z9(9);  d = (sixOverPi*m/p7%rho)**oneThird
+            call rhs_pair(7, 2, 0, 0, .false., p7, 9, Z9, ph, Tg, htab, F1, F0, stale)
+            call stale_flag(stale, 'model 7', ok);  if (stale) return
+            ref = qr_ref(EPS1, d, Tg, Tph(ph))/real(m, R16)
+            select case (ph)
+            case (phLiquid)
+                call judge('model 7 liquid, F(7) = Qr/(m c_l)', 'RU2_model7_liquid', 7, F1, F0, ref/1250._R16, ok)
+            case (phUndercooled)
+                call judge('model 7 undercooled, F(7) = Qr/(m c_l)', 'RU2_model7_undercooled', 7, F1, F0, &
+                           ref/1250._R16, ok)
+            case (phPlateau)
+                call judge('model 7 plateau, F(8) = -Qr/(m h_fus)', 'RU2_model7_plateau', 8, F1, F0, &
+                           -ref/1.07e6_R16, ok)
+            case (phSolid)
+                call judge('model 7 solid, F(7) = Qr/(m c_s)', 'RU2_model7_solid', 7, F1, F0, ref/600._R16, ok)
             end select
         end do
 
