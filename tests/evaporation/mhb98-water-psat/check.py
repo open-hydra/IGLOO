@@ -115,8 +115,8 @@ def cem_mdot(Xs, d):
 def lk_mdot(Tp, d):
     """LK fixed-point mass rate (the model IGLOO runs). At 1.1 mm the correction is
     only ~L_K/d~2e-4, but it accumulates over the path, so the kernel must carry it
-    to match production to the E13.6 floor -- 'vacuous' referred to LK-vs-VLE
-    EXPERIMENTAL discrimination, not to IGLOO-vs-kernel."""
+    to match production to the E13.6 floor -- 'vacuous' (mhb98-water) means LK-vs-VLE
+    EXPERIMENTAL discrimination, not IGLOO-vs-kernel."""
     XsE = xs_eq(Tp)
     md = cem_mdot(XsE, d)
     if md == 0.0:
@@ -286,7 +286,7 @@ def main():
             if r[0] > rows[-1][0]:
                 rows.append(r)
             else:
-                n_artifact += 1          # corner-exit phantom row
+                n_artifact += 1          # a row repeating an x
         xa, _, _, _, _, _, Ta, da, ma = rows[0]
 
         if xa < INLET_X:
@@ -396,7 +396,7 @@ def main():
     print(f"\ninjection placement: inlet(x<{INLET_X})={n_inlet}  mid-domain={n_mid}  "
           f"dead(1-row)={n_dead}  of {len(parts)} total")
     if n_artifact:
-        print(f"[NOTE] dropped {n_artifact} non-monotone-x phantom row(s) (corner-exit artifact)")
+        print(f"[NOTE] dropped {n_artifact} row(s) repeating an x (not evaporation physics)")
     print(f"max relative d^2 loss over a particle: {worst_loss*100:.2f}%  "
           f"(need >= {LOSS_MIN_REL*100:.0f}% to count; {n_noevap} below)")
     print(f"worst kernel point: {worst[1]}  (resid/tol = {worst[0]:.3f})")

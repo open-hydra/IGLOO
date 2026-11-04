@@ -13,12 +13,10 @@
 fuel. This case is a **real fuel with temperature-dependent liquid density**
 (`INPUT/properties.dat`, ρ_l 767→570 over 300→560 K, the paper's Table-1 anchors), so the
 drop **swells** as it heats before the D²-law evaporation — the hallmark of Fig. 11. It runs
-the T-dependent-property path end to end, and two failures of that path stop it:
-- the variable-property tabs (`rhoTab`/`cpTab`/`hTab`) left unallocated: the first
-  variable-density read segfaults;
-- a `lookupTab` that indexes the table with `idint(T)` and no bounds guard: SDIRK4's
-  Newton probes trial temperatures outside the tabulated range on stiff evaporation
-  transients and reads out of bounds. The index is clamped.
+the T-dependent-property path end to end: with the density table (`rhoTab`) left
+unallocated, the first variable-density read segfaults. The density and `Psat` columns are
+read through `tableValue` (the end value held outside the table) at SDIRK4's Newton trial
+temperatures; `Cp` is constant, so `lookupTab` is not called.
 
 ## Case construction
 Same box + injection as `tc-box` (kv=1 ⇒ Re=0, Sh=2, coast at u_g ⇒ t=x/u_g; kt=0.5 ⇒
@@ -47,8 +45,7 @@ production does, and matches the measured d²(x) (25/25 within 0.19 %, tol 2 %);
 **swelling** — measured max d²/d0² > 1.03 (a constant-density case can only shrink, so this
 proves ρ_l(Tp) is live); (3) **PC0** — the run reported `p_sat tabulated from properties.dat`;
 (4) **PC1** — the plateau (max T_p over the gated drops) within 1 K of the 0-D replica of the
-kernel, `zero_d.py` on this fixture: 492.63 K. Exercises the variable-property tabs and their
-bounds guard.
+kernel, `zero_d.py` on this fixture: 492.63 K. Exercises the density and `Psat` tables.
 
 ## IGLOO's kernel IS TC2012's present model (eq. 16), not Stefan-Fuchs
 Proven from the paper: IGLOO's TC transcendental `m̂ + (T̃s−1)·Le_v·(f(m̂/Le_v)−1) = rhs0`

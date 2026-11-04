@@ -6,7 +6,7 @@
 #               build/verif/ (build/mpi/ when USE_MPI=ON), whose tests run that
 #               tree's own IGLOO, publishes its IGLOO and DocGen to bin/, then
 #               dispatches to ctest by label or name.
-#               Categories: standard evaporation combustion solidification breakup infrastructure unit e2e
+#               Categories: standard evaporation combustion solidification breakup infrastructure repeatability mpi unit e2e
 #===============================================================================
 set -euo pipefail
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Overlay IGLOO vs the digitized TC2012 Fig. 11 model curves (E-VAL-3, MOSE-style).
+"""Overlay IGLOO vs the digitized TC2012 Fig. 11 model curves (MOSE-style).
 
 check.py is the GATE (variable-density TC mass rate + swelling); this only DRAWS and
 writes OUTPUT/tc-hexadecane.svg. matplotlib imported defensively.

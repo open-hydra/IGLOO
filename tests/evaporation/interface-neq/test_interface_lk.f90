@@ -1,6 +1,6 @@
 program test_interface_lk
     !
-    ! F1 unit family: Langmuir-Knudsen non-equilibrium interface (Miller-Harstad-Bellan
+    ! Unit checks of the Langmuir-Knudsen non-equilibrium interface (Miller-Harstad-Bellan
     ! 1998, model M2) around the CEM gas-side rate, called DIRECTLY with correctly-
     ! ordered gas args. Independent transcription of the full chain:
     !   psat_CC -> Xs_eq;  L_K = mu*sqrt(2 pi Tp Ru/Mv)/(alpha_e*Sc*p);
@@ -17,10 +17,10 @@ program test_interface_lk
     !   LK5  envelope convergence: 27-pt (Tp,d,rho) grid; deep fixed point vs code
     !        2e-13 (stopping-distance bound k/(1-k)*1e-12, k<=0.06 on this grid);
     !        moderate sub-envelope (d>=50um): 6 plain passes land within 1e-12
-    !        (measured 5-pass worst 1.36e-12 -- plan's <=5 estimate marginally off)
+    !        (measured 5-pass worst 1.36e-12: five passes fall short)
     !   LK6  Miller-Bellan heptane regime rows (1 atm, 300 K): LK rate deficit > 0
     !        and grows as d shrinks (M1-vs-M2 divergence direction); magnitudes
-    !        reported INFORMATIONAL (quantitative figure digitization deferred)
+    !        reported INFORMATIONAL (no digitized figure)
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_Lib_Evaporation, only: evaporation, nep
@@ -218,7 +218,7 @@ contains
         integer  :: i, j, k
         logical  :: pass
         tolc = 2.0e-13_R8    ! stopping-distance bound k/(1-k)*1e-12, k<=0.06 here
-        tol5 = 1.0e-12_R8    ! plan F1: <=5 plain passes on the moderate envelope
+        tol5 = 1.0e-12_R8    ! the bound the plain passes reach on the moderate envelope
         wc = 0._R8; w5 = 0._R8
         do i = 1, 3; do j = 1, 3; do k = 1, 3
             call ora_lk(rrs(k), Tps(i), dds(j), 1._R8, 60, md_ref)
@@ -226,7 +226,7 @@ contains
             errc = abs(md-md_ref)/abs(md_ref)
             wc   = max(wc, errc)
             if (dds(j) >= 50.e-6_R8) then
-                !> 6 passes: measured 5-pass worst = 1.36e-12, marginally over the plan estimate
+                !> 6 passes: measured 5-pass worst = 1.36e-12, just over the bound
                 call ora_lk(rrs(k), Tps(i), dds(j), 1._R8, 6, md_5)
                 err5 = abs(md_5-md_ref)/abs(md_ref)
                 w5   = max(w5, err5)
@@ -259,7 +259,7 @@ contains
         ok = ok .and. pass
         call append_row('LK6_heptane_direction', 'deficit', merge(0._R8,1._R8,pass), 0._R8, &
                         r10, r50, 1._R8, pass)
-        ! magnitudes informational (MHB98 figure digitization deferred)
+        ! magnitudes informational (no digitized MHB98 figure)
         call append_row('LK6_heptane_d10um_info', 'deficit', r10, r10, 0._R8, 0._R8, 1._R8, .true.)
         call append_row('LK6_heptane_d50um_info', 'deficit', r50, r50, 0._R8, 0._R8, 1._R8, .true.)
     end subroutine run_LK6

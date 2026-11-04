@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B-VAL-3 gate: TAB breakup vs the ORA87 analytic damped-oscillator (Tier V).
+"""tab-e2e gate: TAB breakup vs the ORA87 analytic damped-oscillator (Tier V).
 
 25-drop RADIUS-based Weber sweep (make_pe_case.py --we-convention rad) across the
 TAB onset We_r = WeCrit/2 = 6 (ORA87's critical Weber number, radius convention;
@@ -17,10 +17,10 @@ TAB onset We_r = WeCrit/2 = 6 (ORA87's critical Weber number, radius convention;
     d drop, t = sum dx/u_mean) widened by TOL_T (slip drift + event-apply granularity).
   5.75 < We_r < 7: onset band, informational only (slip-drift sensitive).
 
-This case FOUND and GATES bug A18: the event-breakup path was dead in
-production (brkupEvent never copied to particles; then an absent-optional crash, a
-wrong oscillator clock, and a stale aux diameter/mass that reverted the resize). With
-A18 fixed the analytic t_bu lands inside the measured bracket to sub-percent at every
+This case gates the event-breakup path: RED when the event flag is not copied to the
+particles (no TAB/ETAB breakup at all), when an absent optional argument crashes the event,
+on a wrong oscillator clock, and on a stale aux diameter/mass that reverts the resize. The
+analytic t_bu lands inside the measured bracket to sub-percent at every
 gated We_r (observed 16/16 within ~1%).
 """
 import math

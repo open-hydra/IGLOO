@@ -13,8 +13,8 @@ the slip instead (a shock-tube series at fixed size): cell i gets u0_i =
 --side-code 300 codes the lateral faces 3-6 as reflecting planes (default 400: a parcel
 that reaches them leaves the box); the outlet face 2 stays 400.
 
-Defaults reproduce the B-VAL-1 Pilch-Erdman case byte-identically (dia-based We
-sweep 20..1000, U=200, 60x5x5 box, air rho 1.2, mu 1.8e-5). The TAB case (B-VAL-3) uses
+Defaults reproduce the pilch-erdman-e2e case byte-identically (dia-based We
+sweep 20..1000, U=200, 60x5x5 box, air rho 1.2, mu 1.8e-5). The TAB case (tab-e2e) uses
 --we-convention rad --u-gas 50 --lx 0.6 --nx 240 and its own sweep across the ORA87 onset We_r=6.
 
 Writes <out_dir>/solfile.tec and <out_dir>/bc.txt.

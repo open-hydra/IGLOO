@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E-VAL-3 gate: Tonini-Cossali evaporation of an n-hexadecane drop with TEMPERATURE-
+"""Gate: Tonini-Cossali evaporation of an n-hexadecane drop with TEMPERATURE-
 DEPENDENT liquid density (TC2012 Fig. 11 conditions).
 
 Two things are validated, both along the MEASURED Tp(x) (so the gate is on the mass-rate
@@ -12,8 +12,9 @@ law and the variable-density diameter, not on the Tp evolution):
       reconstructs d^2 from m and the T-dependent liquid
       density: d^2 = (6 m / (pi rho_l(Tp)))^{2/3}. This couples the evaporative mass loss
       AND the thermal swelling (rho_l falls as the drop heats) exactly as production does,
-      and is compared to the measured d^2(x). It exercises bug fixes A20 (variable-property
-      tabs were never allocated) and A21 (lookupTab read out of bounds on Newton trials).
+      and is compared to the measured d^2(x). It exercises the temperature-dependent density
+      and p_sat tables (tableValue, which holds the end value outside the table) at the
+      implicit ODE solver's trial temperatures.
 
   (2) SWELLING (qualitative, validates variable rho_l). The drop MUST swell: max
       d^2/d0^2 > SWELL_MIN before it evaporates. With a constant liquid density (all other
@@ -163,18 +164,17 @@ def _log_count(pat):
 
 
 def check_exit_paths():
-    """H1/H2 -- how the parcels LEAVE. Before the rhsEvaporation finite scrub all 25 ended
-    on `non-finite state ==> reverting to last good step` at m/m0 = 1.36e-3: the RHS made a
-    NaN out of a negative Newton trial mass (d = (6m/pi/rho)^(1/3)) and the poisoned state
-    only surfaced in solout. With the scrub the bad trial is a 1e30 slope, the step is
-    rejected, and the drop reaches mBurnTol -- a clean burnout through the normal branch.
+    """H1/H2 -- how the parcels LEAVE. The rhsEvaporation finite scrub makes a negative Newton
+    trial mass (d = (6m/pi/rho)^(1/3) would be a NaN) a 1e30 slope: the step is rejected, and
+    the drop reaches mBurnTol -- a clean burnout through the normal branch. Without the scrub
+    all 25 end on `non-finite state ==> reverting to last good step` at m/m0 = 1.36e-3.
     H3 (below) is what pins the mass; these two pin the PATH."""
     n_nan  = _log_count("non-finite state")
     n_err  = _log_count("Run_ODESolver err=")
     n_exit = sum(1 for l in open(OUTLOC).read().splitlines()[2:] if len(l.split()) == 11) \
              if os.path.exists(OUTLOC) else -1
     checks = [
-        (f"H1 no parcel ends on a non-finite state (was {NPART})", n_nan == 0),
+        (f"H1 no parcel ends on a non-finite state (without the scrub: {NPART})", n_nan == 0),
         (f"H2a no parcel ends on a solver failure",                n_err == 0),
         (f"H2b all {NPART} parcels wrote an exit row",             n_exit == NPART),
     ]
@@ -265,12 +265,12 @@ def main():
     pc1 = n_good > 0 and abs(max_plat - T_0D) <= 1.0
     print(f"[{'PASS' if pc1 else 'FAIL'}] PC1 plateau {max_plat:.2f} K within 1 K of the 0-D replica "
           f"{T_0D:.2f} K (Clausius-Clapeyron with the same sink: 486.0 K)")
-    print("\nexit-path and mass-balance gates (O30):")
+    print("\nexit-path and mass-balance gates:")
     extra = check_exit_paths() + check_mass_balance()
 
     if n_good >= N_GOOD and n_viol == 0 and n_noswell == 0 and extra == 0 and pc0 and pc1:
         print("\n[PASS] IGLOO's variable-density TC evaporation reproduces the mass-rate law "
-              "with the tabulated psat and the thermal swelling (A20/A21 exercised), the plateau "
+              "with the tabulated psat and the thermal swelling, the plateau "
               "sits on the 0-D replica, and every drop burns out cleanly.")
         return 0
     print(f"\n[FAIL] {n_viol} rate deviation(s) / {n_noswell} non-swelling drop(s) / "

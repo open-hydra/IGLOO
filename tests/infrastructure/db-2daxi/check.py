@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
-"""Behavioral gate for the promoted legacy `test/assigned-pos` case (2Daxi + DB).
+"""Behavioral gate for the axisymmetric nozzle with DB injection (2Daxi + DB).
 
 Covers the path combination no box case reaches: axisymmetric-wedge mesh
-(delthe fold), REAL MOSE flow solution (with particle vars in the header — the
-B5 phantom-species trigger), DB injection ([IGLOO-BC] x/y/diam/mdot), euler
-output on (the B6 euler-only accumulator path), Morsi-Alexander + Kavanau-Drake.
+(delthe fold), REAL MOSE flow solution (with particle vars in the header, which
+the species count must skip), DB injection ([IGLOO-BC] x/y/diam/mdot), euler
+output on (out-file = e, the euler-only accumulator path), Morsi-Alexander +
+Kavanau-Drake.
 
 Deliberately md5-free: trajectory bytes drift by 1 ULP across compiler/configure
 generations (documented flips); byte-level regression stays with the manual
 same-session A/B protocol. This gate asserts the PHYSICS-level contract:
 
-  1. exactly 2 particles; both integrate (>= MIN_ROWS rows each — the historical
-     failure modes died at injection or froze mid-domain);
+  1. exactly 2 particles; both integrate (>= MIN_ROWS rows each -- a parcel that
+     dies at injection or freezes mid-domain records fewer);
   2. both EXIT through the nozzle outlet (outloc x > X_EXIT, beyond the throat
-     x=0.175 — B6's heap corruption killed the run before any exit);
+     x=0.175 -- a heap corruption in the euler-only accumulators ends the run
+     before any exit);
   3. every trajectory row finite, T in [T_MIN, T_MAX], dp in (0, DP_MAX];
-  4. the ord2 eulerian deposit (ledger O16, ported from axis-200's O14 audit; the helpers
+  4. the ord2 eulerian deposit (axis-200's audit; the helpers
      are IMPORTED from ../axis-200/check.py, one implementation):
      E1  mass retention sum(rho_p V) / sum(mdot t), TOTAL and PER PARCEL. ~1 by physics
          (the projection returns the mass it was given). The per-parcel split is exact:
@@ -28,8 +30,8 @@ same-session A/B protocol. This gate asserts the PHYSICS-level contract:
          projection and/or the crossing-row quadrature, NOT attributed -- the gate pins
          the measured ord2 values. Floor: euler1.tec is bit-identical over 3 runs x
          OMP {1, 5}, so the floor is ZERO; half-ULP noise on every printed row moves E1
-         by <= 1.4e-6 (reviewer's bound). RETAIN_TOL = 1e-4 is 2x the O14 signature on
-         the total (unclipped boundary dual: 1.001230 -- small because both parcels are
+         by <= 1.4e-6. The unclipped-dual signature on the total is 2x RETAIN_TOL = 1e-4
+         (unclipped boundary dual: 1.001230 -- small because both parcels are
          off-axis and touch only the outlet boundary; per parcel 1.000453 / 1.001285,
          3.7e-4 and 2.0e-4 away) and a factor-2 field reads 2.0.
      E3  per-drop mass identity with TWO admissible masses -- ID 1 carries d = 1e-4, ID 2
@@ -45,8 +47,8 @@ same-session A/B protocol. This gate asserts the PHYSICS-level contract:
          defect is -7.3 %, a 73x margin. It pins the smoother too -- re-measure if
          mollify-passes changes.
      No E2: neither parcel approaches the axis (y0 = 0.55 and 0.66).
-     Before O16 this section asserted only "parses, finite, non-empty" -- a factor-2
-     field passed it intact.
+     A check of "parses, finite, non-empty" alone passes a factor-2 field
+     intact.
 """
 import importlib.util
 import math
@@ -64,11 +66,11 @@ X_EXIT   = 2.0       # outlet plane sits at x ~ 2.05; throat at 0.175
 T_MIN, T_MAX = 200.0, 3700.0   # gas field spans ~300-3600 K
 DP_MAX   = 1.2e-4    # injected diameters 1e-4 and 2e-5 (constant-size model)
 
-# --- eulerian audit (section 4). MEASURED 2026-09-16, see the docstring. ---
+# --- eulerian audit (section 4). MEASURED, see the docstring. ---
 RHO_LIQ    = 2500.0                 # INPUT/properties.dat zone A density
 DP_INJ     = {1: 1.0e-4, 2: 2.0e-5} # [IGLOO-BC] diam per ID (constant: no evap/breakup)
 RETAIN     = {0: 1.001438, 1: 1.000821, 2: 1.001482}   # E1 measured: total, ID 1, ID 2
-RETAIN_TOL = 1.0e-4                 # floor 0; O14 unclipped-dual signature 2.1e-4 / 3.7e-4 / 2.0e-4
+RETAIN_TOL = 1.0e-4                 # floor 0; unclipped-dual signature 2.1e-4 / 3.7e-4 / 2.0e-4
 BAND_COLS  = 3                      # E4: last 3 geo columns (outlet band)
 BAND_SHARE = 2.514026e-3            # E4 measured; unclipped dual reads 2.331509e-3 (-7.3 %)
 BAND_TOL   = 1.0e-3                 # relative; floor 0
@@ -82,7 +84,7 @@ def fail(msg):
 
 
 def check_euler(traj, mdot):
-    """Section 4: the ord2 eulerian deposit audit (O16 port of axis-200's E1/E3)."""
+    """Section 4: the ord2 eulerian deposit audit (axis-200's E1/E3)."""
     spec = importlib.util.spec_from_file_location("axis200_check", AXIS200)
     ax = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ax)
@@ -126,8 +128,8 @@ def check_euler(traj, mdot):
     for key, lab in ((0, "total"), (p_hi, f"ID {p_hi} (d={DP_INJ[p_hi]:.0e})"), (p_lo, f"ID {p_lo} (d={DP_INJ[p_lo]:.0e})")):
         if abs(retain[key] - RETAIN[key]) > RETAIN_TOL:
             rc |= fail(f"E1 {lab} mass retention {retain[key]:.6f} outside {RETAIN[key]} +- {RETAIN_TOL}. "
-                       f"CONSERVATION statement, ~1.0 is physical; the unclipped boundary dual (O14 "
-                       f"lost) reads 1.001230 / 1.000453 / 1.001285 (total / ID 1 / ID 2); a factor-2 "
+                       f"CONSERVATION statement, ~1.0 is physical; the boundary dual without its "
+                       f"clip reads 1.001230 / 1.000453 / 1.001285 (total / ID 1 / ID 2); a factor-2 "
                        f"field reads 2.0. Re-measure only after confirming the mesh, injection or "
                        f"projection actually changed.")
 

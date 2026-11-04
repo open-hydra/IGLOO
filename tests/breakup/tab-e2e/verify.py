@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Overlay IGLOO vs the ORA87 TAB first-breakup time (B-VAL-3, MOSE-style).
+"""Overlay IGLOO vs the ORA87 TAB first-breakup time (MOSE-style).
 
-check.py is the GATE (analytic damped-oscillator onset + t_bu, xfail on A18); this
+check.py is the GATE (analytic damped-oscillator onset + t_bu); this
 only DRAWS and writes OUTPUT/tab-e2e.svg. matplotlib imported defensively.
 
 One panel: t_bu vs We_r (radius-based, ORA87 convention): the analytic crossing curve
 (gated), the no-break region We_r<6 shaded, and IGLOO's measured brackets (error
-bars). Post-A18-fix the points ride the analytic curve to sub-percent.
+bars). The points ride the analytic curve to sub-percent.
 """
 import argparse
 import os

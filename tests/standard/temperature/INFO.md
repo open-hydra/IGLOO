@@ -1,7 +1,7 @@
-# INFO — temperature (family B)
+# INFO — temperature
 
 Verifies the per-particle thermal ODE under various heat closures.
-Same L1/L2 dual mechanism as family A.
+Same L1/L2 dual mechanism as the drag tests.
 
 Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
 

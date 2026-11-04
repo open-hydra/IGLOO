@@ -2,11 +2,11 @@
 """Gate: a wedge whose axis row sits at r = 1e-8 with z = 0 is still classified as a wedge.
 
 The slab/wedge classifier (allocation.f90) compares the k-plane span at the outermost node with
-the span at an inner node: a slab's span decays as 1/r, a wedge's is constant. Its first version
-took "inner" as the smallest r > 0 -- and hydra's JPL nozzle mesh (ATLAS BCB) keeps its axis row at
-r = 1e-8 with roundoff z, a node whose azimuth is noise. Measured on the JPL 3-solver case: the
-wedge was taken for a slab (no fold, no 2.5D gas sampling), IGLOO injected 1.85x its share and
-the centreline Mach went from 2.104 to 2.449. The inner node must be clearly off the axis
+the span at an inner node: a slab's span decays as 1/r, a wedge's is constant. A classifier that
+takes "inner" as the smallest r > 0 fails on hydra's JPL nozzle mesh (ATLAS BCB), which keeps its
+axis row at r = 1e-8 with roundoff z, a node whose azimuth is noise: measured on the JPL 3-solver
+case, the wedge is taken for a slab (no fold, no 2.5D gas sampling), IGLOO injects 1.85x its share
+and the centreline Mach goes from 2.104 to 2.449. The inner node must be clearly off the axis
 (r > 1e-3 r_max).
 
 Fixture (make_fixture.py): 20 x 8 cells, 1-degree wedge about x, k-planes at -+delthe/2, j = 0
@@ -17,8 +17,8 @@ Asserts: the log reports "Axisymmetric wedge: delthe = 0.01745329" and NOT a pla
 give-up; both parcels leave through the outlet (x >= X_EXIT) with y and z at their injection
 values to Y_TOL (a wedge parcel at azimuth 0 with no swirl stays in the meridian plane).
 
-Verified RED on the first classifier (the log says "Planar slab ... 0.00000000 rad at the
-innermost"), GREEN after the radius floor.
+RED on a classifier without the radius floor (the log says "Planar slab ... 0.00000000 rad at the
+innermost"), GREEN on this one.
 """
 import math
 import re

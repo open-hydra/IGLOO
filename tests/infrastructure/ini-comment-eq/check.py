@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ini-comment-eq: an '=' inside an in-section ';' comment must be inert (FiNeR >= 18fa207)."""
+"""ini-comment-eq: an '=' inside an in-section ';' comment must be inert (a FiNeR whose parser skips comment lines)."""
 import os, sys
 def has(path, s):
     return os.path.exists(path) and s in open(path, errors="replace").read()

@@ -1,6 +1,6 @@
 program test_kh_rayleigh_limit
     !
-    ! O7 — INDEPENDENT anchor for the Reitz-87 KH curve fit.
+    ! INDEPENDENT anchor for the Reitz-87 KH curve fit.
     !
     ! Both existing KH references re-type the SAME correlation as production:
     !   test_breakup_khrt::khrt_ref  (Fortran)   and  khrt-e2e/check.py::kh_rate (Python).

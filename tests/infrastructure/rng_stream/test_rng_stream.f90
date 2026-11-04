@@ -3,10 +3,10 @@ program test_rng_stream
     ! Per-particle RNG stream contract (IGLOO_Lib_Statistics::rngSeedFor / rngNext).
     !
     ! Why this exists. Samplers reachable from inside `!$OMP PARALLEL DO` -- TAB's child-size
-    ! draw and ETAB's azimuth -- used the intrinsic `random_number`, whose state is per-thread.
-    ! Which draw a particle received therefore depended on thread scheduling, so `tab-e2e` was
-    ! not reproducible run to run (measured: trajectories differed as a MULTISET) and could not
-    ! be thread-count or MPI-rank invariant. Each particle now carries its own stream, seeded
+    ! draw and ETAB's azimuth -- cannot use the intrinsic `random_number`, whose state is
+    ! per-thread: the draw a particle receives then depends on thread scheduling, so `tab-e2e`
+    ! does not reproduce run to run (measured: trajectories differ as a MULTISET) and cannot
+    ! be thread-count or MPI-rank invariant. Each particle carries its own stream, seeded
     ! from (rng_seed, famID, ID).
     !
     ! Three properties the e2e gates cannot see, because a WRONG-but-deterministic stream
@@ -14,8 +14,8 @@ program test_rng_stream
     !
     !   RS1  DISTINCTNESS. Seeds are unique over a realistic (famID, ID) grid. `ID` is only
     !        unique within a group -- every pin path assigns `particle(p)%ID = p` -- so famID
-    !        must be mixed in, or particle 1 of every family shares a stream. Nothing in the
-    !        suite has >= 2 families with breakup today, so only this test covers it.
+    !        must be mixed in, or particle 1 of every family shares a stream. The e2e cases with
+    !        two TAB families (solid-brk-tab, solid-brk-tab-rhos) do not test it: only this one does.
     !   RS2  REPRODUCIBILITY. Re-seeding replays the identical sequence. This is what makes a
     !        second sweep (and a re-run) reproduce the first.
     !   RS3  RANGE + UNIFORMITY. Draws lie strictly in (0,1) -- RosinRammler takes log(x), so a
@@ -157,7 +157,7 @@ contains
         write(*,'(a,i0,a,es24.16,a)') '        (state ', s, ', sum ', tot, ')'
     end subroutine knownDraws
 
-    !> Plain heapsort: only used to find duplicates, so O(n log n) with no allocation.
+    !> Plain heapsort: serves only to find duplicates, so O(n log n) with no allocation.
     subroutine sort_i8(a)
         integer(int64), intent(inout) :: a(:)
         integer :: n, s, r

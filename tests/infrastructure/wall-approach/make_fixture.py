@@ -7,9 +7,10 @@ mesh the wall row is sampled between the ghost node at y = -dy/2 and the first i
 y = +dy/2, so what the ghost carries decides whether a parcel can be pushed through the plane.
 
 solfile.tec is planar-slab's writer with (NX, NY, LX, LY, v) changed; bc.txt is
-tools/make_box_case.py's write_bc reduced to a per-face tag map -- nothing in the tree writes a
-bc.txt with a WALL on face 3 and an outlet on face 1 (planar-slab's came from ATLAS via
-retag_bc.py, and make_box_case hardcodes a 401 inlet on face 1).
+tools/make_box_case.py's write_bc reduced to a per-face tag map -- make_box_case.py writes no 301
+on face 3 (only the outlet face 2 takes a code of choice, --outlet-code) and one symmetry face at
+most (--sym-face), its face 1 a 401 inlet or, with --no-inlet, a 400 (planar-slab's came from
+ATLAS via retag_bc.py).
 
 Face 3 is 301, the dispersed-phase wall code ATLAS writes for a `type = wall` patch -- IGLOO
 reads <name>-bc.txt, so a gas-solid wall reaches it as 301, not 300. Faces 5/6 are the slab

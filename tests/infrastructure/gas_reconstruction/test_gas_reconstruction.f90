@@ -1,6 +1,6 @@
 program test_gas_reconstruction
     !
-    ! E-family verification (no ODE): production Lib_Equations::interp2ndOrder
+    ! Verification (no ODE): production Lib_Equations::interp2ndOrder
     ! is exercised directly against an INDEPENDENT analytic oracle (verif_interp).
     !
     !   E1  constant field, parallelepiped            -> machine precision

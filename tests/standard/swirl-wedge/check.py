@@ -21,21 +21,20 @@ input.ini (no transcribed constant), with two in-file refutations run before any
 system with the true field agrees with the cylindrical form to < RK_SELF in r and w. Two
 formulations of one physics guard the oracle against a transcription slip.
 
-What the code does (W-plan item E, exact 2.5D sampling): the 2D dual holds the theta=0
+What the code does (exact 2.5D sampling): the 2D dual holds the theta=0
 Cartesian components (U0, 0, Om y); Lib_Equations::sampleGas2D evaluates them at the
 parcel's (x, r) and rotates the velocity to the parcel's azimuth, so the sampled field is
 the true (U0, -Om z, +Om y) at every RHS call and the fold (segment ends) is an exact
 isometry of the problem. The residual against the oracle is then the F12.6 print floor
-(half-ULP 5e-7 on r, v_r, w; ~5e-7/r on theta) plus the ODE tolerance: measured 2026-09-17
+(half-ULP 5e-7 on r, v_r, w; ~5e-7/r on theta) plus the ODE tolerance: measured
 max|dr| 5.0e-7, max|dw| 5.2e-7, max|dv_r| 5.9e-7, max|dtheta| 1.7e-6 (P3, r = 0.3). The
-tolerances below sit ~6x above that floor. Before E the code sampled the theta=0 components
-UNROTATED at (x, y) (the 2.5D approximation of W-plan section 2): a frame error first
-order in theta, an outward radial bias dt_seg/(2 tau) = 2.5e-3 on the centrifugal drift,
-max|dr| 6.75e-5 / 5.80e-5 / 7.52e-5 for P1/P2/P3 (within 3 % of the segment-wise model,
-scratch swirl_design.py) -- this gate's first cut absorbed that as a derived budget
-(2.5e-4 / 3.0e-5 / 2.5e-4 / 2.0e-4). Proven RED (INFO.md): E reverted (the unrotated
-sampling) breaks G3/G6 on every parcel by 19-25x, G5 on every parcel (1.6-10x) and G4 on
-P1/P3 (2-3x); the fold rotating position only breaks G3-G6 by 10-200x the OLD tolerances;
+tolerances below sit ~6x above that floor. A sampler that takes the theta=0 components
+UNROTATED at (x, y) makes a frame error first order in theta: an outward radial bias
+dt_seg/(2 tau) = 2.5e-3 on the centrifugal drift, max|dr| 6.75e-5 / 5.80e-5 / 7.52e-5 for P1/P2/P3
+(within 3 % of the segment-wise model, scratch swirl_design.py); a derived budget for that error
+is (2.5e-4 / 3.0e-5 / 2.5e-4 / 2.0e-4). RED (INFO.md) on a build with the unrotated sampling:
+G3/G6 fail on every parcel by 19-25x, G5 on every parcel (1.6-10x) and G4 on P1/P3 (2-3x); a
+fold that rotates position only breaks G3-G6 by 10-200x the derived-budget tolerances;
 omega = 0 breaks G2.
 
 Measured from OUTPUT/trajectories-A.dat (7F12.6,2E13.6E2,I8 = x y z u v w Tp d m ID; no
@@ -84,11 +83,11 @@ U_TOL = 1e-6                                   # zero-slip clock
 RK_H = T_FLIGHT / 20000.0                      # RK4 step (self-checked below)
 RK_SELF = 1e-12                                # step-halving and cyl-vs-cart agreement
 
-# --- gate tolerances: ~6x the F12.6 print floor (exact 2.5D sampling, W-plan item E) ---
-TOL_R = 3.0e-6      # G3  |r - r_or|          floor 5.0e-7; pre-E residual 5.8e-5..7.5e-5
-TOL_W = 3.0e-6      # G4  |w_p - w_or|        floor 5.2e-7; pre-E 1.9e-6..9.8e-6 (P2 inside)
-TOL_TH = 8.0e-6     # G5  |theta_unw - th_or| floor 1.7e-6; pre-E 1.3e-5..8.2e-5
-TOL_VR = 3.0e-6     # G6  |v_r - v_r,or|      floor 5.9e-7; pre-E 5.8e-5..6.4e-5
+# --- gate tolerances: ~6x the F12.6 print floor (exact 2.5D sampling) ------------------
+TOL_R = 3.0e-6      # G3  |r - r_or|          floor 5.0e-7; unrotated sampling 5.8e-5..7.5e-5
+TOL_W = 3.0e-6      # G4  |w_p - w_or|        floor 5.2e-7; unrotated 1.9e-6..9.8e-6 (P2 inside)
+TOL_TH = 8.0e-6     # G5  |theta_unw - th_or| floor 1.7e-6; unrotated 1.3e-5..8.2e-5
+TOL_VR = 3.0e-6     # G6  |v_r - v_r,or|      floor 5.9e-7; unrotated 5.8e-5..6.4e-5
 
 
 def fail(msg):

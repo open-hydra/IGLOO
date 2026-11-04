@@ -14,7 +14,7 @@ threads-omp*/ runs, every other entry linked, so the scripts' relative paths res
         file's zones shuffled outright;
         printout mode: the parcels' records interleaved at random, each parcel's own order kept, and a trajectory
         file's zones interleaved at random, each parcel's images in their order
-(every OUTPUT/*.dat of the copy, sibling runs' included; the ID column is found by name in each `variables` line, and
+(every OUTPUT/*.dat of the copy, sibling runs' included; the ID column is read by name in each `variables` line, and
 a zone without one keeps its order except under the figure mode's mix; a file's zones move only when every title is
 a parcel image's; VV_ORDER_SEED sets the seed). Among parcels tied in what a script picks them by, the first in file
 order is the lowest tied ID in `up` and the highest in `down`, so a pick that follows the file order fails whatever

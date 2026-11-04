@@ -10,7 +10,7 @@ in the simulation frame with the symmetry axis at y = y_axis:
     v_g(x,y) = -eps*(y - y_axis)   (compressive toward the axis)
     w_g      = 0
 
-This is the ONLY box fixture with a spatially varying gas field. v_g is linear
+The carrier varies in y only: v_g is linear
 in y, so IGLOO's 2nd-order interpolation reproduces it exactly (see the
 gas_reconstruction E2 unit test). u_g is uniform and the particles are injected
 at U_p0 = u_g0, so there is zero axial slip and x = u_g0*t is an exact clock;

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Gate for [IGLOO-Properties] psat: accepted and ignored.
 
-The saturation pressure of every evaporation model is Clausius-Clapeyron's, computed from Lv, Mv and
-the boiling temperature; the psat key feeds nothing. This case is tc-box without the key; the gate
+Without a Psat column in the properties table the saturation pressure of every evaporation model
+is Clausius-Clapeyron's, computed from Lv, Mv and the boiling temperature; the psat key feeds
+nothing. This case is tc-box without the key; the gate
 runs tc-box's own input.ini (psat present) as a sibling into ref-psat/ and requires the two runs to
 agree exactly: every value of source.tec, and the particle files (trajectories, exits, scatter cloud)
-as sorted multisets (row order depends on the OpenMP schedule). The case must evaporate: a run that
+as sorted multisets. The case must evaporate: a run that
 deposits no mass would make the comparison vacuous.
 
 RED on a reader that requires psat: setup stops ("Evaporation requires psat"), exit 128, and the

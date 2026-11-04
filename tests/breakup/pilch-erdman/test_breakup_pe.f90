@@ -2,7 +2,7 @@ program test_breakup_pe
     !
     ! D3 Pilch-Erdman [PE87] via public breakupOde (brkupSelect=1).
     ! Oracle: local reimplementation of the PE87 TBT(We) table (verified vs
-    ! paper in ../breakup_LITERATURE_TESTS.md), Wec(Oh), VdV, dStable, tau.
+    ! paper in ../LITERATURE_TESTS.md), Wec(Oh), VdV, dStable, tau.
     !
     !   PE1  sub-critical We<Wec -> rate 0
     !   PE2  branch values + just-inside-each-breakpoint pairs (18/45/351/2670)
@@ -12,9 +12,9 @@ program test_breakup_pe
     !   PE3  Oh-override branch (Oh>0.1, We<228): TBT=4.5(1+1.2 Oh^1.64)
     !   PE4  dp<dStable stability guard -> rate 0 (default bp, We=20)
     !
-    ! NB: VdV>1 at mid-We (e.g. 15.7 at We=50, default B) — the truncated
-    ! velocity poly leaves its fit range; coefficients flagged INFERRED in
-    ! breakup_LITERATURE_TESTS.md. Transcription is what is gated here.
+    ! NB: the oracle re-codes the production table, so transcription is what is
+    ! gated here; the table and the velocity-poly coefficients are checked
+    ! against PE87 in ../LITERATURE_TESTS.md.
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_Lib_Breakup, only: breakupOde
@@ -79,7 +79,7 @@ contains
         if (We <= Wec) return
         if     (We > 2670._R8) then; TBT = 5.5_R8
         elseif (We >  351._R8) then; TBT = 0.766_R8*(We-12._R8)**0.25_R8
-        elseif (We >   45._R8) then; TBT =  14.1_R8*(We-12._R8)**(-0.25_R8)  ! PE87 Fig.7: NEGATIVE (A16; do not re-lockstep)
+        elseif (We >   45._R8) then; TBT =  14.1_R8*(We-12._R8)**(-0.25_R8)  ! PE87 Fig.7: NEGATIVE (the paper's sign)
         elseif (We >   18._R8) then; TBT =  2.45_R8*(We-12._R8)**0.25_R8
         elseif (We >   12._R8) then; TBT =    6._R8*(We-12._R8)**(-0.25_R8)
         else; return

@@ -4,7 +4,8 @@
 first segment end whose time since the parcel's last row reaches Δ (`Lib_Integration`: the reference moves to every
 row written), besides the injection row and the last row at the stop; `print-ds` takes precedence when both are set.
 With `print-dcell` set the rows follow the diagnostic cadence instead, where `print-dtime` writes a row at the first
-segment end past each multiple of Δ.
+segment end at or past a target that starts Δ after the parcel's start and moves on by Δ at every row written, the
+crossing rows included.
 
 **Fixture.** `drag-stokes`'s (`INPUT/` symlinked); `input.ini` is `drag-stokes`'s with `print-dtime = 1.0e-3`, no
 `print-dcell`, and `out-time = on`. At 10 m/s a limit spans about four cell crossings, so the rule is not met at

@@ -1,27 +1,28 @@
 #!/usr/bin/env python3
-"""Regression gate for the bc_center pinning path with two particle groups (BUGS.md A24).
+"""Regression gate for the bc_center pinning path with two particle groups.
 
-This case exists to execute `pin_particles_bc_center`, which no other case reaches:
-20 e2e cases set `ds` (=> bc_ds), 3 inject from an assigned/DB stream, and every other
-`phase.txt` declares one group. The routine held two implicit-SAVE counters, and both
-halves of the resulting defect are triggered here (see input.ini for why `fsample = 2`
-and `A 2` are both required).
+This case (and its MPI twin, tests/mpi/bc-center-2grp) executes `pin_particles_bc_center`
+with two groups, which no other case does: the psd cases reach the routine with one group,
+and every other case sets `ds` (=> bc_ds) or injects from an assigned/DB stream. The
+routine sets its two counters on every call (an initializer in their declaration would make
+them implicit SAVE), and both halves of the carried-counter defect are triggered here (see
+input.ini for why `fsample = 2` and `A 2` are both required).
 
 Expectations are built from KNOWN INPUTS, never read back from production output:
 the box's face-1 inlet is 5x5 = 25 cells and `fsample = 2` takes every 2nd one, so each
 of the 2 groups holds floor(25/2) = 12 particles, 24 in total.
 
-Gates, with the signature each one caught pre-fix (measured 2026-08-07 at d857aba^,
-release build, rc=0 and EMPTY STDERR in every case -- none of this announces itself):
+Gates, with the signature each one catches when the counters carry between calls
+(release build, rc=0 and EMPTY STDERR in every case -- none of this announces itself):
 
   1. population  -- both groups hold exactly 12 particles.
-     Pre-fix: group 1 = 12, group 2 = 13. The counting pass carried `nn` across the
-     call, so mod(nn,fsample) shifted phase and sized group 2's array from a different
+     Carried counters: group 1 = 12, group 2 = 13. The counting pass carries `nn` across
+     the call, so mod(nn,fsample) shifts phase and sizes group 2's array from a different
      cell subset than the fill pass walks.
   2. identity    -- each group's ID set is exactly {1..12}.
-     Pre-fix: group 1 = {1..12}; group 2 = eleven 0s and a stray 13. `p` resumed at 12,
-     so the writes landed at indices 13..24 of a 1:13 array -- one in bounds, ELEVEN
-     PAST THE END -- and group 2's real IDs were never assigned, keeping their default 0.
+     Carried counters: group 1 = {1..12}; group 2 = twelve 0s and a stray 13. `p` resumes
+     at 12, so the writes land at indices 13..24 of a 1:13 array -- one in bounds, ELEVEN
+     PAST THE END -- and group 2's real IDs are never assigned, keeping their default 0.
      NOTE: gate on this, not on "IDs are 1..N". A record-count-only gate is vacuous at
      fsample = 1, where both groups return 25 either way.
   3. clone       -- group 2's exit records equal group 1's, particle for particle.
@@ -89,7 +90,7 @@ def check_population(exits):
         print(f"  group {g}: {n} particles (need {N_PER_GRP} = {N_INLET}//{FSAMPLE})"
               f"  [{'PASS' if good else 'FAIL'}]")
     if len(exits) == N_GROUPS and len({len(v) for v in exits.values()}) != 1:
-        print("  [FAIL] groups disagree on population -- the counting pass carried state")
+        print("  [FAIL] groups disagree on population -- the counting pass carries state")
         ok = False
     return 0 if ok else 1
 

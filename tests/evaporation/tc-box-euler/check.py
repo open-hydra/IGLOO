@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """tc-box-euler: the equivalent-Eulerian field of a MASS-LOSING material (ODE model 2).
 
-`computeEulField`'s `case(2,5)` deposits the droplet-mass integral `intE(5) = int m dt`,
-which is per-droplet [kg s]; the number rate `npdot` belongs there too, as it does for
-model 4 (whose integrand is `m*npdot` already) and for models 1/3 (which deposit
-`mdot*Tstay`, and `mdot = npdot*m`). Without it `rho_p` is `1/npdot` of the truth, and
+`computeEulField`'s `case(2,5,8)` deposits the droplet-mass integral `intE(5) = int m dt`,
+which is per-droplet [kg s], times the number rate `npdot`, as model 4 does (whose
+integrand is `m*npdot` already) and models 1/3 (which deposit `mdot*Tstay`, and
+`mdot = npdot*m`). Without the factor `rho_p` is `1/npdot` of the truth, and
 because `finalizeEUL` normalizes velocity and temperature BY `rho_p`, `u_p` and `T_p` come
 out multiplied by `npdot` instead (5e7 here).
 
 The oracle is the per-cell ratio `rho_p / n_p` -- the time-mean droplet mass in the cell,
-an INTENSIVE quantity that the defect scales by 1/npdot ~ 2e-8. Every constant below is
+an INTENSIVE quantity that a deposit without npdot scales by 1/npdot ~ 2e-8. Every constant below is
 derived from the case inputs, never from production output.
 """
 import math
@@ -36,9 +36,9 @@ NPDOT  = MDOT/M0                          # 5.002713e+07 1/s
 
 #> Tolerances from measurement on this fixture, and BIT-STABLE at OMP 1/2/5 (each parcel
 #> rides its own (j,k) column, so no two threads accumulate into one cell and the
-#> !$OMP ATOMIC never re-associates). Worst observed, post-fix:
+#> !$OMP ATOMIC never re-associates). Worst observed:
 #>   E3 2.930e-5 | u 7.514e-14 | v,w 4.3e-22 | T band 0.0 exactly
-#> RED (pre-fix) is 1.0 / 5.0e6 / - / ~1e10 K, i.e. four decades clear of every bound.
+#> Without npdot in the deposit: 1.0 / 5.0e6 / - / ~1e10 K, four decades clear of every bound.
 TOL_MASS = 1.0e-4         # 3.4x the worst residual of the two-row mean
 TOL_U    = 1.0e-11        # 133x
 TOL_VW   = 1.0e-18        # 2300x
@@ -145,7 +145,7 @@ def main():
         print(f"[{'PASS' if ok else 'FAIL'}] {name}")
         fail += (not ok)
     print(f"       m0 = {M0:.6e} kg, npdot = {NPDOT:.6e} 1/s "
-          f"(the factor the defect drops; RED reads E3 ~ 1.0 and u_p ~ {U_G*NPDOT:.3e} m/s)")
+          f"(the deposit's factor; without it E3 reads ~ 1.0 and u_p ~ {U_G*NPDOT:.3e} m/s)")
     return 1 if fail else 0
 
 

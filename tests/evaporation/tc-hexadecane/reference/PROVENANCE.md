@@ -36,7 +36,7 @@ properties are sourced as follows (not fitted to the overlay):
   A single Clausius-Clapeyron fit through the anchors (anchored at boiling) has `Lv=2.58e5` and
   reproduces them to <=2.5 %; at 490 K it agrees with the table to 0.1 %.
 - **Lv = 2.2695e5 J/kg** -- Table 1's `dHv(Tb) = 226.95 kJ/kg`, the latent heat at the boiling
-  point: the energy sink. It no longer sets the saturation curve (the column does).
+  point: the energy sink. It does not set the saturation curve (the column does).
 - **cp_l = 2800 J/kg/K** (constant, `INPUT/properties.dat` Cp column) -- **NIST WebBook /
   Chemeo** n-hexadecane LIQUID isobaric heat capacity: `Cp(298 K)=499-500 J/mol*K = 2205
   J/kg*K`, `Csat(400 K)=572 J/mol*K = 2527`, linear-extrapolated to the ~490 K operating point

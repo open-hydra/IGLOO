@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A23/S4-E robustness gate: heavy KH shedding must stay bounded, mass-exact and crash-free.
+"""khrt-stress robustness gate: heavy KH shedding must stay bounded, mass-exact and crash-free.
 
 This is a STRESS case, not a validation case — there is no oracle and no paper. It runs the
 breakup/khrt-e2e fixture with `mShedLim` at 0.01 instead of the 0.03 default, so a parent
@@ -76,7 +76,7 @@ def main():
         print("[FAIL] the shed path collapsed -- far fewer children than this case produces.")
     if not ok_deep:
         print("[FAIL] no parcel shed deeply; the growable list is not being exercised, so "
-              "this case is no longer a stress test (a one-shed-per-parent cap may be back).")
+              "this case is not a stress test (a one-shed-per-parent cap would do this).")
     if not ok_mass:
         print("[FAIL] mass is not conserved under heavy shedding -- the per-shed "
               "strip/create pairing is wrong; the error compounds with shed count.")

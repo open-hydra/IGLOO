@@ -4,7 +4,7 @@
 The two names are one key: IGLOO and ICE both read `boiling-temperature` and accept `Tboil` as its
 alias. This case is tc-box with the canonical name; the gate runs tc-box's own input.ini (the alias)
 as a sibling into ref-tboil/ and requires the two runs to agree exactly: every value of source.tec
-and the exit records (outloc-A.dat) as a sorted multiset (row order depends on the OpenMP schedule).
+and the exit records (outloc-A.dat) as a sorted multiset.
 
 RED on a reader that knows only Tboil: the canonical key is ignored, the evaporating material has no
 boiling temperature and setup stops ("Evaporation requires ..."), so this run fails before the check.

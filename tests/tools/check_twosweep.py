@@ -19,14 +19,15 @@ Two comparison rules:
   *.tec  max SCALE-relative difference below TEC_TOL, i.e. max|a-b| normalised by the
          FIELD's magnitude max|a| -- NOT a per-value |a-b|/|a|, which is ill-conditioned
          here (see tools/compare_tec.py for the measurement). The PASS string below says
-         "max|rel|" for stdout byte-stability; the computation is and always was
+         "max|rel|" for stdout byte-stability; the computation is
          scale-relative. These fields are filled by
          !$OMP ATOMIC UPDATE, and FP addition is not associative, so the value depends
-         on thread interleaving. Measured 2026-08-07 on this host: the run-to-run floor
-         at a FIXED sweep is <= 4e-15, while the F7 accumulator-shape bug this test was
-         written to catch showed 5.2e-11. TEC_TOL sits ~4 decades from each.
+         on thread interleaving. Measured: the run-to-run floor at a FIXED sweep is
+         <= 4e-15, while accumulators that keep the previous sweep's shape under gas-order 2
+         (a second solve deposits past their end) give 5.2e-11. TEC_TOL sits between the
+         two, which lie ~4 decades apart.
 
-Plus an integration criterion (skill: igloo-verify-integration): a reset that injects
+Plus an integration criterion: a reset that injects
 every particle out of the domain also produces two identical empty sweeps and would pass
 the comparison vacuously. So sweep 0 must also show particles that actually moved.
 """
@@ -92,8 +93,8 @@ def cmp_tec(a, b, label):
         #> Deliberately NOT printing `worst` or `ndiff` on success. Both are set by !$OMP ATOMIC
         #  accumulation order and so vary run to run (measured: khrt 3.9e-16 vs 3.9e-15, vie-plait
         #  1415 vs 1606 diffs, all far inside tolerance). Printing them makes THIS gate's stdout
-        #  irreproducible, which pollutes every future byte-inert A/B -- the same trap as BUGS.md
-        #  O2. Stable on PASS, fully verbose on FAIL, which is when the numbers are wanted.
+        #  irreproducible, which pollutes every byte-inert A/B, as any thread-dependent printout
+        #  does. Stable on PASS, fully verbose on FAIL, which is when the numbers are wanted.
         notes.append(f"  {label:<44} within tolerance (max|rel| <= {TEC_TOL:.0e})")
         return True
     fails.append(f"  {label}: max|rel|={worst:.3e} exceeds {TEC_TOL:.0e} ({ndiff} values differ)")

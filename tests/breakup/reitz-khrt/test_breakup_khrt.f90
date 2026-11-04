@@ -1,6 +1,6 @@
 program test_breakup_khrt
     !
-    ! T-KHRT (was rank #7, BLOCKED pre-A2) via public breakupOde (brkupSelect=3).
+    ! T-KHRT via public breakupOde (brkupSelect=3).
     ! Oracle: Reitz 1987 KH linear-stability chain, written from the paper form
     !   Omega_KH*sqrt(rho_l r^3 / sigma) = (0.34+0.38 We_g^1.5)/((1+Z)(1+1.4 T^0.6))
     !   Lambda_KH/r = 9.02(1+0.45 sqrt(Z))(1+0.4 T^0.7)/(1+0.87 We_g^1.67)^0.6
@@ -8,8 +8,7 @@ program test_breakup_khrt
     !   T = Z sqrt(We_g)                                 (Taylor: GAS Weber)
     !   tau_KH = 3.726 B1 r/(Lambda_KH Omega_KH),  dStable = 2 B0 Lambda_KH,
     !   npdotDot = -3 npdot/d (dStable-d)/tau_KH   (pure-KH path: acc=0 kills RT)
-    ! (Pre-A13 the oracle lockstepped the coded Z=sqrt(We_l)/Re_gas,diam and
-    ! T=Z*sqrt(We_l) — verifying transcription, not the paper. Now paper-anchored.)
+    ! (Paper-anchored: Z and T are written from the paper, not re-typed from the code.)
     !
     !   KH1  sub-critical WeGas <= WeLimit(=6) -> rate 0
     !   KH2  moderate We (u=100 m/s, WeGas~8.3): code == paper chain

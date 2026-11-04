@@ -31,9 +31,9 @@ program test_tab_moments
     use verif_report, only: init_report, append_row, finalize_report
     implicit none
 
-    !> One RNG stream for this test program. breakupEvent now takes the parcel's own stream
-    !  instead of drawing from the intrinsic random_number (which is thread-scheduled and so
-    !  irreproducible inside the solver's OMP region). Host-scope, not per-call: an ensemble of
+    !> One RNG stream for this test program. breakupEvent takes the parcel's own stream, not
+    !  the intrinsic random_number (which is thread-scheduled and so irreproducible inside the
+    !  solver's OMP region). Host-scope, not per-call: an ensemble of
     !  events must see DISTINCT draws, so the state has to advance across calls.
     integer(int64) :: tRng = 20260808_int64
 

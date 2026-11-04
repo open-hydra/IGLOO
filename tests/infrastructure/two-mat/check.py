@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-two-mat -- the first case in the suite with MORE THAN ONE MATERIAL (nm = 2).
+two-mat -- a case with MORE THAN ONE MATERIAL (nm = 2).
 
 Same box, gas, inlet and parcels as standard/drag-stokes, integrated for two materials that
 differ only by density (A: 2950 kg/m3, B: 1000 kg/m3), so each material's parcels relax on
@@ -33,8 +33,8 @@ Gates
       (0.68), so every parcel of either material carries mdot = krho/(1-krhoTot) * mdot_gas
       = 0.34/0.32 * 1.2e-3 = 1.275e-3 kg/s (drag-stokes: 0.618e-3) -- the arity-2 path of the
       krho fan-out, pinned from the outloc mdot column
-All of this ran for the first time on 2026-09-16; nothing here is a regression pin of a fixed
-bug -- it is the arity-2 execution of every per-material loop that had only ever seen nm = 1.
+These gates are the arity-2 execution of every per-material loop (nm = 2), not the pin of one
+defect.
 """
 import importlib.util
 import math

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """solver-fail-consumed: a parcel deleted on an ODE-solver failure (`err < 0`) must still
-hand its remaining mass to the gas for consumption models (2/5).
+hand its remaining mass to the gas for the consumption models (2, 4, 5, 8).
 
 The ODE tolerances are 1e-30, unreachable in double precision, so SDIRK4 gives up on the
 first step of every parcel: all 25 die at injection carrying their FULL mass. The source
