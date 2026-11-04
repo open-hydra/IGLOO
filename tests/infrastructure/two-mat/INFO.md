@@ -14,7 +14,7 @@ lists `A 1` and `B 1`; `properties.dat` has two zones, A = `tests/common/propert
 cell and the reader copies it to every family, so both materials inject the same 25 parcels
 (same d, v₀, krho) and differ only through their density — hence their Stokes time
 τ = ρ_p d²/(18μ). The line's field 1 is krho/(1 − krho_tot) for the two families, 0.34/(1 − 0.68) (ATLAS's
-mixture rule: `INPUT/bc.txt` is drag-stokes's at 07110ce rewritten so, not a symlink), so each
+mixture rule: `INPUT/bc.txt` is drag-stokes's records rewritten so, not a symlink), so each
 parcel of either material carries ṁ = field 1 · ṁ_gas = 0.34/0.32 · 1.2e-3 = 1.275e-3 kg/s
 (drag-stokes: 0.618e-3) — a 68 % condensed mixture; internally consistent, oracle-blind (Stokes
 relaxation is ṁ-independent), pinned by M7. `out-file = ALL` enables both the source and the eulerian output, so

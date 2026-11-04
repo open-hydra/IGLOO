@@ -19,7 +19,7 @@ both at run time. This case drives it with two groups.
 
 ## Fixture
 `INPUT/` symlinks `standard/drag-stokes/INPUT/solfile.tec` and `common/properties.dat`; `phase.txt` and
-`bc.txt` are real files, `bc.txt` drag-stokes's at 07110ce under ATLAS's mixture rule for the two groups (field 1
+`bc.txt` are real files, `bc.txt` drag-stokes's records under ATLAS's mixture rule for the two groups (field 1
 0.34/(1 − 0.68): one file cannot carry the share of one family and of two). `input.ini` is drag-stokes'
 with two deliberate changes, **both load-bearing**:
 
