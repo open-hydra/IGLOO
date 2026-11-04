@@ -11,7 +11,7 @@ contains
   !> Integrate one particle from its current state to domain exit (or burnout) through the
   !  steady gas field, one cell segment at a time, depositing source and Eulerian moments.
   subroutine integrate(part,geoblock,gasblock,srcblock,eulblock,     &
-                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, shed,noShed)
+                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, shed,noShed,resid)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
     use IGLOO_variables,  only: unitTraj,unitExit,unitScat,unitSnap,iprint,dtprint,tEnd,timeOn,snapOn,frozenOn, &
@@ -21,7 +21,7 @@ contains
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
                                 nInjNoCell,                                &
                                 trajOn, scatOn, dNscat, sixOverPi, pi,    &
-                                planeOn, planeX, unitPlane
+                                planeOn, planeX, unitPlane, failAfter
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock
@@ -30,8 +30,8 @@ contains
     use Lib_RHS, only: packAuxVars, nauxvar, packAuxState, unpackAuxState,     &
                        packEventVar, unpackEventVar,                           &
                        rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, &
-                       rhsAlCombustion, rhsSolidification,                          &
-                       ind_d, ind_rho, ind_sig, ind_mup, ind_m, ind_rs,             &
+                       rhsAlCombustion, rhsSolidification, rhsAlCap,                &
+                       ind_d, ind_rho, ind_sig, ind_mup, ind_m, ind_rs, ind_mb,     &
                        ind_sb1, ind_sb2, ind_sph,                                   &
                        ind_evd, ind_evn, ind_ev1, ind_ev2,                          &
                        nauxstate, neventvar, nbrkst,                                &
@@ -39,6 +39,7 @@ contains
                        mod_bp, mod_bpMethod, mod_bpScale
     use oslo,              only: Run_ODESolver, no_jacobian
     use IGLOO_Lib_Breakup, only: nchild
+    use IGLOO_Lib_Combustion, only: imRr
     use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, eventCrossed, &
                                         eventPassed, solidTransition, solidDiameter, phUndercooled
     use IGLOO_Mod_MPI,     only: mpi_size_, region_fail, region_failed
@@ -54,8 +55,13 @@ contains
     type(shedList),        intent(inout), optional :: shed
     !> True on the last generation pass: sheds are suppressed and the parent keeps the mass.
     logical,               intent(in),    optional :: noShed
+    !> This parent's burnout-residue list (a capped material with residue = on).
+    type(shedList),        intent(inout), optional :: resid
     !> local variables
     type(obj_shed) :: shedRec   !> staged child record, pushed once complete
+    type(obj_shed) :: resRec    !> the burnout residue's record
+    logical  :: resBorn         !> the parcel ended consumed with its cap: a residue is born
+    real(R8) :: mRes, hRes, vRes
     real(R8), allocatable :: gas(:,:), gasVert(:,:), gasState(:)
     real(R8) :: vert(3,8), t1, t2, tStart, deltat, tprint
     real(R8) :: Ein, Eout, Pin(3), Pout(3), massIn, massOut, vol
@@ -175,6 +181,8 @@ contains
 
       select case(part%model)
       case(2,5); part%stateVar(8) = part%m
+      case(8); part%stateVar(8) = part%m
+               part%stateVar(9) = 0._R8
       case(3); part%stateVar(8) = part%npdot
       case(4); part%stateVar(8) = part%m
                part%stateVar(9) = part%npdot
@@ -245,6 +253,9 @@ contains
         t1     = part%time
         call ODEsystem()
       enddo
+      !> A capped parcel consumed (burnout, solver failure, non-finite state) with a cap: its residue is born.
+      resBorn = .false.
+      if (present(resid) .and. consumed .and. part%model == 8) resBorn = part%stateVar(9) > 0._R8
             
       if (sourceSwitch) then
         call part%computeSource(massOut,Pout,Eout)
@@ -262,10 +273,19 @@ contains
           Pout    = Pout    + shedM*shedV
           Eout    = Eout    + shedM*(hShed + 0.5_R8*vShed*vShed)
         endif
+        !> A burnout residue takes its birth flux, the cap at the product's heat capacity and datum, from the books.
+        if (resBorn) then
+          mRes    = part%npdot*part%stateVar(9)
+          hRes    = part%cpRes*part%tp + part%hOffRes
+          vRes    = norm2(part%stateVar(4:6))
+          massOut = massOut + mRes
+          Pout    = Pout    + mRes*part%stateVar(4:6)
+          Eout    = Eout    + mRes*(hRes + 0.5_R8*vRes*vRes)
+        endif
         !> Body-force source-reaction correction.
         if (srcBodyForce) then
           select case(part%model)
-          case(2,5)      ! J,W at neq-1,neq;
+          case(2,5,8)    ! J,W at neq-1,neq;
             Pin = Pin + (part%npdot * part%stateVar(part%neq-1)) * bodyAccel
             Ein = Ein + (part%npdot * part%stateVar(part%neq))
           case(4)        ! euler-on: J at neq-2 (neq-1 is F(16)=npdot)
@@ -418,6 +438,19 @@ contains
       endif
       if (region_failed()) part%gone = .true.   !> MPI: end every parcel in flight after a failure
       if (part%gone) then
+        !> The residue's record: the state its parent's exit record prints.
+        if (resBorn) then
+          resRec%pos    = part%stateVar(1:3)
+          resRec%vel    = part%stateVar(4:6)
+          resRec%temp   = part%tp
+          resRec%time   = part%time
+          resRec%ipos   = part%i
+          resRec%igas   = part%igas
+          resRec%mass   = part%stateVar(9)
+          resRec%npdot  = part%npdot
+          resRec%parent = part%ID
+          call resid%push(resRec)
+        endif
         call writeExitRow()
         part%time = 0._R8
         call flushScat()
@@ -527,7 +560,7 @@ contains
     subroutine emitPlanes(ta, ya, tb, yb)
       use IGLOO_variables, only: oneThird
       real(R8), intent(in) :: ta, tb, ya(:), yb(:)
-      real(R8) :: s, pos(2), vel(3), z7, tp, rho, m, d, np, mdotR, f, tc
+      real(R8) :: s, pos(2), vel(3), z7, tp, rho, m, d, np, mdotR, f, tc, mAlP, mOxP
       integer  :: kp, idir
       do kp = 1, size(planeX)
         if (ya(1) < planeX(kp) .and. planeX(kp) <= yb(1)) then
@@ -552,6 +585,9 @@ contains
           np = ya(9) + s*(yb(9) - ya(9)); m = mdotSeg/np; mdotR = mdotSeg
         case(2,5)
           np = part%npdot; m = ya(8) + s*(yb(8) - ya(8)); mdotR = np*m
+        case(8)
+          np = part%npdot; mAlP = ya(8) + s*(yb(8) - ya(8)); mOxP = ya(9) + s*(yb(9) - ya(9))
+          m = mAlP + mOxP; mdotR = np*m
         case(4)
           np = ya(9) + s*(yb(9) - ya(9)); m = ya(8) + s*(yb(8) - ya(8)); mdotR = np*m
         case default
@@ -559,7 +595,9 @@ contains
         end select
         f = 0._R8
         if (mod_isSolid) f = ya(8) + s*(yb(8) - ya(8))
-        if (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7 .and. ind_rs == 0) then
+        if (mod_model == 8) then
+          d = (sixOverPi*(mAlP/rho + mOxP/auxLocal(ind_mb+imRr-1)))**oneThird
+        elseif (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7 .and. ind_rs == 0) then
           d = auxLocal(ind_d)
         else
           d = (sixOverPi*m/rho)**oneThird
@@ -620,7 +658,10 @@ contains
       case(5); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs5, no_jacobian, 0, err, deltat, solout)
       case(6); nDL = 9;  call Run_ODESolver(neq, t1, t2, y, rhs6, no_jacobian, 0, err, deltat, solout)
       case(7); nDL = 10; call Run_ODESolver(neq, t1, t2, y, rhs6, no_jacobian, 0, err, deltat, solout)
+      case(8); nDL = 10; call Run_ODESolver(neq, t1, t2, y, rhs8, no_jacobian, 0, err, deltat, solout)
       end select
+      !> [IGLOO-ODE] fail-after: the cap model fails once its last accepted time reaches it.
+      if (failAfter > 0._R8 .and. mod_model == 8 .and. err >= 0 .and. timeLocal >= failAfter) err = -1
       if (err < 0) then
         write(*,'(a,i0,a,i0,a,es12.4,a)')                                   &
           '[IGLOO] Run_ODESolver err=',err,' part=',part%ID,                   &
@@ -628,7 +669,15 @@ contains
         doLoop    = .false.
         part%gone = .true.
         !> Consumption models hand the remnant to the gas, as on the non-finite exit below.
-        if (mod_model==2 .or. mod_model==4 .or. mod_model==5) consumed = .true.
+        if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) consumed = .true.
+        !> Model 8: back to the last accepted step, the state its residue starts from.
+        if (mod_model == 8) then
+          part%stateVar = oldLocal
+          part%time     = timeLocal
+          part%oldState = oldLocal
+          call part%updatePart(rhoTab,hTab,eulerSwitch)
+          part%Tstay = timeLocal - tStart
+        endif
         return
       endif
       !> Burnout: the droplet was consumed on a still-good state; falls through to the normal finalize.
@@ -642,7 +691,7 @@ contains
         write(*,'(A,I4,A)') '[WARNING] Particle ',part%ID,                                &
                             ' non-finite state ==> reverting to last good step, marking gone'
         !> Report the remaining mass fraction for mass-evolving models.
-        if (mod_model==2 .or. mod_model==4 .or. mod_model==5)                              &
+        if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8)           &
           write(*,'(A,ES10.3,A,ES10.3,A)') '          last good m/m0 =',                   &
                 oldLocal(8)/part%m0, '  (burnout fires at m =', mBurnTol, ' kg)'
         part%stateVar = oldLocal
@@ -651,7 +700,7 @@ contains
         part%gone     = .true.
         doLoop        = .false.
         !> Consumption models hand the remnant to the gas as on a clean burnout.
-        if (mod_model==2 .or. mod_model==4 .or. mod_model==5) consumed = .true.
+        if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) consumed = .true.
         !> Sync d/m/tp from the reverted state; the residence ends at the last good step.
         call part%updatePart(rhoTab,hTab,eulerSwitch)
         part%Tstay = timeLocal - tStart
@@ -825,7 +874,7 @@ contains
       endif
     end subroutine solidCatchUp
 
-    !> ODE right-hand sides for models 1-7, forwarding integrate's host-associated state.
+    !> ODE right-hand sides for models 1-8, forwarding integrate's host-associated state.
     subroutine rhs1(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
       call rhsStandard(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab, gas,gasVert,gasState, ng,ngVert)
@@ -853,6 +902,10 @@ contains
       call rhsSolidification(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, rhoTab,mupTab,sigTab, &
                              gas,gasVert,gasState, ng,ngVert)
     end subroutine rhs6
+    subroutine rhs8(neq, time, Z, F)
+      integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
+      call rhsAlCap(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, gas,gasVert,gasState, ng,ngVert)
+    end subroutine rhs8
 
 
     !> Solver output callback: after each accepted step it tests cell/sector crossings,
@@ -901,8 +954,8 @@ contains
         IamOut = .false.; newGas = .false.; sectorOut = .false.
       endif
 
-      !> Burnout test on the droplet mass, consumption models only.
-      if (mod_model==2 .or. mod_model==4 .or. mod_model==5) then
+      !> Burnout test on the droplet mass (model 8: the metal's), consumption models only.
+      if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) then
         if (y(8) <= mBurnTol) burnedOut = .true.   ! y(8) IS the droplet mass [kg]
       endif
 
@@ -932,6 +985,7 @@ contains
         case(3);      m = auxLocal(ind_m)/y(8)
         case(7);      m = auxLocal(ind_m)/y(9)
         case(2,4,5);  m = y(8)
+        case(8);      m = y(8) + y(9)
         case default; m = auxLocal(ind_m)
         end select
         !> Models 3, 7 and a rho-solid material derive d from the current ODE state.
@@ -992,10 +1046,12 @@ contains
         case(3);      m = auxLocal(ind_m)/y(8)
         case(7);      m = auxLocal(ind_m)/y(9)
         case(2,4,5);  m = y(8)
+        case(8);      m = y(8) + y(9)
         case default; m = auxLocal(ind_m)
         end select
         if (ind_d > 0 .and. mod_model /= 7) then; d = auxLocal(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
         if (ind_rs > 0) d = solidDiameter(m, y(8), rho, auxLocal(ind_rs))
+        if (mod_model == 8) d = (sixOverPi*(y(8)/rho + y(9)/auxLocal(ind_mb+imRr-1)))**oneThird
         nScat = nScat + 1
         if (frozenOn) then
           fScat = 0._R8; if (mod_isSolid) fScat = y(8)
@@ -1071,7 +1127,7 @@ contains
 
       nmat = particle%mID
       !> Mass source only for materials that lose mass to the gas (evaporation or combustion).
-      if (phaseChange .or. particle%model==5) then
+      if (phaseChange .or. particle%model==5 .or. particle%model==8) then
         !$OMP ATOMIC UPDATE
         sblock%sourceMass(nmat,ii,jj,kk) = sblock%sourceMass(nmat,ii,jj,kk) + (masIn-masOut)
       else
@@ -1112,7 +1168,7 @@ contains
         np  = particle%intE(5)            *factor
         rho = mdotSeg*particle%Tstay*factor
         factor = rho/particle%deltaL
-      case(2,5)
+      case(2,5,8)
         np  = particle%npdot*particle%Tstay*factor
         rho = particle%npdot*particle%intE(5)*factor   !> intE(5) = int m dt per droplet; times the number rate
         factor = np /particle%deltaL

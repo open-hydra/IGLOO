@@ -41,11 +41,16 @@ IGLOO reads only the `[IGLOO-*]` sections above. The sections below are the *pre
 whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase.txt`,
 `properties.dat`, `bc.txt`). The per-material model keys (`evaporation`, `combustion`, `solidification`,
 `breakup`, `alpha-e`, ...), the solidification constants (`h-fus`, `cp-solid`, `T-melt`, `T-nuc`, `rho-solid`; see
-[Solidification](../theory/solidification.md#inputs)) and the breakup constants (`<tag>-<key>`, as `KHRT-B1`; table under
-[`[IGLOO-Models]`](#igloo-models)) are `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after
+[Solidification](../theory/solidification.md#inputs)), the breakup constants (`<tag>-<key>`, as `KHRT-B1`; table under
+[`[IGLOO-Models]`](#igloo-models)) and the combustion constants (`K-burn`, `n-burn`, `X-eff`, `T-ign`, `beta-part`,
+`q-comb`, `xi-cap`, `product`, `residue`, `d-residue`; see [Metal Combustion](../theory/combustion.md#inputs)) are
+`[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after
 `<name> <groups>` on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
 The `<groups>` summed over the material lines is the family count, and therefore the number of table
 copies `bc.txt` may carry (one copy feeds every family; see [Several families](boundary-conditions.md#several-families)).
+A line with 0 groups injects nothing and `bc.txt` carries no copy for it; named by `product=` on a burning line, it
+is that line's combustion product, with its own zone of `properties.dat` and one family after the injected ones
+([The burnout residue](../theory/combustion.md#the-burnout-residue)).
 
 | Section | Role |
 |---------|------|
@@ -226,6 +231,7 @@ Selects and tunes the ODE integrator.
 | `relative-tol` | real | `1e-10` | Relative ODE tolerance |
 | `absolute-tol` | real | `1e-10` | Absolute ODE tolerance |
 | `max-steps-ode` | integer | `100000` | Maximum internal steps per integrator call (`iopt(1)`) |
+| `fail-after` | real | `0` | Forces the solver failure of the oxide-cap model (ODE model 8) once a parcel's last accepted time reaches this value [s]: the failure path of the [burnout residue](../theory/combustion.md#the-burnout-residue); 0 = off |
 
 `H-sdirk4` is recommended for stiff cases (evaporation, small Stokes number). `H-dopri5` is faster for non-stiff drag-only cases.
 
@@ -326,4 +332,4 @@ and so is a breaking material with neither a column nor a key > 0.
     Zone *i* of `INPUT/properties.dat` is the material on line *i* of `INPUT/phase.txt`; the zone title (`ZONE T="..."`) is not read. ATLAS writes both files in material order, so a generated case is always consistent — the trap is a hand-edited or regenerated `phase.txt` paired with a stale `properties.dat`, which is a silent density/cp swap. IGLOO refuses a file whose zone count differs from the material count or whose zones do not share one temperature table.
 
 !!! note "The enthalpy column carries a datum"
-    Column 4 of `properties.dat` is named `Enthalpy` (relative: `cp·T`, or the SP-database integral from `Tmin`) or `Enthalpy_abs` (absolute: formation enthalpy included — thermo tables, or a fixed `cp` with `[GPB-Phase*] h0`). For a constant-`cp` material IGLOO integrates the temperature and takes the table's level once, `hOff = h(Tmin) − cp·Tmin` (0 for a relative table), and the gas coupling source credits the transferred mass at `cp·T + hOff`; a variable-`cp` material integrates the enthalpy state read from the table, which carries its datum by itself. The datum only matters when mass is transferred to a gas solver whose energy is absolute (hydra-MI2): a relative table then leaves the coupler to correct the level. A relative-tagged constant-`cp` column that is not `cp·T` is refused at setup. The datum is printed per material at setup (`enthalpy datum absolute|relative (hOff = ...)`).
+    Column 4 of `properties.dat` is named `Enthalpy` (relative: `cp·T`, or the SP-database integral from `Tmin`) or `Enthalpy_abs` (absolute: formation enthalpy included — thermo tables, or a fixed `cp` with `[GPB-Phase*] h0`). For a constant-`cp` material IGLOO integrates the temperature and takes the table's level once, `hOff = h(Tmin) − cp·Tmin` (0 for a relative table), and the gas coupling source credits the transferred mass at `cp·T + hOff`; a variable-`cp` material integrates the enthalpy state read from the table, which carries its datum by itself. The datum only matters when mass is transferred to a gas solver whose energy is absolute (hydra-MI2): a relative table then leaves the coupler to correct the level. A relative-tagged constant-`cp` column that is not `cp·T` is refused at setup. The datum is printed per material at setup (`enthalpy datum absolute|relative (hOff = ...)`). An oxide cap (`xi-cap > 0`) requires an absolute table: the parcel carries two species, each valued on its own datum ([The oxide cap](../theory/combustion.md#energy-the-absolute-datum-and-the-streams)).

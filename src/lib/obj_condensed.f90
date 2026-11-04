@@ -1,18 +1,21 @@
-!> Material, group and shed-list types, and the material -> group -> particle property hand-off.
+!> Material, group and shed-list types, the material -> group -> particle property hand-off, and the birth of a
+!  burnout residue.
 module IGLOO_data_phases
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_particles
   use IGLOO_Lib_Breakup, only: NBRKTOK
   implicit none
   private
+  public :: birthResidue
 
-  !> One shed child parcel, held in a per-parent growable list (shedList).
+  !> One shed child parcel (or burnout residue), held in a per-parent growable list (shedList).
   type, public:: obj_shed
     integer  :: ipos(4) = 0,      igas(3) = 0
     real(R8) :: pos(3)  = 0._R8,  vel(3)  = 0._R8
     real(R8) :: temp    = 0._R8,  diam    = 0._R8, npdot = 0._R8, time = 0._R8
     integer  :: phase   = 0       !> the parent's solidification phase at the shed
     integer  :: parent  = 0       !> the shedding parcel's ID
+    real(R8) :: mass    = 0._R8   !> a burnout residue's mass: its parent's cap
   end type
 
   !> Growable shed list, one per parent index (reserve + double via move_alloc). Dummies take it
@@ -70,6 +73,17 @@ module IGLOO_data_phases
     real(R8) :: qComb = 0._R8
     real(R8) :: rhoSol = 0._R8       !> solid density [kg/m3]; 0 = the liquid density
     real(R8) :: emissivity = 0._R8   !> grey-body surface emissivity; 0 = no radiation
+    !> The oxide cap: the combustion product (its material line, 0 = none), its density, heat capacity and datum,
+    !  the stretch c
+    character(len=20) :: productName = ''
+    integer  :: prodID = 0
+    real(R8) :: rhoRes = 0._R8, cpRes = 0._R8, hOffRes = 0._R8, cStretch = 1._R8
+    !> The burnout residue: on, the residue diameter (0 = one per droplet), the ID offset of this group's residues
+    !  in the product, one record list per parent index
+    logical  :: resOn = .false.
+    real(R8) :: dRes = 0._R8
+    integer  :: resBase = 0
+    type(shedList), allocatable :: resid(:)
     integer  :: nactive = 0
     type(obj_particle), allocatable :: particle(:)
     type(shedList),     allocatable :: shed(:)   !> one growable shed list per parent index
@@ -124,6 +138,15 @@ module IGLOO_data_phases
     real(R8) :: qComb = 0._R8
     real(R8) :: rhoSol = 0._R8       !> rho-solid [kg/m3]; 0 = the liquid density
     real(R8) :: emissivity = 0._R8   !> [IGLOO-Properties] emissivity; 0 = no radiation
+    !> The oxide cap: the product's name and line (0 = none), its density, heat capacity and datum, the stretch c;
+    !  isProduct marks the 0-group line a capped material names
+    character(len=20) :: productName = ''
+    integer  :: prodID = 0
+    logical  :: isProduct = .false.
+    real(R8) :: rhoRes = 0._R8, cpRes = 0._R8, hOffRes = 0._R8, cStretch = 1._R8
+    !> The burnout residue: the cap becomes a parcel of the product (residue = on), at d-residue (0 = one per droplet)
+    logical  :: resOn = .false.
+    real(R8) :: dRes = 0._R8
     !> sub-objects
     type(obj_group), allocatable :: group(:)
     !> Thermodynamic tables (defined if variable properties)
@@ -133,6 +156,59 @@ module IGLOO_data_phases
   end type obj_material
 
 contains
+
+  !> A burnout residue from its parent's record: the parent's position, velocity, temperature, time and cell
+  !  locators; one parcel per droplet with the cap's mass, or at d-residue with the mass flow kept; a freezing
+  !  product's residue liquid at or above T-melt, else undercooled, f = 0; its birth row due. kid holds the
+  !  product's group properties (assign_group2particle) and state arrays (setup_particleODE).
+  subroutine birthResidue(kid, rec, id, dRes)
+    use IGLOO_variables,          only: eulerSwitch, pi
+    use IGLOO_Lib_Statistics,     only: rngSeedFor
+    use IGLOO_Lib_Solidification, only: phLiquid, phUndercooled
+    implicit none
+    type(obj_particle), intent(inout) :: kid
+    type(obj_shed),     intent(in)    :: rec
+    integer,            intent(in)    :: id
+    real(R8),           intent(in)    :: dRes
+
+    kid%ID            = id
+    kid%parentID      = rec%parent
+    kid%rngState      = rngSeedFor(kid%famID, id)
+    kid%stateVar(1:3) = rec%pos
+    kid%stateVar(4:6) = rec%vel
+    kid%tp            = rec%temp
+    kid%time          = rec%time
+    kid%i       = rec%ipos
+    kid%igas    = rec%igas
+    kid%igasOld = rec%igas
+    kid%xi0     = 0.5_R8
+    kid%Ncell = 0; kid%gone = .false.; kid%wasin = .false.; kid%lost = .false.
+    kid%angle = 0._R8; kid%exitCode = 0
+    if (dRes > 0._R8) then
+      kid%d     = dRes
+      kid%m     = pi/6._R8*kid%rho*dRes**3
+      kid%npdot = rec%npdot*rec%mass/kid%m
+    else
+      kid%m     = rec%mass
+      kid%d     = (6._R8*kid%m/(pi*kid%rho))**(1._R8/3._R8)
+      kid%npdot = rec%npdot
+    endif
+    kid%mdot  = kid%npdot*kid%m
+    kid%m0    = kid%m
+    kid%npold = kid%npdot
+    kid%n0    = kid%npdot
+    kid%stateVar(7) = kid%tp
+    if (kid%model == 6) then
+      kid%solidPhase  = merge(phLiquid, phUndercooled, kid%tp >= kid%Tmelt)
+      kid%fSolid      = 0._R8
+      kid%stateVar(8) = 0._R8
+    endif
+    if (eulerSwitch)   kid%stateVar(kid%nOde+1:kid%neq) = 0._R8
+    if (kid%bodyAccum) kid%stateVar(kid%neq-1 :kid%neq) = 0._R8
+    kid%oldState = kid%stateVar
+    kid%newborn  = .true.
+
+  end subroutine birthResidue
 
   !> Grow the backing store to at least `newcap`, preserving the live entries. Never shrinks.
   subroutine shed_reserve(this,newcap)
@@ -223,6 +299,9 @@ contains
       endif
       if (self%solidSelect > 0) gr%rhoSol = self%rhoSol
       gr%emissivity = self%emissivity
+      gr%productName = self%productName; gr%prodID = self%prodID
+      gr%rhoRes = self%rhoRes; gr%cpRes = self%cpRes; gr%hOffRes = self%hOffRes; gr%cStretch = self%cStretch
+      gr%resOn = self%resOn; gr%dRes = self%dRes
       end associate
     enddo
 
@@ -249,7 +328,7 @@ contains
     endif
 
     mdotSwitch = (self%evapSelect > 0)
-    mdl = determineModel(mdotSwitch, self%brkupEqOde, self%combSelect, self%solidSelect)
+    mdl = determineModel(mdotSwitch, self%brkupEqOde, self%combSelect, self%solidSelect, cap=self%xiCap > 0._R8)
     self%neq  = computeNeq(mdl, eulerSwitch, srcBodyForce)
     !> Build fixed-size propFlags: [varCp, varRho, varSig, varMup, varPsat, varLv, varCpv]
     propFlags = [self%cpVariable, self%rhoVariable, .false., .false., .false., .false., .false.]
@@ -278,7 +357,7 @@ contains
       call sizeTo(part%oldState, self%neq)
       if (eulerSwitch) then
         select case(mdl)
-        case(2,5);    call sizeTo(part%intE, 5)
+        case(2,5,8);  call sizeTo(part%intE, 5)
         case(3,4,7);  call sizeTo(part%intE, 6)
         case default; call sizeTo(part%intE, 4)
         end select
@@ -286,7 +365,7 @@ contains
       part%model = mdl
       part%neq   = self%neq
       part%nOde  = computeNode(mdl)
-      part%bodyAccum   = srcBodyForce .and. (mdl==2 .or. mdl==4 .or. mdl==5)
+      part%bodyAccum   = srcBodyForce .and. (mdl==2 .or. mdl==4 .or. mdl==5 .or. mdl==8)
       part%evapSelect  = self%evapSelect
       part%brkupSelect = self%brkupSelect
       end associate
@@ -384,6 +463,7 @@ contains
       endif
       if (self%solidSelect > 0) part%rhoSol = self%rhoSol
       part%emissivity = self%emissivity
+      part%rhoRes = self%rhoRes; part%cpRes = self%cpRes; part%hOffRes = self%hOffRes; part%cStretch = self%cStretch
       end associate
     enddo
 

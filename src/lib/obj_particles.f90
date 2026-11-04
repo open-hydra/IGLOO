@@ -82,7 +82,7 @@ module IGLOO_particles
     integer      :: solidSelect = 0    !> solidification:   0 off, 1 supercool + recalescence
     integer      :: solidPhase  = 0    !> solidification phase: 0 liquid, 1 undercooled, 2 plateau, 3 solid
     real(R8)     :: fSolid      = 0._R8 !> frozen mass fraction, copy of stateVar(8) (models 6, 7)
-    integer      :: model       = 1    !> RHS model (1-7)
+    integer      :: model       = 1    !> RHS model (1-8)
     integer      :: neq         = 7    !> number of ODE equations
     integer      :: nOde        = 7    !> number of ODE state variables
     logical      :: bodyAccum = .false. !> body-force J/W accumulators present (only models 2,4,5 & srcBodyForce)
@@ -110,7 +110,7 @@ module IGLOO_particles
     real(R8)     :: nBurn      = 0._R8  !> Beckstead exponent
     real(R8)     :: Xeff       = 0._R8  !> effective oxidizer fraction
     real(R8)     :: betaPart   = 0._R8  !> heat-partition fraction of q-comb to the particle
-    real(R8)     :: xiCap      = 0._R8  !> oxide-cap fraction (M4)
+    real(R8)     :: xiCap      = 0._R8  !> oxide-cap fraction: the oxide formed by the burn retained on the drop
     real(R8)     :: Tign       = 0._R8  !> ignition temperature [K]
     real(R8)     :: Tmelt      = 2327._R8 !> melt temperature [K], default alumina (solidification)
     real(R8)     :: hFus       = 0._R8  !> heat of fusion [J/kg] (solidification)
@@ -119,6 +119,11 @@ module IGLOO_particles
     real(R8)     :: rhoSol     = 0._R8  !> solid density [kg/m3]; 0 => the liquid density (solidification)
     real(R8)     :: qComb      = 0._R8  !> heat of combustion [J/kg]
     real(R8)     :: emissivity = 0._R8  !> grey-body surface emissivity; 0 = no radiation
+    !> The oxide cap (model 8): the combustion product's density, heat capacity and enthalpy datum, the stretch c
+    real(R8)     :: rhoRes     = 0._R8
+    real(R8)     :: cpRes      = 0._R8
+    real(R8)     :: hOffRes    = 0._R8
+    real(R8)     :: cStretch   = 1._R8
   contains
     !> integration procedures
     procedure, pass(self) :: computeDs
@@ -185,8 +190,12 @@ contains
     !> solidification: the latent heat of fusion is part of the enthalpy
     if (self%solidSelect > 0) enthalpy = hSolid(self%stateVar(7), self%stateVar(8), self%solidPhase, self%cp, &
                                                 self%cpSol, self%hFus, self%Tmelt, self%hOff)
+    !> model 8: the metal and its cap, each at its own heat capacity and datum
+    if (self%model == 8) enthalpy = (self%stateVar(8)*(self%cp*self%stateVar(7) + self%hOff) +      &
+                                     self%stateVar(9)*(self%cpRes*self%stateVar(7) + self%hOffRes)) / &
+                                    (self%stateVar(8) + self%stateVar(9))
     select case (self%model)
-    case (2,4,5); mdot_inst = self%npdot * self%m
+    case (2,4,5,8); mdot_inst = self%npdot * self%m
     case default; mdot_inst = self%mdot
     end select
     M = mdot_inst
@@ -312,8 +321,12 @@ contains
     case(7); self%fSolid = self%stateVar(8)
              self%npdot  = self%stateVar(9)
              self%m      = self%mdot/self%npdot
+    case(8); self%m      = self%stateVar(8) + self%stateVar(9)
     end select
-    if (self%model/=1 .or. self%varRho) then
+    if (self%model == 8) then
+      !> the equal-volume sphere of the metal and its cap
+      self%d = (sixOverPi*(self%stateVar(8)/self%rho + self%stateVar(9)/self%rhoRes))**oneThird
+    elseif (self%model/=1 .or. self%varRho) then
       if (self%varRho) self%rho = tableValue(rhoTab, Tmin, Tmax, self%Tp)
       if (self%rhoSol > 0._R8) then
         self%d = solidDiameter(self%m, self%fSolid, self%rho, self%rhoSol)

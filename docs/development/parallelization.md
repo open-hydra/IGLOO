@@ -96,7 +96,7 @@ build compiles the module to no-ops (`mpi_size_ = 1`, `mpi_is_root = .true.`,
 
 ### Rank-invariance is the hard part
 
-Splitting the work is easy; getting *identical numbers* out of any rank count is not. Three
+Splitting the work is easy; getting *identical numbers* out of any rank count is not. Four
 mechanisms carry it:
 
 **1 — Per-parcel RNG streams.** Every parcel's stream is seeded from `(rng_seed, famID, ID)`,
@@ -119,6 +119,12 @@ This is legal because **every parcel is written by exactly one rank**: on pass 1
 parent is cycled and keeps the `n = 0` every rank stores unconditionally; on passes ≥2 the
 window holds only locally-created children. Serial equivalence is exact by induction and is
 asserted permanently by an `mpi_size_ == 1` tripwire.
+
+**4 — Burnout residues.** A combustion product's parcels are born during the solve on the rank that
+integrated their parent, and that rank integrates them in the second pass (every burning material
+before every product), without the ownership filter. A residue's ID is its group's offset plus its
+parent's ID, both rank-invariant, so its RNG stream and its scatter emission do not depend on the
+partition; the product's banner count is a sum over the ranks.
 
 !!! note "The `dNscat` pre-pass stays fully replicated"
     Do **not** add an ownership guard there. It computes the scatter quantum; striping it

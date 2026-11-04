@@ -6,7 +6,7 @@ module IGLOO_Lib_Evaporation
     public :: assign_evaporation
     public :: assign_liquid, assign_interface, assign_boiling
     public :: assign_blowing, blowingFactor
-    public :: assign_combustion, assign_solidification
+    public :: assign_combustion, assign_solidification, assign_residue
     public :: evaporation
     public :: chiETC
     public :: boilingTemperatureCC, alphaBoil, zgrBoiling
@@ -168,6 +168,21 @@ contains
             error stop 'IGLOO: unknown solidification token'
         end select
     end subroutine assign_solidification
+
+    !> Burnout residue: on, the oxide cap becomes a parcel of the combustion product; off, it goes to the gas.
+    subroutine assign_residue(word, resOn)
+        implicit none
+        character(len=*), intent(in)  :: word
+        logical,          intent(out) :: resOn
+        select case (word)
+        case('on');  resOn = .true.
+        case('off'); resOn = .false.
+        case default
+            write(*,*) "Wrong residue input ---> "//trim(word)
+            write(*,*) "Choose one of: on, off"
+            error stop 'IGLOO: unknown residue token'
+        end select
+    end subroutine assign_residue
 
 
     !> Evaporation rate mdot (< 0) and, for the models that provide it, the gas-side heat Qdot_evap:

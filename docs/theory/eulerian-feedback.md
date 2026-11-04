@@ -64,7 +64,7 @@ the drag reaction only.  The correction form depends on the model:
   $\mathbf{P}_\mathrm{in} \mathrel{+}= \dot m\,T_\mathrm{stay}\,\mathbf{g}$ and
   $E_\mathrm{in} \mathrel{+}= \dot m\,\mathbf{g}\cdot(\mathbf{x} - \mathbf{x}_\mathrm{entry})$
   using the residence time and cell-entry position.
-- Models 2, 4, 5 (mass-evolving): accumulators $J = \int \dot m\,dt$ and
+- Models 2, 4, 5, 8 (mass-evolving): accumulators $J = \int \dot m\,dt$ and
   $W = \int \dot m\,\mathbf{g}\cdot\mathbf{v}\,dt$ are extra ODE state variables at the
   tail of the state; when eulerian output is also on, $J$ reuses the euler mass moment
   and only $W$ is appended.
@@ -145,7 +145,7 @@ $$
 \rho_p^{\,\mathrm{cell}} \;=\; \frac{1}{V}\sum_p \dot{n}_p \int_{\mathrm{cell}} m_p\,\mathrm{d}t
 $$
 
-Models 2 and 5 integrate $m_p$ alone and pick up $\dot{n}_p$ at the deposit; model 4
+Models 2, 5 and 8 integrate $m_p$ alone ($m_\mathrm{Al} + m_\mathrm{ox}$ for model 8) and pick up $\dot{n}_p$ at the deposit; model 4
 integrates $m_p\,\dot{n}_p$ directly, so its deposit needs no extra factor. The two routes
 give the same quantity. This matters beyond the density itself: `finalizeEUL` divides the
 velocity and temperature numerators **by** $\rho_p^{\,\mathrm{cell}}$, so a density missing
@@ -153,7 +153,7 @@ $\dot{n}_p$ also scales $\mathbf{u}_p$ and $T_p$ by it.
 
 `computeEulField` maps the ODE moment integrals `intE(:)` (arc-length $\delta L$ and
 $\mathbf{v}_p\,\delta L$, $T_p\,\delta L$, plus the mass or number moment for models
-2–5) into these cell accumulators, normalised by the deposition cell volume $V$ (the gas
+2–5 and 8) into these cell accumulators, normalised by the deposition cell volume $V$ (the gas
 dual cell with `gas-order = 2`, the geometry cell otherwise).  The `factor` and `rho`
 terms differ per model to account for how each model tracks mass and parcel number.
 The momentum moment is integrated in the meridian frame on a wedge, as for the source.
@@ -207,9 +207,9 @@ its ODE system is sized):
 | Slot offset | Symbol | Meaning |
 | :---: | :--- | :--- |
 | `nOde+1` | $\ell = \int\|\mathbf{v}_p\|$ | Arc-length integrand |
-| `nOde+2..4` | $\mathbf{v}_p\,\ell$ | Momentum integrand (weighted by the parcel mass $m$ for models 2 and 5 and by the stream mass $m\,\dot n_p$ for model 4; unweighted for models 1, 3 and 6) |
-| `nOde+5` | energy integrand | $T_p\,\ell$ or $h_p\,\ell$ (weighted by the parcel mass $m$ for models 2 and 5 and by the stream mass $m\,\dot n_p$ for model 4; unweighted for models 1, 3 and 6) |
-| `nOde+6` | mass or number moment | $m$ (models 2, 5), $\dot n_p$ (model 3), $m\,\dot n_p$ (model 4) |
+| `nOde+2..4` | $\mathbf{v}_p\,\ell$ | Momentum integrand (weighted by the parcel mass $m$ for models 2, 5 and 8 and by the stream mass $m\,\dot n_p$ for model 4; unweighted for models 1, 3 and 6) |
+| `nOde+5` | energy integrand | $T_p\,\ell$ or $h_p\,\ell$ (weighted by the parcel mass $m$ for models 2, 5 and 8 and by the stream mass $m\,\dot n_p$ for model 4; unweighted for models 1, 3 and 6) |
+| `nOde+6` | mass or number moment | $m$ (models 2, 5, 8), $\dot n_p$ (model 3), $m\,\dot n_p$ (model 4) |
 | `nOde+7` | $\dot n_p$ | Number moment (model 4 only) |
 
 See [Governing equations](governing-equations.md) for the full state-vector table.

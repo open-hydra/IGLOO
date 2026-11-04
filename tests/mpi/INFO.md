@@ -47,11 +47,12 @@ green, nothing decomposed. Without the witness this whole directory would be a v
 | `mpi-consistency` | 1 vs 4; 4 at 1 and 5 threads | the cross-rank-count and cross-thread-count gate (below) |
 | `mpi-consistency-two-mat` | 1 vs 4; 4 at 1 and 5 threads | the same gate (same `check.py`, symlinked) on the `nm=2` fixture |
 | `mpi-consistency-psd` | 1 vs 4; 4 at 1 and 5 threads | the same gate on `psd-table`'s 20 000 parcels, whose diameters are drawn from a tabulated law (below) |
+| `mpi-consistency-residue` | 1 vs 4; 4 at 1 and 5 threads | the same gate on `burn-box-residue`: each burnout residue lives on the rank of its parent, at an index the ownership filter knows nothing of, so its ID (the group's offset plus its parent's ID), rows and exit record and the source field must not depend on the decomposition; its own `check.py` imports the shared one and adds the product's banner, which must count the 25 residues over every rank. RED with a rank-local residue counter: the product's three files differ as multisets at every 4-rank arm; RED with the banner's count left rank-local: 7 at 4 ranks while every file comparison passes |
 | `mpi-determinism` | 1, 3, 4 | the rank-order cross-rank sum: grid bytes at n = 3 and 4 independent of the collective algorithm (below) |
-| `mpi-repeat-<case>` (13) | 2 | every `repeatability/` case under `mpiexec`: the two-sweep harness (`setup_static`, then `reset_state` + `solve` + `writeout` per sweep) with the rank witness on every log, `check_twosweep.py` unchanged; the gas-refresh cycle on `drag-stokes`, `vie-plait` and `swirl-wedge` |
+| `mpi-repeat-<case>` (13) | 2 | every `repeatability/` case but `burn-box-residue` (its rank side is `mpi-consistency-residue`'s) under `mpiexec`: the two-sweep harness (`setup_static`, then `reset_state` + `solve` + `writeout` per sweep) with the rank witness on every log, `check_twosweep.py` unchanged; the gas-refresh cycle on `drag-stokes`, `vie-plait` and `swirl-wedge` |
 
-Each variant directory **symlinks** its parent case's `INPUT/`, `input.ini` and `check.py`. The oracle
-is therefore the same inode as the serial case's — "the oracle passes unmodified" is not a claim to
+Each variant directory **symlinks** its parent case's `INPUT/`, `input.ini` and `check.py` (`consistency-residue`
+imports the shared `check.py` and adds one assertion). The oracle is therefore the same inode as the serial case's — "the oracle passes unmodified" is not a claim to
 audit, it is the same file. Private directories rather than a `RESOURCE_LOCK` on the serial case's
 `OUTPUT/` (the `repeatability/` pattern): a private dir cannot race the serial variant at all, and it
 lets the two run concurrently under `ctest -j`.

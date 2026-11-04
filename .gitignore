@@ -51,6 +51,9 @@ ref-o2-*
 ref-serial
 # breakup-per-material reruns its case once per material into ref-A/ .. ref-D/ (tests/breakup/breakup-per-material/check.py)
 ref-[ABCD]
+# burn-box-residue runs its d-residue and fail-after siblings into ref-dres/ and ref-fail/ (tests/combustion/burn-box-residue/check.py)
+ref-dres
+ref-fail
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/

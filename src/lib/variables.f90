@@ -69,6 +69,9 @@ module IGLOO_variables
   character(len=100) :: ode_word
   real(R8) :: rtol, atol
   integer  :: iopt(3)
+  !> [IGLOO-ODE] fail-after [s]: the oxide-cap model (ODE model 8) fails once a parcel's last accepted time
+  !  reaches it (the residue's failure path); 0 = off
+  real(R8) :: failAfter = 0._R8
 
   !> Parameters
   real(R8), parameter :: pi = acos(-1.0_R8)

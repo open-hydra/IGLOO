@@ -13,10 +13,19 @@ program test_combustion
     !   CB4  Beckstead-correlation DISCRIMINATOR: K-burn calibrated at the anchor,
     !        other (D, X_eff) points predicted vs published [Beck05]; RED unless the
     !        X_eff exponent is 1 (linear per Beckstead's final D^1.8 fit). [Beck05]
+    !   CB5  the oxide cap (ODE model 8): one rhsAlCap call, F(9) = -xi nu F(8).
+    !   CB6  rhsAlCap at f_ox = 0.1, 0.3, 0.5, 0.9: F(8) = becksteadRate's mdot on the metal's
+    !        diameter times F(f_ox) c, the products typed from Gallier's lobe [Gal21].
+    !   CB7  nu = M(Al2O3)/(2 M(Al)) from the molar masses typed here.
+    !   CB8  computeSource of a capped parcel: the energy flow carries the metal and the cap
+    !        each at its own heat capacity and enthalpy datum.
+    !   CB9  lobeF at ten points of f_ox against Gallier's exposed-surface factor at 2570 K,
+    !        typed here, and decreasing over 1001 points. [Gal21]
+    !   CB10 capStretch(0.2, 1.8) = int_0^1 ds/F, the stretch that keeps Beckstead's burn time.
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_Lib_Combustion, only: becksteadRate, nmp, imKb, imN, imXe, imBeta, &
-                                    imTig, imQc, aXeff
+                                    imTig, imQc, aXeff, nuOx, buildLobeTable, lobeF, capStretch
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
     use verif_dump,   only: dump_curve
@@ -47,6 +56,12 @@ program test_combustion
     call run_CB2(ok_all)
     call run_CB3(ok_all)
     call run_CB4(ok_all)
+    call buildLobeTable()
+    call run_CB5_CB6(ok_all)
+    call run_CB7(ok_all)
+    call run_CB8(ok_all)
+    call run_CB9(ok_all)
+    call run_CB10(ok_all)
 
     call dump_CB2()
     call dump_CB3()
@@ -195,6 +210,145 @@ contains
         end do
         mp(imKb) = KBURN; mp(imXe) = XEFF   ! restore
     end subroutine run_CB4
+
+    !> The IGLOO_variables switches of a zero-slip right-hand side call under NoDrag and NoHeat.
+    subroutine set_switches()
+        use IGLOO_variables, only: ord2, mesh2D, eulerSwitch, bodyForce, bodyAccel, srcBodyForce, &
+                                   dragSelect, heatSelect
+        ord2 = .false.;  mesh2D = .false.;  eulerSwitch = .false.
+        bodyForce = .false.;  bodyAccel = 0._R8;  srcBodyForce = .false.
+        dragSelect = 14;  heatSelect = 7
+    end subroutine set_switches
+
+    subroutine run_CB5_CB6(ok)
+        !> one production rhsAlCap per cap fraction on a burning particle (T = 3000 K > T-ign) at zero slip
+        use IGLOO_particles, only: obj_particle
+        use Lib_RHS,         only: setupRHS, packAuxVars, nauxvar, nauxstate, rhsAlCap
+        logical, intent(inout) :: ok
+        real(R8), parameter :: XI = 0.2_R8
+        real(R8), parameter :: fox(4) = [0.1_R8, 0.3_R8, 0.5_R8, 0.9_R8]
+        real(R8), parameter :: Fc(4)  = [1.294539_R8, 1.185062_R8, 1.084161_R8, 0.785019_R8]   ! F(f_ox) c [Gal21]
+        type(obj_particle) :: p
+        real(R8), allocatable :: aux(:), auxst(:)
+        real(R8) :: Z(9), F(9), gas(9), gasNodes(9,8), gasVert(3,8), mAl, mOx, dAl, mdot, qrel
+        real(R8) :: err5, err6, nuT, tol
+        logical  :: pf(7), pass
+        integer  :: i, nAux, nS, nE
+        call set_switches()
+        p%cp = 1250._R8;  p%rho = RHOP
+        p%Kburn = KBURN;  p%nBurn = NB;  p%Xeff = XEFF;  p%betaPart = BETA;  p%Tign = TIGN;  p%qComb = QCOMB
+        p%xiCap = XI;  p%rhoRes = 3950._R8;  p%cpRes = 1887.6_R8;  p%cStretch = capStretch(XI, NB)
+        pf = .false.
+        call setupRHS(8, 0, 0, 0, 0, 0, 1, pf, [real(R8)::], 0, 0._R8, nAux, nS, nE)
+        allocate(aux(nauxvar), auxst(max(1, nauxstate)))
+        call packAuxVars(p, nauxvar, aux)
+        gas = [1.2_R8, 10._R8, 0._R8, 0._R8, 2000._R8, 1.8e-5_R8, 1.4_R8, 287._R8, 0.026_R8]
+        gasNodes = spread(gas, 2, 8);  gasVert = 0._R8
+        nuT = (2._R8*26.9815385_R8 + 3._R8*15.999_R8)/(2._R8*26.9815385_R8)
+        err5 = 0._R8;  err6 = 0._R8
+        do i = 1, size(fox)
+            mAl = RHOP*PI/6._R8*D0**3
+            mOx = fox(i)/(1._R8 - fox(i))*mAl
+            Z = [0._R8, 0._R8, 0._R8, 10._R8, 0._R8, 0._R8, TP, mAl, mOx]
+            auxst = 0._R8
+            call rhsAlCap(9, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), gasNodes, gasVert, gas, 9, 8)
+            err5 = max(err5, abs(F(9) + XI*nuT*F(8))/abs(XI*nuT*F(8)))
+            dAl = (6._R8*mAl/(PI*RHOP))**(1._R8/3._R8)
+            call becksteadRate(TP, dAl, RHOP, mp, mdot, qrel)
+            err6 = max(err6, abs(F(8) - mdot*Fc(i))/abs(mdot*Fc(i)))
+            write(*,'(a,f4.1,a,es23.15,a,es23.15)') '  [INFO] CB6 f_ox ', fox(i), ': F(8) = ', F(8), &
+                ', Beckstead mdot x F c = ', mdot*Fc(i)
+        end do
+        tol = 1.0e-15_R8
+        pass = assert_lt('CB5 the cap retains xi nu of the metal burned: |F(9) + xi nu F(8)|/|xi nu F(8)|', err5, tol)
+        ok = ok .and. pass
+        call append_row('CB5_cap_growth', 'F9', err5, err5, 0._R8, 0._R8, tol, pass)
+        tol = 3.0e-6_R8
+        pass = assert_lt('CB6 burn rate = Beckstead on d_Al x F(f_ox) c, relative', err6, tol)
+        ok = ok .and. pass
+        call append_row('CB6_cap_rate', 'F8', err6, err6, 0._R8, 0._R8, tol, pass)
+    end subroutine run_CB5_CB6
+
+    subroutine run_CB7(ok)
+        !> nuOx from the molar masses of aluminium and oxygen
+        logical, intent(inout) :: ok
+        real(R8) :: err, tol
+        logical  :: pass
+        err = abs(nuOx - (2._R8*26.9815385_R8 + 3._R8*15.999_R8)/(2._R8*26.9815385_R8))
+        tol = 1.0e-6_R8
+        pass = assert_lt('CB7 nu = M(Al2O3)/(2 M(Al)) from M(Al) 26.9815385, M(O) 15.999', err, tol)
+        ok = ok .and. pass
+        call append_row('CB7_nu', 'nu', err, err, 0._R8, 0._R8, tol, pass)
+    end subroutine run_CB7
+
+    subroutine run_CB8(ok)
+        !> the energy flow of a capped parcel at 900 K: metal and cap at their own c_p and datum
+        use IGLOO_particles, only: obj_particle
+        logical, intent(inout) :: ok
+        real(R8), parameter :: CAL = 1250._R8, HAL = -372687.5_R8, CRES = 1887.6_R8, HRES = -1.723894e7_R8
+        real(R8), parameter :: T9 = 900._R8, NPD = 1.0e6_R8
+        type(obj_particle) :: p
+        real(R8) :: M, P3(3), E, mAl, mOx, v(3), Eref, err, tol
+        logical  :: pass
+        mAl = 2.0e-11_R8;  mOx = 1.5e-11_R8;  v = [10._R8, -2._R8, 1._R8]
+        p%model = 8;  p%varCp = .false.;  p%solidSelect = 0
+        p%cp = CAL;  p%hOff = HAL;  p%cpRes = CRES;  p%hOffRes = HRES
+        allocate(p%stateVar(9))
+        p%stateVar = [0._R8, 0._R8, 0._R8, v(1), v(2), v(3), T9, mAl, mOx]
+        p%m = mAl + mOx;  p%npdot = NPD
+        call p%computeSource(M, P3, E)
+        Eref = NPD*(mAl*(CAL*T9 + HAL) + mOx*(CRES*T9 + HRES) + 0.5_R8*(mAl + mOx)*dot_product(v, v))
+        err = abs(E - Eref)/abs(Eref)
+        tol = 1.0e-14_R8
+        pass = assert_lt('CB8 energy flow of a capped parcel = npdot (m_Al h_Al + m_ox h_res + m v^2/2), relative', &
+                         err, tol)
+        ok = ok .and. pass
+        call append_row('CB8_cap_enthalpy', 'E', err, err, 0._R8, 0._R8, tol, pass)
+    end subroutine run_CB8
+
+    subroutine run_CB9(ok)
+        !> the lobe table against Gallier's exposed-surface factor at 2570 K, and its monotonicity
+        logical, intent(inout) :: ok
+        real(R8), parameter :: fp(10) = [0._R8, 0.01_R8, 0.1_R8, 0.3_R8, 0.5_R8, 0.7_R8, 0.9_R8, 0.99_R8, &
+                                         0.999_R8, 1._R8]
+        real(R8), parameter :: Fg(10) = [1.0000000000_R8, 0.9827270766_R8, 0.9262022266_R8, 0.8478748420_R8, &
+                                         0.7756834778_R8, 0.6915082387_R8, 0.5616563064_R8, 0.4171621830_R8, &
+                                         0.3581359139_R8, 0.3123823675_R8]
+        real(R8) :: err, tol, prev, v
+        logical  :: pass, mono
+        integer  :: i
+        err = 0._R8
+        do i = 1, size(fp)
+            err = max(err, abs(lobeF(fp(i)) - Fg(i)))
+        end do
+        tol = 3.0e-6_R8
+        pass = assert_lt('CB9a lobeF vs Gallier F(f_ox) at ten points, absolute', err, tol)
+        ok = ok .and. pass
+        call append_row('CB9a_lobe_table', 'F', err, err, 0._R8, 0._R8, tol, pass)
+        mono = .true.;  prev = lobeF(0._R8)
+        do i = 1, 1000
+            v = lobeF(real(i, R8)/1000._R8)
+            mono = mono .and. v < prev
+            prev = v
+        end do
+        if (mono) then; write(*,'(a)') '  [PASS] CB9b lobeF decreasing over 1001 points'
+        else;           write(*,'(a)') '  [FAIL] CB9b lobeF decreasing over 1001 points'; end if
+        ok = ok .and. mono
+        call append_row('CB9b_lobe_monotone', 'F', 0._R8, 0._R8, 0._R8, 0._R8, 0._R8, mono)
+    end subroutine run_CB9
+
+    subroutine run_CB10(ok)
+        !> the stretch at xi = 0.2, n = 1.8 against int_0^1 ds/F on Gallier's lobe
+        logical, intent(inout) :: ok
+        real(R8) :: c, err, tol
+        logical  :: pass
+        c = capStretch(0.2_R8, 1.8_R8)
+        err = abs(c - 1.397686_R8)/1.397686_R8
+        tol = 1.0e-5_R8
+        pass = assert_lt('CB10 capStretch(0.2, 1.8) vs 1.397686, relative', err, tol)
+        ok = ok .and. pass
+        call append_row('CB10_stretch', 'c', err, err, 0._R8, 0._R8, tol, pass)
+    end subroutine run_CB10
 
     !> Beckstead (2005) burn-time correlation at p=1 atm, T0=300 K, SI seconds out
     pure function tb_corr(aC, d_um, xeff_) result(t_s)

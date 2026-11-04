@@ -8,15 +8,16 @@ program test_radiation
     !        Tg - Tp both ways; eps = 0 and Tg = Tp give exactly 0
     !   RU3  the aux layout: with radiation one slot after every other block (nAux + 1, ind_eps = nAux);
     !        without it, set up after a material with it, no slot (ind_eps = 0) and the nAux of the layout
-    !        without the feature; models 1-7
-    !   RU2  one production right-hand side per ODE model 1-7 at zero slip under NoDrag and NoHeat: F of a
+    !        without the feature; models 1-8
+    !   RU2  one production right-hand side per ODE model 1-8 at zero slip under NoDrag and NoHeat: F of a
     !        material with eps = 0.8 minus F of the same material with eps = 0 is Qr*cpFactor/m in the energy
     !        equation (models 6 and 7 by phase: Qr/(m c_l), -Qr/(m h_fus) in F(8), Qr/(m c_s)) within 8 ULP
     !        of the larger F, and 0 in every other component; model 1 again on a varying-cp table
     !        (cpFactor = 1); model 2 again with blowing = LK on the d2-law (mdot /= 0): the term is not
     !        multiplied by f2. d and m are the ones the right-hand side holds (aux for models 1 and 6, rebuilt
     !        from the mass for models 2-5 and 7, typed as the right-hand side rebuilds them; model 7 at a
-    !        Z(9) off the injection rate, so its d is not the injection one)
+    !        Z(9) off the injection rate, so its d is not the injection one); model 8 (the oxide cap,
+    !        m_ox = m_Al): Qr on the equal-volume sphere over the heat capacity m_Al c_Al + m_ox c_res
     !   RU4  getSourceTerms at zero slip under NoDrag and NoHeat: the energy component equals
     !        np*eps*sigma*pi*d^2*(Tg^4 - Tp^4), d = (6 rhop/(pi rho np))^(1/3): 1e-14 relative; eps = 0 gives 0
     !
@@ -133,11 +134,11 @@ contains
     subroutine run_RU3(ok)
         use Lib_RHS, only: ind_eps
         logical, intent(inout) :: ok
-        integer, parameter :: NM = 8
+        integer, parameter :: NM = 9
         !                                 model brk evap comb varcp
         integer, parameter :: cfg(5, NM) = reshape([1, 0, 0, 0, 0,  1, 0, 0, 0, 1,  2, 0, 1, 0, 0, &
                                                     3, 2, 0, 0, 0,  4, 2, 1, 0, 0,  5, 0, 0, 1, 0, &
-                                                    6, 0, 0, 0, 0,  7, 2, 0, 0, 0], [5, NM])
+                                                    6, 0, 0, 0, 0,  7, 2, 0, 0, 0,  8, 0, 0, 1, 0], [5, NM])
         integer :: i, nA0, nA1, nA2, nA3, e0, e1, e2, e3
         logical :: pass, all_ok
         call set_switches(0)
@@ -161,7 +162,7 @@ contains
     !> one right-hand side call of the model set up last
     subroutine call_rhs(model, neq, Z, F, aux, auxst, gas, htab)
         use Lib_RHS, only: rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, rhsAlCombustion, &
-                           rhsSolidification, nauxvar, nauxstate
+                           rhsSolidification, rhsAlCap, nauxvar, nauxstate
         integer,  intent(in)    :: model, neq
         real(R8), intent(in)    :: Z(neq), aux(:), htab(:)
         real(R8), intent(out)   :: F(neq)
@@ -181,6 +182,8 @@ contains
                                        htab, dtab, gasNodes, gasVert, gas, 9, 8)
         case (6, 7); call rhsSolidification(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
                                             dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8)
+        case (8); call rhsAlCap(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
+                                gasNodes, gasVert, gas, 9, 8)
         end select
     end subroutine call_rhs
 
@@ -252,11 +255,12 @@ contains
         use IGLOO_Lib_Properties, only: Tmin, Tmax
         use IGLOO_Lib_Evaporation, only: blowingFactor
         use IGLOO_Lib_Solidification, only: phLiquid, phUndercooled, phPlateau, phSolid
+        use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch
         logical, intent(inout) :: ok
         real(R8), parameter :: PI = 4._R8*atan(1._R8), UG = 10._R8, Ru = 8314.46_R8
-        type(obj_particle) :: p1, p6, p7, p2, p3, p4, p5
+        type(obj_particle) :: p1, p6, p7, p2, p3, p4, p5, p8
         real(R8), allocatable :: htab(:)
-        real(R8) :: Z7(7), Z8(8), Z9(9), F1(9), F0(9), m, d, Tg, Tp, f2
+        real(R8) :: Z7(7), Z8(8), Z9(9), F1(9), F0(9), m, d, Tg, Tp, f2, mAl, mOx
         real(R16) :: ref
         integer  :: i, ph
         logical  :: stale
@@ -392,6 +396,21 @@ contains
         ref = qr_ref(EPS1, d, Tg, Tp)/(1250._R16*real(m, R16))
         write(*,'(a,es12.5,a)') '  [INFO] RU2 model 5: F(7) without radiation = ', F0(7), ' K/s (heat release)'
         call judge('model 5, F(7) = Qr/(m cp) + q_rel', 'RU2_model5', 7, F1(1:8), F0(1:8), ref, ok)
+
+        !> model 8: model 5's burning metal at rho 2950, c 1250 with a cap as heavy (rho 3950, c 1887.6, xi-cap 0.2)
+        call buildLobeTable()
+        p8%cp = 1250._R8;  p8%rho = 2950._R8
+        p8%Kburn = 4.28e-6_R8;  p8%nBurn = 1.8_R8;  p8%Xeff = 0.21_R8;  p8%betaPart = 0.3_R8
+        p8%Tign = 2350._R8;  p8%qComb = 31.0e6_R8
+        p8%xiCap = 0.2_R8;  p8%rhoRes = 3950._R8;  p8%cpRes = 1887.6_R8;  p8%cStretch = capStretch(0.2_R8, 1.8_R8)
+        Tg = 2000._R8;  Tp = 3000._R8
+        mAl = 2950._R8*PI/6._R8*(100.0e-6_R8)**3;  mOx = mAl
+        d = (sixOverPi*(mAl/2950._R8 + mOx/3950._R8))**oneThird
+        Z9 = [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, Tp, mAl, mOx]
+        call rhs_pair(8, 0, 0, 1, .false., p8, 9, Z9, 0, Tg, htab, F1, F0, stale)
+        call stale_flag(stale, 'model 8', ok);  if (stale) return
+        ref = qr_ref(EPS1, d, Tg, Tp)/(1250._R16*real(mAl, R16) + real(1887.6_R8, R16)*real(mOx, R16))
+        call judge('model 8, F(7) = Qr(d_eq)/(m_Al c_Al + m_ox c_res) + q_rel', 'RU2_model8', 7, F1, F0, ref, ok)
     end subroutine run_RU2
 
     !> a stale radiation index reaches past aux: the leg cannot run
