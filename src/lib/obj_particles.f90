@@ -581,18 +581,20 @@ contains
   !> Relocates the particle after a cell crossing: the connected cell of a connected block face,
   !  the cell search, then boundary handling (periodic transport, BC definitions) with a flip-flop
   !  cycle breaker.
-  subroutine updateCell(self,block,lookGas)
+  subroutine updateCell(self,block,lookGas,reflected)
     implicit none
     class(obj_particle), intent(inout) :: self
     class(obj_block),    intent(in)    :: block(nb)
     logical, optional,   intent(in)    :: lookGas
+    logical, optional,   intent(out)   :: reflected   !> a bcDef call of this relocation reflected the particle
     real(R8), dimension(3) :: psave, p, v, pold, vold, intersectionPoint
     real(R8)     :: vertices(3,8)
     integer      :: b, f, m, n, prevTry(4,2), ind(4), iold(4), loc(3)
-    logical      :: found, retry, noBC, gasGeo
+    logical      :: found, retry, noBC, gasGeo, refl
 
     gasGeo = .false.   !> no declaration initializer: it would imply SAVE
     if (present(lookGas)) gasGeo = lookGas
+    if (present(reflected)) reflected = .false.
 
     if (.not.gasGeo) then
       if (self%connectedExit(block) == 1) return
@@ -632,7 +634,8 @@ contains
         else
           call bcDef(blk%face(f)%cell(m,n),vertices,pold,vold,  &
                       intersectionPoint,f,p,v,self%time,iold,   &
-                      self%angle,self%Af,found,self%gone,retry)
+                      self%angle,self%Af,found,self%gone,retry,refl)
+          if (present(reflected)) reflected = reflected .or. refl
           if (self%gone) self%exitCode = blk%face(f)%cell(m,n)%bcdef
           !> a rim: an unresolved connection (100) or a chimera face no donor holds the particle in
           if (self%gone .and. (blk%face(f)%cell(m,n)%bcdef == 100 .or. blk%face(f)%cell(m,n)%bcdef == 102)) then

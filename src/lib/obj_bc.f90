@@ -121,7 +121,7 @@ contains
 
   !> Apply the exit cell's boundary condition to the particle state: reflection (300 and non-wedge
   !  200), wedge fold (200), connected interface (101/103: retry in the partner cell), or exit (gone).
-  subroutine bcDef(cell,vertices,pold,vold,intersect,f,p,v,time,iold,angle,Af,found,gone,retry)
+  subroutine bcDef(cell,vertices,pold,vold,intersect,f,p,v,time,iold,angle,Af,found,gone,retry,reflected)
     use IGLOO_variables, only: pi, toll, delthe, axisDir
     implicit none
     class(obj_bc_cell), intent(in)    :: cell
@@ -134,12 +134,14 @@ contains
     integer,            intent(out)   :: iold(4)
     real(R8),           intent(out)   :: angle, Af
     logical,            intent(out)   :: gone, retry
+    logical, optional,  intent(out)   :: reflected   !> the reflection branch was taken (grazing or specular)
     real(R8) :: nn(3), nn1(3), nn2(3), pstop(3), rot
     real(R8) :: azim
     integer      :: try
 
     gone  = .false.
     retry = .false.
+    if (present(reflected)) reflected = .false.
 
     !> classify a 200 face by its geometry: |azim| > wedgeAzimTol is a wedge face, else it reflects
     azim = 0._R8
@@ -147,6 +149,7 @@ contains
 
     !> Reflection: 300 and the non-wedge 200 faces (axis face included).
     if (cell%bcdef==300 .or. (cell%bcdef==200 .and. abs(azim) <= wedgeAzimTol)) then
+      if (present(reflected)) reflected = .true.
       nn = cell%normal
       try = 0
       do while ((norm2(nn)<toll) .and. (try<2))

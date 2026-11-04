@@ -23,7 +23,7 @@ contains
                                 trajOn, scatOn, dNscat, sixOverPi, pi,    &
                                 planeOn, planeX, unitPlane, failAfter
     use IGLOO_particles,  only: obj_particle, eps
-    use IGLOO_bcBox,      only: axisymFold, sectorDs
+    use IGLOO_bcBox,      only: axisymFold, sectorDs, grazeStandoff
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock
     use IGLOO_Lib_Properties
     use Lib_Equations
@@ -77,6 +77,9 @@ contains
     integer  :: neq, nsp, ng, b, i, j, k, ngVert, iu, iw, it, iter, nCross, nE, nStall
     integer  :: nRefl         ! gas order 1: segments of this cell that ended in a reflection
     real(R8) :: posPrev(3)    ! last outer-iter position, for the zero-progress guard
+    integer  :: nReflW        ! reflections since the progress checkpoint
+    real(R8) :: posReflW(3)   ! the progress checkpoint: the position nReflW reflections ago
+    logical  :: reflSeg, refl ! this segment reflected off a boundary face; one updateCell's flag
     logical  :: doLoop, IamOut, newGas, eventType, eventFlag, exitLoop, startedOut, burnedOut
     logical  :: sectorOut  !> wedge: the segment ended on a k-plane
     logical  :: foldOnly   !> sector fold with no cell crossing
@@ -218,6 +221,7 @@ contains
     iter = 0; nCross=0; tprint = part%time + dtprint
     nStall = 0; posPrev = part%stateVar(1:3) - 1._R8
     nRefl = 0
+    nReflW = 0; posReflW = part%stateVar(1:3)
     !> Scatter accumulator, seeded with a per-ID golden-ratio phase offset.
     wAcc = dNscat * mod(real(part%ID,R8)*0.6180339887498949_R8, 1._R8)
     do while (part%time<tEnd.and.iter<maxIter)
@@ -339,6 +343,7 @@ contains
         endif
       endif
 
+      reflSeg = .false.
       if (ord2) then
         !> Gas crossing: advance igas on the dual mesh (gas-primary tracking).
         if (newGas) then
@@ -368,12 +373,12 @@ contains
                   tol=geoHexTol)
             endif
           else
-            call part%updateCell(geoblock); call handleGeoEvent()
+            call part%updateCell(geoblock, reflected=refl); reflSeg = reflSeg .or. refl; call handleGeoEvent()
           endif
         endif
         !> Geo domain exit / BC handling.
         if (IamOut) then
-          call part%updateCell(geoblock); call handleGeoEvent()
+          call part%updateCell(geoblock, reflected=refl); reflSeg = reflSeg .or. refl; call handleGeoEvent()
         endif
         !> Residency count on the gas cell; a pure sector fold is neither a crossing nor residency.
         if (newGas .or. IamOut) then; nCross = nCross + 1; part%Ncell = 0
@@ -381,7 +386,7 @@ contains
       else
         !> ord1: geo-driven.
         if (IamOut) then
-          call part%updateCell(geoblock); b = part%i(1)
+          call part%updateCell(geoblock, reflected=refl); reflSeg = reflSeg .or. refl; b = part%i(1)
           call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen, &
               tol=geoHexTol)
         endif
@@ -410,6 +415,18 @@ contains
       if (part%Ncell-nRefl>nMaxCell) then
         write(*,'(A,I4,A,4I4,A)') '       ==> Particle ',part%ID,' stuck in cell:',part%iold
         part%gone=.true.
+      endif
+
+      !> A bounce that makes no progress: nMaxStall reflections within nMaxStall standoffs.
+      if (reflSeg .and. .not.part%gone) then
+        nReflW = nReflW + 1
+        if (nReflW == nMaxStall) then
+          if (norm2(part%stateVar(1:3) - posReflW) < nMaxStall*grazeStandoff) then
+            write(*,'(A,I4,A,4I4,A)') '       ==> Particle ',part%ID,' stuck in cell:',part%iold
+            part%gone = .true.
+          endif
+          nReflW = 0; posReflW = part%stateVar(1:3)
+        endif
       endif
 
       !> Zero-progress guard on displacement.
