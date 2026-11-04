@@ -67,6 +67,7 @@ contains
     character(len=SCATLEN) :: scatBuf(SCATCAP)
     integer  :: nScat, iScat
     integer  :: neq, nsp, ng, b, i, j, k, ngVert, iu, iw, it, iter, nCross, nE, nStall
+    integer  :: nRefl         ! gas order 1: segments of this cell that ended in a reflection
     real(R8) :: posPrev(3)    ! last outer-iter position, for the zero-progress guard
     logical  :: doLoop, IamOut, newGas, eventType, eventFlag, exitLoop, startedOut, burnedOut
     logical  :: sectorOut  !> wedge: the segment ended on a k-plane
@@ -140,6 +141,7 @@ contains
       if (part%gone) then
         write(*,'(A,I4,A)')                                                         &
                 '[WARNING] Particle ',part%ID,' has been initialized out of domain!'
+        call writeStartRecord()
         call flushScat()
         return
       endif
@@ -149,6 +151,7 @@ contains
         part%gone = .true.
         !$OMP ATOMIC
         nInjNoCell = nInjNoCell + 1
+        call writeStartRecord()
         call flushScat()
         return
       endif
@@ -191,11 +194,15 @@ contains
     !> TRAJECTORY INTEGRATION LOOP
     iter = 0; nCross=0; tprint = part%time + dtprint
     nStall = 0; posPrev = part%stateVar(1:3) - 1._R8
+    nRefl = 0
     !> Scatter accumulator, seeded with a per-ID golden-ratio phase offset.
     wAcc = dNscat * mod(real(part%ID,R8)*0.6180339887498949_R8, 1._R8)
     do while (part%time<tEnd.and.iter<maxIter)
       iter = iter+1
       call part%initializeCell(eulerSwitch)
+      !> Only the segment finalize sets these: a segment that never finalizes deposits nothing.
+      part%deltaL = 0._R8; part%Tstay = 0._R8
+      if (eulerSwitch) part%intE = 0._R8
       if (sourceSwitch) call part%computeSource(massIn,Pin,Ein)
       entryPos = part%stateVar(1:3)   ! cell-entry position (for the closed-form body-force work)
       i = part%i(2); j = part%i(3); k = part%i(4);
@@ -348,7 +355,8 @@ contains
           call gasblock(b)%gasProperties(gas,part%igas)
         endif
         if (all(part%i==part%iold)) then; if (.not.foldOnly) part%Ncell = part%Ncell+1
-        elseif (IamOut) then;   nCross = nCross + 1;   part%Ncell = 0; endif
+          if (IamOut .and. .not.part%gone) nRefl = nRefl + 1   ! a reflection is not residency
+        elseif (IamOut) then;   nCross = nCross + 1;   part%Ncell = 0; nRefl = 0; endif
       endif
 
       !> Wedge safety net: fold a segment that ended past a k-plane together with an x-y crossing.
@@ -364,7 +372,7 @@ contains
         endif
       endif
 
-      if (part%Ncell>nMaxCell) then
+      if (part%Ncell-nRefl>nMaxCell) then
         write(*,'(A,I4,A,4I4,A)') '       ==> Particle ',part%ID,' stuck in cell:',part%iold
         part%gone=.true.
       endif
@@ -382,6 +390,9 @@ contains
           .or.part%time>=tEnd) then
         if (trajOn) call writeTrajRow()
         tprint = tprint + dtprint
+      !> A parcel that left through a boundary face ends its trajectory at the exit, whatever the cadence.
+      elseif (trajOn .and. part%gone .and. part%exitCode /= 0) then
+        call writeTrajRow()
       endif
       !> time-end reached inside the domain: the parcel's state at the stop.
       if (snapOn .and. part%time>=tEnd .and. .not.part%gone) &
@@ -403,6 +414,8 @@ contains
       call writeExitRow()
       part%time = 0._R8
     endif
+    !> Time end reached inside the domain: the record of where integration stopped.
+    if (.not. part%gone .and. part%time >= tEnd) call writeExitRow()
     !> Every exit path flushes the scatter buffer.
     call flushScat()
 
@@ -420,11 +433,13 @@ contains
 
 
     !> One exit record, written before the time reset; out-time appends the parcel time.
-    subroutine writeExitRow()
+    subroutine writeExitRow(started)
+      logical, intent(in), optional :: started   !> .false.: the parcel was never integrated
       real(R8) :: mdotOut
       !> Model 4: the stream's mass flow at exit; the other models: the injected or birth flow.
       mdotOut = part%mdot
       if (part%model == 4) mdotOut = part%npdot*part%m
+      if (present(started)) then; if (.not.started) mdotOut = part%mdot; endif
       if (timeOn) then
         write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,ES16.8E2,I5,E13.6E2)') part%stateVar(1:3), part%tp, &
               norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%time, part%exitCode, part%d
@@ -433,6 +448,17 @@ contains
               norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%exitCode, part%d
       endif
     end subroutine writeExitRow
+
+
+    !> The record of a parcel never integrated: its injection point, at rest, at t = 0, code 0.
+    subroutine writeStartRecord()
+      part%stateVar(1:3) = part%pInj
+      part%stateVar(4:6) = 0._R8
+      part%angle = 0._R8; part%Af = 0._R8; part%exitCode = 0
+      !> A boundary-face stream derives its temperature and flow at injection, which did not take place.
+      if (.not. all(part%iInj == [0,0,0,0])) then; part%tp = 0._R8; part%mdot = 0._R8; endif
+      call writeExitRow(started=.false.)
+    end subroutine writeStartRecord
 
 
     !> Emit the buffered scatter records in one write statement.
@@ -515,8 +541,9 @@ contains
         doLoop        = .false.
         !> Consumption models hand the remnant to the gas as on a clean burnout.
         if (mod_model==2 .or. mod_model==4 .or. mod_model==5) consumed = .true.
-        !> Sync d/m/tp from the reverted state.
+        !> Sync d/m/tp from the reverted state; the residence ends at the last good step.
         call part%updatePart(rhoTab,hTab,eulerSwitch)
+        part%Tstay = timeLocal - tStart
         return
       endif
       part%stateVar = y
@@ -710,6 +737,7 @@ contains
       real(R8) :: Vdif(3), vel, Re, Fdrag(3), Qdot, tp, acc(3), d, rho, sigma, mup, m, np
       real(R8) :: brkupState(max(nbrkst,1))
       real(R8) :: gOld, gEnd
+      real(R8) :: vEvt(3)   !> the velocity breakupEvent works on (Y stays the solver's)
       real(R8), parameter :: oneThird=0.3333333333333333_R8, sixOverPi=1.90985931710274403_R8
 
       IRTRN = 1
@@ -792,13 +820,13 @@ contains
         endif
         if (ind_sb1 > 0) brkupState(1:nbrkst) = stateLocal(ind_sb1:ind_sb2)
         !> Breakup event over the accepted-step interval (x-xold).
-        kickDV = Y(4:6)
+        vEvt = Y(4:6)
         call breakupEvent(eventLocal, neventvar, brkupState, nbrkst,    &
-                          sigma,mup,rho,gasState(1),vel,Re,t1,acc,y(4:6),x-xold, &
+                          sigma,mup,rho,gasState(1),vel,Re,t1,acc,vEvt,x-xold, &
                           mod_brkSelect, mod_bp,mod_bpMethod,mod_bpScale,        &
                           eventFlag,childState,addChildLocal,exitLoop,part%rngState,childDone)
-        !> Keep the ETAB kick as a delta; the abort below discards Y.
-        kickDV = Y(4:6) - kickDV
+        !> The ETAB kick as a delta, applied once by the segment finalize.
+        kickDV = vEvt - Y(4:6)
         kickPend = (mod_brkSelect == 5) .and. (maxval(abs(kickDV)) > 0._R8)
         if (ind_sb1 > 0) stateLocal(ind_sb1:ind_sb2) = brkupState(1:nbrkst)
       endif

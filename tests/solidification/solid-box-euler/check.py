@@ -63,7 +63,7 @@ def main():
             worst_vw = max(worst_vw, abs(v_p[c]), abs(w_p[c]))
             a, b = at.get(round(i * sb.DX, 6)), at.get(round((i + 1) * sb.DX, 6))
             if a is None or b is None:
-                continue                                   # outlet cell: its exit row is in outloc
+                continue                                   # a cell without both bounding rows
             n_band += 1
             lo, hi = min(a[6], b[6]), max(a[6], b[6])
             worst_T = max(worst_T, lo - T_p[c], T_p[c] - hi, 0.0)

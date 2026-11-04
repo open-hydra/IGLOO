@@ -10,7 +10,7 @@ integrated as extra ODE states for the models whose mass changes (2, 4 and 5; mo
 centres, κ_v = 1, T₀ = 300 K, ρ_p = 8000 and a 100× c_p (125000 J/(kg K)) that freezes B_T, d2-law evaporation
 (L_v = 2·10⁵). `input.ini` is d2law-line's with `body-accel = 0 −200 0`, `out-file = ALL`, `out-time = on` and
 `time-end = 6.875e-3`: every parcel stops mid-cell 28, before the first one reaches the wall (7.5 ms), so its last row
-is its final state and no exit record is written. `check.py` also runs the case with `out-file = S` in `ref-S/`, the
+is its final state and its exit record, code 0, is that state. `check.py` also runs the case with `out-file = S` in `ref-S/`, the
 other slot layout.
 
 **Oracle** (`check.py` → [`../../tools/body_source_check.py`](../../tools/body_source_check.py)). Momentum and energy
@@ -26,7 +26,8 @@ alone is about 10⁻⁶ of it, so B2 values the mass the parcels lost by the mas
 
 **Gates** (each on both runs).
 - W the witnesses: the body acceleration and the output fields in the log, the ODE size of the layout (15 with the
-  Eulerian output, 10 without), no exit record, the injection state on every first row, every last row at t = time-end
+  Eulerian output, 10 without), one exit record per parcel, code 0 at its snapshot row's position and time, the
+  injection state on every first row, every last row at t = time-end
   and in the snapshot; the parcels' final T within 5e-5 K of their mean and m within 1e-5 (B2's premise; measured 0).
 - B0 Σẇ = Σ_p ṅ(m₀ − m_last) and ΣF_x = u_g Σ_p ṅ(m₀ − m_last) within the print of m; ΣF_z = 0.
 - B1 within 1e-5 of the gross plus three Richardson estimates.

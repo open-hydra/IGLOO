@@ -197,9 +197,7 @@ def check_mass_telescoping(parts):
         m_first, m_last = rows[0][8], rows[-1][8]
         if m_first > 0.0 and pid in mdot_inj:
             lost = m_first - m_last
-            # Trajectory rows end at the last crossing BEFORE the outlet, so the final
-            # slab's evaporation deposits in wdot but is invisible here (~2% in this
-            # late-evap regime): extrapolate the last printed dm/dx to the outlet.
+            # a trajectory that ends short of the outlet: extrapolate its last dm/dx to it
             if len(rows) >= 2 and rows[-1][0] > rows[-2][0]:
                 slope = (rows[-2][8] - rows[-1][8]) / (rows[-1][0] - rows[-2][0])
                 lost += slope * max(0.0, Lx - rows[-1][0])

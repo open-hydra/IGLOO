@@ -40,6 +40,7 @@ TRAJ   = "OUTPUT/trajectories-A.dat"
 OUTLOC = "OUTPUT/outloc-A.dat"
 SRC    = "OUTPUT/source.tec"
 TELESCOPE_TOL = 0.01
+X_OUT = 0.15                         # the outlet plane
 
 # ---- known test inputs (SI). NOT read from production output. ----------------
 RU     = 8314.46    # universal gas constant  [J/kmol/K]
@@ -203,14 +204,9 @@ def check_mass_telescoping(parts):
     nnod, ncel = I * J * K, (I - 1) * (J - 1) * (K - 1)
     vals = " ".join(lines[lines.index(zone) + 1:]).split()
     wdot = [float(v) for v in vals[3 * nnod:3 * nnod + ncel]]
-    # Domain-match the eulerian sum to the lagrangian extent: the last trajectory row
-    # sits at the final INTERIOR crossing (x=0.1475), so drop the exit x-layer of cells
-    # (i=I-2, spanning [0.1475,0.15]) whose deposit no traj row covers. In this aggressive
-    # regime that layer is ~2.9% of the source (flat wet-bulb rate); leaving it in mismatches
-    # the [0,0.15] source against the [0,0.1475] loss. Assumes straight-through axial exit
-    # (all 24 drops exit at x=0.1475); a side-face variant at varying x would break this.
-    # (d2law/lk-neq keep the un-matched sum: their gentle regime makes the final cell ~2e-4.)
-    src_total = sum(w for idx, w in enumerate(wdot) if idx % (I - 1) != I - 2)
+    # the exit x-layer (i = I-2) counts only when every trajectory reaches the outlet
+    at_exit = all(rows[-1][0] >= X_OUT - 0.5e-6 for rows in parts.values())
+    src_total = sum(w for idx, w in enumerate(wdot) if at_exit or idx % (I - 1) != I - 2)
 
     mdot_inj = {}
     for line in open(OUTLOC).read().splitlines()[2:]:

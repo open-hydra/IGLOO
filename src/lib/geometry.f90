@@ -223,7 +223,8 @@ contains
 
     end function isConcave
 
-    !> Index of the cell face closest to p.
+    !> Index of the cell face p lies beyond: the nearest face the containment test rejects p through (both triangle
+    !  distances above hexTol), else the face of the smallest non-negative triangle distance.
     function closestFace(p,vertices) result(face)
         implicit none
         real(R8), intent(in) :: vertices(3,8)
@@ -231,10 +232,13 @@ contains
         integer              :: face
         real(R8) :: v(3,3), facePlane(3,2), vert(3,4)
         real(R8), parameter :: toll=1e-20
-        integer  :: f, t, vertstart
+        integer  :: f, t, vertstart, faceOut
         logical  :: isDegenerate
-        real(R8) :: minDist, oldminDist, distance(2)
+        real(R8) :: minDist, oldminDist, distance(2), raw(2), eps, minOut
 
+        eps = hexTol(vertices)
+        minOut = 1.e3_R8
+        faceOut = 0
         oldminDist = 1.e3_R8
         do f = 1, 6
             vert(:,1) = vertices(:,guide(f,1))
@@ -258,14 +262,20 @@ contains
                 else
                     distance(t) = dot_product(facePlane(:,1), p - facePlane(:,2))
                 endif
+                raw(t) = distance(t)
                 if (distance(t) < 0._R8) distance(t) = 1.e3_R8
             enddo
+            if (all(raw > eps) .and. minval(raw) < minOut) then
+                faceOut = f
+                minOut = minval(raw)
+            endif
             minDist = minval(distance)
             if (minDist<oldminDist) then
                 face = f
                 oldminDist = minDist
             endif
         enddo
+        if (faceOut > 0) face = faceOut
 
     end function closestFace
 

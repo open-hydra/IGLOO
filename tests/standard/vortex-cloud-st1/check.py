@@ -13,7 +13,8 @@ Gates
   G0' premise: every one of the 1672 IDs has rows; its first row is its seed state
       (x0, y0, h/2, -Omega y0, Omega x0, 0, 300 K) at t = 0 to the F12.6 half-ULP; the
       input's seed lists are the generator's; snapshot-A.dat holds all 1672 parcels at
-      t = QUARTER (1e-8); no exit record; the log reports the planar single-layer path
+      t = QUARTER (1e-8); one exit record per parcel, code 0 (none left through a face), at
+      its snapshot row's position and time; the log reports the planar single-layer path
       and no lost, stuck or stalled parcel
   G1  oracle self-check: C(0) = 1, C'(0) = i Omega; Im(C'/C) > 0 and d|C|/dt > 0 on
       1e-3 <= t <= QUARTER; the closed form against an independent RK4 integration of
@@ -76,6 +77,20 @@ def read_rows(path, ncol):
         except ValueError:
             continue
     return rows
+
+
+def read_exits(path):
+    """Exit records with the time column: (X, Y, Z, ID, t, bc) per row."""
+    out = []
+    for ln in open(path):
+        t = ln.split()
+        if len(t) != 12:
+            continue
+        try:
+            out.append((float(t[0]), float(t[1]), float(t[2]), int(t[8]), float(t[9]), int(t[10])))
+        except ValueError:
+            continue
+    return out
 
 
 def rk4_quarter(tau, n=20000):
@@ -173,11 +188,20 @@ def main():
     if tdev > TOL_T:
         ok0 = False; rc |= fail("G0' snapshot times depart from QUARTER by up to %.2e s" % tdev)
     try:
-        nexit = sum(1 for ln in open("OUTPUT/outloc-A.dat") if len(ln.split()) >= 9 and ln.split()[0][0] in "-0123456789")
+        exits = read_exits("OUTPUT/outloc-A.dat")
     except FileNotFoundError:
-        nexit = -1
-    if nexit != 0:
-        ok0 = False; rc |= fail("G0' %d exit record(s) in outloc-A.dat: every parcel must still be inside at QUARTER" % nexit)
+        exits = None
+    if exits is None:
+        ok0 = False; rc |= fail("G0' no outloc-A.dat")
+    else:
+        snap_by_id = {r[9]: r for r in snap}
+        left = [e[3] for e in exits if e[5] != 0]
+        off = [e[3] for e in exits if e[3] not in snap_by_id
+               or list(e[:3]) != snap_by_id[e[3]][:3] or e[4] != snap_by_id[e[3]][10]]
+        if left or sorted(e[3] for e in exits) != list(range(1, n + 1)) or off:
+            ok0 = False; rc |= fail("G0' exit records: %d of %d IDs, %d with a boundary code (every parcel must still be "
+                                    "inside at QUARTER), %d not the parcel's snapshot position and time"
+                                    % (len(set(e[3] for e in exits)), n, len(left), len(off)))
     try:
         log = open("run_out.txt", errors="replace").read()
     except FileNotFoundError:
@@ -189,7 +213,7 @@ def main():
         ok0 = False; rc |= fail("G0' the log reports %s" % bad)
     if ok0:
         print("G0' %d parcels from their seed states (worst %.1e), %d trajectory rows, %d snapshot rows at "
-              "QUARTER (worst %.1e s), no exit, planar single-layer path PASS"
+              "QUARTER (worst %.1e s), each exit record code 0 at its snapshot state, planar single-layer path PASS"
               % (n, worst0, len(rows), len(snap), tdev))
 
     # G2' --------------------------------------------------------------------------------

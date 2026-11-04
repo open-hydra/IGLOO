@@ -26,7 +26,7 @@ This case emits **241 KH-shed child parcels** in a single pass from 25 parents (
 sheds 22 times; `run_out.txt` prints `number of children = 241` plus a `max N sheds from one
 parcel` tripwire), so `outloc-A.dat` carries 266 exit records. The children integrate: they are
 born inside the domain at the shed point, fly, and RT-shatter in their own right (`check_rt.py`
-counts 134 shatters, up from 8 when only parents flew).
+counts 137 shatters, up from 8 when only parents flew).
 
 Three defects were closed to get here, all previously invisible to a green suite:
 
@@ -61,7 +61,7 @@ Three gates cover the KH-shed path, none of which the older ones could see:
 
 - **`check.py::check_children_integrate`** (A23h). A *population* test: ≥90 % of the shed
   children must leave ≥4 trajectory records and cover ≥1e-3 in x between birth and exit.
-  Observed 98.3 %; the broken state scores 0 %. It is a population test on purpose — a parent
+  Observed 98.8 %; the broken state scores 0 %. It is a population test on purpose — a parent
   may legitimately shed in its final segment, giving a child that exits before the periodic
   trajectory print fires (measured: 1 such child in 241). Requiring 100 % would be flaky.
   Deliberately **pairing-free**: `kid%ID` follows the drain order over shed lists, not the

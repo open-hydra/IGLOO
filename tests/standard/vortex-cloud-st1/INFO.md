@@ -27,7 +27,7 @@ turn of the gas, `t = QUARTER = π/2`:
 
 | id | assertion |
 |---|---|
-| G0' | the input's seed lists are the generator's; all 1672 IDs start from their seed state at t = 0 (F12.6 half-ULP); `snapshot-A.dat` holds every parcel at t = QUARTER (1e-8 s); no exit record; the log reports the planar single-layer path and no lost, stuck or stalled parcel |
+| G0' | the input's seed lists are the generator's; all 1672 IDs start from their seed state at t = 0 (F12.6 half-ULP); `snapshot-A.dat` holds every parcel at t = QUARTER (1e-8 s); one exit record per parcel, code 0 (none left through a face), at its snapshot row's position and time; the log reports the planar single-layer path and no lost, stuck or stalled parcel |
 | G1 | `C(0) = 1`, `C'(0) = i Ω`; `Im(C'/C) > 0` and `d|C|/dt > 0` on [1e-3, QUARTER]; the closed form against RK4 of `τ z'' + z' = i Ω z` at QUARTER to 1e-12 |
 | G2' | at every time-stamped row and snapshot record, `|z − C(t) z0| ≤ 3e-6` m and `|v − C'(t) z0| ≤ 3e-6` m/s |
 

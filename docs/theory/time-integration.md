@@ -136,7 +136,8 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
 
 !!! note "Stuck-particle detection"
     A particle that stays in the same cell for more than `nMaxCell = 10` outer
-    iterations without a crossing, or makes no net displacement for `nMaxStall = 100`
+    iterations without a crossing (a segment that ends in a reflection at a boundary face
+    is not counted), or makes no net displacement for `nMaxStall = 100`
     iterations, is flagged `gone` with a diagnostic message; a particle that reaches
     `maxIter` is flagged `gone` with its exit record written.
 

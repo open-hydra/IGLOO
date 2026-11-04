@@ -27,7 +27,7 @@ so every parcel crosses the box at its injection state. `check.py` builds `(v0, 
 
 **Exact, not to round-off:** `0 × finite = 0`, so the velocity and temperature rates are
 `0.0` and no integrator stage can move those states — they stay bit-identical to injection.
-Measured (2026-09-24): 25 parcels, 1500 rows, max `|v − v0|` = max `|T − T_p0|` = 0 at the
+Measured: 25 parcels, 1525 rows, max `|v − v0|` = max `|T − T_p0|` = 0 at the
 print, 1500/1500 cells exactly `0.0` in all five source fields.
 
 ## Discrimination

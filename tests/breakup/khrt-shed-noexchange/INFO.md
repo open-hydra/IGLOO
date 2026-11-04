@@ -9,7 +9,7 @@ outgoing flow plus the child's birth flow equals the parent's incoming flow.
 `khrt-e2e`'s case (`INPUT/` symlinked) with `drag = NoDrag`, `heat = NoHeat` and `mollify = off`. Every drop
 keeps its injection velocity (100 m/s, slip 100 m/s) and temperature (300 K); the acceleration is zero, so
 `λ_RT` is unbounded and no RT event fires; KH stripping and shedding run the whole length of the box. Measured:
-553 children in one pass, no shed-cap warning, 17536 trajectory rows.
+553 children in one pass, no shed-cap warning, 18114 trajectory rows.
 
 ## What it verifies
 With no exchange a segment deposits `in − out = 0`, and the only event is the shed. `check.py` requires

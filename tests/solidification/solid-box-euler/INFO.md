@@ -13,7 +13,7 @@ Per cell of every parcel's column (each parcel rides its own `(j,k)` column; con
 | N | coverage: all 60 cells of every column have `n_p > 0` | exact | 1500 of 1500 |
 | M | `ρ_p / n_p = m`, the constant droplet mass | 1e-12 | 4.0e-15 |
 | U | `u_p = u_g`; `v_p`, `w_p` ≈ 0 | 1e-11; 1e-15 m/s | 3.0e-15; 2.4e-20 m/s |
-| T | `T_p` inside `[T_in, T_out]` of the cell's two bounding rows (1475 cells); `T_p = T_m` on the 200 plateau cells | 1e-6 K; 1e-9 | 1e-11 K; 4.3e-15 |
+| T | `T_p` inside `[T_in, T_out]` of the cell's two bounding rows (1500 cells); `T_p = T_m` on the 200 plateau cells | 1e-6 K; 1e-9 | 1e-11 K; 4.3e-15 |
 
 `ρ_p / n_p` is formed from `ṁ`, `ṅ_p` and the residence time, never from the tail, so it cannot see a tail
 defect; coverage, `u_p` and `T_p` can.

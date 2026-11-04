@@ -5,12 +5,12 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
-#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
+#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
 #   repeatability/      two-sweep gates (twosweep driver): 13 cases
 #   mpi/                registered only under USE_MPI: 7 rank-count cases + 3 consistency + 1 determinism
 #                       + 13 two-sweep cases
@@ -172,6 +172,10 @@ igloo_unit_test(test_axis_dispatch      infrastructure/axis_dispatch      "unit;
 # radially thin -- so grazeOffset caps it at a fraction of the cell. Pins the invariant across
 # 12 decades of cell thickness.
 igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;infrastructure;bc;t1")
+# closestFace, the boundary search's fallback when both rays miss: the nearest face the containment test rejects the
+# point through, at a warped wall and in the tolerance band (BF1, BF2; RED when a face qualifies by one non-negative
+# triangle distance: the side face), controls and the fallback (BF3, BF4), 2e4 points on each of six cells (BF5).
+igloo_unit_test(test_geometry_rules     infrastructure/geometry_rules     "unit;infrastructure;geometry;t1")
 # O29: the ord2 gas ghost ring was filled by blind linear extrapolation on every face, so the
 # sampled normal velocity at a gas-solid plane was (3v1 - v2)/2 instead of 0 and a parcel in the
 # boundary dual row was dragged through it. The bc-aware fill existed but ran once at setup and
@@ -452,6 +456,10 @@ igloo_e2e_case(scatter-weight standard/scatter-weight "e2e;standard;scatter")
 igloo_e2e_case(out-dcell3 standard/out-dcell3 "e2e;standard;io")
 igloo_e2e_case(out-dtime  standard/out-dtime  "e2e;standard;io")
 igloo_e2e_case(out-off    standard/out-off    "e2e;standard;io")
+# out-exit-row: drag-stokes's case at gas order 1, print-dcell 1, and five siblings run by check.py (gas order 2;
+# print-dcell 3; print-dtime, at both orders): every exited parcel's last trajectory row is its exit record's
+# position and time, written once. RED with the exit row left to the cadence: 4 of the 6 runs.
+igloo_e2e_case(out-exit-row standard/out-exit-row "e2e;standard;io")
 # psd-*: the injected diameters follow bc.txt column 8 -- a size-distribution file (psd-table) or a
 # parametric law -- on a 200 x 100 inlet in the cell-centre mode (one parcel per cell, 20 000 parcels of
 # equal mass flow). Kolmogorov-Smirnov and Anderson-Darling at alpha = 1e-3 on each parcel's first
@@ -644,6 +652,11 @@ set_tests_properties(vv-order PROPERTIES
 # B-VAL-5 (2026-07-22): ETAB vs Tanner 97/98 — shared TAB oscillator (onset + t_bu) plus
 # the deterministic exponential-cascade product size across the bag/stripping branches.
 igloo_e2e_case(etab-e2e breakup/etab-e2e "e2e;breakup;val;etab")
+# etab-e2e-dopri5: etab-e2e under the explicit solver (H-dopri5, INPUT symlinked): etab-e2e's oracles, and against
+# the same input under H-sdirk4 (run by check.py into ref-sdirk4/) the same kicked drops with the same largest
+# lateral speed within 1e-4: the product kick reaches the parcel once. RED with the kick also written into the
+# solver's state: ratio 1.9992-2.0010 on all 15 kicked drops.
+igloo_e2e_case(etab-e2e-dopri5 breakup/etab-e2e-dopri5 "e2e;breakup;etab")
 # B-VAL-4 (2026-07-23): Reitz-Diwakar vs [RD87] (SAE 870598) — the bag + stripping breakup
 # rate across the We_r=0.5*sqrt(Re) handoff. Model 3 (ODE-path, no event). The RD model is
 # source-faithful to [RD87] (Cs=20 curve-fit, Cb=pi verified) — no production change. GREEN.
@@ -1049,9 +1062,30 @@ igloo_e2e_case(solver-fail-consumed infrastructure/solver-fail-consumed "e2e;inf
 # solver-fail-consumed-m4: the same failure exit under model 4 (breakup on, rate zero): the remnant must
 # reach the gas as for model 2. RED while model 4 is not a consumption model on that exit.
 igloo_e2e_case(solver-fail-consumed-m4 infrastructure/solver-fail-consumed-m4 "e2e;infrastructure;m4")
+# solver-fail-midway: the ODE solver gives up mid-trajectory (max-steps-ode = 60 at a gas velocity jump, model 1,
+# Eulerian output on): the failed segment deposits nothing, so the field's mass equals the exit records' sum of
+# mdot*t within 1e-5. RED with the previous segment's moments left in place: +3.333e-2.
+igloo_e2e_case(solver-fail-midway infrastructure/solver-fail-midway "e2e;infrastructure;euler")
 # stuck-cell: parcels at rest in a gas at rest (402 inlet, |v| = 0): the residency guard ends each one once, at its
 # injection point, before the zero-progress guard or the outer cap.
 igloo_e2e_case(stuck-cell infrastructure/stuck-cell "e2e;infrastructure;guard")
+# sym-plane-skate: twelve streams launched toward a symmetry plane (300), 0.1 and 50 m/s at 1 and 10 degrees: no
+# give-up guard or solver failure, every parcel at the outlet; the grazing fast streams slide on the plane, the
+# steep ones reflect. RED: the plane made an exit (6 of 12 leave at z = 0); the residency guard at one segment
+# (12 'stuck in cell' at gas order 1). The -ord2 twin runs the same streams at gas order 2.
+igloo_e2e_case(sym-plane-skate infrastructure/sym-plane-skate "e2e;infrastructure;bc;guard")
+igloo_e2e_case(sym-plane-skate-ord2 infrastructure/sym-plane-skate-ord2 "e2e;infrastructure;bc;guard;gas")
+# sym-plane-bounce: six slow streams pressed onto a symmetry plane by gravity in a 0.1 m/s gas bounce up to 49 times
+# in one cell: at gas order 1 a reflection is not residency, so no 'stuck in cell' and every exit at the outlet.
+# RED with reflections counted: 6 'stuck in cell' in cell 3. The -ord2 twin (a reflection restarts the count there)
+# is the control and witnesses more than 11 rows of one parcel in one cell.
+igloo_e2e_case(sym-plane-bounce infrastructure/sym-plane-bounce "e2e;infrastructure;bc;guard")
+igloo_e2e_case(sym-plane-bounce-ord2 infrastructure/sym-plane-bounce-ord2 "e2e;infrastructure;bc;guard;gas")
+# exit-census: seven assigned streams in drag-stokes's box, each stopped one way: three leave through the outlet,
+# three are inside at time-end, one starts outside the box (no cell holds it) and is not integrated. Every parcel
+# leaves one exit record, code 0 where the integration stopped inside. RED with no record for the time-end and
+# never-integrated stops: records for IDs 1-3 only.
+igloo_e2e_case(exit-census infrastructure/exit-census "e2e;infrastructure;io")
 
 # ---------- mpi (registered only in a USE_MPI build) ----------------------------
 # See mpi/INFO.md. Each dir symlinks its parent case's INPUT/, input.ini and check.py, so the fixture

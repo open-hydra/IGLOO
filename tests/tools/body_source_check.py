@@ -23,8 +23,9 @@ sum wdot to the rows.
 
 Gates, on the run in the case directory (out-file = ALL) and on a sibling ref-S/ with out-file = S (the two slot
 layouts of the accumulators):
-  W   witnesses: the body acceleration, the output fields, the ODE size of the layout; no exit record; 25 parcels,
-      each first row the injection state and each last row at t = time-end exactly, the snapshot holding them; the
+  W   witnesses: the body acceleration, the output fields, the ODE size of the layout; 25 parcels, each with one exit
+      record, code 0 (none left through a face) at its snapshot row's position and time; each first row the injection
+      state and each last row at t = time-end exactly, the snapshot holding them; the
       parcels' final T within SPREAD_T of their mean and m within SPREAD_REL (B2's premise only)
   B0  sum wdot = sum_p ndot (m_0 - m_last) and sum Fx = sum_p ndot u_g (m_0 - m_last) (no body term), within the
       print of m; sum Fz = 0
@@ -143,9 +144,11 @@ def check_run(d, cfg, layout, g):
         parts.setdefault(r["ID"], []).append(r)
     for p in parts.values():
         p.sort(key=lambda r: r["t"])
-    g.check("W", not exits and len(parts) == N_PARCELS and len(snap) == N_PARCELS,
-            "%d exit records (none: time-end comes first), %d parcels, %d snapshot rows" % (
-                len(exits), len(parts), len(snap)))
+    ex_ok = sorted(r["ID"] for r in exits) == sorted(snap) and all(
+        r["bc"] == 0 and all(r[k] == snap[r["ID"]][k] for k in ("X", "Y", "Z", "t")) for r in exits)
+    g.check("W", ex_ok and len(exits) == N_PARCELS and len(parts) == N_PARCELS and len(snap) == N_PARCELS,
+            "%d exit records, each code 0 at its snapshot row's position and time (time-end comes first), %d parcels, "
+            "%d snapshot rows" % (len(exits), len(parts), len(snap)))
     keys = ("X", "U", "V", "W", "T", "d<sub>p", "m<sub>p", "t")
     bad_first = [pid for pid, p in parts.items()
                  if p[0]["t"] != 0.0 or abs(p[0]["T"] - cfg["T0"]) > HALF_F or abs(p[0]["U"] - U_G) > HALF_F

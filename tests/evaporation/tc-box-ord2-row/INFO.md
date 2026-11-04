@@ -81,8 +81,7 @@ Under ord2 the **exit row is printed** (an `IamOut` crossing zeroes `Ncell` befo
 test, and the position is snapped to the face intersection), so `x_last = L` exactly and the
 closure term vanishes — measured gap `0.000e+00`. It is kept as a guard in case the last row
 ever lands at the final dual face instead; there its error is second order on the plateau
-(< 1e-5). This differs from ord1, where the last row sits at the final *interior* crossing —
-which is why tc-box's own oracle drops the exit layer and this one must not.
+(< 1e-5). Under ord1 the exit row is printed too, so tc-box's own oracle also sums every cell.
 
 ## Red–green evidence (2026-09-22, release build, sprop2)
 

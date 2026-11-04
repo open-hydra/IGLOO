@@ -15,7 +15,7 @@ half of the model-4 droplet-mass equation — a number rate multiplied into `dm/
 |---|---|
 | unfixed (`F(8) = n·ṁ_evap`, n = 1.48e7 1/s) | every parcel lost at injection (25 `Run_ODESolver err=` lines); `dead(1-row)=25`, 0 verifiable evaporators (need 20), telescoping "trajectory-based evaporated flow is zero" — predicted: collapse at ~1e-9 s |
 | breakup share dropped from `F(8)` | PASS (the share is zero here: this case cannot see it; `rd-evap-frozen` does) |
-| fixed | PASS: 25 verified, worst resid/tol 0.355 — the `d2law` case's numbers to the printed digit; telescoping resid 5.0e-8 (the injected flow minus the exit flows) |
+| fixed | PASS: 25 verified, worst resid/tol 0.338 — the `d2law` case's numbers to the printed digit; telescoping resid 5.0e-8 (the injected flow minus the exit flows) |
 
 ## Pass criterion
 `d2law/check.py` (see [../d2law/INFO.md](../d2law/INFO.md)). Model 4 integrates nine equations where model 2

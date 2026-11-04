@@ -47,7 +47,7 @@ TOL_MASS = 1.0e-4         # relative, the two-row trapezoid against the time mea
 TOL_U    = 1.0e-11        # relative
 TOL_VW   = 1.0e-18        # m/s
 TOL_T    = 0.05           # K of slack on the [T_in, T_out] band
-MIN_CELLS = 1000          # non-vacuity: 25 columns x 59 cells (i = 60 has no exit row)
+MIN_CELLS = 1000          # non-vacuity: 25 columns x 60 cells
 
 
 def read_euler(path, nvar=6):
@@ -63,7 +63,7 @@ def read_euler(path, nvar=6):
 
 def load_columns():
     """Trajectory rows grouped into the (j,k) column each parcel rides; print-dcell = 1 writes one
-    row per cell entry (x = 0 .. 0.1475), the exit at x = 0.15 goes to outloc-A.dat."""
+    row per cell entry (x = 0 .. 0.1475) and the exit row at x = 0.15."""
     parts = {}
     for line in open(TRAJ):
         try:
@@ -106,7 +106,7 @@ def main():
                     continue
                 a, b = rows.get(round((i - 1) * DX, 6)), rows.get(round(i * DX, 6))
                 if a is None or b is None:
-                    continue                            # outlet layer: no m_out row
+                    continue                            # a cell without both bounding rows
                 n += 1
                 mbar = 0.5 * (a[8] + b[8])
                 mloss = max(mloss, 1.0 - b[8] / M0)

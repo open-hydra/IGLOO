@@ -34,7 +34,7 @@ parcel's first row (`x = u_g t`) and compares:
 The inversion itself, to rounding, is pinned by `test_properties_reader` (PR14).
 
 ## Pass criterion
-All four. Measured: V1 worst residual 8.1e-7 K (0.013 of its tolerance), V2 worst 0.014 of its tolerance,
+All four. Measured: V1 worst residual 1.4e-6 K (0.014 of its tolerance), V2 worst 0.014 of its tolerance,
 V3 6.4e-9 of the gross (4.868e3 W), 25/25 parcels verified.
 
 ## Falsification

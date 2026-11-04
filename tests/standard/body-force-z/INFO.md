@@ -16,7 +16,7 @@ row (z_c = 5 mm) leaves through z = 0.
 v_z(t) = v_∞(1 − e^{−t/τ}), z(t) = z₀ + v_∞ t − v_∞ τ(1 − e^{−t/τ}). The temperature is a classical RK4 of
 dT/dt = K(t)(T_c(k(t)) − T), K = 6 Nu k_g/(ρ_p c_p d²), Nu = 2 + 0.6 Re^½ Pr^⅓, Re = ρ_g |v_z| d/μ, with k(t)
 the layer of z(t), switched at the k-face planes (bisection on the closed form to 1e-14 s); checked at half the
-step (6.5e-12 K).
+step (6.9e-12 K).
 
 **Gates.**
 - B0 each first row is the injection state (x = 0, the inlet cell centre, (u_g, 0, 0), T = T_c(k₀), t = 0).
