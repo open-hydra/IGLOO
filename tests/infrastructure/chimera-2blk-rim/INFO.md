@@ -18,9 +18,12 @@ material A, one centred parcel per inlet cell each; `input.ini` is `chimera-2blk
 |---|---|---|
 | K3 | target | the run log's block-change line: `block changes: 40 via the connected cell, 0 via the block sweep, 10 rim exits; stencil refreshed on a block change at a boundary entry: 0` |
 | R1 | target | 10 exit records at x = 0.085, y in the uncovered row (0.04–0.05) and `Af` the facelet area dy·dz = 1e-4 m²; the other 40 at x = 0.15 |
+| R1b | target | each exit record's boundary code is the code `INPUT/bc.txt` gives the facelet it left through (block 1 face 2 for the 10 rim exits: 100; block 2 face 2 for the 40 outlet exits: 400), and its diameter, as printed, is that of the same parcel's first trajectory row (drag only: the diameter never changes) |
 | E1 | control | the routing line `chimera facelets: 40 (0 with an empty donor layer, 5 unresolved (code 100), 0 header-only 104)` |
 | C2 | control | no `stuck in cell`, `no net progress` or `outer maxIter` line in `run_out.txt` |
 
 **RED.** On the cell search without the connected-cell step and the rim count the run log carries no
 block-change line (the rim parcels still leave at x = 0.085, through the exit branch, uncounted); with the
-step skipped it reads `0 via the connected cell, 40 via the block sweep, 10 rim exits`.
+step skipped it reads `0 via the connected cell, 40 via the block sweep, 10 rim exits`. R1b is RED on a writer
+without the `bc` and `d_p` columns (no exit row of the new width) and with the code never set (every `bc` 0: 50
+records off).

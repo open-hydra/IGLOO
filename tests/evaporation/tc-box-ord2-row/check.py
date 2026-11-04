@@ -71,7 +71,7 @@ def main():
     mdot_inj = {}
     for line in open(OUTLOC).read().splitlines()[2:]:
         c = line.split()
-        if len(c) == 9:
+        if len(c) == 11:
             mdot_inj[int(c[8])] = float(c[6])
 
     src_total, (nx, ny, nz) = read_source_total(SRC)
@@ -96,7 +96,7 @@ def main():
         evap += npdot * ((m_first - m_last) + (-dmdx) * gap)
 
     resid = abs(src_total - evap) / evap if evap > 0 else 1.0
-    n_exit = sum(1 for l in open(OUTLOC).read().splitlines()[2:] if len(l.split()) == 9)
+    n_exit = sum(1 for l in open(OUTLOC).read().splitlines()[2:] if len(l.split()) == 11)
 
     checks = [
         ("W1 gas-order = 2 was read (no ord1 fallback notice)",

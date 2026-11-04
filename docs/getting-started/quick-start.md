@@ -120,7 +120,7 @@ Output files written to `OUTPUT/`:
 | File | Content |
 |------|---------|
 | `trajectories-A.dat` | Per-cell-crossing state: X Y Z U V W T d_p m_p ID (Tecplot ASCII) |
-| `outloc-A.dat` | Exit location, speed, impact angle, area, ID per particle |
+| `outloc-A.dat` | Exit location, speed, impact angle, area, ID, boundary code and diameter per particle |
 | `scatter-A.dat` | Number-density scatter cloud (npdot-weighted point cloud) |
 | `source.tec` | Gas-coupling source terms on the mesh |
 

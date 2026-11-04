@@ -164,10 +164,10 @@ Constant evaporation and breakup properties, one value per material in the order
 | Key | Description |
 |-----|-------------|
 | `psat` | Legacy, accepted and ignored — the saturation pressure is computed from Clausius-Clapeyron (`Lv`, `Mv`, `boiling-temperature`) or read from the `Psat` column of `properties.dat` |
-| `Mv` | Vapor molar mass [kg/kmol] |
-| `Lv` | Latent heat of vaporization [J/kg] |
+| `Mv` | Vapor molar mass [kg/kmol], or the `Mv` column of `properties.dat`; 0 for a material that has the column |
+| `Lv` | Latent heat of vaporization [J/kg], or the `Lv` column of `properties.dat`; 0 for a material that has the column |
 | `boiling-temperature` (alias `Tboil`) | Boiling temperature [K]; give one name or the other, not both |
-| `cpv` | Vapor specific heat [J/(kg·K)] |
+| `cpv` | Vapor specific heat [J/(kg·K)], or the `Cpv` column of `properties.dat`; 0 for a material that has the column |
 | `Le` | Lewis number |
 | `Yinf` | Far-field vapor mass fraction |
 | `sigma` | Surface tension [N/m] (breakup) |
@@ -217,7 +217,7 @@ the same temperatures, one row per integer kelvin (`T = Tmin, Tmin+1, ..., Tmax`
 holding `VARIABLES` names the columns:
 
 ```text
-VARIABLES = "Temperature", "Cp", "Density", "Enthalpy", "Psat"
+VARIABLES = "Temperature", "Cp", "Density", "Enthalpy", "Psat", "Lv", "Mv", "Cpv"
 ```
 
 | column | unit | |
@@ -227,9 +227,12 @@ VARIABLES = "Temperature", "Cp", "Density", "Enthalpy", "Psat"
 | `Density` | kg/m³ | required |
 | `Enthalpy` or `Enthalpy_abs` | J/kg | required, exactly one: `Enthalpy` is relative (`cp·T`, or the integral of cp), `Enthalpy_abs` includes the formation enthalpy (the datum, see below) |
 | `Psat` | Pa, absolute | optional: the saturation pressure of an evaporating material |
+| `Lv` | J/kg | optional, with `Psat`: the latent heat of vaporization |
+| `Mv` | kg/kmol | optional, with `Psat`: the vapour molar mass, the same on every row |
+| `Cpv` | J/(kg K) | optional, with `Psat`: the vapour specific heat |
 
 After `Temperature` the columns may come in any order; the lowercase names are accepted too
-(`PSAT` as well). A column whose property is constant in T is read as a constant; one that varies
+(`PSAT`, `LV`, `MV`, `CPV` as well). A column whose property is constant in T is read as a constant; one that varies
 becomes a table, linear between the nodes. Outside the table the density holds its end values and
 the enthalpy continues its first and last segments, both as in ICE. With a varying `Cp` the particle
 state is the enthalpy, and its temperature is read back through the same table, so the table may
@@ -243,6 +246,17 @@ ignores it. With the column, `Lv` is the latent-heat sink only. Setup prints
 material that uses it. ATLAS GPB writes the column from a liquid/vapour pair of its thermo database
 (`[GPB-Phase*] psat-vapour`), zeros for a material without a pair.
 
+**`Lv`, `Mv`, `Cpv`.** ATLAS GPB writes them beside `Psat` from the same pair (the latent heat with
+the enthalpy difference that `Psat`'s Clausius-Clapeyron slope uses), zeros for a material without
+a pair. An evaporating material takes `Lv` and `Cpv` at the droplet temperature in every right-hand
+side (linear between the nodes, the end values outside, as `Psat`) — the latent-heat sink, the
+d²-law transfer number and the vapour heat capacity of ASM and TC — and `Mv` as its constant. Each
+column replaces its `[IGLOO-Properties]` key: a material whose column is non-zero must give 0 (or
+nothing) for that key, and a material without the column needs the key. For a tabulated `Lv` the
+material's scalar latent heat is `Lv(298.15 K)` (the enthalpy datum's temperature). Setup prints
+`vapour data tabulated from properties.dat: Lv, Mv, Cpv (Lv(298.15 K) = ..., Lv(boiling-temperature) = ...)`
+per material that uses them; a material that does not evaporate ignores them.
+
 A table is refused at setup, with the reason and the expected header, when: there is no
 `VARIABLES` line, the first column is not `Temperature`, `Cp`, `Density` or an enthalpy column is
 missing, a column is named twice, both `Enthalpy` and `Enthalpy_abs` appear, a data row does not
@@ -255,7 +269,13 @@ for a value that is not finite, a negative pressure, a pressure that decreases w
 neighbours, such as low-T values rounded to 0, are accepted), a constant pressure,
 `boiling-temperature` outside `[Tmin, Tmax−1]`, or `psat(boiling-temperature)` more than a factor 2
 away from one atmosphere (a unit slip or a wrong liquid/vapour pair; a database curve sits within
-a few percent).
+a few percent). The `Lv`, `Mv`, `Cpv` columns of an evaporating material are refused for a value
+that is not finite, a column zero on some rows and not on others, a negative value, an `Mv` that
+differs between rows, any of them without a valid `Psat` column, or an `Lv` whose Clausius-Clapeyron
+slope at `boiling-temperature` is more than a factor 2 from the `Psat` column's
+(`ln(p(i0+1)/p(i0))` against `½(Lv(i0)+Lv(i0+1))·Mv/Ru·(1/i0 − 1/(i0+1))`, `i0 = int(boiling-temperature)`,
+`Mv` from its column or else from the key: `Lv` in kJ/kg is a factor 1000); a non-zero key beside a
+non-zero column of the same quantity is refused as well.
 
 ---
 

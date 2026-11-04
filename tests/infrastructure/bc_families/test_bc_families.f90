@@ -31,17 +31,25 @@ program test_bc_families
     !       layer 2 is dropped; every other face 400. RED: a reader without 102 stops at pass 0
     !       on the first chimera record; with the layer-1 lines stored in reverse order the
     !       two-donor facelet fails (0.75, 0.25)
+    !   F6b the field mollifier's link table (buildInterfaceLinks) on F6's blocks: one link per 102
+    !       facelet with a layer-1 donor (5 of 6: the facelet without one keeps zero flux), each
+    !       normal to index direction 1, its donors and weights in file order in the flat donor
+    !       list (6 entries). RED: a table of the 101/201 records only holds no link
     !   F7  a one-layer (2D) block with faces 3/4 periodic (201): face 3's connection lines carry
     !       ATLAS's nine integers (block, i, j, k, face, d11..d22), face 4's the eight-integer form
     !       (block, i, j, face, d11..d22); each cell keeps its partner cell, partner face and the
     !       four orientation integers. RED: a reader taking four index integers on a one-layer mesh
     !       stores k (1) as face 3's partner face and (4, 1, 0, 0) as its orientation
+    !   F8  the field mollifier's link table (buildInterfaceLinks) on F7's block: 8 links, each face-3
+    !       cell joined to the face-4 cell of its column and back, both normal to index direction 2.
+    !       RED: a table of the 101 records only holds no link
     !
     ! A pair (a, b) is a family's payload columns 1 and 6: krho (401) or gp (402), and rp.
     !
     use, intrinsic :: iso_fortran_env, only: real64
     use IGLOO_IO,          only: read_cdp_bc_file
-    use IGLOO_data_block,  only: obj_block, obj_flowblock
+    use IGLOO_data_block,  only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, buildInterfaceLinks
+    use IGLOO_Lib_Mollify, only: cellLink, linkDonors
     use IGLOO_data_phases, only: obj_material
     use IGLOO_variables,   only: nb, nm, mesh2D, dsSwitch
     implicit none
@@ -211,7 +219,46 @@ contains
             print '(a,4(i0,1x))', '  [FAIL] famtest F6 tags (102 per block, 400 per block): ', n102, n400
             nfail = nfail + 1
         endif
+        call f6b_chimera_links(geo)
     end subroutine f6_chimera
+
+    !> F6b -- the mollifier's link table on F6's blocks: one link per 102 facelet with layer-1 donors,
+    !  receiver (block, face, cell), dir 1, nd and d0 into the flat donor list, in face-walk order.
+    subroutine f6b_chimera_links(geo)
+        type(obj_block), intent(in) :: geo(:)
+        type(cellLink), allocatable :: links(:)
+        type(linkDonors) :: donors
+        !> expected links: block, face, i, j, nd, d0; expected donors: block, i, j, k, weight
+        integer, parameter :: EL(6, 5) = reshape([1, 2, 4, 1, 1, 0,   1, 2, 4, 2, 2, 1, &
+                                                  2, 1, 1, 1, 1, 3,   2, 1, 1, 2, 1, 4,   2, 1, 1, 3, 1, 5], [6, 5])
+        integer, parameter :: ED(4, 6) = reshape([2, 1, 1, 1,   2, 1, 2, 1,   2, 2, 2, 1, &
+                                                  1, 4, 1, 1,   1, 4, 2, 1,   1, 4, 3, 1], [4, 6])
+        real(real64), parameter :: EW(6) = [1.0_real64, 0.25_real64, 0.75_real64, 1.0_real64, 1.0_real64, 1.0_real64]
+        integer :: l, nbad
+        call buildInterfaceLinks(geo, links, donors)
+        nbad = 0
+        if (size(links) /= 5 .or. size(donors%w) /= 6) then
+            nbad = 1
+        else
+            do l = 1, 5
+                associate(c => links(l))
+                if (any([c%b, c%f, c%i, c%j, c%nd, c%d0] /= EL(:, l)) .or. c%k /= 1 .or. c%dir /= 1) nbad = nbad + 1
+                end associate
+            enddo
+            do l = 1, 6
+                if (any([donors%b(l), donors%i(l), donors%j(l), donors%k(l)] /= ED(:, l)) .or. donors%w(l) /= EW(l)) &
+                    nbad = nbad + 1
+            enddo
+        endif
+        if (nbad == 0) then
+            print '(a)', '  [ok]   famtest F6b link table: 5 links of the 102 facelets with a layer-1 donor, dir 1, '// &
+                '6 donors and weights in file order'
+        else
+            print '(a,i0,a,i0,a,i0,a)', '  [FAIL] famtest F6b link table: ', size(links), ' links (expected 5), ', &
+                size(donors%w), ' donors (expected 6), ', nbad, ' entries off'
+            nfail = nfail + 1
+        endif
+    end subroutine f6b_chimera_links
 
 
     !> F7 -- 201 connection lines on a one-layer block (4 x 3 x 1): nine integers on face 3, eight on
@@ -254,7 +301,39 @@ contains
             call expectConn('F7 face 4 m='//itoa(m)//' (eight integers)', geo(1)%face(4)%cell(m,1), &
                             [1, m, 1, 1], 3, [1, 0, 0, 1])
         enddo
+        call f8_periodic_links(geo)
     end subroutine f7_connection_2d
+
+    !> F8 -- the mollifier's link table on F7's block: one link per 201 face cell, joined to the cell
+    !  of its column on the other face, both faces normal to index direction 2.
+    subroutine f8_periodic_links(geo)
+        type(obj_block), intent(in) :: geo(:)
+        type(cellLink), allocatable :: links(:)
+        type(linkDonors) :: donors
+        integer :: l, nbad, n3, n4
+        call buildInterfaceLinks(geo, links, donors)
+        nbad = 0; n3 = 0; n4 = 0
+        do l = 1, size(links)
+            associate(c => links(l))
+            if (c%b /= 1 .or. c%pb /= 1 .or. c%dir /= 2 .or. c%k /= 1 .or. c%pk /= 1 .or. c%pi /= c%i) then
+                nbad = nbad + 1
+            elseif (c%f == 3 .and. c%j == 1 .and. c%pf == 4 .and. c%pj == 3) then
+                n3 = n3 + 1
+            elseif (c%f == 4 .and. c%j == 3 .and. c%pf == 3 .and. c%pj == 1) then
+                n4 = n4 + 1
+            else
+                nbad = nbad + 1
+            endif
+            end associate
+        enddo
+        if (size(links) == 8 .and. n3 == 4 .and. n4 == 4 .and. nbad == 0) then
+            print '(a)', '  [ok]   famtest F8 link table: 8 links, face 3 (i,1) <-> face 4 (i,3) of each column, dir 2'
+        else
+            print '(a,4(i0,a))', '  [FAIL] famtest F8 link table: ', size(links), ' links (expected 8), ', n3, &
+                ' face 3 -> 4, ', n4, ' face 4 -> 3, ', nbad, ' other'
+            nfail = nfail + 1
+        endif
+    end subroutine f8_periodic_links
 
 
     ! ------------------------------------------------------------------ fixture

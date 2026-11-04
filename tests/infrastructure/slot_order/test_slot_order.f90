@@ -24,7 +24,7 @@ program test_slot_order
 
     type(obj_particle)    :: p
     real(R8), allocatable :: aux(:)
-    logical  :: propFlags(5)
+    logical  :: propFlags(7)
     integer  :: nAux, nAuxSt, nEvV, nbad
 
     nbad = 0

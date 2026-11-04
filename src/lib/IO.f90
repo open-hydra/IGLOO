@@ -13,8 +13,8 @@ contains
 
   !> Read the phase file (one line per material: "<name> <groups> [key=value ...]", the tokens being
   !  the per-material models ATLAS GPB writes from [GPB-Phase*]) and properties.dat (columns named by
-  !  its VARIABLES line: cp, rho, h and an optional Psat); breakup/evaporation constants come from
-  !  [IGLOO-Properties].
+  !  its VARIABLES line: cp, rho, h, an optional Psat and its pair's Lv, Mv, Cpv); breakup/evaporation
+  !  constants come from [IGLOO-Properties] (Lv, Mv, cpv from there or from their columns).
   subroutine read_cdp_properties(prefix,material)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_variables,       only: nm, brkupSwitch, phaseChange, breakup_word, evaporation_word, &
@@ -23,14 +23,15 @@ contains
     use IGLOO_Lib_Properties,  only: Tmin, Tmax, ntok_max, tok_len, nzone_max, TAB_OK, PSAT_OK, PSAT_ABSENT, &
                                      read_variables_line, classify_table_tokens, scan_rows, &
                                      check_table_nodes, check_table_columns, validate_psat_column, &
-                                     table_reason, psat_reason
+                                     table_reason, psat_reason, VAP_OK, VAP_ABSENT, validate_vapour_columns, &
+                                     vapour_reason, tableValue
     use IGLOO_IO_INI,          only: ini_Mv, ini_Lv, ini_Tboil, ini_cpv, ini_Le, ini_Yinf, &
                                         ini_sigma, ini_mu, &
                                         set_material_defaults, apply_material_key, finalize_material_models
     use Lib_ORION_data
     use Lib_Tecplot
     use IGLOO_Lib_Breakup,     only: assign_breakup
-    use IGLOO_Lib_Evaporation, only: assign_evaporation, Patm
+    use IGLOO_Lib_Evaporation, only: assign_evaporation, Patm, Ru
     implicit none
     character(len=32),  intent(in)  :: prefix
     type(obj_material), intent(out), allocatable :: material(:)
@@ -42,9 +43,12 @@ contains
     character(len=512)     :: tablefile
     character(len=tok_len) :: tokens(ntok_max)
     integer                :: ntok, icp, irho, ih, ips, code, Ni, i0
+    integer                :: ilv, imv, icpv
     integer                :: nzone, nsize, ndata, ntrail, badline, nannounced(nzone_max), nrows(nzone_max)
     logical                :: relative, found, exists
     real(R8)               :: ratio
+    real(R8), allocatable  :: colLv(:), colMv(:), colCpv(:), colPs(:)   !> a material's vapour columns, 0 if absent
+    character(len=16)      :: vapNames
 
     open(newunit=unit,file='INPUT/'//trim(prefix)//'phase.txt',status='old',iostat=ios)
     if (ios/=0) error stop ( "Error reading phase file" )
@@ -140,7 +144,7 @@ contains
     if (.not. exists) call refuse_table(tablefile, 'no such file')
     call read_variables_line(tablefile, tokens, ntok, found)
     if (.not. found) call refuse_table(tablefile, 'no VARIABLES line')
-    call classify_table_tokens(tokens(1:ntok), icp, irho, ih, ips, relative, code)
+    call classify_table_tokens(tokens(1:ntok), icp, irho, ih, ips, relative, code, ilv, imv, icpv)
     if (code /= TAB_OK) call refuse_table(tablefile, table_reason(code))
     !> "Enthalpy" = relative (cp*T, or the SP-database integral), "Enthalpy_abs" = formation enthalpy included
     hDatum = merge('relative', 'absolute', relative)
@@ -178,6 +182,7 @@ contains
     Tmin = nint(orion%block(1)%mesh(1,1,1,1))
     Tmax = Tmin + orion%block(1)%Ni - 1
     Ni   = orion%block(1)%Ni
+    allocate(colLv(Tmin:Tmax), colMv(Tmin:Tmax), colCpv(Tmin:Tmax), colPs(Tmin:Tmax))
 
     !> [IGLOO-Properties] vectors must carry one entry per material
     if (allocated(ini_Mv))    then; if (size(ini_Mv)    /= nm) error stop '[ERROR] [IGLOO-Properties] Mv: size /= number of materials';    endif
@@ -250,24 +255,37 @@ contains
         endif
       endif
 
+      !> the material's vapour and Psat columns, an absent one as zeros
+      colLv = 0._R8; colMv = 0._R8; colCpv = 0._R8; colPs = 0._R8
+      if (ilv  > 0) colLv  = blk%vars(ilv, 1:Ni,1,1)
+      if (imv  > 0) colMv  = blk%vars(imv, 1:Ni,1,1)
+      if (icpv > 0) colCpv = blk%vars(icpv,1:Ni,1,1)
+      if (ips  > 0) colPs  = blk%vars(ips, 1:Ni,1,1)
+
       !> evaporation properties
       if (phaseChange) then
-        !> constants from [IGLOO-Properties]
-        if (allocated(ini_Mv)) then;    material(i)%Mv = ini_Mv(i)
-        else; error stop '[ERROR] Evaporation requires Mv. Provide in [IGLOO-Properties]'
-        endif
-        if (allocated(ini_cpv)) then;   material(i)%cpv = ini_cpv(i)
-        else; error stop '[ERROR] Evaporation requires cpv. Provide in [IGLOO-Properties]'
-        endif
+        !> constants from [IGLOO-Properties]; Mv, cpv and Lv there or as a properties.dat column, not both
+        if (allocated(ini_Mv)) material(i)%Mv = ini_Mv(i)
+        if (.not. allocated(ini_Mv) .and. all(colMv == 0._R8)) &
+          error stop '[ERROR] Evaporation requires Mv: give it in [IGLOO-Properties] or as the Mv column of properties.dat'
+        if (material(i)%evapSelect > 0 .and. material(i)%Mv /= 0._R8 .and. any(colMv /= 0._R8)) &
+          error stop 'IGLOO: Mv given both in [IGLOO-Properties] and as a properties.dat column'
+        if (allocated(ini_cpv)) material(i)%cpv = ini_cpv(i)
+        if (.not. allocated(ini_cpv) .and. all(colCpv == 0._R8)) &
+          error stop '[ERROR] Evaporation requires cpv: give it in [IGLOO-Properties] or as the Cpv column of properties.dat'
+        if (material(i)%evapSelect > 0 .and. material(i)%cpv /= 0._R8 .and. any(colCpv /= 0._R8)) &
+          error stop 'IGLOO: cpv given both in [IGLOO-Properties] and as a properties.dat column'
         if (allocated(ini_Le)) then;    material(i)%Le = ini_Le(i)
         else; error stop '[ERROR] Evaporation requires Le. Provide in [IGLOO-Properties]'
         endif
         if (allocated(ini_Yinf)) then;  material(i)%Yinf = ini_Yinf(i)
         else; error stop '[ERROR] Evaporation requires Yinf. Provide in [IGLOO-Properties]'
         endif
-        if (allocated(ini_Lv)) then;    material(i)%Lv = ini_Lv(i)
-        else; error stop '[ERROR] Evaporation requires Lv. Provide in [IGLOO-Properties]'
-        endif
+        if (allocated(ini_Lv)) material(i)%Lv = ini_Lv(i)
+        if (.not. allocated(ini_Lv) .and. all(colLv == 0._R8)) &
+          error stop '[ERROR] Evaporation requires Lv: give it in [IGLOO-Properties] or as the Lv column of properties.dat'
+        if (material(i)%evapSelect > 0 .and. material(i)%Lv /= 0._R8 .and. any(colLv /= 0._R8)) &
+          error stop 'IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column'
         if (allocated(ini_Tboil)) then; material(i)%Tboil = ini_Tboil(i)
         else; error stop '[ERROR] Evaporation requires boiling-temperature (alias Tboil) in [IGLOO-Properties]'
         endif
@@ -294,6 +312,46 @@ contains
             ratio = (mat%psatTab(i0) + (mat%psatTab(i0+1) - mat%psatTab(i0))*(mat%Tboil - real(i0,R8)))/Patm
             write(*,'(A,I0,A,I0,A,I0,A,F7.4)') '  >> [material ', i, '] p_sat tabulated from properties.dat (', &
               Tmin, '..', Tmax, ' K), psat(boiling-temperature)/Patm = ', ratio
+          endif
+        endif
+      endif
+
+      !> Lv, Mv, Cpv columns (the pair that gives Psat): Lv(T) and cpv(T) tabulated, Mv the column's constant
+      if (ilv > 0 .or. imv > 0 .or. icpv > 0) then
+        if (mat%evapSelect == 0) then
+          write(*,'(A,I0,A)') '  >> [material ', i, '] Lv, Mv, Cpv columns not used: this material does not evaporate'
+        else
+          code = validate_vapour_columns(colLv, colMv, colCpv, colPs, mat%psatVariable, Tmin, Tmax, mat%Tboil, Ru, mat%Mv)
+          if (code /= VAP_OK .and. code /= VAP_ABSENT) &
+            call refuse_table(tablefile, trim(zone_label(i, mat%matName))//vapour_reason(code))
+          if (code == VAP_OK) then
+            vapNames = ''
+            if (colLv(Tmin) /= 0._R8) then
+              mat%LvVariable = .true.
+              allocate(mat%LvTab(Tmin:Tmax))
+              mat%LvTab(Tmin:Tmax) = colLv
+              mat%Lv = tableValue(mat%LvTab, Tmin, Tmax, 298.15_R8)   !> the enthalpy-datum temperature
+              vapNames = trim(vapNames)//', Lv'
+            endif
+            if (colMv(Tmin) /= 0._R8) then
+              mat%Mv = colMv(Tmin)
+              vapNames = trim(vapNames)//', Mv'
+            endif
+            if (colCpv(Tmin) /= 0._R8) then
+              mat%cpvVariable = .true.
+              allocate(mat%cpvTab(Tmin:Tmax))
+              mat%cpvTab(Tmin:Tmax) = colCpv
+              mat%cpv = tableValue(mat%cpvTab, Tmin, Tmax, mat%Tboil)
+              vapNames = trim(vapNames)//', Cpv'
+            endif
+            mat%LvMvOverRu = mat%Lv * mat%Mv / Ru
+            if (mat%LvVariable) then
+              write(*,'(A,I0,A,ES12.5,A,ES12.5,A)') '  >> [material ', i, '] vapour data tabulated from properties.dat: '// &
+                trim(vapNames(3:))//' (Lv(298.15 K) = ', mat%Lv, ' J/kg, Lv(boiling-temperature) = ', &
+                tableValue(mat%LvTab, Tmin, Tmax, mat%Tboil), ' J/kg)'
+            else
+              write(*,'(A,I0,A)') '  >> [material ', i, '] vapour data tabulated from properties.dat: '//trim(vapNames(3:))
+            endif
           endif
         endif
       endif

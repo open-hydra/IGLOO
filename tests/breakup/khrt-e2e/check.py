@@ -111,7 +111,7 @@ def check_mass_conservation():
     tot = 0.0
     n = 0
     for c in rows:
-        if len(c) in (9, 10) and c[0][0] in "0123456789-":
+        if len(c) in (11, 12) and c[0][0] in "0123456789-":
             try:
                 tot += float(c[6]); n += 1
             except ValueError:
@@ -157,7 +157,7 @@ def check_children_integrate():
         return 1
     exit_x = {}
     for c in exits:
-        if len(c) in (9, 10) and c[0][0] in "0123456789-":
+        if len(c) in (11, 12) and c[0][0] in "0123456789-":
             try:
                 exit_x[int(c[8])] = float(c[0])
             except ValueError:
@@ -379,7 +379,7 @@ def check_source_budget(parts=("mass", "momentum", "energy"), tol_mass=TOL_SRC_M
     p_out = e_out = 0.0
     for line in open(OUTLOC):
         c = line.split()
-        if len(c) in (9, 10) and c[0][0] in "0123456789-":
+        if len(c) in (11, 12) and c[0][0] in "0123456789-":
             try:
                 t, vm, md = float(c[3]), float(c[4]), float(c[6])
             except ValueError:

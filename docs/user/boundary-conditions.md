@@ -69,7 +69,7 @@ The last column is what the code does to the **gas** ghost ring under `gas-order
 | `401` | Inlet (krho) | Injection boundary; mass loading specified as a density ratio `krho` ∈ [0,1). Particle mass flow is $\dot{m}_p = \frac{k_\rho}{1-\sum k_\rho} (\dot{m}_\mathrm{gas} + \dot{m}_\mathrm{part})$. | Linear fill. |
 | `402` | Inlet (mass flux) | Injection boundary; particle mass flow specified as a flux $g_p$ [kg/(s·m²)]: $\dot{m}_p = g_p \cdot A_\mathrm{cell}$. | Linear fill. |
 | `403` | Inlet (mass flux variant) | Same as 402, used for a second injection family type. | Linear fill. |
-| All others | Wall / outflow | Particle is marked as exited (`gone = true`). Its exit position, speed, impact angle, and cell face area are recorded in `outloc-<mat>.dat`. | `301` — the code ATLAS writes for a dispersed phase at a `type = wall` patch, and therefore the one a gas-solid wall reaches IGLOO as — **mirrors**, exactly as 300. Every other code, `400` (the box generators' outlet/side tag) included, keeps the linear fill. |
+| All others | Wall / outflow | Particle is marked as exited (`gone = true`). Its exit position, speed, impact angle, cell face area and the face's code (`bc`) are recorded in `outloc-<mat>.dat`. | `301` — the code ATLAS writes for a dispersed phase at a `type = wall` patch, and therefore the one a gas-solid wall reaches IGLOO as — **mirrors**, exactly as 300. Every other code, `400` (the box generators' outlet/side tag) included, keeps the linear fill. |
 
 !!! note "Default is wall/outflow"
     Any `bcdef` code not listed above (e.g. 0, 404–407, 420) is treated as a wall or outflow: the particle is removed from the domain at the crossing point. Code `103` (a connection between blocks of different phases) and `104` (a chimera face between blocks of different phases) are header only in a dispersed-phase file, so a particle leaves the domain there.
@@ -84,6 +84,8 @@ Injection faces (`bcdef` 401–403) are the only faces where particles enter the
 - `ds > 0`: advancing-front algorithm — 2D sweep for planar (Nz=1) faces, 3D BFS hexagonal packing for volumetric faces. Particle spacing is at most `ds` cm, with a coverage-guarantee pass that seeds any injection cell missed by the front.
 
 The `ds-degen` key sets a floor: injection cells whose tangential size is below this threshold are skipped (they are typically collapsing or degenerate boundary cells near edges).
+
+A parcel takes its loading, velocity and temperature columns from the cell it starts in: the injection cell that placed it whenever that cell's containment test holds its point, also on an edge two injection cells share, and otherwise the cell the search finds. A parcel whose injection point no cell holds is not integrated, and the run log counts such parcels once per sweep: `[WARNING] N parcel(s) whose injection point no cell holds: not integrated`.
 
 Per-cell injection properties stored in `bc.txt` columns (after the `bcdef` column) are:
 
@@ -173,17 +175,19 @@ $$p \;\leftarrow\; p + (\text{partner face center} - \text{exit face center})$$
 
 Velocity is unchanged. After the shift the integration continues from the partner cell in the partner block. This mirrors the MOSE translational-periodic convention; rotational periodicity is not implemented.
 
+**Setup and fields.** Every 201 face cell is listed with its partner cell and checked as a 101 cell is (below): the partner block and cell must exist, lie on the partner face, and carry a 201 record that names this cell and this face — a periodic face whose partner face is not periodic stops the run (`IGLOO: a 101/201 connection is not mutual: the partner cell does not name this cell`). The field mollifier then smooths across the pair as across an interior face, the cells next to the two faces being neighbours (see [Field mollification](../theory/mollification.md#block-interfaces-and-periodic-faces)). Verified by `test_bc_families` F8, `test_mollify_blocks` U1d, the `periodic-y` and `periodic-2d` cases and `refuse-periodic-not-mutual`.
+
 ---
 
 ## Block Connections (code 101)
 
 Conformal connections (`bcdef` 101) are coincident interfaces between adjacent structured blocks. An extra data line in `bc.txt` gives, for each face cell, its partner cell and the orientation of the partner face: `[block, i, j, k, partner_face, d11, d12, d21, d22]`. On a one-layer (2D) mesh the line carries the same nine integers (`k` = 1, what ATLAS writes) or eight without `k`; IGLOO tells the two apart by the count, and any other count stops the run (`IGLOO: a 101/201 connection line is not 9 integers (8 on a one-layer mesh)`). The same line, and the same reading, belong to a periodic (201) face.
 
-**Setup.** IGLOO lists every 101 face cell with its partner cell and checks the pair: the partner block and cell must exist, the partner cell must lie on the partner face, and its 101 record on that face must name this cell and this face — otherwise the run stops (`IGLOO: a 101 connection names a block outside the mesh`, `... names a cell outside its block`, `... is not mutual: the partner cell does not name this cell`). On a one-layer (2D) mesh a 101 record on face 5 or 6 is refused.
+**Setup.** IGLOO lists every 101 face cell with its partner cell and checks the pair: the partner block and cell must exist, the partner cell must lie on the partner face, and its 101 record on that face must name this cell and this face — otherwise the run stops (`IGLOO: a 101/201 connection names a block outside the mesh`, `... names a cell outside its block`, `... is not mutual: the partner cell does not name this cell`). On a one-layer (2D) mesh a 101 or 201 record on face 5 or 6 is refused.
 
 **Particles.** When a step ends past the face, the cell search (`updateCell`) looks first in the partner cell the record names, and around it, starting from the point where the step crossed the face (see [Connected faces](#connected-faces-the-particle-search)); only if the partner block does not hold the point does it search the current block and then every other block. The containment tests are inclusive, so a conformal interface leaves no gap between the blocks. The index jump of `bcDef` (into the cell the record names) runs only when no block contains the point. With `gas-order = 2` the integration step ends at the block face, where a single block would not end it: the trajectory gains a row at the interface and scatter samples near it can move by a fraction of a step; the deposited fields are additive over the cut.
 
-**Fields.** The field mollifier smooths across the interface as across an interior face when both faces are normal to the same index direction; an interface whose two faces are normal to different index directions is smoothed with zero flux, and the setup names it with one warning line per face pair (see [Field mollification](../theory/mollification.md#block-interfaces)). With `gas-order = 2` each block keeps its own dual mesh: at a 101 face the boundary dual cells of each block are clipped to the half inside it, the ghost nodes of the face hold the partner block's gas interpolated at the node (see [Connected faces: the gas ghost ring](#connected-faces-the-gas-ghost-ring)), and a deposit near the face is reduced to the geometry cells of the block that received it.
+**Fields.** The field mollifier smooths across the interface as across an interior face when both faces are normal to the same index direction; an interface whose two faces are normal to different index directions is smoothed with zero flux, and the setup names it with one warning line per face pair (see [Field mollification](../theory/mollification.md#block-interfaces-and-periodic-faces)). With `gas-order = 2` each block keeps its own dual mesh: at a 101 face the boundary dual cells of each block are clipped to the half inside it, the ghost nodes of the face hold the partner block's gas interpolated at the node (see [Connected faces: the gas ghost ring](#connected-faces-the-gas-ghost-ring)), and a deposit near the face is reduced to the geometry cells of the block that received it.
 
 ---
 
@@ -210,10 +214,51 @@ counted per facelet (not per family copy).
 
 A particle that leaves a block through a chimera facelet is searched for first in the facelet's layer-1
 donor cells, by decreasing weight, then in every block (see [Connected faces](#connected-faces-the-particle-search));
-one that no block contains leaves the domain there, a rim exit. Each particle deposits into the block it is tracked in, so the cells
-of the other block in the overlap receive none of its deposits; the field mollifier gives a chimera face
-zero flux, and under `gas-order = 2` its ghost nodes hold the overlapping block's gas interpolated at the
-node (see [Connected faces: the gas ghost ring](#connected-faces-the-gas-ghost-ring)).
+one that no block contains leaves the domain there, a rim exit. Under `gas-order = 2` a chimera face's
+ghost nodes hold the overlapping block's gas interpolated at the node (see [Connected faces: the gas
+ghost ring](#connected-faces-the-gas-ghost-ring)).
+
+**The overlap's deposits.** The gas solver keeps a complete copy of the overlap in each block, so every
+copy that covers a location receives the deposits made there. When the file holds a chimera facelet the
+setup maps every cell to the cell of each other block that contains its centroid (inclusive containment:
+a centroid on a face between two of that block's cells goes to one of them) — except a centroid lying on
+that block's chimera face, within max(10⁻¹² h, 64 ε L) of the face (h the cell diagonal, L its largest node
+coordinate): there the other block's grid is the fringe, interpolated from this one, not a copy of the
+flow — and prints one line per ordered block pair,
+
+```
+ [IGLOO] chimera overlap: N cells of block b covered by block b'
+```
+
+A particle deposits into the block it is tracked in; at the end of `solve`, after the deposits are
+reduced to the geometry cells and before the field mollifier, every cell adds the deposits the other
+blocks made in the cells mapped onto it, from a copy of the owner-only fields (so a deposit is mirrored
+once into each other covering block, never twice): source amounts as they are, eulerian densities
+scaled by the volume ratio, so the amount is preserved. Each sweep prints, per block, what the overlap
+added to its source beyond its own deposits — the mirrored deposits and, with the field mollifier on, what
+its chimera face cells took from the donor halo (below) —
+
+```
+ [IGLOO] chimera overlap: block b mirrored source (mass, momentum, energy): ...
+```
+
+and keeps it in `mirrored(b)` (mass per material, momentum, energy), valid like `source` between a
+`solve` and the next `reset_state`: the once-counted total of an overlapping mesh is the sum over every
+block minus the mirrored totals. A parent solver that sums its own copies of the overlap can weight each
+cell by `1/ovl%blk(b)%n(c)`, the number of blocks that cover the centroid of cell `c` (cells numbered
+`i + (j−1)·Nx + (k−1)·Nx·Ny`). Verified by `chimera-2blk` (each block's fields equal the one-block run on
+its cells; the mirrored totals) and `test_mollify_blocks` (U-M).
+
+**Smoothing.** The field mollifier crosses a chimera face through a one-cell halo: each facelet with
+layer-1 donors takes their weighted value and volume, and its cell takes the interior-face flux against
+them; the donors are not debited, so each block's total changes by what its chimera cells took, and that
+exchange joins the block's mirrored totals (see [Field
+mollification](../theory/mollification.md#block-interfaces-and-periodic-faces)). Where the overlap's cells
+coincide, each block's smoothed fields equal the one-block ones on its cells; where they do not (two
+donors per facelet), only to the interpolation error of the halo and of the centroid map, which gives a
+centroid lying on an interior face of the other block to one of the two cells it touches. A facelet with an empty
+layer 1 keeps zero flux. Verified by `chimera-2blk-mollify`, `chimera-2blk-shift-mollify`,
+`test_mollify_blocks` (U-M (ii), (iii)) and `test_bc_families` (F6b).
 
 ---
 
@@ -230,7 +275,7 @@ index jump, the 201 transport, an exit).
 
 A particle that leaves the domain through a 100 facelet (ATLAS's unresolved connection: a connection or
 chimera facelet that found no partner) or through a 102 facelet whose donors and blocks do not hold it is
-a *rim exit*; its exit record is an ordinary one (position, `Af` of the facelet). When the bc file holds
+a *rim exit*; its exit record is an ordinary one (position, `Af` of the facelet, `bc` = 100 or 102). When the bc file holds
 any 101, 103, 201, 102 or 100 facelet, `solve` prints once per sweep, summed over the MPI ranks:
 
 ```

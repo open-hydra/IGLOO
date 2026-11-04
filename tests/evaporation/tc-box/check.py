@@ -215,7 +215,7 @@ def check_mass_telescoping(parts):
     mdot_inj = {}
     for line in open(OUTLOC).read().splitlines()[2:]:
         c = line.split()
-        if len(c) == 9:
+        if len(c) == 11:
             mdot_inj[int(c[8])] = float(c[6])
     evap_total = 0.0
     for pid, rows in parts.items():

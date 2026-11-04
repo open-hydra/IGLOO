@@ -598,6 +598,9 @@ drained after the parallel region.
 `khrt-shed-noexchange` states the same cell by cell: with `NoDrag` and `NoHeat` a shed is the
 only exchange left, and every source cell must be zero.  `khrt-evap-frozen` runs the case with
 evaporation on and frozen (model 4): KH rate, RT persistence, children and no mass to the gas.
+`khrt-evap-live` runs it with live evaporation and negligible stripping: a KH shed counts the
+number-rate excess $(\dot n - n_0)\,m$ since the last event, so the evaporated mass makes no child,
+and the evaporated flow closes the mass budget.
 
 **Result:** KH stripping within $0.03\,\%$ of the Reitz-87 closed form across the
 sweep; RT shatter persists on all eight drops; source budget within the print floor of the
@@ -656,19 +659,21 @@ suspended at fixed slip; see
 
 ### mhb98-water-psat
 
-The same droplet with the saturation pressure taken from the `Psat` column that ATLAS GPB writes
-for water (its NASA9 $\mathrm{H_2O(L)}/\mathrm{H_2O}$ pair, within 0.1 % of IAPWS at 280–300 K),
-the table copied byte for byte: a positive control of the tabulated $p_\mathrm{sat}$ on the
-CEM + Langmuir–Knudsen path, and the end-to-end check of the ATLAS-to-IGLOO route.  At 282 K the
-table sits 14 % above the case's Clausius–Clapeyron line, so the wet-bulb drops.  Not a
-validation: MHB98's M7 line is Clausius–Clapeyron-based, so the M7 legs are not carried; the
-gates are the LK kernel with the tabulated $p_\mathrm{sat}$ along the measured $T_p$, the
-$K$–wet-bulb identity, the mass balance, the run's report of the tabulation, and the wet-bulb at
+The same droplet with the saturation pressure, the latent heat and the vapour molar mass taken from
+the `Psat`, `Lv` and `Mv` columns that ATLAS GPB writes for water (its NASA9
+$\mathrm{H_2O(L)}/\mathrm{H_2O}$ pair, $p_\mathrm{sat}$ within 0.1 % of IAPWS at 280–300 K), the
+table copied byte for byte: a positive control of the tabulated $p_\mathrm{sat}$ and $L_v(T)$ on
+the CEM + Langmuir–Knudsen path, and the end-to-end check of the ATLAS-to-IGLOO route.  At 282 K the
+table sits 14 % above the case's Clausius–Clapeyron line, so the wet-bulb drops; the latent-heat
+sink is $L_v(T_p)$ of the same pair.  Not a validation: MHB98's M7 line is
+Clausius–Clapeyron-based, so the M7 legs are not carried; the gates are the LK kernel with the
+tabulated $p_\mathrm{sat}$ along the measured $T_p$, the $K$–wet-bulb identity with
+$L_v(T_\mathrm{wb})$, the mass balance, the run's reports of the tabulation, and the wet-bulb at
 least 0.6 K below the Clausius–Clapeyron case.
 
-**Result:** wet-bulb 281.31 K against 282.33 K (−1.02 K); the kernel, the identity and the mass
-balance hold as in the parent case.  With the column zeroed the run reproduces the parent's
-282.33 K to the printed digit.
+**Result:** wet-bulb 281.25 K against 282.33 K (−1.08 K); the $K$–wet-bulb identity holds to
+1.1e-4 with $K$ and $T_\mathrm{wb}$ from the last half of the path, the kernel and the mass balance as
+in the parent case.
 
 ---
 
@@ -693,10 +698,11 @@ field has no analytic solution.  `db-2daxi` is deliberately md5-free: trajectory
 bytes drift by 1 ULP across compiler and configure generations.
 
 Several members of this category have **no figure** and so no section below:
-`bc-center-2grp` (multi-group `bc_center` pinning), `axis-200` and `wedge-fold` (the
+`bc-center-2grp` (multi-group `bc_center` pinning), `inj-edge` and `inj-edge-payload` (injection points on
+the edges of the inlet cells), `axis-200` and `wedge-fold` (the
 axis face and the sector fold on the MOSE nozzle field), `two-mat` (two materials),
 `two-fam-bc` (one inlet table per family in `bc.txt`), `two-fam-bc-2blk` (the same on two blocks joined by
-a 101 connection), `two-fam-bc-2blk-mollify` (the same with the field mollifier on), `chimera-2blk` (two overlapping blocks joined by chimera faces), `varcp-tmin` (a varying-$c_p$ table that ends below the parcels' temperature) and the
+a 101 connection), `two-fam-bc-2blk-mollify` (the same with the field mollifier on), `chimera-2blk` (two overlapping blocks joined by chimera faces), `chimera-2blk-mollify` and `chimera-2blk-shift-mollify` (the same with the field mollifier on, the second with block 2 shifted by half a cell), `varcp-tmin` (a varying-$c_p$ table that ends below the parcels' temperature) and the
 `refusals/*` gates —
 behavioral cases with no reference curve, summarised in the table on the
 [Overview](index.md).  This page is organized around comparison figures;
@@ -707,7 +713,7 @@ Anderson-Darling statistics (see `tests/standard/psd-table/INFO.md`); nor has `p
 size-distribution file named without `.` or `/`, every parcel at the table's single diameter).
 
 The routine-level member of this category is the interpolation family
-`test_gas_reconstruction` (E1–E5), documented under
+`test_gas_reconstruction` (E1–E5, E7, E8), documented under
 [Literature tests](literature.md); `vie-plait` is its in-solver counterpart, the
 only case that exercises the 2nd-order gas rebuild inside the integration loop.
 
@@ -825,9 +831,13 @@ path: the body-force decoupling with $g_y = -8000$ drives each particle across
 the $y$-periodic pair 2–3 times.  The anchored $v(x)$ closed form must hold
 across every wrap (the transport leaves velocity untouched) and $y(x)$ must
 equal the unwrapped closed form **modulo $L_y$** (the transport is an exact
-$\pm L_y$ translation).
+$\pm L_y$ translation).  The deposited source is smoothed across the periodic
+pair: a run with `mollify = off`, smoothed by the check itself with the first
+and last $y$ rows neighbours, equals the solver's smoothed `source.tec`, on the
+case and on a sibling where only the first inlet row injects.
 
-**Result:** residual $\sim 5\cdot10^{-7}$ m.
+**Result:** residual $\sim 5\cdot10^{-7}$ m; smoothed source within
+$1.3\cdot10^{-14}$ of the field scale.
 
 <figure>
   {% include "vv/images/periodic-y.svg" ignore missing %}

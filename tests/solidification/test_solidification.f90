@@ -418,7 +418,7 @@ contains
         real(R8), allocatable :: aux(:), auxP(:), auxst(:)
         real(R8) :: Z(13), F(13), FP(13), ref(13), gas(9), gasNodes(9,8), gasVert(3,8), q, err, errMax
         integer  :: nAux, nAuxSt, nEvV, ph
-        logical  :: propFlags(5), layout, same
+        logical  :: propFlags(7), layout, same
         ord2 = .false.;  mesh2D = .false.;  eulerSwitch = .true.
         bodyForce = .false.;  bodyAccel = 0._R8;  srcBodyForce = .false.
         sourceSwitch = .false.;  phaseChange = .false.

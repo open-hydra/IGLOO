@@ -126,15 +126,18 @@ contains
       'Legacy, accepted and ignored: p_sat comes from Clausius-Clapeyron (Lv, Mv, boiling-temperature) '// &
       'or from a Psat column in properties.dat','',.false.)
     call reg%add('IGLOO-Properties','Mv',d_a(3,:),'0', &
-      'Vapour molar mass; one value per material, overrides properties.dat','',.false.)
+      'Vapour molar mass; one value per material; a material whose properties.dat carries the Mv column '// &
+      'takes it from there (give 0 here)','',.false.)
     call reg%add('IGLOO-Properties','Lv',d_a(4,:),'0', &
-      'Latent heat of vaporization; one value per material, overrides properties.dat','',.false.)
+      'Latent heat of vaporization; one value per material; a material whose properties.dat carries the Lv '// &
+      'column takes it from there (give 0 here)','',.false.)
     call reg%add('IGLOO-Properties','boiling-temperature',d_a(5,:),'0', &
       'Boiling temperature [K]; one value per material, overrides properties.dat','',.false.)
     call reg%add('IGLOO-Properties','Tboil',d_a(5,:),'0', &
       'Alias of boiling-temperature, the name ICE also accepts; give one or the other, not both','',.false.)
     call reg%add('IGLOO-Properties','cpv',d_a(6,:),'0', &
-      'Vapour specific heat; one value per material, overrides properties.dat','',.false.)
+      'Vapour specific heat; one value per material; a material whose properties.dat carries the Cpv column '// &
+      'takes it from there (give 0 here)','',.false.)
     call reg%add('IGLOO-Properties','Le',d_a(7,:),'0', &
       'Lewis number; one value per material, overrides properties.dat','',.false.)
     call reg%add('IGLOO-Properties','Yinf',d_a(8,:),'0', &

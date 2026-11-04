@@ -22,8 +22,13 @@ module IGLOO_Lib_Properties
                         PSAT_NONMONOTONE = 4, PSAT_CONSTANT = 5, PSAT_TBOIL_RANGE = 6, &
                         PSAT_TBOIL_MISMATCH = 7
 
+  !> Codes of the vapour column checks (Lv, Mv, Cpv); vapour_reason gives the text.
+  integer, parameter :: VAP_OK = 0, VAP_ABSENT = 1, VAP_NONFINITE = 2, VAP_PARTIAL = 3, VAP_NONPOSITIVE = 4, &
+                        VAP_MV_VARIES = 5, VAP_WITHOUT_PSAT = 6, VAP_CC_MISMATCH = 7
+
   character(len=*), parameter :: grammar = &
-    'expected: VARIABLES = "Temperature", "Cp", "Density", "Enthalpy" (or "Enthalpy_abs")[, "Psat"], '// &
+    'expected: VARIABLES = "Temperature", "Cp", "Density", "Enthalpy" (or "Enthalpy_abs")'// &
+    '[, "Psat"[, "Lv"][, "Mv"][, "Cpv"]], '// &
     'Temperature first and the others in any order, one zone per material, rows on consecutive integer kelvins'
 
 contains
@@ -100,13 +105,15 @@ contains
 
 
   !> Maps the header names to column indices of vars (column 1 is Temperature, read as the mesh).
-  pure subroutine classify_table_tokens(tokens, icp, irho, ih, ips, relative, code)
+  pure subroutine classify_table_tokens(tokens, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
     character(len=*), intent(in)  :: tokens(:)
     integer,          intent(out) :: icp, irho, ih, ips, code
     logical,          intent(out) :: relative
+    integer,          intent(out) :: ilv, imv, icpv
     integer :: t
 
     icp = 0; irho = 0; ih = 0; ips = 0; relative = .true.
+    ilv = 0; imv = 0; icpv = 0
     code = TAB_NO_TEMPERATURE
     if (size(tokens) < 1) return
     if (tokens(1) /= 'Temperature' .and. tokens(1) /= 'temperature') return
@@ -127,6 +134,15 @@ contains
       case ('Psat', 'psat', 'PSAT')
         if (ips > 0) code = TAB_DUPLICATE
         ips = t - 1
+      case ('Lv', 'lv', 'LV')
+        if (ilv > 0) code = TAB_DUPLICATE
+        ilv = t - 1
+      case ('Mv', 'mv', 'MV')
+        if (imv > 0) code = TAB_DUPLICATE
+        imv = t - 1
+      case ('Cpv', 'cpv', 'CPV')
+        if (icpv > 0) code = TAB_DUPLICATE
+        icpv = t - 1
       end select
       if (code /= TAB_OK) return
     enddo
@@ -245,6 +261,62 @@ contains
     case default;               txt = 'unknown Psat error'
     end select
   end function psat_reason
+
+
+  !> The Lv, Mv, Cpv columns of one material (an absent one all zero): all three zero means absent;
+  !  finite; each zero on every row or on none; not negative; Mv the same on every row; beside a
+  !  valid Psat column; the Lv column's Clausius-Clapeyron slope ln(p(i0+1)/p(i0)) at the boiling
+  !  temperature within a factor 2 of the Psat column's (Mv from its column, else MvKey).
+  pure function validate_vapour_columns(Lv, Mv, cpv, psat, psatOK, lo, hi, Tboil, Ru, MvKey) result(code)
+    integer,  intent(in) :: lo, hi
+    real(R8), intent(in) :: Lv(lo:hi), Mv(lo:hi), cpv(lo:hi), psat(lo:hi), Tboil, Ru, MvKey
+    logical,  intent(in) :: psatOK
+    integer  :: code, i0
+    real(R8) :: MvCC, ratio
+    code = VAP_ABSENT
+    if (all(Lv == 0._R8) .and. all(Mv == 0._R8) .and. all(cpv == 0._R8)) return
+    code = VAP_NONFINITE
+    if (.not. (all(ieee_is_finite(Lv)) .and. all(ieee_is_finite(Mv)) .and. all(ieee_is_finite(cpv)))) return
+    code = VAP_PARTIAL
+    if (partial(Lv) .or. partial(Mv) .or. partial(cpv)) return
+    code = VAP_NONPOSITIVE
+    if (any(Lv < 0._R8) .or. any(Mv < 0._R8) .or. any(cpv < 0._R8)) return
+    code = VAP_MV_VARIES
+    if (Mv(lo) /= 0._R8 .and. any(Mv /= Mv(lo))) return
+    code = VAP_WITHOUT_PSAT
+    if (.not. psatOK) return
+    code = VAP_CC_MISMATCH
+    if (Lv(lo) /= 0._R8) then
+      MvCC  = merge(Mv(lo), MvKey, Mv(lo) /= 0._R8)
+      i0    = int(Tboil)
+      ratio = log(psat(i0+1)/psat(i0)) / &
+              (0.5_R8*(Lv(i0) + Lv(i0+1))*MvCC/Ru*(1._R8/real(i0, R8) - 1._R8/real(i0+1, R8)))
+      if (.not. (ratio >= 0.5_R8 .and. ratio <= 2._R8)) return
+    endif
+    code = VAP_OK
+  contains
+    pure logical function partial(c)
+      real(R8), intent(in) :: c(:)
+      partial = any(c == 0._R8) .and. any(c /= 0._R8)
+    end function partial
+  end function validate_vapour_columns
+
+
+  pure function vapour_reason(code) result(txt)
+    integer, intent(in) :: code
+    character(len=:), allocatable :: txt
+    select case (code)
+    case (VAP_NONFINITE);    txt = 'vapour column: a value is not finite'
+    case (VAP_PARTIAL);      txt = 'vapour column: zero on some rows and not on others'
+    case (VAP_NONPOSITIVE);  txt = 'vapour column: a value is negative'
+    case (VAP_MV_VARIES);    txt = 'Mv column: not the same value on every row'
+    case (VAP_WITHOUT_PSAT); txt = 'vapour columns without a Psat column (Lv, Mv and Cpv come from the '// &
+                                   'liquid/vapour pair that gives Psat)'
+    case (VAP_CC_MISMATCH);  txt = 'Lv column: not the slope of the Psat column at boiling-temperature '// &
+                                   '(a factor 2 or more)'
+    case default;            txt = 'unknown vapour column error'
+    end select
+  end function vapour_reason
 
 
   pure function table_reason(code) result(txt)

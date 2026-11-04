@@ -90,7 +90,7 @@ contains
         real(R8), allocatable :: aux(:), auxst(:)
         real(R8) :: Z(8), F(8), gas(9), gasNodes(9,8), gasVert(3,8), dtab(1)
         integer(I4) :: nAux, nAuxSt, nEvV
-        logical :: propFlags(5)
+        logical :: propFlags(7)
 
         ord2 = .false.;  mesh2D = .false.;  eulerSwitch = .false.
         bodyForce = .false.;  bodyAccel = 0._R8
@@ -113,7 +113,7 @@ contains
 
         Z = [0._R8, 0._R8, 0._R8, 0._R8, 0._R8, 0._R8, Tp, p%m]
         call rhsEvaporation(8, 0._R8, Z, F, aux, nauxvar, auxst, max(1,nauxstate), &
-                            dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8)
+                            dtab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8)
         mdot_out = F(8)
     end subroutine rhs_evap_once
 

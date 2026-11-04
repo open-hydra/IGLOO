@@ -117,7 +117,7 @@ def load_exits():
     ex = {}
     for line in open(OUTLOC):
         c = line.split()
-        if len(c) == 9 and c[0][0] in "0123456789-":
+        if len(c) == 11 and c[0][0] in "0123456789-":
             try:
                 ex[int(c[8])] = tuple(float(v) for v in c[:8])
             except ValueError:

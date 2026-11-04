@@ -19,4 +19,4 @@ zero, so nothing else of model 4 is involved.
 | fixed | S4 PASS, resid 2.941e-7 — the model-2 case's floor (the E13.6 source print) |
 
 ## Pass criterion
-`solver-fail-consumed/check.py` unmodified: S1–S3 exact counts, S4 to 1e-5.
+`solver-fail-consumed/check.py` unmodified: S1–S3 exact counts, S4 to 1e-5, S5 every `bc` = 0.

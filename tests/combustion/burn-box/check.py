@@ -145,7 +145,7 @@ def check_mass_telescoping(parts):
     mdot_inj = {}
     for line in open(OUTLOC).read().splitlines()[2:]:
         c = line.split()
-        if len(c) == 9:
+        if len(c) == 11:
             mdot_inj[int(c[8])] = float(c[6])
     # m at the true domain exit (x=Lx) from the closed form anchored at the first
     # row -- the last trajectory row lags the exit by up to one cell of burning

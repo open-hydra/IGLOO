@@ -19,7 +19,20 @@ which writes the 3D connection lines `block i j k face + 4 weights`).
    ≈ 5·10⁻⁷ m — the transport is an exact ±Ly translation);
 3. every particle wraps ≥ 2 times (measured 2–3; non-vacuous) and all 25 exit
    at the outlet;
-4. `u≡u_g`, `w≡0`, `T≡T_g` decoupling guards hold through the transports.
+4. `u≡u_g`, `w≡0`, `T≡T_g` decoupling guards hold through the transports;
+5. **S-P, the source smoothed across the periodic pair**: `check.py` runs the case
+   again with `mollify = off` (`ref-raw/`), smooths that `source.tec` itself
+   (8 passes of the [¼, ½, ¼] filter on the box's uniform volumes, zero flux in x
+   and z, the first and last y rows neighbours) and holds `OUTPUT/source.tec` to
+   it, field by field, to 1e-12 of the field's scale (measured 1.3e-14). The
+   case's 25 parcels start one cell apart and their deposits are uniform in y to
+   about 1e-6, so the pair is run again with only face 1's first row injecting
+   (`ref-row/`, `ref-row-raw/`): there periodic and zero-flux smoothing differ by
+   0.55 of the scale, and the same comparison holds to 1.1e-14.
+
+**RED (S-P).** With zero flux at the 201 faces the case's own source differs
+from the periodic smoothing by 2.5e-8 of the scale (2.5e4 tolerances) and the
+first-row run's by 0.36.
 
 **Notes.** The `[BCB-*]`/`[per]` ini patches are ATLAS-side only — the solver
 reads the 201 codes from `bc.txt`. MOSE's translational-periodic convention

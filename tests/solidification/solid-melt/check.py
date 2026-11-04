@@ -84,14 +84,17 @@ def tol_T(T, L):
     return HALF_ULP * (2.0 + 2.0 * abs(T - T_G) / L) + INT_FLOOR
 
 
-def load_rows(path, ncol):
+def load_rows(path, ncol, idcol=None):
+    """{ID: [row, ...]}: rows of ncol values, the ID in column idcol (default the last), the columns before it."""
+    if idcol is None:
+        idcol = ncol - 1
     parts = {}
     for line in open(path):
         c = line.split()
         if len(c) != ncol:
             continue
         try:
-            r = [float(v) for v in c[:-1]] + [int(c[-1])]
+            r = [float(v) for v in c[:idcol]] + [int(c[idcol])]
         except ValueError:
             continue
         parts.setdefault(r[-1], []).append(r)
@@ -163,7 +166,7 @@ def check_regimes(traj):
 
 def main():
     try:
-        traj, exits = load_rows(TRAJ, 10), load_rows(EXIT, 9)
+        traj, exits = load_rows(TRAJ, 10), load_rows(EXIT, 11, 8)
         wdot, _, _, _, E = read_source(SRC)
         log = open(LOG, errors="replace").read()
     except (FileNotFoundError, StopIteration, ValueError) as e:

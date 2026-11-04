@@ -6,16 +6,24 @@ module IGLOO_module
                               buildInterfaceLinks, reportNonAligned, mollifyEulerBlocks, mollifySourceBlocks, &
                               hasConnectedFaces, buildGhostLinks
   use IGLOO_data_phases, only: obj_material
-  use IGLOO_Lib_Mollify, only: cellLink
+  use IGLOO_Lib_Mollify, only: cellLink, linkDonors
+  use IGLOO_overlap,     only: overlapMap, mirroredTotals
   implicit none
 
   type, public :: obj_IGLOO
     type(obj_block),       allocatable :: geoblock(:)
     type(obj_flowblock),   allocatable :: gasblock(:)
-    !> The 101 face cells and their partner cells, built once after the bc read.
+    !> The 101, 201 and 102 face cells and their partner cells or layer-1 donors, built once after the
+    !  bc read.
     type(cellLink),        allocatable :: links(:)
+    type(linkDonors) :: donors
     !> A face cell carries 101, 103, 201, 102 or 100: solve reports the block changes.
     logical :: connFaces = .false.
+    !> Chimera faces only: each cell's covering cells in the other blocks and its coverage count.
+    type(overlapMap) :: ovl
+    !> Chimera faces only: what the overlap mirror and the smoothing's chimera halo added to each block's
+    !  source; valid as `source`.
+    type(mirroredTotals),  allocatable :: mirrored(:)
     !> Valid only between a solve and the next reset_state (which deallocates them).
     type(obj_sourceblock), allocatable :: source(:)
     type(obj_eulerblock),  allocatable :: euler(:,:)
@@ -63,6 +71,7 @@ contains
     use IGLOO_allocation
     use IGLOO_IO_INI, only: read_IGLOO_input
     use IGLOO_Lib_Statistics, only: initRandomSeed
+    use IGLOO_overlap,        only: hasChimeraFaces, buildOverlapMap
     use IGLOO_Mod_MPI,        only: mpi_is_root, mpi_size_
     use IGLOO_Mod_Timing,     only: tm_phase, TM_IDLE, TM_INPUT, TM_GASREAD, TM_BLOCKS, TM_IMPORT, TM_PIN
     use Lib_ORION_data
@@ -72,7 +81,8 @@ contains
     type(orion_data)     :: own_gas
     character(len=llen)  :: gasfile
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
-    integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar
+    integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar, b, b2
+    integer, allocatable :: npair(:,:)
     character(len=2)     :: method
 
     if (self%staticDone) then
@@ -130,9 +140,18 @@ contains
     endif
     call read_cdp_bc_file(IGLOO_phase_prefix,self%material,self%geoblock,self%gasblock)
     call tm_phase(TM_BLOCKS)
-    call buildInterfaceLinks(self%geoblock, self%links)
+    call buildInterfaceLinks(self%geoblock, self%links, self%donors)
     if (mpi_is_root) call reportNonAligned(self%links)
     self%connFaces = hasConnectedFaces(self%geoblock)
+    if (hasChimeraFaces(self%geoblock)) then
+      call buildOverlapMap(self%geoblock, self%ovl, npair)
+      if (mpi_is_root) then
+        do b = 1, size(npair, 1); do b2 = 1, size(npair, 2)
+          if (npair(b, b2) > 0) write(*,'(A,3(I0,A))') ' [IGLOO] chimera overlap: ', npair(b, b2), &
+            ' cells of block ', b, ' covered by block ', b2
+        enddo; enddo
+      endif
+    endif
     if (ord2) then
       call buildGhostLinks(self%gasblock, self%geoblock, nGhostIn, nGhostMiss, nGhostFar)
       if (mpi_is_root .and. nGhostIn + nGhostMiss > 0) write(*,'(A,2(I0,A))') &
@@ -193,6 +212,7 @@ contains
     enddo
 
     !> Drop last sweep's source/euler accumulators (all of them); solve re-allocates them at the right shape.
+    if (allocated(self%mirrored)) deallocate(self%mirrored)
     do b = 1, nb
       if (allocated(self%source(b)%sourceMass)) deallocate(self%source(b)%sourceMass)
       if (allocated(self%source(b)%sourceMom))  deallocate(self%source(b)%sourceMom)
@@ -234,6 +254,7 @@ contains
           part%exitFace    = 0
           part%gasExitFace = 0
           part%Af          = 0._R8
+          part%exitCode    = 0
           part%gone  = .false.
           part%wasin = .false.
           part%Ncell = 0
@@ -301,7 +322,7 @@ contains
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
                                 trajOn, scatOn, dNscat, trajSample, threshold, &
                                 probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
-                                nConnHit, nSweepHit, nRimExit, &
+                                nConnHit, nSweepHit, nRimExit, nInjNoCell, &
                                 unitSnap, snapOn, timeOn, tEnd
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
@@ -314,6 +335,7 @@ contains
                                     TM_IDLE, TM_ACCUM, TM_GHOST, TM_SOLVE, TM_LOOP, TM_CENSUS, &
                                     TM_REDUCE, TM_FINALIZE, TM_SMOOTH
     use IGLOO_Mod_Footprint,  only: record_footprint
+    use IGLOO_overlap,        only: mirrorSource, mirrorEuler
     use oslo
     use omp_lib
     implicit none
@@ -323,10 +345,10 @@ contains
     integer :: loopCounter, maxShedSeen
     !> Child-ID band of the current generation. No initializer here: it would imply SAVE.
     integer :: curBase, curCount, newBase, childLocal, childGlobal, pidx, idBase
-    integer :: foldStat(2)
+    integer :: foldStat(2), noCell(1)
     integer, allocatable :: nShedAll(:), shedOff(:)
     ! logical, allocatable :: famDone(:)
-    real(R8), allocatable :: relTol(:), absTol(:)
+    real(R8), allocatable :: relTol(:), absTol(:), exch(:,:)
     !> Scatter-cloud weight-quantum (dNscat) auto-sizing scratch.
     integer  :: c, nStreams, nValid
     real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp
@@ -340,6 +362,7 @@ contains
     endif
     self%stateIsFresh = .false.
     nSectorFold = 0; nMultiFold = 0; nStencilRefresh = 0; nConnHit = 0; nSweepHit = 0; nRimExit = 0
+    nInjNoCell = 0
 
     sourceSwitch = self%srcSwitch
     eulerSwitch  = self%eulSwitch
@@ -380,9 +403,11 @@ contains
       endif
       open(newunit=unitExit,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'outloc-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat')
       if (timeOn) then
-        write(unitExit,'(1X,A)') 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","t"'
+        write(unitExit,'(1X,A)') 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","t",'// &
+                                 '"bc","d<sub>p</sub>"'
       else
-        write(unitExit,*) 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID"'
+        write(unitExit,'(1X,A)') 'variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID",'// &
+                                 '"bc","d<sub>p</sub>"'
       endif
       !> Parcels still in the domain at time-end, one record each.
       if (snapOn) then
@@ -492,7 +517,7 @@ contains
               call tm_parcel_begin()
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                              mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab,    &
-                             gr%shed(ip), noShed=(loopCounter==maxLoop))
+                             mat%LvTab,mat%cpvTab, gr%shed(ip), noShed=(loopCounter==maxLoop))
               call tm_parcel_end()
             enddo
             !$OMP END PARALLEL DO
@@ -584,10 +609,11 @@ contains
                 kid%xi0     = 0.5_R8
                 !> fresh trajectory bookkeeping
                 kid%Ncell = 0; kid%gone = .false.; kid%wasin = .false.; kid%angle = 0._R8
-                kid%lost  = .false.
+                kid%lost  = .false.; kid%exitCode = 0
                 !> parcel mass state: m from (rho, d), then the parcel flow mdot = npdot*m
                 call kid%computeMass(mat%rhoTab)
                 kid%m0   = kid%m
+                kid%n0   = kid%npdot
                 kid%mdot = kid%npdot * kid%m
                 !> ODE state: enthalpy/temperature slot, then the model-3 count slot
                 if (kid%varCp) then
@@ -631,7 +657,8 @@ contains
             if (.not. owns_particle(ip)) cycle
             call tm_parcel_begin()
             call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
-                            mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab)
+                            mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
+                            mat%LvTab,mat%cpvTab)
             call tm_parcel_end()
           enddo
           !$OMP END PARALLEL DO
@@ -658,9 +685,26 @@ contains
       do b = 1, nb
         call self%source(b)%finalize(self%geoblock(b))
       enddo
+      if (allocated(self%ovl%blk)) call mirrorSource(self%source, self%ovl, self%mirrored)
       call tm_nest(TM_SMOOTH)
-      call mollifySourceBlocks(self%source, self%geoblock, self%links)
+      allocate(exch(nm + 4, nb))
+      call mollifySourceBlocks(self%source, self%geoblock, self%links, self%donors, exch)
       call tm_unnest()
+      !> the chimera halo's exchange joins the mirrored totals: Sum over blocks - mirrored = once-counted
+      if (allocated(self%mirrored)) then
+        do b = 1, nb
+          self%mirrored(b)%mass = self%mirrored(b)%mass + exch(1:nm, b)
+          self%mirrored(b)%mom  = self%mirrored(b)%mom  + exch(nm+1:nm+3, b)
+          self%mirrored(b)%en   = self%mirrored(b)%en   + exch(nm+4, b)
+        enddo
+        if (mpi_is_root) then
+          do b = 1, nb
+            write(*,'(A,I0,A,*(1X,ES23.15E3))') ' [IGLOO] chimera overlap: block ', b, &
+              ' mirrored source (mass, momentum, energy):', self%mirrored(b)%mass, self%mirrored(b)%mom, &
+              self%mirrored(b)%en
+          enddo
+        endif
+      endif
     endif
     if (eulerSwitch) then
       do m = 1, nm
@@ -669,8 +713,9 @@ contains
           do b = 1, nb
             call self%euler(b, fam)%reduce(self%geoblock(b))
           enddo
+          if (allocated(self%ovl%blk)) call mirrorEuler(self%euler(:, fam), self%geoblock, self%ovl)
           call tm_nest(TM_SMOOTH)
-          call mollifyEulerBlocks(self%euler(:, fam), self%geoblock, self%links)
+          call mollifyEulerBlocks(self%euler(:, fam), self%geoblock, self%links, self%donors)
           call tm_unnest()
           do b = 1, nb
             call self%euler(b, fam)%normalize(self%material(m)%hTab, self%material(m)%cpVariable)
@@ -688,6 +733,10 @@ contains
                                                  foldStat(1), ' (multi-sector: ', foldStat(2), ')'
     endif
     if (self%connFaces) call reportBlockChanges()
+    noCell = [nInjNoCell]
+    call mpi_allreduce_sum_i4_array(noCell, 1)
+    if (mpi_is_root .and. noCell(1) > 0) write(*,'(A,I0,A)') ' [WARNING] ', noCell(1), &
+      ' parcel(s) whose injection point no cell holds: not integrated'
     if (mpi_is_root) then
       if (snapOn) then
         write(*,'(A,ES16.8E2,A)') '  Stop condition : time-end = ', tEnd, ' s reached, or the particle left the domain'

@@ -16,8 +16,8 @@ cell) with the 25 records of the outlet face (x = 0.15) coded 103, header only. 
 - C1 `drag-stokes`'s closed form on every row (its oracle, imported and run on this output).
 - C2 25 exits, every one at x = 0.15 with Af = d_y d_z = 1.000000E-04 m² (to the E13.6 print).
 - C3 the same `input.ini` on `drag-stokes`'s `INPUT/` (outlet 400), run by `check.py` into `ref-400/`:
-  trajectories and exit records equal as sorted multisets, `source.tec` within 1e-12 of the field scale
-  (`compare_tec.py`); measured equal, worst 0.
+  trajectories equal as sorted multisets, the exit records too apart from their boundary code (`bc` 103 here,
+  400 there), `source.tec` within 1e-12 of the field scale (`compare_tec.py`); measured equal, worst 0.
 - C4 `run_out.txt` holds `[IGLOO] block changes: 0 via the connected cell, 0 via the block sweep, 0 rim exits;
   stencil refreshed on a block change at a boundary entry: 0` exactly once — the witness that the file's 103
   was read as 103 (a 400 face prints no such line) — and the 400 run's log holds none.

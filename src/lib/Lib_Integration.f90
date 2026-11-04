@@ -11,7 +11,7 @@ contains
   !> Integrate one particle from its current state to domain exit (or burnout) through the
   !  steady gas field, one cell segment at a time, depositing source and Eulerian moments.
   subroutine integrate(part,geoblock,gasblock,srcblock,eulblock,     &
-                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab, shed,noShed)
+                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, shed,noShed)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
     use IGLOO_variables,  only: unitTraj,unitExit,unitScat,unitSnap,iprint,dtprint,tEnd,timeOn,snapOn, &
@@ -19,6 +19,7 @@ contains
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
+                                nInjNoCell,                                &
                                 trajOn, scatOn, dNscat, sixOverPi, pi
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs
@@ -47,7 +48,7 @@ contains
     type(obj_sourceblock), intent(inout) :: srcblock(nb)
     type(obj_eulerblock),  intent(inout) :: eulblock(nb)
     real(R8),              intent(in)    :: hTab(:),cpTab(:),rhoTab(:),     &
-                                            mupTab(:),sigTab(:),psatTab(:)
+                                            mupTab(:),sigTab(:),psatTab(:),LvTab(:),cpvTab(:)
     !> This parent's shed list (intent(inout) required).
     type(shedList),        intent(inout), optional :: shed
     !> True on the last generation pass: sheds are suppressed and the parent keeps the mass.
@@ -79,6 +80,7 @@ contains
     real(R8) :: geoHexNorms(3,2,6), geoHexCentroids(3,2,6)
     real(R8) :: gasHexNorms(3,2,6), gasHexCentroids(3,2,6)
     logical  :: geoHexDegen(2,6), gasHexDegen(2,6)
+    real(R8) :: geoHexTol, gasHexTol   !> the cached cells' containment tolerances
     integer,  parameter :: maxIter=500000, nMaxCell=10, nMaxStall=100
     !> accessed by ODEsystem, rhs1-4, solout via host association
     real(R8) :: y(part%neq), oldLocal(part%neq)
@@ -133,11 +135,20 @@ contains
       part%angle = 0._R8
       part%i     = part%iInj
       part%stateVar(1:3) = part%pInj
-      call part%updateCell(geoblock)
+      if (.not. injCellHolds()) call part%updateCell(geoblock)
 
       if (part%gone) then
         write(*,'(A,I4,A)')                                                         &
                 '[WARNING] Particle ',part%ID,' has been initialized out of domain!'
+        call flushScat()
+        return
+      endif
+      !> No cell holds the injection point: the parcel is not integrated (counted per sweep).
+      if (any(part%i < 1)) then
+        part%lost = .true.
+        part%gone = .true.
+        !$OMP ATOMIC
+        nInjNoCell = nInjNoCell + 1
         call flushScat()
         return
       endif
@@ -156,6 +167,7 @@ contains
       endif
       if (part%varCp) then; part%stateVar(7) = lookupTab(hTab,part%tp); else; part%stateVar(7) = part%tp; endif
       call part%computeMass(rhoTab); part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot
+      part%n0 = part%npdot
 
       select case(part%model)
       case(2,5); part%stateVar(8) = part%m
@@ -289,7 +301,7 @@ contains
         !> Gas crossing: advance igas on the dual mesh (gas-primary tracking).
         if (newGas) then
           call part%advanceGasCell(gasblock(b))
-          call gasblock(b)%getVertices(part%igas,gasVert,mesh2D, gasHexNorms, gasHexCentroids, gasHexDegen)
+          call gasblock(b)%getVertices(part%igas,gasVert,mesh2D, gasHexNorms, gasHexCentroids, gasHexDegen, gasHexTol)
           if (.not.mesh2D) then
             !> 3D: vert numbering from getVertices
             part%xi0(1) = (part%stateVar(1) - gasVert(1,1)) / (gasVert(1,5) - gasVert(1,1) + toll)
@@ -310,7 +322,8 @@ contains
               nStencilRefresh = nStencilRefresh + 1
               call handleGeoEvent()
             else
-              call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen)
+              call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen, &
+                  tol=geoHexTol)
             endif
           else
             call part%updateCell(geoblock); call handleGeoEvent()
@@ -327,7 +340,8 @@ contains
         !> ord1: geo-driven.
         if (IamOut) then
           call part%updateCell(geoblock); b = part%i(1)
-          call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen)
+          call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen, &
+              tol=geoHexTol)
         endif
         if (newGas) then
           part%igas = part%i(2:4)
@@ -412,11 +426,11 @@ contains
       mdotOut = part%mdot
       if (part%model == 4) mdotOut = part%npdot*part%m
       if (timeOn) then
-        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), &
-                                                                  part%angle, mdotOut, part%Af, part%ID, part%time
+        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,ES16.8E2,I5,E13.6E2)') part%stateVar(1:3), part%tp, &
+              norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%time, part%exitCode, part%d
       else
-        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8)') part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), &
-                                                         part%angle, mdotOut, part%Af, part%ID
+        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,I5,E13.6E2)') part%stateVar(1:3), part%tp, &
+              norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%exitCode, part%d
       endif
     end subroutine writeExitRow
 
@@ -660,7 +674,8 @@ contains
     end subroutine rhs1
     subroutine rhs2(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
-      call rhsEvaporation(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,psatTab, gas,gasVert,gasState, ng,ngVert)
+      call rhsEvaporation(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,psatTab,LvTab,cpvTab, &
+                          gas,gasVert,gasState, ng,ngVert)
     end subroutine rhs2
     subroutine rhs3(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
@@ -668,7 +683,8 @@ contains
     end subroutine rhs3
     subroutine rhs4(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
-      call rhsEvapBreakup(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,mupTab,sigTab,psatTab, gas,gasVert,gasState, ng,ngVert)
+      call rhsEvapBreakup(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,mupTab,sigTab,psatTab, &
+                          LvTab,cpvTab, gas,gasVert,gasState, ng,ngVert)
     end subroutine rhs4
     subroutine rhs5(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
@@ -710,10 +726,12 @@ contains
 
       !> Geo containment only when the gas cell is on a boundary  (ord2==true)
       if (.not.ord2 .or. atGasBoundary) then
-            IamOut = .not. isPointInsideCell(y(1:3),vert,mesh2D,geoHexNorms,geoHexCentroids,geoHexDegen,part%exitFace,sectorOut)
+            IamOut = .not. isPointInsideCell(y(1:3),vert,mesh2D,geoHexNorms,geoHexCentroids,geoHexDegen,part%exitFace,sectorOut, &
+                                            geoHexTol)
       else; IamOut = .false.
       endif
-      if     ( ord2 ) then; newGas = .not.isPointInsideCell(y(1:3),gasVert,mesh2D,gasHexNorms,gasHexCentroids,gasHexDegen,part%gasExitFace,sectorOut)
+      if     ( ord2 ) then; newGas = .not.isPointInsideCell(y(1:3),gasVert,mesh2D,gasHexNorms,gasHexCentroids,gasHexDegen,part%gasExitFace, &
+                                                         sectorOut,gasHexTol)
       elseif (IamOut) then; newGas = .true.; endif
 
       !> Locator-lost start: suppress containment interrupts until the particle has moved escapeDist.
@@ -821,13 +839,27 @@ contains
 
     !> Cell-entry geometry and gas state of the current cell.
     subroutine refreshCellEntry()
-      call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen)   ! geo cell (NOT the gas dual index igas)
+      call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen, &
+          tol=geoHexTol)   ! geo cell (NOT the gas dual index igas)
       if (ord2) then
-        call gasblock(b)%getVertices(part%igas,gasVert,mesh2D, gasHexNorms, gasHexCentroids, gasHexDegen)
+        call gasblock(b)%getVertices(part%igas,gasVert,mesh2D, gasHexNorms, gasHexCentroids, gasHexDegen, gasHexTol)
         call setAtGasBoundary()
       endif
       call gasblock(b)%gasProperties(gas,part%igas)
     end subroutine refreshCellEntry
+
+    !> A pinned parcel whose point lies in its injection cell by the test that pinned it (the 12-plane
+    !  test of the cell, also on a one-layer mesh) takes that cell, with no search.
+    logical function injCellHolds()
+      use IGLOO_RayFaceIntersection3D, only: isPointInsideHexahedron12
+      real(R8) :: v(3,8)
+      injCellHolds = .false.
+      if (any(part%iInj < 1)) return
+      call geoblock(part%iInj(1))%getVertices(part%iInj(2:4), v)
+      if (.not. isPointInsideHexahedron12(part%pInj, v)) return
+      part%i = part%iInj; part%wasin = .true.; part%lost = .false.
+      injCellHolds = .true.
+    end function injCellHolds
 
     !> True when the gas dual cell sits on a block boundary
     subroutine setAtGasBoundary()
@@ -840,11 +872,11 @@ contains
     !> After a geo crossing: refresh the geo cell and, if the particle stayed in, re-resolve the gas cell.
     subroutine handleGeoEvent()
       b = part%i(1)
-      call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen)
+      call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen, tol=geoHexTol)
       if (.not.part%gone) then
         part%gasExitFace = 0
         call part%advanceGasCell(gasblock(b))
-        call gasblock(b)%getVertices(part%igas,gasVert,mesh2D, gasHexNorms, gasHexCentroids, gasHexDegen)
+        call gasblock(b)%getVertices(part%igas,gasVert,mesh2D, gasHexNorms, gasHexCentroids, gasHexDegen, gasHexTol)
         call gasblock(b)%gasProperties(gas,part%igas)
         call setAtGasBoundary()
       endif

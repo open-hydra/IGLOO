@@ -61,7 +61,7 @@ def main():
     dn = float(m.group(1)); dn_h = half_ulp_es(m.group(1))
     npart = sum(int(k) for k in re.findall(r"number of particles =\s*(\d+)", txt))
 
-    exits = {int(r[8]): (float(r[6]), r[9]) for r in rows("OUTPUT/outloc-A.dat", 10)}
+    exits = {int(r[8]): (float(r[6]), r[9]) for r in rows("OUTPUT/outloc-A.dat", 12)}
     m0 = {}
     for r in rows("OUTPUT/trajectories-A.dat", 11):
         i, t = int(r[9]), float(r[10])

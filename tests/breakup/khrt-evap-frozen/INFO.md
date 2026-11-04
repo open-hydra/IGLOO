@@ -31,9 +31,9 @@ a KH shed takes from a parent's state, its child carries out (`5e-6`, the E13.6 
 | a child's number rate doubled in its model-4 state | exit flows 1.25× the injected flow (children 0.1542 kg/s instead of 0.0771); Σ `wdot` = −0.0771 kg/s |
 | exit record printing the injected or birth flow (the output before model 4's exit flow) | exit flows 1.25× the injected flow; momentum and energy budgets 0.38 and 0.25 of their input flux |
 | the parent deposits its shed child's birth flow | Σ `wdot` = **+0.0771** kg/s = 0.25 of the injected flow = the children's birth flow |
-| fixed | PASS: KH worst 2.18e-4, 241 children (237 fly), 134 persisted RT shatters, Σ `wdot` 1.2e-10 of the injected flow; exit flows: parents 0.2320, children 0.0771 kg/s, total 6.3e-7 from the injected flow; momentum 5.9e-7, energy 6.3e-7 |
+| fixed | PASS: KH worst 2.18e-4, 241 children (237 fly), 134 persisted RT shatters, Σ `wdot` 7.7e-11 of the injected flow; exit flows: parents 0.2320, children 0.0771 kg/s, total 6.6e-7 from the injected flow; momentum 6.5e-7, energy 6.6e-7 |
 
 ## Pass criterion
-All oracles PASS. The mass tolerance `1e-9` is ~10× the measured floor (1.2e-10): the product `n·m` of the
+All oracles PASS. The mass tolerance `1e-9` is ~13× the measured floor (7.7e-11): the product `n·m` of the
 two ODE states drifts at the integration tolerance, breakup conserving it exactly only in the equations. The exit-flow
-tolerance `5e-6` is the E13.6 bound on column 7 (measured 6.3e-7).
+tolerance `5e-6` is the E13.6 bound on column 7 (measured 6.6e-7).

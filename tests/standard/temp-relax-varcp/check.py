@@ -110,14 +110,17 @@ TOL_H = 1.0e-6                                 # fixture h column vs the recipe 
 MIN_PTS, N_PER_GROUP = 3, {210: 5, 300: 5, 750: 10, 840: 5}
 
 
-def load_rows(path, ncol):
+def load_rows(path, ncol, idcol=None):
+    """{ID: [row, ...]}: rows of ncol values, the ID in column idcol (default the last), the columns before it."""
+    if idcol is None:
+        idcol = ncol - 1
     parts = {}
     for line in open(path):
         c = line.split()
         if len(c) != ncol:
             continue
         try:
-            r = [float(v) for v in c[:-1]] + [int(c[-1])]
+            r = [float(v) for v in c[:idcol]] + [int(c[idcol])]
         except ValueError:
             continue
         parts.setdefault(r[-1], []).append(r)
@@ -136,7 +139,7 @@ def read_source(path):
 def main():
     fails = []
     try:
-        traj, exits = load_rows(TRAJ, 10), load_rows(EXIT, 9)
+        traj, exits = load_rows(TRAJ, 10), load_rows(EXIT, 11, 8)
         wdot, _, _, _, E = read_source(SRC)
         log = open(LOG, errors="replace").read()
         tmin, tmax, cols = load_properties(os.path.join(HERE, "INPUT", "properties.dat"))

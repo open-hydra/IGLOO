@@ -179,7 +179,7 @@ def check_mass_telescoping(parts):
     mdot_col7 = {}
     for line in open(OUTLOC).read().splitlines()[2:]:
         c = line.split()
-        if len(c) == 9:
+        if len(c) == 11:
             mdot_col7[int(c[8])] = float(c[6])
     tol, label = TELESCOPE_TOL, "traj evap flow"
     if model4():

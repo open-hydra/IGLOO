@@ -35,6 +35,8 @@ committed; `INPUT/properties.dat` is `common/properties.dat`, symlinked):
 | X1 | target | the same box as one block (`make_box_case.py`, two families, generated and run by `check.py` into `ref-1blk/` with this `input.ini`): trajectory rows away from the chimera planes x = 0.065 and 0.085, and the exit records, equal as sorted multisets |
 | C1 | control | 50 exits (25 parcels per family), every one at x = 0.15: a parcel that leaves block 1 at x = 0.085 continues in block 2 |
 | C2 | control | no `stuck in cell`, `no net progress` or `outer maxIter` line in `run_out.txt` |
+| G-M1 | target | the overlap's deposits reach both blocks: `source.tec`, `euler1.tec` and `euler2.tec` cell by cell against the one-block run (block 1's cell i is its cell i, block 2's is 26 + i), to 1e-12 of each field's scale (measured: bit-identical); the run log's mirrored totals — block 2's equal the one-block sums over cells 27–34, block 1's are zero — to 1e-12 of Σ\|S\| over those cells |
+| G-M2 | target | `source.tec` summed over both blocks minus the mirrored totals equals the one-block total, to 1e-12 of Σ\|S\| |
 
 **RED.** A reader without the 102 record stops at its first scan of the file: the 6-integer header
 read takes the counts line and the first donor line, its code is the donor's k (1), and the run ends
@@ -45,14 +47,13 @@ skips both searches and goes to the exit branch: every parcel leaves at x = 0.08
 differ (1650 against 2900) and all 50 exits. The payload checks are gated by the `refuse-chimera-*` cases
 ([refusals](../refusals/INFO.md)) and the stored counts, donors and weights by `test_bc_families` (F6).
 
-**Measured, not gated: the fields in the overlap.** A parcel deposits into the block it is tracked in,
-so the overlap's deposits sit in block 1 (the parcels change block at x = 0.085) and block 2's cells
-there receive none. Against the box as one block, `source.tec` with `mollify = off`: block 1's cells
-27–34 equal the one-block cells bit for bit, block 2's cells 1–8 hold 0, every cell outside the
-overlap equals its one-block cell in both blocks, and the two blocks' totals equal the one-block total
-to 1.2e-15. With the mollifier at its default (8 passes, zero flux at the chimera faces) the totals
-still agree (4e-16), but the smoothing cannot carry a deposit across x = 0.085: summed over both
-blocks, the energy source of the last column before that plane exceeds the one-block run's by 17.6 %
-of the field's largest column and the first column after it falls short by as much, down to 0.4 % five
-columns away on either side (`Fx` 16.7 %); block 2 also spreads its own deposits back into its overlap
-cells, up to 7e-3 of the field scale. Nothing shows at x = 0.065, where no parcel enters block 2.
+**The fields in the overlap.** A parcel deposits into the block it is tracked in: the parcels change
+block at x = 0.085, so the overlap's deposits are made in block 1 and block 2's cells 1–8 receive none of
+their own. The setup maps every cell to the cell of the other block that holds its centroid, unless the
+centroid lies on that block's chimera face (`chimera
+overlap: 200 cells of block 1 covered by block 2` and the converse), and after the deposits are reduced
+every cell adds what the other block deposited in the cells mapped onto it: with `mollify = off` block 2's
+cells 1–8 then equal the one-block cells 27–34, block 1's cells equal the one-block cells, and the two
+blocks' totals minus the mirrored totals equal the one-block total. **RED** (G-M1, G-M2) without the
+mirror: block 2's overlap cells hold 0 — `source.tec` off by 7.0e-3 (`Fx`) and 2.2e-2 (`E`) of the field
+scale, `euler1/2.tec` by up to the whole scale — and no mirrored-total line is printed.

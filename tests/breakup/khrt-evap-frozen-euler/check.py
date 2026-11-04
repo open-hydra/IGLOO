@@ -19,7 +19,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 EUL, OUTLOC = "OUTPUT/euler1.tec", "OUTPUT/outloc-A.dat"
-TOL_EUL = 1.0e-5     # |sum rho_p V - sum F_p t_p| / sum F_p t_p (measured 7.5e-7)
+TOL_EUL = 1.0e-5     # |sum rho_p V - sum F_p t_p| / sum F_p t_p (measured 7.9e-7)
 
 
 def load(name, path):
@@ -50,7 +50,7 @@ def euler_mass():
 
 def check_euler_mass():
     rows = [l.split() for l in open(OUTLOC)]
-    rows = [c for c in rows if len(c) == 10 and c[0][0] in "0123456789-"]
+    rows = [c for c in rows if len(c) == 12 and c[0][0] in "0123456789-"]
     ft = sum(float(c[6]) * float(c[9]) for c in rows)
     em = euler_mass()
     rel = abs(em - ft) / ft if ft > 0.0 else 1.0

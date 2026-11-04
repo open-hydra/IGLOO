@@ -9,8 +9,8 @@
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
-#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
+#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
 #   repeatability/      two-sweep gates (twosweep driver): 13 cases
 #   mpi/                registered only under USE_MPI: 7 rank-count cases + 3 consistency + 1 determinism
 #                       + 13 two-sweep cases
@@ -184,6 +184,7 @@ igloo_unit_test(test_ghost_bc           infrastructure/ghost_bc           "unit;
 # a bc.txt with one copy of every block's table per family (what ATLAS writes for a phase with several
 # populations, block-outermost): copy c is family c. A reader that feeds copy 1 to every family fails
 # F2-F5 (per-family krho/rp/gp/ds, one and two blocks) while the one-copy control F1 passes either way.
+# F8: the mollifier's link table joins a 201 pair (0 links on a table of 101 records only).
 igloo_unit_test(test_bc_families        infrastructure/bc_families        "unit;infrastructure;bc;io;t1")
 # the ord2 dual must TILE the domain: its boundary cells straddle the boundary face, so an
 # unclipped one dilutes its deposited density by the outside fraction. Pins sum(dual cellVol)
@@ -202,9 +203,17 @@ igloo_unit_test(test_dual_clip          infrastructure/dual_clip          "unit;
 igloo_unit_test(test_source_reduction  infrastructure/source_reduction   "unit;infrastructure;euler;t1")
 # The field mollifier over blocks joined by 101 links (mollifyBlocks): a random grid cut into blocks
 # smooths as the uncut grid (3D and 2D cuts, three blocks, 2 x 2 blocks, above the OpenMP threshold),
-# Sum(q V) holds over the blocks, and without an aligned link each block is smoothed on its own.
+# Sum(q V) holds over the blocks, and without an aligned link each block is smoothed on its own; U1d a
+# periodic (201) pair in one block smooths as the grid with j wrapped; U-T a centroid on the other block's
+# chimera face is not covered by it; U-M (i) the chimera overlap mirror, (ii) two blocks overlapping across
+# chimera (102) links smooth as the grid, (iii) each block's total changes by exactly what its chimera cells
+# took from the donor halo.
 igloo_unit_test(test_mollify_blocks    infrastructure/mollify_blocks     "unit;infrastructure;mollify;t1")
 igloo_unit_test(test_host_assoc        infrastructure/host_assoc         "unit;infrastructure;build;t1")
+# The 12-plane point-in-hexahedron test and its tolerance relative to the cell: on a face shared by two cells
+# 100 m from the origin every point lies in at least one of them (C1; RED at the absolute 1e-15 m: up to 60 % of
+# the face in neither cell), and the two copies of the test decide alike (C2).
+igloo_unit_test(test_containment       infrastructure/containment        "unit;infrastructure;geometry;t1")
 
 # ---------- two-sweep repeatability harness -----------------------------------
 # Drives one pinned population through solve() TWICE. Every other case in the suite is
@@ -483,6 +492,8 @@ igloo_unit_test(test_evaporation evaporation "unit;evaporation;c;t4")
 igloo_unit_test(test_mhb98_decane evaporation "unit;evaporation;val;mhb98;f2")
 # Promoted 2026-07-07 with the A3/A4/A9 production fixes (see BUGS.md):
 igloo_unit_test(test_evap_probes evaporation "unit;evaporation;c;t8")
+# The Lv and Cpv columns at the droplet temperature: a table read at T_p acts as the scalar of that value.
+igloo_unit_test(test_vapour_tables evaporation "unit;evaporation;c;t8")
 igloo_e2e_case(d2law evaporation/d2law "e2e;evaporation")
 # threads-d2law: d2law at 1, 2 and 5 threads (evaporating parcels, the mass source).
 igloo_threads_case(threads-d2law evaporation/d2law "e2e;evaporation;omp")
@@ -682,6 +693,10 @@ igloo_e2e_case(khrt-evap-frozen breakup/khrt-evap-frozen "e2e;breakup;evaporatio
 # enters without its model's ODE state count: every child burns out at birth, the Eulerian mass 13 % off
 # the exit-record sum.
 igloo_e2e_case(khrt-evap-frozen-euler breakup/khrt-evap-frozen-euler "e2e;breakup;evaporation;khrt;m4;euler")
+# khrt-evap-live: the khrt-e2e case under model 4 with live evaporation and negligible KH stripping (B1 1e8,
+# no RT, mShedLim 1e-5): a KH shed counts the stripped mass only, so no child appears, and the evaporated
+# flow closes the mass budget. RED while the shed counts the per-drop deficit m0 - m (17 children).
+igloo_e2e_case(khrt-evap-live breakup/khrt-evap-live "e2e;breakup;evaporation;khrt;m4")
 # khrt-shed-noexchange: the khrt-e2e case with NoDrag and NoHeat, so a KH shed is the only exchange left:
 # every cell of the source field must be zero. RED while the shed cell receives the child's birth flux.
 igloo_e2e_case(khrt-shed-noexchange breakup/khrt-shed-noexchange "e2e;breakup;khrt;source")
@@ -771,7 +786,9 @@ igloo_e2e_case(rot-2blk infrastructure/rot-2blk "e2e;infrastructure;bc;io")
 # chimera-2blk: drag-stokes's box as two overlapping blocks joined by chimera (102) faces (make_box_case.py
 # --overlap 4 --families 2), each family copy repeating the chimera payload: the file is read (the routing
 # line counts 50 facelets) and every parcel leaves at x = 0.15. RED on a reader without 102: pass 0 stops on
-# the first payload ("bad BC cell line ... Legacy-schema").
+# the first payload ("bad BC cell line ... Legacy-schema"). G-M1/G-M2: the overlap's deposits mirrored into
+# both blocks (each equal to the one-block run on its cells; the mirrored totals). RED without the mirror:
+# block 2's overlap cells 0 (E 2.2e-2 of the scale), no mirrored-total line.
 igloo_e2e_case(chimera-2blk infrastructure/chimera-2blk "e2e;infrastructure;bc;io;chimera")
 # chimera-2blk-rim: block 2 one row shorter in y, block 1's face-2 facelets of the uncovered row written 100 (no
 # donor): the block-change line counts 40 crossings through the connected cell and 10 rim exits, which leave at
@@ -780,12 +797,24 @@ igloo_e2e_case(chimera-2blk-rim infrastructure/chimera-2blk-rim "e2e;infrastruct
 # two-fam-bc-2blk-stretch-ord2: the box as two blocks of 1.667 mm | 3.333 mm cells joined by a 101 face, gas-order
 # 2, T linear in x: the face's ghost nodes interpolated from the other block's gas; check.py holds trajectory T,
 # source E and euler T_p away from the face to the same cells as one block. RED with the ghost ring copying the
-# partner centre: trajectory T 3.07e-2 K, E 9.8e-4 and T_p 2.8e-5 of the scale (10x the tolerances).
+# partner centre: trajectory T 3.07e-2 K, E 9.8e-4 and T_p 2.8e-5 of the scale; with the gas sampler's Newton
+# stopped at an absolute 1e-5 m: 4.43e-4 K, 9.5e-6 and 2.9e-7 (5-9x the tolerances).
 igloo_e2e_case(two-fam-bc-2blk-stretch-ord2 infrastructure/two-fam-bc-2blk-stretch-ord2 "e2e;infrastructure;bc;gas")
 # chimera-2blk-shift-ord2: chimera-2blk with block 2 shifted by half a cell, gas-order 2, T linear in x: each 102
 # ghost node interpolated between two centres of the other block. A control: on a linear field the own linear
 # fill is exact too (test_ghost_bc's G6u separates them on a quadratic field).
 igloo_e2e_case(chimera-2blk-shift-ord2 infrastructure/chimera-2blk-shift-ord2 "e2e;infrastructure;bc;chimera;gas")
+# chimera-2blk-mollify: chimera-2blk with the field mollifier at its default (8 passes), each chimera face smoothed
+# through the halo of its layer-1 donors: check.py holds each block's smoothed source and eulerian fields cell by
+# cell to the box run as one block (G-C6) and the once-counted total with the halo's exchange in the mirrored
+# totals (G-M2s). RED with zero flux at the chimera faces: block 2 E 2.8e-3 of the scale (3.1e-2 without the
+# mirror too); with the exchange left out of the mirrored totals, G-M2s 3.6e-4 of Sum |S|.
+igloo_e2e_case(chimera-2blk-mollify infrastructure/chimera-2blk-mollify "e2e;infrastructure;bc;chimera;mollify")
+# chimera-2blk-shift-mollify: chimera-2blk-shift-ord2's blocks (block 2 shifted by half a cell, two donors of
+# weight 1/2) on a uniform gas with the mollifier on: the once-counted total of the smoothed run equals the
+# unsmoothed run's (G-M2s; RED with the halo's exchange left out of the mirrored totals: 5.7e-5 of Sum |S|);
+# each block's seam against the one-block run on its own cells is printed, not gated.
+igloo_e2e_case(chimera-2blk-shift-mollify infrastructure/chimera-2blk-shift-mollify "e2e;infrastructure;bc;chimera;mollify")
 # varcp-tmin: a varying-cp table from 280 K, the parcels at 600 K on its extended last segment.
 igloo_e2e_case(varcp-tmin infrastructure/varcp-tmin "e2e;infrastructure;heat")
 
@@ -818,6 +847,12 @@ igloo_refusal_case(refuse-pure2d-mesh      infrastructure/refusals/pure2d-mesh
 igloo_refusal_case(refuse-pure2d-bc        infrastructure/refusals/pure2d-bc
                    "IGLOO: bc.txt has 5 header integers (a pure 2D ATLAS file): give IGLOO the boundary file of the one-cell-layer mesh"
                    "e2e;refusal;infrastructure;bc")
+# The vapour columns: an Lv column off the Psat slope (kJ/kg written as J/kg), and Lv given both as a key
+# and as a column.
+igloo_refusal_case(refuse-vapour-cc        infrastructure/refusals/vapour-cc
+                   "Lv column: not the slope of the Psat column"        "e2e;refusal;evaporation")
+igloo_refusal_case(refuse-vapour-ini-both  infrastructure/refusals/vapour-ini-both
+                   "IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column" "e2e;refusal;evaporation")
 # bc.txt layouts: one copy of every block's table, or one copy per family in ATLAS's order; any
 # other record count (two copies for A 3) and a copy that does not repeat copy 1's faces (two
 # swapped headers) stop at setup. A reader that consumes copy 1 only runs both to completion.
@@ -838,6 +873,10 @@ igloo_refusal_case(refuse-chimera-weights  infrastructure/refusals/chimera-weigh
                    "IGLOO: chimera donor list is not normalised" "e2e;refusal;infrastructure;bc;chimera")
 igloo_refusal_case(refuse-chimera-copies   infrastructure/refusals/chimera-copies
                    "IGLOO: bc.txt family copies do not repeat the chimera donor counts of copy 1" "e2e;refusal;infrastructure;bc;chimera")
+# A one-sided periodic (201) face (refusals/make_periodic.py: face 3 names face-4 partners whose records are 400):
+# the field mollifier's link table refuses it. RED before that table took 201: the run integrates and exits 0.
+igloo_refusal_case(refuse-periodic-not-mutual infrastructure/refusals/periodic-not-mutual
+                   "IGLOO: a 101/201 connection is not mutual: the partner cell does not name this cell" "e2e;refusal;infrastructure;bc")
 # Unknown model tokens (ledger O26): the selectors used to print the menu and execute a plain
 # `stop`, exit 0 -- invisible to any harness or embedding parent. Now error stops.
 igloo_refusal_case(refuse-drag-token        infrastructure/refusals/drag-token
@@ -947,11 +986,14 @@ igloo_refusal_case(refuse-body-accel       infrastructure/refusals/body-accel
 # fork's fix/dopri5-solout (six-argument call, silent label 79). Needs BOTH OSlo checkouts (IGLOO's
 # lib/OSLO, hydra's lib/OSLO) on that commit.
 igloo_e2e_case(drag-stokes-dopri5 standard/drag-stokes-dopri5 "e2e;standard")
-# translational periodic pair (bcdef 201): closed-form v(x) across wraps + modular-y
+# translational periodic pair (bcdef 201): closed-form v(x) across wraps + modular-y; the source smoothed across the
+# pair (S-P: unsmoothed siblings smoothed by check.py, periodic in y). S-P RED with zero flux at the 201 faces:
+# 2.5e-8 of the field scale on the case itself (its deposits are uniform in y), 0.36 with only face 1's first row injecting.
 igloo_e2e_case(periodic-y infrastructure/periodic-y "e2e;infrastructure")
 # periodic-2d: periodic-y on a one-layer box, the 201 lines in ATLAS's nine-integer single-layer form (the partner
 # face is the fifth integer). RED on a reader taking four index integers there: the partner's k read as its face,
-# 18 of 25 parcels cycling to the outer iteration cap, the run not ending in 300 s.
+# 18 of 25 parcels cycling to the outer iteration cap, the run not ending in 300 s. S-P as periodic-y's: RED 6.1e-8
+# (the case), 0.29 (first row).
 igloo_e2e_case(periodic-2d infrastructure/periodic-2d "e2e;infrastructure;bc")
 # periodic-2d-ord2: periodic-2d at gas-order 2 with a temperature wave across the 201 pair: T follows the periodic
 # extension of the cell-centre field (the 201 ghosts carry the partner side's gas). RED on the ring's linear fill.
@@ -973,6 +1015,16 @@ igloo_e2e_case(bc-center-2grp infrastructure/bc-center-2grp "e2e;infrastructure;
 igloo_e2e_case(inj-pack    infrastructure/inj-pack    "e2e;infrastructure;injection")
 igloo_e2e_case(inj-dscell  infrastructure/inj-dscell  "e2e;infrastructure;injection")
 igloo_e2e_case(inj-dsdegen infrastructure/inj-dsdegen "e2e;infrastructure;injection")
+# inj-edge: drag-stokes's box injected with ds = 0.25 cm, whose advancing front pins lattice points on the inlet
+# cells' edges, the domain's outer edge y = 0 among them (a few 1e-18 m outside the face): every parcel takes its
+# own inlet cell and leaves at x = 0.15. RED while the search rejected the point that the pinning test accepted:
+# no cell, block index 0, SIGSEGV after 5 of 472 exits.
+igloo_e2e_case(inj-edge infrastructure/inj-edge "e2e;infrastructure;pinning")
+# inj-edge-payload: drag-stokes's box with the inlet rows 1 and 3 at krho 0.68, kV 0.2 and a 2.5 mm lattice in row
+# 2 only, whose points reach the edges it shares with rows 1 and 3: every parcel carries its own cell's payload
+# (first-row velocity, total mass flow). RED while the search moved edge points into the neighbouring row: 9
+# parcels at 2 m/s instead of 1, the exit mass flow 2.8 % above the inlet's.
+igloo_e2e_case(inj-edge-payload infrastructure/inj-edge-payload "e2e;infrastructure;pinning")
 # O32 / O19 (2): an `=` inside an in-section `;` comment line must be inert. FiNeR before
 # 18fa207 parsed such a line as an option and DROPPED every option after it in the same
 # section, at exit 0 -- so the gate is drag-stokes's INI plus one comment line, and the

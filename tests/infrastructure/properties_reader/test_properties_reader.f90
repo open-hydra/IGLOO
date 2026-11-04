@@ -12,8 +12,10 @@ program test_properties_reader
     !                 PR11 check_table_columns, PR12 tableValue, PR13 scan_rows (scan-*.dat)
     !                 PR14 comp_TfromTab: the inverse of lookupTab on tables from 250 K, 300 K and 1 K
     !                 PR15 lookupTab at a non-finite temperature: NaN, and no invalid flag
+    !                 PR-V2 validate_vapour_columns: each code once
     !   two-material  PR9 nm-: zone A tabulated, zone B all zero (Clausius-Clapeyron)
     !   atlas-water   PR10 atlas-: the table ATLAS GPB writes for water with psat-vapour = H2O
+    !                 PR-V1 atlas-: its Lv, Mv, Cpv columns by name, Lv(T) and cpv(T) through tableValue
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_IO_INI,         only: read_IGLOO_input
@@ -27,7 +29,9 @@ program test_properties_reader
                                     TAB_RHO_NONPOSITIVE, TAB_CP_NONPOSITIVE, TAB_H_NONMONOTONE, &
                                     TAB_H_CP_MISMATCH, TAB_DATUM_MISMATCH, TAB_NEGATIVE_T, &
                                     PSAT_OK, PSAT_ABSENT, PSAT_NONFINITE, PSAT_NEGATIVE, PSAT_NONMONOTONE, &
-                                    PSAT_CONSTANT, PSAT_TBOIL_RANGE, PSAT_TBOIL_MISMATCH
+                                    PSAT_CONSTANT, PSAT_TBOIL_RANGE, PSAT_TBOIL_MISMATCH, &
+                                    validate_vapour_columns, VAP_OK, VAP_ABSENT, VAP_NONFINITE, VAP_PARTIAL, &
+                                    VAP_NONPOSITIVE, VAP_MV_VARIES, VAP_WITHOUT_PSAT, VAP_CC_MISMATCH
     use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_nan, ieee_positive_inf, &
                                              ieee_negative_inf
     use, intrinsic :: ieee_exceptions, only: ieee_set_flag, ieee_get_flag, ieee_invalid
@@ -199,7 +203,74 @@ contains
                        tableValue(mat(1)%psatTab, Tmin, Tmax, 385._R8) == mat(1)%psatTab(380), &
                        'PR10 atlas-: psat 5 K outside the table = the end values', nbad)
         endif
+        call atlas_vapour_legs(mat, nbad)
     end subroutine atlas_water_legs
+
+
+    !> PR-V1: Lv, Mv, Cpv found by name; Lv and cpv through tableValue at six temperatures (below the table,
+    !  the datum temperature, a node, between nodes, the boiling temperature, above) equal to the file's
+    !  own numbers by the same formula (exact on a node and outside, 4 eps between nodes); Lv(298.15 K)
+    !  the material's scalar latent heat.
+    subroutine atlas_vapour_legs(mat, nbad)
+        type(obj_material), intent(in)    :: mat(:)
+        integer,            intent(inout) :: nbad
+        real(R8), parameter :: Tq(6) = [250._R8, 298.15_R8, 300._R8, 337.5_R8, 373.15_R8, 400._R8]
+        logical,  parameter :: onNode(6) = [.true., .false., .true., .false., .false., .true.]
+        real(R8) :: T(200), Lvf(200), Mvf(200), Cpvf(200), row(8), eLv, eCpv, tol
+        integer  :: u, ios, n, k
+        character(len=512) :: line
+
+        call check(mat(1)%LvVariable .and. mat(1)%cpvVariable,   'PR-V1 atlas-: Lv and Cpv tabulated', nbad)
+        call check(mat(1)%Mv == 18.015_R8,                       'PR-V1 atlas-: Mv = 18.015 from its column', nbad)
+        if (.not. (allocated(mat(1)%LvTab) .and. allocated(mat(1)%cpvTab))) then
+            call check(.false.,                                  'PR-V1 atlas-: Lv and Cpv tables allocated', nbad)
+            return
+        endif
+        open(newunit=u, file='INPUT/atlas-properties.dat', status='old', action='read')
+        n = 0
+        do
+            read(u, '(a)', iostat=ios) line
+            if (ios /= 0) exit
+            read(line, *, iostat=ios) row
+            if (ios /= 0) cycle
+            n = n + 1
+            T(n) = row(1); Lvf(n) = row(6); Mvf(n) = row(7); Cpvf(n) = row(8)
+        enddo
+        close(u)
+        call check(n == Tmax - Tmin + 1 .and. nint(T(1)) == Tmin,  'PR-V1 atlas-: the file read here spans the table', nbad)
+        call check(all(Mvf(1:n) == 18.015_R8),                   'PR-V1 atlas-: the Mv column is 18.015 on every row', nbad)
+        do k = 1, 6
+            eLv  = rel(tableValue(mat(1)%LvTab, Tmin, Tmax, Tq(k)), file_value(Lvf, Tq(k)))
+            eCpv = rel(tableValue(mat(1)%cpvTab, Tmin, Tmax, Tq(k)), file_value(Cpvf, Tq(k)))
+            tol  = merge(0._R8, 4._R8*epsilon(1._R8), onNode(k))
+            write(*,'(a,f7.2,a,es9.2,a,es9.2)') '    T = ', Tq(k), ' K: rel Lv ', eLv, ', rel Cpv ', eCpv
+            call check(eLv <= tol .and. eCpv <= tol, 'PR-V1 atlas-: Lv and cpv at T = the file''s by the same formula', nbad)
+        enddo
+        call check(rel(mat(1)%Lv, file_value(Lvf, 298.15_R8)) <= 4._R8*epsilon(1._R8), &
+                   'PR-V1 atlas-: the scalar Lv = Lv(298.15 K) of the column', nbad)
+    end subroutine atlas_vapour_legs
+
+
+    !> A column read from the file at T: linear between the nodes, the end value outside (tableValue's rule).
+    pure function file_value(col, Tx) result(v)
+        real(R8), intent(in) :: col(:), Tx
+        real(R8) :: v, Tc
+        integer  :: i
+        Tc = min(max(Tx, real(Tmin, R8)), real(Tmax, R8))
+        if (Tc >= real(Tmax, R8)) then
+            v = col(Tmax - Tmin + 1)
+        else
+            i = int(Tc)
+            v = col(i - Tmin + 1) + (col(i - Tmin + 2) - col(i - Tmin + 1))*(Tc - real(i, R8))
+        endif
+    end function file_value
+
+
+    pure function rel(a, b) result(e)
+        real(R8), intent(in) :: a, b
+        real(R8) :: e
+        e = abs(a - b)/abs(b)
+    end function rel
 
 
     !> The table checks and the psat lookup on synthetic input, one outcome per code.
@@ -207,7 +278,7 @@ contains
         integer, intent(inout) :: nbad
         real(R8) :: tab(100:110), bad(100:110), T(11), cp(11), rho(11), h(11), nan
         character(len=64) :: tok4(4), tok5(5)
-        integer :: k, icp, irho, ih, ips, code
+        integer :: k, icp, irho, ih, ips, code, ilv, imv, icpv
         integer :: nzone, nsize, ndata, ntrail, badline, nannounced(nzone_max), nrows(nzone_max)
         logical :: relative
 
@@ -253,30 +324,30 @@ contains
 
         ! PR8: the header names
         tok4 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy']
-        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code)
+        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
         call check(code == TAB_OK .and. icp == 1 .and. irho == 2 .and. ih == 3 .and. ips == 0 .and. relative, &
                    'PR8 the 4-column header: OK, relative, no Psat', nbad)
         tok5 = [character(len=64) :: 'temperature', 'PSAT', 'enthalpy_abs', 'cp', 'density']
-        call classify_table_tokens(tok5, icp, irho, ih, ips, relative, code)
+        call classify_table_tokens(tok5, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
         call check(code == TAB_OK .and. icp == 3 .and. irho == 4 .and. ih == 2 .and. ips == 1 .and. .not. relative, &
                    'PR8 aliases in another order: OK, absolute, Psat first', nbad)
         tok5 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'Enthalpy_abs']
-        call classify_table_tokens(tok5, icp, irho, ih, ips, relative, code)
+        call classify_table_tokens(tok5, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
         call check(code == TAB_TWO_ENTHALPY,                                     'PR8 both enthalpy names: TWO_ENTHALPY', nbad)
         tok5 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'Cp']
-        call classify_table_tokens(tok5, icp, irho, ih, ips, relative, code)
+        call classify_table_tokens(tok5, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
         call check(code == TAB_DUPLICATE,                                        'PR8 Cp twice: DUPLICATE', nbad)
         tok4 = [character(len=64) :: 'Cp', 'Temperature', 'Density', 'Enthalpy']
-        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code)
+        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
         call check(code == TAB_NO_TEMPERATURE,                                   'PR8 Temperature not first: NO_TEMPERATURE', nbad)
         tok4 = [character(len=64) :: 'Temperature', 'Density', 'Enthalpy', 'Psat']
-        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code)
+        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
         call check(code == TAB_NO_CP,                                            'PR8 no Cp: NO_CP', nbad)
         tok4 = [character(len=64) :: 'Temperature', 'Cp', 'Enthalpy', 'Psat']
-        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code)
+        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
         call check(code == TAB_NO_DENSITY,                                       'PR8 no Density: NO_DENSITY', nbad)
         tok4 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Psat']
-        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code)
+        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv)
         call check(code == TAB_NO_ENTHALPY,                                      'PR8 no enthalpy: NO_ENTHALPY', nbad)
 
         ! PR11: the columns
@@ -326,7 +397,44 @@ contains
         call scan_rows('../two-material/INPUT/nm-properties.dat', 5, nzone, nsize, ndata, nannounced, nrows, ntrail, badline)
         call check(nzone == 2 .and. nsize == 2 .and. ndata == 2 .and. all(nannounced(1:2) == 620) .and. &
                    all(nrows(1:2) == 620) .and. ntrail == 0 .and. badline == 0, 'PR13 two zones of 620 rows: clean', nbad)
+
+        call vapour_code_legs(tab, nan, nbad)
     end subroutine function_legs
+
+
+    !> PR-V2: validate_vapour_columns returns each code once, on columns beside the PR4 Psat column
+    !  (ln p = -5000/T + const, so Lv*Mv/Ru = 5000 K is its Clausius-Clapeyron slope).
+    subroutine vapour_code_legs(ps, nan, nbad)
+        real(R8), intent(in)    :: ps(100:110), nan
+        integer,  intent(inout) :: nbad
+        real(R8), parameter :: RuT = 8314.46_R8
+        real(R8) :: Lv(100:110), Mv(100:110), cv(100:110), zero(100:110), bad(100:110)
+
+        Lv = 5000._R8*RuT/18._R8; Mv = 18._R8; cv = 1900._R8; zero = 0._R8
+        call check(validate_vapour_columns(Lv, Mv, cv, ps, .true., 100, 110, 105._R8, RuT, 0._R8) == VAP_OK, &
+                   'PR-V2 the three columns on the Psat slope: OK', nbad)
+        call check(validate_vapour_columns(zero, zero, zero, ps, .true., 100, 110, 105._R8, RuT, 18._R8) == VAP_ABSENT, &
+                   'PR-V2 all three zero: ABSENT', nbad)
+        bad = Lv; bad(103) = nan
+        call check(validate_vapour_columns(bad, Mv, cv, ps, .true., 100, 110, 105._R8, RuT, 0._R8) == VAP_NONFINITE, &
+                   'PR-V2 a NaN in Lv: NONFINITE', nbad)
+        bad = cv; bad(100:102) = 0._R8
+        call check(validate_vapour_columns(Lv, Mv, bad, ps, .true., 100, 110, 105._R8, RuT, 0._R8) == VAP_PARTIAL, &
+                   'PR-V2 Cpv zero on three rows: PARTIAL', nbad)
+        call check(validate_vapour_columns(Lv, Mv, -cv, ps, .true., 100, 110, 105._R8, RuT, 0._R8) == VAP_NONPOSITIVE, &
+                   'PR-V2 Cpv negative: NONPOSITIVE', nbad)
+        bad = Mv; bad(104) = 18.5_R8
+        call check(validate_vapour_columns(Lv, bad, cv, ps, .true., 100, 110, 105._R8, RuT, 0._R8) == VAP_MV_VARIES, &
+                   'PR-V2 Mv not constant: MV_VARIES', nbad)
+        call check(validate_vapour_columns(Lv, Mv, cv, zero, .false., 100, 110, 105._R8, RuT, 0._R8) == VAP_WITHOUT_PSAT, &
+                   'PR-V2 no Psat column: WITHOUT_PSAT', nbad)
+        call check(validate_vapour_columns(Lv/1000._R8, Mv, cv, ps, .true., 100, 110, 105._R8, RuT, 0._R8) == &
+                   VAP_CC_MISMATCH, 'PR-V2 Lv in kJ/kg: CC_MISMATCH', nbad)
+        ! the slope with Mv from the key: the column absent, MvKey 18 (OK) or 18/2.5 (ratio 2.5)
+        call check(validate_vapour_columns(Lv, zero, cv, ps, .true., 100, 110, 105._R8, RuT, 18._R8) == VAP_OK .and. &
+                   validate_vapour_columns(Lv, zero, cv, ps, .true., 100, 110, 105._R8, RuT, 18._R8/2.5_R8) == &
+                   VAP_CC_MISMATCH, 'PR-V2 Mv from the key: 18 OK, 18/2.5 CC_MISMATCH', nbad)
+    end subroutine vapour_code_legs
 
 
     !> comp_TfromTab against lookupTab on tables that start above 1 K, and ICE's energy rule on the same table.

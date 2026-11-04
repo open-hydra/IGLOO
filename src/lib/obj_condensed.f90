@@ -56,6 +56,7 @@ module IGLOO_data_phases
     real(R8) :: Yinf       = 0._R8
     real(R8) :: LvMvOverRu = 0._R8
     real(R8) :: invTboil   = 0._R8
+    logical  :: LvVariable = .false., cpvVariable = .false.  !> Lv(T), cpv(T) from the properties.dat columns
     !> Optional per-material properties; each is read only by the model that needs it.
     real(R8) :: alphaE = 1._R8, kLiq = 0._R8, muLiq = 0._R8
     real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8
@@ -102,6 +103,7 @@ module IGLOO_data_phases
     real(R8) :: Yinf       = 0._R8
     real(R8) :: LvMvOverRu = 0._R8
     real(R8) :: invTboil   = 0._R8
+    logical  :: LvVariable = .false., cpvVariable = .false.  !> Lv(T), cpv(T) from the properties.dat columns
     !> Optional per-material properties; each is read only by the model that needs it.
     real(R8) :: alphaE = 1._R8, kLiq = 0._R8, muLiq = 0._R8
     real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8
@@ -110,7 +112,7 @@ module IGLOO_data_phases
     !> sub-objects
     type(obj_group), allocatable :: group(:)
     !> Thermodynamic tables (defined if variable properties)
-    real(R8), dimension(:), allocatable :: hTab, cpTab, rhoTab, sigTab, mupTab, psatTab
+    real(R8), dimension(:), allocatable :: hTab, cpTab, rhoTab, sigTab, mupTab, psatTab, LvTab, cpvTab
   contains
     procedure, pass(self), public :: assign_material2group
   end type obj_material
@@ -179,6 +181,8 @@ contains
         gr%evapWord     = self%evapWord
         gr%evapSelect   = self%evapSelect
         gr%psatVariable = self%psatVariable
+        gr%LvVariable   = self%LvVariable
+        gr%cpvVariable  = self%cpvVariable
         gr%Mv           = self%Mv
         gr%Lv           = self%Lv
         gr%Tboil        = self%Tboil
@@ -214,7 +218,7 @@ contains
     class(obj_group),  intent(inout) :: self
     integer, optional, intent(in)    :: rangeStart, rangeEnd
     integer :: i, start, end, mdl, nBase, nBrk, nEvap, nAux, nAuxSt, nEvV
-    logical :: propFlags(5), mdotSwitch
+    logical :: propFlags(7), mdotSwitch
     real(R8) :: bp_empty(0)
 
     if (present(rangeStart).and.present(rangeEnd)) then
@@ -228,8 +232,9 @@ contains
     mdotSwitch = (self%evapSelect > 0)
     mdl = determineModel(mdotSwitch, self%brkupEqOde, self%combSelect, self%solidSelect)
     self%neq  = computeNeq(mdl, eulerSwitch, srcBodyForce)
-    !> Build fixed-size propFlags: [varCp, varRho, varSig, varMup, varPsat]
-    propFlags = [self%cpVariable, self%rhoVariable, .false., .false., .false.]
+    !> Build fixed-size propFlags: [varCp, varRho, varSig, varMup, varPsat, varLv, varCpv]
+    propFlags = [self%cpVariable, self%rhoVariable, .false., .false., .false., .false., .false.]
+    if (self%evapSelect > 0) propFlags(6:7) = [self%LvVariable, self%cpvVariable]
     if (self%brkupSelect > 0) then
       propFlags(3) = self%sigVariable
       propFlags(4) = self%mupVariable

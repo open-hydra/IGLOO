@@ -71,6 +71,23 @@ Used when `block(1)%Nz > 1`.  An advancing-front BFS over the injection face:
 The BFS queue is the flat `Inj(:,:)` / `ind(:,:)` arrays; `head` walks the populated
 tail.  Maximum particle count is hard-capped at `alloc = 10⁷`.
 
+### The cell a parcel starts in
+
+A face-injected parcel starts its trajectory in the inlet cell that pinned it whenever the 12-plane test
+of that cell (with the cell's tolerance, see [Geometry](geometry.md#ispointinsidehexahedron12)) holds its
+injection point: a point on an edge two inlet cells share lies in both, and one on the domain boundary can
+lie a few ulps outside it. Otherwise the cell search of `updateCell` locates the parcel. `initializePart`
+reads the loading, velocity, direction and temperature columns of the cell the parcel starts in (the
+diameter was drawn at pinning). A
+parcel whose injection point no cell holds is not integrated;
+the run log counts such parcels once per sweep:
+
+```
+ [WARNING] N parcel(s) whose injection point no cell holds: not integrated
+```
+
+Verified by the `inj-edge` and `inj-edge-payload` cases (see the [V&V overview](../vv/index.md)).
+
 ---
 
 ## Stochastic diameter sampling

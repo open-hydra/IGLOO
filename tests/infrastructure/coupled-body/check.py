@@ -161,7 +161,7 @@ def check_source():
     mdot = {}
     for ln in open(OUTLOC).read().splitlines()[2:]:
         c = ln.split()
-        if len(c) == 9:
+        if len(c) == 11:
             mdot[int(c[8])] = float(c[6])
     if not mdot:
         print("[FAIL] no exits in outloc -- cannot scale the source totals")

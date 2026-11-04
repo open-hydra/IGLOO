@@ -134,7 +134,13 @@ Two discrete events ride on top of it in the `solout` callback:
   least the parent count (Reitz 1987 product-parcel rule), a child parcel of diameter
   $d_\mathrm{stable}$ carrying the stripped mass is appended (`brkupHasChild = .true.`,
   `childState = [v_p, d_\mathrm{stable}, n_\mathrm{child}]`, velocity equal to the
-  parent's) and the parent's count is restored.  The stripped mass leaves with the child and
+  parent's) and the parent's count is restored.  Without evaporation (ODE model 3) the stream
+  mass is constant and the stripped mass is the per-drop deficit since the last event.  With
+  evaporation (ODE model 4) the drop mass $m$ also falls by evaporation, which never changes
+  $\dot n$: with $n_0$ the number rate right after the last event, the stripped mass flow is
+  $(\dot n - n_0)\,m$, the shed fires when it exceeds `mShedLim` $\cdot\,n_0 m_0$ and
+  $n_\mathrm{child} = (\dot n - n_0)(d/d_\mathrm{stable})^3 \ge n_0$, and the parent returns
+  to $n_0$, so evaporated mass never enters a child.  The stripped mass leaves with the child and
   never enters the gas source: the parent's outgoing flux in the shed segment includes the
   child's birth flux, which the child deposits along its own path (see
   [Eulerian feedback](eulerian-feedback.md)).

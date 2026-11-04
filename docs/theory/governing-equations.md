@@ -191,8 +191,11 @@ The gas state vector at a particle position is assembled as:
 
 When `gas-order = 2`, `interp2ndOrder` (3D) or `sampleGas2D` (2D / axisymmetric) in
 `Lib_Equations.f90` evaluates the gas state via trilinear inverse mapping with
-Newton-Raphson iteration (max 10 steps, stopped once the position residual is below
-$10^{-5}$ m, $\boldsymbol{\xi}$ clamped to $[0,1]^3$), or bilinear with an analytic inverse.
+Newton-Raphson iteration (max 10 steps from the particle's previous local coordinates, stopped once
+$\lVert \mathbf{x}(\boldsymbol{\xi}) - \mathbf{p} \rVert < \max(10^{-12} h,\ 64\,\varepsilon L)$, with $h$
+the cell diagonal, $L$ the largest coordinate magnitude of the cell's nodes and $\varepsilon$ the machine
+epsilon — relative to the cell and reachable in floating point —, $\boldsymbol{\xi}$ clamped to
+$[0,1]^3$), or bilinear with an analytic inverse.
 On an axisymmetric wedge the meridian field is sampled at the particle's $(x, r)$ and its
 velocity rotated to the particle's azimuth before it enters the ODE.  When
 `gas-order = 1`, the cell-centre values are used directly.
