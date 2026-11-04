@@ -129,7 +129,8 @@ and the drop reaches `mBurnTol` — a **clean burnout** through the normal branc
 the solver-failure exit. That branch is gated separately in
 [`infrastructure/solver-fail-consumed`](../../infrastructure/solver-fail-consumed/INFO.md),
 which forces it with an unreachable ODE tolerance; its siblings `solver-fail-consumed-m4`
-(model 4) and `solver-fail-midway` (a step limit, mid-trajectory) are the branch's other cases.
+(model 4), `solver-fail-midway` (a step limit, mid-trajectory) and `solver-fail-refine` (a step
+limit on a refinement call) are the branch's other cases.
 
 | gate | assertion | RED without the scrub | GREEN |
 |---|---|---|---|

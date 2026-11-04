@@ -159,10 +159,10 @@ terms differ per model to account for how each model tracks mass and parcel numb
 The momentum moment is integrated in the meridian frame on a wedge, as for the source.
 
 The moments and the residence time $T_\mathrm{stay}$ are set by the segment's finalize and zeroed at every
-segment start, so a segment that does not finalize — the ODE solver gives up on it (`Run_ODESolver`
-returns `err < 0`) or the inner loop reaches its cap — deposits no Euler moments and adds no residence to
-the body-force correction. A segment that ends on a non-finite state is reverted to its last good step and
-deposited up to it, with the residence of that step.
+segment start. A segment that ends on a numerical failure — the ODE solver gives up on it (`Run_ODESolver`
+returns `err < 0`) or the state turns non-finite — is reverted to its last accepted step and deposited up to
+it, with the residence of that step; a segment cut by the inner loop's cap deposits no Euler moments and adds
+no residence to the body-force correction.
 
 All accumulations are `!$OMP ATOMIC UPDATE`.
 

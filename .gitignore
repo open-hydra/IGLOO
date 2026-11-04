@@ -54,6 +54,8 @@ ref-[ABCD]
 # burn-box-residue runs its d-residue and fail-after siblings into ref-dres/ and ref-fail/ (tests/combustion/burn-box-residue/check.py)
 ref-dres
 ref-fail
+# solver-fail-refine runs its body-force sibling into ref-g/ (tests/infrastructure/solver-fail-refine/check.py)
+ref-g
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/
