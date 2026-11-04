@@ -103,6 +103,12 @@ import argparse
 import math
 import os
 
+import sys
+
+if os.path.dirname(os.path.abspath(__file__)) not in sys.path:   # bc401, beside this file, wherever this is
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # loaded from (a check.py loads it by path)
+import bc401  # noqa: E402
+
 # ---- geometry (SI) ----
 LX, LY, LZ = 0.15, 0.05, 0.05
 NX, NY, NZ = 60, 5, 5                    # cells per direction (Nz>=2 => 3D, no axisym)
@@ -388,6 +394,7 @@ def write_bc(path, kv, kt, rp, alpha=None, periodic_y=False, blocks=1, nx=NX, ny
                                 for g in (1, 2):
                                     for db, di, w in donors[g]:
                                         f.write(f"{db:8d}{di:8d}{m:8d}{n:8d}{w:24.16E}\n")
+    bc401.convert(path, quiet=True)            # the 401 record of ATLAS's mixture rule (field 1, G)
     return n_inlet
 
 

@@ -14,15 +14,17 @@ program test_bc_families
     ! faces) and 5 x 3 x 1 (46), H = 0.25. mdotGas is seeded on every face cell, so initMdotGas
     ! returns at once and the case stays a parser test. Two families throughout.
     !
-    !   F1  one copy (control)       fam 1 = fam 2 = (0.1, 1e-6), krhoTot 0.2          RED the same
-    !   F2  two copies, one block    fam 1 (0.1, 1e-6), fam 2 (0.2, 2e-6), krhoTot 0.3
-    !                                RED fam 2 (0.1, 1e-6), krhoTot 0.2 (copy 2 never read)
+    !   F1  one copy (control)       fam 1 = fam 2 = (0.1, 1e-6, 0.5)                    RED the same
+    !   F2  two copies, one block    fam 1 (0.1, 1e-6, 0.5), fam 2 (0.2, 2e-6, 0.7)
+    !                                RED fam 2 (0.1, 1e-6, 0.5) (copy 2 never read)
     !       run twice: two materials of one group (F2a), one material of two groups (F2b)
-    !   F3  two copies, two blocks   b1 as F2; b2 (0.3, 3e-6)/(0.4, 4e-6), krhoTot 0.7, three 401
+    !   F3  two copies, two blocks   b1 as F2; b2 (0.3, 3e-6, 0.9)/(0.4, 4e-6, 1.1), three 401
     !                                cells per block, all on face 1
     !                                RED block 2 reads block 1's copy 2: b2 face 1 (0.2, 2e-6) for
     !                                both families, three more 401 cells on b2 face 6
-    !   F4  two copies, 402          mdotPart = (0.1 + 0.2) H^2                         RED 0.2 H^2
+    !   F4  two copies, 402, lines of 9 fields (G is a 401 field): read, fam 1 (0.1, 1e-6, 0),
+    !                                fam 2 (0.2, 2e-6, 0)   RED a reader asking G of every inlet
+    !                                line stops at the first 402 record
     !   F5  two copies, ds on copy 2 properties(2,9) = 0.01, dsSwitch on               RED 0, off
     !   F6  chimera (102) faces, two blocks, two copies: face 2 of block 1 and face 1 of block 2
     !       carry ATLAS's payload (the donor counts of the two ghost layers, then one line per
@@ -44,7 +46,9 @@ program test_bc_families
     !       cell joined to the face-4 cell of its column and back, both normal to index direction 2.
     !       RED: a table of the 101 records only holds no link
     !
-    ! A pair (a, b) is a family's payload columns 1 and 6: krho (401) or gp (402), and rp.
+    ! A triple (a, b, g) is a family's payload columns 1, 6 and 10: krho/(1 - krho_tot) (401) or gp
+    ! (402), rp, and G (401; ATLAS writes one per cell, the same on its copies: told apart here, so a
+    ! copy mix-up shows; none on a 402 line, 0). RED a reader dropping column 10: G 0 in F1-F3.
     !
     use, intrinsic :: iso_fortran_env, only: real64
     use IGLOO_IO,          only: read_cdp_bc_file
@@ -66,7 +70,7 @@ program test_bc_families
     call f2_two_copies('F2a', [1, 1])
     call f2_two_copies('F2b', [2])
     call f3_two_blocks
-    call f4_mass_flux
+    call f4_402_no_g
     call f5_ds
     call f6_chimera
     call f7_connection_2d
@@ -82,7 +86,7 @@ program test_bc_families
 
 contains
 
-    !> F1 -- the control: one copy is every family's, and krhoTot sums it once per family.
+    !> F1 -- the control: one copy is every family's, G (column 10) included.
     subroutine f1_one_copy
         type(obj_block)                 :: geo(1)
         type(obj_flowblock)             :: gas(1)
@@ -90,10 +94,11 @@ contains
         integer :: u
         call setup(geo, reshape([4, 3, 1], [3, 1]), mat, [1, 1])
         open(newunit=u, file='INPUT/famtest-F1-bc.txt', status='replace', action='write')
-        call writeCopy(u, 1, 4, 3, 1, 401, 0.1_real64, 1.0e-6_real64, 0.0_real64)
+        call writeCopy(u, 1, 4, 3, 1, 401, 0.1_real64, 1.0e-6_real64, 0.0_real64, 0.5_real64)
         close(u)
         call read_cdp_bc_file('famtest-F1-', mat, geo, gas)
-        call expectInlet('F1', geo(1), [0.1_real64, 0.1_real64], [1.0e-6_real64, 1.0e-6_real64], 0.2_real64)
+        call expectInlet('F1', geo(1), 401, [0.1_real64, 0.1_real64], [1.0e-6_real64, 1.0e-6_real64], &
+                         [0.5_real64, 0.5_real64])
         call expectTags('F1', geo(1), 3)
     end subroutine f1_one_copy
 
@@ -108,11 +113,12 @@ contains
         integer :: u
         call setup(geo, reshape([4, 3, 1], [3, 1]), mat, groups)
         open(newunit=u, file='INPUT/famtest-'//lab//'-bc.txt', status='replace', action='write')
-        call writeCopy(u, 1, 4, 3, 1, 401, 0.1_real64, 1.0e-6_real64, 0.0_real64)
-        call writeCopy(u, 1, 4, 3, 1, 401, 0.2_real64, 2.0e-6_real64, 0.0_real64)
+        call writeCopy(u, 1, 4, 3, 1, 401, 0.1_real64, 1.0e-6_real64, 0.0_real64, 0.5_real64)
+        call writeCopy(u, 1, 4, 3, 1, 401, 0.2_real64, 2.0e-6_real64, 0.0_real64, 0.7_real64)
         close(u)
         call read_cdp_bc_file('famtest-'//lab//'-', mat, geo, gas)
-        call expectInlet(lab, geo(1), [0.1_real64, 0.2_real64], [1.0e-6_real64, 2.0e-6_real64], 0.3_real64)
+        call expectInlet(lab, geo(1), 401, [0.1_real64, 0.2_real64], [1.0e-6_real64, 2.0e-6_real64], &
+                         [0.5_real64, 0.7_real64])
         call expectTags(lab, geo(1), 3)
     end subroutine f2_two_copies
 
@@ -124,37 +130,35 @@ contains
         integer :: u
         call setup(geo, reshape([4, 3, 1, 5, 3, 1], [3, 2]), mat, [1, 1])
         open(newunit=u, file='INPUT/famtest-F3-bc.txt', status='replace', action='write')
-        call writeCopy(u, 1, 4, 3, 1, 401, 0.1_real64, 1.0e-6_real64, 0.0_real64)
-        call writeCopy(u, 1, 4, 3, 1, 401, 0.2_real64, 2.0e-6_real64, 0.0_real64)
-        call writeCopy(u, 2, 5, 3, 1, 401, 0.3_real64, 3.0e-6_real64, 0.0_real64)
-        call writeCopy(u, 2, 5, 3, 1, 401, 0.4_real64, 4.0e-6_real64, 0.0_real64)
+        call writeCopy(u, 1, 4, 3, 1, 401, 0.1_real64, 1.0e-6_real64, 0.0_real64, 0.5_real64)
+        call writeCopy(u, 1, 4, 3, 1, 401, 0.2_real64, 2.0e-6_real64, 0.0_real64, 0.7_real64)
+        call writeCopy(u, 2, 5, 3, 1, 401, 0.3_real64, 3.0e-6_real64, 0.0_real64, 0.9_real64)
+        call writeCopy(u, 2, 5, 3, 1, 401, 0.4_real64, 4.0e-6_real64, 0.0_real64, 1.1_real64)
         close(u)
         call read_cdp_bc_file('famtest-F3-', mat, geo, gas)
-        call expectInlet('F3 block 1', geo(1), [0.1_real64, 0.2_real64], [1.0e-6_real64, 2.0e-6_real64], 0.3_real64)
+        call expectInlet('F3 block 1', geo(1), 401, [0.1_real64, 0.2_real64], [1.0e-6_real64, 2.0e-6_real64], &
+                         [0.5_real64, 0.7_real64])
         call expectTags('F3 block 1', geo(1), 3)
-        call expectInlet('F3 block 2', geo(2), [0.3_real64, 0.4_real64], [3.0e-6_real64, 4.0e-6_real64], 0.7_real64)
+        call expectInlet('F3 block 2', geo(2), 401, [0.3_real64, 0.4_real64], [3.0e-6_real64, 4.0e-6_real64], &
+                         [0.9_real64, 1.1_real64])
         call expectTags('F3 block 2', geo(2), 3)
     end subroutine f3_two_blocks
 
-    !> F4 -- a 402 inlet: mdotPart sums gp * area over the families' own gp.
-    subroutine f4_mass_flux
+    !> F4 -- a 402 inlet: its lines of 9 fields (G, field 10, is a 401 field) are read, column 10 left 0.
+    subroutine f4_402_no_g
         type(obj_block)                 :: geo(1)
         type(obj_flowblock)             :: gas(1)
         type(obj_material), allocatable :: mat(:)
-        integer :: u, m
+        integer :: u
         call setup(geo, reshape([4, 3, 1], [3, 1]), mat, [1, 1])
         open(newunit=u, file='INPUT/famtest-F4-bc.txt', status='replace', action='write')
-        call writeCopy(u, 1, 4, 3, 1, 402, 0.1_real64, 1.0e-6_real64, 0.0_real64)
-        call writeCopy(u, 1, 4, 3, 1, 402, 0.2_real64, 2.0e-6_real64, 0.0_real64)
+        call writeCopy(u, 1, 4, 3, 1, 402, 0.1_real64, 1.0e-6_real64, 0.0_real64, 0.0_real64)
+        call writeCopy(u, 1, 4, 3, 1, 402, 0.2_real64, 2.0e-6_real64, 0.0_real64, 0.0_real64)
         close(u)
         call read_cdp_bc_file('famtest-F4-', mat, geo, gas)
-        do m = 1, 3
-            associate(cell => geo(1)%face(1)%cell(m, 1))
-            call expectEq('F4 cell '//itoa(m)//' mdotPart', cell%mdotPart, 0.3_real64*H*H)
-            call expectEq('F4 cell '//itoa(m)//' krhoTot', cell%krhoTot, 0.0_real64)
-            end associate
-        enddo
-    end subroutine f4_mass_flux
+        call expectInlet('F4', geo(1), 402, [0.1_real64, 0.2_real64], [1.0e-6_real64, 2.0e-6_real64], &
+                         [0.0_real64, 0.0_real64])
+    end subroutine f4_402_no_g
 
     !> F5 -- the per-cell spacing (column 9) of family 2 reaches family 2 and switches ds on.
     subroutine f5_ds
@@ -164,8 +168,8 @@ contains
         integer :: u
         call setup(geo, reshape([4, 3, 1], [3, 1]), mat, [1, 1])
         open(newunit=u, file='INPUT/famtest-F5-bc.txt', status='replace', action='write')
-        call writeCopy(u, 1, 4, 3, 1, 401, 0.1_real64, 1.0e-6_real64, 0.0_real64)
-        call writeCopy(u, 1, 4, 3, 1, 401, 0.2_real64, 2.0e-6_real64, 0.01_real64)
+        call writeCopy(u, 1, 4, 3, 1, 401, 0.1_real64, 1.0e-6_real64, 0.0_real64, 0.0_real64)
+        call writeCopy(u, 1, 4, 3, 1, 401, 0.2_real64, 2.0e-6_real64, 0.01_real64, 0.0_real64)
         close(u)
         call read_cdp_bc_file('famtest-F5-', mat, geo, gas)
         call expectEq('F5 fam 1 ds', geo(1)%face(1)%cell(1, 1)%properties(1, 9), 0.0_real64)
@@ -281,8 +285,8 @@ contains
             end select
             if (f == 1) then
                 write(u, '(6i8)') 1, i, j, 1, f, 401
-                write(u, '(2(2x,es12.5),2(3x,a),3(2x,es12.5),3x,a,2x,es12.5)') 0.1_real64, 0.1_real64, &
-                    'normal,', 'normal,', 1.0_real64, 1.0e-6_real64, 0.0_real64, 'Dirac', 0.0_real64
+                write(u, '(2(2x,es12.5),2(3x,a),3(2x,es12.5),3x,a,2(2x,es12.5))') 0.1_real64, 0.1_real64, &
+                    'normal,', 'normal,', 1.0_real64, 1.0e-6_real64, 0.0_real64, 'Dirac', 0.0_real64, 0.0_real64
             elseif (f == 3) then
                 write(u, '(6i8)') 1, i, j, 1, f, 201
                 write(u, '(9i8)') 1, m, 3, 1, 4, 1, 0, 0, 1
@@ -374,10 +378,10 @@ contains
 
     !> One copy of block b's boundary table in the ATLAS layout: header "b i j k f code" per face
     !  cell (fmn2ijk's face rule), f = 1..6, n outer, m inner; face 1 carries code1 and a payload
-    !  line in drag-stokes's form, every other face 400.
-    subroutine writeCopy(u, b, nx, ny, nz, code1, col1, rp, ds)
+    !  line in drag-stokes's form, G (field 10) last on a 401 line only (ATLAS), every other face 400.
+    subroutine writeCopy(u, b, nx, ny, nz, code1, col1, rp, ds, g)
         integer,      intent(in) :: u, b, nx, ny, nz, code1
-        real(real64), intent(in) :: col1, rp, ds
+        real(real64), intent(in) :: col1, rp, ds, g
         integer :: f, m, n, i, j, k, mend(6), nend(6)
         mend(1:2) = ny; nend(1:2) = nz
         mend(3:4) = nx; nend(3:4) = nz
@@ -393,8 +397,13 @@ contains
             end select
             if (f == 1) then
                 write(u, '(6i8)') b, i, j, k, f, code1
-                write(u, '(2(2x,es12.5),2(3x,a),3(2x,es12.5),3x,a,2x,es12.5)') col1, 0.1_real64, &
-                    'normal,', 'normal,', 1.0_real64, rp, 0.0_real64, 'Dirac', ds
+                if (code1 == 401) then
+                    write(u, '(2(2x,es12.5),2(3x,a),3(2x,es12.5),3x,a,2(2x,es12.5))') col1, 0.1_real64, &
+                        'normal,', 'normal,', 1.0_real64, rp, 0.0_real64, 'Dirac', ds, g
+                else
+                    write(u, '(2(2x,es12.5),2(3x,a),3(2x,es12.5),3x,a,2x,es12.5)') col1, 0.1_real64, &
+                        'normal,', 'normal,', 1.0_real64, rp, 0.0_real64, 'Dirac', ds
+                endif
             else
                 write(u, '(6i8)') b, i, j, k, f, 400
             endif
@@ -493,24 +502,25 @@ contains
     end subroutine expectChim
 
 
-    !> Face-1 inlet cells of blk: code 401, (column 1, column 6) per family, krhoTot.
-    subroutine expectInlet(lab, blk, col1, rp, krhoTot)
+    !> Face-1 inlet cells of blk: the given code, (column 1, column 6, column 10) per family.
+    subroutine expectInlet(lab, blk, code, col1, rp, g)
         character(*),    intent(in) :: lab
         type(obj_block), intent(in) :: blk
-        real(real64),    intent(in) :: col1(:), rp(:), krhoTot
+        integer,         intent(in) :: code
+        real(real64),    intent(in) :: col1(:), rp(:), g(:)
         integer :: m, fam
         do m = 1, blk%Ny
             associate(cell => blk%face(1)%cell(m, 1))
-            if (cell%bcdef /= 401) then
-                print '(a,i0,a)', '  [FAIL] famtest '//lab//' face 1 cell '//itoa(m)//' bcdef: got ', &
-                    cell%bcdef, ' want 401'
+            if (cell%bcdef /= code) then
+                print '(a,i0,a,i0)', '  [FAIL] famtest '//lab//' face 1 cell '//itoa(m)//' bcdef: got ', &
+                    cell%bcdef, ' want ', code
                 nfail = nfail + 1
             else
                 do fam = 1, size(col1)
                     call expectEq(lab//' cell '//itoa(m)//' fam '//itoa(fam)//' col1', cell%properties(fam, 1), col1(fam))
                     call expectEq(lab//' cell '//itoa(m)//' fam '//itoa(fam)//' rp',   cell%properties(fam, 6), rp(fam))
+                    call expectEq(lab//' cell '//itoa(m)//' fam '//itoa(fam)//' G',    cell%properties(fam, 10), g(fam))
                 enddo
-                call expectEq(lab//' cell '//itoa(m)//' krhoTot', cell%krhoTot, krhoTot)
             endif
             end associate
         enddo

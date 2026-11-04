@@ -15,7 +15,8 @@ must each inject with their own.
 | `totFam` × that, `totFam > 1` | one copy per family, ATLAS order | copy `c` → family `c`; copies 2.. must repeat copy 1's header integers and codes face by face |
 | anything else | — | refused at setup (`refuse-bc-copies`); a copy out of order is refused too (`refuse-bc-copy-order`) |
 
-`krhoTot` is then the sum of the families' own `krho` and `mdotPart` of their own `gp · area`; the
+Each family injects its own field 1, krho/(1 − krho_tot) as ATLAS writes it (krho_tot the cell's sum over every
+family of every dispersed phase), times ṁ_gas + G · area, G its field 10; the
 per-cell spacing (column 9) and the diameter law are per family. Only copy 1's headers tag the face
 cells; for 101/201 cells the connection line of the last copy is the one kept (ATLAS writes the same
 line in every copy).
@@ -26,11 +27,12 @@ line in every copy).
 (ρ_A 2950, ρ_B 1000) symlinked from `two-mat`, `drag = Stokes`, `[IGLOO-BC] ds = 10.0` (one
 centred parcel per inlet cell). `INPUT/bc.txt` is written by `make_fixture.py` (committed; run once
 from this directory, `python3 make_fixture.py`): 2 × 1250 records, family 1 (A) = `drag-stokes`'s
-inlet line, family 2 (B) half the loading and twice the radius:
+inlet line (krho 0.34), family 2 (B) half the loading (krho 0.17) and twice the radius, field 1 written as ATLAS
+writes it, krho/(1 − 0.51), and G = 0 last (`tools/bc401.py`):
 
 ```
-A:   3.40000E-01   1.00000E-01   normal,   normal,   1.00000E+00   5.94500E-06   0.00000E+00   Dirac   0.00000E+00
-B:   1.70000E-01   1.00000E-01   normal,   normal,   1.00000E+00   1.18900E-05   0.00000E+00   Dirac   0.00000E+00
+A:   6.9387755102040827E-01   1.00000E-01   normal,   normal,   1.00000E+00   5.94500E-06   0.00000E+00   Dirac   0.00000E+00   0.0000000000000000E+00
+B:   3.4693877551020413E-01   1.00000E-01   normal,   normal,   1.00000E+00   1.18900E-05   0.00000E+00   Dirac   0.00000E+00   0.0000000000000000E+00
 ```
 
 The headers use ATLAS's `b i j k f code` (6I8, `(i, j, k)` from `obj_block%fmn2ijk`'s face rule), so
@@ -49,9 +51,9 @@ exact on the uniform field):
 
 | quantity | read per family | copy 1 fed to both families |
 |---|---|---|
-| `krhoTot` | 0.34 + 0.17 = 0.51 | 0.68 |
-| ṁ_A = krho_A/(1 − krhoTot) · ṁ_gas | 8.326531e-4 kg/s | 1.275e-3 kg/s |
-| ṁ_B | 4.163265e-4 kg/s | 1.275e-3 kg/s |
+| field 1, krho/(1 − krho_tot), krho_tot = 0.34 + 0.17 = 0.51 | A 0.693878, B 0.346939 | 0.693878 for both |
+| ṁ_A = field 1 · ṁ_gas | 8.326531e-4 kg/s | 8.326531e-4 kg/s |
+| ṁ_B | 4.163265e-4 kg/s | 8.326531e-4 kg/s |
 | d_B | 23.78 µm | 11.89 µm |
 | τ_B = ρ_B d_B²/(18 μ) | 1.745e-3 s | 4.36e-4 s |
 | m_B/m_A at injection | (1000/2950) · 8 = 2.711864 | 0.338983 |

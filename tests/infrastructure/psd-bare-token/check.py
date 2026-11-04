@@ -40,7 +40,7 @@ def main():
             return 1
     log = open(LOG, errors="replace").read()
     lines = open(BC).read().splitlines()
-    payload = [l.split() for l in lines if len(l.split()) == 9]
+    payload = [l.split() for l in lines if len(l.split()) == 10]     # the 401 lines: nine fields and G
     tokens = {p[7] for p in payload}
     table = [tuple(float(v) for v in l.split()) for l in open(TABLE)
              if l.strip() and l.strip()[0] not in "#!;"]

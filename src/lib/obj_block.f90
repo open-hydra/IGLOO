@@ -10,9 +10,7 @@ module IGLOO_data_block
 
   type, public :: obj_bc_cell
     real(R8),dimension(:,:),allocatable :: properties !> first index per group (family)
-    real(R8)     :: krhoTot   = 0._R8 !> sum of krho across 401 families (dimensionless, ∈[0,1))
     real(R8)     :: mdotGas   = 0._R8 !> gas mass flow rate [kg/s]; external (coupled) or LSQ-extrapolated
-    real(R8)     :: mdotPart  = 0._R8 !> particle mass flow rate from 402/403 families [kg/s]
     real(R8)     :: area      = 0._R8 !> face area [m²]
     integer      :: nInj      = 0     !> injection particles pinned in this cell
     integer      :: bcdef     = 0     !> boundary code; 0 until read_cdp_bc_file tags the cell

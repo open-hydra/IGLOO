@@ -2,7 +2,7 @@
 
 **Purpose.** `[IGLOO-General] mdot-max` (g/s) caps the mass flow a parcel carries. The placement (`compute_ds`,
 `initialization.f90`) asks each inlet cell for N_pmin = ⌈F/ṁ_max⌉ parcels — F the cell's mass flow,
-κ_ρ/(1 − κ_ρ,tot)·(|ṁ_gas| + ṁ_part) for 401 — and packs the cell at the spacing R = d_cell/N_pmin (d_cell the
+field 1 · (|ṁ_gas| + G·A) for 401 (field 1 κ_ρ/(1 − κ_ρ,tot) and field 10 G as ATLAS writes them; `inlet-401-g` gives G a value) — and packs the cell at the spacing R = d_cell/N_pmin (d_cell the
 cell's mid-edge size; a positive `ds` below that wins), by `inj-pack`'s advancing front. No other case sets
 `mdot-max`.
 

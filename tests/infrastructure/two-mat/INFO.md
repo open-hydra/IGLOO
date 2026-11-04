@@ -13,8 +13,9 @@ lists `A 1` and `B 1`; `properties.dat` has two zones, A = `tests/common/propert
 2950, cp = 1250) and B the same table at ρ = 1000. `bc.txt` carries ONE property line per inlet
 cell and the reader copies it to every family, so both materials inject the same 25 parcels
 (same d, v₀, krho) and differ only through their density — hence their Stokes time
-τ = ρ_p d²/(18μ). The fan-out also sums krho into `krhoTot` for every family (0.68), so each
-parcel of either material carries ṁ = krho/(1 − krhoTot)·ṁ_gas = 0.34/0.32 · 1.2e-3 = 1.275e-3 kg/s
+τ = ρ_p d²/(18μ). The line's field 1 is krho/(1 − krho_tot) for the two families, 0.34/(1 − 0.68) (ATLAS's
+mixture rule: `INPUT/bc.txt` is drag-stokes's at 07110ce rewritten so, not a symlink), so each
+parcel of either material carries ṁ = field 1 · ṁ_gas = 0.34/0.32 · 1.2e-3 = 1.275e-3 kg/s
 (drag-stokes: 0.618e-3) — a 68 % condensed mixture; internally consistent, oracle-blind (Stokes
 relaxation is ṁ-independent), pinned by M7. `out-file = ALL` enables both the source and the eulerian output, so
 `source.tec` carries two `wdot` slots and one euler file per family is written.
@@ -30,7 +31,7 @@ and re-parametrised per material — one oracle, not two copies):
 | M4 | `source.tec` variables include `wdot(A)` and `wdot(B)`, both finite and identically zero (by construction — no phase change — so this pins only the slot names); the SHARED slots balance both materials' parcels: Σ Fx = −Σ_p ṁ_p (u_exit − u₀) and Σ E = −Σ_p ṁ_p (u²_exit − u₀²)/2 to 1e-6 (measured −0.573749 and −3.155615; an nm-fold double count or a dropped material in `sourceMom` misses by O(1)) |
 | M5 | `euler1.tec` is material A and `euler2.tec` is material B: ρ_p/n_p = ρ_mat π d³/6 in every deposited cell (2.596e-12 / 8.801e-13, uniform to 7e-15) — a family↔material swap or a cross-deposit changes the ratio |
 | M6 | 25 exits in `outloc-<mat>.dat` and a non-empty `scatter-<mat>.dat` for each material |
-| M7 | every exit record of either material carries ṁ = 1.275e-3 kg/s — the krho fan-out and `krhoTot` at arity 2 |
+| M7 | every exit record of either material carries ṁ = 1.275e-3 kg/s — the fan-out of field 1, 0.34/(1 − 0.68), at arity 2 |
 
 **Falsification.** (1) `phase.txt` lines swapped (`B 1` / `A 1`): material "A" then integrates
 on zone 2's ρ = 1000 and M1 fails on every parcel (|x − x_pred| 4.9e-3..1.5e-2 vs tol 1e-6) —

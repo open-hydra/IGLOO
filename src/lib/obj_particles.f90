@@ -309,9 +309,10 @@ contains
       case (401)
         self%stateVar(4:6) = kV * normVgas * dir
         self%tp            = kT * gasblock(b)%temperature(i,j,k)
-        ! mdot_p = krho/(1-krhoTot)/Ninj * (mdotGas + mdotPart)
-        self%mdot = krho / (1._R8 - cell%krhoTot) / self%Ninj * &
-                    (abs(cell%mdotGas) + cell%mdotPart)
+        ! mdot_p = krho'/Ninj * (mdotGas + G area): krho' = krho/(1 - krho_tot) (col 1) and G (col 10), krho_tot and
+        ! G of the cell over every dispersed phase, as ATLAS writes them (the mixture rule)
+        self%mdot = krho / self%Ninj * &
+                    (abs(cell%mdotGas) + cell%properties(self%famID,10) * cell%area)
       case (402)
         ! Col 2 = absolute velocity_magnitude [m/s]; col 5 = absolute Tp [K]; col 1 = gp.
         self%stateVar(4:6) = kV * dir

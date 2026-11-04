@@ -1,7 +1,8 @@
 # INFO — solidification/solid-box-2mat (a model-6 material followed by a model-1 one, e2e)
 
 ## What it verifies
-Two materials on `solid-box`'s box and inlet (`bc.txt`, `solfile.tec` symlinked; `properties.dat` is
+Two materials on `solid-box`'s box and inlet (`solfile.tec` symlinked; `bc.txt` `solid-box`'s at 07110ce under ATLAS's
+mixture rule for the two families, field 1 0.34/(1 − 0.68); `properties.dat` is
 `infrastructure/two-mat`'s two-zone table): `A` carries the solidification tokens (ODE model 6), `B` is a plain
 constant-mass material of density 1000 (model 1). The reader copies each inlet line to every family, so both
 inject the same 25 parcels. Materials are set up and integrated one after the other through module-level

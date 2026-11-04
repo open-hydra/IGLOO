@@ -21,9 +21,7 @@ def main():
     while i < len(lines):
         t = lines[i].split()
         if len(t) == 6 and t[1] == "1" and int(t[5]) == GEN.BCDEF_INLET and int(t[2]) in ROWS:
-            GEN.DS_COL9 = DS_CELL
-            out += [lines[i], GEN.inlet_data(GEN.KV, GEN.KT, GEN.RP)]
-            GEN.DS_COL9 = 0.0
+            out += [lines[i], GEN.bc401.set_field(lines[i + 1], 9, f"{DS_CELL:.5E}")]   # write_bc's 401 line, ds set
             i += 2; n += 1
             continue
         out.append(lines[i]); i += 1
