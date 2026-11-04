@@ -44,7 +44,8 @@ USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # rank-count gates, built in
 the three boiling checks (`boiling-zgr-flash`, `-hot`, `-switch`: their oracle integrates with `solve_ivp`), which
 fail without it. matplotlib with numpy draws the V&V figures (`verify.py`, `tools/plot_curves.py`) and runs
 `vv-order`, which is skipped without them. git lists the files `history-census` reads: outside a git checkout that
-test is skipped.
+test is skipped. The CI's serial job installs numpy, scipy and matplotlib from Ubuntu: no check there is skipped or
+fails for want of a package.
 
 `test.sh` configures a **separate `build/verif/`** (`build/mpi/` when `USE_MPI=ON`) with
 `-DBUILD_VERIFICATION=ON` (default OFF, so the production build is unchanged) and builds it (same
@@ -61,6 +62,17 @@ procedure always addresses the main program's arrays (`infrastructure/host_assoc
     `./tests/test.sh <test>`, or `rm -f build/verif/bin/IGLOO build/verif/bin/DocGen && cmake --build build/verif -j 8`,
     republishes the serial tree; confirm with `ldd bin/IGLOO bin/DocGen | grep -c libmpi` (0 = serial).
     The tests never run `bin/`.
+
+### Continuous integration
+
+`.github/workflows/ctest.yml` runs on every pull request to `main`, on every push to it, and by hand. Its two jobs
+run on `ubuntu-24.04` and build with gfortran (RELEASE, TecIO and SUNDIALS off) at `-DIGLOO_GNU_MARCH=x86-64-v3`
+([the target CPU of a GNU build](../getting-started/installation.md#the-target-cpu-of-a-gnu-build)), so that the
+code is the same whatever CPU the runner has. `test` installs numpy, scipy and matplotlib from Ubuntu, stops if one
+of them does not import, and runs every test of the serial tree two at a time (an end-to-end case runs five OpenMP
+threads); `--timeout 900` bounds the tests that set no TIMEOUT of their own, and `vortex-cloud-3way` is skipped there
+(no hydra). `test-mpi` builds with Ubuntu's Open MPI (`USE_MPI=ON`) and runs the `mpi` label, up to 4 ranks per test
+on the runner's cores; its checkers need the standard library alone.
 
 ### Layout
 

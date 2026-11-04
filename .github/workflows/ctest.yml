@@ -1,17 +1,24 @@
 name: CTest
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
 
+env:
+  # vv-order draws the V&V figures with matplotlib; keep it headless.
+  MPLBACKEND: Agg
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Ubuntu 24.04, not ubuntu-latest: its gfortran 13 and Python packages, whatever ubuntu-latest moves to.
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # Not recursive: OSLO's one nested submodule is SUNDIALS, which only
           # USE_SUNDIALS needs.
@@ -24,12 +31,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gfortran python3-numpy python3-scipy python3-matplotlib
 
+      - name: Check Python dependencies
+        # Without scipy the boiling checks fail, without matplotlib vv-order skips: stop here instead.
+        run: |
+          python3 -c "import numpy, scipy, matplotlib; print('numpy', numpy.__version__, 'scipy', scipy.__version__, 'matplotlib', matplotlib.__version__)"
+
       - name: Configure
+        # A fixed CPU target (AVX2 and FMA, no AVX-512) instead of native: the runners' CPUs differ, and a verdict
+        # must not depend on the one a job lands on.
         run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=RELEASE \
             -DCMAKE_Fortran_COMPILER=gfortran \
             -DCMAKE_CXX_COMPILER=g++ \
+            -DIGLOO_GNU_MARCH=x86-64-v3 \
             -DUSE_OPENMP=ON \
             -DUSE_MPI=OFF \
             -DUSE_TECIO=OFF \
@@ -40,10 +55,59 @@ jobs:
         run: cmake --build build --parallel $(nproc)
 
       - name: Run the test suite
-        # The whole suite (tests/test.sh all): every category, unit and end-to-end, in parallel on the runner's cores.
-        # vortex-cloud-3way is skipped without hydra and ICE; the mpi cases exist only with USE_MPI=ON.
+        # The whole suite (tests/test.sh all): every category, unit and end-to-end, two at a time: an end-to-end case
+        # runs five OpenMP threads, and four tests at a time on four cores stretch the slowest toward their TIMEOUT.
+        # --timeout bounds the tests that set no TIMEOUT of their own. vortex-cloud-3way is skipped without hydra and
+        # ICE; the mpi cases exist only with USE_MPI=ON (the job below).
         run: >
           ctest --test-dir build
           --output-on-failure
           --timeout 900
-          --parallel $(nproc)
+          --parallel 2
+          --no-tests=error
+
+  test-mpi:
+    # gfortran with Ubuntu's MPI library (Open MPI): the build with USE_MPI=ON and the mpi label, which the job above
+    # does not register; every mpi case asserts the rank count the solver reports. Its checkers import the standard
+    # library only.
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran libopenmpi-dev openmpi-bin
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=RELEASE \
+            -DCMAKE_Fortran_COMPILER=gfortran \
+            -DCMAKE_CXX_COMPILER=g++ \
+            -DIGLOO_GNU_MARCH=x86-64-v3 \
+            -DUSE_OPENMP=ON \
+            -DUSE_MPI=ON \
+            -DUSE_TECIO=OFF \
+            -DUSE_SUNDIALS=OFF \
+            -DBUILD_VERIFICATION=ON
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Run the MPI tests
+        # Up to 4 ranks per test: let Open MPI run more ranks than the runner has cores (Open MPI 4 and Open MPI 5
+        # read different variables).
+        env:
+          OMPI_MCA_rmaps_base_oversubscribe: "1"
+          PRTE_MCA_rmaps_default_mapping_policy: ":oversubscribe"
+        run: >
+          ctest --test-dir build
+          --output-on-failure
+          --timeout 900
+          --label-regex '^mpi$'
+          --no-tests=error

@@ -21,7 +21,8 @@ USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # the rank-count gates, buil
 the three boiling checks (`boiling-zgr-flash`, `-hot`, `-switch`: their oracle integrates with `solve_ivp`), which
 fail without it. matplotlib with numpy draws the V&V figures (`verify.py`, `tools/plot_curves.py`) and runs
 `vv-order`, which is skipped without them. git lists the files `history-census` reads: outside a git checkout that
-test is skipped.
+test is skipped. The CI's serial job installs numpy, scipy and matplotlib from Ubuntu: no check there is skipped or
+fails for want of a package.
 
 Opt-in via `-DBUILD_VERIFICATION=ON` (default OFF, so the production build is
 byte-for-byte untouched). `test.sh` configures a **separate `build/verif/`**
