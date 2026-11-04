@@ -871,33 +871,44 @@ contains
   end subroutine checkChimera
 
 
-  !> Read the background gas field from an ASCII Tecplot multiblock file: rank 0 parses it, the
-  !  other ranks receive rank 0's copy.
+  !> Read the background gas field from an ASCII Tecplot multiblock file: rank 0 parses it (the one-pass
+  !  reader, ORION's reader for a file it declines or under IGLOO_TEC_FAST=0), the other ranks receive
+  !  rank 0's copy.
   subroutine read_TECsolfile(filename,orion)
     use Lib_Tecplot
     use Lib_ORION_data
     use IGLOO_Mod_MPI, only: mpi_is_root, mpi_bcast_orion
+    use IGLOO_Mod_TecASCII, only: tec_read_ascii_fast, tec_fast_enabled
     implicit none
     character(len=*), intent(in) :: filename
     type(orion_data) :: orion
     integer          :: error
+    character(len=96) :: why
 
     orion%tec%node = .false.
     orion%tec%bc = .false.
 
     orion%tec%format = 'ascii'
-    if (mpi_is_root) error = tec_read_structured_multiblock(orion=orion,filename=filename)
+    if (mpi_is_root) then
+      error = 1
+      if (tec_fast_enabled() .and. (index(filename,'.dat')>0 .or. index(filename,'.tec')>0)) then
+        error = tec_read_ascii_fast(orion, filename, why=why)
+        if (error /= 0) write(*,'(A)') ' [IGLOO] gas file read by ORION''s reader: '//trim(why)
+      endif
+      if (error /= 0) error = tec_read_structured_multiblock(orion=orion,filename=filename)
+    endif
     call mpi_bcast_orion(orion)
 
   end subroutine read_TECsolfile
 
 
-  !> Write the source (source.tec) and per-family eulerian (euler<fam>.tec) grid fields;
-  !  `tag` is the sweep suffix appended to the file names.
+  !> Write the source (source.tec) and per-family eulerian (euler<fam>.tec) grid fields (the stream writer, ORION's
+  !  writer under IGLOO_TEC_FAST=0 or when the stream writer fails); `tag` is the sweep suffix appended to the file names.
   subroutine write_outfield(material,geoblock,sourceblock,eulerblock,srcSwitch,eulSwitch,tag)
     use IR_Precision
     use Lib_Tecplot
     use Lib_ORION_data
+    use IGLOO_Mod_TecASCII, only: tec_write_ascii_fast, tec_fast_enabled
     use IGLOO_variables, only: llen, nb, nm, nfam, IGLOO_phase_prefix
     use IGLOO_data_block, only: obj_block, obj_sourceblock, obj_eulerblock
     use IGLOO_data_phases, only: obj_material
@@ -911,7 +922,7 @@ contains
     type(orion_data)    :: orion
     integer(I4P)        :: E_IO, b, i, j, k, fam
     character(len=llen) :: file, varnames
-    character(len=:), allocatable :: sfx
+    character(len=:), allocatable :: sfx, fname
 
     sfx = ''
     if (present(tag)) sfx = tag
@@ -949,7 +960,13 @@ contains
       write(*,*)
       write(*,*)' Writing tec-fomat file: ',trim(file),'.tec'
       write(*,*)
-      E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename='OUTPUT/'//trim(IGLOO_phase_prefix)//trim(file)//sfx//'.tec')
+      fname = 'OUTPUT/'//trim(IGLOO_phase_prefix)//trim(file)//sfx//'.tec'
+      E_IO = 1
+      if (tec_fast_enabled()) then
+        E_IO = tec_write_ascii_fast(orion, varnames, fname)
+        if (E_IO /= 0) write(*,'(A)') ' [IGLOO] '//fname//' written by ORION''s writer: the stream writer failed'
+      endif
+      if (E_IO /= 0) E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename=fname)
     endif
 
     if (allocated(orion%block)) deallocate(orion%block)
@@ -979,7 +996,13 @@ contains
         enddo
         varnames = ''
         varnames = trim(varnames)//trim('"rho<sub>p" "u<sub>p" "v<sub>p" "w<sub>p" "T<sub>p" "n<sub>p"')
-        E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename='OUTPUT/'//trim(IGLOO_phase_prefix)//trim(file)//sfx//'.tec')
+        fname = 'OUTPUT/'//trim(IGLOO_phase_prefix)//trim(file)//sfx//'.tec'
+        E_IO = 1
+        if (tec_fast_enabled()) then
+          E_IO = tec_write_ascii_fast(orion, varnames, fname)
+          if (E_IO /= 0) write(*,'(A)') ' [IGLOO] '//fname//' written by ORION''s writer: the stream writer failed'
+        endif
+        if (E_IO /= 0) E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename=fname)
       enddo
     endif
 

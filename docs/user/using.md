@@ -79,6 +79,8 @@ mkdir -p OUTPUT
 !!! warning "Stack size"
     Always set `ulimit -s unlimited` (or `KMP_STACKSIZE=100M` for Intel compilers) before launching the solver. Large automatic arrays in the per-particle integration (cell-crossing ray tests and the ODE-solver work arrays) requires more stack than the default system limit.
 
+With the Intel runtime, `FORT_BUFFERED=true` in the environment buffers the particle files (`trajectories-`, `outloc-`, `scatter-`, `planes-` and `snapshot-<mat>.dat`) and, under `IGLOO_TEC_FAST=0`, the grid files (`source.tec`, `euler<fam>.tec`), which otherwise make one system call per line.
+
 Output is written to `OUTPUT/` on completion. The solver prints progress to stdout; any fatal errors go to stderr.
 
 ### Running a verification case
@@ -180,6 +182,8 @@ After `solve`, `obj_IGLOO%writeout` writes the mesh-projected fields:
 | `euler<fam>.tec` | Equivalent Eulerian fields per particle family: density, velocity, temperature, number density (`rho_p u_p v_p w_p T_p n_p`) |
 
 Both outputs are mollified by a local binomial smoother (controlled by `mollify` and `mollify-passes` in `[IGLOO-General]`) to reduce deposition noise.
+
+Both are ASCII Tecplot files in BLOCK packing: the coordinates at the nodes, then the variables at the cells, one value per line in `E23.15E3`, the bytes ORION's writer writes. A stream writer formats the values many at a time on every OpenMP thread and writes them in large blocks; `IGLOO_TEC_FAST=0` in the environment writes them with ORION's writer; so does a run whose stream writer fails, which prints `[IGLOO] <file> written by ORION's writer`.
 
 ---
 

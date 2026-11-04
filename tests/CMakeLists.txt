@@ -10,7 +10,7 @@
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ burn-box-ox0/ beckstead-air/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-melt-rhos/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-brk-tab-rhos/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ khrt-varcp/ breakup-per-material/ khrt-plane/ pe-sigma-table/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ sym-plane-creep/ sym-plane-creep-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,krho-{sum,negative},gas-no-density}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ tec_read/ tec_write/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ sym-plane-creep/ sym-plane-creep-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,krho-{sum,negative},gas-no-density}
 #   repeatability/      two-sweep gates (twosweep driver): 15 cases
 #   mpi/                registered only under USE_MPI: 9 rank-count cases + 4 consistency + 1 determinism
 #                       + 14 two-sweep cases
@@ -226,6 +226,50 @@ igloo_unit_test(test_host_assoc        infrastructure/host_assoc         "unit;i
 # 100 m from the origin every point lies in at least one of them (C1; RED at the absolute 1e-15 m: up to 60 % of
 # the face in neither cell), and the two copies of the test decide alike (C2).
 igloo_unit_test(test_containment       infrastructure/containment        "unit;infrastructure;geometry;t1")
+# The gas file's one-pass reader against ORION's reader in the same executable (infrastructure/tec_read): every tracked
+# .tec input (the list written here, without the directories runs and checks write .tec outputs into) and a synthetic
+# set the test writes, every value bit for bit, at four buffer sizes.
+file(GLOB_RECURSE _tec_inputs ${CMAKE_CURRENT_SOURCE_DIR}/*.tec)
+list(FILTER _tec_inputs EXCLUDE REGEX "/(OUTPUT|__pycache__|ref-[^/]*|tec_n[^/]*|_run-[^/]*|threads-omp[^/]*)/")
+set(_tec_real "")
+foreach(_f IN LISTS _tec_inputs)
+    file(REAL_PATH "${_f}" _r)
+    list(APPEND _tec_real "${_r}")
+endforeach()
+list(REMOVE_DUPLICATES _tec_real)
+list(SORT _tec_real)
+string(REPLACE ";" "\n" _tec_text "${_tec_real}")
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/tec_read_files.txt "${_tec_text}\n")
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tec_read)
+add_executable(test_tec_read infrastructure/tec_read/test_tec_read.f90)
+target_link_libraries(test_tec_read PRIVATE verif_support)
+set_target_properties(test_tec_read PROPERTIES LINKER_LANGUAGE Fortran)
+if(USE_OPENMP)
+    set_target_properties(test_tec_read PROPERTIES
+        COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
+        LINK_FLAGS    "${OpenMP_Fortran_FLAGS}")
+endif()
+add_test(NAME test_tec_read COMMAND test_tec_read --list ${CMAKE_CURRENT_BINARY_DIR}/tec_read_files.txt)
+set_tests_properties(test_tec_read PROPERTIES
+    LABELS "unit;infrastructure;io"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tec_read"
+    TIMEOUT 900)
+# The grid files' stream writer against ORION's ASCII writer in the same executable (infrastructure/tec_write): the
+# orion_data write_outfield makes, byte for byte, at three chunk sizes, each write over a longer file.
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tec_write)
+add_executable(test_tec_write infrastructure/tec_write/test_tec_write.f90)
+target_link_libraries(test_tec_write PRIVATE verif_support)
+set_target_properties(test_tec_write PROPERTIES LINKER_LANGUAGE Fortran)
+if(USE_OPENMP)
+    set_target_properties(test_tec_write PROPERTIES
+        COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
+        LINK_FLAGS    "${OpenMP_Fortran_FLAGS}")
+endif()
+add_test(NAME test_tec_write COMMAND test_tec_write)
+set_tests_properties(test_tec_write PROPERTIES
+    LABELS "unit;infrastructure;io"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tec_write"
+    TIMEOUT 900)
 
 # ---------- two-sweep repeatability harness -----------------------------------
 # Drives one pinned population through solve() TWICE. Every other case in the suite is
