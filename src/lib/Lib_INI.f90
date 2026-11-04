@@ -386,6 +386,7 @@ contains
     mat%Xeff     = 1._R8             ! pure effective oxidizer => Keff = K-burn
     mat%betaPart = 0._R8
     mat%xiCap    = 0._R8
+    mat%xiOx0    = 0._R8
     mat%Tign     = 2350._R8          ! Al2O3-shell melting anchor
     mat%qComb    = 0._R8
     mat%Tmelt    = 2327._R8          ! alumina default
@@ -400,7 +401,7 @@ contains
 
 
   !> One key=value token from the material line of the phase file (written by ATLAS GPB from
-  !  [GPB-Phase*]): the eight model words call the assign_* selectors, the sixteen reals are read, the
+  !  [GPB-Phase*]): the eight model words call the assign_* selectors, the seventeen reals are read, the
   !  product name is kept, a breakup constant is kept for apply_breakup_tokens; an unknown key or a
   !  non-numeric value stops the run.
   subroutine apply_material_key(imat, mat, key, value)
@@ -433,6 +434,7 @@ contains
     case ('X-eff');     read(value,*,iostat=ios) mat%Xeff
     case ('beta-part'); read(value,*,iostat=ios) mat%betaPart
     case ('xi-cap');    read(value,*,iostat=ios) mat%xiCap
+    case ('xi-ox0');    read(value,*,iostat=ios) mat%xiOx0
     case ('T-ign');     read(value,*,iostat=ios) mat%Tign
     case ('q-comb');    read(value,*,iostat=ios) mat%qComb
     case ('T-melt');    read(value,*,iostat=ios) mat%Tmelt
@@ -539,6 +541,7 @@ contains
       '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap
     if (len_trim(mat%productName) > 0 .and. mat%resOn) write(*,'(a,i0,a,es10.3,a,es10.3)') '  >> [material ', imat, &
       '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap, ' residue=on d-residue=', mat%dRes
+    if (mat%xiOx0 > 0._R8) write(*,'(a,i0,a,es10.3)') '  >> [material ', imat, '] xi-ox0=', mat%xiOx0
   end subroutine finalize_material_models
 
 

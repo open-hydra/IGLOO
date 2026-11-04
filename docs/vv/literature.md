@@ -327,14 +327,14 @@ $X_\mathrm{eff}$-exponent discriminator calibrated at the paper anchor (CB4); an
 (`rhsAlCap`, model 8): the cap's growth $\dot m_\mathrm{ox} = -\xi\nu\,\dot m_\mathrm{Al}$ (CB5), the burn
 rate on the metal's diameter times $F\,c$ at four cap fractions (CB6), $\nu$ from the molar masses (CB7),
 the mixture enthalpy of the gas source (CB8), the lobe table against Gallier's exposed-surface factor
-and its monotonicity (CB9), and the stretch $c$ (CB10).
+and its monotonicity (CB9), the stretch $c$ (CB10) and the stretch with an initial cap (CB11).
 
 **Literature references.** `[Beck05]` (Beckstead 2005); the exponent
 $X_\mathrm{eff}^{1.0}$ is the paper's final correlation.  `[Gal21]` (Gallier et al. 2021) for the
 exposed-surface factor of an oxide lobe, its geometry and property laws.
 
-**Gates.** `test_combustion` (CB1–CB10); e2e companions `burn-box`, `burn-box-cap`,
-`burn-box-residue` — see [End-to-End Cases](e2e.md).
+**Gates.** `test_combustion` (CB1–CB11); e2e companions `burn-box`, `burn-box-cap`,
+`burn-box-residue`, `burn-box-ox0` — see [End-to-End Cases](e2e.md).
 
 <figure>
   {% include "vv/images/unit-combustion-beckstead.svg" ignore missing %}

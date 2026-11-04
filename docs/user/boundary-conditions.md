@@ -101,6 +101,10 @@ Per-cell injection properties stored in `bc.txt` columns (after the `bcdef` colu
 | 8 | Size distribution: a law name — `Dirac`, `Normal`, `LogNormal`, `RosinRammler` (any case) — or the path of a size-distribution file; absent → Dirac |
 | 9 | Per-cell injection spacing override `ds` [m] (0 → use global `[IGLOO-BC] ds`) |
 
+For a burning material with an oxide fraction at injection (`xi-ox0`), the loading (column 1) and the size
+columns (6–8) describe the whole particle, metal and oxide, its diameter the equal-volume sphere of both
+([An oxide fraction at injection](../theory/combustion.md#an-oxide-fraction-at-injection)).
+
 The line is split on blanks and tabs (a `normal,` direction token keeps its comma, which is accepted); a
 line of 512 characters or more and a token of 256 or more are refused. The laws and their CDFs are
 listed under [Injection](../theory/injection.md#stochastic-diameter-sampling); every law is the

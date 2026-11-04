@@ -190,8 +190,38 @@ keeps $t_b = d_0^n/K_\mathrm{eff}$ at every size: the metal burns faster than Be
 is small and slower once it is large; the burn time and the residue's mass do not change.  `capStretch`
 evaluates $c$ at setup (midpoint rule, 4096 cells over `lobeF`) for each burning material with
 `xi-cap > 0`, and the log prints it: $c$ = 1.305, 1.398, 1.547 at
-$\xi$ = 0.1, 0.2, 0.5 ($n = 1.8$).  At every state $m_\mathrm{ox} = \xi\nu(m_0 - m_\mathrm{Al})$ and
+$\xi$ = 0.1, 0.2, 0.5 ($n = 1.8$).  With no initial cap, at every state $m_\mathrm{ox} = \xi\nu(m_0 - m_\mathrm{Al})$ and
 $m/m_0 = s^{3/n} + \xi\nu(1 - s^{3/n})$.
+
+### An oxide fraction at injection
+
+`xi-ox0` $= x_0 \in [0, 1)$ on a capped burning line starts the cap from oxide the particle carries at
+injection: $x_0 = m_\mathrm{ox}/(m_\mathrm{Al} + m_\mathrm{ox})$ of the injected particle.  The inlet's loading
+and size describe the **whole particle**, metal and oxide (a `401` record's `krho`, a `402`/`403` record's
+flux, a size law or file, a database stream's flow and diameter), and its diameter $d_{p0}$ is the
+equal-volume sphere of both:
+
+$$
+m_{p0} = \frac{\pi d_{p0}^3/6}{(1 - x_0)/\rho_\mathrm{Al} + x_0/\rho_\mathrm{res}}, \qquad
+m_\mathrm{Al0} = (1 - x_0)\,m_{p0}, \qquad m_\mathrm{ox0} = x_0\,m_{p0}, \qquad
+d_\mathrm{Al0} = \left(\frac{6\,m_\mathrm{Al0}}{\pi\rho_\mathrm{Al}}\right)^{1/3},
+$$
+
+and the stream's number rate is $\dot m/m_{p0}$.  The cap grows from $m_\mathrm{ox0}$,
+$m_\mathrm{ox} = m_\mathrm{ox0} + \xi\nu(m_\mathrm{Al0} - m_\mathrm{Al})$; with $s = (d_\mathrm{Al}/d_\mathrm{Al0})^n$ and
+$r_0 = x_0/(1 - x_0)$,
+
+$$
+f_\mathrm{ox}(s; x_0) = \frac{r_0 + \xi\nu(1 - s^{3/n})}{s^{3/n} + r_0 + \xi\nu(1 - s^{3/n})}, \qquad
+c(\xi, n, x_0) = \left(\frac{d_\mathrm{Al0}}{d_{p0}}\right)^n \int_0^1 \frac{ds}{F(f_\mathrm{ox}(s; x_0))},
+$$
+
+so the particle burns out in Beckstead's time for its injected diameter, $t_b = d_{p0}^n/K_\mathrm{eff}$, whatever
+$x_0$: the initial oxide shows in the residue, $m_\mathrm{res} = m_\mathrm{ox0} + \xi\nu(m_\mathrm{Al0} - m_\mathrm{Al,b})$,
+not in the burn time.  `capStretchX0` evaluates $c$ at setup in place of `capStretch` and the log prints it beside
+$x_0$: $c$ = 1.395, 1.388, 1.379 at $x_0$ = 0.05, 0.10, 0.15 ($\xi = 0.2$, $n = 1.8$).  The parcel's first source
+segment brings $\dot m\,(h_\mathrm{mix}(T_0) + |v|^2/2)$ to the books, $h_\mathrm{mix}$ the mixture enthalpy below.
+Absent or 0, the cap starts from zero.
 
 ### Energy: the absolute datum and the streams
 
@@ -278,6 +308,7 @@ them from `[GPB-Phase*]`; see the [registry](../user/registry.md) for the vocabu
 | `beta-part` | heat-partition fraction to the particle | 0 |
 | `q-comb` | heat of combustion (J/kg) | 0 |
 | `xi-cap` | fraction of the oxide formed retained in the cap, [0, 1]; > 0 selects model 8 | 0 |
+| `xi-ox0` | the oxide's mass fraction of the injected particle, [0, 1); > 0 needs `xi-cap > 0` | 0 |
 | `product` | the combustion product: the name of a 0-group line of the phase file; required with `xi-cap > 0` | none |
 | `residue` | `on`: the cap becomes a parcel of the product; `off`: it goes to the gas | `off` |
 | `d-residue` | residue diameter (m) with the mass flow kept; 0: one residue per droplet | 0 |
@@ -285,7 +316,8 @@ them from `[GPB-Phase*]`; see the [registry](../user/registry.md) for the vocabu
 The product's line carries no combustion, evaporation or breakup (under a global evaporation or breakup
 word it says `evaporation=NoEvaporation`, `breakup=NoBreakup`) and may carry `solidification=on` with its own
 `T-melt`, `h-fus`, `T-nuc`, `cp-solid`; every `[IGLOO-Properties]` vector holds one value for it too.
-Setup refuses `xi-cap` outside [0, 1]; `product`, `residue=on` or `d-residue > 0` without
+Setup refuses `xi-cap` outside [0, 1]; `xi-ox0` outside [0, 1), or > 0 without `combustion=Beckstead` and
+`xi-cap > 0`; `product`, `residue=on` or `d-residue > 0` without
 `combustion=Beckstead` and `xi-cap > 0`; `xi-cap > 0` without a 0-group product line; a product that
 burns, evaporates or breaks up; a varying `Cp` or `Density` of the burning material or its product; a
 relative table; a negative `d-residue`, or one without `residue=on`.
@@ -310,12 +342,14 @@ Unit family `tests/combustion/` (closed-form complex-step oracle, d^n
 regression identity, bitwise ignition gate, informational Beckstead
 correlation points; the cap's growth, its burn rate against Beckstead's times $F\,c$,
 $\nu$, the mixture enthalpy of the source, the lobe table against Gallier's factor, the
-stretch) and e2e box cases `tests/combustion/burn-box/` (exact
+stretch with and without an initial cap) and e2e box cases `tests/combustion/burn-box/` (exact
 closed-form $d^n(x)$, independent RK4 of the heat-release energy balance,
 mass-telescoping audit), `burn-box-euler` (the Eulerian field of model 5),
 `burn-box-cap` (model 8 against an oracle on Gallier's exact lobe) and `burn-box-residue`
 (the residue's birth, books and freezing; `d-residue` with two groups; the residue after a solver
-failure).  See `tests/combustion/INFO.md`.
+failure) and `burn-box-ox0` (an oxide fraction at injection: the whole particle's mass and number rate, the
+cap from its initial oxide and the re-evaluated stretch against Gallier's exact lobe, the burnout time, the
+residue and the books).  See `tests/combustion/INFO.md`.
 
 References:
 

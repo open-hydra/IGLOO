@@ -181,8 +181,16 @@ contains
 
       select case(part%model)
       case(2,5); part%stateVar(8) = part%m
-      case(8); part%stateVar(8) = part%m
-               part%stateVar(9) = 0._R8
+      case(8); if (part%xiOx0 > 0._R8) then
+                 !> the whole particle at the injected diameter: metal and its initial cap
+                 part%m  = part%capInjMass()
+                 part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot; part%n0 = part%npdot
+                 part%stateVar(8) = (1._R8 - part%xiOx0)*part%m
+                 part%stateVar(9) = part%xiOx0*part%m
+               else
+                 part%stateVar(8) = part%m
+                 part%stateVar(9) = 0._R8
+               endif
       case(3); part%stateVar(8) = part%npdot
       case(4); part%stateVar(8) = part%m
                part%stateVar(9) = part%npdot

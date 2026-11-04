@@ -16,7 +16,9 @@ whose table zone gives the cap its density, heat capacity and absolute enthalpy 
 Z(9) beside the metal Z(8). The cap retains `ξν` of the metal burned (`ν = M(Al₂O₃)/(2 M(Al))`), the burn law on
 the metal's diameter is scaled by the exposed-surface factor `F(f_ox)` of an oxide lobe `[Gal21]` and by the
 stretch `c = ∫₀¹ ds/F` that keeps Beckstead's burn time, and drag, heat and radiation act on the equal-volume
-sphere of metal and cap.
+sphere of metal and cap. With `xi-ox0 = x0 > 0` the parcel is injected as metal and oxide at the equal volume,
+its cap starting from `x0` of its mass, and the stretch is re-evaluated from that cap,
+`c = (d_Al0/d_p0)^n ∫₀¹ ds/F(f_ox(s; x0))`, so the particle burns out in Beckstead's time for its injected diameter.
 
 Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
 
@@ -35,8 +37,10 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
 | CB8 | analytic | design | n/a | `computeSource` of a capped parcel at 900 K: E = ṅ(m_Al(c_Al T + hOff_Al) + m_ox(c_res T + hOff_res) + m v²/2) | 1e-14 rel.; RED the metal's c_p and datum for the whole parcel: 1.12 | absolute data of `burn-box-cap`'s table | GREEN (0) |
 | CB9 | analytic | `[Gal21]` | 10.1016/j.combustflame.2021.01.039 | `lobeF` at ten f_ox against Gallier's exposed-surface factor at 2570 K (typed to 10 digits); decreasing over 1001 points | 3e-6 abs.; RED weight linear in f 1.4e-5, Gallier's densities dropped 5.3e-2 | 513 nodes uniform in the lobe angle | GREEN (9.5e-7) |
 | CB10 | analytic | `[Gal21]` | — | `capStretch(0.2, 1.8)` = ∫₀¹ ds/F = 1.397686 | 1e-5 rel.; RED c = ∫F ds: 0.457 | midpoint, 4096 cells | GREEN (9.2e-7) |
+| CB11 | analytic | `[Gal21]` | — | `capStretchX0(0.2, 1.8, 0.1, 2950, 3950)` = (d_Al0/d_p0)^n ∫₀¹ ds/F(f_ox(s; x0)) = 1.388383 (the initial cap r0 = x0/(1 − x0)) | 1e-5 rel.; RED the integrand without the initial cap 4.0e-2, r0 = x0 3.6e-3, the factor dropped 4.9e-2 | midpoint, 4096 cells | GREEN (7.6e-7) |
 | E-CAP | e2e box | `[Beck05]`, `[Gal21]` | — | `combustion/burn-box-cap/`: burn-box with `xi-cap=0.2 product=OX` on an absolute two-zone table; every trajectory row against an oracle on Gallier's exact lobe (RK4 of the burn law and the mixture heat balance), the eulerian ρ_p/n_p identity with the cap's mass, the mass telescoping (1 − ξν) of the metal burned | m, d 4e-6 rel.; T 0.1 K; E3 1e-4; telescoping 1e-5 | burn-box's `bc.txt`/`solfile.tec`; `out-file = ALL`, `mollify = off` | GREEN |
 | E-RES | e2e box | — (definitions) | — | `combustion/burn-box-residue/`: residue=on, product OX freezing; one residue per parcel burned out, born at its parent's exit record with the cap's mass; the mass and energy books with the birth flux withdrawn; nucleation and relaxation; siblings with d-residue and two groups (IDs 1–50) and with `[IGLOO-ODE] fail-after` (the residue after a solver failure) | m 3e-5, d 5e-6; books 1e-5; T the F12.6 budget | burn-box's `bc.txt`/`solfile.tec`, burn-box-cap's table; `out-file = S`, `out-time = on`, `mollify = off` | GREEN |
+| E-OX0 | e2e box | `[Beck05]`, `[Gal21]` | — | `combustion/burn-box-ox0/`: burn-box-residue's capped line with `xi-ox0=0.1` and an inert product; the whole particle's mass and number rate at injection, every trajectory row against an oracle on Gallier's exact lobe with the cap from its initial oxide and the re-evaluated stretch, the burnout inside Beckstead's time for the injected diameter, the residue's mass and flow, the mass and energy books, the scatter quanta | m, d 4e-6 rel.; T 0.1 K; injection m 2e-6; residue m 3e-5; books 1e-5; scatter 1e-3 | burn-box's `bc.txt`/`solfile.tec`, burn-box-cap's table; `out-file = S`, `out-time = on`, `mollify = off` | GREEN |
 
 ## Notes
 

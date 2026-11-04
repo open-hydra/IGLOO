@@ -68,7 +68,7 @@ module IGLOO_data_phases
     logical  :: LvVariable = .false., cpvVariable = .false.  !> Lv(T), cpv(T) from the properties.dat columns
     !> Optional per-material properties; each is read only by the model that needs it.
     real(R8) :: alphaE = 1._R8, kLiq = 0._R8, muLiq = 0._R8
-    real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8
+    real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8, xiOx0 = 0._R8
     real(R8) :: Tign = 0._R8, Tmelt = 2327._R8, hFus = 0._R8, Tnuc = 0._R8, cpSol = 0._R8
     real(R8) :: qComb = 0._R8
     real(R8) :: rhoSol = 0._R8       !> solid density [kg/m3]; 0 = the liquid density
@@ -133,7 +133,7 @@ module IGLOO_data_phases
     logical  :: LvVariable = .false., cpvVariable = .false.  !> Lv(T), cpv(T) from the properties.dat columns
     !> Optional per-material properties; each is read only by the model that needs it.
     real(R8) :: alphaE = 1._R8, kLiq = 0._R8, muLiq = 0._R8
-    real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8
+    real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8, xiOx0 = 0._R8
     real(R8) :: Tign = 0._R8, Tmelt = 2327._R8, hFus = 0._R8, Tnuc = 0._R8, cpSol = 0._R8
     real(R8) :: qComb = 0._R8
     real(R8) :: rhoSol = 0._R8       !> rho-solid [kg/m3]; 0 = the liquid density
@@ -293,7 +293,7 @@ contains
       gr%solidSelect= self%solidSelect
       if (self%combSelect > 0 .or. self%solidSelect > 0) then
         gr%Kburn = self%Kburn; gr%nBurn = self%nBurn; gr%Xeff  = self%Xeff
-        gr%betaPart = self%betaPart; gr%xiCap = self%xiCap; gr%Tign = self%Tign
+        gr%betaPart = self%betaPart; gr%xiCap = self%xiCap; gr%xiOx0 = self%xiOx0; gr%Tign = self%Tign
         gr%Tmelt = self%Tmelt; gr%hFus = self%hFus; gr%Tnuc = self%Tnuc; gr%cpSol = self%cpSol
         gr%qComb = self%qComb
       endif
@@ -457,7 +457,7 @@ contains
       part%solidSelect= self%solidSelect
       if (self%combSelect > 0 .or. self%solidSelect > 0) then
         part%Kburn = self%Kburn; part%nBurn = self%nBurn; part%Xeff = self%Xeff
-        part%betaPart = self%betaPart; part%xiCap = self%xiCap; part%Tign = self%Tign
+        part%betaPart = self%betaPart; part%xiCap = self%xiCap; part%xiOx0 = self%xiOx0; part%Tign = self%Tign
         part%Tmelt = self%Tmelt; part%hFus = self%hFus; part%Tnuc = self%Tnuc; part%cpSol = self%cpSol
         part%qComb = self%qComb
       endif

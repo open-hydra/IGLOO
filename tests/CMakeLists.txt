@@ -647,6 +647,11 @@ igloo_e2e_case(burn-box-cap combustion/burn-box-cap "e2e;combustion;euler")
 # its nucleation and relaxation; siblings ref-dres/ (d-residue, two groups: the residue IDs' offset) and ref-fail/
 # ([IGLOO-ODE] fail-after: the residue born after a solver failure).
 igloo_e2e_case(burn-box-residue combustion/burn-box-residue "e2e;combustion;solidification")
+# burn-box-ox0: an oxide fraction at injection (xi-ox0 0.1 on burn-box-residue's capped line, an inert product): the
+# whole particle's mass and number rate at injection; every trajectory row against an oracle on Gallier's exact lobe
+# with the cap grown from its initial oxide and the stretch re-evaluated from it; the burnout inside Beckstead's time
+# of the injected diameter; the residue's mass and flow, the mass and energy books, the scatter quanta.
+igloo_e2e_case(burn-box-ox0 combustion/burn-box-ox0 "e2e;combustion")
 
 # ---------- solidification (ODE models 6 and 7: supercooling, recalescence, plateau, melting; breakup on the liquid) --------
 igloo_unit_test(test_solidification solidification "unit;solidification;t4")
@@ -1106,6 +1111,11 @@ igloo_refusal_case(refuse-cap-varcp        infrastructure/refusals/cap-varcp
                    "xi-cap > 0 requires a constant-cp, constant-density material and product" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-cap-relative     infrastructure/refusals/cap-relative
                    "xi-cap > 0 requires the absolute enthalpy datum (an Enthalpy_abs column)" "e2e;refusal;combustion")
+# The initial oxide (xi-ox0) outside [0, 1), and without a burning, capped material.
+igloo_refusal_case(refuse-ox0-range        infrastructure/refusals/ox0-range
+                   "xi-ox0 must lie in [0, 1)" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-ox0-nocap        infrastructure/refusals/ox0-nocap
+                   "xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-brk-sigma        infrastructure/refusals/brk-sigma
                    "Breakup requires sigma" "e2e;refusal;breakup")
 igloo_refusal_case(refuse-brk-mu           infrastructure/refusals/brk-mu

@@ -398,6 +398,22 @@ the residue born after a solver failure at the parcel's last accepted step.
 0.096 of their print budget; 50/50 residues with `d-residue`; after the forced failure every parent ends
 at or past `fail-after` and its residue's mass is the burn law's at that time (3.8e-6).
 
+### burn-box-ox0
+
+An oxide fraction at injection ([An oxide fraction at injection](../theory/combustion.md#an-oxide-fraction-at-injection)):
+burn-box-residue's capped parcels with `xi-ox0` $= x_0 = 0.1$ and an inert product.  The inlet's diameter and loading are the
+whole particle's, so each parcel is injected at $m_{p0} = (\pi/6)\,d_{p0}^3/((1 - x_0)/\rho_\mathrm{Al} + x_0/\rho_\mathrm{res})$
+with a tenth of that mass as its cap.  The oracle integrates the burn law from that cap, with the stretch re-evaluated
+from it ($c = 1.388383$), on Gallier's exact lobe.  The gates check the log, the injection rows, every trajectory row's
+mass, diameter and temperature, the burnout inside Beckstead's time for the injected diameter, the residue's mass
+$m_\mathrm{ox0} + \xi\nu(m_\mathrm{Al0} - 10^{-15}\,\mathrm{kg})$ and flow, the mass and energy books (the inflow at the
+mixture's enthalpy) and the scatter quanta.
+
+**Result:** the stretch printed 1.388382 (7.2e-7); the injection mass within 4.7e-7; 725 rows: mass within 2.6e-6,
+diameter 2.1e-6, temperature 3.5e-5 K; 25/25 burnouts at 7.1985e-3 to 7.2003e-3 s, inside $[t(s_b), t_b]$ =
+[7.1974e-3, 7.2247e-3] s; 25/25 residues, mass 2.9e-6, flows 3.3e-6; books 5.2e-7 (mass) and 6.2e-8 (energy); the
+scatter quanta 5.7e-5.
+
 ### solid-box
 
 Solidification (model 6): molten droplets injected at 2400 K into the 600 K box gas at
