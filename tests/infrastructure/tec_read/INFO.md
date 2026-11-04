@@ -15,7 +15,7 @@ interface that passes the count by value, and asserts it (`omp_get_max_threads`)
 **The suite's files**: every tracked `.tec` input under `tests/`, from the list CMake writes at configure time
 (`build/…/tests/tec_read_files.txt`: the `.tec` files of the source tree outside the directories runs and checks
 write `.tec` outputs into — `OUTPUT/`, `ref-*/`, `tec_n*/`, `_run-*/`, `threads-omp*/` — symlinks resolved, duplicates
-dropped). The test fails unless the list holds `SUITE_FILES` = 67 files, the number of tracked inputs: adding a
+dropped). The test fails unless the list holds `SUITE_FILES` = 68 files, the number of tracked inputs: adding a
 tracked `.tec` input moves that constant. Each file must also be one ORION reads right: no line of 1000 characters
 or more (ORION cuts a line there), no CR byte, no POINT zone.
 
@@ -43,8 +43,8 @@ or more (ORION cuts a line there), no CR byte, no POINT zone.
 | `s19-short-zone` | a zone with fewer values than its dimensions before the next zone | refused by both |
 | `s20-long-token` | a token of 120 characters | refused by both |
 
-"Declined" means the reader returns 1 and IGLOO reads the file with ORION's reader. 87 files × 4 buffer sizes × 4
-thread counts, plus four more reads of each synthetic file at 7 threads and every buffer size: 1 712 reads compared.
+"Declined" means the reader returns 1 and IGLOO reads the file with ORION's reader. 88 files × 4 buffer sizes × 4
+thread counts, plus four more reads of each synthetic file at 7 threads and every buffer size: 1 728 reads compared.
 
 The values of the test's own fixtures are integers times powers of two, exact, so that no fixture value depends on
 how a compiler rounds an expression at two call sites.
