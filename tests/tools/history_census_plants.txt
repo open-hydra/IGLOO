@@ -169,3 +169,9 @@ none	tests/infrastructure/sym-plane-bounce/check.py	# B4 at most N_MAX_CELL + 1 
 ledger	tests/standard/drag-stokes/check.py	# B4 at most N_MAX_CELL + 1 rows in one cell
 ledger	tests/infrastructure/sym-plane-bounce/check.py	# the B4 fix moved the cell guard
 ledger	tests/infrastructure/sym-plane-bounce/check.py	# B4 as in BUGS
+# The erosion laws' check ids O1-O4: admitted on their page and in their source, caught on a twin page and by the never-exempt rules
+none	tests/erosion/laws/INFO.md	| O3 | E90 = K (a Hv)^(k1 b) (v/v′)^k2 (D/D′)^k3 against its closed form |
+ledger	tests/erosion/wall-laws/INFO.md	| O3 | E90 = K (a Hv)^(k1 b) (v/v′)^k2 (D/D′)^k3 against its closed form |
+ledger	tests/erosion/laws/INFO.md	The O3 fix moved the E90 exponent.
+none	tests/erosion/laws/test_erosion_laws.f90	! ---- O3: E90 ----
+ledger	tests/erosion/laws/test_erosion_laws.f90	! the O3 fix moved the E90 exponent

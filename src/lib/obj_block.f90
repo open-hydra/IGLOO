@@ -10,9 +10,7 @@ module IGLOO_data_block
 
   type, public :: obj_bc_cell
     real(R8),dimension(:,:),allocatable :: properties !> first index per group (family)
-    real(R8)     :: krhoTot   = 0._R8 !> sum of krho across 401 families (dimensionless, ∈[0,1))
     real(R8)     :: mdotGas   = 0._R8 !> gas mass flow rate [kg/s]; external (coupled) or LSQ-extrapolated
-    real(R8)     :: mdotPart  = 0._R8 !> particle mass flow rate from 402/403 families [kg/s]
     real(R8)     :: area      = 0._R8 !> face area [m²]
     integer      :: nInj      = 0     !> injection particles pinned in this cell
     integer      :: bcdef     = 0     !> boundary code; 0 until read_cdp_bc_file tags the cell
@@ -127,6 +125,18 @@ module IGLOO_data_block
     procedure, pass(self), public :: reduce => reduceEUL
     procedure, pass(self), public :: normalize => normalizeEUL
   end type obj_eulerblock
+
+  !> Wall-impact sums of one face: acc(1:2, nm, Nm, Nn), per face cell and material, the sum of mdot*E and of mdot
+  !  over the parcels that left through the cell.
+  type, public :: obj_wallface
+    real(R8), dimension(:,:,:,:), allocatable :: acc
+  end type obj_wallface
+
+  !> Wall-impact sums of one block: the faces that hold an eroding wall cell (on) and their sums.
+  type, public :: obj_wallblock
+    logical            :: on(6) = .false.
+    type(obj_wallface) :: face(6)
+  end type obj_wallblock
 
 contains
 

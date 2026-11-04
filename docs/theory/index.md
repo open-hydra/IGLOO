@@ -75,6 +75,11 @@ change the model index.
 
     Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT, TAB, and ETAB; child-particle appending.
 
+-   :material-wall: **[Wall erosion](erosion.md)**
+
+    Erosion of the walls by the parcels that hit them: Oka et al. (2005) and Neilson-Gilchrist (1968), and the
+    wall file `wall.tec`.
+
 -   :material-spray: **[Injection](injection.md)**
 
     BC-pinned face injection, advancing-front 3D hex packing, and stochastic diameter sampling.
@@ -109,6 +114,7 @@ change the model index.
 | [Evaporation](evaporation.md) | `Lib_Evaporation.f90`, `Lib_RHS.f90` |
 | [Metal combustion](combustion.md) | `Lib_Combustion.f90`, `Lib_RHS.f90` |
 | [Breakup](breakup.md) | `Lib_Breakup.f90`, `Lib_Integration.f90` |
+| [Wall erosion](erosion.md) | `Lib_Erosion.f90`, `Lib_Integration.f90`, `IO.f90` |
 | [Injection](injection.md) | `initialization.f90`, `Lib_Statistics.f90` |
 | [Eulerian feedback](eulerian-feedback.md) | `Lib_Integration.f90`, `obj_block.f90`, `obj_condensed.f90` |
 | [Mollification](mollification.md) | `Lib_Mollify.f90`, `obj_block.f90` |

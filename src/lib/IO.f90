@@ -7,6 +7,7 @@ module IGLOO_IO
   public:: read_cdp_bc_file
   public:: read_cdp_properties
   public:: write_outfield
+  public:: write_wallfield
   public:: merge_rank_particle_files
 
 contains
@@ -496,7 +497,7 @@ contains
     type(obj_material)   , intent(in)    :: material(nm)
     type(obj_block)      , intent(inout) :: geoblock(nb)
     type(obj_flowblock)  , intent(inout) :: gasblock(nb)
-    integer, parameter :: nPropDP = 9
+    integer, parameter :: nPropDP = 10      !> inlet columns: 1-7 numbers, 8 the law, 9 ds, 10 G (401)
     integer            :: b, mat, p, f, m, n, i, mend(6), nend(6)
     integer            :: u, dumi, totFam, ci_n, s, ios, nTok, readLine(9)
     integer            :: c, nCopies, nrec, nFaceTot, nfb, ic, code, hdr(5), nchi(2)
@@ -504,7 +505,6 @@ contains
     integer            :: i_g, j_g, k_g
     real(R8)           :: propBuffer(nPropDP)
     real(R8)           :: vertices(3, 8)
-    real(R8)           :: kmin
     character(len=256) :: tok(nPropDP)
     character(len=512) :: lineString
     integer            :: ipos, lawc
@@ -586,9 +586,7 @@ contains
                 if (allocated(cell%properties)) deallocate(cell%properties)
                 allocate(cell%properties(1:totFam, 1:nPropDP))
 
-                ! Reset the per-cell accumulators, compute the face area, seed mdotGas from the gas.
-                cell%mdotPart = 0._R8
-                cell%krhoTot  = 0._R8
+                ! Compute the face area, seed mdotGas from the gas.
                 call blk%fmn2ijk(f, m, n, i_g, j_g, k_g)
                 call blk%getVertices([i_g, j_g, k_g], vertices)
                 cell%area = 0.5_R8 * (computeArea(f, vertices) + &
@@ -709,30 +707,33 @@ contains
               propBuffer(9) = 0._R8
             endif
             if (propBuffer(9) > 0._R8) dsSwitch = .true.
+            ! Col 10 (401): G, the sum of gp over the 402/403 records of the cell in the files of every dispersed
+            ! phase, by which ATLAS writes krho/(1 - krho_tot) in col 1 (the mixture rule over the phases): the family
+            ! injects col 1 times (mdotGas + G area). A 401 line without it is from an ATLAS before the rule (its col 1
+            ! is krho): refused
+            propBuffer(10) = 0._R8
+            if (cell%bcdef == 401) then
+              if (nTok < 10) then
+                write(*,'(A)') ' [ERROR] INPUT/'//trim(name)//'bc.txt: a 401 inlet line without its 10th field G, '// &
+                  'the fixed mass flux of the cell: written by an ATLAS before the mixture rule over the dispersed '// &
+                  'phases (its field 1 is krho); regenerate it with ATLAS BCB'
+                error stop 'IGLOO: bc.txt 401 line without G (an ATLAS before the mixture rule): regenerate it'
+              endif
+              read(tok(10),*,iostat=ios) propBuffer(10)
+              if (ios /= 0) then
+                write(*,'(A)') ' [ERROR] INPUT/'//trim(name)//'bc.txt: the 10th field G of a 401 inlet line is not '// &
+                  'a number'
+                error stop 'IGLOO: bc.txt 401 field G unreadable'
+              endif
+            endif
             if (nCopies == 1) then
               !> one record per face: the payload is every family's
               do i = 1, totFam
                 cell%properties(i,:) = propBuffer(:)
               enddo
-
-              ! Per-family totals: krho (401) into krhoTot, gp*area (402/403) into mdotPart.
-              do i = 1, totFam
-                select case (cell%bcdef)
-                case (401)
-                  cell%krhoTot  = cell%krhoTot  + cell%properties(i, 1)
-                case (402, 403)
-                  cell%mdotPart = cell%mdotPart + cell%properties(i, 1) * cell%area
-                end select
-              enddo
             else
               !> one copy per family, in ATLAS order: copy c is family c (material-major, group-minor)
               cell%properties(c,:) = propBuffer(:)
-              select case (cell%bcdef)
-              case (401)
-                cell%krhoTot  = cell%krhoTot  + propBuffer(1)
-              case (402, 403)
-                cell%mdotPart = cell%mdotPart + propBuffer(1) * cell%area
-              end select
             endif
 
           case default
@@ -745,7 +746,8 @@ contains
     enddo
     close(u)
 
-    !> A 401 cell's flow divides by 1 - krhoTot: every krho >= 0 and their sum below 1, or refuse.
+    !> A 401 cell injects col 1, krho/(1 - krho_tot), times (mdotGas + G area), G col 10 (ATLAS): both finite and
+    !> >= 0, or refuse.
     do b = 1, size(geoblock)
       blkKrho: associate(blk => geoblock(b))
       mend(1:2) = blk%Ny; nend(1:2) = blk%Nz
@@ -754,11 +756,13 @@ contains
       do f = 1, 6; do n = 1, nend(f); do m = 1, mend(f)
         associate(cell => blk%face(f)%cell(m,n))
         if (cell%bcdef == 401) then
-          kmin = minval(cell%properties(1:totFam, 1))
-          if (cell%krhoTot >= 1._R8 .or. kmin < 0._R8) then
+          ! .not. (x >= 0 .and. x <= huge): negative, NaN and infinite alike (min/minval would pass a NaN by)
+          if (any(.not. (cell%properties(1:totFam, [1, 10]) >= 0._R8 .and. &
+                         cell%properties(1:totFam, [1, 10]) <= huge(1._R8)))) then
             write(*,'(A,I0,A,I0,A,I0,A,I0,A,ES13.6,A,ES13.6)') ' [IGLOO::read_cdp_bc_file] 401 inlet, block ', b, &
-              ' face ', f, ' cell (', m, ',', n, '): krho sum ', cell%krhoTot, ', smallest krho ', kmin
-            error stop 'IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1'
+              ' face ', f, ' cell (', m, ',', n, '): smallest krho/(1 - krho_tot) ', &
+              minval(cell%properties(1:totFam, 1)), ', smallest G ', minval(cell%properties(1:totFam, 10))
+            error stop 'IGLOO: bc.txt 401 inlet: krho/(1 - krho_tot) and G must be finite and >= 0'
           endif
         endif
         end associate
@@ -1007,6 +1011,106 @@ contains
     endif
 
   end subroutine write_outfield
+
+
+  !> Write OUTPUT/<prefix>wall<tag>.tec in MOSE's wall-file layout: one zone per block face holding a wall cell
+  !  (B<b>F<f>: the face's nodes, the values cell-centred), er-<mat> and g-<mat> of every material, then rdot.
+  !  Per face cell: er-<mat> = sum(mdot*E)/sum(mdot) over the material's parcels that left through it, g-<mat> =
+  !  sum(mdot)/A with A the area of the cell's face, rdot = sum over the materials of g*er/wall-density.
+  subroutine write_wallfield(material, geoblock, wall, tag)
+    use IR_Precision
+    use Lib_Tecplot
+    use Lib_ORION_data
+    use IGLOO_variables,             only: nm, IGLOO_phase_prefix
+    use IGLOO_data_block,            only: obj_block, obj_wallblock
+    use IGLOO_data_phases,           only: obj_material
+    use IGLOO_RayFaceIntersection3D, only: computeArea
+    use IGLOO_Lib_Erosion,           only: rhoWall
+    implicit none
+    type(obj_material),  intent(in) :: material(:)
+    class(obj_block),    intent(in) :: geoblock(:)
+    type(obj_wallblock), intent(in) :: wall(:)
+    character(len=*),    intent(in), optional :: tag
+    type(orion_data) :: orion
+    integer(I4P)     :: E_IO
+    integer          :: b, f, z, m, n, i, j, k, mat, cell(3), lo(3), hi(3)
+    real(R8)         :: vertices(3,8), area, ermSum
+    character(len=:), allocatable :: sfx, varnames
+
+    sfx = ''
+    if (present(tag)) sfx = tag
+    z = 0
+    do b = 1, size(wall)
+      z = z + count(wall(b)%on)
+    enddo
+    if (z == 0) return
+
+    orion%tec%node     = .false.
+    orion%tec%bc       = .false.
+    orion%tec%format   = 'ascii'
+    orion%solutiontime = -10.d0
+    allocate(orion%block(1:z))
+    z = 0
+    do b = 1, size(wall)
+      do f = 1, 6
+        if (.not. wall(b)%on(f)) cycle
+        z = z + 1
+        associate(blk => geoblock(b), zb => orion%block(z), acc => wall(b)%face(f)%acc)
+        zb%name = 'B'//trim(adjustl(str(.true.,b)))//'F'//trim(adjustl(str(.true.,f)))
+        !> the face's nodes: the block's node range, the normal index on the face's plane
+        lo = 0; hi = [blk%Nx, blk%Ny, blk%Nz]
+        select case (f)
+        case (1); hi(1) = 0
+        case (2); lo(1) = blk%Nx
+        case (3); hi(2) = 0
+        case (4); lo(2) = blk%Ny
+        case (5); hi(3) = 0
+        case (6); lo(3) = blk%Nz
+        end select
+        allocate(zb%mesh(1:3, 0:hi(1)-lo(1), 0:hi(2)-lo(2), 0:hi(3)-lo(3)))
+        zb%mesh = blk%node(:, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
+        zb%Ni = hi(1) - lo(1); zb%Nj = hi(2) - lo(2); zb%Nk = hi(3) - lo(3)
+        allocate(zb%vars(1:2*nm+1, max(zb%Ni,1), max(zb%Nj,1), max(zb%Nk,1)))
+        zb%vars = 0._R8
+        do n = 1, blk%face(f)%Nn
+          do m = 1, blk%face(f)%Nm
+            call blk%fmn2ijk(f, m, n, i, j, k)
+            call blk%getVertices([i, j, k], vertices)
+            area = computeArea(f, vertices)
+            !> the cell's place in the zone: the face-local (m,n), 1 across the face
+            select case (f)
+            case (1,2);   cell = [1, m, n]
+            case (3,4);   cell = [m, 1, n]
+            case default; cell = [m, n, 1]
+            end select
+            ermSum = 0._R8
+            do mat = 1, nm
+              if (acc(2,mat,m,n) > 0._R8) zb%vars(mat, cell(1), cell(2), cell(3)) = acc(1,mat,m,n)/acc(2,mat,m,n)
+              zb%vars(nm+mat, cell(1), cell(2), cell(3)) = acc(2,mat,m,n)/area
+              ermSum = ermSum + acc(1,mat,m,n)
+            enddo
+            zb%vars(2*nm+1, cell(1), cell(2), cell(3)) = ermSum/(area*rhoWall)
+          enddo
+        enddo
+        end associate
+      enddo
+    enddo
+
+    varnames = ''
+    do mat = 1, nm
+      varnames = varnames//'"er-'//trim(material(mat)%matName)//'"'
+    enddo
+    do mat = 1, nm
+      varnames = varnames//'"g-'//trim(material(mat)%matName)//'"'
+    enddo
+    varnames = varnames//'"rdot"'
+    write(*,*)
+    write(*,*)' Writing tec-format file: wall.tec'
+    write(*,*)
+    E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames, &
+                                           filename='OUTPUT/'//trim(IGLOO_phase_prefix)//'wall'//sfx//'.tec')
+
+  end subroutine write_wallfield
 
 
   !> Merge the last solve's per-rank particle-output shards into the serial file layout, from the shards' block indices

@@ -34,6 +34,7 @@ Parameters not specified take their default values. Unknown sections are silentl
 | `[IGLOO-Properties]` | Constant scalar properties for evaporation/breakup and the radiation emissivity (per material) |
 | `[IGLOO-BC]` | Injection spacing (`ds`) or explicit particle coordinates |
 | `[IGLOO-ODE]` | ODE solver selection, tolerances, step count |
+| `[IGLOO-Erosion]` | Wall erosion by particle impact: the model and constants of each material, the wall; present = `OUTPUT/wall.tec` |
 
 ## ATLAS-Generated Sections (not parsed by IGLOO)
 
@@ -237,6 +238,30 @@ Selects and tunes the ODE integrator.
 | `fail-after` | real | `0` | Forces the solver failure of the oxide-cap model (ODE model 8) once a parcel's last accepted time reaches this value [s]: the failure path of the [burnout residue](../theory/combustion.md#the-burnout-residue); 0 = off |
 
 `H-sdirk4` is recommended for stiff cases (evaporation, small Stokes number). `H-dopri5` is faster for non-stiff drag-only cases.
+
+### `[IGLOO-Erosion]`
+
+Present: every parcel that leaves through a wall cell (301, 104, a 103 without partner) erodes it, and
+`OUTPUT/wall.tec` holds per wall face cell the erosion ratio `er-<mat>` and the incident mass flux `g-<mat>` of
+every material and the recession rate `rdot` ([Wall erosion](../theory/erosion.md)). Absent: no erosion, no file.
+The constants carry no model prefix: each takes one value per material of the phase file, read for the
+material's own model. Every key belongs to one model and the keys are case-sensitive (`K` Oka's, `k`
+Neilson-Gilchrist's).
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `model` | string list | — | One token per material: `Oka`, `Neilson-Gilchrist` or `none` (any case) |
+| `wall-density` | real | — | Wall density [kg/m³], every wall; required, > 0 |
+| `Hv`, `a`, `b` | real | — | Oka: the wall's Vickers hardness [GPa] and load relaxation; one value each, with an Oka material |
+| `K` | real list | — | Oka: the particle factor of E90 [mm³/kg] |
+| `k1`, `k3`, `v-ref`, `D-ref` | real list | — | Oka: exponents of E90, reference speed [m/s] and diameter [m] |
+| `k2`, `n1`, `n2` | real list | — | Oka: each as a value, or as `<key>-s` and `<key>-q` with `<key> = s Hv^q` |
+| `phi`, `epsilon`, `n` | real list | — | Neilson-Gilchrist: energies of cutting and deformation per unit eroded mass [J/kg], angle constant |
+| `k` | real list | — | Neilson-Gilchrist: the normal velocity below which no deformation erosion occurs [m/s] (the paper's K) |
+
+Setup refuses an unknown token, a list whose length is not the number of materials, a missing constant of a model
+in use, `k2`/`n1`/`n2` in neither or both forms, a value out of its range, a token that is not a number and a wall
+constant with several values ([Inputs](../theory/erosion.md#inputs)).
 
 ---
 

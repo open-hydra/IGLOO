@@ -34,7 +34,7 @@ Each name appearing in `[BCB-Block*]` gets its own section defining the BC type 
 ```ini
 [in]
 type = inlet
-krho = 0.34       ; mass-loading ratio (dimensionless, ≥ 0; the families of one cell sum below 1)
+krho = 0.34       ; mass loading (≥ 0, a fraction of the mixture flow; ATLAS stops on a cell whose phases sum to 1)
 dp   = 11.89e-6   ; Dirac particle diameter [m]
 
 [out]
@@ -66,13 +66,20 @@ The last column is what the code does to the **gas** ghost ring under `gas-order
 | `100` | Unresolved connection | ATLAS's code for a connection or chimera facelet that found no partner or donor; header only. The particle leaves the domain there. | Linear fill. |
 | `300` | Symmetry / reflection | Velocity is reflected through the face normal (elastic wall). Grazing impacts ($v_n / \|v\| < 0.02$) slide along the face to prevent micro-bounce skating. | **Mirror** — the interior partner's normal component is reflected into the ghost (`v_g·n = −v_i·n`), the tangential part kept from the linear fill, so the sampled `v_n` at the plane is 0 for any profile. A non-positive extrapolated scalar falls back to zero-gradient. |
 | `200` | Axisymmetric wedge | Position and velocity are rotated by $\pm\Delta\theta$ about the x-axis to fold the particle back into the wedge sector. `face6` (+k) rotates by $-\Delta\theta$; `face5` (-k) by $+\Delta\theta$. $\Delta\theta$ is the wedge angle, computed from the mesh k-layer geometry. | Linear fill; a ghost node flagged `nodeOnAxis` is then overridden by `axisGhost` (scalars copied, velocity reduced to its axis-parallel component). |
-| `401` | Inlet (krho) | Injection boundary; mass loading specified as a density ratio `krho` ≥ 0 per family. Particle mass flow is $\dot{m}_p = \frac{k_\rho}{1-\sum k_\rho} (\dot{m}_\mathrm{gas} + \dot{m}_\mathrm{part})$, the sum over the families of the cell (a one-copy record counts once per family); a cell whose sum reaches 1, or a negative `krho`, stops the setup (see [Several families](#several-families)). | Linear fill. |
+| `401` | Inlet (krho) | Injection boundary; mass loading `krho` ≥ 0 per family, the fraction of the flow of the mixture. ATLAS writes column 1 as $k_\rho/(1-k_{\rho,\mathrm{tot}})$ and column 10 as $G$, $k_{\rho,\mathrm{tot}}$ the sum of `krho` over every family of every dispersed phase of the cell and $G$ the sum of the mass fluxes `gp` of its 402/403 records (the gas not included): the particle mass flow is $\dot{m}_p = \frac{k_\rho}{1-k_{\rho,\mathrm{tot}}} (\dot{m}_\mathrm{gas} + G A_\mathrm{cell})$. A 401 line without column 10 (an ATLAS before this rule), or a column 1 or $G$ that is negative or not finite, stops the setup (see [Several families](#several-families)); a family whose column 1 is 0 in a cell pins no parcel there. | Linear fill. |
 | `402` | Inlet (mass flux) | Injection boundary; particle mass flow specified as a flux $g_p$ [kg/(s·m²)]: $\dot{m}_p = g_p \cdot A_\mathrm{cell}$. | Linear fill. |
 | `403` | Inlet (mass flux variant) | Same as 402, used for a second injection family type. | Linear fill. |
 | All others | Wall / outflow | Particle is marked as exited (`gone = true`). Its exit position, speed, impact angle, cell face area and the face's code (`bc`) are recorded in `outloc-<mat>.dat`. | `301` — the code ATLAS writes for a dispersed phase at a `type = wall` patch, and therefore the one a gas-solid wall reaches IGLOO as — **mirrors**, exactly as 300. Every other code, `400` (the box generators' outlet/side tag) included, keeps the linear fill. |
 
 !!! note "Default is wall/outflow"
     Any `bcdef` code not listed above (e.g. 0, 404–407, 420) is treated as a wall or outflow: the particle is removed from the domain at the crossing point. Code `103` (a connection between blocks of different phases) and `104` (a chimera face between blocks of different phases) are header only in a dispersed-phase file, so a particle leaves the domain there.
+
+!!! note "Walls that erode"
+    With `[IGLOO-Erosion]` the parcels that leave through a **301**, **104** or partner-less **103** cell erode
+    it ([Wall erosion](../theory/erosion.md)); no other code erodes. ATLAS writes a manifold (501) and every
+    gas-surface interaction (502–506) as a symmetry (`300`) in a dispersed phase's file — the particle is
+    reflected there and nothing erodes — and a solid-propellant grain (502) whose section gives the phase's inlet
+    keys as a `401` inlet.
 
 ---
 
@@ -91,7 +98,7 @@ Per-cell injection properties stored in `bc.txt` columns (after the `bcdef` colu
 
 | Column | Quantity |
 |--------|---------|
-| 1 | `krho` (401) or mass flux `gp` [kg/(s·m²)] (402/403) |
+| 1 | $k_\rho/(1-k_{\rho,\mathrm{tot}})$ (401, as ATLAS writes it) or mass flux `gp` [kg/(s·m²)] (402/403) |
 | 2 | Particle velocity fraction $k_V = \|v_p\| / \|u_g\|$ |
 | 3 | Flow angle α (in-plane inclination from mesh normal) |
 | 4 | Flow angle β (out-of-plane) |
@@ -100,6 +107,7 @@ Per-cell injection properties stored in `bc.txt` columns (after the `bcdef` colu
 | 7 | Width $\sigma_p$: the diameter standard deviation [m] of a Normal or LogNormal, the spread $n$ of a Rosin–Rammler law; $\sigma_p \le 0$ turns a law name into a Dirac; unused by a size-distribution file |
 | 8 | Size distribution: a law name — `Dirac`, `Normal`, `LogNormal`, `RosinRammler` (any case) — or the path of a size-distribution file; absent → Dirac |
 | 9 | Per-cell injection spacing override `ds` [m] (0 → use global `[IGLOO-BC] ds`) |
+| 10 | 401 only: $G$, the sum of the mass fluxes `gp` [kg/(s·m²)] of the 402/403 records of the cell over every dispersed phase (required) |
 
 For a burning material with an oxide fraction at injection (`xi-ox0`), the loading (column 1) and the size
 columns (6–8) describe the whole particle, metal and oxide, its diameter the equal-volume sphere of both
@@ -153,7 +161,7 @@ A family is one population of one material: the `<groups>` of every material lin
 | the family count × that | one copy per family: copy `c` of each block is family `c` |
 | anything else | refused at setup: `IGLOO: bc.txt record count is neither one copy nor one copy per family` (the three counts are printed first) |
 
-With one copy per family, copy 1 tags the face cells, and every later copy must repeat copy 1's header integers and codes record by record — otherwise the run stops with `IGLOO: bc.txt family copies do not repeat the faces of copy 1`. The inlet columns (loading, velocity, direction, temperature, radius, width, law, `ds`) are then per family, and the 401 normalisation uses the sum of the families' own `krho`: $\dot m_p = \frac{k_{\rho,\mathrm{fam}}}{1-\sum_\mathrm{fam} k_\rho}(\dot m_\mathrm{gas} + \dot m_\mathrm{part})$, with $\dot m_\mathrm{part} = \sum_\mathrm{fam} g_{p,\mathrm{fam}} A_\mathrm{cell}$ for 402/403. In either layout the sum runs over every family of the cell, so one copy of loading $k_\rho$ fed to $F$ families sums to $F k_\rho$. A 401 cell whose sum reaches 1, or whose smallest `krho` is negative, would get an infinite or a negative flow: the setup stops after reading the file, the cell, its sum and its smallest `krho` printed first, with `IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1`. For 101/201 cells the connection line is read from every copy and the last one is kept (ATLAS writes the same line in each); for a chimera (102) facelet copy 1's payload is kept and every later copy must repeat its donor counts. Verified by `test_bc_families` (one and two blocks) and the `two-fam-bc`, `refuse-bc-copies`, `refuse-bc-copy-order`, `refuse-krho-sum` and `refuse-krho-negative` cases (see the [V&V overview](../vv/index.md)).
+With one copy per family, copy 1 tags the face cells, and every later copy must repeat copy 1's header integers and codes record by record — otherwise the run stops with `IGLOO: bc.txt family copies do not repeat the faces of copy 1`. The inlet columns (loading, velocity, direction, temperature, radius, width, law, `ds`, $G$) are then per family. The 401 normalisation over the families is ATLAS's: column 1 carries $k_{\rho,\mathrm{fam}}/(1-k_{\rho,\mathrm{tot}})$, $k_{\rho,\mathrm{tot}}$ summed over every family of every dispersed phase of the cell, and column 10 the fixed mass flux $G$ of the cell, so that $\dot m_p = \mathrm{col}_1\,(\dot m_\mathrm{gas} + G A_\mathrm{cell})$; IGLOO takes both as written, so a one-copy file fed to $F$ families of loading $k_\rho$ holds $k_\rho/(1-F k_\rho)$ (as `tests/tools/bc401.py` writes the fixtures). ATLAS stops on a sum of 1 or more, and IGLOO stops after reading the file on a column 1 or $G$ that is negative or not finite (`IGLOO: bc.txt 401 inlet: krho/(1 - krho_tot) and G must be finite and >= 0`, the cell and the smallest values printed first) and on a 401 line without column 10, written by an ATLAS before the rule (`IGLOO: bc.txt 401 line without G (an ATLAS before the mixture rule): regenerate it`). For 101/201 cells the connection line is read from every copy and the last one is kept (ATLAS writes the same line in each); for a chimera (102) facelet copy 1's payload is kept and every later copy must repeat its donor counts. Verified by `test_bc_families` (one and two blocks) and the `two-fam-bc`, `refuse-bc-copies`, `refuse-bc-copy-order`, `refuse-bc-no-g` and `refuse-krho-negative` cases (see the [V&V overview](../vv/index.md)).
 
 ---
 

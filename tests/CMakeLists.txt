@@ -10,7 +10,7 @@
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ burn-box-ox0/ beckstead-air/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-melt-rhos/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-brk-tab-rhos/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ khrt-varcp/ breakup-per-material/ khrt-plane/ pe-sigma-table/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ tec_read/ tec_write/ fmt/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ sym-plane-creep/ sym-plane-creep-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,krho-{sum,negative},gas-no-density}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ tec_read/ tec_write/ fmt/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ inlet-401-g/ inlet-zero-load/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ sym-plane-creep/ sym-plane-creep-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,bc-no-g,krho-negative,gas-no-density}
 #   repeatability/      two-sweep gates (twosweep driver): 15 cases
 #   mpi/                registered only under USE_MPI: 9 rank-count cases + 4 consistency + 1 determinism
 #                       + 14 two-sweep cases
@@ -1052,6 +1052,56 @@ igloo_e2e_case(chimera-2blk-shift-mollify infrastructure/chimera-2blk-shift-moll
 # varcp-tmin: a varying-cp table from 280 K, the parcels at 600 K on its extended last segment.
 igloo_e2e_case(varcp-tmin infrastructure/varcp-tmin "e2e;infrastructure;heat")
 
+# ---------- erosion (wall erosion by particle impact: [IGLOO-Erosion], OUTPUT/wall.tec) ------------------------
+# test_erosion_laws: Oka et al. (2005) and Neilson-Gilchrist (1968) as production computes them, against their
+# closed forms and the anchors of the papers (the maxima of g(alpha), eq. 7, the 35 deg threshold of Fig. 11).
+igloo_unit_test(test_erosion_laws erosion/laws "unit;erosion")
+# wall-flux: a box whose outlet face is a dispersed-phase wall (301), five assigned NoDrag streams on straight lines,
+# material A in two groups and B in one, model none: wall.tec's zone and nodes, g-<mat> per wall cell from the
+# streams' lines and from the bc-301 exit records, er and rdot zero, no wall file without the section.
+igloo_e2e_case(wall-flux erosion/wall-flux "e2e;erosion;io")
+# wall-laws: the same box, eight straight NoDrag streams hitting the wall at 10-90 deg; material A Oka (silica's
+# constants, n1 n2 k2 from their correlations), B Neilson-Gilchrist (Table I, k = 20 m/s): er-A, er-B, g, rdot per
+# cell against an independent oracle of the two laws; ref-direct/ gives n1, n2, k2 as values: the same wall.tec.
+igloo_e2e_case(wall-laws erosion/wall-laws "e2e;erosion;io")
+# [IGLOO-Erosion] refusals on wall-flux's case (INPUT symlinked, materials A and B), each RED on the reader without
+# its check: the missing and the empty model stop at the next check (another payload), one token for two materials
+# reads past its list and stops at the unknown-token check, an unknown token and the missing or negative
+# wall-density run to the end with exit 0 (the missing density writes rdot = NaN; see erosion/refusals/INFO.md).
+igloo_refusal_case(refuse-erosion-model-missing    erosion/refusals/model-missing
+                   "IGLOO: [IGLOO-Erosion] model is missing"                   "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-model-empty      erosion/refusals/model-empty
+                   "IGLOO: [IGLOO-Erosion] model is empty"                     "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-model-count      erosion/refusals/model-count
+                   "IGLOO: [IGLOO-Erosion] model needs one token per material" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-model-token      erosion/refusals/model-token
+                   "IGLOO: unknown [IGLOO-Erosion] model"                      "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-density-missing  erosion/refusals/density-missing
+                   "IGLOO: [IGLOO-Erosion] wall-density [kg/m^3] is missing or not positive" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-density-negative erosion/refusals/density-negative
+                   "IGLOO: [IGLOO-Erosion] wall-density [kg/m^3] is missing or not positive" "e2e;refusal;erosion")
+# The constants of the laws, on wall-laws's deck: a wall constant, an Oka constant, a Neilson-Gilchrist constant
+# missing; n1 as a value and as s, q; k2-s without k2-q; one k for two materials; phi = 0; a token that is not a
+# number; two values of Hv (RED without each check: erosion/refusals/INFO.md).
+igloo_refusal_case(refuse-erosion-oka-wall-missing erosion/refusals/oka-wall-missing
+                   "IGLOO: [IGLOO-Erosion] a constant of the models in use is missing" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-oka-missing      erosion/refusals/oka-missing
+                   "IGLOO: [IGLOO-Erosion] a constant of the models in use is missing" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-ng-missing       erosion/refusals/ng-missing
+                   "IGLOO: [IGLOO-Erosion] a constant of the models in use is missing" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-form-both        erosion/refusals/form-both
+                   "IGLOO: [IGLOO-Erosion] give k2, n1 and n2 each as a value or as its s and q, once" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-form-partial     erosion/refusals/form-partial
+                   "IGLOO: [IGLOO-Erosion] give k2, n1 and n2 each as a value or as its s and q, once" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-count            erosion/refusals/count
+                   "IGLOO: [IGLOO-Erosion] a constant needs one value per material" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-range            erosion/refusals/range
+                   "IGLOO: [IGLOO-Erosion] a constant out of its range" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-not-number       erosion/refusals/not-number
+                   "IGLOO: [IGLOO-Erosion] a constant that is not a number" "e2e;refusal;erosion")
+igloo_refusal_case(refuse-erosion-wall-count       erosion/refusals/wall-count
+                   "IGLOO: [IGLOO-Erosion] a wall constant takes one value" "e2e;refusal;erosion")
+
 # ---------- refusals (setup-time error stops) ------------------------------------------------
 # Each is drag-stokes (or two-mat's phase.txt) plus ONE offending key/file. The expected text is the solver's own
 # message; check_refusal.py also requires exit == IGLOO_ERROR_STOP_RC and that nothing integrated.
@@ -1253,11 +1303,13 @@ igloo_refusal_case(refuse-body-accel       infrastructure/refusals/body-accel
                    "body-accel: expected 3 values (gx gy gz)" "e2e;refusal;standard")
 igloo_refusal_case(refuse-plane-x          infrastructure/refusals/plane-x
                    "IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]" "e2e;refusal;infrastructure")
-# A 401 inlet whose families' krho sum to 1 or more (three families on a one-copy file), and a negative krho.
-igloo_refusal_case(refuse-krho-sum         infrastructure/refusals/krho-sum
-                   "IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1" "e2e;refusal;infrastructure")
+# A 401 inlet line without its 10th field G (a bc.txt of an ATLAS before the mixture rule over the dispersed
+# phases, its field 1 krho), and a negative field 1, krho/(1 - krho_tot) (the krho sum over the phases of a cell
+# is ATLAS's to refuse).
+igloo_refusal_case(refuse-bc-no-g          infrastructure/refusals/bc-no-g
+                   "IGLOO: bc.txt 401 line without G (an ATLAS before the mixture rule): regenerate it" "e2e;refusal;infrastructure;bc")
 igloo_refusal_case(refuse-krho-negative    infrastructure/refusals/krho-negative
-                   "IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1" "e2e;refusal;infrastructure")
+                   "IGLOO: bc.txt 401 inlet: krho/(1 - krho_tot) and G must be finite and >= 0" "e2e;refusal;infrastructure")
 # A gas file without a density variable (a box whose Roi( 1 ) is renamed, make_gas_refusals.py).
 igloo_refusal_case(refuse-gas-no-density   infrastructure/refusals/gas-no-density
                    "IGLOO: the gas file has no density variable" "e2e;refusal;infrastructure")
@@ -1305,6 +1357,12 @@ igloo_e2e_case(inj-pack    infrastructure/inj-pack    "e2e;infrastructure;inject
 igloo_e2e_case(inj-mdotmax infrastructure/inj-mdotmax "e2e;infrastructure;injection")
 igloo_e2e_case(inj-dscell  infrastructure/inj-dscell  "e2e;infrastructure;injection")
 igloo_e2e_case(inj-dsdegen infrastructure/inj-dsdegen "e2e;infrastructure;injection")
+# inlet-401-g: drag-stokes's 401 inlet with the 10th field G (the cell's fixed mass flux, ATLAS's mixture rule over the
+# dispersed phases) = rho_g U: the exit mass flow field 1 (mdot_gas + G A) per cell, and mdot-max's N_pmin with G (5).
+igloo_e2e_case(inlet-401-g infrastructure/inlet-401-g "e2e;infrastructure;injection")
+# inlet-zero-load: two-fam-bc's inlet with field 1 zero on family A's rows 1-2 and on every record of family B
+# (ATLAS's 401 of krho 0): no parcel pinned there, none carrying zero mass (dropZeroFlow).
+igloo_e2e_case(inlet-zero-load infrastructure/inlet-zero-load "e2e;infrastructure;injection")
 # inj-edge: drag-stokes's box injected with ds = 0.25 cm, whose advancing front pins lattice points on the inlet
 # cells' edges, the domain's outer edge y = 0 among them (a few 1e-18 m outside the face): every parcel takes its
 # own inlet cell and leaves at x = 0.15. RED on a search that rejects the point the pinning test accepts:

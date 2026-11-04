@@ -590,10 +590,10 @@ subroutine compute_ds(block,gas,f,m,n,i,j,k,vertices,group,ds,mdotMax,R,single,d
             prop => block%face(f)%cell(m,n)%properties(group%famID,1:7))
   select case (cell%bcdef)
   case (401)
-    ! mdot_p = krho/(1-krhoTot)/Ninj · (mdotGas + mdotPart)
+    ! mdot_p = krho'/Ninj · (mdotGas + G area), krho' col 1 and G col 10 (ATLAS's mixture rule over the phases)
     ! NpMin (~ Ninj when mdot_p hits mdotMax) inverts that relation.
-    NpMin = ceiling(prop(1) / (1._R8 - cell%krhoTot) / mdotMax * &
-                    (abs(cell%mdotGas) + cell%mdotPart))
+    NpMin = ceiling(prop(1) / mdotMax * &
+                    (abs(cell%mdotGas) + cell%properties(group%famID,10) * cell%area))
   case (402, 403)
     ! prop(1) is gp [kg/(s·m²)]; mdot_p = gp*area/Ninj => NpMin = gp*area/mdotMax
     NpMin = ceiling(prop(1) * cell%area / mdotMax)

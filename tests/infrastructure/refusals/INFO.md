@@ -99,8 +99,8 @@ output written).
 | `refuse-body-accel` | `body-force` (`INPUT/` symlinked) with `body-accel = 0.0 -200.0` | `body-accel: expected 3 values (gx gy gz)` |
 | `refuse-plane-x` | `INPUT/` symlinked; `plane-x = abc` | `IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]` |
 | `refuse-plane-x-empty` | `INPUT/` symlinked; `plane-x =` with nothing after the `=` | `IGLOO: [IGLOO-General] plane-x is empty` |
-| `refuse-krho-sum` | own `INPUT/phase.txt` `A 3` (three families of drag-stokes's material); drag-stokes's one-copy `bc.txt` and `solfile.tec`, `common/properties.dat`: the one copy feeds `krho` 0.34 to every family, a sum of 1.02 on each of the 25 inlet cells | `IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1` — refused in `read_cdp_bc_file` after the file is read, the cell, its sum and its smallest `krho` printed first |
-| `refuse-krho-negative` | own `INPUT/bc.txt`: `drag-stokes`'s with every inlet `krho` negated (`make_bc_refusals.py`) | the same payload (smallest `krho` −0.34) |
+| `refuse-bc-no-g` | own `INPUT/bc.txt`: `drag-stokes`'s as written before ATLAS's mixture rule over the dispersed phases (401 lines of nine fields, field 1 `krho`, no G); drag-stokes's `solfile.tec`, `common/phase.txt` and `common/properties.dat` | `IGLOO: bc.txt 401 line without G (an ATLAS before the mixture rule): regenerate it` — refused in `read_cdp_bc_file` at the first 401 line, the file named first (a `krho` sum of 1 or more is ATLAS's to refuse) |
+| `refuse-krho-negative` | own `INPUT/bc.txt`: `drag-stokes`'s with every inlet field 1, krho/(1 − krho_tot), negated (`make_bc_refusals.py`) | `IGLOO: bc.txt 401 inlet: krho/(1 - krho_tot) and G must be finite and >= 0` — refused after the file is read, the cell, its smallest field 1 (−0.515) and its smallest G (0) printed first |
 | `refuse-gas-no-density` | own `INPUT/solfile.tec`: a 2×2×2 box (`tools/make_box_case.py --nx 2 --ny 2 --nz 2`) whose density variable `"Roi( 1 )"` is renamed `"Q( 1 )"` (`python3 make_gas_refusals.py`, run from this directory); drag-stokes's `phase.txt`, `properties.dat` and `bc.txt` symlinked (the stop comes before the boundary file is read) | `IGLOO: the gas file has no density variable (Roi(s) or rho(s))` — refused at the gas import (`allocation.f90` `import_gas`), the block named first |
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
@@ -154,14 +154,13 @@ harness or an embedding parent can tell from success; every one of those selecto
 solution centres to exactly 0.0 — and on a [0, δ] sector such a solver runs the case to
 "All particles out of domain" with exit 0, the gas and every deposit rotated by δ/2.
 **The two `bc.txt` copy cases are RED** too, on a reader that consumes copy 1 only: `bc-copies` feeds
-its three families of A copy 1's `krho` 0.34, i.e. `krhoTot` = 1.02, and stops at the 401 inlet refusal (exit
-128, not its payload) — without that refusal ṁ = 0.34/(1 − 1.02) · 1.2e-3 = −2.04e-2 kg/s per parcel, a
-negative mass flow, 75 exits, exit 0 — and `bc-copy-order` runs like `two-fam-bc` fed copy 1 for both
-families (exit 0, six output files). **The two 401-loading cases are RED** on a reader without the check: both run
-to "Stop condition" with exit 0 and write their output, each parcel of `refuse-krho-sum` at ṁ = 0.34/(1 − 1.02) ·
-1.2e-3 = −2.04e-2 kg/s and of `refuse-krho-negative` at −0.34/1.34 · 1.2e-3 = −3.04e-4 kg/s; with the sum clause
-alone taken out `refuse-krho-sum` runs so and `refuse-krho-negative` is still refused, with the negative clause
-alone the other way round. **`refuse-gas-no-density` is RED** on a gas import that ends on a bare `error stop 1`:
+its three families copy 1's field 1, 0.34/(1 − 0.51), and runs to "All particles out of domain" with exit 0, 75
+exits at ṁ = 8.32653e-4 kg/s each, and `bc-copy-order` runs like `two-fam-bc` fed copy 1 for both families (exit
+0, seven output files, family B's 25 exits at 8.32653e-4 kg/s instead of 4.163265e-4). **The two 401-record cases
+are RED** on a reader without their check: both run to "Stop condition" with exit 0 and 25 exits, `refuse-bc-no-g`
+(G taken as 0 where it is missing) at ṁ = 0.34 · 1.2e-3 = 4.08e-4 kg/s per parcel, its `krho` read as
+krho/(1 − krho_tot) (the regenerated file gives 0.34/0.66 · 1.2e-3 = 6.1818e-4: 34 % short), and
+`refuse-krho-negative` at ṁ = −0.34/0.66 · 1.2e-3 = −6.18182e-4 kg/s. **`refuse-gas-no-density` is RED** on a gas import that ends on a bare `error stop 1`:
 exit 1, not 128, and no payload in stderr (the stop code `1` alone).
 
 **The eleven cases of the phase file's burn-law and breakup checks, the property sizes, the two boundary files

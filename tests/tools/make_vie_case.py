@@ -31,6 +31,12 @@ Usage:
 import argparse
 import os
 
+import sys
+
+if os.path.dirname(os.path.abspath(__file__)) not in sys.path:   # bc401, beside this file, wherever this is
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # loaded from (a check.py loads it by path)
+import bc401  # noqa: E402
+
 # ---- geometry (SI): x axial (flow, L=6), y transverse (H=2), z thin dummy ----
 LX, LY, LZ = 6.0, 2.0, 0.05
 NX, NY, NZ = 120, 50, 5                   # dx=0.05, dy=0.04, dz=0.01 (Nz>=2 => 3D)
@@ -110,6 +116,7 @@ def write_bc(path, kv=KV, rp=RP):
                     f.write(f"   {1:6d}{face:6d}{m:6d}{n:6d}{1:6d}{bcdef:6d}\n")
                     if face == 1:
                         f.write(data)
+    bc401.convert(path, quiet=True)            # the 401 record of ATLAS's mixture rule (field 1, G)
 
 
 def main():

@@ -12,8 +12,9 @@ Targets -- each fails if both families are fed copy 1
   T1  B's parcels integrate at d = 2 rp_B = 23.78 um: the drag-stokes Stokes oracle (imported)
       with D_P and TAU = rho_B d^2/(18 mu) = 1.745e-3 s passes on trajectories-B.dat -- its
       per-row diameter check makes the import the diameter gate
-  T2  loading per family: krhoTot = 0.34 + 0.17 = 0.51, so every exit record carries
-      mdot = krho/(1 - krhoTot) * rho U A: A 8.326531e-4, B 4.163265e-4 kg/s (1e-5 relative)
+  T2  loading per family: field 1 of each copy is krho/(1 - krho_tot), krho_tot = 0.34 + 0.17 = 0.51 (ATLAS's
+      rule, as make_fixture.py writes it), so every exit record carries mdot = field 1 * rho U A:
+      A 8.326531e-4, B 4.163265e-4 kg/s (1e-5 relative)
   T3  parcel mass at injection: m_B/m_A = (rho_B/rho_A) (d_B/d_A)^3 = 2.711864 for every ID
   T4  euler2.tec is B's: rho_p/n_p = rho_B pi d_B^3/6 = 7.0410e-12 in every deposited cell
       (euler1.tec: A's 2.596e-12)

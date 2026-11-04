@@ -4,7 +4,7 @@ module IGLOO_module
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_data_block, only: obj_block, obj_flowblock, obj_sourceblock, obj_eulerblock, fillGhostPartners, &
                               buildInterfaceLinks, reportNonAligned, mollifyEulerBlocks, mollifySourceBlocks, &
-                              hasConnectedFaces, buildGhostLinks, vertexClass, combineInterfaceDual
+                              hasConnectedFaces, buildGhostLinks, vertexClass, combineInterfaceDual, obj_wallblock
   use IGLOO_data_phases, only: obj_material
   use IGLOO_Lib_Mollify, only: cellLink, linkDonors
   use IGLOO_overlap,     only: overlapMap, mirroredTotals
@@ -30,6 +30,8 @@ module IGLOO_module
     !> Valid only between a solve and the next reset_state (which deallocates them).
     type(obj_sourceblock), allocatable :: source(:)
     type(obj_eulerblock),  allocatable :: euler(:,:)
+    !> [IGLOO-Erosion]: the wall-impact sums per block, zeroed by every solve, valid like source.
+    type(obj_wallblock),   allocatable :: wall(:)
     type(obj_material),    allocatable :: material(:)
     logical :: eulSwitch, srcSwitch
     !> Sweep bookkeeping: setup_static ran; reset_state ran since the last solve.
@@ -79,6 +81,7 @@ contains
     use IGLOO_overlap,        only: hasChimeraFaces, buildOverlapMap
     use IGLOO_Mod_MPI,        only: mpi_is_root, mpi_size_
     use IGLOO_Mod_Timing,     only: tm_phase, TM_IDLE, TM_INPUT, TM_GASREAD, TM_BLOCKS, TM_IMPORT, TM_PIN
+    use IGLOO_Lib_Erosion,    only: erosionOn, eroModelWord, checkErosionInput, setupWall, describeErosion
     use Lib_ORION_data
     implicit none
     class(obj_IGLOO), intent(inout)        :: self
@@ -86,7 +89,7 @@ contains
     type(orion_data)     :: own_gas
     character(len=llen)  :: gasfile
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
-    integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar, b, b2, nMoved
+    integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar, b, b2, nMoved, nWallFace, nDrop
     character(len=16)    :: dualCodes
     integer, allocatable :: npair(:,:), resCount(:)
     character(len=2)     :: method
@@ -124,6 +127,7 @@ contains
 
     call tm_phase(TM_INPUT)
     call read_cdp_properties(IGLOO_phase_prefix,self%material)
+    call checkErosionInput(nm)
     call tm_phase(TM_BLOCKS)
     call allocate_blocks(own_gas,self%material,self%geoblock,self%gasblock, &
                          self%source,self%euler,self%srcSwitch,self%eulSwitch)
@@ -145,6 +149,16 @@ contains
       endif
     endif
     call read_cdp_bc_file(IGLOO_phase_prefix,self%material,self%geoblock,self%gasblock)
+    !> [IGLOO-Erosion]: the faces holding a wall cell and their sums (an empty entry per block otherwise).
+    call setupWall(self%geoblock, self%wall, nm, nWallFace)
+    if (erosionOn .and. mpi_is_root) then
+      write(*,'(A,I0,A)') ' [IGLOO] wall erosion: ', nWallFace, ' block face(s) with wall cells (codes 301, 103, 104)'
+      do m = 1, nm
+        write(*,'(A)') '         material '//trim(self%material(m)%matName)//': '//trim(adjustl(eroModelWord(m)))
+        if (len(describeErosion(m)) > 0) write(*,'(A)') '           '//describeErosion(m)
+      enddo
+      if (nWallFace == 0) write(*,'(A)') ' [WARNING] [IGLOO-Erosion] no wall cell in the boundary file: no OUTPUT/wall.tec'
+    endif
     call tm_phase(TM_BLOCKS)
     call buildInterfaceLinks(self%geoblock, self%links, self%donors)
     if (mpi_is_root) call reportNonAligned(self%links)
@@ -182,6 +196,13 @@ contains
         gr%gID   = g
         gr%famID = fam
         call pin_particles(gr, self%geoblock, self%gasblock, method, pos0,vel0,temp0,mdot,diam, fam, gr%nparticles)
+        !> A boundary parcel of a cell that injects nothing for this family -- a 401 of field 1 zero (ATLAS's 401 of
+        !  krho 0, a phase without inlet keys at an inflow grain), a 402/403 of gp zero -- would carry zero mass from
+        !  the inlet to its exit: dropped once every parcel is pinned, so the parcels kept keep their pinning draws (the
+        !  per-parcel streams, seeded from the ID each sweep, follow the IDs the kept parcels are renumbered to).
+        call dropZeroFlow(gr, self%geoblock, fam, nDrop)
+        if (mpi_is_root .and. nDrop > 0) write(*,'(A,I0,A,I0,A)') ' [IGLOO] family ', fam, ': ', nDrop, &
+          ' parcel(s) of inlet cells with a zero loading (field 1 = 0) not injected'
         !> Pin-time census, never overwritten.
         gr%nInjected = gr%nparticles
         end associate
@@ -296,6 +317,7 @@ contains
           part%gasExitFace = 0
           part%Af          = 0._R8
           part%exitCode    = 0
+          part%exitCell    = 0
           part%gone  = .false.
           part%wasin = .false.
           part%Ncell = 0
@@ -380,6 +402,7 @@ contains
     use IGLOO_Lib_Combustion, only: nuOx
     use IGLOO_records,        only: rec_setup, ps_open, ps_text, ps_zone, ps_close, ps_begin, ps_end, &
                                     STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT
+    use IGLOO_Lib_Erosion,    only: zeroWall
     use oslo
     use omp_lib
     implicit none
@@ -421,6 +444,7 @@ contains
     call tm_phase(TM_ACCUM)
     call allocateAccumulators(self%source, self%euler, sourceSwitch, eulerSwitch)
     call initialize_fields(self%source,self%euler,sourceSwitch,eulerSwitch)
+    call zeroWall(self%wall)
     call record_footprint(self%geoblock, self%gasblock, self%source, self%euler)
     call tm_phase(TM_GHOST)
     if (ord2) then
@@ -654,7 +678,7 @@ contains
               call tm_parcel_begin()
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                              mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab,    &
-                             mat%LvTab,mat%cpvTab, slot=ip, shed=gr%shed(ip), noShed=(loopCounter==maxLoop))
+                             mat%LvTab,mat%cpvTab, slot=ip, shed=gr%shed(ip), noShed=(loopCounter==maxLoop), wallblock=self%wall)
               call tm_parcel_end()
             enddo
             !$OMP END PARALLEL DO
@@ -750,7 +774,7 @@ contains
                 kid%xi0     = 0.5_R8
                 !> fresh trajectory bookkeeping
                 kid%Ncell = 0; kid%gone = .false.; kid%wasin = .false.; kid%angle = 0._R8
-                kid%lost  = .false.; kid%exitCode = 0
+                kid%lost  = .false.; kid%exitCode = 0; kid%exitCell = 0
                 !> parcel mass state: m from (rho, d), then the parcel flow mdot = npdot*m
                 call kid%computeMass(mat%rhoTab)
                 kid%m0   = kid%m
@@ -821,11 +845,11 @@ contains
             if (gr%resOn) then
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                               mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
-                              mat%LvTab,mat%cpvTab, slot=ip, resid=gr%resid(ip))
+                              mat%LvTab,mat%cpvTab, slot=ip, resid=gr%resid(ip), wallblock=self%wall)
             else
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                               mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
-                              mat%LvTab,mat%cpvTab, slot=ip)
+                              mat%LvTab,mat%cpvTab, slot=ip, wallblock=self%wall)
             endif
             call tm_parcel_end()
           enddo
@@ -850,7 +874,7 @@ contains
 
     !> Sum the partial grid sums across ranks, in rank order, before finalize, which is nonlinear.
     call tm_phase(TM_REDUCE)
-    call reduce_accumulators(self%source, self%euler, sourceSwitch, eulerSwitch)
+    call reduce_accumulators(self%source, self%euler, sourceSwitch, eulerSwitch, self%wall)
     call tm_phase(TM_FINALIZE)
     !> One dual cell per 101 vertex class, before the nonlinear finalize.
     if (allocated(self%classes)) call combineInterfaceDual(self%source, self%euler, self%classes, self%gasblock)
@@ -976,12 +1000,13 @@ contains
   end function getSourceTerms
 
 
-  !> Write the grid fields (root only), merge this sweep's per-rank particle files and print the
-  !  timing report (timing = on).
+  !> Write the grid fields (root only): the source and eulerian fields and, with [IGLOO-Erosion], the wall file;
+  !  merge this sweep's per-rank particle files and print the timing report (timing = on).
   subroutine writeout(self)
     use IGLOO_IO
-    use IGLOO_Mod_MPI,    only: mpi_is_root, mpi_barrier_env
-    use IGLOO_Mod_Timing, only: tm_phase, tm_report, TM_WRITE
+    use IGLOO_Mod_MPI,     only: mpi_is_root, mpi_barrier_env
+    use IGLOO_Mod_Timing,  only: tm_phase, tm_report, TM_WRITE
+    use IGLOO_Lib_Erosion, only: erosionOn
     implicit none
     class(obj_IGLOO), intent(inout) :: self
 
@@ -992,6 +1017,7 @@ contains
     if (mpi_is_root) then
       call write_outfield(self%material,self%geoblock,self%source,self%euler,self%srcSwitch, &
                           self%eulSwitch, tag=self%sweepTag())
+      if (erosionOn) call write_wallfield(self%material, self%geoblock, self%wall, tag=self%sweepTag())
 
       !> Collapse the last solve's per-rank .dat shards into the serial layout (no-op at one rank).
       if (allocated(self%pidx)) call merge_rank_particle_files(self%material, self%pidx, tag=self%sweepTag())
@@ -1065,6 +1091,55 @@ contains
 
 
   !> Resize a particle array to newCapacity, preserving the leading entries.
+  !> Drop the pinned boundary parcels of family fam whose injection cell injects nothing for it: column 1 of the
+  !  cell's 401-403 payload is zero (401: krho/(1 - krho_tot); 402/403: gp), so the parcel would carry zero mass. The
+  !  parcels kept stay in their pinning order, renumbered 1..n (the IDs solve gives them each sweep, and from which it
+  !  seeds their random streams); a parcel of an
+  !  assigned stream (iInj all 0) is kept. ndrop: the parcels dropped.
+  subroutine dropZeroFlow(gr, block, fam, ndrop)
+    use IGLOO_data_phases, only: obj_group
+    implicit none
+    type(obj_group), intent(inout) :: gr
+    type(obj_block), intent(in)    :: block(:)
+    integer,         intent(in)    :: fam
+    integer,         intent(out)   :: ndrop
+    integer :: ip, n, am, an
+    logical :: keep
+
+    ndrop = 0
+    if (.not. allocated(gr%particle)) return
+    n = 0
+    do ip = 1, gr%nparticles
+      keep = .true.
+      associate(p => gr%particle(ip))
+      if (any(p%iInj /= 0)) then
+        call block(p%iInj(1))%ijk2fmn(p%iInj(2), p%iInj(3), p%iInj(4), p%fInj, am, an)
+        if (am > 0) then
+          associate(cell => block(p%iInj(1))%face(p%fInj)%cell(am, an))
+          select case (cell%bcdef)
+          case (401:403)
+            if (allocated(cell%properties)) keep = cell%properties(fam, 1) /= 0._R8
+          end select
+          end associate
+        endif
+      endif
+      end associate
+      if (.not. keep) then
+        ndrop = ndrop + 1
+        cycle
+      endif
+      n = n + 1
+      if (n /= ip) gr%particle(n) = gr%particle(ip)
+    enddo
+    if (ndrop == 0) return
+    call resizeParticleArray(gr%particle, n)
+    gr%nparticles = n
+    do ip = 1, n
+      gr%particle(ip)%ID = ip
+    enddo
+  end subroutine dropZeroFlow
+
+
   subroutine resizeParticleArray(arr, newCapacity)
     use IGLOO_particles, only: obj_particle
     implicit none

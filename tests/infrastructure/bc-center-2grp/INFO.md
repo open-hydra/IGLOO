@@ -18,8 +18,9 @@ initializer* once at program start, not per call (implicit SAVE), so the routine
 both at run time. This case drives it with two groups.
 
 ## Fixture
-`INPUT/` symlinks `standard/drag-stokes/INPUT/{bc.txt,solfile.tec}` and
-`common/properties.dat`; only `phase.txt` is a real file. `input.ini` is drag-stokes'
+`INPUT/` symlinks `standard/drag-stokes/INPUT/solfile.tec` and `common/properties.dat`; `phase.txt` and
+`bc.txt` are real files, `bc.txt` drag-stokes's records under ATLAS's mixture rule for the two groups (field 1
+0.34/(1 − 0.68): one file cannot carry the share of one family and of two). `input.ini` is drag-stokes'
 with two deliberate changes, **both load-bearing**:
 
 | change | half of the carried-counter defect it triggers |

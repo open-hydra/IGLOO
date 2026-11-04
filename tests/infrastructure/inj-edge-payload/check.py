@@ -10,8 +10,9 @@ Target
   P1 every parcel's first trajectory row moves at its own row's kV |U| (U = 10 m/s): a parcel whose first row
      lies in y in [1, 2] cm was pinned by row 2 (1 m/s), one at y = 0.5 or 2.5 cm by row 1 or 3 (2 m/s), the
      rest by rows 4 and 5 (1 m/s)
-  P2 the exit records carry the inlet's mass flow: sum of mdot = sum over the cells of krho/(1 - krho) rho U A
-     (rho 1.2 kg/m3, U 10 m/s, A 1e-4 m2; krho from INPUT/bc.txt), to 1e-5 (the records' six digits)
+  P2 the exit records carry the inlet's mass flow: sum of mdot = sum over the cells of field 1 (rho U A + G A)
+     (rho 1.2 kg/m3, U 10 m/s, A 1e-4 m2; field 1, krho/(1 - krho) as ATLAS writes it for one family, and G,
+     field 10, from INPUT/bc.txt), to 1e-5 (the records' six digits)
 Controls
   W1 every parcel leaves at x = 0.15
   W2 some parcel of row 2 starts on a row edge (y = 1 or 2 cm): the witness reaches the case it is for
@@ -51,8 +52,9 @@ def inlet_mass_flow():
     for i, ln in enumerate(lines):
         t = ln.split()
         if len(t) == 6 and t[5] == "401":
-            krho = float(lines[i + 1].split()[0])
-            tot += krho / (1.0 - krho) * RHO_GAS * U_GAS * AREA
+            pay = lines[i + 1].split()
+            k1, g = float(pay[0]), float(pay[9])            # krho/(1 - krho_tot) and G (ATLAS's 401 record)
+            tot += k1 * (RHO_GAS * U_GAS * AREA + g * AREA)
     return tot
 
 

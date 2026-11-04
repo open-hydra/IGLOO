@@ -29,8 +29,8 @@ Gates
       cross-deposit changes the ratio, which "the two files differ" could not see
   M6  outloc-<mat>.dat has 25 exit records for each material (all parcels left through the
       outlet), scatter-<mat>.dat non-empty for both
-  M7  loading: bc.txt's one krho line is fanned out to BOTH families and krhoTot sums them
-      (0.68), so every parcel of either material carries mdot = krho/(1-krhoTot) * mdot_gas
+  M7  loading: bc.txt's one 401 line is fanned out to BOTH families, its field 1 krho/(1 - krho_tot) for the two
+      (0.34/(1 - 0.68), ATLAS's rule), so every parcel of either material carries mdot = field 1 * mdot_gas
       = 0.34/0.32 * 1.2e-3 = 1.275e-3 kg/s (drag-stokes: 0.618e-3) -- the arity-2 path of the
       krho fan-out, pinned from the outloc mdot column
 These gates are the arity-2 execution of every per-material loop (nm = 2), not the pin of one
@@ -49,7 +49,7 @@ MATS   = {"A": 2950.0, "B": 1000.0}     # kg/m3, properties.dat zones 1 and 2
 FAMILY = {"A": 1, "B": 2}               # euler<fam>.tec: families are numbered in material order
 N_PARCELS = 25                           # one per inlet cell (bc.txt, 5x5 face)
 D_P    = 1.189e-5                        # bc.txt rp = 5.945e-6 (Dirac), both materials
-MDOT   = 0.34 / (1.0 - 2 * 0.34) * 1.2e-3   # krho/(1-krhoTot) * rho_g U A_cell, per parcel
+MDOT   = 0.34 / (1.0 - 2 * 0.34) * 1.2e-3   # field 1, krho/(1 - krho_tot), * rho_g U A_cell, per parcel
 NN, NC = 61 * 6 * 6, 60 * 5 * 5          # box: nodal x y z, then cell-centred variables
 TOL_BAL = 1.0e-6                         # sum(Fx)/sum(E) balance: inputs are printed columns
 TOL_RATIO = 1.0e-9                       # rho_p/n_p per cell vs rho_mat pi d^3/6 (measured 7e-15)
@@ -248,7 +248,7 @@ def main():
         bad = [r[6] for r in exits[mat] if abs(r[6] - MDOT) > 1e-5 * MDOT]
         if bad:
             rc |= fail(f"M7 material {mat}: {len(bad)} parcel(s) with mdot != {MDOT:.4e} (e.g. {bad[0]:.4e}) -- "
-                       f"the krho fan-out to both families (krhoTot = 0.68) is not what was loaded")
+                       f"the fan-out of field 1, 0.34/(1 - 0.68), to both families is not what was loaded")
         else:
             print(f"M7 material {mat}: every parcel carries mdot = {MDOT:.4e} = 0.34/(1-0.68) * 1.2e-3 PASS")
 
