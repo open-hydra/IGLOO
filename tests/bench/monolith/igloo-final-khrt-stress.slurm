@@ -8,8 +8,9 @@
 #SBATCH --time=02:00:00
 #
 # The scaling curve of khrt-stress (output-bound) on one exclusive node, IGLOO_REPS repetitions (default 5): the
-# 1x1 anchor, every split of 4, 8, 16 and 32 slots, the 80-slot splits, the A/A twin; then OUTPUT/ on tmpfs, and
-# the scatter cloud off with source and Eulerian output (the accumulators' atomics). Submit from the harness root:
+# 1x1 anchor, every split of 4, 8, 16 and 32 slots, the 80-slot splits, the A/A twin; then OUTPUT/ on tmpfs, the
+# scatter cloud off with source and Eulerian output (the accumulators' atomics), and the scatter cloud off alone (the
+# particle output's control: the 1x32 loop's cycle efficiency against it). Submit from the harness root:
 #   sbatch --output=$IGLOO_PERF_ROOT/logs/%x-%j.out --export=ALL,IGLOO_PERF_ROOT=$IGLOO_PERF_ROOT \
 #     scripts/igloo-final-khrt-stress.slurm
 set -u
@@ -31,5 +32,11 @@ IGLOO_INI_SET="out-scatter=off out-file=ALL" \
   igloo_run khrt-stress-1x1-noscat  khrt-stress 1  1 1 "$(igloo_spread 1)"  "$REPS"
 IGLOO_INI_SET="out-scatter=off out-file=ALL" \
   igloo_run khrt-stress-1x32-noscat khrt-stress 1 32 1 "$(igloo_spread 32)" "$REPS"
+
+echo "=== khrt-stress: the scatter cloud off alone, out-file as the workload's ==="
+IGLOO_INI_SET="out-scatter=off" \
+  igloo_run khrt-stress-1x1-scatoff  khrt-stress 1  1 1 "$(igloo_spread 1)"  "$REPS"
+IGLOO_INI_SET="out-scatter=off" \
+  igloo_run khrt-stress-1x32-scatoff khrt-stress 1 32 1 "$(igloo_spread 32)" "$REPS"
 
 echo "IGLOO-FINAL DONE"

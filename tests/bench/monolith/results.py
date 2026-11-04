@@ -32,9 +32,9 @@ DEFS = """\
 #   commit, binary_md5 the IGLOO commit the binary was built from (-dirty: with local changes), the binary's md5
 #   smt                hardware threads per core of the node (every point ran one thread per core)
 #   tag                <workload>-<ranks>x<threads>[-<variant>]: aa the twin binary, shm OUTPUT/ on tmpfs, noscat
-#                      the scatter cloud off with source and Eulerian output, s0 one socket, sp spread over the
-#                      sockets, plain/inter the pages where the first touch left them / interleaved over the NUMA
-#                      domains (numactl --interleave=all)
+#                      the scatter cloud off with source and Eulerian output, scatoff the scatter cloud off alone,
+#                      s0 one socket, sp spread over the sockets, plain/inter the pages where the first touch left
+#                      them / interleaved over the NUMA domains (numactl --interleave=all)
 #   cores              omp: Intel MPI's domains (each rank on OMP_NUM_THREADS consecutive cores); else the CPUs of
 #                      the ranks' pin masks
 #   reps, nok          repetitions asked, repetitions scored
