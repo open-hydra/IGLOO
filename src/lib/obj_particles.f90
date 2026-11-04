@@ -577,6 +577,7 @@ contains
     prevTry(:,2) = iold
     p    = self%stateVar(1:3); v    = self%stateVar(4:6)
     pold = self%oldstate(1:3); vold = self%oldstate(4:6)
+    psave = p
 
     do while (retry)
       b = iold(1)

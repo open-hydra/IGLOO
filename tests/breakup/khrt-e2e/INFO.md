@@ -101,6 +101,19 @@ with the exchange switched off, is [breakup/khrt-shed-noexchange](../khrt-shed-n
 The excess is the children's birth flux exactly: divided by their exit flow (0.0770868 kg/s) it is
 100.555 m/s and c_p·300 + ½·100.555² J/kg.
 
+## Scatter rows (`check.py::check_scatter_diameter`)
+Every row of `scatter-A.dat` prints a parcel's mass and diameter. Under model 3 the diameter is that of the stream's
+current mass, `m = ṁ/ṅ`, at the case's constant density (ρ_p = 1000 kg/m³), so every row satisfies
+
+    |m − ρ_p π d³/6| / m  ≤  h(m)/m + 3 h(d)/d + 1e-9
+
+with `h` half a unit of the sixth digit of the E13.6 prints (the 1e-9 covers `3(h(d)/d)²`): the prints' worst case,
+which a diameter computed from the mass in double precision meets on every row. At least 1000 rows of 10 parcels are
+required. Measured: 565,201 rows of 254 parcels, the largest at 0.987 of the bound (`khrt-e2e-euler`, which runs this
+check, 553,795 rows at 0.994; `mpi-khrt` runs it too). RED with the scatter row printing model 3's per-droplet
+diameter, which only a breakup event resyncs: 2,552 rows of 16 parcels off the identity, the worst by 7.2271e-2
+(`khrt-e2e-euler`: 2,605 of 553,795).
+
 ## What `check.py` gates (KH stripping, GREEN)
 IGLOO's initial `dd/dt` (leading-window LSQ, matched against the same-window RK4 of the
 Reitz-87 KH rate — the decelerating rate's finite-window bias cancels on both sides) vs

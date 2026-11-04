@@ -1055,7 +1055,8 @@ contains
         case(8);      m = y(8) + y(9)
         case default; m = auxLocal(ind_m)
         end select
-        if (ind_d > 0 .and. mod_model /= 7) then; d = auxLocal(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
+        if (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7) then; d = auxLocal(ind_d)
+        else; d = (sixOverPi*m/rho)**oneThird; endif
         if (ind_rs > 0) d = solidDiameter(m, y(8), rho, auxLocal(ind_rs))
         if (mod_model == 8) d = (sixOverPi*(y(8)/rho + y(9)/auxLocal(ind_mb+imRr-1)))**oneThird
         nScat = nScat + 1

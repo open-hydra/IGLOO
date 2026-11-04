@@ -150,7 +150,8 @@ its plane or along one of its edges, is no hit on it, so a particle on a face, a
 not stopped by the faces it lies on. When both rays miss, `closestFace`
 returns in 3D, of the faces the containment test rejects the point through (beyond both triangle planes by more
 than $\tau$), the one whose nearer triangle plane is closest to the point, and when no face rejects it, the face
-with the smallest non-negative triangle distance (`test_geometry_rules`).
+with the smallest non-negative triangle distance, and when no distance is non-negative, the face whose triangle
+plane is nearest (`test_geometry_rules`).
 
 The hooks integrated into the tracking loop are:
 

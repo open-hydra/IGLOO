@@ -5,7 +5,8 @@ program test_geometry_rules
     ! closestFace, the boundary search's fallback when checkBoundary's forward and backward rays both miss the
     ! cell's faces: of the faces the containment test rejects the point through (beyond both triangle planes of
     ! the face by more than the cell's tolerance hexTol), the one with the smallest min(d1, d2); when no face
-    ! rejects the point, the face with the smallest non-negative triangle distance.
+    ! rejects the point, the face with the smallest non-negative triangle distance; when no triangle distance is
+    ! non-negative, the face of the nearest triangle plane; 0 for a non-finite point.
     !
     ! The ray/face intersection the search tries first:
     !
@@ -33,9 +34,13 @@ program test_geometry_rules
     !        oracle works on precomputeHex12's planes and reproduces isInsideHex12Fast's decision and crossed
     !        face on every point. Witness: on some rejected points the smallest non-negative triangle distance
     !        belongs to a face that does not reject the point
+    !   BF6  2e4 points per cell drawn in the bounding box of each of BF5's six cells (a stream of its own), kept
+    !        when the containment test accepts them and every non-degenerate triangle distance is negative: on
+    !        every kept point closestFace returns a face of the nearest triangle plane; at least 1000 kept per cell
+    !   BF6b a non-finite point: face 0
     !
     use, intrinsic :: iso_fortran_env, only: real64
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
     use IGLOO_RayFaceIntersection3D, only: closestFace, isPointInsideHexahedron12, isInsideHex12Fast, precomputeHex12, &
                                            intersectRayTriangle, intersectPolyhedron, Ray_t, Triangle_t
     implicit none
@@ -47,12 +52,15 @@ program test_geometry_rules
     integer, parameter :: CORN(3, 8) = reshape([0,0,0, 0,0,1, 0,1,1, 0,1,0, 1,0,0, 1,0,1, 1,1,1, 1,1,0], [3, 8])
     !> guide's corners of each face, one face per column
     integer, parameter :: GUIDE(4,6) = reshape([1,2,3,4, 7,6,5,8, 6,2,1,5, 4,3,7,8, 5,1,4,8, 3,2,6,7], [4,6])
-    integer(8) :: seed
+    character(len=24), parameter :: NAMES(6) = [character(len=24) :: 'box at the origin', 'warped cell', &
+                                                'thin twisted cell', 'box at 100 m', 'BF1''s cell', 'wedge cell']
+    integer(8) :: seed, seed2
     integer :: nfail, c
     real(real64) :: box(3,8), warp(3,8)
 
     nfail = 0
     seed = 20261020_8
+    seed2 = 20261026_8
     do c = 1, 8
         box(:, c) = H*CORN(:, c)
     enddo
@@ -71,6 +79,7 @@ program test_geometry_rules
     call config('BF4 warped cell, inside, beyond a +i triangle', [H + 0.5_real64*DW, 0.9_real64*H, 0.2_real64*H], &
                 warp, 2, FALLBACK)
     call sweep()
+    call nonFinitePoint()
 
     if (nfail == 0) then
         print '(a)', ''
@@ -258,9 +267,9 @@ contains
         enddo
     end subroutine oracle
 
-    !> BF5 on six cells.
+    !> BF5 on six cells, then BF6 on the same cells.
     subroutine sweep()
-        real(real64) :: V(3,8), M(3,3), Xc(3), hc, a
+        real(real64) :: V(3,8), M(3,3), Xc(3), hc, a, Vs(3,8,6)
         integer :: icell, c, nwit
         nwit = 0
         do icell = 1, 6
@@ -294,6 +303,7 @@ contains
                     V(:, c) = H*[real(CORN(1, c), real64), CORN(2, c)*cos(a), CORN(2, c)*(2*CORN(3, c) - 1)*sin(a)]
                 enddo
             end select
+            Vs(:, :, icell) = V
             call sweepCell(icell, V, nwit)
         enddo
         if (nwit > 0) then
@@ -304,6 +314,9 @@ contains
                 'non-negative triangle distance (vacuous)'
             nfail = nfail + 1
         endif
+        do icell = 1, 6
+            call sweepInterior(icell, Vs(:, :, icell))
+        enddo
     end subroutine sweep
 
     !> BF5 on one cell: np/2 points in the bounding box enlarged by 10 %, np/2 on one of the four corner triangles
@@ -312,8 +325,6 @@ contains
         integer,      intent(in)    :: icell
         real(real64), intent(in)    :: V(3,8)
         integer,      intent(inout) :: nwit
-        character(len=24), parameter :: NAMES(6) = [character(len=24) :: 'box at the origin', 'warped cell', &
-                                                    'thin twisted cell', 'box at 100 m', 'BF1''s cell', 'wedge cell']
         real(real64) :: nrm(3,2,6), cen(3,2,6), tol, lo(3), hi(3), ext(3), p(3), q(3,4), a, b, nf(3), d(2,6), best
         real(real64) :: t1(3), t2(3), t3(3)
         logical :: dg(2,6), rej(6), inside
@@ -374,6 +385,62 @@ contains
         endif
     end subroutine sweepCell
 
+    !> BF6 on one cell: NP points in the cell's bounding box, kept when the containment test accepts them and every
+    !  non-degenerate triangle distance is negative; closestFace must return a face whose nearest non-degenerate
+    !  triangle plane is within 1e-6 tolerances of the nearest of all.
+    subroutine sweepInterior(icell, V)
+        integer,      intent(in) :: icell
+        real(real64), intent(in) :: V(3,8)
+        real(real64) :: nrm(3,2,6), cen(3,2,6), tol, lo(3), hi(3), p(3), d(2,6), best
+        logical :: dg(2,6), rej(6)
+        integer :: s, ff, fc, either, nkeep, nbad
+        call precomputeHex12(V, nrm, cen, dg, tol)
+        lo = minval(V, dim=2); hi = maxval(V, dim=2)
+        nkeep = 0; nbad = 0
+        do s = 1, NP
+            p = lo + (hi - lo)*[uniform2(), uniform2(), uniform2()]
+            if (.not. isInsideHex12Fast(p, nrm, cen, dg, ff, tol)) cycle
+            call oracle(p, nrm, cen, dg, tol, d, rej, either)
+            if (any(d >= 0._real64 .and. .not. dg)) cycle
+            nkeep = nkeep + 1
+            best = maxval(d, mask=.not. dg)
+            fc = closestFace(p, V)
+            if (fc < 1 .or. fc > 6) then
+                nbad = nbad + 1
+            elseif (all(dg(:, fc))) then
+                nbad = nbad + 1
+            elseif (maxval(d(:, fc), mask=.not. dg(:, fc)) < best - 1.e-6_real64*tol) then
+                nbad = nbad + 1
+            endif
+        enddo
+        if (nbad == 0 .and. nkeep >= 1000) then
+            print '(a,a,a,i0,a,i0,a)', '  [ok]   BF6 ', trim(NAMES(icell)), ': ', nkeep, ' of ', NP, &
+                ' points inside every triangle plane, the face of the nearest plane on each'
+        elseif (nbad == 0) then
+            print '(a,a,a,i0,a,i0,a)', '  [FAIL] BF6 ', trim(NAMES(icell)), ': ', nkeep, ' of ', NP, &
+                ' points inside every triangle plane, fewer than 1000 (vacuous)'
+            nfail = nfail + 1
+        else
+            print '(a,a,a,i0,a,i0,a)', '  [FAIL] BF6 ', trim(NAMES(icell)), ': ', nbad, ' of ', nkeep, &
+                ' points inside every triangle plane get no face or not the face of the nearest plane'
+            nfail = nfail + 1
+        endif
+    end subroutine sweepInterior
+
+    !> BF6b: closestFace on a non-finite point.
+    subroutine nonFinitePoint()
+        real(real64) :: p(3)
+        integer :: fc
+        p = [ieee_value(1._real64, ieee_quiet_nan), 0._real64, 0._real64]
+        fc = closestFace(p, box)
+        if (fc == 0) then
+            print '(a)', '  [ok]   BF6b a non-finite point: face 0'
+        else
+            print '(a,i0,a)', '  [FAIL] BF6b a non-finite point: face ', fc, ' (expected 0)'
+            nfail = nfail + 1
+        endif
+    end subroutine nonFinitePoint
+
     !> The rejecting faces as a string of indices.
     function faces(rej) result(s)
         logical, intent(in) :: rej(6)
@@ -425,5 +492,11 @@ contains
         seed = modulo(16807_8*seed, 2147483647_8)
         uniform = real(seed, real64)/2147483647._real64
     end function uniform
+
+    !> BF6's own stream, the same generator from another seed.
+    real(real64) function uniform2()
+        seed2 = modulo(16807_8*seed2, 2147483647_8)
+        uniform2 = real(seed2, real64)/2147483647._real64
+    end function uniform2
 
 end program test_geometry_rules

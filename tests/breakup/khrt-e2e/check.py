@@ -33,6 +33,9 @@ unit-side on 2026-08-03 by:
     sharing no constant with the fit;
   * `test_khrt_interaction`  — pins that the ODE and event copies of the KH/RT blocks
     agree on the RT predicate and the tc/told accumulator.
+
+SCATTER — every row of scatter-A.dat carries the diameter of its mass: |m - RHOP pi d^3/6|/m within the E13.6 prints
+of m and d, h(m)/m + 3 h(d)/d + 1e-9 (check_scatter_diameter); at least 1000 rows of at least 10 parcels.
 """
 import math
 import os
@@ -41,6 +44,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
 from trajtime import cumulative_time  # noqa: E402
+import datcols  # noqa: E402
 
 TRAJ = "OUTPUT/trajectories-A.dat"
 OUTLOC = "OUTPUT/outloc-A.dat"
@@ -76,6 +80,11 @@ TOL_SRC_P  = 5.0e-6  # |sum Fx - (P_in - P_out)| / P_in: the E13.6 bound on outl
 TOL_SRC_E  = 5.0e-6  # |sum E - (E_in - E_out)| / E_in: the same bound (measured 6.4e-7)
 TOL_SRC_M  = 1.0e-12 # |sum wdot| / mdot_in (model 3 exchanges no mass)
 TOL_SRC_T  = 1.0e-12 # |sum Fy|, |sum Fz| / P_in (the flow is along x)
+
+# ---- scatter rows: the diameter of the row's mass at the case's constant density RHOP ----
+SCAT = "OUTPUT/scatter-A.dat"
+SCAT_SECOND = 1.0e-9     # covers the second-order term 3 (h(d)/d)^2 of the print bound
+MIN_SCAT_ROWS, MIN_SCAT_PARCELS = 1000, 10
 
 
 def kh_rate(d, slip):
@@ -420,6 +429,53 @@ def check_source_budget(parts=("mass", "momentum", "energy"), tol_mass=TOL_SRC_M
     return 1 if fails else 0
 
 
+def half_e13(v):
+    """Half a unit of the sixth significant digit of an E13.6 print (0.dddddd E+xx)."""
+    return 0.5e-6 * 10.0 ** (math.floor(math.log10(abs(v))) + 1) if v else 0.0
+
+
+def check_scatter_diameter():
+    """Every scatter row's d is the diameter of its m: |m - RHOP pi d^3/6|/m <= h(m)/m + 3 h(d)/d + SCAT_SECOND.
+
+    The bound is the two prints' worst case: a d computed from m in double precision satisfies it on every row. A row
+    whose d lags its mass (a per-droplet diameter the state no longer carries) does not.
+    """
+    try:
+        zs = datcols.zones(SCAT)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"[FAIL] scatter diameter: {e}")
+        return 1
+    n = bad = 0
+    worst = worst_rel = 0.0
+    ids, off = set(), set()
+    for z in zs:
+        for r in z["rows"]:
+            m, d = r["m<sub>p"], r["d<sub>p"]
+            n += 1
+            ids.add(r["ID"])
+            if m > 0.0 and d > 0.0:
+                rel = abs(m - RHOP * math.pi * d ** 3 / 6.0) / m
+                ratio = rel / (half_e13(m) / m + 3.0 * half_e13(d) / d + SCAT_SECOND)
+            else:
+                rel = ratio = float("inf")
+            worst = max(worst, ratio)
+            if ratio > 1.0:
+                bad += 1
+                off.add(r["ID"])
+                worst_rel = max(worst_rel, rel)
+    if n < MIN_SCAT_ROWS or len(ids) < MIN_SCAT_PARCELS:
+        print(f"[FAIL] scatter diameter: {n} rows of {len(ids)} parcels, fewer than {MIN_SCAT_ROWS} rows of "
+              f"{MIN_SCAT_PARCELS} parcels (vacuous)")
+        return 1
+    if bad:
+        print(f"[FAIL] scatter diameter: {bad} of {n} rows ({len(off)} of {len(ids)} parcels: {sorted(off)[:8]}) "
+              f"off m = rho pi d^3/6 beyond the print bound (worst rel {worst_rel:.4e}, {worst:.3e} bounds)")
+        return 1
+    print(f"  scatter    {n} rows of {len(ids)} parcels: m = rho pi d^3/6 within the E13.6 prints on every row "
+          f"(worst {worst:.3f} of the bound) PASS")
+    return 0
+
+
 def main():
     try:
         parts = load_trajectories(TRAJ)
@@ -431,11 +487,13 @@ def main():
     rc_kids = check_children_integrate()
     rc_shed = check_multiple_sheds()
     rc_src = check_source_budget()
+    rc_scat = check_scatter_diameter()
 
     if n_good >= N_GOOD and n_viol == 0 and rc_mass == 0 and rc_kids == 0 and rc_shed == 0 \
-            and rc_src == 0:
+            and rc_src == 0 and rc_scat == 0:
         print("\n[PASS] IGLOO reproduces the Reitz-87 KH-stripping rate at every gated We_r, "
-              "conserves parcel mass-flow, and sheds children that integrate.")
+              "conserves parcel mass-flow, sheds children that integrate, and writes scatter rows whose "
+              "diameter is that of their mass.")
         return 0
     if n_viol:
         print(f"\n[FAIL] {n_viol} drop(s) deviate from the Reitz-87 KH-stripping rate.")
