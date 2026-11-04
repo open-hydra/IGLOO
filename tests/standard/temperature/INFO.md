@@ -41,7 +41,7 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
   |---|---|---|---|---|---|---|---|
   | HN4 | JAXA2 | `[SP8039]` Table II ref. 82: 2 + 0.370 Re^0.6 Pr^⅓ | Re {0.5, 1, 10, 100, 1000} × Pr {0.7, 1, 7} × Ma {0, 0.01, 0.1, 0.5, 1} | Nu, relative | 1e-14 | 1.8e-16 | exponent 0.6 → 0.55: 0.28 |
   | HN5 | JAXA3 | `[SP8039]` Table II ref. 42: 2 + 0.459 Re^0.55 Pr^⅓ | as HN4 | Nu, relative | 1e-14 | 0 | 0.459 → 0.495: 7.5e-2 |
-  | HN6 | JAXA4 | `[Shim06]` eq. 50: [(2 + 0.654 Re^½ Pr^⅓)^−1 + 3.42 Ma/(Re Pr)]^−1 (SP-8039's last row prints Pr^½; the code follows Shimada) | Re × Pr × Ma {0.01, 0.1, 0.5, 1} | Nu, relative | 1e-14 | 1.9e-16 | 0.654 → 0.645: 1.3e-2 |
+  | HN6 | JAXA4 | `[SP8039]` Table II, the last row: [(2 + 0.654 Re^½ Pr^½)^−1 + 3.42 Ma/(Re Pr)]^−1 (`[Shim06]` eq. 50 prints Pr^⅓) | Re × Pr × Ma {0.01, 0.1, 0.5, 1} | Nu, relative | 1e-14 | 1.8e-16 | 0.654 → 0.645: 1.3e-2 |
   | HN7 | Kavanau-Drake | `[SP8039]` Table II ref. 72 = `[Shim06]` eq. 49: N₀/(1 + 3.42 (Ma/(Re Pr)) N₀), N₀ = 2 + 0.459 Re^0.55 Pr^0.33 | as HN6 | Nu, relative | 1e-14 | 0 | Pr^0.33 → Pr^⅓: 6.2e-3; 3.42 → 3.24: 5.3e-2 |
   | HN8 | JAXA4, Kavanau-Drake | the rarefaction identity 1/Nu(Re,Pr,Ma) − 1/Nu(Re,Pr,0) = 3.42 Ma/(Re Pr) (no transcription) | as HN6 | residual over the bound 8ε (1/Nu(Ma) + 1/Nu(0)) | 1 | 9.4e-2 | 3.42 → 3.24 in Kavanau-Drake: 2.9e13 |
 

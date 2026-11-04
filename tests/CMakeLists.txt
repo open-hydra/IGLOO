@@ -411,7 +411,7 @@ igloo_unit_test(test_radiation   standard/temperature "unit;standard;heat;radiat
 igloo_e2e_case(drag-stokes standard/drag-stokes "e2e;standard;drag")
 # drag-morsi, drag-chang: drag-stokes's box with 100 um particles (Re 60 -> 22 across the box), drag = Morsi-Alexander
 # or Chang: every printed row against an RK4 quadrature of the slip ODE with the law typed in check.py (Chang =
-# Clift-Gauvin, [Shim06] eq. 18; Morsi-Alexander's coded table, a regression pin). RED: Morsi-Alexander's band-4
+# Clift-Gauvin, [Shim06] eq. 18; Morsi-Alexander, [MA72]'s appendix). RED: Morsi-Alexander's band-4
 # a2 46.5 -> 45.6 (3.9e-2 m/s), the law swapped to Schiller-Naumann (5.3e-2 and 1.3e-3 m/s against about 5e-7).
 igloo_e2e_case(drag-morsi  standard/drag-morsi  "e2e;standard;drag")
 igloo_e2e_case(drag-chang  standard/drag-chang  "e2e;standard;drag")
@@ -429,7 +429,7 @@ igloo_e2e_case(body-force  standard/body-force  "e2e;standard;drag")
 igloo_e2e_case(body-force-z standard/body-force-z "e2e;standard;drag")
 igloo_e2e_case(conv-nu     standard/conv-nu     "e2e;standard;heat")
 # conv-nu-<law>: conv-nu's constant-slip state under JAXA2, JAXA3, JAXA4 and Kavanau-Drake (Ma = 5.2e-4 > 0): T on
-# the printed time against the exact exponential with the law as NASA-SP-8039 Table II / Shimada eq. 50 print it.
+# the printed time against the exact exponential with the law as NASA-SP-8039 Table II prints it.
 igloo_e2e_case(conv-nu-jaxa2 standard/conv-nu-jaxa2 "e2e;standard;heat")
 igloo_e2e_case(conv-nu-jaxa3 standard/conv-nu-jaxa3 "e2e;standard;heat")
 igloo_e2e_case(conv-nu-jaxa4 standard/conv-nu-jaxa4 "e2e;standard;heat")

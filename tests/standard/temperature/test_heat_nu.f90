@@ -12,8 +12,7 @@ program test_heat_nu
     !        documented flags D-HEAT-2/3, not gated here)
     !   HN4  JAXA2 = [SP8039] Table II ref. 82, 2 + 0.370 Re^0.6 Pr^(1/3), at any Ma
     !   HN5  JAXA3 = [SP8039] Table II ref. 42, 2 + 0.459 Re^0.55 Pr^(1/3), at any Ma
-    !   HN6  JAXA4 = [Shim06] eq. 50, [(2 + 0.654 Re^(1/2) Pr^(1/3))^-1 + 3.42 Ma/(Re Pr)]^-1
-    !        (SP-8039's last row prints Pr^(1/2): the code follows Shimada)
+    !   HN6  JAXA4 = [SP8039] Table II, last row, [(2 + 0.654 Re^(1/2) Pr^(1/2))^-1 + 3.42 Ma/(Re Pr)]^-1
     !   HN7  Kavanau-Drake = [SP8039] Table II ref. 72 = [Shim06] eq. 49, Pr^0.33 as printed
     !   HN8  both rarefied forms: 1/Nu(Re,Pr,Ma) - 1/Nu(Re,Pr,0) = 3.42 Ma/(Re Pr)
     !
@@ -136,7 +135,7 @@ contains
         call append_row('HN5_JAXA3_table', 'Nu', e3, e3, 0._R8, 0._R8, tol, pass)
     end subroutine run_HN4_HN5
 
-    !> HN6/HN7: JAXA4 (Shimada eq. 50) and Kavanau-Drake (Table II ref. 72) on Re x Pr x Ma > 0.
+    !> HN6/HN7: JAXA4 (SP-8039's last row) and Kavanau-Drake (Table II ref. 72) on Re x Pr x Ma > 0.
     subroutine run_HN6_HN7(ok)
         logical, intent(inout) :: ok
         real(R8) :: Re, Pr, Ma, ref, n0, e4, e6, tol
@@ -147,7 +146,7 @@ contains
             do j = 1, size(GRID_PR)
                 do l = 1, size(GRID_MA)
                     Re = GRID_RE(i); Pr = GRID_PR(j); Ma = GRID_MA(l)
-                    ref = 1._R8/(1._R8/(2._R8 + 0.654_R8*Re**0.5_R8*Pr**THIRD) + 3.42_R8*Ma/(Re*Pr))
+                    ref = 1._R8/(1._R8/(2._R8 + 0.654_R8*Re**0.5_R8*Pr**0.5_R8) + 3.42_R8*Ma/(Re*Pr))
                     e4 = max(e4, abs(heat(Re, Pr, Ma, JAXA4) - ref)/ref)
                     n0  = 2._R8 + 0.459_R8*Re**0.55_R8*Pr**0.33_R8
                     ref = n0/(1._R8 + 3.42_R8*(Ma/(Re*Pr))*n0)
@@ -156,7 +155,7 @@ contains
             end do
         end do
         tol = 1.0e-14_R8
-        pass = assert_lt('HN6 JAXA4 = Shimada eq. 50 at Ma > 0', e4, tol)
+        pass = assert_lt('HN6 JAXA4 = SP-8039 Table II last row at Ma > 0', e4, tol)
         ok = ok .and. pass
         call append_row('HN6_JAXA4_Ma', 'Nu', e4, e4, 0._R8, 0._R8, tol, pass)
         pass = assert_lt('HN7 Kavanau-Drake = SP-8039 ref. 72 at Ma > 0', e6, tol)
