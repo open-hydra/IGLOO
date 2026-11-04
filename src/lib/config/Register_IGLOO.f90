@@ -146,6 +146,9 @@ contains
       'Surface tension; one value per material, overrides properties.dat','',.false.)
     call reg%add('IGLOO-Properties','mu',d_a(10,:),'0', &
       'Particle dynamic viscosity; one value per material, overrides properties.dat','',.false.)
+    call reg%add('IGLOO-Properties','emissivity',d_a(20,:),'0', &
+      'Particle surface emissivity of the grey-body exchange with the gas temperature; one value per material; '// &
+      '0 = off (default)','',.false.)
 
     ! --- [IGLOO-BC] ---
     call reg%add('IGLOO-BC','ds',d_r(22),'0', &

@@ -1,5 +1,6 @@
 module Lib_RHS
   use, intrinsic :: iso_fortran_env, only: R8 => real64
+  use IGLOO_Lib_Heat, only: radiativeHeat
   implicit none
   private
 
@@ -15,6 +16,7 @@ module Lib_RHS
   public  :: ind_sxi, ind_sb1, ind_sb2, ind_sph
   public  :: ind_evd, ind_evn, ind_evm0, ind_ev1, ind_ev2, ind_evn0
   public  :: ind_e3, ind_e4, ind_e5, ind_mb, nmetal
+  public  :: ind_eps
   public  :: mod_model, mod_brkSelect, mod_evapSelect, mod_propFlags
   public  :: mod_liqSelect, mod_intfSelect, mod_boilSelect, mod_combSelect
   public  :: mod_bp, mod_bpMethod, mod_bpScale
@@ -41,6 +43,7 @@ module Lib_RHS
   integer :: ind_e3  = 0, ind_e4  = 0, ind_e5 = 0  !> alpha_e (LK interface); k_liq / mu_liq reserved for P2T
   integer :: ind_mb  = 0                            !> metal-block start (combustion), 0 = absent
   integer, parameter :: nmetal = 9                  !> metal parameter block, order = IGLOO_Lib_Combustion imKb..imQc
+  integer :: ind_eps = 0                            !> emissivity (radiation), 0 = absent
   integer :: nauxvar = 0
 
   !> AuxState indices (set by computeNauxState)
@@ -103,13 +106,14 @@ contains
 
   !> Number of auxiliary variables (read-only in the RHS) per model, and their indices.
   subroutine computeNaux(model,brkSelect,evapSelect,combSelect, &
-                         propFlags,ord2,mesh2D,nAux)
+                         propFlags,ord2,mesh2D,nAux,radiation)
     integer, intent(in)  :: model, brkSelect, evapSelect, combSelect
     logical, intent(in)  :: ord2, mesh2D, propFlags(7)
     integer, intent(out) :: nAux
-    integer :: nBase, nBrk, nEvap, nComb, ind
+    logical, intent(in), optional :: radiation
+    integer :: nBase, nBrk, nEvap, nComb, nRad, ind
 
-    nBase = 0; nBrk = 0; nEvap = 0; nComb = 0; ind = 1
+    nBase = 0; nBrk = 0; nEvap = 0; nComb = 0; nRad = 0; ind = 1
 
     !> base
     if (.not.propFlags(1)) then
@@ -161,7 +165,14 @@ contains
       nComb = nComb + nmetal
       ind_mb = ind; ind = ind + nmetal
     endif
-    nAux = nBase + nBrk + nEvap + nComb
+
+    !> radiation: the emissivity, after every other block
+    if (present(radiation)) then
+      if (radiation) then
+        nRad = 1; ind_eps = ind; ind = ind + 1
+      endif
+    endif
+    nAux = nBase + nBrk + nEvap + nComb + nRad
 
   end subroutine computeNaux
 
@@ -221,7 +232,7 @@ contains
   !  called once per material/group, outside any parallel region.
   subroutine setupRHS(model, brkSelect, evapSelect, liqSelect, intfSelect, boilSelect, &
                       combSelect, propFlags, bp_in, &
-                      bpMethod_in, bpScale_in, nAux, nAuxSt, nEvV)
+                      bpMethod_in, bpScale_in, nAux, nAuxSt, nEvV, radiation)
     use IGLOO_variables, only: ord2, mesh2D
     !$ use omp_lib, only: omp_in_parallel
     integer,  intent(in) :: model, brkSelect, evapSelect
@@ -231,6 +242,7 @@ contains
     integer,  intent(in) :: bpMethod_in
     real(R8), intent(in) :: bpScale_in
     integer, intent(out) :: nAux, nAuxSt, nEvV
+    logical, intent(in), optional :: radiation   !> the material radiates (emissivity > 0)
     !> module-level state: materials are set up and integrated sequentially
     !$ if (omp_in_parallel()) error stop '[BUG] setupRHS called inside an OMP parallel region'
     mod_model = model
@@ -253,9 +265,9 @@ contains
     ind_sig=0; ind_mup=0
     ind_Mv=0;  ind_Lv=0; ind_Cv=0; ind_Le=0; ind_Yi=0
     ind_e1=0;  ind_e2=0;  ind_e3=0; ind_e4=0; ind_e5=0
-    ind_mb=0
+    ind_mb=0;  ind_eps=0
     !> Compute layouts
-    call computeNaux(model,brkSelect,evapSelect,combSelect,propFlags,ord2,mesh2D,nAux)
+    call computeNaux(model,brkSelect,evapSelect,combSelect,propFlags,ord2,mesh2D,nAux,radiation)
     call computeNauxState(model, brkSelect, propFlags, ord2, mesh2D, nAuxSt)
     call computeNeventVar(model, brkSelect, nEvV)
     nauxvar   = nAux
@@ -300,6 +312,8 @@ contains
       [particle%Kburn, particle%nBurn, particle%Xeff, particle%betaPart, &
        particle%xiCap, particle%Tign,  particle%hFus,  particle%cpSol,   &
        particle%qComb]
+    !> radiation
+    if (ind_eps > 0) aux(ind_eps) = particle%emissivity
   end subroutine packAuxVars
 
   !> Pack the particle's auxiliary state (xi0, KHRT told/tc, solidification phase) into auxst.
@@ -431,6 +445,7 @@ contains
     else
       Re = gas(1) * slip * d / gas(6)
       call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot)
+      if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), tp)*cpFactor
     endif
     F(1:3) = Z(4:6)
     F(4:6) = Fdrag/m
@@ -512,6 +527,7 @@ contains
     else
       Re = gas(1) * slip * d / gas(6)
       call interphase(gas, nsp, Vdif, slip, Z(7), d, Re, 1._R8, Fdrag, QdotW)
+      if (ind_eps > 0) QdotW = QdotW + radiativeHeat(aux(ind_eps), d, gas(5), Z(7))
     endif
     F(1:3) = Z(4:6)
     F(4:6) = Fdrag/m
@@ -604,6 +620,7 @@ contains
     !> Stefan-blowing reduction of the convective heat (MHB98 eq.19); skipped when the model returned its own Qdot
     if (blowSelect == 1 .and. .not.override) &
         Qdot = Qdot * blowingFactor(gas(7), gas(8), gas(6), gas(9), rho, d, m, mdot)
+    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), tp)*cpFactor
     F(1:3) = Z(4:6)
     F(4:6) = Fdrag / m
     if (bodyForce) F(4:6) = F(4:6) + bodyAccel
@@ -681,6 +698,7 @@ contains
     Re   = gas(1) * slip * d / gas(6)
 
     call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot)
+    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), tp)*cpFactor
     acc = Fdrag / m
 
     ! Breakup: npdot rate — brkupVar from auxState (told/tc for KHRT)
@@ -794,6 +812,7 @@ contains
     !> Stefan-blowing reduction of the convective heat (MHB98 eq.19); skipped when the model returned its own Qdot
     if (blowSelect == 1 .and. .not.override) &
         Qdot = Qdot * blowingFactor(gas(7), gas(8), gas(6), gas(9), rho, d, m, mdot_evap)
+    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), tp)*cpFactor
 
     !> per-droplet mass: evaporation plus the breakup share that keeps the stream mass
     mdot = mdot_evap - m*F(9)/Z(9)
@@ -874,6 +893,7 @@ contains
     Re   = gas(1) * slip * d / gas(6)
 
     call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot)
+    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), tp)*cpFactor
     !> Burn rate + heat release from the metal aux block (inert below T-ign)
     call becksteadRate(tp, d, rho, aux(ind_mb:ind_mb+nmp-1), mdot, qrel)
     F(1:3) = Z(4:6)

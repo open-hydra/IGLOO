@@ -57,7 +57,7 @@ change the model index.
 
 -   :material-thermometer: **[Heat transfer](heat.md)**
 
-    Nusselt-number correlations and the particle-property lookup tables.
+    Nusselt-number correlations, the grey-body radiative exchange and the particle-property lookup tables.
 
 -   :material-water-percent: **[Evaporation](evaporation.md)**
 

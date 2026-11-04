@@ -14,6 +14,7 @@ module IGLOO_IO_INI
   real(R8), allocatable, public :: ini_Mv(:),    ini_Lv(:), ini_Tboil(:)
   real(R8), allocatable, public :: ini_cpv(:),   ini_Le(:), ini_Yinf(:)
   real(R8), allocatable, public :: ini_sigma(:), ini_mu(:), ini_psat(:)
+  real(R8), allocatable, public :: ini_emissivity(:)
 
 
 contains
@@ -421,7 +422,7 @@ contains
 
 
   !> [IGLOO-Properties]: optional per-material property vectors (psat, Mv, Lv, boiling-temperature, cpv, Le,
-  !  Yinf, sigma, mu), all of one length.
+  !  Yinf, sigma, mu, emissivity), all of one length.
   subroutine read_properties()
     implicit none
     integer :: n, nref
@@ -497,6 +498,14 @@ contains
       if (n /= nref) error stop '[ERROR] [IGLOO-Properties] mu: size mismatch with other property vectors'
       allocate(ini_mu(n))
       call fini%get(section_name='IGLOO-Properties', option_name='mu', val=ini_mu, error=error)
+    endif
+    !> emissivity: present in this section only (a coupled case carries ICE's [ICE-Physics] emissivity)
+    if (fini%index(section_name='IGLOO-Properties', option_name='emissivity') > 0) then
+      n = fini%count_values(section_name='IGLOO-Properties', option_name='emissivity')
+      if (nref < 0) nref = n
+      if (n /= nref) error stop '[ERROR] [IGLOO-Properties] emissivity: size mismatch with other property vectors'
+      allocate(ini_emissivity(n))
+      call fini%get(section_name='IGLOO-Properties', option_name='emissivity', val=ini_emissivity, error=error)
     endif
   end subroutine read_properties
 

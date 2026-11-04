@@ -54,6 +54,7 @@ at 1500 K in a 3000 K gas (`T_m` at `t_m = 9.41e-3 s`, molten at `2.28e-2 s`).
 | [`solid-melt`](solid-melt/INFO.md) | a solid heated to `T-melt` in a hotter gas: the solid, melting-plateau and liquid regimes against their closed forms, the event positions, the heat taken from the gas per plateau cell, no parcel lost at a phase boundary |
 | [`solid-box-euler`](solid-box-euler/INFO.md) | the equivalent-Eulerian field of model 6: coverage, `ρ_p/n_p = m`, `u_p`, `T_p` per cell |
 | [`solid-box-2mat`](solid-box-2mat/INFO.md) | a model-6 material followed by a model-1 one in one run |
+| [`solid-box-rad`](solid-box-rad/INFO.md) | the three regimes under radiation alone (`NoHeat`, `emissivity = 0.8`) against their closed forms, the plateau rows, the energy deposit |
 | [`scatter-weight-solid`](scatter-weight-solid/INFO.md) | the scatter cloud's marker count per parcel across the phase events: an event keeps the scatter weight of the part of the step it keeps |
 | `repeatability/solid-box` | two sweeps reproduce each other: the phase and the frozen fraction are re-derived at injection |
 | `infrastructure/refusals/solid-*` | the eight setup refusals of the input contract (`h-fus`, `cp-solid`, `T-nuc < T-melt`, no evaporation, combustion or breakup, constant `cp` and density) |

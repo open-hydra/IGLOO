@@ -115,6 +115,7 @@ module IGLOO_particles
     real(R8)     :: Tnuc       = 0._R8  !> nucleation temperature [K]; 0 => 0.8*Tmelt (solidification)
     real(R8)     :: cpSol      = 0._R8  !> solid specific heat [J/kg/K] (solidification)
     real(R8)     :: qComb      = 0._R8  !> heat of combustion [J/kg]
+    real(R8)     :: emissivity = 0._R8  !> grey-body surface emissivity; 0 = no radiation
   contains
     !> integration procedures
     procedure, pass(self) :: computeDs

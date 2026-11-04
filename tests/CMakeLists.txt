@@ -5,10 +5,10 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ rad-cool/ emissivity-cap/ rad-foreign-key/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
 #   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
-#   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
+#   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
 #   repeatability/      two-sweep gates (twosweep driver): 13 cases
@@ -391,6 +391,7 @@ igloo_unit_test(test_drag        standard/drag        "unit;standard;drag;a;t2")
 igloo_unit_test(test_drag_lit    standard/drag        "unit;standard;drag;a;t5")
 igloo_unit_test(test_temperature standard/temperature "unit;standard;heat;b;t3")
 igloo_unit_test(test_heat_nu     standard/temperature "unit;standard;heat;b;t5")
+igloo_unit_test(test_radiation   standard/temperature "unit;standard;heat;radiation;t3")
 
 igloo_e2e_case(drag-stokes standard/drag-stokes "e2e;standard;drag")
 # drag-morsi, drag-chang: drag-stokes's box with 100 um particles (Re 60 -> 22 across the box), drag = Morsi-Alexander
@@ -418,6 +419,13 @@ igloo_e2e_case(conv-nu-jaxa2 standard/conv-nu-jaxa2 "e2e;standard;heat")
 igloo_e2e_case(conv-nu-jaxa3 standard/conv-nu-jaxa3 "e2e;standard;heat")
 igloo_e2e_case(conv-nu-jaxa4 standard/conv-nu-jaxa4 "e2e;standard;heat")
 igloo_e2e_case(conv-nu-kd    standard/conv-nu-kd    "e2e;standard;heat")
+# rad-cool: radiation the only heat exchange (NoHeat, zero slip): every row against the closed form of
+# dT/dt = -a (T^4 - T_g^4) in x, the exit temperature and the energy deposit.
+igloo_e2e_case(rad-cool standard/rad-cool "e2e;standard;heat;radiation")
+# emissivity-cap: rad-cool with emissivity 1.5, cut to 1.0 with one warning; rad-cool's oracle at 1.0.
+igloo_e2e_case(emissivity-cap standard/emissivity-cap "e2e;standard;heat;radiation")
+# rad-foreign-key: drag-stokes plus an [ICE-Physics] emissivity: every artefact equal to drag-stokes's.
+igloo_e2e_case(rad-foreign-key standard/rad-foreign-key "e2e;standard;radiation;io")
 igloo_e2e_case(vie-plait   standard/vie-plait   "e2e;standard;drag;gas")
 # vie-plait-dense: vie-plait's field with 250 strands from the inlet face (gas-order 2, 3D): vie-plait's closed
 # form on every row of every strand, the side-face exits it predicts, and the source totals (momentum, kinetic
@@ -606,6 +614,9 @@ igloo_e2e_case(solid-melt solidification/solid-melt "e2e;solidification")
 igloo_e2e_case(solid-box-euler solidification/solid-box-euler "e2e;solidification;euler")
 # solid-box-2mat: a model-6 material followed by a plain model-1 one, set up and integrated after it.
 igloo_e2e_case(solid-box-2mat solidification/solid-box-2mat "e2e;solidification;infrastructure")
+# solid-box-rad: solid-box's three regimes driven by radiation alone (10 um drops, NoHeat), against the closed
+# forms, and the energy deposit.
+igloo_e2e_case(solid-box-rad solidification/solid-box-rad "e2e;solidification;radiation")
 # scatter-weight-solid: scatter-weight's oracle on solid-box's drops (ODE model 6). A phase event keeps the part
 # of the step before the event, and the parcel keeps that part of the step's scatter weight. RED when the event
 # keeps the whole step's weight: 6 parcels one marker above the bound (2268 markers against 2262).

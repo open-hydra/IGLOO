@@ -53,3 +53,15 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
 - `test_heat_probes.f90` (ctest `test_heat_probes`, ordinary gate — bug-transcription pin): XH1
   JAXA1 missing +2 floor — Nu(Re=1e-6)=0.315 today. Flips the suite RED when
   production is fixed, signalling promotion to the gate (bug A7).
+- `test_radiation.f90` (ctest `test_radiation`): the grey-body exchange `Q̇_r = ε σ π d² (T_g⁴ − T_p⁴)`
+  against the form typed in the test (`σ = 5.670374419e-8`, CODATA) in quadruple precision; RU2 and RU4 at zero
+  slip under `NoDrag` and `NoHeat`, so the radiative term is the only heat exchange:
+
+  | id | compared | tolerance | measured | RED |
+  |---|---|---|---|---|
+  | RU1 | `radiativeHeat` at six points (both signs of `T_g − T_p`) against the closed form rounded once; the sign; `ε = 0` and `T_g = T_p` give exactly 0 | 4 ULP; exact | 2 ULP | `σ = 5.67e-8`: 5.6e11 ULP; area `π d²/2`: 4.3e15 ULP |
+  | RU3 | the auxiliary layout, models 1–6 (seven layouts): with radiation one slot after every other block (`nAux + 1`, the slot at `nAux`); a material without radiation set up after one with it gets no slot and the plain `nAux` | exact | 7 of 7 | the slot index not reset per setup: it stays at the previous layout's index |
+  | RU2 | per ODE model, `F(ε = 0.8) − F(ε = 0)` = `Q̇_r cpFactor/m` in the energy equation and 0 in every other component: models 1–5, model 1 on a varying-cp table (`cpFactor = 1`), model 6 in its four phases (`Q̇_r/(m c_l)` liquid and undercooled, `−Q̇_r/(m h_fus)` in `F(8)` on the plateau, `Q̇_r/(m c_s)` solid), model 2 with `blowing = LK` (`f₂ = 0.9116`: the term is not multiplied by `f₂`) | 8 ULP of the larger `F` | worst 0.26 of tol (varying cp) | model 4 without the term: its leg (0 against 513.87 K/s); the term added before the blowing factor: the LK leg (468.45 = 513.87 `f₂`) |
+  | RU4 | `getSourceTerms` (the Eulerian source branch): the energy component against `n_p ε σ π d² (T_g⁴ − T_p⁴)`, `d = (6 ρ̂_p/(π ρ n_p))^⅓`; `ε = 0` gives exactly 0 | 1e-14 relative | 9.5e-16 | the term absent from the branch: 1.0 |
+
+  The e2e twins are `rad-cool`, `emissivity-cap`, `rad-foreign-key` and `solidification/solid-box-rad`.
