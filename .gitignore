@@ -30,7 +30,8 @@ ref-1blk
 ref-1blk-raw
 # conn-103 runs its 400 sibling into ref-400/ (tests/infrastructure/conn-103/check.py)
 ref-400
-# out-dcell3, out-off and rad-foreign-key run the plain drag-stokes case into ref-plain/ (their check.py)
+# out-dcell3, out-off and rad-foreign-key run the plain drag-stokes case into ref-plain/ (their check.py);
+# foreign-keys and foreign-keys-db run their deck cut at [decoys] there, zero-group-line the plain drag-stokes case
 ref-plain
 # body-evap-m2, body-evap-m4 and body-burn-m5 run their out-file = S layout into ref-S/ (tests/tools/body_source_check.py)
 ref-S
@@ -62,6 +63,9 @@ build_*/
 # Unit-test CSV reports: written relative to the caller's cwd, so a test executable run
 # by hand outside the build tree drops one wherever you happen to be.
 verif_*.csv
+
+# What tests/bench/monolith/sync-src-monolith.sh shipped (commits and dirty counts), written at each sync
+IGLOO-commit.txt
 
 # Test-case scratch artifacts (debug/gate runs)
 test/*/dbg*

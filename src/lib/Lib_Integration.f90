@@ -41,7 +41,8 @@ contains
     use IGLOO_Lib_Breakup, only: nchild
     use IGLOO_Lib_Combustion, only: imRr
     use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, eventCrossed, &
-                                        eventPassed, solidTransition, solidDiameter, phUndercooled
+                                        eventPassed, solidTransition, solidDiameter, phUndercooled, &
+                                        breakupStateAtSwitch
     use IGLOO_Mod_MPI,     only: mpi_size_, region_fail, region_failed
     implicit none
     class(obj_particle),   intent(inout) :: part
@@ -176,15 +177,14 @@ contains
         call part%initializePart(geoblock,gasblock)
       endif
       if (part%varCp) then; part%stateVar(7) = lookupTab(hTab,part%tp); else; part%stateVar(7) = part%tp; endif
-      call part%computeMass(rhoTab); part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot
+      !> the injection mass: the initial cap (model 8), a frozen fraction at rho-solid, else the injected diameter
+      call part%injectionMass(rhoTab); part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot
       part%n0 = part%npdot
 
       select case(part%model)
       case(2,5); part%stateVar(8) = part%m
       case(8); if (part%xiOx0 > 0._R8) then
                  !> the whole particle at the injected diameter: metal and its initial cap
-                 part%m  = part%capInjMass()
-                 part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot; part%n0 = part%npdot
                  part%stateVar(8) = (1._R8 - part%xiOx0)*part%m
                  part%stateVar(9) = part%xiOx0*part%m
                else
@@ -196,11 +196,6 @@ contains
                part%stateVar(9) = part%npdot
       case(6,7); call solidPhaseAtInjection(part%tp, part%Tmelt, part%Tnuc, part%solidPhase, part%stateVar(8))
                  part%fSolid = part%stateVar(8)
-                 !> an injected frozen fraction at rho-solid: the mass of the injected diameter
-                 if (part%rhoSol > 0._R8 .and. part%fSolid > 0._R8) then
-                   part%m  = pi/6._R8*part%d**3._R8/((1._R8 - part%fSolid)/part%rho + part%fSolid/part%rhoSol)
-                   part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot; part%n0 = part%npdot
-                 endif
                  if (part%model == 7) part%stateVar(9) = part%npdot
       end select
       if (eulerSwitch)    part%stateVar(part%nOde+1:part%neq) = 0._R8
@@ -738,12 +733,11 @@ contains
           phaseEv = nint(stateLocal(ind_sph))
           call solidTransition(whichEv, part%cp, part%cpSol, part%Tmelt, part%hFus, y(7), y(8), phaseEv)
           stateLocal(ind_sph) = real(phaseEv, R8)
-          !> Breakup state at the switch: a nucleated TAB/ETAB oscillator at rest, the KH-RT timer restarted at a re-melt.
-          if (whichEv == 1 .and. (mod_brkSelect == 4 .or. mod_brkSelect == 5) .and. allocated(eventLocal)) &
-            eventLocal(ind_ev1:ind_ev2) = 0._R8
-          if (whichEv == 3 .and. ind_sb1 > 0) then
-            stateLocal(ind_sb1) = t1; stateLocal(ind_sb2) = 0._R8
-          endif
+          !> Breakup state at the switch: the TAB/ETAB oscillator, the KH-RT timer.
+          if ((mod_brkSelect == 4 .or. mod_brkSelect == 5) .and. allocated(eventLocal)) &
+            eventLocal(ind_ev1:ind_ev2) = breakupStateAtSwitch(whichEv, mod_brkSelect, t1, eventLocal(ind_ev1:ind_ev2))
+          if (ind_sb1 > 0) &
+            stateLocal(ind_sb1:ind_sb2) = breakupStateAtSwitch(whichEv, mod_brkSelect, t1, stateLocal(ind_sb1:ind_sb2))
           part%stateVar = y
           part%oldState = y
         endif
@@ -874,10 +868,7 @@ contains
                            part%oldState(7), part%oldState(8), part%solidPhase)
       part%stateVar(7:8) = part%oldState(7:8)
       !> Breakup state at the switch, as the segment finalize sets it.
-      if (which == 1 .and. (mod_brkSelect == 4 .or. mod_brkSelect == 5)) part%brkupVar(1:2) = 0._R8
-      if (which == 3 .and. mod_brkSelect == 3) then
-        part%brkupVar(1) = part%time; part%brkupVar(2) = 0._R8
-      endif
+      part%brkupVar(1:2) = breakupStateAtSwitch(which, mod_brkSelect, part%time, part%brkupVar(1:2))
     end subroutine solidCatchUp
 
     !> ODE right-hand sides for models 1-8, forwarding integrate's host-associated state.

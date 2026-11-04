@@ -47,6 +47,8 @@ output written).
 | `refuse-periodic-not-mutual` | own `INPUT/` (`python3 make_periodic.py`, run from this directory): a box with faces 3/4 a periodic pair (`tools/make_box_case.py --nx 8 --ny 2 --nz 2 --periodic-y`) whose face-4 records are all header-only 400, so no face-3 facelet's partner names it back | `IGLOO: a 101/201 connection is not mutual: the partner cell does not name this cell` — refused when the field mollifier's link table is built |
 | `refuse-ord2-orient` | own `INPUT/` (`python3 make_ord2.py`, run from this directory): a box of two blocks joined by 101 faces (`tools/make_box_case.py --nx 8 --ny 2 --nz 2 --blocks 2`) at `gas-order = 2`, block 1's first 101 record carrying the orientation `-1 0 0 1`: the face corners it names lie one cell from the partner's | `IGLOO: 101 orientation disagrees with the partner cells` — refused when the dual cells of the interface vertices are joined (`allocation.f90`) |
 | `refuse-ord2-slab` | the same generator on a one-layer box (`--nz 1`), that record carrying `1 1 0 1` (d12 = 1) | `IGLOO: 101 orientation mixes the slab direction on a one-layer mesh` |
+| `refuse-ord2-periodic-orient` | own `INPUT/` (`python3 make_ord2.py`): a one-block box whose faces 3/4 are a periodic pair (`tools/make_box_case.py --nx 8 --ny 2 --nz 2 --periodic-y`) at `gas-order = 2`, block 1's first 201 record (face 3) carrying `-1 0 0 1`: the face corners it names lie one cell from the partner's, modulo the periodic offset | `IGLOO: 201 orientation disagrees with the partner cells` — refused when the dual cells of the periodic face's vertices are joined (`allocation.f90`) |
+| `refuse-ord2-periodic-slab` | the same box on one layer (`--nz 1`), that record carrying `1 1 0 1` (d12 = 1) | `IGLOO: 201 orientation mixes the slab direction on a one-layer mesh` |
 | `refuse-drag-token` | `drag = no-such-drag-law` | `IGLOO: unknown drag model` |
 | `refuse-heat-token` | `heat = no-such-nusselt-law` | `IGLOO: unknown heat model` |
 | `refuse-breakup-token` | `breakup = no-such-breakup-model` | `IGLOO: unknown breakup model` |
@@ -96,12 +98,14 @@ output written).
 | `refuse-bc-empty-payload` | own `INPUT/bc.txt`: `drag-stokes`'s with the first inlet payload line empty (`make_bc_refusals.py`) | `IGLOO: bc.txt inlet payload line is empty` |
 | `refuse-body-accel` | `body-force` (`INPUT/` symlinked) with `body-accel = 0.0 -200.0` | `body-accel: expected 3 values (gx gy gz)` |
 | `refuse-plane-x` | `INPUT/` symlinked; `plane-x = abc` | `IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]` |
+| `refuse-plane-x-empty` | `INPUT/` symlinked; `plane-x =` with nothing after the `=` | `IGLOO: [IGLOO-General] plane-x is empty` |
 | `refuse-krho-sum` | own `INPUT/phase.txt` `A 3` (three families of drag-stokes's material); drag-stokes's one-copy `bc.txt` and `solfile.tec`, `common/properties.dat`: the one copy feeds `krho` 0.34 to every family, a sum of 1.02 on each of the 25 inlet cells | `IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1` — refused in `read_cdp_bc_file` after the file is read, the cell, its sum and its smallest `krho` printed first |
 | `refuse-krho-negative` | own `INPUT/bc.txt`: `drag-stokes`'s with every inlet `krho` negated (`make_bc_refusals.py`) | the same payload (smallest `krho` −0.34) |
+| `refuse-gas-no-density` | own `INPUT/solfile.tec`: a 2×2×2 box (`tools/make_box_case.py --nx 2 --ny 2 --nz 2`) whose density variable `"Roi( 1 )"` is renamed `"Q( 1 )"` (`python3 make_gas_refusals.py`, run from this directory); drag-stokes's `phase.txt`, `properties.dat` and `bc.txt` symlinked (the stop comes before the boundary file is read) | `IGLOO: the gas file has no density variable (Roi(s) or rho(s))` — refused at the gas import (`allocation.f90` `import_gas`), the block named first |
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All seventy-seven exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All eighty-one exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
@@ -121,6 +125,8 @@ to "Stop condition" with exit 0 and writes its output. **`refuse-periodic-not-mu
 table of 101 records only, which never looks at the 201 faces: the run integrates to "Stop condition" with
 exit 0 and writes its output. **The two gas-order-2 interface cases are RED** on the solver without the interface
 pass, which never reads the orientation integers: both run to "Stop condition" with exit 0 and write their output.
+**The two gas-order-2 periodic cases are RED** on the interface pass of 101 faces alone, which never reads a 201
+record's orientation integers: both run to "Stop condition" with exit 0 and write their output.
 **The three oxide-cap cases are RED** on a reader that does not know the `product` token: `refuse-cap-product`
 (whose line names no product) runs the burn law to "Stop condition" with exit 0 and writes its output, the other two
 stop at `unknown per-material key` (exit 128, not their payload); with its check taken out of `resolve_products`
@@ -155,7 +161,8 @@ families (exit 0, six output files). **The two 401-loading cases are RED** on a 
 to "Stop condition" with exit 0 and write their output, each parcel of `refuse-krho-sum` at ṁ = 0.34/(1 − 1.02) ·
 1.2e-3 = −2.04e-2 kg/s and of `refuse-krho-negative` at −0.34/1.34 · 1.2e-3 = −3.04e-4 kg/s; with the sum clause
 alone taken out `refuse-krho-sum` runs so and `refuse-krho-negative` is still refused, with the negative clause
-alone the other way round.
+alone the other way round. **`refuse-gas-no-density` is RED** on a gas import that ends on a bare `error stop 1`:
+exit 1, not 128, and no payload in stderr (the stop code `1` alone).
 
 **The eleven cases of the phase file's burn-law and breakup checks, the property sizes, the two boundary files
 and `body-accel` are RED** on the solver with each of their error stops turned into a plain write: eight run on
@@ -164,7 +171,8 @@ later stop with another payload (`mu: size mismatch`, `mu: size /= number of mat
 **`refuse-breakup-token-material` is RED** on a reader that knows no `breakup` token on a material line: it stops
 at `IGLOO: unknown per-material key in the phase file`, not its payload. **`refuse-plane-x` is RED** on a solver that
 does not read `plane-x` (an unknown `[IGLOO-General]` key is ignored): it runs to "Stop condition" with exit 0, no
-payload, and writes three `.dat` files.
+payload, and writes three `.dat` files. **`refuse-plane-x-empty` is RED** on a reader that skips a `plane-x` of no
+value: it runs to "Stop condition" with exit 0 and writes three `.dat` files and no planes file.
 
 **Not here.** The mixed-Nk refusal (`allocation.f90`, `IGLOO: mixed 2D/3D blocks are not supported`)
 needs a two-zone `solfile.tec`; it is verified on a scratch fixture only and has no case.

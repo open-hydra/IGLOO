@@ -6,14 +6,14 @@
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-stokes-dopri5/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ rad-cool/ emissivity-cap/ rad-foreign-key/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
-#   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/, liquid-p2t/, boiling-zgr/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ d2law-brk-dormant/ temp-relax-p2t/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/ (e2e)
+#   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/, liquid-p2t/, boiling-zgr/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ evap-breakup-box-varcp/ d2law-brk-dormant/ temp-relax-p2t/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ burn-box-ox0/ (e2e)
-#   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-brk-tab-rhos/ (e2e)
-#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ breakup-per-material/ khrt-plane/ pe-sigma-table/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x,krho-{sum,negative}}
-#   repeatability/      two-sweep gates (twosweep driver): 14 cases
+#   solidification/     unit family (root) + solid-box/ solid-melt/ solid-melt-rhos/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-brk-tab-rhos/ (e2e)
+#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ khrt-varcp/ breakup-per-material/ khrt-plane/ pe-sigma-table/
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,krho-{sum,negative},gas-no-density}
+#   repeatability/      two-sweep gates (twosweep driver): 15 cases
 #   mpi/                registered only under USE_MPI: 9 rank-count cases + 4 consistency + 1 determinism
-#                       + 13 two-sweep cases
+#                       + 14 two-sweep cases
 #
 # Run everything via ../test.sh (it builds this tree's IGLOO, which every e2e case runs, and publishes it to bin/).
 
@@ -329,6 +329,11 @@ endfunction()
 # and pass every e2e gate.
 igloo_twosweep_case(repeat-drag-stokes  repeatability/drag-stokes
                     "e2e;repeatability;standard"       "INPUT/solfile.tec")
+# repeat-drag-stokes-time-end: drag-stokes's parcels stopped by time-end at 12 ms, inside the box in the original gas
+# and at the outlet in the gas cycle's middle sweep: sweeps that end inside, at the outlet (code 400), inside. RED on a
+# reset_state that keeps the exit code: sweep 2's time-end records print code 400 (outloc 25 of 25 records differ).
+igloo_twosweep_case(repeat-drag-stokes-time-end repeatability/drag-stokes-time-end
+                    "e2e;repeatability;standard"       "INPUT/solfile.tec")
 # repeat-drag-stokes-dopri5: two sweeps at OMP 5 with the explicit solver. Gates the scatter
 # cloud's determinism on the DOPRI5 path: solout's scatter accumulator reads x - xold, and
 # dopri5.f keeps XOLD in COMMON /CONDO5/ (THREADPRIVATE), SOLOUT receiving the thread-private
@@ -626,6 +631,9 @@ igloo_unit_test(test_evap_breakup evaporation/evap-breakup "unit;evaporation;bre
 # the d2-law integral after it, the source closure (every drop consumed in the box), no cell taking mass
 # from the gas, and 25 burnouts with no solver-failure exit. RED: every drop lost at injection.
 igloo_e2e_case(evap-breakup-box evaporation/evap-breakup-box "e2e;evaporation;breakup;val;m4")
+# evap-breakup-box-varcp: evap-breakup-box with a varying cp (model 4's own copy of the enthalpy-state lines): the
+# energy deposit telescopes, the mass audit closes, T follows an RK4 of dh/dt = (Q + mdot L_v)/m along the measured path.
+igloo_e2e_case(evap-breakup-box-varcp evaporation/evap-breakup-box-varcp "e2e;evaporation;breakup;m4")
 # d2law-brk-dormant: the d2law case under model 4 with the breakup rate exactly zero (zero slip); the
 # d2law oracle must hold unchanged. RED while F(8) carries the number rate.
 igloo_e2e_case(d2law-brk-dormant evaporation/d2law-brk-dormant "e2e;evaporation;breakup;m4")
@@ -663,6 +671,9 @@ igloo_e2e_case(solid-box solidification/solid-box "e2e;solidification")
 # solid-melt: solid particles in a gas hotter than T-melt heat to T-melt, melt on the plateau at the
 # latent-heat rate and heat as liquids, against the closed forms; no parcel lost at the phase boundaries.
 igloo_e2e_case(solid-melt solidification/solid-melt "e2e;solidification")
+# solid-melt-rhos: solid-melt with rho-solid; the particles enter frozen at the injected diameter, so their constant
+# mass is rho-solid's: the solid, the melting plateau with its growing diameter and the liquid against the closed forms.
+igloo_e2e_case(solid-melt-rhos solidification/solid-melt-rhos "e2e;solidification")
 # solid-box-euler: the equivalent-Eulerian field of model 6 (out-file ALL) -- the only gate on the euler
 # tail after the frozen fraction; solid-box writes the source field only.
 igloo_e2e_case(solid-box-euler solidification/solid-box-euler "e2e;solidification;euler")
@@ -802,6 +813,10 @@ igloo_e2e_case(khrt-shed-noexchange breakup/khrt-shed-noexchange "e2e;breakup;kh
 igloo_e2e_case(tab-varrho breakup/tab-varrho "e2e;breakup;tab")
 igloo_e2e_case(tab-evap-frozen-varrho breakup/tab-evap-frozen-varrho "e2e;breakup;evaporation;tab")
 igloo_e2e_case(khrt-varrho breakup/khrt-varrho "e2e;breakup;khrt")
+# khrt-varcp: khrt-e2e with a varying cp (the enthalpy state of model 3): the energy deposit at the table's enthalpy
+# telescopes, a KH child carries its parent's enthalpy, T follows an RK4 of the enthalpy history along every run of rows
+# at one d and stays inside the bracket of every interval in which d changes.
+igloo_e2e_case(khrt-varcp breakup/khrt-varcp "e2e;breakup;khrt")
 # breakup-per-material: four materials in tab-e2e's box, each with its own breakup model and constants from the
 # tokens of its phase-file line over [IGLOO-Models] (TAB with TAB-Comega, KH-RT with KHRT-B1, none, KH-RT with an
 # unused TAB token); check.py reruns the case once per material with that material's model and constants given
@@ -1018,6 +1033,12 @@ igloo_refusal_case(refuse-ord2-orient infrastructure/refusals/ord2-orient
                    "IGLOO: 101 orientation disagrees with the partner cells" "e2e;refusal;infrastructure;bc")
 igloo_refusal_case(refuse-ord2-slab   infrastructure/refusals/ord2-slab
                    "IGLOO: 101 orientation mixes the slab direction on a one-layer mesh" "e2e;refusal;infrastructure;bc")
+# The same across a periodic (201) pair (refusals/make_ord2.py, one block): its first 201 record reversed in m, and
+# d12 = 1 on a one-layer box. RED on the interface pass of 101 faces alone: both run, exit 0.
+igloo_refusal_case(refuse-ord2-periodic-orient infrastructure/refusals/ord2-periodic-orient
+                   "IGLOO: 201 orientation disagrees with the partner cells" "e2e;refusal;infrastructure;bc")
+igloo_refusal_case(refuse-ord2-periodic-slab   infrastructure/refusals/ord2-periodic-slab
+                   "IGLOO: 201 orientation mixes the slab direction on a one-layer mesh" "e2e;refusal;infrastructure;bc")
 # Unknown model tokens are error stops: a selector that prints the menu and executes a plain
 # `stop` exits 0, invisible to any harness or embedding parent.
 igloo_refusal_case(refuse-drag-token        infrastructure/refusals/drag-token
@@ -1143,6 +1164,11 @@ igloo_refusal_case(refuse-krho-sum         infrastructure/refusals/krho-sum
                    "IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1" "e2e;refusal;infrastructure")
 igloo_refusal_case(refuse-krho-negative    infrastructure/refusals/krho-negative
                    "IGLOO: bc.txt 401 inlet: krho must be >= 0 and the families of one cell must sum below 1" "e2e;refusal;infrastructure")
+# A gas file without a density variable (a box whose Roi( 1 ) is renamed, make_gas_refusals.py).
+igloo_refusal_case(refuse-gas-no-density   infrastructure/refusals/gas-no-density
+                   "IGLOO: the gas file has no density variable" "e2e;refusal;infrastructure")
+igloo_refusal_case(refuse-plane-x-empty    infrastructure/refusals/plane-x-empty
+                   "IGLOO: [IGLOO-General] plane-x is empty" "e2e;refusal;infrastructure")
 # drag-stokes-dopri5: the explicit solver (ode-solver = H-dopri5) on drag-stokes's own oracle.
 # RED on a DOPRI5 whose per-step SOLOUT call has the eleven-argument form: IGLOO's interrupt
 # never reaches DOPRI5 and every parcel is lost at injection with exit 0. Needs BOTH OSlo
@@ -1161,6 +1187,11 @@ igloo_e2e_case(periodic-2d infrastructure/periodic-2d "e2e;infrastructure;bc")
 # periodic-2d-ord2: periodic-2d at gas-order 2 with a temperature wave across the 201 pair: T follows the periodic
 # extension of the cell-centre field (the 201 ghosts carry the partner side's gas). RED on the ring's linear fill.
 igloo_e2e_case(periodic-2d-ord2 infrastructure/periodic-2d-ord2 "e2e;infrastructure;bc;gas")
+# periodic-2d-ord2-dual: periodic-2d-ord2's box over two periods (make_box_case.py --periods 2), mollify off: the
+# source and eulerian fields next to the 201 seam equal the cells one period away (the seam's dual cells held as one
+# across the period), the twins' exits agree. RED on each side reducing its own half dual cell: no routing line,
+# every additive field 10 times its tolerance at the seam (rho_p, n_p, E 1/3 of the scale, Fy 8.0e-2).
+igloo_e2e_case(periodic-2d-ord2-dual infrastructure/periodic-2d-ord2-dual "e2e;infrastructure;bc;gas;euler")
 # conn-103: drag-stokes's box with the outlet face coded 103, header only (no partner cell): the parcels leave as
 # through a 400 face (check.py runs the 400 case beside it into ref-400/) and the run reports its block changes.
 igloo_e2e_case(conn-103 infrastructure/conn-103 "e2e;infrastructure;bc")
@@ -1199,6 +1230,15 @@ igloo_e2e_case(inj-edge-payload infrastructure/inj-edge-payload "e2e;infrastruct
 # `Defaulting to 2nd order`, the E+S default, euler1.tec written; a/b/c1/c2 FAIL, d PASS);
 # GREEN on a FiNeR whose strip_inline_comment blanks the line before the `=` test.
 igloo_e2e_case(ini-comment-eq infrastructure/ini-comment-eq "e2e;infrastructure;ini")
+# foreign-keys, foreign-keys-db: every key IGLOO tests for presence (the boundary-injection path; the optional keys
+# of the assigned-position path), set only in a [decoys] section, leaves the run equal to the deck cut at [decoys].
+# RED on presence tests that search every section: setup stops at the first decoy (body-accel; temp0).
+igloo_e2e_case(foreign-keys infrastructure/foreign-keys "e2e;infrastructure;io")
+igloo_e2e_case(foreign-keys-db infrastructure/foreign-keys-db "e2e;infrastructure;io;injection")
+# zero-group-line: a 0-group material line that no product= names (A 1, B 0 on drag-stokes's deck) is inert -- A's
+# records and the source equal drag-stokes's, B's files hold no data row -- and the setup log names it once.
+# RED on a reader without the notice (the inert half holds there too).
+igloo_e2e_case(zero-group-line infrastructure/zero-group-line "e2e;infrastructure;io")
 # [IGLOO-General] timing = on: the [IGLOO-timing] report's phases, thread/rank lines, parcel counts
 # (strided ownership) and allocated sizes (closed form of the mesh). INPUT/ symlinks vie-plait's.
 igloo_e2e_case(timing-report infrastructure/timing-report "e2e;infrastructure;timing")
@@ -1226,6 +1266,9 @@ igloo_e2e_case(solver-fail-refine infrastructure/solver-fail-refine "e2e;infrast
 # stuck-cell: parcels at rest in a gas at rest (402 inlet, |v| = 0): the residency guard ends each one once, at its
 # injection point, before the zero-progress guard or the outer cap.
 igloo_e2e_case(stuck-cell infrastructure/stuck-cell "e2e;infrastructure;guard")
+# plane-back: parcels thrown at 10 m/s into a gas at rest under a body acceleration toward the inlet turn back: each plane
+# is crossed forward and then backward, the trajectory on the closed form, the flows through each plane cancelling.
+igloo_e2e_case(plane-back infrastructure/plane-back "e2e;infrastructure;output")
 # sym-plane-skate: twelve streams launched toward a symmetry plane (300), 0.1 and 50 m/s at 1 and 10 degrees: no
 # give-up guard or solver failure, every parcel at the outlet; the grazing fast streams slide on the plane, the
 # steep ones reflect. RED: the plane made an exit (6 of 12 leave at z = 0); the residency guard at one segment
@@ -1365,9 +1408,10 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
             TIMEOUT 900)
     endfunction()
     # every repeatability case but burn-box-residue (its rank side is mpi-consistency-residue's) at 2 ranks x 2 threads
-    # (children, RNG, evaporation, ord2 accumulator shape,
-    # two materials, the explicit solver, the wedge, the gas-refresh cycle on drag-stokes, vie-plait and swirl-wedge)
+    # (children, RNG, evaporation, ord2 accumulator shape, two materials, the explicit solver, the wedge, the exit code's
+    # reset, the gas-refresh cycle on drag-stokes, drag-stokes-time-end, vie-plait and swirl-wedge)
     igloo_twosweep_case_mpi(mpi-repeat-drag-stokes        mpi/repeat-drag-stokes        2 2 "e2e;mpi;repeatability" "INPUT/solfile.tec")
+    igloo_twosweep_case_mpi(mpi-repeat-drag-stokes-time-end mpi/repeat-drag-stokes-time-end 2 2 "e2e;mpi;repeatability" "INPUT/solfile.tec")
     igloo_twosweep_case_mpi(mpi-repeat-drag-stokes-dopri5 mpi/repeat-drag-stokes-dopri5 2 2 "e2e;mpi;repeatability" "")
     igloo_twosweep_case_mpi(mpi-repeat-db-injection       mpi/repeat-db-injection       2 2 "e2e;mpi;repeatability" "")
     igloo_twosweep_case_mpi(mpi-repeat-two-mat            mpi/repeat-two-mat            2 2 "e2e;mpi;repeatability" "")

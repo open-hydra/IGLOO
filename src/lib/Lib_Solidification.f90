@@ -5,7 +5,7 @@ module IGLOO_Lib_Solidification
     implicit none
     private
     public :: solidPhaseAtInjection, nucleationJump, plateauRate, hSolid, solidDiameter
-    public :: eventValue, eventFunction, eventCrossed, eventPassed, solidTransition
+    public :: eventValue, eventFunction, eventCrossed, eventPassed, solidTransition, breakupStateAtSwitch
 
     !> Phases: liquid, undercooled liquid, freezing plateau at T-melt, solid.
     integer(I4), parameter, public :: phLiquid=0, phUndercooled=1, phPlateau=2, phSolid=3
@@ -158,5 +158,18 @@ contains
         end select
 
     end subroutine solidTransition
+
+    !> Breakup state s after phase change `which`: a nucleated TAB/ETAB oscillator at rest, the KH-RT timer restarted at a re-melt.
+    pure function breakupStateAtSwitch(which, brkSelect, tNow, s) result(sNew)
+        implicit none
+        integer,  intent(in) :: which, brkSelect
+        real(R8), intent(in) :: tNow, s(2)
+        real(R8) :: sNew(2)
+
+        sNew = s
+        if (which == 1 .and. (brkSelect == 4 .or. brkSelect == 5)) sNew = 0._R8
+        if (which == 3 .and. brkSelect == 3) sNew = [tNow, 0._R8]
+
+    end function breakupStateAtSwitch
 
 end module IGLOO_Lib_Solidification
