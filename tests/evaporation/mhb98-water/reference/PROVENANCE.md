@@ -15,9 +15,9 @@ all M1–M8 coincide anyway, so the choice does not bite here — but it justifi
 - **`d2`** extrapolates to **D0²_M7 ≈ 1.10 mm²** at t=0 — the figure's own start value. The
   caption says `D0=1.1 mm` (→ 1.21); this ~9% internal offset is a property of the paper's
   plot. The gated quantity is the **slope / β** (Eq.28, D0-independent):
-  `K_M7 ≈ 1.347e-3 mm²/s → β_M7 ≈ 6.35e-3`, computed by LSQ in `check.py` at gate time (β_M7 was
-  6.51e-3 before 2026-07-29, when Eq. 28's coefficient still used ad-hoc `ρ_l`/`Pr_G`/`μ_G`
-  instead of MHB98's Appendix-A values; the gate is a slope ratio, so the coefficient cancels).
+  `K_M7 ≈ 1.347e-3 mm²/s → β_M7 ≈ 6.35e-3`, computed by LSQ in `check.py` at gate time with
+  Eq. 28's coefficient from MHB98's Appendix-A values (the gate is a slope ratio, so the
+  coefficient cancels).
 - **`Td`** plateau (tail mean) = **282.43 K**.
 
 ### GATE (`check.py`, Tier-P), built on these curves
@@ -26,12 +26,11 @@ all M1–M8 coincide anyway, so the choice does not bite here — but it justifi
   also the fallback if the file is absent. IGLOO β = 6.30e-3 → **rel 0.8%** vs β_M7.
 - (b) IGLOO wet-bulb vs the **M7 plateau** 282.43 K, **±0.5 K**. IGLOO 282.33 → **|ΔT| 0.10 K**.
 
-### Property provenance (2026-07-29)
+### Property provenance
 MHB98 **Appendix A** publishes every correlation and its source: **air and water both Harpole
 (1981)** (benzene/hexane Reid et al. 1987 + *Petroleum Refining Data Book* 1992; decane Abramzon &
 Sirignano 1989; heptane Park & Aggarwal 1995), frozen once at `T_R = T_WB`(eq. 27) = 293.9676 K.
-The case now runs those numbers (see `../INFO.md`). Earlier revisions of this file claimed the
-property tables were "not published" — **wrong**. Water lists no `Γ_V`/`Sc`, so the Appendix's
+The case runs those numbers (see `../INFO.md`). Water lists no `Γ_V`/`Sc`, so the Appendix's
 stated `Le=1` default applies: MHB98's water runs at `Le=1`, as IGLOO does.
 
 `verify.py` overlays the digitized M7 line in both panels, **normalized**: d²/d0² against

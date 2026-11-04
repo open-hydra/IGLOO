@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Independent oracle for the TONINI-COSSALI ANALYTICAL (F2) e2e case.
+"""Independent oracle for the TONINI-COSSALI ANALYTICAL e2e case.
 
 Companion to lk-neq/check.py. Verifies the production particle DIAMETER output (col 8)
 against the TC2012 variable-density Stefan-Fuchs rate written from the LITERATURE
 (Tonini & Cossali, IJTS 57:45, 2012; Antonov et al., IJMF 179:104922, 2024, eq.9;
-derivation in plan-bucket/f2-tc-derivation.md), not read from the code:
+the form in docs/theory/evaporation.md), not read from the code:
 
   Xs   = psat_CC(Tp)/p                          (Clausius-Clapeyron, mole fraction)
   rhs0 = (Mv/Minf)*ln[(1-Xinf)/(1-Xs)]          (molar Stefan driver; Yinf=0 => Xinf=0)
@@ -261,7 +261,7 @@ def main():
             if r[0] > rows[-1][0]:
                 rows.append(r)
             else:
-                n_artifact += 1          # B4 corner-exit phantom row (see d2law/check.py)
+                n_artifact += 1          # a row repeating an x (see d2law/check.py)
         xa, _, _, _, _, _, Ta, da, ma = rows[0]
 
         if xa < INLET_X:
@@ -363,7 +363,7 @@ def main():
     print(f"\ninjection placement: inlet(x<{INLET_X})={n_inlet}  mid-domain={n_mid}  "
           f"dead(1-row)={n_dead}  of {len(parts)} total")
     if n_artifact:
-        print(f"[NOTE] dropped {n_artifact} non-monotone-x phantom row(s) (B4 artifact)")
+        print(f"[NOTE] dropped {n_artifact} row(s) repeating an x (not evaporation physics)")
     print(f"max relative d^2 loss over a particle: {worst_loss*100:.2f}%  "
           f"(need >= {LOSS_MIN_REL*100:.0f}% to count; {n_noevap} below)")
     print(f"worst point: {worst[1]}  (resid/tol = {worst[0]:.3f})")
@@ -385,7 +385,7 @@ def main():
         print(f"\n[FAIL] only {verified} verifiable evaporators (< {N_GOOD}).")
     if n_signal < N_GOOD:
         print(f"\n[FAIL] TC signal indistinguishable from CEM on {N_GOOD - n_signal} "
-              f"needed particle(s) -- case is vacuous for F2, retune the regime.")
+              f"needed particle(s) -- case is vacuous for TC, retune the regime.")
     return 1
 
 

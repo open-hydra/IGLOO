@@ -8,7 +8,7 @@ defensively (no-op if absent).
 IGLOO runs CEM+LK = the uniform-temperature Langmuir-Knudsen model = MHB98's M7 (M8 is the
 finite-conductivity variant; the two are superimposed in Fig. 2, so only M7 was digitized).
 Two panels vs the NORMALIZED D^2-law lifetime t/t_life, t_life = D0^2/K (K = LSQ slope,
-extrapolated to D^2->0; NOT the last sample -- the water drop exits the box at d^2/d0^2~0.14):
+extrapolated to D^2->0; NOT the last sample -- the water drop burns out before D^2 vanishes):
   (a) d^2/d0^2 : IGLOO, its LK kernel (check.py's oracle), the digitized M7 model line and the
       Ranz & Marshall circles (reference/mhb98_fig2_exp_d2.csv, re-digitized from the figure).
       Normalized (each by its own D0^2 and lifetime) because the paper's caption D0=1.1 mm
@@ -99,7 +99,7 @@ def main():
     beta_ex = check.BETA_COEF * lsq_slope(tex, yex) * 1e-6 if tex else float("nan")
 
     # Normalized D^2-law lifetime: t_life = D0^2 / K (extrapolate D^2->0), NOT the last
-    # sample -- the water drop EXITS the box at d^2/d0^2~0.14, so t[-1] is not the lifetime.
+    # sample -- the water drop burns out before D^2 vanishes, so t[-1] is not the lifetime.
     d0sq_ig = d2_ig[0]; life_ig = d0sq_ig / K_ig
     d0sq_m7 = ym7[0];   life_m7 = d0sq_m7 / K_m7 if tm7 else 1.0
     tn_ig = [tt / life_ig for tt in t]

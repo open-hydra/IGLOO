@@ -1,20 +1,19 @@
 program test_evaporation
     !
-    ! C-family unit checks on IGLOO_Lib_Evaporation::evaporation called DIRECTLY
-    ! with CORRECTLY-ORDERED gas arguments (rhog,Tg,gamma,Rg,mug,kg) — the
-    ! function-level physics. The production CALL SITES pass these scrambled
-    ! (bug A4) and d2law is factor-2 low (A3): both live in
-    ! test_evap_probes (ctest WILL_FAIL), NOT here.
+    ! Unit checks on IGLOO_Lib_Evaporation::evaporation called DIRECTLY
+    ! with the gas arguments in their documented order (rhog,Tg,gamma,Rg,mug,kg) —
+    ! the function-level physics. The production call site and the d2law rate
+    ! are pinned in test_evap_probes (XE2, XE1), NOT here.
     !
     !   EV1  CEM at Re=0: full independent chain psat_CC -> Xs -> Ys -> BM,
     !        Sh=2, mdot = -2 pi d (kg/cpg) ln(1+BM)/Le
     !   EV2  CEM convective ratio: mdot(Re)/mdot(0) = (2+0.6 sqrt(Re) Sc^(1/3))/2
     !   EV3  CEM-B at Re=0: 1/3-rule film chain (Tf, rho_f, k_f, Dv_f), Sh=2
     !   EV4  CEM in the BOILING clamp (Tp=420 K > 404 K): mdot finite and equal to the
-    !        closed form at Xs = 1-xsCap.  Pre-clamp the model returned -Inf.
-    !   EV5  CEM-B boiling: EV4 x the 1/3-rule film factor (Tf/Tg)^0.7.  Pre-clamp -Inf.
-    !   EV6  ASM boiling: identical to CEM at Re=0 (Sh*=2), qd finite.  Pre-clamp NaN.
-    !   EV7  CEM+LK boiling: finite and negative.  Pre-clamp exactly 0 (Picard fallback).
+    !        closed form at Xs = 1-xsCap.
+    !   EV5  CEM-B boiling: EV4 x the 1/3-rule film factor (Tf/Tg)^0.7.
+    !   EV6  ASM boiling: identical to CEM at Re=0 (Sh*=2), qd finite.
+    !   EV7  CEM+LK boiling: finite and negative.
     !   EV8  psatExt = the Clausius-Clapeyron value re-typed: mdot, Qdot, override as without it
     !        (CEM and TC) -- the table branch adds nothing but the pressure it is given.
     !   EV9  psatExt = 1.2 x Clausius-Clapeyron: mdot follows the CEM chain at the raised Xs.
@@ -43,7 +42,7 @@ program test_evaporation
     ! fuel properties (water-like)
     real(R8), parameter :: Mv = 18._R8, Lv = 2.26e6_R8, cpv = 1900._R8
     real(R8), parameter :: Le = 1._R8, Yinf = 0._R8, Tboil = 373.15_R8
-    !> ep(8:10) = Phase-0 placeholders (alphaE, kLiq, muLiq) — unused by models 1-4
+    !> ep(8:10) = optional properties (alphaE, kLiq, muLiq) — unused by models 1-4
     real(R8), parameter :: ep(nep) = [Mv, Lv, cpv, Le, Yinf, &
                                       Lv*Mv/Ru, 1._R8/Tboil, 1._R8, 0._R8, 0._R8]
     integer, parameter :: CEM = 2, CEMB = 3, ASM = 4, TC = 5
@@ -166,7 +165,7 @@ contains
     end subroutine run_EV3
 
     !> EV4: the boiling clamp must stay finite. psat >= p forces Xs to the cap, so
-    !> BM = Ys/(1-Ys) is large but finite; uncapped it was +Inf and CEM returned -Inf.
+    !> BM = Ys/(1-Ys) is large but finite; uncapped it is +Inf and CEM returns -Inf.
     subroutine run_EV4(ok)
         logical, intent(inout) :: ok
         real(R8) :: mdot, qd, cpg, p, BM, mref, err, tol
@@ -215,7 +214,7 @@ contains
 
     !> EV6: ASM at Re=0 reduces to CEM exactly -- Sh* = 2 + 0/F_M = 2, same Dv, same
     !> ln(1+BM), same operation order -- so the two rates must agree BIT for bit.
-    !> Uncapped, ASM's F_correction(Inf) = Inf*Inf/Inf made mdot NaN.
+    !> Uncapped, ASM's F_correction(Inf) = Inf*Inf/Inf makes mdot NaN.
     subroutine run_EV6(ok)
         logical, intent(inout) :: ok
         real(R8) :: m_asm, m_cem, qd_asm, qd_cem, err, tol
@@ -241,9 +240,8 @@ contains
         call append_row('EV6_asm_boiling', 'mdot', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_EV6
 
-    !> EV7: with the Langmuir-Knudsen interface the uncapped -Inf poisoned the Picard
-    !> iteration and it fell back to exactly 0 -- "no evaporation at boiling". Capped,
-    !> the iteration starts from a finite rate. The converged value is reported, not pinned.
+    !> EV7: the Langmuir-Knudsen interface at boiling: capped, the Picard iteration
+    !> starts from a finite rate. The converged value is reported, not pinned.
     subroutine run_EV7(ok)
         logical, intent(inout) :: ok
         real(R8) :: mdot, qd, err, tol

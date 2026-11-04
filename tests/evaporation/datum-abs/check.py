@@ -2,11 +2,10 @@
 """Gate for the enthalpy datum of the properties table (hOff) in the gas source term.
 
 The coupling source E = mdot*(h + v^2/2) values the evaporated mass at the enthalpy of the
-material's table. For a constant-cp material IGLOO integrates T, so the table's LEVEL never
-entered E: h was cp*T whatever the table said, and a formation-inclusive (Enthalpy_abs) table
-written by ATLAS GPB was silently ignored -- the gas received the vapour at the wrong datum by
-~1.7e7 J/kg (water). read_cdp_properties now takes hOff = h(Tmin) - cp*Tmin from the column and
-computeSource credits cp*T + hOff.
+material's table. For a constant-cp material IGLOO integrates T, so the table's LEVEL reaches E
+through its datum: read_cdp_properties takes hOff = h(Tmin) - cp*Tmin from the column and
+computeSource credits cp*T + hOff, so a formation-inclusive (Enthalpy_abs) table written by
+ATLAS GPB moves the vapour's energy by hOff (~1.7e7 J/kg for water).
 
 Fixture: tc-box (25 TC-evaporating parcels, out-file = S) with its table shifted to an absolute
 datum (H_OFF = -1.7113460e7 J/kg, make_table.py) and tagged Enthalpy_abs. This gate runs the

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Overlay IGLOO vs the Godsave-Spalding analytic d^2 line (E-VAL-1, MOSE-style).
+"""Overlay IGLOO vs the Godsave-Spalding analytic d^2 line (MOSE-style).
 
 check.py is the GATE (input-only closed-form line, theory budget); this only DRAWS
 and writes OUTPUT/d2law-line.svg. matplotlib imported defensively (no-op if absent).

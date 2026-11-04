@@ -1,19 +1,18 @@
 program test_evap_probes
     !
-    ! Bug-transcription pins for A3/A4/A9. Written as xfail probes
-    ! (exit 1 while a bug is live), but all three are FIXED, so this exits 0 and
-    ! ctest runs it as an ORDINARY gate: no WILL_FAIL property is set, and a
-    ! regression turns it red the normal way. Folding these into the parent
-    ! evaporation family is still pending — they already gate as they stand.
+    ! Pins of three evaporation contracts, an ordinary gate: exit 1 when a pin
+    ! fails (ctest sets no WILL_FAIL).
     !
-    !   XE1  d2law factor-2 (A3): direct call w/ CORRECT arg order; literature
-    !        rate is -2 pi d (kg/cpg) ln(1+BT) [Godsave/Spalding, Nu=2 film];
-    !        code gives exactly HALF
-    !   XE2  call-site scramble (A4): ONE production rhsEvaporation evaluation
-    !        (the real Lib_RHS.f90:509 call site, gas packed per the production
+    !   XE1  d2law: direct call; the rate must equal the literature rate
+    !        -2 pi d (kg/cpg) ln(1+BT) [Godsave/Spalding, Nu=2 film] to 1e-6
+    !        relative (a halved rate fails)
+    !   XE2  production call site: ONE rhsEvaporation evaluation (the evaporation
+    !        call in Lib_RHS.f90's rhsEvaporation, gas packed per the production
     !        contract gas(6)=mu, gas(7)=gamma, gas(8)=R) -> F(8)=mdot must be
-    !        negative for a cold droplet in hot gas; today it is identically 0
-    !        (scramble makes cpg<0 -> BT<0 -> guard exits)
+    !        negative for a cold droplet in hot gas (a scrambled pack gives
+    !        cpg<=0, and evaporation stops on its cpg guard)
+    !   XE3  ASM: the model returns its own gas-side heat (override), Q_G > 0,
+    !        mdot < 0
     !
     use, intrinsic :: iso_fortran_env, only: I4 => int32, R8 => real64
     use IGLOO_Lib_Evaporation, only: evaporation, nep
@@ -36,44 +35,44 @@ program test_evap_probes
 
     nbad = 0
 
-    ! --- XE1: d2law halved --------------------------------------------------
+    ! --- XE1: d2law rate vs literature --------------------------------------
     call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tp, dp0, 0._R8, 1._R8, 1, 0, ep, mdot, qd, ovr)
     cpg  = gam*Rg/(gam-1._R8)
     BT   = cpg*(Tg-Tp)/Lv
     mref = -2._R8*PI*dp0*(kg/cpg)*log(1._R8+BT)
     if (abs(mdot/mref - 1._R8) < 1.0e-6_R8) then
-        write(*,'(a,es12.4)') '  [XE1 FIXED] d2law/literature ratio = 1, mdot =', mdot
+        write(*,'(a,es12.4)') '  [XE1 PASS] d2law/literature ratio = 1, mdot =', mdot
     else
         nbad = nbad + 1
-        write(*,'(a,f8.5)') '  [XE1 STILL-BROKEN] d2law/literature ratio =', mdot/mref
+        write(*,'(a,f8.5)') '  [XE1 FAIL] d2law/literature ratio =', mdot/mref
     end if
 
     ! --- XE2: production call site ------------------------------------------
     call rhs_evap_once(F8)
     if (F8 < 0._R8) then
-        write(*,'(a,es12.4)') '  [XE2 FIXED] rhsEvaporation F(8) =', F8
+        write(*,'(a,es12.4)') '  [XE2 PASS] rhsEvaporation F(8) =', F8
     else
         nbad = nbad + 1
-        write(*,'(a,es12.4)') '  [XE2 STILL-BROKEN] rhsEvaporation F(8) =', F8
+        write(*,'(a,es12.4)') '  [XE2 FAIL] rhsEvaporation F(8) =', F8
     end if
 
     ! --- XE3: ASM Q_G sign (A-S 1989 eq. 24) ---------------------------------
     ! Gas-side heat entering an evaporating droplet in hot gas must be POSITIVE
-    ! (the F(7) assembly adds the latent sink itself); the pre-fix code returned
-    ! mdot*(Lv + cpv*dT/BT) < 0 (Lv double-count + sign flip).
+    ! (the F(7) assembly adds the latent sink itself); a model returning
+    ! mdot*(Lv + cpv*dT/BT) < 0 (Lv counted twice, sign flipped) fails it.
     call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tp, dp0, 0._R8, 1._R8, 4, 0, ep, mdot, qd, ovr)
     if (ovr .and. qd > 0._R8 .and. mdot < 0._R8) then
-        write(*,'(a,es12.4)') '  [XE3 FIXED] ASM Q_G =', qd
+        write(*,'(a,es12.4)') '  [XE3 PASS] ASM Q_G =', qd
     else
         nbad = nbad + 1
-        write(*,'(a,es12.4,a,l2)') '  [XE3 STILL-BROKEN] ASM Q_G =', qd, ' override=', ovr
+        write(*,'(a,es12.4,a,l2)') '  [XE3 FAIL] ASM Q_G =', qd, ' override=', ovr
     end if
 
     if (nbad > 0) then
-        write(*,'(a,i0,a)') 'test_evap_probes: ', nbad, ' known bug(s) still present (expected)'
+        write(*,'(a,i0,a)') 'test_evap_probes: ', nbad, ' pin(s) failed'
         stop 1
     else
-        write(*,'(a)') 'test_evap_probes: all known bugs FIXED — promote probes to the gate'
+        write(*,'(a)') 'test_evap_probes: OVERALL PASS'
         stop 0
     end if
 

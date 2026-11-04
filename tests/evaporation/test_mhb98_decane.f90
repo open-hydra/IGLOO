@@ -1,6 +1,6 @@
 program test_mhb98_decane
     !
-    ! E-VAL-2b — MHB98 Fig. 4 (decane, T_G=1000 K, T_d,0=315 K, D0=2.0 mm, Re_d,0=17;
+    ! MHB98 Fig. 4 (decane, T_G=1000 K, T_d,0=315 K, D0=2.0 mm, Re_d,0=17;
     ! experiment Wong & Lin 1992).  THE case where MHB98's eight models actually separate:
     ! Fig. 4(b) spans ~200 K across models, against 0.47 K in Fig. 2(b) (see
     ! evaporation/mhb98-water/INFO.md).  What separates them here is the evaporative
@@ -10,8 +10,8 @@ program test_mhb98_decane
     ! convective heat is cut by 60%.
     !
     ! A UNIT test, not an e2e box case, because MHB98's Fig. 4 droplet is at FIXED SLIP
-    ! (suspended-drop experiment; Re decays only through D).  Establishing that was the
-    ! design step: a free-flying drop (their eq. 2 with the eq. 5 f1) gives beta 1.31-1.44
+    ! (suspended-drop experiment; Re decays only through D): a free-flying drop (their
+    ! eq. 2 with the eq. 5 f1) gives beta 1.31-1.44
     ! and D^2 systematically too high for EVERY Sc, whereas fixed slip gives 1.50-1.59
     ! against their stated ~1.6.  tau_eff/lifetime = 2.84/5.84 s, so free flight would let
     ! Nu fall 4.0 -> 2.0 over the drop's life.  Emulating fixed slip in the box solver would
@@ -25,7 +25,7 @@ program test_mhb98_decane
     !   DC3  paper leg  : the re-coded M7 trajectory, integrated with MHB98's OWN
     !                     Sh/Nu coefficient 0.552 (their eq. 6), vs three quantities
     !                     measured off Fig. 4 by pixel calibration -- beta, T_d(3.5 s),
-    !                     D^2(4.0 s).  This is the E-VAL-2b reproduction point.
+    !                     D^2(4.0 s).  This is the Fig. 4 reproduction point.
     !
     ! COEFFICIENT SPLIT (deliberate, documented): IGLOO's Ranz-Marshall is
     ! Nu = 2 + 0.600 sqrt(Re) Pr^(1/3) (Lib_Heat.f90) and its CEM Sh likewise carries 0.600
@@ -97,7 +97,7 @@ program test_mhb98_decane
     ok_all = .true.
     call init_report('verif_mhb98_decane.csv')
 
-    write(*,'(a)')        'test_mhb98_decane: MHB98 Fig.4 decane (E-VAL-2b), fixed slip'
+    write(*,'(a)')        'test_mhb98_decane: MHB98 Fig.4 decane, fixed slip'
     write(*,'(a,f8.2,a)') '  T_R (their eq.27)      = ', T_R, ' K'
     write(*,'(a,f8.4,a)') '  Pr = Sc (Le=1)         = ', Pr, ''
     write(*,'(a,es12.5,a)') '  fixed slip u_s0        = ', us0, ' m/s (Re_d,0 = 17)'

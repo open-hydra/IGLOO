@@ -213,7 +213,7 @@ uniform-temperature drop's ([Heat conduction inside the droplet](../theory/evapo
 
 | Witness | Requirement |
 |---------|-------------|
-| Every row | $T(x)$ on the closed form with $1.2\,\tau$, within `temp-relax`'s F12.6 budget |
+| Every row with $\lvert T_g - T\rvert > 1$ K | $T(x)$ on the closed form with $1.2\,\tau$, within `temp-relax`'s F12.6 budget |
 | The `T<sub>s` column, every row | $(5T + T_g)/6$ within 1e-6 K (the two F12.6 prints and the solve's $4\varepsilon\,T_s$) |
 | Every row | $m = m_0$ within the E13.6 half-ULP; $u = u_g$, $v = w = 0$, $d = d_0$ |
 

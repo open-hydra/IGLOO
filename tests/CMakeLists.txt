@@ -669,8 +669,8 @@ igloo_e2e_case(mhb98-water-psat evaporation/mhb98-water-psat "e2e;evaporation;mh
 # and the shifts of K and T_wb against a no-blowing sibling (ref-noblow/) and a coupled droplet kernel.
 igloo_e2e_case(mhb98-water-blowing evaporation/mhb98-water-blowing "e2e;evaporation;mhb98")
 # tc-hexadecane: Tonini-Cossali n-hexadecane, TC2012 Fig.11 — a VARIABLE-density case (thermal swelling) on the
-# T-dependent-property path end to end. RED on variable-property tabs left unallocated (a segfault) and on a
-# lookupTab with no bounds guard (an out-of-bounds read). Gate = TC mass rate + swelling; digitized curves non-gating.
+# T-dependent-property path end to end. RED on the density table left unallocated (a segfault).
+# Gate = TC mass rate + swelling; digitized curves non-gating.
 igloo_e2e_case(tc-hexadecane evaporation/tc-hexadecane "e2e;evaporation;val;tc")
 # tc-box-euler: the equivalent-Eulerian field of a MASS-LOSING material (ODE model 2). tc-box's case
 # with out-file = ALL and mollify = off: the model-2/5/8 branch of computeEulField (burn-box-euler gates
