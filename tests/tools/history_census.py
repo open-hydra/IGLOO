@@ -146,6 +146,8 @@ ALLOW = [
     ("output checks O1-O2", {"ledger"}, r"O[12]",
      ("tests/standard/out-off/INFO.md", "tests/standard/vie-plait-dense/INFO.md"), ("out-off", "vie-plait-dense"),
      None, "tests/standard/out-off/check.py, tests/standard/vie-plait-dense/check.py"),
+    ("erosion-law checks O1-O4", {"ledger"}, r"O[1-4]", ("tests/erosion/laws/INFO.md",), ("test_erosion_laws",),
+     None, "tests/erosion/laws/test_erosion_laws.f90"),
     ("kept check-id families", set(),
      r"\b(?:XD[1-5]|XE[1-3]|XH1|PE[1-4]|LK[1-6]|TC[1-7]|CB[1-4]|E[1-9]|IP[1-5]|DC[1-3]|ET[1-4][a-d]?|KH[1-3]|"
      r"PR\d{1,2}|SG\d{1,2})\b", ALL, ALL, None, "kept: check ids inside a family"),
