@@ -1,4 +1,4 @@
-# INFO — breakup_tab (family D, test D1)
+# INFO — breakup_tab
 
 Verifies the TAB (Taylor Analogy Breakup) model. **Not SDIRK-integrated** —
 `y(t)` is advanced by closed-form damped-oscillator update `YupdateTAB`

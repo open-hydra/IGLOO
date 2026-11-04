@@ -119,11 +119,11 @@ target_link_libraries(test_verif_self PRIVATE verif_support)
 set_target_properties(test_verif_self PROPERTIES LINKER_LANGUAGE Fortran)
 add_test(NAME self_test COMMAND test_verif_self)
 set_tests_properties(self_test PROPERTIES
-    LABELS "unit;infrastructure;self;t0"
+    LABELS "unit;infrastructure;self"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
-igloo_unit_test(test_gas_reconstruction infrastructure/gas_reconstruction "unit;infrastructure;interp;e;t1")
-igloo_unit_test(test_ini_pipeline       infrastructure/ini_pipeline       "unit;infrastructure;ini;t9")
+igloo_unit_test(test_gas_reconstruction infrastructure/gas_reconstruction "unit;infrastructure;interp")
+igloo_unit_test(test_ini_pipeline       infrastructure/ini_pipeline       "unit;infrastructure;ini")
 # The properties.dat reader (read_cdp_properties) on its own fixtures, one working directory per leg set
 # (the reader loads input.ini from the working directory): hexadecane -- a table from 280 K against the
 # same rows from 1 K, the Psat column looked up by name in any order, both enthalpy datums; two-material -- a
@@ -146,35 +146,35 @@ foreach(_set hexadecane two-material atlas-water sigma-mu)
     endif()
     add_test(NAME ${_name} COMMAND test_properties_reader ${_set})
     set_tests_properties(${_name} PROPERTIES
-        LABELS "unit;infrastructure;io;t9"
+        LABELS "unit;infrastructure;io"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/infrastructure/properties_reader/${_set}")
 endforeach()
-igloo_unit_test(test_rng_stream         infrastructure/rng_stream         "unit;infrastructure;rng;t1")
+igloo_unit_test(test_rng_stream         infrastructure/rng_stream         "unit;infrastructure;rng")
 # Injection size distributions through the production sampleDiameter: the knots of a size-distribution
 # file (radius, mass fraction; histogram reading), one load per token, the INPUT/ fallback, a one-row
 # Dirac that draws nothing, and Kolmogorov-Smirnov + Anderson-Darling of 1e5 draws against the
 # prescribed CDFs (table, truncated Normal, LogNormal, Rosin-Rammler) at alpha = 1e-3.
-igloo_unit_test(test_psd_table          infrastructure/psd_table          "unit;infrastructure;injection;t1")
+igloo_unit_test(test_psd_table          infrastructure/psd_table          "unit;infrastructure;injection")
 # The packed property slots: every per-material property packAuxVars writes is read back under its own
 # name through the readers' indices (IGLOO_Lib_Evaporation iMv..imuLiq, IGLOO_Lib_Combustion imKb..imCs)
 # for models 2, 4, 5 and 6. RED with two slots of either block exchanged in packAuxVars.
-igloo_unit_test(test_slot_order         infrastructure/slot_order         "unit;infrastructure;rhs;t1")
+igloo_unit_test(test_slot_order         infrastructure/slot_order         "unit;infrastructure;rhs")
 # The material-line tokens of the phase file (six model words, the breakup word, fourteen reals, twenty-three
 # breakup constants) through apply_material_key, set_material_defaults, finalize_material_models and
 # apply_breakup_tokens on a material built in the test: each real token sets its own field and no other, each
 # model word every allowed selector value, each breakup constant its own model's slot and nothing on the four
 # others, the defaults, T-nuc = 0.8 T-melt, combustion over evaporation, TAB's product-size scale.
-igloo_unit_test(test_material_tokens    infrastructure/material_tokens    "unit;infrastructure;ini;t1")
+igloo_unit_test(test_material_tokens    infrastructure/material_tokens    "unit;infrastructure;ini")
 # bcdef-200 dispatch must key off face GEOMETRY, not face index: the wedge is not pinned to faces 5/6 by anything.
 # Covers all six indices for wedges built on i, j and k, and pins the dispatch's agreement with the face-index rule
 # (`f==6` -> -delthe, `f==5` -> +delthe) on the conventional k-ordering. No e2e case reaches bcDef's fold branch
 # (axisymFold re-sectors first), so this unit test is its only coverage.
-igloo_unit_test(test_axis_dispatch      infrastructure/axis_dispatch      "unit;infrastructure;bc;t1")
+igloo_unit_test(test_axis_dispatch      infrastructure/axis_dispatch      "unit;infrastructure;bc")
 # the grazing standoff is an absolute length that must stay "<< cell size". The axis
 # face reflects, and the axis is where meshes go radially thin, so grazeOffset caps
 # it at a fraction of the cell. Pins the invariant across 12 decades of cell
 # thickness.
-igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;infrastructure;bc;t1")
+igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;infrastructure;bc")
 # The boundary search's face: a ray along a triangle edge, in its plane or off it, is no hit (RT1; RED with the ratio
 # form of the parallel test, 0/0: NaN and +Inf hits); intersectPolyhedron returns the exit face at its distance for
 # every face hint from points on a face, an edge and a corner of a box (RT2; RED: a face the ray runs along at NaN).
@@ -183,7 +183,7 @@ igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;
 # triangle distance: the side face), controls and the fallback (BF3, BF4), 2e4 points on each of six cells (BF5);
 # points inside every triangle plane get the face of the nearest plane, a NaN point 0 (BF6, BF6b; RED with that
 # fallback taken out: BF6 on every kept point; with its initial face 1: BF6b).
-igloo_unit_test(test_geometry_rules     infrastructure/geometry_rules     "unit;infrastructure;geometry;t1")
+igloo_unit_test(test_geometry_rules     infrastructure/geometry_rules     "unit;infrastructure;geometry")
 # the ord2 gas ghost ring: a ring filled only by blind linear extrapolation on every face gives a
 # sampled normal velocity of (3v1 - v2)/2 instead of 0 at a gas-solid plane and drags a parcel in
 # the boundary dual row through it. The ring is filled at every solve, the linear fill first, then
@@ -192,19 +192,19 @@ igloo_unit_test(test_geometry_rules     infrastructure/geometry_rules     "unit;
 # connected block's gas: exact on a linear field across unequal and warped cells, the snap to a
 # partner centre bit for bit, order-free between blocks, within q h^2/4 on a quadratic 102 field;
 # and a face whose ring a parent provided (setGhostFace), kept through the fill.
-igloo_unit_test(test_ghost_bc           infrastructure/ghost_bc           "unit;infrastructure;bc;gas;t1")
+igloo_unit_test(test_ghost_bc           infrastructure/ghost_bc           "unit;infrastructure;bc;gas")
 # a bc.txt with one copy of every block's table per family (what ATLAS writes for a phase with several
 # populations, block-outermost): copy c is family c. A reader that feeds copy 1 to every family fails
 # F2-F5 (per-family krho/rp/gp/ds, one and two blocks) while the one-copy control F1 passes either way.
 # F8: the mollifier's link table joins a 201 pair (0 links on a table of 101 records only).
-igloo_unit_test(test_bc_families        infrastructure/bc_families        "unit;infrastructure;bc;io;t1")
+igloo_unit_test(test_bc_families        infrastructure/bc_families        "unit;infrastructure;bc;io")
 # the ord2 dual must TILE the domain: its boundary cells straddle the boundary face, so an
 # unclipped one dilutes its deposited density by the outside fraction. Pins sum(dual cellVol)
 # == domain volume plus the per-cell 1/2, 1/4, 1/8 factors. NO e2e case GATES the 3D branch: the
 # 3D gas-order-2 cases that write the Eulerian field hold it to a run that clips alike (the box as
 # one block, or on one rank) or do not read it, and vie-plait runs it at gas-order 2 with nothing
 # reading the field -- so this is its only coverage; the 2D cases in it are the regression half.
-igloo_unit_test(test_dual_clip          infrastructure/dual_clip          "unit;infrastructure;euler;t1")
+igloo_unit_test(test_dual_clip          infrastructure/dual_clip          "unit;infrastructure;euler")
 # the ord2 source reduction must CONSERVE: one that volume-AVERAGES extensive rates makes every
 # boundary dual row leak most of its deposit (1/2 on a face row, 1/4 edge, 1/8 corner on a uniform
 # Cartesian mesh; the octant inequality elsewhere). Asserts
@@ -212,7 +212,7 @@ igloo_unit_test(test_dual_clip          infrastructure/dual_clip          "unit;
 # and on a CURVILINEAR mesh -- the last is what separates "conserves on a nice mesh" from
 # "conserves by construction". Also pins the partition-of-unity invariant sum(dualW) ==
 # sum(subVol). RED on a volume-averaging reduction: 0.4000 / 0.2963 / 0.6000 / 0.4444 and 1, 1/2, 1/4, 1/8.
-igloo_unit_test(test_source_reduction  infrastructure/source_reduction   "unit;infrastructure;euler;t1")
+igloo_unit_test(test_source_reduction  infrastructure/source_reduction   "unit;infrastructure;euler")
 # The field mollifier over blocks joined by 101 links (mollifyBlocks): a random grid cut into blocks
 # smooths as the uncut grid (3D and 2D cuts, three blocks, 2 x 2 blocks, above the OpenMP threshold),
 # Sum(q V) holds over the blocks, and without an aligned link each block is smoothed on its own; U1d a
@@ -220,12 +220,12 @@ igloo_unit_test(test_source_reduction  infrastructure/source_reduction   "unit;i
 # chimera face is not covered by it; U-M (i) the chimera overlap mirror, (ii) two blocks overlapping across
 # chimera (102) links smooth as the grid, (iii) each block's total changes by exactly what its chimera cells
 # took from the donor halo.
-igloo_unit_test(test_mollify_blocks    infrastructure/mollify_blocks     "unit;infrastructure;mollify;t1")
-igloo_unit_test(test_host_assoc        infrastructure/host_assoc         "unit;infrastructure;build;t1")
+igloo_unit_test(test_mollify_blocks    infrastructure/mollify_blocks     "unit;infrastructure;mollify")
+igloo_unit_test(test_host_assoc        infrastructure/host_assoc         "unit;infrastructure;build")
 # The 12-plane point-in-hexahedron test and its tolerance relative to the cell: on a face shared by two cells
 # 100 m from the origin every point lies in at least one of them (C1; RED at the absolute 1e-15 m: up to 60 % of
 # the face in neither cell), and the two copies of the test decide alike (C2).
-igloo_unit_test(test_containment       infrastructure/containment        "unit;infrastructure;geometry;t1")
+igloo_unit_test(test_containment       infrastructure/containment        "unit;infrastructure;geometry")
 # The gas file's one-pass reader against ORION's reader in the same executable (infrastructure/tec_read): every tracked
 # .tec input (the list written here, without the directories runs and checks write .tec outputs into) and a synthetic
 # set the test writes, every value bit for bit, at four buffer sizes.
@@ -434,7 +434,7 @@ add_test(NAME registry-docs COMMAND ${CMAKE_COMMAND}
     -DGENERATED=${CMAKE_CURRENT_BINARY_DIR}/registry_generated.md
     -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_registry.cmake)
 set_tests_properties(registry-docs PROPERTIES
-    LABELS "unit;infrastructure;docs;t9"
+    LABELS "unit;infrastructure;docs"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # exe-per-tree: every test runs this tree's executables (<source>/bin/ holds a published copy another tree's
 # build can replace mid-run); helper registrations carry IGLOO_EXE; no test script builds the shared path.
@@ -452,17 +452,17 @@ set_tests_properties(lint-test-inputs PROPERTIES
 # psd-plane-tool: scripts/psd_plane.py on a synthetic planes file whose flows, mean diameters and quantiles are
 # known in closed form (forward and net crossings, a disc and an annulus, a second plane it must not read).
 add_test(NAME psd-plane-tool COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_psd_plane.py)
-set_tests_properties(psd-plane-tool PROPERTIES LABELS "unit;infrastructure;output;t9")
+set_tests_properties(psd-plane-tool PROPERTIES LABELS "unit;infrastructure;output")
 # db-injection: DB ("assigned position") injection; RED on a DB pinning that writes unallocated stateVar(4:6): SIGSEGV
 igloo_e2e_case(db-injection infrastructure/db-injection "e2e;infrastructure;injection")
 configure_file(infrastructure/ini_pipeline/input.ini ${CMAKE_CURRENT_BINARY_DIR}/input.ini COPYONLY)
 
 # ---------- standard (drag + heat, always-integrated physics) -----------------
-igloo_unit_test(test_drag        standard/drag        "unit;standard;drag;a;t2")
-igloo_unit_test(test_drag_lit    standard/drag        "unit;standard;drag;a;t5")
-igloo_unit_test(test_temperature standard/temperature "unit;standard;heat;b;t3")
-igloo_unit_test(test_heat_nu     standard/temperature "unit;standard;heat;b;t5")
-igloo_unit_test(test_radiation   standard/temperature "unit;standard;heat;radiation;t3")
+igloo_unit_test(test_drag        standard/drag        "unit;standard;drag")
+igloo_unit_test(test_drag_lit    standard/drag        "unit;standard;drag")
+igloo_unit_test(test_temperature standard/temperature "unit;standard;heat")
+igloo_unit_test(test_heat_nu     standard/temperature "unit;standard;heat")
+igloo_unit_test(test_radiation   standard/temperature "unit;standard;heat;radiation")
 
 igloo_e2e_case(drag-stokes standard/drag-stokes "e2e;standard;drag")
 # drag-morsi, drag-chang: drag-stokes's box with 100 um particles (Re 60 -> 22 across the box), drag = Morsi-Alexander
@@ -592,14 +592,14 @@ set_tests_properties(vortex-cloud-3way PROPERTIES
     TIMEOUT 3600)
 
 # ---------- evaporation --------------------------------------------------------
-igloo_unit_test(test_evaporation evaporation "unit;evaporation;c;t4")
+igloo_unit_test(test_evaporation evaporation "unit;evaporation")
 # test_mhb98_decane: MHB98 Fig.4 decane — the case where their 8 models separate (f2 = eq.19).
 # A unit test, not e2e: the paper's drop is at FIXED slip (see the file header).
 igloo_unit_test(test_mhb98_decane evaporation "unit;evaporation;val;mhb98;f2")
 # test_evap_probes: XE1 the d2-law rate (a halved rate fails), XE2 rhsEvaporation's F(8) < 0, XE3 the ASM Q_G sign.
-igloo_unit_test(test_evap_probes evaporation "unit;evaporation;c;t8")
+igloo_unit_test(test_evap_probes evaporation "unit;evaporation")
 # The Lv and Cpv columns at the droplet temperature: a table read at T_p acts as the scalar of that value.
-igloo_unit_test(test_vapour_tables evaporation "unit;evaporation;c;t8")
+igloo_unit_test(test_vapour_tables evaporation "unit;evaporation")
 # liquid-conduction = P2T (the parabolic temperature profile inside the drop): test_liquid_p2t calls the right-hand
 # sides of ODE models 2 and 4 against the closed form at Re = 0, the infinite-conductivity limit, chi(Pe_L), the
 # surface balance with the sensible carry of the evaporated mass, the breakup viscosity as the liquid viscosity and
@@ -633,14 +633,14 @@ igloo_e2e_case(d2law-line evaporation/d2law-line "e2e;evaporation;val;d2line")
 # history along the measured diameter, and the energy deposit at the table's enthalpy.
 igloo_e2e_case(d2law-varcp evaporation/d2law-varcp "e2e;evaporation;heat")
 # test_interface_lk, lk-neq: Langmuir-Knudsen non-equilibrium interface (Miller-Harstad-Bellan 1998)
-igloo_unit_test(test_interface_lk evaporation/interface-neq "unit;evaporation;lk;c;t9")
+igloo_unit_test(test_interface_lk evaporation/interface-neq "unit;evaporation;lk")
 igloo_e2e_case(lk-neq evaporation/lk-neq "e2e;evaporation")
 # cemb-box, asm-box: lk-neq's droplet at half the gas speed under CEM-B (the 1/3-rule film) and the
 # Abramzon-Sirignano model: d^2 (and, for ASM, T) against the models' rate laws along the measured state.
 igloo_e2e_case(cemb-box evaporation/cemb-box "e2e;evaporation")
 igloo_e2e_case(asm-box evaporation/asm-box "e2e;evaporation")
 # test_tc_analytic, tc-box: Tonini-Cossali analytical evaporation (TC2012 Stefan-Fuchs; Antonov 2024 eq.9)
-igloo_unit_test(test_tc_analytic evaporation/tc-analytic "unit;evaporation;tc;c;t5")
+igloo_unit_test(test_tc_analytic evaporation/tc-analytic "unit;evaporation;tc")
 igloo_e2e_case(tc-box evaporation/tc-box "e2e;evaporation")
 # datum-abs: tc-box with an ABSOLUTE (Enthalpy_abs) table -- the table datum hOff must reach the gas
 # energy source and nothing else (E_abs - E_rel == hOff*wdot; the gate runs the relative sibling
@@ -705,8 +705,8 @@ igloo_e2e_case(evap-breakup-box-varcp evaporation/evap-breakup-box-varcp "e2e;ev
 # d2law oracle must hold unchanged. RED while F(8) carries the number rate.
 igloo_e2e_case(d2law-brk-dormant evaporation/d2law-brk-dormant "e2e;evaporation;breakup;m4")
 
-# ---------- combustion (M1: Beckstead d^n burn law) -----------------------------
-igloo_unit_test(test_combustion combustion "unit;combustion;m1;t4")
+# ---------- combustion (the Beckstead d^n burn law) -----------------------------
+igloo_unit_test(test_combustion combustion "unit;combustion")
 igloo_e2e_case(burn-box combustion/burn-box "e2e;combustion")
 # burn-box-euler: burn-box with out-file = ALL and mollify = off -- the equivalent-Eulerian field of
 # ODE model 5 (a burning material), which no other fixture gates. Per cell rho_p/n_p against the mean
@@ -737,7 +737,7 @@ igloo_e2e_case(burn-box-ox0 combustion/burn-box-ox0 "e2e;combustion")
 igloo_e2e_case(beckstead-air combustion/beckstead-air "e2e;combustion;val")
 
 # ---------- solidification (ODE models 6 and 7: supercooling, recalescence, plateau, melting; breakup on the liquid) --------
-igloo_unit_test(test_solidification solidification "unit;solidification;t4")
+igloo_unit_test(test_solidification solidification "unit;solidification")
 # solid-box: supercooling, recalescence, plateau and solid cooling against the closed forms, and the
 # energy deposit (global telescoping + per-cell plateau heat) on the unsmoothed source field.
 igloo_e2e_case(solid-box solidification/solid-box "e2e;solidification")
@@ -778,23 +778,23 @@ igloo_e2e_case(solid-box-varrho solidification/solid-box-varrho "e2e;solidificat
 igloo_e2e_case(solid-brk-tab-rhos solidification/solid-brk-tab-rhos "e2e;solidification;breakup;tab")
 
 # ---------- breakup: KHRT ------------------------------------------------------
-igloo_unit_test(test_breakup_khrt breakup/reitz-khrt "unit;breakup;khrt;d;t7")
+igloo_unit_test(test_breakup_khrt breakup/reitz-khrt "unit;breakup;khrt")
 # test_khrt_interaction: KHRT is the only model live on BOTH paths at once, and each path carries its own verbatim
 # copy of the KH/RT blocks. Gates that ReitzKHRT (ODE) and ReitzKHRTevent (event) agree on the RT predicate and on
 # the tc/told accumulator, so the duplication cannot drift. Also pins that RT preempts an otherwise-firing KH shed,
 # the parcel mass conserved across the shed.
-igloo_unit_test(test_khrt_interaction breakup/reitz-khrt "unit;breakup;khrt;d;t7")
+igloo_unit_test(test_khrt_interaction breakup/reitz-khrt "unit;breakup;khrt")
 # test_kh_rayleigh_limit: the only KH reference that does NOT re-type the Reitz-87 fit — recovers
 # lambda_KH/omega_KH from breakupOde by two-point inversion in B0, then checks the
 # We_g->0, Z->0 corner against Rayleigh's 1878 dispersion relation solved in-test.
-igloo_unit_test(test_kh_rayleigh_limit breakup/reitz-khrt "unit;breakup;khrt;val;d;t7")
+igloo_unit_test(test_kh_rayleigh_limit breakup/reitz-khrt "unit;breakup;khrt;val")
 
 # ---------- breakup -------------------------------------------------------------
-igloo_unit_test(test_breakup_tab  breakup/tab           "unit;breakup;tab;d;t4")
-igloo_unit_test(test_tab_moments  breakup/tab           "unit;breakup;tab;d;t5")
-igloo_unit_test(test_breakup_rd   breakup/reitz-diwakar "unit;breakup;rd;d;t6")
-igloo_unit_test(test_breakup_etab breakup/etab          "unit;breakup;etab;d;t6")
-igloo_unit_test(test_breakup_pe   breakup/pilch-erdman  "unit;breakup;pe;d;t7")
+igloo_unit_test(test_breakup_tab  breakup/tab           "unit;breakup;tab")
+igloo_unit_test(test_tab_moments  breakup/tab           "unit;breakup;tab")
+igloo_unit_test(test_breakup_rd   breakup/reitz-diwakar "unit;breakup;rd")
+igloo_unit_test(test_breakup_etab breakup/etab          "unit;breakup;etab")
+igloo_unit_test(test_breakup_pe   breakup/pilch-erdman  "unit;breakup;pe")
 # pilch-erdman-e2e: VALIDATION vs PE87's own correlation T*(We) (Fig. 7), a 25-drop Weber sweep: the initial
 # breakup rate of the 22 drops with We >= 45 within 1 % (18-45: test_breakup_pe's), the d_stable plateau (We0 <= 60)
 # vs PE87's closed form within 12 %. RED: the 45 < We <= 351 branch +0.25 for -0.25; d_stable: bp zeroed at runtime.
@@ -1531,6 +1531,6 @@ endif()
 
 # test_heat_probes: XH1, a positive transcription pin: JAXA1 is source-faithful to Shimada2006 eq.45
 # (quoting NASA-SP-8039), Nu = 2.5 Re^0.15 + 0.04 Re with no +2 floor (Nu -> 0 as Re -> 0).
-igloo_unit_test(test_heat_probes standard/temperature "unit;standard;heat;a")
+igloo_unit_test(test_heat_probes standard/temperature "unit;standard;heat")
 # test_drag_probes: XD1/XD2 Crowe/Hermsen Cd finite, XD3/XD5 Putnam/Wen-Yu plateaus, XD4 Henderson continuous at Ma 1.75
-igloo_unit_test(test_drag_probes standard/drag "unit;standard;drag;a;t8")
+igloo_unit_test(test_drag_probes standard/drag "unit;standard;drag")

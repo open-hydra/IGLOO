@@ -1,4 +1,4 @@
-# INFO — breakup_pilch_erdman (family D, test D3)
+# INFO — breakup_pilch_erdman
 
 Verifies the Pilch–Erdman breakup model (selector 1). Reference data is
 the **`TBT(We)` piecewise table and regime boundaries reported in the source
@@ -21,7 +21,7 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
 - The `TBT(We)` rows, the velocity-polynomial coefficients (0.75, 3) and the Oh-override
   (4.5, 1.2, 1.64) match the [PE87] PDF (the re-verification against the primary PDFs at
   the head of [../LITERATURE_TESTS.md](../LITERATURE_TESTS.md)).
-- `npdot` reduced-to-`ḋ` derivation: same caveat as D2 — `τ = τ(d)` via
+- `npdot` reduced-to-`ḋ` derivation: same caveat as `reitz-diwakar`'s — `τ = τ(d)` via
   `TBT(We(d))` makes this nonlinear ⇒ a reference integrator, not a closed form, is
   the oracle of `d(t)`.
 - This test is the most direct evidence that production matches the published model.

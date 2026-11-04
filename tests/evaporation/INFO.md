@@ -1,4 +1,4 @@
-# INFO — evaporation (family C)
+# INFO — evaporation
 
 Verifies the evaporation mass ODE (and coupled heat) under the production
 closures: d²-law=1, CEM=2, CEM-B=3, ASM=4, TC=5. All property-freeze
