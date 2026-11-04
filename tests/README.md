@@ -17,10 +17,11 @@ USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # the rank-count gates, buil
 ./tests/test.sh clean            # wipe what the tests write in their directories + build/verif/
 ```
 
-**Requirements.** Python 3 (the suite runs on 3.6) with its standard library runs every check. scipy is required by
+**Requirements.** Python 3 (the suite runs on 3.6) with its standard library runs every other check. scipy is required by
 the three boiling checks (`boiling-zgr-flash`, `-hot`, `-switch`: their oracle integrates with `solve_ivp`), which
 fail without it. matplotlib with numpy draws the V&V figures (`verify.py`, `tools/plot_curves.py`) and runs
-`vv-order`, which is skipped without them.
+`vv-order`, which is skipped without them. git lists the files `history-census` reads: outside a git checkout that
+test is skipped.
 
 Opt-in via `-DBUILD_VERIFICATION=ON` (default OFF, so the production build is
 byte-for-byte untouched). `test.sh` configures a **separate `build/verif/`**
@@ -106,12 +107,12 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 326/326 in a serial build (271 e2e + 54 unit, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` among the latter, and the
+ctest 327/327 in a serial build (271 e2e + 55 unit, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs`, `psd-plane-tool` and `history-census` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 28 more `mpi-*` cases, 354 in all (the 28 `mpi-*` pass). The e2e entries are 165 solver cases, two further
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 28 more `mpi-*` cases, 355 in all (the 28 `mpi-*` pass). The e2e entries are 165 solver cases, two further
 oracles on `khrt-e2e`'s run, the five thread-count gates, the ordered-window gate, the fifteen two-sweep gates, the eighty-one setup refusals, `vv-order` (thirteen V&V
 figures independent of the record and zone order; skipped without matplotlib) and `check-order` (nine gate printouts independent of it); the unit entries are 45
-compiled unit tests, the property-table reader on four fixtures, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool`. Evaporation with
+compiled unit tests, the property-table reader on four fixtures, `self_test`, `registry-docs`, `exe-per-tree`, `lint-test-inputs`, `psd-plane-tool` and `history-census`. Evaporation with
 ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,
 `evap-breakup-box`, `d2law-brk-dormant`, `rd-evap-frozen`, `tab-evap-frozen`, `etab-evap-frozen`, `khrt-evap-frozen`,
 `khrt-evap-frozen-euler`, `khrt-evap-live`, `khrt-e2e-euler`, `khrt-shed-noexchange`,

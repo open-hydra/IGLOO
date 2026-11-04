@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (326 in a serial build: 271 e2e + 54 unit incl. `self_test`,
-`registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 28 `mpi-*`
-rows in their own section, 354).
+One row per registered CTest entry (327 in a serial build: 271 e2e + 55 unit incl. `self_test`,
+`registry-docs`, `exe-per-tree`, `lint-test-inputs`, `psd-plane-tool` and `history-census` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 28 `mpi-*`
+rows in their own section, 355).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -445,6 +445,7 @@ box/BC. Sub-test IDs in parentheses.
 | **exe-per-tree** | — (kind 8, contract meta-test) | *build-tree contract*: `tools/check_exe_per_tree.py` reads the generated `CTestTestfile.cmake` and fails if a registered test names `<source>/bin/IGLOO` or `bin/DocGen` (the copies another tree's build replaces), if a test of `igloo_e2e_case`, `igloo_e2e_case_mpi`, `igloo_refusal_case` or `igloo_threads_case` lacks `IGLOO_EXE` in its environment, if a `function(igloo_<name> ...)` of `tests/CMakeLists.txt` runs `$<TARGET_FILE:IGLOO>` without being one of those helpers, or if a test script builds the path `bin/IGLOO` outside the default of an `IGLOO_EXE` read. On the shared layout it fails on 137 registrations (136 naming `bin/IGLOO`, `registry-docs` naming `bin/DocGen`), 133 helper registrations and 8 scripts; with `igloo_threads_case` out of the helper list it fails on that helper, and a generated test file without `IGLOO_EXE` in the four `threads-*` entries fails on those 4 |
 | **lint-test-inputs** | — (kind 8, contract meta-test) | *input lint*: `tools/lint_inputs.py` reads every `*.ini` under `tests/` once (a symlink through its target) and fails on a value list whose tokens are separated by anything but one blank — FiNeR counts a list's values as its blanks plus one (`vp = -1.0   -3.3` gives four values, and a get into four reals leaves two unset without an error) — and on any byte above 127. It fails on a value line `vp = 1.0  2.0`, on a single tab between values and on a comment line holding an em dash |
 | **psd-plane-tool** | — (kind 8, the planes file's size tool) | *closed form*: `tests/tools/test_psd_plane.py` runs `scripts/psd_plane.py` on a synthetic planes file (on plane 1 at r = 1 mm five forward classes d = 1…5 µm at number rates 5…1 and a forward and a backward 3 µm record of rate 3, a forward 5 µm record at r = 4 mm; a 1 µm record of rate 100 on plane 2) and holds the record counts, the number flow, D10, D32, D43, `dn50`, `dv10`, `dv50`, `dv90` (Hazen positions) and `dm` = `dv` at one density to their closed forms, within r = 2.5 mm net and forward only, and beyond r = 3 mm (1e-9 relative; 34 checks). RED: the volume weight with d² (`dv50` 3.000000 against 4.027668 µm; 24 of 34), the disc on \|Y\| alone (the r = 4 mm record enters), every plane read (the number flow 115 against 15), a sort on (d, w) (`dn50`, `dv10`; 32 of 34) |
+| **history-census** | — (kind 8, contract meta-test) | *census*: `tools/history_census.py` reads the tracked test pages (every `INFO.md`, this matrix, the comment lines of `tests/CMakeLists.txt`) and the test sources, scripts and inputs (the comments, docstrings and strings of `.py`, the comments and strings of `.f90`, the comments and quoted strings of `.sh`, the comments of `.cmake` and `.ini`, every line of the other `.md`) and fails on a line that keeps a ledger id, a plan tag, a date, a commit hash or a chronology phrase past its allowlist; first it runs its 141 plants (`tools/history_census_plants.txt`: 116 texts each caught by its class, 25 caught by none) and fails on one it misses. It lists the files with git and is skipped (exit 77) outside a git checkout. RED: a ledger id planted in a checker's comment (exit 1, the line listed) |
 
 ## MPI build only (`USE_MPI=ON`, 28 entries)
 
@@ -485,16 +486,16 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-271 `e2e`-labelled + 54 `unit`-labelled + the optional `vortex-cloud-3way` = **326 CTest entries** in a
-serial build (+28 `mpi-*` under `USE_MPI`, 354), all green (counted from `tests/CMakeLists.txt`). The 271
+271 `e2e`-labelled + 55 `unit`-labelled + the optional `vortex-cloud-3way` = **327 CTest entries** in a
+serial build (+28 `mpi-*` under `USE_MPI`, 355), all green (counted from `tests/CMakeLists.txt`). The 271
 `e2e` entries are the 165 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the five `threads-*` thread-count gates, `window-khrt-e2e` (the particle files' ordered window under a
 64 KiB budget), the fifteen `repeat-*` two-sweep gates, the eighty-one `refuse-*` setup-refusal gates, `vv-order`
 (the record-order independence of thirteen V&V figures) and `check-order` (of nine gate printouts). The
-54 `unit` entries are 45 compiled unit tests, the property-table reader on its four fixtures
+55 `unit` entries are 45 compiled unit tests, the property-table reader on its four fixtures
 (`test_properties_reader`, `-two-material`, `-atlas-water`, `-sigma-mu`), `self_test`, `registry-docs`, `exe-per-tree`,
-`lint-test-inputs` and `psd-plane-tool`. Unit
+`lint-test-inputs`, `psd-plane-tool` and `history-census`. Unit
 families that emit a production-vs-reference overlay (`verif_dump` → `tools/plot_curves.py` →
 `docs/vv/images/unit-*.svg`): drag, heat, evaporation-CEM, LK, TC, the MHB98 decane kernel,
 combustion, solidification, the five breakup models, and interp — 14 figures. `ini_pipeline` (config

@@ -40,10 +40,11 @@ USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF   # rank-count gates, built in
 ./tests/test.sh clean
 ```
 
-**Requirements.** Python 3 (the suite runs on 3.6) with its standard library runs every check. scipy is required by
+**Requirements.** Python 3 (the suite runs on 3.6) with its standard library runs every other check. scipy is required by
 the three boiling checks (`boiling-zgr-flash`, `-hot`, `-switch`: their oracle integrates with `solve_ivp`), which
 fail without it. matplotlib with numpy draws the V&V figures (`verify.py`, `tools/plot_curves.py`) and runs
-`vv-order`, which is skipped without them.
+`vv-order`, which is skipped without them. git lists the files `history-census` reads: outside a git checkout that
+test is skipped.
 
 `test.sh` configures a **separate `build/verif/`** (`build/mpi/` when `USE_MPI=ON`) with
 `-DBUILD_VERIFICATION=ON` (default OFF, so the production build is unchanged) and builds it (same
@@ -104,7 +105,7 @@ tests/
 | `breakup` | TAB/ETAB, Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT unit families + TAB stochastic moments, and the evaporation-with-breakup unit family; seven Weber-sweep e2e cases (tab-hf92 and etab-hf92, TAB and ETAB on Hsiang & Faeth's water series, among them), two further oracles on khrt-e2e's run, its Eulerian twin khrt-e2e-euler and the khrt-stress load case; evaporation with breakup and the KH-shed source: evap-breakup-box, d2law-brk-dormant, rd-evap-frozen, tab-evap-frozen, etab-evap-frozen, khrt-evap-frozen, khrt-evap-frozen-euler, khrt-evap-live and khrt-shed-noexchange; a density that varies with temperature: tab-varrho, tab-evap-frozen-varrho and khrt-varrho; a varying cp under breakup: khrt-varcp and evap-breakup-box-varcp; the breakup model and its constants per material (breakup-per-material); the plane-crossing records and the birth row of every breakup child (khrt-plane); breakup on a solidifying material: solid-brk-tab and solid-brk-khrt; σ and μ from the property table (pe-sigma-table); the two-sweep khrt, etab, tab, tab-dopri5 and evap-breakup; the eleven breakup refusals (an unknown model in `[IGLOO-Models]` or on a material line, the TAB method, σ and μ missing or mis-sized, σ given as a column and a key, a `Sigma` column that is not positive, `mu-liq` beside the breakup viscosity of a P2T material, a P2T material whose breakup viscosity is 0) |
 | `combustion` | Beckstead $d^n$ Al-burn unit family, the oxide cap's among it; burn-box, burn-box-euler, body-burn-m5 (the body-force accumulators of model 5), burn-box-cap (the oxide cap), burn-box-residue (the burnout residue), burn-box-ox0 (the oxide fraction at injection) and beckstead-air (burnout times in air against Beckstead's Eq. 7, his Fig. 1 drawn beside them) e2e; the four combustion refusals, the three of the oxide cap and the two of the oxide fraction at injection |
 | `solidification` | Solidification unit family (supercooling, recalescence, plateau, melting, the birth state of a burnout residue); solid-box, solid-melt, solid-box-euler, solid-box-2mat, solid-box-rad, scatter-weight-solid e2e; breakup on a solidifying material: solid-brk-tab and solid-brk-khrt; the density change on freezing: solid-box-rhos, solid-box-varrho, solid-brk-tab-rhos and solid-melt-rhos; the freezing residue of burn-box-residue; the two-sweep solid-box and the seven solidification refusals |
-| `infrastructure` | Gas reconstruction, INI pipeline, property-table reader (four fixtures), RNG stream, axis dispatch, grazing stand-off, gas ghost ring, boundary-file families, dual-clip, source-reduction, multi-block mollifier, host-association and boundary-face fallback unit families, `self_test`, `registry-docs` and the planes-file size tool (`psd-plane-tool`); injection, coupling (the body-force accumulators of models 2, 4 and 5 among them), nozzle, wedge and slab, periodic, two-material, per-material breakup, per-family boundary-file, two-block, chimera, INI-comment, foreign-key, 0-group material line, wall-approach, varying-cp table, solver-failure, exit-record and backward plane-crossing (plane-back) e2e cases; the two-sweep db-injection and two-mat; thirty-one setup-refusal gates (forty more sit in their model's category, two of them in both evaporation and breakup, and the ten size-distribution refusals carry the `injection` label) |
+| `infrastructure` | Gas reconstruction, INI pipeline, property-table reader (four fixtures), RNG stream, axis dispatch, grazing stand-off, gas ghost ring, boundary-file families, dual-clip, source-reduction, multi-block mollifier, host-association and boundary-face fallback unit families, `self_test`, `registry-docs`, the planes-file size tool (`psd-plane-tool`) and the history census (`history-census`); injection, coupling (the body-force accumulators of models 2, 4 and 5 among them), nozzle, wedge and slab, periodic, two-material, per-material breakup, per-family boundary-file, two-block, chimera, INI-comment, foreign-key, 0-group material line, wall-approach, varying-cp table, solver-failure, exit-record and backward plane-crossing (plane-back) e2e cases; the two-sweep db-injection and two-mat; thirty-one setup-refusal gates (forty more sit in their model's category, two of them in both evaporation and breakup, and the ten size-distribution refusals carry the `injection` label) |
 | `repeatability` | Fifteen e2e cases run twice through `setup_static` → `reset_state` → `solve` with the second sweep compared to the first (see `tests/repeatability/INFO.md`) |
 | `mpi` | The serial gates re-run under `mpiexec` with a rank-count witness, plus cross-rank-count consistency (see `tests/mpi/INFO.md`) |
 
@@ -115,8 +116,8 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **326 tests** in a serial build (271 e2e + 54 unit, `self_test`,
-`registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 28 more
+Current gate: **327 tests** in a serial build (271 e2e + 55 unit, `self_test`,
+`registry-docs`, `exe-per-tree`, `lint-test-inputs`, `psd-plane-tool` and `history-census` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 28 more
 `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.
 

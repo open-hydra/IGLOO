@@ -453,6 +453,13 @@ set_tests_properties(lint-test-inputs PROPERTIES
 # known in closed form (forward and net crossings, a disc and an annulus, a second plane it must not read).
 add_test(NAME psd-plane-tool COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_psd_plane.py)
 set_tests_properties(psd-plane-tool PROPERTIES LABELS "unit;infrastructure;output")
+# history-census: the test pages and sources carry no ledger id, plan tag, date, hash or chronology; the plants
+# refute the census. It lists the files with git and is skipped outside a git checkout.
+add_test(NAME history-census COMMAND bash -c "python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/history_census.py --plants ${CMAKE_CURRENT_SOURCE_DIR}/tools/history_census_plants.txt && python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/history_census.py")
+set_tests_properties(history-census PROPERTIES
+    LABELS "unit;infrastructure;docs"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    SKIP_RETURN_CODE 77)
 # db-injection: DB ("assigned position") injection; RED on a DB pinning that writes unallocated stateVar(4:6): SIGSEGV
 igloo_e2e_case(db-injection infrastructure/db-injection "e2e;infrastructure;injection")
 configure_file(infrastructure/ini_pipeline/input.ini ${CMAKE_CURRENT_BINARY_DIR}/input.ini COPYONLY)

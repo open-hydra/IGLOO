@@ -160,6 +160,10 @@ plantag	tests/breakup/reitz-khrt/test_breakup_khrt.f90	write(*,*) 'Q1: RT before
 none	tests/tools/body_source_check.py	"""Half a unit of the last digit of an ES16.8 print (d.dddddddd E+xx)."""
 hash	tests/tools/body_source_check.py	"""Half a unit of the last digit of an ES16.8 print (3fb668d4 E+xx)."""
 hash	tests/combustion/beckstead-air/check.py	"""v printed ES16.8 (d.dddddddd x 10^e), as at 3fb668d4."""
+none	tests/bench/monolith/sync-src-monolith.sh	FILTERS=(--exclude='/plan-bucket' --exclude='/site')
+plantag	tests/bench/monolith/sync-src-monolith.sh	rsync -a "$SRC/" "$D/"  # the notes stay in /plan-bucket
+plantag	tests/bench/monolith/sync-src-monolith.sh	echo "skipped /plan-bucket"
+plantag	tests/tools/mpi_scaling_smoke.sh	FILTERS=(--exclude='/plan-bucket' --exclude='/site')
 # Sources: a check id admitted through its directory's INFO.md, its twin elsewhere, and the never-exempt rules
 none	tests/infrastructure/sym-plane-bounce/check.py	# B4 at most N_MAX_CELL + 1 rows in one cell
 ledger	tests/standard/drag-stokes/check.py	# B4 at most N_MAX_CELL + 1 rows in one cell
