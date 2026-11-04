@@ -5,12 +5,12 @@
 # end-to-end solver cases (dir with check.py, LABELS "e2e;<category>;...").
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
-#   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
-#   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ lk-neq/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
+#   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ out-dcell3/ out-dtime/ out-off/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
+#   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ d2law-brk-dormant/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ stuck-cell/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ varcp-tmin/ psd-bare-token/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
 #   repeatability/      two-sweep gates (twosweep driver): 13 cases
 #   mpi/                registered only under USE_MPI: 7 rank-count cases + 3 consistency + 1 determinism
 #                       + 13 two-sweep cases
@@ -389,6 +389,9 @@ igloo_e2e_case(drag-chang  standard/drag-chang  "e2e;standard;drag")
 igloo_e2e_case(temp-relax  standard/temp-relax  "e2e;standard;heat")
 # temp-relax-varcp: the enthalpy state on a varying-cp table from 250 K; heating and cooling below, inside and above it.
 igloo_e2e_case(temp-relax-varcp standard/temp-relax-varcp "e2e;standard;heat")
+# temp-relax-varcp-euler: the same run with out-file = ALL: the Eulerian temperature of every cell against the
+# table's T of the time-mean enthalpy over the residence (the moment ratio of model 1 under a varying cp).
+igloo_e2e_case(temp-relax-varcp-euler standard/temp-relax-varcp-euler "e2e;standard;heat;euler")
 # temp-relax-varrho: the same with a varying density; the diameter follows d(T) at constant mass.
 igloo_e2e_case(temp-relax-varrho standard/temp-relax-varrho "e2e;standard;heat")
 igloo_e2e_case(body-force  standard/body-force  "e2e;standard;drag")
@@ -396,6 +399,12 @@ igloo_e2e_case(body-force  standard/body-force  "e2e;standard;drag")
 # toward the temperature of the k-layer that holds it (a parcel placed in the wrong cell after a crossing is seen).
 igloo_e2e_case(body-force-z standard/body-force-z "e2e;standard;drag")
 igloo_e2e_case(conv-nu     standard/conv-nu     "e2e;standard;heat")
+# conv-nu-<law>: conv-nu's constant-slip state under JAXA2, JAXA3, JAXA4 and Kavanau-Drake (Ma = 5.2e-4 > 0): T on
+# the printed time against the exact exponential with the law as NASA-SP-8039 Table II / Shimada eq. 50 print it.
+igloo_e2e_case(conv-nu-jaxa2 standard/conv-nu-jaxa2 "e2e;standard;heat")
+igloo_e2e_case(conv-nu-jaxa3 standard/conv-nu-jaxa3 "e2e;standard;heat")
+igloo_e2e_case(conv-nu-jaxa4 standard/conv-nu-jaxa4 "e2e;standard;heat")
+igloo_e2e_case(conv-nu-kd    standard/conv-nu-kd    "e2e;standard;heat")
 igloo_e2e_case(vie-plait   standard/vie-plait   "e2e;standard;drag;gas")
 # swirl-wedge: solid-body swirl on an annular axisymmetric wedge (mesh2D + axisym), three DB
 # parcels with prescribed wp -- the quantitative gate on the 2.5D fold (W-plan item B): r, w_p,
@@ -480,9 +489,16 @@ igloo_threads_case(threads-d2law evaporation/d2law "e2e;evaporation;omp")
 # E-VAL-1 (2026-07-22): Tier-V analytic line — cp_p x100 freezes B_T so K is a pure
 # closed form of the inputs (Godsave/Spalding); companion to the run-conditioned d2law.
 igloo_e2e_case(d2law-line evaporation/d2law-line "e2e;evaporation;val;d2line")
+# d2law-varcp: d2law with a varying cp (the enthalpy state under evaporation): d2law's mass-rate oracle, the enthalpy
+# history along the measured diameter, and the energy deposit at the table's enthalpy.
+igloo_e2e_case(d2law-varcp evaporation/d2law-varcp "e2e;evaporation;heat")
 # F1 (2026-07-10): Langmuir-Knudsen non-equilibrium interface (Miller-Harstad-Bellan 1998)
 igloo_unit_test(test_interface_lk evaporation/interface-neq "unit;evaporation;lk;c;t9")
 igloo_e2e_case(lk-neq evaporation/lk-neq "e2e;evaporation")
+# cemb-box, asm-box: lk-neq's droplet at half the gas speed under CEM-B (the 1/3-rule film) and the
+# Abramzon-Sirignano model: d^2 (and, for ASM, T) against the models' rate laws along the measured state.
+igloo_e2e_case(cemb-box evaporation/cemb-box "e2e;evaporation")
+igloo_e2e_case(asm-box evaporation/asm-box "e2e;evaporation")
 # F2 (2026-07-11): Tonini-Cossali analytical evaporation (TC2012 Stefan-Fuchs; Antonov 2024 eq.9)
 igloo_unit_test(test_tc_analytic evaporation/tc-analytic "unit;evaporation;tc;c;t5")
 igloo_e2e_case(tc-box evaporation/tc-box "e2e;evaporation")
@@ -508,6 +524,9 @@ igloo_e2e_case(mhb98-water evaporation/mhb98-water "e2e;evaporation;val;mhb98")
 # CP-psat-water table, byte for byte) -- the tabulated p_sat on the CEM + LK path. RED with the column
 # zeroed: no tabulation reported, wet-bulb 282.33 K (the Clausius-Clapeyron case's) instead of 281.31 K.
 igloo_e2e_case(mhb98-water-psat evaporation/mhb98-water-psat "e2e;evaporation;mhb98")
+# mhb98-water-blowing: mhb98-water with blowing = LK: the wet-bulb identity with MHB98's f2, the f2-free form off,
+# and the shifts of K and T_wb against a no-blowing sibling (ref-noblow/) and a coupled droplet kernel.
+igloo_e2e_case(mhb98-water-blowing evaporation/mhb98-water-blowing "e2e;evaporation;mhb98")
 # E-VAL-3 (2026-07-23): Tonini-Cossali n-hexadecane, TC2012 Fig.11 — first VARIABLE-density
 # case (thermal swelling). Found+fixed A20 (variable tabs never allocated) + A21 (lookupTab
 # OOB). Gate = variable-density TC mass rate + swelling; digitized paper curves non-gating.
@@ -689,6 +708,12 @@ set_tests_properties(khrt-e2e khrt-e2e-rt khrt-e2e-threads PROPERTIES RESOURCE_L
 igloo_e2e_case(coupled-body infrastructure/coupled-body "e2e;infrastructure")
 # threads-coupled-body: coupled-body at 1, 2 and 5 threads (the Euler, source and body-force accumulators).
 igloo_threads_case(threads-coupled-body infrastructure/coupled-body "e2e;infrastructure;omp")
+# body-evap-m2, body-evap-m4, body-burn-m5: the body-force accumulators J = int m dt and W = int m g.v dt of models
+# 2, 4 and 5 (out-file ALL and, through a ref-S/ sibling, S): source.tec momentum and energy telescoped against the
+# trajectory rows to time-end.
+igloo_e2e_case(body-evap-m2 infrastructure/body-evap-m2 "e2e;infrastructure;evaporation;source")
+igloo_e2e_case(body-evap-m4 infrastructure/body-evap-m4 "e2e;infrastructure;evaporation;m4;source")
+igloo_e2e_case(body-burn-m5 infrastructure/body-burn-m5 "e2e;infrastructure;combustion;source")
 # promoted legacy test/assigned-pos: 2Daxi wedge + real MOSE solfile + DB injection
 # + euler-only output (the B5/B6 path); behavioral gate, md5 A/B stays manual
 igloo_e2e_case(db-2daxi infrastructure/db-2daxi "e2e;infrastructure")

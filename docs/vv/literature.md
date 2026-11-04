@@ -72,10 +72,14 @@ production `rhsStandard` path.
 and JAXA3 (analytic, source-free); the full Ranz–Marshall correlation `[RM52]`
 against a table of (Re, Pr) values; SDIRK4 tableau order on the linearized (Nu = 2)
 thermal RHS; and the full coupled (velocity + temperature) ODE under Ranz–Marshall
-against an independent RK4 re-implementation.  JAXA4 and Kavanau–Drake share the same
-compressibility bridge, verified algebraically (S1 in
-`standard/temperature/LITERATURE_TESTS.md`); JAXA4's base coefficient is $0.654$
-(Shimada 2006 eq. 50 / NASA SP-8039 Table II).
+against an independent RK4 re-implementation.  JAXA2, JAXA3 and Kavanau–Drake are
+checked against NASA SP-8039 Table II as printed (refs. 82, 42 and 72, Kavanau–Drake with its
+$\mathrm{Pr}^{0.33}$) and JAXA4 against Shimada 2006 eq. 50, on a Re × Pr × Ma grid to $10^{-14}$
+(`test_heat_nu` HN4–HN7); the rarefaction term of JAXA4 and Kavanau–Drake by the identity
+$1/\mathrm{Nu}(\mathrm{Ma}) - 1/\mathrm{Nu}(0) = 3.42\,\mathrm{Ma}/(\mathrm{Re}\,\mathrm{Pr})$ (HN8); and the
+four laws end to end at constant slip and a slip Mach number of $5.2\times10^{-4}$ (`conv-nu-jaxa2`,
+`-jaxa3`, `-jaxa4`, `-kd`).  JAXA4 keeps Shimada's $\mathrm{Pr}^{1/3}$; the last row of SP-8039's
+Table II prints $\mathrm{Pr}^{1/2}$.
 
 **Oracle type.** Analytic Nu = 2 anchor (source-free); Ranz–Marshall table values
 from `[RM52]`; independent RK4 of the coupled system for B2; machine-zero inter-model

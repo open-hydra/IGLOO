@@ -18,9 +18,13 @@ VACUOUS at this size (L_K/d ~ 1e-4), so CEM == LK to the output floor -- unlike
 lk-neq, there is no LK-vs-VLE signal to assert (asserting it would falsely FAIL).
 
 Extra, case-specific physics gate: at Re=0 the coupled heat+evaporation balance ties
-the d^2-law slope to the wet-bulb exactly, K = (TG - Twb) * 8 kg / (rho_l Lv). We
-measure Twb from the flat Tp tail and IGLOO's fitted K and require the identity to
-hold -- this pins the drag-off / Nu=Sh=2 / CEM coupling self-consistency.
+the d^2-law slope to the wet-bulb, f2 * 2 pi d k (TG - Twb) = -mdot Lv on the plateau, so
+K = f2 (TG - Twb) 8 kg / (rho_l Lv) (MHB98 eqs. 3, 17-19), f2 = beta/(e^beta - 1) with
+beta = rho_l Pr K/(8 mu_G) (eq. 28) when the case's input.ini sets blowing = LK, f2 = 1
+without it. K (the LSQ slope of d^2(t)) and Twb (the mean Tp) come from the last half of
+the rows, where the droplet sits on the plateau; the identity must hold to TOL_WB_REL --
+this pins the drag-off / Nu=Sh=2 / CEM coupling self-consistency and, with blowing on,
+the blowing factor in the energy equation.
 
 Tier-P paper-reproduction gate (the E-VAL-2 point), now built on the DIGITIZED M7 model
 line (reference/mhb98_fig2_M7_*.csv, WebPlotDigitizer). IGLOO runs CEM+LK = the uniform-
@@ -36,14 +40,16 @@ M7 (~6.5e-3), so the earlier "~13% below experiment" is largely an eyeball-digit
 artifact -- confirming needs a proper exp re-digitization (follow-up), not gated here.
 """
 import math
+import os
 import re
 import sys
 
 TRAJ   = "OUTPUT/trajectories-A.dat"
 OUTLOC = "OUTPUT/outloc-A.dat"
 SRC    = "OUTPUT/source.tec"
-REF_M7_D2 = "reference/mhb98_fig2_M7_d2.csv"   # digitized MHB98 Fig.2a M7 model line
-REF_M7_TD = "reference/mhb98_fig2_M7_Td.csv"   # digitized MHB98 Fig.2b M7 model line
+HERE   = os.path.dirname(os.path.abspath(__file__))   # the references are this case's, whoever imports it
+REF_M7_D2 = os.path.join(HERE, "reference", "mhb98_fig2_M7_d2.csv")   # digitized MHB98 Fig.2a M7 model line
+REF_M7_TD = os.path.join(HERE, "reference", "mhb98_fig2_M7_Td.csv")   # digitized MHB98 Fig.2b M7 model line
 TELESCOPE_TOL = 0.02
 TOL_CONSERV   = 0.01   # two-phase mass closure (A22 burnout deposit)
 
@@ -102,9 +108,29 @@ TOL_U_REL      = 1.0e-3     # u must equal u_g (coast) -> t = x/u_g valid
 TOL_D0_REL     = 1.0e-2
 TOL_T0         = 1.0e-3 * T_G
 TOL_MD_REL     = 1.0e-3
-# wet-bulb self-consistency: K == (TG - Twb) * 8 kg / (rho_l Lv)
-TOL_WB_REL     = 0.02
-WB_TAIL_FRAC   = 0.5       # average Tp over the last half of the path for Twb
+# wet-bulb self-consistency: K == f2 (TG - Twb) 8 kg / (rho_l Lv), K and Twb from the last half of the rows.
+# The model's own floor of this tail form is 1.8e-5 (a coupled RK4 of the droplet), IGLOO's 4.4e-5; a missing or
+# doubled f2 moves it by 3.2e-3.
+TOL_WB_REL     = 5.0e-4
+WB_TAIL_FRAC   = 0.5       # the last half of the path: Twb and K
+
+
+def read_blowing(path="input.ini"):
+    """True when the [IGLOO-Models] section of the case's input.ini sets blowing = LK."""
+    section, word = None, "none"
+    try:
+        for line in open(path):
+            s = re.split(r"[;#!]", line, 1)[0].strip()
+            if s.startswith("["):
+                section = s.strip("[]").strip()
+            elif section == "IGLOO-Models" and "=" in s and s.split("=", 1)[0].strip() == "blowing":
+                word = s.split("=", 1)[1].strip()
+    except FileNotFoundError:
+        pass
+    return word == "LK"
+
+
+BLOWING = read_blowing()
 # Tier-P paper-reproduction gate (E-VAL-2). IGLOO runs CEM+LK = the uniform-temperature
 # Langmuir-Knudsen model = MHB98's M7 (M8 is the finite-conductivity variant). The gate
 # compares IGLOO's integrated beta (Eq.28) to the DIGITIZED M7 model line (Fig.2a): beta_M7
@@ -414,24 +440,30 @@ def main():
                       f"(meas {d2s[k]:.5e}, CEM pred {pf[k]:.5e})")
                 n_violation += 1; bad = True
 
-        # wet-bulb self-consistency: K == (TG - Twb) * 8 kg / (rho_l Lv)
+        # wet-bulb self-consistency: K == f2 (TG - Twb) 8 kg / (rho_l Lv) on the last half of the rows
         i0 = int((1.0 - WB_TAIL_FRAC) * (nrow - 1))
         twb = sum(Tps[i0:]) / (nrow - i0)
         twbs.append(twb)
         ts  = [x / U_G for x in xs]
         n = nrow; sx = sum(ts); sy = sum(d2s)
         sxx = sum(t*t for t in ts); sxy = sum(t*y for t, y in zip(ts, d2s))
-        Kfit = -(n*sxy - sx*sy) / (n*sxx - sx*sx)      # -slope of d^2 vs t
+        Kfit = -(n*sxy - sx*sy) / (n*sxx - sx*sx)      # -slope of d^2 vs t (the M7 comparison)
         kfits.append(Kfit)
-        Kwb  = (T_G - twb) * 8.0 * KG / (RHO_P * LV)
-        wb_rel = abs(Kfit - Kwb) / Kwb
+        tt, dd = ts[i0:], d2s[i0:]
+        n = len(tt); sx = sum(tt); sy = sum(dd)
+        sxx = sum(t*t for t in tt); sxy = sum(t*y for t, y in zip(tt, dd))
+        Ktail = -(n*sxy - sx*sy) / (n*sxx - sx*sx)
+        beta = BETA_COEF * Ktail
+        f2 = beta / math.expm1(beta) if BLOWING else 1.0
+        Kwb  = f2 * (T_G - twb) * 8.0 * KG / (RHO_P * LV)
+        wb_rel = abs(Ktail - Kwb) / Kwb
         worst_wb = max(worst_wb, wb_rel)
         wb_seen += 1
         if wb_rel <= TOL_WB_REL:
             wb_ok += 1
         else:
-            print(f"[FAIL] ID={pid}: K-wetbulb identity off: Kfit={Kfit:.4e} vs "
-                  f"(TG-Twb)8kg/(rho_l Lv)={Kwb:.4e} (Twb={twb:.2f}K, rel {wb_rel:.2%})")
+            print(f"[FAIL] ID={pid}: K-wetbulb identity off: K={Ktail:.6e} vs "
+                  f"f2 (TG-Twb)8kg/(rho_l Lv)={Kwb:.6e} (f2={f2:.6f}, Twb={twb:.4f}K, rel {wb_rel:.3e})")
             n_violation += 1
 
         rel_loss = (d2a - d2s[-1]) / d2a
@@ -448,8 +480,8 @@ def main():
     print(f"max relative d^2 loss over a particle: {worst_loss*100:.2f}%  "
           f"(need >= {LOSS_MIN_REL*100:.0f}% to count; {n_noevap} below)")
     print(f"worst kernel point: {worst[1]}  (resid/tol = {worst[0]:.3f})")
-    print(f"K<->wet-bulb identity: {wb_ok}/{wb_seen} within {TOL_WB_REL:.0%} "
-          f"(worst {worst_wb:.2%})")
+    print(f"K<->wet-bulb identity ({'blowing LK: f2 from beta' if BLOWING else 'no blowing: f2 = 1'}, "
+          f"last half of the rows): {wb_ok}/{wb_seen} within {TOL_WB_REL:.1e} (worst {worst_wb:.3e})")
     print(f"verified evaporators (loss>={LOSS_MIN_REL*100:.0f}%, >={MIN_PTS} rows, in tol): "
           f"{verified} (need >= {N_GOOD})")
 

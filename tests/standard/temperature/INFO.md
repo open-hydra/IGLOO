@@ -35,7 +35,21 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
   [RM52] formula (18 pts, machine-zero); HN2 conduction floor Nu(Re=0)=2 exact
   for RM/JAXA2/JAXA3 (deliberately NOT JAXA4/KD — their sub-2 low-Re limit is
   physical rarefaction); HN3 Kavanau-Drake Ma=0 collapse (transcription pin;
-  D-HEAT-2/3 stay open flags).
+  D-HEAT-2/3 stay open flags). HN4–HN8 pin the four other laws to their printed
+  sources (production `heat()` against the forms typed in the test, with the
+  printed exponents):
+
+  | id | law | source (as printed) | grid | compared | tolerance | measured | RED |
+  |---|---|---|---|---|---|---|---|
+  | HN4 | JAXA2 | `[SP8039]` Table II ref. 82: 2 + 0.370 Re^0.6 Pr^⅓ | Re {0.5, 1, 10, 100, 1000} × Pr {0.7, 1, 7} × Ma {0, 0.01, 0.1, 0.5, 1} | Nu, relative | 1e-14 | 1.8e-16 | exponent 0.6 → 0.55: 0.28 |
+  | HN5 | JAXA3 | `[SP8039]` Table II ref. 42: 2 + 0.459 Re^0.55 Pr^⅓ | as HN4 | Nu, relative | 1e-14 | 0 | 0.459 → 0.495: 7.5e-2 |
+  | HN6 | JAXA4 | `[Shim06]` eq. 50: [(2 + 0.654 Re^½ Pr^⅓)^−1 + 3.42 Ma/(Re Pr)]^−1 (SP-8039's last row prints Pr^½; the code follows Shimada) | Re × Pr × Ma {0.01, 0.1, 0.5, 1} | Nu, relative | 1e-14 | 1.9e-16 | 0.654 → 0.645: 1.3e-2 |
+  | HN7 | Kavanau-Drake | `[SP8039]` Table II ref. 72 = `[Shim06]` eq. 49: N₀/(1 + 3.42 (Ma/(Re Pr)) N₀), N₀ = 2 + 0.459 Re^0.55 Pr^0.33 | as HN6 | Nu, relative | 1e-14 | 0 | Pr^0.33 → Pr^⅓: 6.2e-3; 3.42 → 3.24: 5.3e-2 |
+  | HN8 | JAXA4, Kavanau-Drake | the rarefaction identity 1/Nu(Re,Pr,Ma) − 1/Nu(Re,Pr,0) = 3.42 Ma/(Re Pr) (no transcription) | as HN6 | residual over the bound 8ε (1/Nu(Ma) + 1/Nu(0)) | 1 | 9.4e-2 | 3.42 → 3.24 in Kavanau-Drake: 2.9e13 |
+
+  HN8's bound follows the conditioning: where 3.42 Ma/(Re Pr) ≪ 1/Nu the difference of the two reciprocals loses
+  up to ≈ 5e3 in relative terms, so a relative tolerance would fail on correct code. The e2e twins of these
+  legs are `conv-nu-jaxa2`, `-jaxa3`, `-jaxa4` and `-kd` (the laws through the solver's Re, Pr and Mach number).
 - `test_heat_probes.f90` (ctest `test_heat_probes`, ordinary gate — bug-transcription pin): XH1
   JAXA1 missing +2 floor — Nu(Re=1e-6)=0.315 today. Flips the suite RED when
   production is fixed, signalling promotion to the gate (bug A7).
