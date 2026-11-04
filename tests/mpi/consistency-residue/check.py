@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """MPI rank-count and thread-count consistency gate on burn-box-residue: the shared gate (../consistency/check.py:
-the rank witness, the merged layout, every .dat as an exact multiset, the .tec fields) and the combustion product's
+the rank witness, the merged layout, every .dat byte for byte, the .tec fields) and the combustion product's
 banner, which counts the residues over every rank: 25 at each arm.
 
     check.py <mpiexec> <numproc-flag> <path-to-IGLOO>

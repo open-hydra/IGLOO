@@ -7,12 +7,12 @@ Two distinct things can go wrong there, and only one of them is visible to the o
 
   * ORDERING — which child lands on which particle slot. The drain walks `ip` ascending and
     then push order within each list, so the mapping is fixed by the traversal rather than by
-    the schedule. A sorted-multiset compare deliberately ABSORBS ordering differences: record
-    order in `trajectories-*.dat` is OMP-nondeterministic by design and is not a defect.
-  * TEARING — `unitTraj`/`unitExit` are written from inside the parallel region with no
-    synchronisation, so two threads can interleave mid-record. A sorted multiset does NOT
-    absorb that: a torn line is a different line. This gate is the only thing in the suite
-    that would catch it.
+    the schedule. A sorted-multiset compare deliberately ABSORBS ordering differences; the
+    record order itself (the parcel order at every thread count) is gated byte for byte by
+    `threads-khrt-stress`.
+  * TEARING — the particle files are written from inside the parallel region, so two threads
+    could interleave mid-record. A sorted multiset does NOT absorb that: a torn line is a
+    different line.
 
 Established as a PASSING BASELINE while the one-shed cap was still enforced, so that when the
 cap is lifted a red result here means the lift broke thread-invariance, not that it was already

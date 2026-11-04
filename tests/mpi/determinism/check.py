@@ -15,7 +15,7 @@ inside a rank are themselves order-dependent with more than one thread.
 
 Per rank count n in (3, 4): run A with the library's default algorithms, run B with
 I_MPI_ADJUST_ALLREDUCE=8 (ring), which on the reference host associates differently from the default.
-Gates: rank witness; A and B .tec byte-identical; .dat multisets of A, B and n = 1 identical; A within
+Gates: rank witness; A and B .tec byte-identical; the .dat files of A, B and n = 1 byte-identical; A within
 scale-relative 1e-12 of n = 1. PASS stdout carries no residuals.
 """
 import collections
@@ -113,17 +113,18 @@ def main():
             if not all(os.path.exists(p) for p in paths):
                 bad.append(f'n={n} {name}: missing in one of the runs')
                 continue
-            cr, ca, cb = (records(p) for p in paths)
-            if not (cr == ca == cb):
-                bad.append(f'n={n} {name}: record multisets differ ({sum(cr.values())}, '
-                           f'{sum(ca.values())}, {sum(cb.values())} records)')
+            hr, ha, hb = (md5(p) for p in paths)
+            if not (hr == ha == hb):
+                cr, ca, cb = (records(p) for p in paths)
+                bad.append(f'n={n} {name}: bytes differ from n=1 ({sum(cr.values())}, {sum(ca.values())}, '
+                           f'{sum(cb.values())} records; multisets {"equal" if cr == ca == cb else "differ"})')
     if bad:
         for m in bad:
             print(f'  [FAIL] {m}')
         return 1
     print(f'  [PASS] {len(ref[1])} .tec field(s) byte-identical across the algorithm choice at '
           f'n = {", ".join(str(n) for n in RANKS)} and within {DEFAULT_TOL:.0e} of n = 1; '
-          f'{len(ref[2])} .dat multisets identical')
+          f'{len(ref[2])} .dat byte-identical to n = 1')
     return 0
 
 

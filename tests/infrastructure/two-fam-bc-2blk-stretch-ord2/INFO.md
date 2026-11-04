@@ -19,7 +19,7 @@ at the cell centres. Two families of material A, one centred parcel per inlet ce
 | id | kind | assertion |
 |---|---|---|
 | R1 | target | the run log's ghost line `ghost nodes at connected faces: 98 interpolated, 0 not covered` (the 7 × 7 nodes of each face plane, edges and corners included) |
-| G5a | target | trajectory T against the one-block run, rows matched by family, parcel and x, the rows at the face left out: worst difference ≤ 8e-5 K |
+| G5a | target | trajectory T against the one-block run, rows matched by family (read from the zone title), parcel and x, the rows at the face left out, every row of either run matched (4260): worst difference ≤ 8e-5 K |
 | G5b | target | source `E`: cell by cell outside the two face columns (30 and 31 of the one-block order) ≤ 1.1e-6 of the field scale; columns 30 and 31 by their transverse totals ≤ 1.742e-4 of the one-block totals |
 | G5c | target | euler `T_p` of both families: cell by cell outside columns 30 and 31 ≤ 6e-8 of the field scale; columns 30 and 31 by their mass-weighted means (Σ ρ_p T_p / Σ ρ_p over the column's transverse cells) ≤ 3.839e-5 of the scale |
 | C1 | control | 50 exits, all at x = 0.15 |

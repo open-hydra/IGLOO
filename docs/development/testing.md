@@ -88,7 +88,7 @@ tests/
 ├── breakup/                      # TAB, Pilch-Erdman, Reitz-Diwakar, ETAB, Reitz-KHRT unit families + tab/etab/pilch-erdman/reitz-diwakar/khrt e2e, etab-e2e-dopri5, tab-hf92, etab-hf92, khrt-e2e-euler, khrt-stress, rd/tab/etab/khrt-evap-frozen, khrt-evap-frozen-euler, khrt-evap-live, khrt-shed-noexchange, tab/tab-evap-frozen/khrt-varrho, khrt-varcp, breakup-per-material, khrt-plane, pe-sigma-table
 ├── combustion/                   # Beckstead unit family + burn-box/burn-box-euler/burn-box-cap/burn-box-residue/burn-box-ox0/beckstead-air e2e
 ├── solidification/               # solidification unit family + solid-box/solid-melt/solid-melt-rhos/solid-box-euler/solid-box-2mat/solid-box-rad/scatter-weight-solid/solid-brk-tab/solid-brk-khrt/solid-box-rhos/solid-box-varrho/solid-brk-tab-rhos e2e
-├── infrastructure/               # gas_reconstruction, ini_pipeline, properties_reader, rng_stream, axis_dispatch, graze_standoff, dual_clip, source_reduction, ghost_bc, bc_families, mollify_blocks, host_assoc, containment, tec_read, tec_write;
+├── infrastructure/               # gas_reconstruction, ini_pipeline, properties_reader, rng_stream, axis_dispatch, graze_standoff, dual_clip, source_reduction, ghost_bc, bc_families, mollify_blocks, host_assoc, containment, tec_read, tec_write, fmt;
 │                                 # db-injection/coupled-body/body-evap-m2/body-evap-m4/body-burn-m5/db-2daxi/axis-200/wedge-fold/planar-slab/wedge-axis-row/wedge-tiny/two-mat/inlet-402-403/two-fam-bc/two-fam-bc-2blk/two-fam-bc-2blk-mollify/rot-2blk/chimera-2blk/chimera-2blk-rim/two-fam-bc-2blk-stretch-ord2/two-fam-bc-2blk-ord2-dual/two-fam-bc-2blk-ord2-dual-1l/two-fam-bc-2blk-ord2-dual-default/swirl-wedge-2blk-ord2-dual/chimera-2blk-shift-ord2/chimera-2blk-mollify/chimera-2blk-shift-mollify/periodic-y/periodic-2d/periodic-2d-ord2/periodic-2d-ord2-dual/conn-103/bc-center-2grp/inj-pack/inj-mdotmax/inj-dscell/inj-dsdegen/ini-comment-eq/foreign-keys/foreign-keys-db/zero-group-line/solver-fail-consumed/solver-fail-consumed-m4/solver-fail-midway/solver-fail-refine/stuck-cell/plane-back/sym-plane-skate/sym-plane-skate-ord2/sym-plane-bounce/sym-plane-bounce-ord2/sym-plane-creep/sym-plane-creep-ord2/exit-census/wall-approach/varcp-tmin/psd-bare-token/inj-edge/inj-edge-payload (e2e)
 │                                 # refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-*,vapour-*,pure2d-*,bc-copies,bc-copy-order,chimera-*,periodic-not-mutual,ord2-*,*-token,breakup-token-material,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-*,wedge-offcentre,psd-*,comb-*,cap-*,ox0-*,brk-*,sigma-*,bc-legacy,bc-empty-payload,body-accel,plane-x,plane-x-empty,krho-*,gas-no-density} (setup-refusal gates)
 ├── repeatability/                # two-sweep state-leak gates: drag-stokes/drag-stokes-time-end/drag-stokes-dopri5/db-injection/two-mat/d2law/khrt/vie-plait/etab/tab/tab-dopri5/solid-box/evap-breakup/swirl-wedge/burn-box-residue
@@ -115,7 +115,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **322 tests** in a serial build (268 e2e + 53 unit, `self_test`,
+Current gate: **325 tests** in a serial build (270 e2e + 54 unit, `self_test`,
 `registry-docs`, `exe-per-tree`, `lint-test-inputs` and `psd-plane-tool` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 28 more
 `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.
@@ -138,6 +138,8 @@ listed families and empty reports, not ids).
 
 A new gate must be shown to fail on a deliberately broken build before it is accepted:
 a gate that has never been seen red is not evidence of anything.  Measure the
-nondeterminism floor of the artifacts it compares (OpenMP record order, floating-point
-re-association across thread counts) and choose the comparison rule — exact,
-order-insensitive, or numeric tolerance — from that measurement.
+nondeterminism floor of the artifacts it compares and choose the comparison rule — exact,
+order-insensitive, or numeric tolerance — from that measurement: the particle files are in
+parcel order, the same bytes at every thread and rank count for one binary and input; the
+grid fields carry the floating-point re-association of the `!$OMP ATOMIC` sums across
+thread counts.

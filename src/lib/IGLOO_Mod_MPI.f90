@@ -4,7 +4,7 @@ module IGLOO_Mod_MPI
 #ifdef USE_MPI
   use mpi
 #endif
-  use, intrinsic :: iso_fortran_env, only: R8 => real64
+  use, intrinsic :: iso_fortran_env, only: R8 => real64, I8 => int64
   use IGLOO_data_block, only: obj_sourceblock, obj_eulerblock
 
   implicit none
@@ -20,7 +20,7 @@ module IGLOO_Mod_MPI
   public :: owns_particle
   public :: rank_suffix
   public :: mpi_ordered_sum_r8_array, mpi_bcast_r8_array, mpi_bcast_orion
-  public :: mpi_allreduce_sum_i4_array
+  public :: mpi_allreduce_sum_i4_array, mpi_gather_i8
   public :: reduce_accumulators
   public :: region_fail, region_failed, region_fail_check
 
@@ -244,6 +244,43 @@ contains
     enddo
 #endif
   end subroutine mpi_allreduce_sum_i4_array
+
+
+  !> Gathers each rank's int64 array loc(1:n) on rank 0: all = the arrays in rank order, cnt(r) = rank r's n (both
+  !  allocated on every rank, filled on rank 0; at one rank the array itself). MPI counts are int32: n < 2**31 per rank.
+  subroutine mpi_gather_i8(loc, n, all, cnt)
+    integer,     intent(in) :: n
+    integer(I8), intent(in) :: loc(*)
+    integer(I8), allocatable, intent(out) :: all(:)
+    integer,     allocatable, intent(out) :: cnt(:)
+#ifdef USE_MPI
+    integer, allocatable :: displ(:)
+    integer :: ierr, r
+#endif
+    allocate(cnt(0:mpi_size_-1))
+    if (mpi_size_ <= 1) then
+      cnt(0) = n
+      allocate(all(n))
+      all = loc(1:n)
+      return
+    endif
+#ifdef USE_MPI
+    call MPI_GATHER(n, 1, MPI_INTEGER, cnt, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+    call check_mpi_error(ierr)
+    allocate(displ(0:mpi_size_-1))
+    displ = 0
+    if (mpi_is_root) then
+      do r = 1, mpi_size_-1
+        displ(r) = displ(r-1) + cnt(r-1)
+      enddo
+      allocate(all(sum(cnt)))
+    else
+      allocate(all(1))
+    endif
+    call MPI_GATHERV(loc, n, MPI_INTEGER8, all, cnt, displ, MPI_INTEGER8, 0, MPI_COMM_WORLD, ierr)
+    call check_mpi_error(ierr)
+#endif
+  end subroutine mpi_gather_i8
 
 
   !> Sums the per-rank partial source/euler accumulators in rank order so every rank holds the same

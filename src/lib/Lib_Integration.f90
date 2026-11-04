@@ -11,17 +11,17 @@ contains
   !> Integrate one particle from its current state to domain exit (or burnout) through the
   !  steady gas field, one cell segment at a time, depositing source and Eulerian moments.
   subroutine integrate(part,geoblock,gasblock,srcblock,eulblock,     &
-                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, shed,noShed,resid)
+                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, slot,shed,noShed,resid)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
-    use IGLOO_variables,  only: unitTraj,unitExit,unitScat,unitSnap,iprint,dtprint,tEnd,timeOn,snapOn,frozenOn, &
+    use IGLOO_variables,  only: iprint,dtprint,dsprint,dcellSet,tEnd,timeOn,snapOn,frozenOn, &
                                 nb,toll,ord2,mesh2D,threshold,            &
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
                                 nInjNoCell,                                &
                                 trajOn, scatOn, dNscat, sixOverPi, pi,    &
-                                planeOn, planeX, unitPlane, failAfter
+                                planeOn, planeX, failAfter
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs, grazeStandoff
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock
@@ -44,6 +44,10 @@ contains
                                         eventPassed, solidTransition, solidDiameter, phUndercooled, &
                                         breakupStateAtSwitch
     use IGLOO_Mod_MPI,     only: mpi_size_, region_fail, region_failed
+    use IGLOO_records,     only: recList, rec_emit, rec_emit_traj, rec_push, rec_break, &
+                                 STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT, &
+                                 L_ROW, L_ROW_T, L_ROW_F, L_ROW_TF, L_ROW_S, L_ROW_TS, &
+                                 L_EXIT, L_EXIT_T, L_EXIT_F, L_EXIT_TF, L_PLANE
     implicit none
     class(obj_particle),   intent(inout) :: part
     type(obj_block),       intent(in)    :: geoblock(nb)
@@ -52,6 +56,8 @@ contains
     type(obj_eulerblock),  intent(inout) :: eulblock(nb)
     real(R8),              intent(in)    :: hTab(:),cpTab(:),rhoTab(:),     &
                                             mupTab(:),sigTab(:),psatTab(:),LvTab(:),cpvTab(:)
+    !> The parcel's slot in its loop's ordered window of the particle files (its storage index)
+    integer,               intent(in)    :: slot
     !> This parent's shed list (intent(inout) required).
     type(shedList),        intent(inout), optional :: shed
     !> True on the last generation pass: sheds are suppressed and the parent keeps the mass.
@@ -70,10 +76,13 @@ contains
     real(R8) :: pMid(3)       ! segment mid position: azimuth of the meridian-frame source deposit
     real(R8) :: wAcc          ! scatter-cloud npdot-weight accumulator (host-associated into solout)
     real(R8) :: wAccOld       ! wAcc at the last latched state, restored when a cut step is integrated again
-    !> Scatter-cloud output buffer, flushed by flushScat in one write. No initializer: it would imply SAVE.
-    integer, parameter :: SCATLEN = 144, SCATCAP = 4096
-    character(len=SCATLEN) :: scatBuf(SCATCAP)
-    integer  :: nScat, iScat
+    !> The parcel's rows per particle file, written at its end by emitParcel
+    type(recList) :: lTraj, lExit, lPlane, lSnap, lScat
+    !> Parcel-rule rows (print-dcell unset): the last row's t and x, the pre-transport row, the last pushed state
+    logical  :: rowsNew, haveRow, wrp
+    real(R8) :: tL, xL(3), preRow(12), svRow(6), tRow
+    integer  :: nPre, layPre
+    integer  :: nWrap         !> 201 wraps so far: the number of the trajectory image the next one starts
     integer  :: neq, nsp, ng, b, i, j, k, ngVert, iu, iw, it, iter, nCross, nE, nStall
     integer  :: nRefl         ! gas order 1: segments of this cell that ended in a reflection
     real(R8) :: posPrev(3)    ! last outer-iter position, for the zero-progress guard
@@ -118,8 +127,11 @@ contains
     !> Burnout threshold on droplet mass [kg]: a consuming droplet at m <= mBurnTol is declared consumed.
     real(R8), parameter :: mBurnTol=1.e-15_R8
 
-    nScat = 0            !> before every exit path, so flushScat is always well-defined
-    if (region_failed()) return   !> MPI: a parcel of this loop failed; its rank aborts after the join
+    !> MPI: a parcel of this loop failed; its rank aborts after the join (empty blocks keep the window whole)
+    if (region_failed()) then
+      call emitParcel()
+      return
+    endif
     neq = part%neq       !> save local copy of neq
     atGasBoundary = .true.   !> conservative default: geo consulted until proven interior
     nsp = 1              !> nsp = nspecies(part%Iinj(1)) !> for multi-species gas
@@ -153,7 +165,7 @@ contains
         write(*,'(A,I4,A)')                                                         &
                 '[WARNING] Particle ',part%ID,' has been initialized out of domain!'
         call writeStartRecord()
-        call flushScat()
+        call emitParcel()
         return
       endif
       !> No cell holds the injection point: the parcel is not integrated (counted per sweep).
@@ -163,7 +175,7 @@ contains
         !$OMP ATOMIC
         nInjNoCell = nInjNoCell + 1
         call writeStartRecord()
-        call flushScat()
+        call emitParcel()
         return
       endif
 
@@ -211,11 +223,15 @@ contains
     call packAuxVars(part, nauxvar, auxLocal)
     !> The injection row, then a breakup child's first row (its birth state, before its first step), on the
     !  parcel's own aux and cell gas.
+    rowsNew = trajOn .and. .not.dcellSet
+    haveRow = .false.
+    nWrap = 0
     if (part%time==0._R8 .and. trajOn) call writeTrajRow()
     if (part%newborn) then
       if (trajOn) call writeTrajRow()
       part%newborn = .false.
     endif
+    tL = part%time; xL = part%stateVar(1:3)
 
     !> TRAJECTORY INTEGRATION LOOP
     iter = 0; nCross=0; tprint = part%time + dtprint
@@ -330,10 +346,12 @@ contains
       !> Wedge sector exit: fold the azimuth back into the band after the deposits, before the cell logic.
       foldOnly = sectorOut .and. .not.(newGas .or. IamOut)
       if (sectorOut) then
+        if (rowsNew) call trajRow(preRow, nPre, layPre)
         call axisymFold(part%stateVar, nSect=nSect)
         if (nSect > 0) then
           !$OMP ATOMIC
           nSectorFold = nSectorFold + 1
+          if (rowsNew) call transportRows(.false.)
         else
           part%Ncell = part%Ncell + 1   ! no fold: counted as residency
         endif
@@ -373,12 +391,12 @@ contains
                   tol=geoHexTol)
             endif
           else
-            call part%updateCell(geoblock, reflected=refl); reflSeg = reflSeg .or. refl; call handleGeoEvent()
+            call relocate(); call handleGeoEvent()
           endif
         endif
         !> Geo domain exit / BC handling.
         if (IamOut) then
-          call part%updateCell(geoblock, reflected=refl); reflSeg = reflSeg .or. refl; call handleGeoEvent()
+          call relocate(); call handleGeoEvent()
         endif
         !> Residency count on the gas cell; a pure sector fold is neither a crossing nor residency.
         if (newGas .or. IamOut) then; nCross = nCross + 1; part%Ncell = 0
@@ -386,7 +404,7 @@ contains
       else
         !> ord1: geo-driven.
         if (IamOut) then
-          call part%updateCell(geoblock, reflected=refl); reflSeg = reflSeg .or. refl; b = part%i(1)
+          call relocate(); b = part%i(1)
           call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen, &
               tol=geoHexTol)
         endif
@@ -401,10 +419,12 @@ contains
 
       !> Wedge safety net: fold a segment that ended past a k-plane together with an x-y crossing.
       if (axisym) then
+        if (rowsNew) call trajRow(preRow, nPre, layPre)
         call axisymFold(part%stateVar, nSect=nSect)
         if (nSect > 0) then
           !$OMP ATOMIC
           nSectorFold = nSectorFold + 1
+          if (rowsNew) call transportRows(.false.)
         endif
         if (nSect > 1) then
           !$OMP ATOMIC
@@ -438,7 +458,20 @@ contains
         part%gone = .true.
       endif
 
-      if ((dtprint>0._R8.and.part%time>=tprint).or.(mod(nCross,iprint)==0.and.part%Ncell==0.and..not.foldOnly) &
+      !> MPI: end every parcel in flight after a failure, before the row decision writes its last row
+      if (region_failed()) part%gone = .true.
+      !> Rows: the parcel rule (print-ds, else print-dtime, from the last row; a last row at a stop) or print-dcell's cadence
+      if (.not.dcellSet) then
+        if (rowsNew) then
+          if (part%gone .or. part%time>=tEnd) then
+            call writeLastRow()
+          elseif (dsprint>0._R8) then
+            if (norm2(part%stateVar(1:3) - xL) >= dsprint) call writeRuleRow()
+          elseif (dtprint>0._R8) then
+            if (part%time - tL >= dtprint) call writeRuleRow()
+          endif
+        endif
+      elseif ((dtprint>0._R8.and.part%time>=tprint).or.(mod(nCross,iprint)==0.and.part%Ncell==0.and..not.foldOnly) &
           .or.part%time>=tEnd) then
         if (trajOn) call writeTrajRow()
         tprint = tprint + dtprint
@@ -449,14 +482,12 @@ contains
       !> time-end reached inside the domain: the parcel's state at the stop.
       if (snapOn .and. part%time>=tEnd .and. .not.part%gone) then
         if (frozenOn) then
-          write(unit=unitSnap,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2,F10.6)') part%stateVar(1:6), part%tp, part%d, part%m, &
-                                                                           part%ID, part%time, part%fSolid
+          call rec_push(lSnap, [part%stateVar(1:6), part%tp, part%d, part%m, real(part%ID, R8), part%time, part%fSolid], &
+                          L_ROW_TF)
         else
-          write(unit=unitSnap,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, &
-                                                                    part%time
+          call rec_push(lSnap, [part%stateVar(1:6), part%tp, part%d, part%m, real(part%ID, R8), part%time], L_ROW_T)
         endif
       endif
-      if (region_failed()) part%gone = .true.   !> MPI: end every parcel in flight after a failure
       if (part%gone) then
         !> The residue's record: the state its parent's exit record prints.
         if (resBorn) then
@@ -473,7 +504,7 @@ contains
         endif
         call writeExitRow()
         part%time = 0._R8
-        call flushScat()
+        call emitParcel()
         return
       endif
 
@@ -483,41 +514,104 @@ contains
     if (iter >= maxIter .and. .not. part%gone) then
       write(*,'(A,I4,A,I0,A)') '       ==> Particle ',part%ID,' hit outer maxIter (',maxIter,'); flagging gone'
       part%gone = .true.
+      if (rowsNew) call writeLastRow()
       call writeExitRow()
       part%time = 0._R8
     endif
     !> Time end reached inside the domain: the record of where integration stopped.
-    if (.not. part%gone .and. part%time >= tEnd) call writeExitRow()
-    !> Every exit path flushes the scatter buffer.
-    call flushScat()
+    if (.not. part%gone .and. part%time >= tEnd) then
+      if (rowsNew) call writeLastRow()
+      call writeExitRow()
+    endif
+    !> Every exit path writes the parcel's rows.
+    call emitParcel()
 
   contains
 
-    !> One trajectory row; out-time appends the parcel time, a solidifying material the frozen fraction,
-    !  a P2T material the surface temperature.
+    !> One trajectory row of the parcel's current state.
     subroutine writeTrajRow()
-      real(R8) :: tsRow
+      real(R8) :: row(12)
+      integer  :: n, lay
+      call trajRow(row, n, lay)
+      call pushTraj(row(1:n), lay)
+    end subroutine writeTrajRow
+
+
+    !> The trajectory row of the parcel's current state, n values in layout lay; out-time appends the parcel time,
+    !  a solidifying material the frozen fraction, a P2T material the surface temperature.
+    subroutine trajRow(row, n, lay)
+      real(R8), intent(out) :: row(12)
+      integer,  intent(out) :: n, lay
+      row(1:6) = part%stateVar(1:6); row(7) = part%tp; row(8) = part%d; row(9) = part%m; row(10) = real(part%ID, R8)
+      n = 10; lay = L_ROW
       if (part%liqSelect == 1) then
-        tsRow = surfaceTemp()
         if (timeOn) then
-          write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2,F12.6)') part%stateVar(1:6), part%tp, part%d, part%m, &
-                                                                           part%ID, part%time, tsRow
+          row(11) = part%time; row(12) = surfaceTemp(); n = 12; lay = L_ROW_TS
         else
-          write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,F12.6)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, tsRow
+          row(11) = surfaceTemp(); n = 11; lay = L_ROW_S
         endif
       elseif (timeOn .and. frozenOn) then
-        write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2,F10.6)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, &
-                                                                         part%time, part%fSolid
+        row(11) = part%time; row(12) = part%fSolid; n = 12; lay = L_ROW_TF
       elseif (timeOn) then
-        write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,ES16.8E2)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, &
-                                                                  part%time
+        row(11) = part%time; n = 11; lay = L_ROW_T
       elseif (frozenOn) then
-        write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8,F10.6)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID, &
-                                                                part%fSolid
-      else
-        write(unit=unitTraj,fmt='(7F12.6,2E13.6E2,I8)') part%stateVar(1:6), part%tp, part%d, part%m, part%ID
+        row(11) = part%fSolid; n = 11; lay = L_ROW_F
       endif
-    end subroutine writeTrajRow
+    end subroutine trajRow
+
+
+    !> Push one trajectory row; the parcel rule's last row compares the parcel's state with it.
+    subroutine pushTraj(row, lay)
+      real(R8), intent(in) :: row(:)
+      integer,  intent(in) :: lay
+      call rec_push(lTraj, row, lay)
+      svRow = row(1:6); tRow = part%time; haveRow = .true.
+    end subroutine pushTraj
+
+
+    !> The parcel rule's row at a reached limit: it becomes the reference of the next one.
+    subroutine writeRuleRow()
+      call writeTrajRow()
+      tL = part%time; xL = part%stateVar(1:3)
+    end subroutine writeRuleRow
+
+
+    !> The parcel rule's last row at a stop, unless the row just pushed holds this state.
+    subroutine writeLastRow()
+      if (haveRow) then
+        if (tRow == part%time .and. all(svRow == part%stateVar(1:6))) return
+      endif
+      call writeTrajRow()
+    end subroutine writeLastRow
+
+
+    !> A wrap or fold under the parcel rule: preRow (taken before it), then the re-entry row, the next row's reference;
+    !  a wrap's re-entry row starts the next image.
+    subroutine transportRows(wrap)
+      logical, intent(in) :: wrap
+      call pushTraj(preRow(1:nPre), layPre)
+      if (wrap) call rec_break(lTraj, nWrap)
+      preRow(1:6) = part%stateVar(1:6)
+      call pushTraj(preRow(1:nPre), layPre)
+      tL = part%time; xL = part%stateVar(1:3)
+    end subroutine transportRows
+
+
+    !> updateCell from the outer loop; a 201 wrap starts the next trajectory image (in every mode) and writes its two rows
+    !  under the parcel rule (the first: the segment end).
+    subroutine relocate()
+      if (rowsNew) call trajRow(preRow, nPre, layPre)
+      call part%updateCell(geoblock, reflected=refl, wrapped=wrp)
+      reflSeg = reflSeg .or. refl
+      if (wrp) then
+        nWrap = nWrap + 1
+        if (rowsNew) then
+          call transportRows(.true.)
+        elseif (trajOn) then
+          call rec_break(lTraj, nWrap)
+        endif
+      endif
+    end subroutine relocate
 
 
     !> The surface temperature of a P2T parcel at its current state: its right-hand side on copies of the aux and gas
@@ -549,18 +643,17 @@ contains
       if (part%model == 4) mdotOut = part%npdot*part%m
       if (present(started)) then; if (.not.started) mdotOut = part%mdot; endif
       if (timeOn .and. frozenOn) then
-        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,ES16.8E2,I5,E13.6E2,F10.6)') part%stateVar(1:3), part%tp, &
-              norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%time, part%exitCode, part%d, &
-              part%fSolid
+        call rec_push(lExit, [part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, &
+                         real(part%ID, R8), part%time, real(part%exitCode, R8), part%d, part%fSolid], L_EXIT_TF)
       elseif (timeOn) then
-        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,ES16.8E2,I5,E13.6E2)') part%stateVar(1:3), part%tp, &
-              norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%time, part%exitCode, part%d
+        call rec_push(lExit, [part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, &
+                         real(part%ID, R8), part%time, real(part%exitCode, R8), part%d], L_EXIT_T)
       elseif (frozenOn) then
-        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,I5,E13.6E2,F10.6)') part%stateVar(1:3), part%tp, &
-              norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%exitCode, part%d, part%fSolid
+        call rec_push(lExit, [part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, &
+                         real(part%ID, R8), real(part%exitCode, R8), part%d, part%fSolid], L_EXIT_F)
       else
-        write(unit=unitExit,fmt='(6F12.6,2E13.6E2,I8,I5,E13.6E2)') part%stateVar(1:3), part%tp, &
-              norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, part%ID, part%exitCode, part%d
+        call rec_push(lExit, [part%stateVar(1:3), part%tp, norm2(part%stateVar(4:6)), part%angle, mdotOut, part%Af, &
+                         real(part%ID, R8), real(part%exitCode, R8), part%d], L_EXIT)
       endif
     end subroutine writeExitRow
 
@@ -623,18 +716,20 @@ contains
           d = (sixOverPi*m/rho)**oneThird
         endif
         if (ind_rs > 0) d = solidDiameter(m, f, rho, auxLocal(ind_rs))
-        write(unit=unitPlane,fmt='(I3,7F12.6,2E13.6E2,2ES16.8E2,F10.6,2I10,ES16.8E2,I3)') kp, planeX(kp), pos, vel, tp, &
-              d, m, mdotR, np, f, part%ID, part%parentID, tc, idir
+        call rec_push(lPlane, [real(kp, R8), planeX(kp), pos, vel, tp, d, m, mdotR, np, f, real(part%ID, R8), &
+                          real(part%parentID, R8), tc, real(idir, R8)], L_PLANE)
       enddo
     end subroutine emitPlanes
 
 
-    !> Emit the buffered scatter records in one write statement.
-    subroutine flushScat()
-      if (nScat <= 0) return
-      write(unit=unitScat,fmt='(A)') (trim(scatBuf(iScat)), iScat=1,nScat)
-      nScat = 0
-    end subroutine flushScat
+    !> The parcel's rows, one block per particle file.
+    subroutine emitParcel()
+      if (trajOn) call rec_emit_traj(lTraj, slot, part%ID, part%parentID)
+      call rec_emit(lExit, STR_EXIT, slot, part%ID)
+      if (planeOn) call rec_emit(lPlane, STR_PLANE, slot, part%ID)
+      if (snapOn) call rec_emit(lSnap, STR_SNAP, slot, part%ID)
+      if (scatOn) call rec_emit(lScat, STR_SCAT, slot, part%ID)
+    end subroutine emitParcel
 
 
     !> Integrate one trajectory segment: run the ODE solver on [t1,t2] under solout interrupts,
@@ -1067,14 +1162,12 @@ contains
         else; d = (sixOverPi*m/rho)**oneThird; endif
         if (ind_rs > 0) d = solidDiameter(m, y(8), rho, auxLocal(ind_rs))
         if (mod_model == 8) d = (sixOverPi*(y(8)/rho + y(9)/auxLocal(ind_mb+imRr-1)))**oneThird
-        nScat = nScat + 1
         if (frozenOn) then
           fScat = 0._R8; if (mod_isSolid) fScat = y(8)
-          write(scatBuf(nScat),'(7F12.6,2E13.6E2,I8,F10.6)') y(1:3), y(4:6), tp, d, m, part%ID, fScat
+          call rec_push(lScat, [y(1:6), tp, d, m, real(part%ID, R8), fScat], L_ROW_F)
         else
-          write(scatBuf(nScat),'(7F12.6,2E13.6E2,I8)') y(1:3), y(4:6), tp, d, m, part%ID
+          call rec_push(lScat, [y(1:6), tp, d, m, real(part%ID, R8)], L_ROW)
         endif
-        if (nScat == SCATCAP) call flushScat()
         wAcc = wAcc - dNscat
       endif
       !> Latched with the state, after the emission: a refinement never writes a marker twice.

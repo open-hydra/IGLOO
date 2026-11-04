@@ -53,6 +53,7 @@ contains
     use IGLOO_variables
     use IGLOO_Lib_Mollify, only: DEFAULT_MOLLIFY_PASSES
     use IGLOO_Mod_Timing,  only: timingOn
+    use IGLOO_Mod_MPI,     only: mpi_is_root
     implicit none
     logical,             intent(out) :: srcSwitch, eulSwitch
     character(len=llen), intent(out) :: gasfile
@@ -108,12 +109,23 @@ contains
     !> Particles' trajectories output-printing sampling frequency
     call fini%get(section_name='IGLOO-General', option_name='fsample-traj', val=trajSample, error=error)
     if (error/=0) trajSample = 100
-    !> Output print frequency of the single particle trajectory (cell crossings)
-    call fini%get(section_name='IGLOO-General', option_name='print-dcell', val=iprint, error=error)
-    if (error/=0) iprint = 1
-    !> Output print frequency of the single particle trajectory (time based [s])
-    call fini%get(section_name='IGLOO-General', option_name='print-dtime', val=dtprint, error=error)
-    if (error/=0) dtprint = -1._R8
+    !> Trajectory rows: print-dcell present = the diagnostic crossing cadence; else print-ds, then print-dtime
+    dcellSet = inSection('IGLOO-General','print-dcell')
+    iprint = 1
+    if (dcellSet) then
+      call fini%get(section_name='IGLOO-General', option_name='print-dcell', val=iprint, error=error)
+      if (error/=0 .or. iprint<1) error stop 'IGLOO: [IGLOO-General] print-dcell must be an integer >= 1'
+    endif
+    dtprint = -1._R8
+    if (inSection('IGLOO-General','print-dtime')) then
+      call fini%get(section_name='IGLOO-General', option_name='print-dtime', val=dtprint, error=error)
+      if (error/=0) error stop 'IGLOO: [IGLOO-General] print-dtime must be a number [s]'
+    endif
+    dsprint = -1._R8
+    if (inSection('IGLOO-General','print-ds')) then
+      call fini%get(section_name='IGLOO-General', option_name='print-ds', val=dsprint, error=error)
+      if (error/=0) error stop 'IGLOO: [IGLOO-General] print-ds must be a number [m]'
+    endif
     !> Parcel end time [s]; absent or <= 0 = off (integrate until the parcel leaves the domain)
     call fini%get(section_name='IGLOO-General', option_name='time-end', val=tEnd, error=error)
     if (error/=0 .or. .not.(tEnd>0._R8)) tEnd = huge(1._R8)
@@ -132,6 +144,19 @@ contains
     trajOn = .not.( error==0 .and. is_off_token(mollify_word) )
     call fini%get(section_name='IGLOO-General', option_name='out-scatter', val=mollify_word, error=error)
     scatOn = .not.( error==0 .and. is_off_token(mollify_word) )
+    !> The trajectory row rule in force, once (root); silent on the diagnostic crossing cadence
+    if (trajOn .and. mpi_is_root) then
+      if (dcellSet) then
+        if (dsprint>0._R8) write(*,'(A)') '  >> print-ds ignored: print-dcell sets the diagnostic crossing cadence'
+      elseif (dsprint>0._R8) then
+        write(*,'(A,ES12.5,A)') '  >> Trajectory rows: one at each print-ds = ', dsprint, ' m from the last row'
+        if (dtprint>0._R8) write(*,'(A)') '  >> print-dtime ignored: print-ds is set'
+      elseif (dtprint>0._R8) then
+        write(*,'(A,ES12.5,A)') '  >> Trajectory rows: one at each print-dtime = ', dtprint, ' s since the last row'
+      else
+        write(*,'(A)') '  >> Trajectory rows: the first and the last (print-ds and print-dtime unset)'
+      endif
+    endif
     !> RNG seed for stochastic injection-diameter sampling (optional; default 42)
     call fini%get(section_name='IGLOO-General', option_name='seed', val=rng_seed, error=error)
     if (error/=0) rng_seed = 42

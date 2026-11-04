@@ -11,8 +11,8 @@ check.py runs the same cells as one block (make_box_case.py, this input.ini) int
 Targets
   R1  the run log's ghost line: 98 ghost nodes interpolated (the 7 x 7 nodes of each face plane, edges
       and corners included), none left uncovered
-  G5a trajectory temperature against the one-block run, rows matched by parcel and x, the rows at the
-      face left out: worst difference <= 8e-5 K
+  G5a trajectory temperature against the one-block run, rows matched by family (the zone title's group),
+      parcel and x, the rows at the face left out, every row of either run matched: worst difference <= 8e-5 K
   G5b source E against the one-block run, cell by cell outside the two face columns (30 and 31 of the
       one-block order): <= 1.1e-6 of the field scale; columns 30 and 31 by their transverse totals:
       <= 1.742e-4 of the one-block total
@@ -85,12 +85,13 @@ def run_sibling():
 
 
 def trajectories(path):
-    """{(zone, parcel ID): {x rounded to the printed digits: (u, T)}}, the rows at the face left out
-    (IDs restart in every family's zone)."""
+    """{(group, parcel ID): {x rounded to the printed digits: (u, T)}}, the group read from each zone's title,
+    the rows at the face left out (IDs restart in every family)."""
     out, zone = {}, 0
     for ln in open(path):
         if ln.lstrip().upper().startswith("ZONE"):
-            zone += 1
+            m = re.search(r"Group\s*(\d+)", ln)
+            zone = int(m.group(1)) if m else 0
             continue
         t = ln.split()
         if len(t) < 10:
@@ -160,11 +161,13 @@ def main():
                 continue
             nrow += 1
             dU, dT = max(dU, abs(u - q[0])), max(dT, abs(T - q[1]))
-    if nrow == 0 or dT > TOL_T:
-        rc |= fail(f"G5a trajectory T: worst {dT:.3e} K over {nrow} matched rows ({nmiss} unmatched), "
-                   f"tolerance {TOL_T:g} K")
+    alone = sum(len(rows) for rows in tb.values()) - nrow
+    if nrow == 0 or nmiss or alone or dT > TOL_T:
+        rc |= fail(f"G5a trajectory T: worst {dT:.3e} K over {nrow} matched rows ({nmiss} of this run and {alone} "
+                   f"of the one-block run unmatched), tolerance {TOL_T:g} K")
     else:
-        print(f"G5a trajectory T against the one-block run within {TOL_T:g} K over {nrow} rows PASS")
+        print(f"G5a trajectory T against the one-block run within {TOL_T:g} K over {nrow} rows, every row of "
+              f"either run matched PASS")
 
     _, za = TWOBLK.read_zones("OUTPUT/source.tec")
     _, zb = TWOBLK.read_zones(os.path.join(ref, "OUTPUT", "source.tec"))

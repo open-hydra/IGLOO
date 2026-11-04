@@ -37,10 +37,11 @@ ref-plain
 ref-S
 # mhb98-water-blowing runs the droplet without blowing into ref-noblow/ (tests/evaporation/mhb98-water-blowing/check.py)
 ref-noblow
-# periodic-y and periodic-2d run unsmoothed and first-row siblings (tests/infrastructure/periodic-y/check.py)
+# periodic-y and periodic-2d run unsmoothed, first-row and print-ds siblings (tests/infrastructure/periodic-y/check.py)
 ref-raw
 ref-row
 ref-row-raw
+ref-ds
 # chimera-2blk-shift-mollify runs the box shifted by half a cell into ref-shift/ (its check.py)
 ref-shift
 # etab-e2e-dopri5 runs its H-sdirk4 sibling into ref-sdirk4/ (tests/breakup/etab-e2e-dopri5/check.py)
@@ -94,6 +95,8 @@ tests/*/*/diag_*.txt
 tests/mpi/*/tec_n*/
 # Per-thread-count runs of the thread gates (tests/tools/check_threads_case.py)
 tests/*/*/threads-omp*/
+# The window gate's runs (tests/tools/check_window_case.py)
+tests/*/*/window-*/
 
 # mkdocs build output
 site/

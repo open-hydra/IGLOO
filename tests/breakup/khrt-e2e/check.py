@@ -36,6 +36,9 @@ unit-side on 2026-08-03 by:
 
 SCATTER — every row of scatter-A.dat carries the diameter of its mass: |m - RHOP pi d^3/6|/m within the E13.6 prints
 of m and d, h(m)/m + 3 h(d)/d + 1e-9 (check_scatter_diameter); at least 1000 rows of at least 10 parcels.
+
+ZONES (G3) — one trajectory zone per parcel, its title's parent the injected parcel on the child's (Y, Z) line
+(check_zones).
 """
 import math
 import os
@@ -240,6 +243,39 @@ def check_multiple_sheds():
               "(single slot per parent, or childDone latched at the capture).")
         return 1
     return 0
+
+
+def check_zones():
+    """G3: the trajectory file holds one zone per parcel, titled `Mat A Group  1 ID <id> parent <pid>` with I= its
+    rows, in parcel order (datcols.parcel_zones). The flow is along x, so the 25 injected parcels (IDs 1-25,
+    parent 0) ride 25 distinct (Y, Z) lines and a child stays on the line it was born on: its parent is the injected
+    parcel on that line, whose x range holds the child's birth row. One zone per child the log counts."""
+    try:
+        zs = datcols.parcel_zones(TRAJ)
+        nlog = sum(int(ln.split("=")[-1]) for ln in open(RUN_OUT) if "number of children" in ln)
+    except (OSError, ValueError) as e:
+        print(f"\n[FAIL] G3 {e}")
+        return 1
+    inj = {z["id"]: z for z in zs if z["parent"] == 0}
+    lines = {}
+    for z in inj.values():
+        lines.setdefault((z["rows"][0]["Y"], z["rows"][0]["Z"]), []).append(z["id"])
+    kids = [z for z in zs if z["parent"] != 0]
+    bad = [z["title"] for z in zs if z["image"] != 0 or (z["parent"] == 0) != (z["id"] <= N_INJECTED)]
+    for z in kids:
+        b, p = z["rows"][0], inj.get(z["parent"])
+        if (p is None or lines.get((b["Y"], b["Z"])) != [z["parent"]]
+                or not min(r["X"] for r in p["rows"]) <= b["X"] <= max(r["X"] for r in p["rows"])
+                or any((r["Y"], r["Z"]) != (b["Y"], b["Z"]) for r in z["rows"])):
+            bad.append(z["title"])
+    ok = (not bad and sorted(inj) == list(range(1, N_INJECTED + 1)) and len(lines) == N_INJECTED
+          and 0 < len(kids) == nlog)
+    print(f"\nG3 one zone per parcel: {len(inj)} injected (parent 0) on {len(lines)} distinct (Y, Z) lines; "
+          f"{len(kids)} children ({nlog} in the log), each titled with the injected parcel on its line and born in "
+          f"its x range: {len(bad)} off {'PASS' if ok else 'FAIL'}")
+    for t in bad[:3]:
+        print(f"  [FAIL] {t}")
+    return 0 if ok else 1
 
 
 def load_trajectories(path):
@@ -488,12 +524,13 @@ def main():
     rc_shed = check_multiple_sheds()
     rc_src = check_source_budget()
     rc_scat = check_scatter_diameter()
+    rc_zone = check_zones()
 
     if n_good >= N_GOOD and n_viol == 0 and rc_mass == 0 and rc_kids == 0 and rc_shed == 0 \
-            and rc_src == 0 and rc_scat == 0:
+            and rc_src == 0 and rc_scat == 0 and rc_zone == 0:
         print("\n[PASS] IGLOO reproduces the Reitz-87 KH-stripping rate at every gated We_r, "
-              "conserves parcel mass-flow, sheds children that integrate, and writes scatter rows whose "
-              "diameter is that of their mass.")
+              "conserves parcel mass-flow, sheds children that integrate, writes scatter rows whose "
+              "diameter is that of their mass and one trajectory zone per parcel, a child's titled with its parent.")
         return 0
     if n_viol:
         print(f"\n[FAIL] {n_viol} drop(s) deviate from the Reitz-87 KH-stripping rate.")

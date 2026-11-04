@@ -10,7 +10,7 @@
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ burn-box-ox0/ beckstead-air/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-melt-rhos/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-brk-tab-rhos/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ khrt-varcp/ breakup-per-material/ khrt-plane/ pe-sigma-table/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ tec_read/ tec_write/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ sym-plane-creep/ sym-plane-creep-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,krho-{sum,negative},gas-no-density}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ tec_read/ tec_write/ fmt/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ sym-plane-creep/ sym-plane-creep-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,krho-{sum,negative},gas-no-density}
 #   repeatability/      two-sweep gates (twosweep driver): 15 cases
 #   mpi/                registered only under USE_MPI: 9 rank-count cases + 4 consistency + 1 determinism
 #                       + 14 two-sweep cases
@@ -270,6 +270,13 @@ set_tests_properties(test_tec_write PROPERTIES
     LABELS "unit;infrastructure;io"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tec_write"
     TIMEOUT 900)
+# The particle files' edit descriptors without the runtime (IGLOO_fmt): every record layout the trajectories, outloc,
+# planes, snapshot and scatter files write and the zone headers' I0, each on its descriptors' constructed values (fixed)
+# and on 3e5 random records (the program's default; 3e6 by hand), and the scatter layout on 3e6 plausible records,
+# against the runtime's internal write of the same values with the same descriptors. RED without the near-tie window:
+# 355828 of the 3e6 plausible records; with the compilers' -0.0 rules exchanged, the sign of a value that rounds to
+# zero dropped or the integers' sign dropped: every descriptor the rule touches.
+igloo_unit_test(test_fmt               infrastructure/fmt                "unit;infrastructure;io")
 
 # ---------- two-sweep repeatability harness -----------------------------------
 # Drives one pinned population through solve() TWICE. Every other case in the suite is
@@ -344,8 +351,8 @@ function(igloo_twosweep_case name casedir labels gasfile)
         TIMEOUT 900)
 endfunction()
 # Thread-count invariance of a serial case (tools/check_threads_case.py): its input.ini run at 1, 2 and 5 threads in
-# <case>/threads-omp<N>/ (never the case's own OUTPUT/), the thread witness, every .dat an exact multiset, every .tec
-# within 1e-12 of the field scale, the case's check.py on the 1-thread run.
+# <case>/threads-omp<N>/ (never the case's own OUTPUT/), the thread witness, every .dat byte for byte the 1-thread
+# run's, every .tec within 1e-12 of the field scale, the case's check.py on the 1-thread run.
 function(igloo_threads_case name casedir labels)
     add_test(NAME ${name}
         COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_threads_case.py
@@ -824,6 +831,9 @@ set_tests_properties(khrt-e2e-rt PROPERTIES
 # per-parent shed lists go through ~7 doublings. Gates mass exactness under heavy shedding
 # plus "the runaway guard did not fire". INPUT/ is a symlink to ../khrt-e2e/INPUT.
 igloo_e2e_case(khrt-stress breakup/khrt-stress "e2e;breakup;khrt;stress")
+# threads-khrt-stress: khrt-stress at 1, 2 and 5 threads -- 25 parents and their 701 children, two parcel loops with
+# an ordered window each, and the suite's largest particle file (scatter, 195 MB).
+igloo_threads_case(threads-khrt-stress breakup/khrt-stress "e2e;breakup;khrt;omp")
 # khrt-e2e-euler: the khrt-e2e case (model 3) with the Eulerian output on (out-file ALL, mollify off, out-time):
 # its oracles, no parcel lost to a solver failure or a non-finite state, and the Eulerian mass = sum over
 # exits of flow x time. RED while a breakup child enters without its state count (241 children lost at
@@ -887,6 +897,17 @@ set_tests_properties(khrt-e2e-threads PROPERTIES
     TIMEOUT 600)
 # All three rm -rf the same OUTPUT/ in the same working directory.
 set_tests_properties(khrt-e2e khrt-e2e-rt khrt-e2e-threads PROPERTIES RESOURCE_LOCK khrt_output)
+# window-khrt-e2e: the particle files' ordered window (tools/check_window_case.py): khrt-e2e at 1 thread, and at 5
+# threads with the default budget and with a 64 KiB one (IGLOO_IOBUF_BYTES), in khrt-e2e/window-*/: the spill
+# exercised, the bytes held within the budget, every .dat byte for byte the 1-thread run's.
+add_test(NAME window-khrt-e2e
+    COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_window_case.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/breakup/khrt-e2e $<TARGET_FILE:IGLOO>
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/breakup/khrt-e2e")
+set_tests_properties(window-khrt-e2e PROPERTIES
+    LABELS "e2e;breakup;khrt;omp;output"
+    ENVIRONMENT "KMP_STACKSIZE=100M;IGLOO_EXE=$<TARGET_FILE:IGLOO>"
+    TIMEOUT 600)
 
 # ---------- infrastructure: combined output paths --------------------------------
 # coupled-body: the euler, source and body-force accumulators combined in one run
@@ -1342,8 +1363,9 @@ igloo_e2e_case(sym-plane-creep-ord2 infrastructure/sym-plane-creep-ord2 "e2e;inf
 igloo_e2e_case(exit-census infrastructure/exit-census "e2e;infrastructure;io")
 
 # vv-order, check-order: the V&V figures (verify.py) and the printouts of the gates that pick parcels (check.py) are
-# the same whatever order an OpenMP run gives the records of each zone of the .dat files (vv_order_check.py). Both
-# read the cases' fresh OUTPUT/, which each case starts by removing: each case is a fixture, its output a lock.
+# the same whatever the order of the records of each zone of the .dat files and of a trajectory file's zones
+# (vv_order_check.py). Both read the cases' fresh OUTPUT/, which each case starts by removing: each case is a fixture,
+# its output a lock.
 foreach(_c tab-e2e burn-box solid-box conv-nu temp-relax drag-stokes body-force coupled-body periodic-y
         tab-hf92 etab-hf92 mhb98-water beckstead-air d2law-varcp body-evap-m2 body-evap-m4 body-burn-m5)
     set_tests_properties(${_c} PROPERTIES FIXTURES_SETUP order_${_c} RESOURCE_LOCK ${_c}_output)
