@@ -502,7 +502,8 @@ contains
         open(newunit=unitScat,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'scatter-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
              access='stream', form='unformatted', status='replace')
         call ps_open(STR_SCAT, unitScat)
-        call ps_text(STR_SCAT, ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)//LF, 0, 0)
+        call ps_text(STR_SCAT, ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)//',"weight"'//LF, &
+                     0, 0)
         call ps_text(STR_SCAT, 'Zone T="Mat '//trim(mat%matName)//' scatter"'//LF, 0, 1)
         !> Serial inject-only pre-pass over ALL particles (replicated on every rank so dNscat is
         !  identical everywhere): resolves each stream's npdot and injection speed.
@@ -738,6 +739,7 @@ contains
                 kid%tp            = src%temp
                 kid%d             = src%diam
                 kid%npdot         = src%npdot
+                kid%npRef         = src%npRef
                 kid%time          = src%time
                 kid%parentID      = src%parent
                 kid%newborn       = .true.

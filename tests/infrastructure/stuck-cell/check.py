@@ -12,6 +12,9 @@ Gates
   S2  25 exit records, every one at its injection point: x = 0, y and z the inlet cell centres, |u| = 0
   S3  no 'no net progress', 'Inner loop >', 'hit outer maxIter' or 'non-finite' line
   S4  the run ends normally: the 'Stop condition' line in run_out.txt, nothing in run_err.txt
+  L1  the parcel rule's last row at the guard (tools/lastrow.py): a sibling in ref-last/ without row keys and with
+      out-time on, run with the IGLOO_EXE executable; each parcel's trajectory is its injection row and a last row at
+      its exit record's state (X, Y, Z within half the F12.6 quantum, t within the ES16.8 half-unit), once
 """
 import os
 import re
@@ -20,6 +23,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
 import datcols  # noqa: E402
+import lastrow  # noqa: E402
+
+IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
 
 N_PARCELS = 25
 HALF = 0.5e-6
@@ -61,6 +67,7 @@ def main():
                                                           else f"run_err.txt: {err.strip()[:120]!r}"))
     else:
         print("S4 the run ended normally (Stop condition, empty run_err.txt) PASS")
+    rc |= lastrow.gate(HERE, IGLOO)
     print("\n[PASS] stuck-cell: the residency guard ends every parcel at rest, once" if rc == 0
           else "\n[FAIL] stuck-cell violation(s) -- see above.")
     return rc

@@ -30,6 +30,8 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
+import datcols                                                     # noqa: E402
 
 
 def load(name, *rel):
@@ -146,8 +148,8 @@ def main():
         else:
             print(f"T2 material {mat}: every exit record carries mdot = {want:.6e} PASS")
         try:
-            nscat = sum(1 for ln in open(f"OUTPUT/scatter-{mat}.dat") if len(ln.split()) == 10)
-        except FileNotFoundError as e:
+            nscat = len(datcols.rows(f"OUTPUT/scatter-{mat}.dat"))
+        except (FileNotFoundError, ValueError) as e:
             rc |= fail(f"C2 {e}"); continue
         if len(exits[mat]) != N_PARCELS or nscat == 0:
             rc |= fail(f"C2 material {mat}: {len(exits[mat])} exits (expected {N_PARCELS}), {nscat} scatter rows")

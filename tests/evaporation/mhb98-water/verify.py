@@ -54,7 +54,7 @@ def lsq_slope(ts, ys):
 def igloo_and_kernel(parts):
     """(pid, t[s], d2_igloo[mm^2], d2_kernel[mm^2], Tp[K]) for the first sampled droplet."""
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:

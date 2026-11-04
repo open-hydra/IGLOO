@@ -4,9 +4,9 @@ program test_fmt
     ! outloc, planes, snapshot, scatter) and of the zone headers' I0 is formatted by fmt_row and by the runtime's
     ! internal write with the same edit descriptors and the same values; the bytes must agree.
     !
-    !   P1      fixed: the scatter layout on 2e6 plausible records with negatives that round to zero, -0.0 and zeros,
-    !           and 1e6 decimal half-way points of F12.6 with their neighbours
-    !   L1-L11  the eleven particle-record layouts, each in two parts:
+    !   P1      fixed: the trajectory layout on 2e6 plausible records with negatives that round to zero, -0.0 and
+    !           zeros, and 1e6 decimal half-way points of F12.6 with their neighbours
+    !   L1-L11, L13-L14  the thirteen particle-record layouts, each in two parts:
     !           C  fixed: every field runs through its descriptor's constructed values -- +-0.0; NaN, -NaN, +-Inf;
     !              subnormals and the smallest normals; values that round to zero; exact ties; decimal half-way points;
     !              powers of ten and the values half a last digit below; the fast range's edges, values wider than
@@ -26,7 +26,7 @@ program test_fmt
     use IGLOO_fmt, only: fmtSpec, fmt_compile, fmt_row, fmt_int
     implicit none
 
-    integer, parameter :: NL = 12, LREC = 512, NTPUT = 200000, ND = 10, NCLS = 9, NCMAX = 8192
+    integer, parameter :: NL = 14, LREC = 512, NTPUT = 200000, ND = 10, NCLS = 9, NCMAX = 8192
     character(len=56), parameter :: LAY(NL) = [character(len=56) :: &
         '(7F12.6,2E13.6E2,I8)', &
         '(7F12.6,2E13.6E2,I8,ES16.8E2)', &
@@ -39,11 +39,13 @@ program test_fmt
         '(6F12.6,2E13.6E2,I8,I5,E13.6E2,F10.6)', &
         '(6F12.6,2E13.6E2,I8,I5,E13.6E2)', &
         '(I3,7F12.6,2E13.6E2,2ES16.8E2,F10.6,2I10,ES16.8E2,I3)', &
-        '(I0,I0,I0,I0)']
+        '(I0,I0,I0,I0)', &
+        '(7F12.6,2E13.6E2,I8,E13.6E2)', &
+        '(7F12.6,2E13.6E2,I8,F10.6,E13.6E2)']
     character(len=40), parameter :: WHAT(NL) = [character(len=40) :: &
-        'trajectories, scatter', 'trajectories + t, snapshot', 'trajectories + f, scatter + f', &
+        'trajectories', 'trajectories + t, snapshot', 'trajectories + f', &
         'trajectories + t + f, snapshot + f', 'trajectories P2T + t', 'trajectories P2T', 'outloc + t + f', &
-        'outloc + t', 'outloc + f', 'outloc', 'planes', 'zone header integers']
+        'outloc + t', 'outloc + f', 'outloc', 'planes', 'zone header integers', 'scatter', 'scatter + f']
     !> the descriptors, the surface-temperature column of the P2T layouts apart
     character(len=9), parameter :: DNAME(ND) = [character(len=9) :: 'F12.6', 'E13.6E2', 'I8', 'ES16.8E2', 'F10.6', &
         'F12.6 T_s', 'I3', 'I5', 'I10', 'I0']
@@ -121,6 +123,8 @@ contains
         case (11); write(r, '(I3,7F12.6,2E13.6E2,2ES16.8E2,F10.6,2I10,ES16.8E2,I3)') iv(1), v(2:13), iv(14), iv(15), &
                                                                                        v(16), iv(17)
         case (12); write(r, '(I0,I0,I0,I0)') jv(1:4)
+        case (13); write(r, '(7F12.6,2E13.6E2,I8,E13.6E2)') v(1:9), iv(10), v(11)
+        case (14); write(r, '(7F12.6,2E13.6E2,I8,F10.6,E13.6E2)') v(1:9), iv(10), v(11), v(12)
         end select
     end subroutine oracle
 
@@ -207,8 +211,8 @@ contains
         endif
     end subroutine check_record
 
-    !> P1: the scatter layout on n records of plausible values (positions, velocities, temperature, diameter, mass, ID)
-    !  and n/2 decimal half-way points of F12.6 with their neighbours.
+    !> P1: the trajectory layout on n records of plausible values (positions, velocities, temperature, diameter, mass,
+    !  ID) and n/2 decimal half-way points of F12.6 with their neighbours.
     subroutine prototype_population(n)
         integer, intent(in) :: n
         integer(I8) :: s
@@ -673,7 +677,7 @@ contains
         character(len=64) :: got, ref
         real(R8) :: bad(4)
         integer :: k, n, ns
-        integer, parameter :: WREC(NL) = [118, 134, 128, 144, 146, 130, 150, 140, 134, 124, 194, 80]
+        integer, parameter :: WREC(NL) = [118, 134, 128, 144, 146, 130, 150, 140, 134, 124, 194, 80, 131, 141]
         bad = [ieee_value(1._R8, ieee_quiet_nan), ieee_value(1._R8, ieee_positive_inf), 9007199254740992._R8, &
                -1.e300_R8]
         call fmt_compile(sp, '(I8)')
@@ -701,7 +705,7 @@ contains
         endif
         do k = 1, NL
             call fmt_compile(sp, trim(LAY(k)))
-            if (k < NL .and. sp%maxlen /= WREC(k)) then
+            if (k /= 12 .and. sp%maxlen /= WREC(k)) then
                 print '(a,i0,a,i0,a,i0)', '  S4 FAIL: layout ', k, ' width ', sp%maxlen, ' expected ', WREC(k)
                 nfail = nfail + 1
             endif

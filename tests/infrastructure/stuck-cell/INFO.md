@@ -18,11 +18,16 @@ x = 0 with no velocity, no drag, no body force and no heat flux. `input.ini` is 
 - S2 25 exit records, each at its injection point: x = 0, y and z an inlet cell centre, |u| = 0.
 - S3 no `no net progress`, `Inner loop >`, `hit outer maxIter` or `non-finite` line.
 - S4 the run ends normally: the `Stop condition` line, nothing in `run_err.txt`.
+- L1 the parcel rule's last row at the guard (`tools/lastrow.py`): `check.py` runs a sibling in `ref-last/` with
+  the `IGLOO_EXE` executable, the input without `print-dcell` (no row key: the first and last rows) and with
+  `out-time = on`; each parcel's trajectory is its injection row and a last row at its exit record's state (X, Y, Z
+  within half the F12.6 quantum, t within the ES16.8 half-unit), its only row there: 50 rows, the last at t = 0.22 s.
 
 **RED.** The residency guard disabled (`part%Ncell > nMaxCell` → `.false.`): the zero-progress guard ends
 every parcel instead; S1 (no `stuck in cell` line) and S3 (25 `no net progress` lines) fail, S2 and S4 hold.
 With both guards disabled a parcel would run to the outer cap; that run is not part of the gate (it outlasts
-the ctest timeout).
+the ctest timeout). L1 on a binary from before the parcel rule: every trajectory is its injection row alone (a
+parcel at rest crosses no face); with the last row left out of the rule (a mutant): the same.
 
 **Not gated here.** The zero-progress guard alone (a parcel at rest trips the residency guard first), the
 inner-loop cap (a segment would have to neither end nor cross a face in ten ODE calls) and the outer cap.

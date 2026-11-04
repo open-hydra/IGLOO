@@ -42,6 +42,8 @@ import os
 import sys
 
 HERE   = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
+import datcols                          # noqa: E402
 ORACLE = os.path.join(HERE, "..", "..", "standard", "drag-stokes", "check.py")
 MATS   = {"A": 2950.0, "B": 1000.0}     # kg/m3, properties.dat zones 1 and 2
 FAMILY = {"A": 1, "B": 2}               # euler<fam>.tec: families are numbered in material order
@@ -235,8 +237,8 @@ def main():
     # M6 / M7 ---------------------------------------------------------------------
     for mat in MATS:
         try:
-            nscat = sum(1 for ln in open(f"OUTPUT/scatter-{mat}.dat") if len(ln.split()) == 10)
-        except FileNotFoundError as e:
+            nscat = len(datcols.rows(f"OUTPUT/scatter-{mat}.dat"))
+        except (FileNotFoundError, ValueError) as e:
             rc |= fail(f"M6 {e}"); continue
         nexit = len(exits[mat])
         if nexit != N_PARCELS or nscat == 0:

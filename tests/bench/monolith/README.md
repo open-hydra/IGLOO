@@ -123,7 +123,7 @@ ssh $IGLOO_PERF_REMOTE "bash -lc 'cd $IGLOO_PERF_ROOT && sbatch --output=$IGLOO_
 | job | content |
 |---|---|
 | `igloo-smoke.slurm` | the workloads built, each run once at 4 x 20 with its checks (1 node, 1 h) |
-| `igloo-final-khrt-stress.slurm` | the 1x1 anchor, every split of 4, 8, 16 and 32 slots, the 80-slot splits, the A/A twin; `OUTPUT/` on tmpfs; the scatter cloud off (5 repetitions, 2 h) |
+| `igloo-final-khrt-stress.slurm` | the 1x1 anchor, every split of 4, 8, 16 and 32 slots, the 80-slot splits, the A/A twin; `OUTPUT/` on tmpfs; the scatter cloud off, with source and Eulerian output and alone (5 repetitions, 2 h) |
 | `igloo-final-vie-plait-dense.slurm` | the same curve and twin (5 repetitions, 2 h) |
 | `igloo-final-box-4fam.slurm` | the same curve without 80 x 1, the twin at 4 x 20 (3 repetitions, 20 h) |
 | `igloo-omp.slurm` | thread placement: inside one socket, spread over the sockets, interleaved pages, the hybrid controls (11 h) |

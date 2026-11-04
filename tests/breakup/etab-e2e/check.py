@@ -105,7 +105,7 @@ def load_lateral(path):
     """Per-ID [max|V|, max|W|, max|U|, d_max, d_min] for the v_perp transport gate.
 
     Separate from load_trajectories, which keeps only (x, U, d). Uses max/min of d rather
-    than first/last so it is independent of record order (OMP-nondeterministic).
+    than first/last, independent of the rows' order.
     """
     lat = {}
     for line in open(path):
@@ -150,7 +150,7 @@ def main():
 
     n_nobrk_bad = n_brk = n_time_bad = n_size_bad = 0
     for pid in sorted(parts):
-        raw = sorted(parts[pid])          # record order is OMP-nondeterministic
+        raw = sorted(parts[pid])          # by x; the dedupe below keeps each x once
         rows = [raw[0]]
         for r in raw[1:]:
             if r[0] > rows[-1][0]:

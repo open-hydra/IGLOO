@@ -19,8 +19,8 @@ positive), or loosening the tolerance to swallow it — which would then hide a 
 same magnitude somewhere the local value is O(1). Normalising by field scale removes the choice.
 
 Why any tolerance at all: these fields are accumulated with `!$OMP ATOMIC UPDATE`, and floating
-point addition is not associative, so the value depends on thread interleaving — and, once MPI is
-live, on how the rank count partitions the sum. Both are the same FP-reassociation class. Measured
+point addition is not associative, so the value depends on thread interleaving — and, under MPI,
+on how the rank count partitions the sum. Both are the same FP-reassociation class. Measured
 floors on this host: run-to-run at fixed thread count <= 4e-15; across rank counts, bit-identical on
 coupled-body / khrt-e2e / db-2daxi and 1.8e-23 on vie-plait. DEFAULT_TOL sits decades above those and
 decades below the 5.2e-11 that the F7 accumulator-shape bug produced.

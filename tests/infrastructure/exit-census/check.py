@@ -13,6 +13,9 @@ Gates (exit records read by the names of their header)
       and time are the parcel's snapshot row
   E4  ID 7 at its injection point, at rest, t = 0, code 0; the log counts one parcel no cell holds
   E5  the run ends normally ('Stop condition', nothing in run_err.txt)
+  L1  the parcel rule's last row at each stop (tools/lastrow.py): a sibling in ref-last/ without row keys, run with
+      the IGLOO_EXE executable; each integrated parcel's trajectory is its injection row and a last row at its exit
+      record's state (X, Y, Z within half the F12.6 quantum, t within the ES16.8 half-unit), once; ID 7 has none
 """
 import os
 import sys
@@ -20,6 +23,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
 import datcols  # noqa: E402
+import lastrow  # noqa: E402
+
+IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
 
 N_STREAMS = 7
 OUTLET, LEAVE, INSIDE, OUTSIDE = 0.15, (1, 2, 3), (4, 5, 6), 7
@@ -79,6 +85,7 @@ def main():
         rc |= fail("E5 the run did not end normally")
     else:
         print("E5 the run ended normally PASS")
+    rc |= lastrow.gate(HERE, IGLOO, unintegrated=1)
     print("\n[PASS] exit-census: every parcel whose integration stops leaves one exit record" if rc == 0
           else "\n[FAIL] exit-census violation(s) -- see above.")
     return rc

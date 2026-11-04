@@ -29,12 +29,18 @@ build an expectation: the inputs below, the product's line and table, and the pr
   G3  in each run: one trajectory zone per parcel, A's titled parent 0, each residue's titled with the ID of the
       parent exit records its birth row equals (X, Y, Z, T, t printed alike; in ref-dres a residue of the second
       group, ID 25 + k, has parent k)
+  S   in each run and material: every parcel's scatter markers N = floor(frac(ID phi) + r tau), r its number rate at
+      birth (its exit record's mdot over its first row's m) over its material's dNscat, tau its exit t less its
+      birth t, every printed input with its half-ULP; the parcels of one ID summed (A's groups restart their IDs).
+      A residue takes its own rate at birth against the product's quantum, not its parent's: in ref-dres the two
+      differ 61-fold (the residue's number rate and the product's dNscat both 60.958 x the parent's)
 
 The gate fails on a residue sized with the burning material's density (R2: d 2.168897e-5 m), on a birth flux left
 in the gas books (R3: 0.378 of the injected flow), on the product's datum left out of the birth flux (R3e 100.7 %),
 on a residue born solid at its parent's temperature (R4: 63.9 K at the outlet), on d-residue ignored (D), on a
-residue ID without its group's offset (D: 25 distinct IDs) and on a failure exit that keeps the segment-start
-state (F: the residue's mass).
+residue ID without its group's offset (D: 25 distinct IDs), on a failure exit that keeps the segment-start state
+(F: the residue's mass), and on a residue whose markers follow its parent's rate or the burning material's quantum
+(S in ref-dres).
 """
 import importlib.util
 import math
@@ -46,7 +52,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
-from datcols import parcel_zones, zones  # noqa: E402
+from datcols import group, parcel_zones, zones  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("burnboxcap_oracle", os.path.join(HERE, "..", "burn-box-cap", "check.py"))
 cap = importlib.util.module_from_spec(_spec)
@@ -70,6 +76,18 @@ N_PARENTS = 25
 TOL_M2, TOL_D2, TOL_V = 3.0e-5, 5.0e-6, 1.5e-6
 TOL_R3, TOL_R3E, TOL_R5, TOL_DNP, TOL_F = 1.0e-5, 1.0e-5, 1.0e-5, 4.0e-5, 1.0e-5
 HALF_ULP, INT_FLOOR, PRINT_D = 0.5e-6, 1.0e-8, 5.0e-7
+PHI = 0.6180339887498949     # the scatter accumulator's per-ID phase (Lib_Integration.f90, integrate)
+
+
+def half_ulp_e(v):
+    """Half-ULP of an E13.6 value (0.dddddd E+ee)."""
+    return 0.0 if v == 0.0 else 0.5e-6 * 10.0 ** (math.floor(math.log10(abs(v))) + 1)
+
+
+def half_ulp_es(text):
+    """Half-ULP of a printed ES value, from its own digits; a printed zero is exact."""
+    m = re.match(r"\s*[-+]?\d\.(\d+)[Ee]([-+]?\d+)", text)
+    return 0.0 if float(text) == 0.0 else 0.5 * 10.0 ** (int(m.group(2)) - len(m.group(1)))
 
 
 def h_ox(T, f):
@@ -196,6 +214,51 @@ def banner(log):
     return int(m[0]) if len(m) == 1 else -1
 
 
+def scatter_counts(name, d, checks):
+    """S: per material, the markers of each ID against the sum over its parcels of floor(frac(ID phi) + r tau)."""
+    out = os.path.join(d, "OUTPUT")
+    log = open(os.path.join(d, "run_out.txt"), errors="replace").read()
+    for mat in ("A", "OX"):
+        m = re.findall(r"scatter cloud \[%s\]: dNscat=\s*(\S+)" % mat, log)
+        try:
+            first = {(z["group"], z["id"]): z["rows"][0]
+                     for z in parcel_zones(os.path.join(out, "trajectories-%s.dat" % mat)) if z["image"] == 0}
+            ex = {(group(z["title"]), r["ID"]): r
+                  for z in zones(os.path.join(out, "outloc-%s.dat" % mat)) for r in z["rows"]}
+            n = {}
+            for r in (r for z in zones(os.path.join(out, "scatter-%s.dat" % mat)) for r in z["rows"]):
+                n[r["ID"]] = n.get(r["ID"], 0) + 1
+        except (OSError, ValueError) as e:
+            checks.append(("%s S %s: %s" % (name, mat, e), False))
+            continue
+        if len(m) != 1 or set(ex) != set(first):
+            checks.append(("%s S %s: %d dNscat lines, %d exit records, %d parcels with rows" % (
+                name, mat, len(m), len(ex), len(first)), False))
+            continue
+        dn, dh = float(m[0]), half_ulp_es(m[0])
+        win = {}
+        for k, e in ex.items():
+            b = first[k]
+            np_lo = (e["mdot"] - half_ulp_e(e["mdot"])) / (b["m<sub>p"] + half_ulp_e(b["m<sub>p"]))
+            np_hi = (e["mdot"] + half_ulp_e(e["mdot"])) / (b["m<sub>p"] - half_ulp_e(b["m<sub>p"]))
+            th = half_ulp_es("%.8E" % e["t"]) + half_ulp_es("%.8E" % b["t"])
+            ph = math.fmod(k[1] * PHI, 1.0)
+            lo = math.floor(ph + np_lo * max(e["t"] - b["t"] - th, 0.0) / (dn + dh))
+            hi = math.floor(ph + np_hi * (e["t"] - b["t"] + th) / (dn - dh))
+            w = win.setdefault(k[1], [0, 0])
+            w[0] += lo
+            w[1] += hi
+        off = ["ID %d: %d markers, [%d, %d]" % (i, n.get(i, 0), w[0], w[1])
+               for i, w in sorted(win.items()) if not w[0] <= n.get(i, 0) <= w[1]]
+        one = sum(1 for w in win.values() if w[0] == w[1])
+        stray = sorted(set(n) - set(win))
+        checks.append(("%s S %s: dNscat %s, %d parcels in %d IDs, %d markers: N = floor(frac(ID phi) + r tau) off on "
+                       "%d IDs%s; %d windows of one value" % (
+                           name, mat, m[0], len(ex), len(win), sum(n.values()), len(off),
+                           (" (" + "; ".join(off[:3]) + ")") if off else "", one),
+                       not off and not stray and one >= 0.9 * len(win)))
+
+
 def check_main(checks):
     par, res_exit, res_rows, wA, ox_zero, E, log = load_run(HERE)
     exits = par[0]
@@ -219,6 +282,7 @@ def check_main(checks):
                    wm <= TOL_M2 and wd <= TOL_D2))
     checks += books("main", par, res_exit, wA, ox_zero, E)
     zone_titles("main", HERE, checks)
+    scatter_counts("main", HERE, checks)
     # R4: the residue's temperature history
     worst, nrow, phase_ok = 0.0, 0, True
     for rs in res_rows.values():
@@ -297,6 +361,7 @@ def check_d(checks):
                    dd <= 0.5e-11 and wn <= TOL_DNP and all(abs(T - bb.T_G) <= 1e-4 for T in Tex)))
     checks += books("D", par, res_exit, wA, ox_zero, E)
     zone_titles("D", d, checks)
+    scatter_counts("D", d, checks)
 
 
 def check_f(checks):
@@ -328,6 +393,7 @@ def check_f(checks):
                    % (m_al_at(t0) / M0, t0, wm, TOL_F), wm <= TOL_F))
     checks += books("F", par, res_exit, wA, ox_zero, E)
     zone_titles("F", d, checks)
+    scatter_counts("F", d, checks)
 
 
 def main():

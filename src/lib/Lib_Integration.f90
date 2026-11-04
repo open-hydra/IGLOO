@@ -47,7 +47,7 @@ contains
     use IGLOO_records,     only: recList, rec_emit, rec_emit_traj, rec_push, rec_break, &
                                  STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT, &
                                  L_ROW, L_ROW_T, L_ROW_F, L_ROW_TF, L_ROW_S, L_ROW_TS, &
-                                 L_EXIT, L_EXIT_T, L_EXIT_F, L_EXIT_TF, L_PLANE
+                                 L_EXIT, L_EXIT_T, L_EXIT_F, L_EXIT_TF, L_PLANE, L_SCAT, L_SCAT_F
     implicit none
     class(obj_particle),   intent(inout) :: part
     type(obj_block),       intent(in)    :: geoblock(nb)
@@ -74,7 +74,7 @@ contains
     real(R8) :: Ein, Eout, Pin(3), Pout(3), massIn, massOut, vol
     real(R8) :: entryPos(3)   ! cell-entry position, for the closed-form body-force work (models 1,3)
     real(R8) :: pMid(3)       ! segment mid position: azimuth of the meridian-frame source deposit
-    real(R8) :: wAcc          ! scatter-cloud npdot-weight accumulator (host-associated into solout)
+    real(R8) :: wAcc          ! scatter-cloud accumulator: npRef*h per step, a marker per dNscat (host-associated)
     real(R8) :: wAccOld       ! wAcc at the last latched state, restored when a cut step is integrated again
     !> The parcel's rows per particle file, written at its end by emitParcel
     type(recList) :: lTraj, lExit, lPlane, lSnap, lScat
@@ -238,7 +238,9 @@ contains
     nStall = 0; posPrev = part%stateVar(1:3) - 1._R8
     nRefl = 0
     nReflW = 0; posReflW = part%stateVar(1:3)
-    !> Scatter accumulator, seeded with a per-ID golden-ratio phase offset.
+    !> Scatter cloud: the marker rate npRef/dNscat, fixed at entry (a breakup child's is its parent's); the accumulator
+    !  seeded with the golden-ratio phase of the parcel's own ID.
+    if (part%time==0._R8 .or. part%npRef < 0._R8) part%npRef = part%npdot
     wAcc = dNscat * mod(real(part%ID,R8)*0.6180339887498949_R8, 1._R8)
     do while (part%time<tEnd.and.iter<maxIter)
       iter = iter+1
@@ -722,6 +724,58 @@ contains
     end subroutine emitPlanes
 
 
+    !> The scatter markers of the step (ta,ya)-(tb,yb): one at each multiple of dNscat the accumulator crosses on it,
+    !  at its fraction s of the step: the position on the cubic Hermite interpolant of the end positions and
+    !  velocities, the rest linear; each weighs the droplets np/r it stands for.
+    subroutine emitScatter(ta, ya, tb, yb)
+      use IGLOO_variables, only: oneThird
+      real(R8), intent(in) :: ta, tb, ya(:), yb(:)
+      real(R8) :: s, h, lev, pos(3), vel(3), z7, tp, rho, m, d, np, f, mAlS, mOxS
+      integer  :: k
+      if (.not. (wAcc > wAccOld .and. wAcc < huge(wAcc))) return
+      h = tb - ta
+      k = 0
+      lev = dNscat
+      do while (wAcc >= lev)
+        k = k + 1
+        s   = (lev - wAccOld)/(wAcc - wAccOld)
+        pos = (2._R8*s**3 - 3._R8*s**2 + 1._R8)*ya(1:3) + (s**3 - 2._R8*s**2 + s)*h*ya(4:6) &
+            + (3._R8*s**2 - 2._R8*s**3)*yb(1:3) + (s**3 - s**2)*h*yb(4:6)
+        vel = ya(4:6) + s*(yb(4:6) - ya(4:6))
+        z7  = ya(7) + s*(yb(7) - ya(7))
+        if (mod_propFlags(1)) then; tp = comp_TfromTab(hTab, z7); else; tp = z7; endif
+        if (mod_propFlags(2)) then; rho = tableValue(rhoTab, Tmin, Tmax, tp); else; rho = auxLocal(ind_rho); endif
+        select case(mod_model)
+        case(3)
+          np = ya(8) + s*(yb(8) - ya(8)); m = auxLocal(ind_m)/np
+        case(7)
+          np = ya(9) + s*(yb(9) - ya(9)); m = auxLocal(ind_m)/np
+        case(2,5)
+          np = part%npdot; m = ya(8) + s*(yb(8) - ya(8))
+        case(4)
+          np = ya(9) + s*(yb(9) - ya(9)); m = ya(8) + s*(yb(8) - ya(8))
+        case(8)
+          np = part%npdot; mAlS = ya(8) + s*(yb(8) - ya(8)); mOxS = ya(9) + s*(yb(9) - ya(9)); m = mAlS + mOxS
+        case default
+          np = part%npdot; m = auxLocal(ind_m)
+        end select
+        f = 0._R8
+        if (mod_isSolid) f = ya(8) + s*(yb(8) - ya(8))
+        if (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7) then; d = auxLocal(ind_d)
+        else; d = (sixOverPi*m/rho)**oneThird; endif
+        if (ind_rs > 0) d = solidDiameter(m, f, rho, auxLocal(ind_rs))
+        if (mod_model == 8) d = (sixOverPi*(mAlS/rho + mOxS/auxLocal(ind_mb+imRr-1)))**oneThird
+        if (frozenOn) then
+          call rec_push(lScat, [pos, vel, tp, d, m, real(part%ID, R8), f, dNscat*(np/part%npRef)], L_SCAT_F)
+        else
+          call rec_push(lScat, [pos, vel, tp, d, m, real(part%ID, R8), dNscat*(np/part%npRef)], L_SCAT)
+        endif
+        lev = real(k + 1, R8)*dNscat
+      enddo
+      wAcc = wAcc - real(k, R8)*dNscat
+    end subroutine emitScatter
+
+
     !> The parcel's rows, one block per particle file.
     subroutine emitParcel()
       if (trajOn) call rec_emit_traj(lTraj, slot, part%ID, part%parentID)
@@ -839,8 +893,9 @@ contains
           t1 = timeLocal + sEv*(t1 - timeLocal)
           wAcc = wAccOld + sEv*(wAcc - wAccOld)
         endif
-        !> Planes the finalized step crosses, before the phase jump and the breakup event.
+        !> Planes and scatter markers the finalized step crosses, before the phase jump and the breakup event.
         if (planeOn) call emitPlanes(timeLocal, oldLocal, t1, y)
+        if (scatOn .and. dNscat>0._R8) call emitScatter(timeLocal, oldLocal, t1, y)
         if (solidEv .and. .not.(IamOut .or. newGas .or. sectorOut)) then
           phaseEv = nint(stateLocal(ind_sph))
           call solidTransition(whichEv, part%cp, part%cpSol, part%Tmelt, part%hFus, y(7), y(8), phaseEv)
@@ -915,6 +970,7 @@ contains
             shedRec%time  = t1
             shedRec%phase = part%solidPhase
             shedRec%parent = part%ID
+            shedRec%npRef = part%npRef
             call shed%push(shedRec)
             !> the child's birth mass flow, in its computeMass/computeSource operation order
             shedM = shedRec%npdot * (pi/6._R8*part%rho*shedRec%diam**3._R8)
@@ -1028,7 +1084,7 @@ contains
       integer  :: NR, N
       real(R8) :: X, XOLD, Y(N)
       integer  :: IRTRN
-      real(R8) :: Vdif(3), vel, Re, Fdrag(3), Qdot, tp, acc(3), d, rho, sigma, mup, m, np, fScat
+      real(R8) :: Vdif(3), vel, Re, Fdrag(3), Qdot, tp, acc(3), d, rho, sigma, mup, m
       real(R8) :: brkupState(max(nbrkst,1))
       real(R8) :: gOld, gEnd
       real(R8) :: vEvt(3)   !> the velocity breakupEvent works on (Y stays the solver's)
@@ -1037,15 +1093,8 @@ contains
 
       IRTRN = 1
 
-      !> Scatter cloud: accumulate this step's npdot-weight.
-      if (scatOn .and. dNscat>0._R8) then
-        select case(mod_model)
-        case(3);      np = y(8)            ! model 3: npdot is stateVar(8)
-        case(4,7);    np = y(9)            ! models 4, 7: npdot is stateVar(9)
-        case default; np = part%npdot      ! models 1,2: npdot constant
-        end select
-        wAcc = wAcc + np*(x - xold)
-      endif
+      !> Scatter cloud: accumulate this step's marker weight at the parcel's constant rate.
+      if (scatOn .and. dNscat>0._R8) wAcc = wAcc + part%npRef*(x - xold)
 
       !> Geo containment only when the gas cell is on a boundary  (ord2==true)
       if (.not.ord2 .or. atGasBoundary) then
@@ -1139,37 +1188,15 @@ contains
       !> Never latch a non-finite state as the last good one.
       if (any(y/=y)) return
 
-      !> Planes the accepted step crosses, emitted once as it is latched.
+      !> Planes and scatter markers the accepted step crosses, emitted once as it is latched.
       if (planeOn) call emitPlanes(timeLocal, oldLocal, x, y)
+      if (scatOn .and. dNscat>0._R8) call emitScatter(timeLocal, oldLocal, x, y)
 
       timeLocal  = x
       oldLocal   = y
       if (allocated(stateLocal)) oldStLocal = stateLocal
       if (allocated(eventLocal)) oldEvLocal = eventLocal
 
-      !> Scatter cloud: emit one marker per weight quantum dNscat, carrying the remainder.
-      if (scatOn .and. dNscat>0._R8 .and. wAcc >= dNscat) then
-        if (mod_propFlags(1)) then; tp  = comp_TfromTab(hTab,y(7)); else; tp  = y(7);              endif
-        if (mod_propFlags(2)) then; rho = tableValue(rhoTab, Tmin, Tmax, tp); else; rho = auxLocal(ind_rho); endif
-        select case(mod_model)
-        case(3);      m = auxLocal(ind_m)/y(8)
-        case(7);      m = auxLocal(ind_m)/y(9)
-        case(2,4,5);  m = y(8)
-        case(8);      m = y(8) + y(9)
-        case default; m = auxLocal(ind_m)
-        end select
-        if (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7) then; d = auxLocal(ind_d)
-        else; d = (sixOverPi*m/rho)**oneThird; endif
-        if (ind_rs > 0) d = solidDiameter(m, y(8), rho, auxLocal(ind_rs))
-        if (mod_model == 8) d = (sixOverPi*(y(8)/rho + y(9)/auxLocal(ind_mb+imRr-1)))**oneThird
-        if (frozenOn) then
-          fScat = 0._R8; if (mod_isSolid) fScat = y(8)
-          call rec_push(lScat, [y(1:6), tp, d, m, real(part%ID, R8), fScat], L_ROW_F)
-        else
-          call rec_push(lScat, [y(1:6), tp, d, m, real(part%ID, R8)], L_ROW)
-        endif
-        wAcc = wAcc - dNscat
-      endif
       !> Latched with the state, after the emission: a refinement never writes a marker twice.
       wAccOld = wAcc
 

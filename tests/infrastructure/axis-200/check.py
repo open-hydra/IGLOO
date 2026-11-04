@@ -100,8 +100,8 @@ Three assertions, each with its measured provenance:
 
 Floor for all three is EXACTLY ZERO, and measured twice over: euler1.tec is bit-identical
 across repeat runs at 5 threads AND across OMP_NUM_THREADS = 1 / 2 / 5 (max |rel| on
-rho_p = 0.000e+00 between 1 and 5 threads; only the trajectory RECORD ORDER moves, which
-is the documented OMP behaviour and is not read here). So none of these tolerances is
+rho_p = 0.000e+00 between 1 and 5 threads; the particle files are in parcel order, the
+same bytes at every thread count). So none of these tolerances is
 absorbing nondeterminism -- there is none to absorb. 1e-3 is headroom for cross-compiler
 and configure-generation drift ONLY, which this host cannot measure (ifx only); the repo's
 recorded experience is ~1 ULP on trajectory bytes, which reaches these ratios at ~1e-15.

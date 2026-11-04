@@ -53,7 +53,7 @@ def main():
           f"(m/m0 {drop.state(drop.tc)[1]/m0:.6f}), burnout at x = {xb:.6f} m")
     nv, wT, wm = 0, (0.0, ""), (0.0, "")
     sides = {}
-    for r in rows:
+    for r in sorted(rows, key=lambda r: r["ID"]):   # by parcel: a tie picks the lowest ID
         x, T, m = r["X"], r["T"], r["m<sub>p"]
         t = x/UG
         if t > drop.tburn:

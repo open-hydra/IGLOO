@@ -33,9 +33,9 @@ per layout (default 300 000, the registered size); P1 and the constructed parts 
 
 | id | compared | status |
 |---|---|---|
-| P1 | fixed: the scatter layout `(7F12.6,2E13.6E2,I8)` on 2·10^6 plausible records (positions, velocities, temperature, diameter, mass, ID; every 7th with a negative that rounds to zero, every 11th with an F value k/256 (k odd), every 13th with an E tie between 10^5 and 10^6, every 17th with −0.0, every 19th with a zero mass) and 10^6 decimal half-way points of `F12.6` with their ±1 and ±2 ulp neighbours: 0 of 3 000 000 records differ; 1 151 726 of them have a field the runtime writes | PASS |
-| L1–L11 C | fixed: every field runs through its descriptor's constructed values (below); a layout's C part has as many records as its longest list (5 946), field k of record i holding value i + 37(k − 1) of its list, cyclically — the trajectory layouts L1–L6 (plain, `+ t`, `+ f`, `+ t + f`, `+ t + T_s`, `+ T_s`; the plain and `+ f` ones are the scatter's, `+ t` and `+ t + f` the snapshot's), the outloc layouts L7–L10 (`+ t + f`, `+ t`, `+ f`, plain), the planes layout L11 `(I3,7F12.6,2E13.6E2,2ES16.8E2,F10.6,2I10,ES16.8E2,I3)` | PASS |
-| L1–L11 R | 300 000 records per layout, every field drawn at random: every decade of the double range, the decades around the field, the fast range, and the constructed classes at random points | PASS |
+| P1 | fixed: the trajectory layout `(7F12.6,2E13.6E2,I8)` on 2·10^6 plausible records (positions, velocities, temperature, diameter, mass, ID; every 7th with a negative that rounds to zero, every 11th with an F value k/256 (k odd), every 13th with an E tie between 10^5 and 10^6, every 17th with −0.0, every 19th with a zero mass) and 10^6 decimal half-way points of `F12.6` with their ±1 and ±2 ulp neighbours: 0 of 3 000 000 records differ; 1 151 726 of them have a field the runtime writes | PASS |
+| L1–L11, L13–L14 C | fixed: every field runs through its descriptor's constructed values (below); a layout's C part has as many records as its longest list (5 946), field k of record i holding value i + 37(k − 1) of its list, cyclically — the trajectory layouts L1–L6 (plain, `+ t`, `+ f`, `+ t + f`, `+ t + T_s`, `+ T_s`; `+ t` and `+ t + f` are the snapshot's), the outloc layouts L7–L10 (`+ t + f`, `+ t`, `+ f`, plain), the planes layout L11 `(I3,7F12.6,2E13.6E2,2ES16.8E2,F10.6,2I10,ES16.8E2,I3)`, the scatter layouts L13 `(7F12.6,2E13.6E2,I8,E13.6E2)` and L14 (`+ f` before the weight) | PASS |
+| L1–L11, L13–L14 R | 300 000 records per layout, every field drawn at random: every decade of the double range, the decades around the field, the fast range, and the constructed classes at random points | PASS |
 | L12 | the zone headers' integers, `(I0,I0,I0,I0)`, through `fmt_row` and through `fmt_int`: C (107 values up to 2^53) and R (300 000 records) | PASS |
 | S | an `I8` column holding NaN, +Inf, 2^53 or −1e300 prints `********`; `fmt_int` of −2^63 and of 123456789 in `I8` is the runtime's; each layout's record width | PASS |
 
@@ -53,13 +53,12 @@ Exact ties are odd multiples of 2^−(d+1) for `F` and halves of d-digit integer
 the half-way points are those of the last digit at every decade of the fast range and one beyond; the edges include
 exponents of two digits and beyond. The integer descriptors (`I3`, `I5`, `I8`, `I10`) take 0 and 10^k − 1, 10^k,
 10^k + 1 at every decade, both signs, to the int32 extremes (66 values, every width's edges among them); `I0` the same
-to 2^53 − 1 (107). The constructed values are computed in floating point: 27 092 of the 499 012 values of all the
-lists differ by one ulp between ifx and gfortran: without the near-tie window a C part's mismatched records differ by
-up to 6 between the two compilers, the mismatched fields per descriptor do not, nor do they with the −0.0 rules
-exchanged. The test also prints the records per second of both routes on records of in-range values, one thread.
+to 2^53 − 1 (107). The constructed values are computed in floating point, and some differ by one ulp between ifx
+and gfortran: without the near-tie window a C part's mismatched records differ by up to 6 between the two
+compilers, the mismatched fields per descriptor do not, nor do they with the −0.0 rules exchanged. The test also prints the records per second of both routes on records of in-range values, one thread.
 
 The full size, by hand: `build/verif/tests/test_fmt 3000000` (3·10^6 random records per layout): 0 of its
-39 065 513 records differ under ifx and under gfortran.
+45 077 405 records differ under ifx and under gfortran.
 
 ## RED
 
@@ -68,11 +67,12 @@ constructed values, the same at any record count), at the registered size, ifx a
 given.
 
 - **No near-tie window** (a scaled value rounded by its fraction alone): P1 fails on 355 828 of its 3 000 000
-  records, every layout's C part on 1 251 to 1 619 of its 5 946 (gfortran 1 249 to 1 625); `F12.6` 114 929,
-  `E13.6E2` 331 672, `ES16.8E2` 768, `F10.6` 784, `T_s` 368 (both compilers); the integer descriptors pass.
+  records, every particle-record layout's C part on 1 251 to 1 619 of its 5 946 (gfortran 1 249 to 1 625);
+  `F12.6` 117 469, `E13.6E2` 332 176, `ES16.8E2` 768, `F10.6` 940, `T_s` 368 (both compilers); the integer
+  descriptors pass.
 - **The two compilers' −0.0 rules exchanged**: P1 fails on its 117 647 records with −0.0, and every −0.0 of the C
-  parts: `F12.6` 117 730 (83 of them in C), `E13.6E2` 26, `ES16.8E2` 8, `F10.6` 10, `T_s` 2 (both compilers).
-- **The sign written only when the value does not round to zero**: P1 fails on 4 778 records; `F12.6` 12 223,
-  `F10.6` 820, `T_s` 164 (ifx); the `E`, `ES` and integer descriptors pass.
-- **The integers' sign dropped**: `I8` 18 924, `I3` 1 082, `I5` 4 324, `I10` 4 864, `I0` 214 (ifx); P1 (positive
-  IDs) and the real descriptors pass.
+  parts: `F12.6` 117 746 (99 of them in C), `E13.6E2` 32, `ES16.8E2` 8, `F10.6` 12, `T_s` 2 (both compilers).
+- **The sign written only when the value does not round to zero**: P1 fails on 4 778 records; `F12.6` 13 645,
+  `F10.6` 984, `T_s` 164 (ifx); the `E`, `ES` and integer descriptors pass.
+- **The integers' sign dropped**: `I8` 22 708, `I3` 1 082, `I5` 4 324, `I10` 4 864, `I0` 214 (both compilers); P1
+  (positive IDs) and the real descriptors pass.
