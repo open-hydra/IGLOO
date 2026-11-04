@@ -50,7 +50,7 @@ gas import (allocation.f90 import_gas) maps identically. Vars 4-21 are cell-cent
 gas vars are set to SI constants, particle vars to 0.
 
 Usage:
-    make_box_case.py <out_dir> [--kv KV] [--kt KT] [--rp RP] [--alpha A] [--blocks 2] [--tg TG]
+    make_box_case.py <out_dir> [--kv KV] [--kt KT] [--rp RP] [--alpha A [--beta B]] [--blocks 2] [--tg TG]
                      [--nx NX] [--ny NY] [--nz NZ] [--overlap N [--shift S] [--rim]] [--families F]
                      [--stretch R] [--gradient G] [--zgradient G] [--wave-y A] [--rotate2 y]
                      [--outlet-code C] [--ug U] [--u2 U2] [--ygrade G] [--mesh-only] [--sym-face F]
@@ -62,6 +62,8 @@ Usage:
         --alpha : explicit in-plane injection angle [rad] (bc.txt col 3; col 4
                   betap=0). dir=[cos a, sin a, 0], v0 = kv*|u_g|*dir
                   (obj_particles initializePart). Default: 'normal' sentinel.
+        --beta : with --alpha, the out-of-plane injection angle [rad] (bc.txt col 4);
+                  dir=[cos b cos a, cos b sin a, sin b]. Default: col 4 written 0.0.
         --blocks : 2 writes the box as two blocks joined at x = Lx/2 (default 1)
         --tg : gas temperature [K] (default the module's 600 K)
         --nx, --ny, --nz : cells per direction over the same Lx, Ly, Lz (default 60 5 5;
@@ -127,13 +129,14 @@ LAW     = "Dirac"                        # col 8: law name or size-distribution 
 DS_COL9 = 0.0                            # per-cell ds disabled (use global [IGLOO-BC] ds)
 
 
-def inlet_data(kv, kt, rp, alpha=None, krho=KRHO):
+def inlet_data(kv, kt, rp, alpha=None, krho=KRHO, beta=None):
     # default path stays byte-identical to the original 3 cases; the alpha path
     # needs 10 digits on kv/alpha (terminal-velocity injection is precision-set)
     if alpha is None:
         direc, kvs = "normal,   normal,", f"{kv:.5E}"
-    else:                       # explicit angles in radians: alphap=alpha, betap=0
-        direc, kvs = f"{alpha:.10E}   0.0", f"{kv:.10E}"
+    else:                       # explicit angles in radians: alphap=alpha, betap=beta (0 without --beta)
+        betas = "0.0" if beta is None else f"{beta:.10E}"
+        direc, kvs = f"{alpha:.10E}   {betas}", f"{kv:.10E}"
     return (f"   {krho:.5E}   {kvs}   {direc}   {kt:.5E}"
             f"   {rp:.5E}   {SIGMAP:.5E}   {LAW}   {DS_COL9:.5E}\n")
 
@@ -291,7 +294,7 @@ def write_mesh(path, blocks=1, nx=NX, ny=NY, nz=NZ, rotate2=None, ygrade=1.0):
 
 def write_bc(path, kv, kt, rp, alpha=None, periodic_y=False, blocks=1, nx=NX, ny=NY, nz=NZ,
              overlap=0, shift=0.0, rim=False, families=1, outlet_code=BCDEF_WALL, rotate2=None,
-             sym_face=None, no_inlet=False):
+             sym_face=None, no_inlet=False, beta=None):
     # reader loop order (IO.f90 read_cdp_bc_file): b=1..nb, [family copies], f=1..6, n=1..nend(f),
     # m=1..mend(f). mend/nend per face: f1,2->(Ny,Nz); f3,4->(Nx,Nz); f5,6->(Nx,Ny), the block's.
     layout = block_layout(blocks, nx, ny, overlap, shift, rim)
@@ -307,8 +310,8 @@ def write_bc(path, kv, kt, rp, alpha=None, periodic_y=False, blocks=1, nx=NX, ny
                 # the payload of a chimera face cell depends on its row only (aligned in y, z)
                 donors = {g: chimera_donors(layout, b, g) for g in (1, 2)}
             for fam in range(1, families + 1):
-                data = inlet_data(kv, kt, rp * fam, alpha, KRHO / fam) if families > 1 else \
-                    inlet_data(kv, kt, rp, alpha)
+                data = inlet_data(kv, kt, rp * fam, alpha, KRHO / fam, beta) if families > 1 else \
+                    inlet_data(kv, kt, rp, alpha, beta=beta)
                 for face in range(1, 7):
                     mend, nend = ranges[face]
                     bcdef = BCDEF_INLET if face == 1 and not (rot and b == 2) and not no_inlet else BCDEF_WALL
@@ -376,6 +379,8 @@ def main():
     p.add_argument("--kt", type=float, default=KT)
     p.add_argument("--rp", type=float, default=RP)
     p.add_argument("--alpha", type=float, default=None)
+    p.add_argument("--beta", type=float, default=None,
+                   help="with --alpha: out-of-plane injection angle [rad], bc.txt column 4 (default 0)")
     p.add_argument("--law", nargs=2, metavar=("SIGMAP", "TOKEN"), default=None,
                    help="bc.txt columns 7-8: sigmap and the law (Normal, LogNormal, RosinRammler, Dirac) "
                         "or the path of a size-distribution file (default 0.0 Dirac)")
@@ -417,6 +422,8 @@ def main():
         SIGMAP, LAW = float(a.law[0]), a.law[1]
     if min(a.nx, a.ny, a.nz) < 1 or a.nx % a.blocks:
         p.error("--nx/--ny/--nz must be >= 1 and --nx a multiple of --blocks")
+    if a.beta is not None and a.alpha is None:
+        p.error("--beta needs --alpha (the 'normal' sentinel path has no angle columns)")
     if a.overlap and (a.blocks != 2 or a.overlap >= a.nx // 2 or a.periodic_y):
         p.error("--overlap needs --blocks 2, fewer cells than half the box and no --periodic-y")
     if (a.shift or a.rim) and not a.overlap:
@@ -454,7 +461,8 @@ def main():
     n_inlet = write_bc(os.path.join(a.out_dir, "bc.txt"), a.kv, a.kt, a.rp, a.alpha,
                        periodic_y=a.periodic_y, blocks=a.blocks, nx=a.nx, ny=a.ny, nz=a.nz,
                        overlap=a.overlap, shift=a.shift, rim=a.rim, families=a.families,
-                       outlet_code=a.outlet_code, rotate2=a.rotate2, sym_face=a.sym_face, no_inlet=a.no_inlet)
+                       outlet_code=a.outlet_code, rotate2=a.rotate2, sym_face=a.sym_face, no_inlet=a.no_inlet,
+                       beta=a.beta)
     if a.families > 1:
         write_phase(os.path.join(a.out_dir, "phase.txt"), a.families)
     print(f"[ok] box solfile: I={I} J={J} K={K} nnode={nnode} ncell={ncell} "

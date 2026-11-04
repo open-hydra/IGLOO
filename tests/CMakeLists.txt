@@ -10,9 +10,9 @@
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ containment/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ ini-comment-eq/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ stuck-cell/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab},drag-token,heat-token,breakup-token,evaporation-token,evaporation-leb,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,dopri5,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,brk,varcp,varrho},psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},brk-{sigma,mu},sigma-{size,nm},bc-{legacy,empty-payload},body-accel}
 #   repeatability/      two-sweep gates (twosweep driver): 13 cases
-#   mpi/                registered only under USE_MPI: 7 rank-count cases + 3 consistency + 1 determinism
+#   mpi/                registered only under USE_MPI: 8 rank-count cases + 3 consistency + 1 determinism
 #                       + 13 two-sweep cases
 #
 # Run everything via ../test.sh (it builds this tree's IGLOO, which every e2e case runs, and publishes it to bin/).
@@ -810,12 +810,30 @@ igloo_e2e_case(chimera-2blk infrastructure/chimera-2blk "e2e;infrastructure;bc;i
 # x = 0.085 with the facelet's area. RED without the connected-cell step and the rim count: no block-change line.
 igloo_e2e_case(chimera-2blk-rim infrastructure/chimera-2blk-rim "e2e;infrastructure;bc;chimera")
 # two-fam-bc-2blk-stretch-ord2: the box as two blocks of 1.667 mm | 3.333 mm cells joined by a 101 face, gas-order
-# 2, T linear in x: the face's ghost nodes interpolated from the other block's gas; check.py holds trajectory T,
-# source E and euler T_p away from the face to the same cells as one block. RED with the ghost ring copying the
-# partner centre: trajectory T 3.07e-2 K, E 9.8e-4 and T_p 2.8e-5 of the scale; with the gas sampler's Newton
-# stopped at an absolute 1e-5 m: 4.43e-4 K, 9.5e-6 and 2.9e-7 (5-9x the tolerances).
+# 2, T linear in x: the face plane's ghost nodes at the partner centres, the edge and corner nodes interpolated from
+# the other block's gas; check.py holds trajectory T, source E and euler T_p to the same cells as one block, cell by
+# cell outside the two face columns, by E's totals and T_p's mass-weighted means in them. RED without the interface
+# pass: the face columns' E totals +1.7e-3 / -8.6e-4 and T_p means up to 5.2e-4 (10-13x the tolerances); with the gas
+# sampler's Newton stopped at an absolute 1e-5 m: 3.67e-4 K, 2.0e-5 and 2.7e-7 outside them (4.6-18x).
 igloo_e2e_case(two-fam-bc-2blk-stretch-ord2 infrastructure/two-fam-bc-2blk-stretch-ord2 "e2e;infrastructure;bc;gas")
-# chimera-2blk-shift-ord2: chimera-2blk with block 2 shifted by half a cell, gas-order 2, T linear in x: each 102
+# two-fam-bc-2blk-ord2-dual: the box as two blocks of 2 mm | 3 mm cells joined by a 101 face, gas-order 2, mollify
+# off, two families injected at alpha 0.5 and beta 0.3 rad (off the dual-node lines at the face): the dual cell of a
+# face vertex held as one across the face (routing line: 36 vertex classes, 50 ghost nodes at partner centres);
+# check.py holds the source and both eulerian fields, every cell, to the same cells as one block. RED with each
+# block reducing its own dual cells at the face: Fx/Fy/Fz 9.7e-5, E 6.8e-4, euler 3.0e-5 to 1.3e-3 of the scale.
+igloo_e2e_case(two-fam-bc-2blk-ord2-dual infrastructure/two-fam-bc-2blk-ord2-dual "e2e;infrastructure;bc;gas;euler")
+# two-fam-bc-2blk-ord2-dual-1l: the same on a one-layer box (--nz 1, alpha 0.5): 6 vertex classes, 10 ghost nodes.
+# RED with each block's own dual: Fx/Fy 9.8e-5, E 6.8e-4, euler 3.1e-5 to 1.3e-3 of the scale.
+igloo_e2e_case(two-fam-bc-2blk-ord2-dual-1l infrastructure/two-fam-bc-2blk-ord2-dual-1l "e2e;infrastructure;bc;gas;euler")
+# two-fam-bc-2blk-ord2-dual-default: two-fam-bc-2blk-ord2-dual with the mollifier at its default (8 passes across
+# the face through the halo). RED with each block's own dual: Fx/Fy/Fz 1.1e-5, E 4.5e-5, euler 2.9e-6 to 9.4e-5.
+igloo_e2e_case(two-fam-bc-2blk-ord2-dual-default infrastructure/two-fam-bc-2blk-ord2-dual-default "e2e;infrastructure;bc;gas;euler")
+# swirl-wedge-2blk-ord2-dual: swirl-wedge's wedge as two blocks of 8 mm | 12 mm cells joined by a 101 face,
+# gas-order 2, mollify off, parcel 2 at y 0.505: swirl-wedge's oracle across the face, one block change per parcel,
+# the routing line (41 vertex classes, 80 ghost nodes); Fy, Fz, v_p, w_p cell by cell against the same cells as one
+# block. RED with each block's own dual: Fy 6.2e-4, Fz 4.4e-4, v_p 9.3e-4, w_p 3.3e-4 of the scale.
+igloo_e2e_case(swirl-wedge-2blk-ord2-dual infrastructure/swirl-wedge-2blk-ord2-dual "e2e;infrastructure;bc;gas;axisym;euler")
+# chimera-2blk-shift-ord2:chimera-2blk with block 2 shifted by half a cell, gas-order 2, T linear in x: each 102
 # ghost node interpolated between two centres of the other block. A control: on a linear field the own linear
 # fill is exact too (test_ghost_bc's G6u separates them on a quadratic field).
 igloo_e2e_case(chimera-2blk-shift-ord2 infrastructure/chimera-2blk-shift-ord2 "e2e;infrastructure;bc;chimera;gas")
@@ -892,6 +910,12 @@ igloo_refusal_case(refuse-chimera-copies   infrastructure/refusals/chimera-copie
 # the field mollifier's link table refuses it. RED before that table took 201: the run integrates and exits 0.
 igloo_refusal_case(refuse-periodic-not-mutual infrastructure/refusals/periodic-not-mutual
                    "IGLOO: a 101/201 connection is not mutual: the partner cell does not name this cell" "e2e;refusal;infrastructure;bc")
+# The gas-order-2 dual across 101 faces (refusals/make_ord2.py): one record's orientation reversed in m, and
+# d12 = 1 on a one-layer box.
+igloo_refusal_case(refuse-ord2-orient infrastructure/refusals/ord2-orient
+                   "IGLOO: 101 orientation disagrees with the partner cells" "e2e;refusal;infrastructure;bc")
+igloo_refusal_case(refuse-ord2-slab   infrastructure/refusals/ord2-slab
+                   "IGLOO: 101 orientation mixes the slab direction on a one-layer mesh" "e2e;refusal;infrastructure;bc")
 # Unknown model tokens (ledger O26): the selectors used to print the menu and execute a plain
 # `stop`, exit 0 -- invisible to any harness or embedding parent. Now error stops.
 igloo_refusal_case(refuse-drag-token        infrastructure/refusals/drag-token
@@ -1137,6 +1161,8 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
     # a tabulated injection law at four ranks: psd-table's Kolmogorov-Smirnov and Anderson-Darling oracle on the
     # merged output (the size-distribution file loaded on every rank)
     igloo_e2e_case_mpi(mpi-psd-table      mpi/psd-table      4 2 "e2e;mpi;injection")
+    # gas-order 2 across a 101 face on 3 ranks against the same binary on one (its own check.py, ref-serial/)
+    igloo_e2e_case_mpi(mpi-two-fam-bc-2blk-ord2-dual-np3 mpi/two-fam-bc-2blk-ord2-dual-np3 3 2 "e2e;mpi")
     # n=1 vs n=4 of the same binary: witness, file layout, .dat multisets, .tec fields. Launches
     # mpiexec itself (khrt-e2e-threads precedent), so it is not an igloo_e2e_case_mpi.
     add_test(NAME mpi-consistency

@@ -30,23 +30,14 @@ to the one-block run. This case keeps it off, so that its fields match the one-b
 whatever the build.
 
 **Gas-order 2, not gated.** X2 runs at gas-order 1. At gas-order 2 the block face also ends the
-integration step: 15 parcels per material print one more trajectory row, at x = 0.075 (every other
-row identical); scatter keeps its 244 (A) and 250 (B) samples but 6 and 11 of them move, most by
-1e-6 m and those beside the interface by up to 1.2e-4 m (A) and 2.2e-4 m (B). The two cell columns
-beside the interface (30 and 31) differ from the one-block run; every other cell by less than 1e-6
-of the field scale. The difference has two parts:
-
-- **Each block's own dual mesh.** At gas-order 2 every block keeps its own dual mesh, clipped at the
-  block face, and reduces its deposits to its own cells. Column 30 moves, mirrored with the opposite
-  sign in column 31's rows k = 4, 5; the two column sums are equal and opposite, so the total holds.
-  Of the field scale: `euler1` ρ_p and n_p 8.8e-6, u_p 2.6e-5; `euler2` ρ_p and n_p 2.8e-5, u_p
-  9.0e-5; `Fx` 2.1e-5; `E` 7.0e-5.
-- **Ties of the fixture.** One centred parcel per inlet cell with v = w = 0 puts every parcel on a
-  line of dual nodes, so the transverse dual row a deposit falls in is a tie, which the change of
-  block resolves differently from the one-block run. Column 31's rows k = 1–3 carry steps of one
-  parcel's deposit in one dual row (±q/2, q = 1.485e10 m⁻³ in `euler2`'s n_p), summing to about zero
-  over the column: up to 5.0e-2 of the field scale in `euler2`'s n_p and ρ_p, 1.9e-2 in `euler1`'s,
-  3.5e-4 in `E`.
+integration segment: 15 parcels per material print one more trajectory row, at x = 0.075 (every other
+row identical); scatter keeps its 244 (A) and 250 (B) samples, of which 38 and 40 differ from the
+one-block run's, by up to 7e-6 m in position away from the interface (one B sample by 1.5e-5 m) and by
+up to 1.2e-4 m (A) and 2.2e-4 m (B) beside it. The two blocks share the dual cells of the interface
+vertices, and every cell, the two columns beside the interface (30 and 31) included, matches the
+one-block run: of the field scale, ρ_p and n_p within 2.2e-7, u_p within 1.6e-8 (in columns 30 and
+31, where the segment cut at the face moves the arc-length mean; 2.7e-10 elsewhere), `E` within
+1.2e-8, `Fx` within 2.3e-10 and T_p within 2e-12.
 
 **Numbers** (from the inputs, as in `two-fam-bc`): ṁ_A = 0.34/(1 − 0.51) · 1.2e-3 = 8.326531e-4 kg/s,
 ṁ_B = 4.163265e-4 kg/s; d_B = 23.78 µm, τ_B = 1.745e-3 s; m_B/m_A = 2.711864 at injection;

@@ -92,6 +92,27 @@ i.e. it discards most of the deposit exactly where an injected spray puts it. No
 assembled weight is used rather than the clipped physical dual volume: a conservation
 identity must not be routed through an approximate geometry.
 
+**Block interfaces.** The dual cell of a vertex on a 101 face straddles the face, and each block holds
+only the octants on its side. With `gas-order = 2` the setup (`assembleInterfaceDual`) joins the dual
+cells of every face vertex, matched through the orientation integers of the face records, into one
+*vertex class*; it puts the ghost nodes of the face at the partner cells' centres, the nodes the same
+cells have as one block, assembles the dual metric with no clip normal to the face, and gives every
+member the class's summed octant volume $W$, so that the partition of unity spans both blocks. After the
+accumulators are summed over the MPI ranks and before any field is reduced (`combineInterfaceDual`),
+every member takes the class's source sum and, for the eulerian fields, the class's amount over that
+volume, $\sum_m V_m q_m / W$ ($V_m$ the member's dual volume, $q_m$ its accumulated density). The
+reduction then hands each block the share of its own octants, and the two blocks reduce what one block
+would. The integration still cuts the segment at the block face (see
+[Geometry](geometry.md#guided-cell-locator-updatecell-findparticle)): the source and the eulerian
+densities are additive over the cut, while the velocity and temperature numerators, arc-length means
+over a segment times its residence, differ from those of the uncut segment at second order: a cut at
+the fraction $f$ of a segment over which the speed and the transported quantity change by the relative
+amounts $\varepsilon$ and $\eta$ changes the numerator by $-\varepsilon\eta\,f(1-f)/4$ of itself, to
+leading order. On a curved mesh the octant sum $W$ differs from the dual cell's metric volume $V$ (the volume
+of a curved hexahedron is not the sum of its octants'): a class's density is its amount over $W$, an
+interior dual cell's its amount over $V$, so beside the face the two blocks differ from one block by up
+to that ratio (7.6e-5 on the wedge of `swirl-wedge-2blk-ord2-dual`).
+
 **Chimera overlaps.** A parcel deposits into the block it is tracked in. On a mesh with chimera
 (102) faces the gas solver keeps a copy of the overlap in each block, so after the reduction (and
 before the smoothing) every cell adds the owner-only deposits of the cells of the other blocks whose
@@ -160,7 +181,8 @@ $$
 
 When `cpVariable = .true.`, enthalpy integrals are inverted to temperature via the
 particle enthalpy table.  With `gas-order = 2`, the dual-mesh fields are reduced to
-geoblock shape by a sub-octant volume weighting, so that $\sum \rho_p V$ over the
+geoblock shape by a sub-octant volume weighting (the vertex classes of a 101 face combined first, see
+**Block interfaces** under [Source fields](#source-fields)), so that $\sum \rho_p V$ over the
 geometry cells equals the total injected mass flow times residence time (the tiling
 invariant checked by the `axis-200`, `swirl-wedge-deposit` and `swirl-wedge-spin` cases).
 

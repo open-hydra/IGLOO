@@ -13,9 +13,14 @@ Targets
       and corners included), none left uncovered
   G5a trajectory temperature against the one-block run, rows matched by parcel and x, the rows at the
       face left out: worst difference <= 8e-5 K
-  G5b source E away from the face (columns 1-28 and 33-60) against the one-block run: <= 1.1e-6 of the
-      field scale
-  G5c euler T_p away from the face, both families: <= 6e-8 of the field scale
+  G5b source E against the one-block run, cell by cell outside the two face columns (30 and 31 of the
+      one-block order): <= 1.1e-6 of the field scale; columns 30 and 31 by their transverse totals:
+      <= 1.742e-4 of the one-block total
+  G5c euler T_p of both families, cell by cell outside columns 30 and 31: <= 6e-8 of the field scale;
+      columns 30 and 31 by their mass-weighted means (sum rho_p T_p / sum rho_p): <= 3.839e-5 of the scale
+  The parcels ride the dual-node lines (one centred parcel per inlet cell): which transverse row of a
+  face column takes a deposit is a rounding tie the two runs need not resolve alike, and a column's
+  transverse total does not see it.
 Controls -- pass either way
   C1  50 exits (25 per family), all at x = 0.15
   C2  trajectory velocity within 2e-6 of the one-block run; source Fx away from the face within 1e-7
@@ -41,7 +46,10 @@ GHOSTS = " [IGLOO] ghost nodes at connected faces: 98 interpolated, 0 not covere
 CHANGES = (" [IGLOO] block changes: 50 via the connected cell, 0 via the block sweep, 0 rim exits; "
            "stencil refreshed on a block change at a boundary entry: 0")
 TOL_T, TOL_E, TOL_TP = 8.0e-5, 1.1e-6, 6.0e-8
+TOL_E_COL, TOL_TP_COL = 1.742e-4, 3.839e-5
 TOL_U, TOL_FX = 2.0e-6, 1.0e-7
+FACE = (NX1, NX1 + 1)                    # the two columns at the face, compared by transverse totals
+NEAR = tuple(range(NX1 - 1, NX1 + 3))    # columns 29-32, left out of C2's Fx
 
 
 def load(name, path):
@@ -98,16 +106,26 @@ def trajectories(path):
     return out
 
 
-def away(field_a, field_b, ni):
-    """Worst difference of two one-block-ordered cell arrays outside columns NX1-1..NX1+2, of the scale."""
+def away(field_a, field_b, ni, skip):
+    """Worst difference of two one-block-ordered cell arrays outside the columns in skip, of the scale."""
     scale = max(abs(v) for v in field_b) or 1.0
     worst = 0.0
     for idx, (x, y) in enumerate(zip(field_a, field_b)):
-        i = idx % ni + 1
-        if NX1 - 1 <= i <= NX1 + 2:
+        if idx % ni + 1 in skip:
             continue
         worst = max(worst, abs(x - y) / scale)
     return worst
+
+
+def column(field, ni, i):
+    """The transverse cells of column i of a one-block-ordered cell array."""
+    return field[i - 1::ni]
+
+
+def mass_mean(rho, temp, ni, i):
+    """Column i's mass-weighted T_p: sum rho_p T_p / sum rho_p over its transverse cells."""
+    r, t = column(rho, ni, i), column(temp, ni, i)
+    return sum(a * b for a, b in zip(r, t)) / sum(r) if sum(r) else None
 
 
 def main():
@@ -151,23 +169,41 @@ def main():
     _, za = TWOBLK.read_zones("OUTPUT/source.tec")
     _, zb = TWOBLK.read_zones(os.path.join(ref, "OUTPUT", "source.tec"))
     ni = zb[0][0]
-    wE = away(TWOBLK.merged(za, "E"), zb[0][3]["E"], ni)
-    wFx = away(TWOBLK.merged(za, "Fx"), zb[0][3]["Fx"], ni)
-    if wE > TOL_E:
-        rc |= fail(f"G5b source E away from the face: {wE:.2e} of the scale, tolerance {TOL_E:g}")
+    eA, eB = TWOBLK.merged(za, "E"), zb[0][3]["E"]
+    wE = away(eA, eB, ni, FACE)
+    cE = 0.0
+    for i in FACE:
+        sa, sb = sum(column(eA, ni, i)), sum(column(eB, ni, i))
+        cE = max(cE, abs(sa - sb) / abs(sb) if sb else float("inf"))
+    wFx = away(TWOBLK.merged(za, "Fx"), zb[0][3]["Fx"], ni, NEAR)
+    if wE > TOL_E or cE > TOL_E_COL:
+        rc |= fail(f"G5b source E cell by cell outside columns {FACE[0]}-{FACE[1]}: {wE:.2e} of the scale "
+                   f"(tolerance {TOL_E:g}); their transverse totals {cE:.3e} of the one-block's (tolerance "
+                   f"{TOL_E_COL:.3e})")
     else:
-        print(f"G5b source E away from the face within {TOL_E:g} of the scale PASS")
+        print(f"G5b source E cell by cell outside columns {FACE[0]}-{FACE[1]} within {TOL_E:g} of the scale, "
+              f"their transverse totals within {TOL_E_COL:.3e} of the one-block's PASS")
 
-    wTp = 0.0
+    wTp = cTp = 0.0
     for f in ("euler1.tec", "euler2.tec"):
         names, ea = TWOBLK.read_zones(os.path.join("OUTPUT", f))
         _, eb = TWOBLK.read_zones(os.path.join(ref, "OUTPUT", f))
-        name = [n for n in eb[0][3] if n.startswith("T")][0]
-        wTp = max(wTp, away(TWOBLK.merged(ea, name), eb[0][3][name], ni))
-    if wTp > TOL_TP:
-        rc |= fail(f"G5c euler T_p away from the face: {wTp:.2e} of the scale, tolerance {TOL_TP:g}")
+        tname = [n for n in eb[0][3] if n.startswith("T")][0]
+        rname = [n for n in eb[0][3] if n.startswith("rho")][0]
+        ta, tb = TWOBLK.merged(ea, tname), eb[0][3][tname]
+        ra, rb = TWOBLK.merged(ea, rname), eb[0][3][rname]
+        wTp = max(wTp, away(ta, tb, ni, FACE))
+        scale = max(abs(v) for v in tb) or 1.0
+        for i in FACE:
+            ma, mb = mass_mean(ra, ta, ni, i), mass_mean(rb, tb, ni, i)
+            cTp = max(cTp, abs(ma - mb) / scale if ma is not None and mb is not None else float("inf"))
+    if wTp > TOL_TP or cTp > TOL_TP_COL:
+        rc |= fail(f"G5c euler T_p cell by cell outside columns {FACE[0]}-{FACE[1]}: {wTp:.2e} of the scale "
+                   f"(tolerance {TOL_TP:g}); their mass-weighted means {cTp:.3e} of the scale (tolerance "
+                   f"{TOL_TP_COL:.3e})")
     else:
-        print(f"G5c euler T_p of both families away from the face within {TOL_TP:g} of the scale PASS")
+        print(f"G5c euler T_p of both families cell by cell outside columns {FACE[0]}-{FACE[1]} within "
+              f"{TOL_TP:g} of the scale, their mass-weighted means within {TOL_TP_COL:.3e} PASS")
 
     hits = len(re.findall(r"stuck in cell|no net progress|outer maxIter", log))
     changes = [ln for ln in log.split("\n") if "block changes" in ln]

@@ -51,6 +51,7 @@ identity through an approximate geometry is what bug **O15** was.
 | S5 | 3D 4×3×2 uniform | one dual cell: interior / face / edge / corner | 1 / **½** / **¼** / **⅛** | 1 each |
 | S6 | 2D 4×3 uniform | one dual cell: interior / face / corner | 1 / **½** / **¼** | 1 each |
 | S7 | 3D 4×3×2 **curvilinear** | all / interior / face | 0.400000 / **1.000052** / **0.499861** | 1 each |
+| U2 | two 3D boxes joined by 101 along x (3 cells of h_A, 2 of h_B; h_B = h_A, then 1.5 h_A) | one interface dual cell of block A, source and euler | the class sum and the combine skipped: source A **1.0** / B **0.0**; euler total of A + B **0.5** / **0.4** | source A h_A/(h_A + h_B) = 0.5 / 0.4, B the rest; every total 1 (err ≤ 4.4e-16) |
 
 S7 is the case that matters most: on a warped mesh the pre-fix error is the octant
 inequality rather than a clean rational, and the post-fix identity must **still** be exact.
@@ -69,6 +70,17 @@ the two differ by **5.1e-3** relative in total and **1.1e-2** worst per cell. An
 against `cellVol` there would be RED on the **correct** code. It is asserted on the
 Cartesian cases S1–S6, where all faces are planar and the identity is exact.
 
+## The 101 leg (U2)
+Two boxes share a 101 face. Each block's dual cell at an interface vertex holds only its own
+octants, so the setup pass (`assembleInterfaceDual`) joins the two dual cells of every interface
+vertex into one class and writes the class's summed octant volume to both `dualW` entries. After
+the cross-rank reduction `combineInterfaceDual` gives every member the class's source sum and,
+for the euler field, the class's extensive total over that summed volume. `finalizeSRC` and
+`reduceEUL` then hand each block its own octants' share: h_A/(h_A + h_B) to block A.
+
+The euler deposit is written as the solver writes it, the extensive amount over the dual cell's
+volume (`gas%cellVol`); the euler total of a block is Σ_c ρ_geo(c)·Σ_oct subVol(oct,c).
+
 ## Fixture notes
 The mesh is built through the **production** geometry path (`compute_geometry` +
 `precomputeMetric`), so the octant volumes under test are the shipped ones. Two things the
@@ -82,4 +94,5 @@ The mesh is built through the **production** geometry path (`compute_geometry` +
   is under test).
 
 ## Pass criterion
-Every assertion exact — measured `0.00E+00` on all fourteen cases.
+Every assertion exact — measured `0.00E+00` on all fourteen cases. U2 within 1e-14 relative
+(measured ≤ 4.4e-16).

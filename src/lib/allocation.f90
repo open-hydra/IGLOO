@@ -4,6 +4,11 @@ module IGLOO_allocation
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   implicit none
 
+  !> An integer per dual cell of one block.
+  type :: idMap
+    integer, allocatable :: q(:,:,:)
+  end type idMap
+
 contains
 
 
@@ -326,16 +331,18 @@ contains
 
   !> Places the ord2 dual node cloud: interior nodes are the geo cell centres, the surrounding
   !  ring is ghosts by reflection and constant-gradient extrapolation. Parts:
-  !    faces (i, j; k in 3D), i/j corners (both modes), k edges and true corners (3D only),
-  !    axis repair for wedges.
-  subroutine fill_dual_nodes(sol, blk, is2D)
+  !    faces (i, j; k in 3D), then the given face ghosts (ghostIdx at ghostPos), i/j corners
+  !    (both modes), k edges and true corners (3D only), axis repair for wedges.
+  subroutine fill_dual_nodes(sol, blk, is2D, ghostIdx, ghostPos)
     use IGLOO_data_block, only: obj_block, obj_flowblock
     use IGLOO_variables,  only: axisym, refDir
     implicit none
     type(obj_flowblock), intent(inout) :: sol  !> dual (gas) block -- node ring to fill
     type(obj_block),     intent(in)    :: blk  !> geo block -- centres and face centres
     logical,             intent(in)    :: is2D
-    integer  :: i, j, k
+    integer,  intent(in), optional :: ghostIdx(:,:)  !> (3, n) face ghost nodes placed by the caller
+    real(R8), intent(in), optional :: ghostPos(:,:)  !> (3, n) their positions
+    integer  :: i, j, k, l
     real(R8) :: s, sref
     !> Interior nodes: cell centres
     do k = 1, sol%Nz; do j = 1, sol%Ny; do i = 1, sol%Nx
@@ -355,6 +362,11 @@ contains
         sol%node(:,i,j,0)        = 2.0_R8*blk%face(5)%cell(i,j)%center - blk%center(:,i,j,1)
         sol%node(:,i,j,sol%Nz+1) = 2.0_R8*blk%face(6)%cell(i,j)%center - blk%center(:,i,j,sol%Nz)
       enddo; enddo
+    endif
+    if (present(ghostIdx)) then
+      do l = 1, size(ghostIdx, 2)
+        sol%node(:, ghostIdx(1,l), ghostIdx(2,l), ghostIdx(3,l)) = ghostPos(:, l)
+      enddo
     endif
     !> i/j corner ghosts by constant-gradient extrapolation: both modes (mesh2D has Nz = 1)
     do k = 1, sol%Nz
@@ -428,6 +440,7 @@ contains
     real(R8) :: n1, n2, n3, cos12, cos13, cos23, maxcos
     integer  :: i, j, k
 
+    if (allocated(sol%isDeformed)) deallocate(sol%isDeformed)
     allocate(sol%isDeformed(1:sol%Nx, 1:sol%Ny, 1:sol%Nz))
 
     do k = 1, sol%Nz; do j = 1, sol%Ny; do i = 1, sol%Nx
@@ -454,6 +467,238 @@ contains
     enddo; enddo; enddo
 
   end subroutine computeSkewFlag
+
+
+  !> The gas-order-2 dual across 101 faces, built once after the bc read; classes unallocated without a 101 link.
+  subroutine assembleInterfaceDual(geo, gas, links, classes, nmoved)
+    use IGLOO_variables,   only: mesh2D
+    use IGLOO_data_block,  only: obj_block, obj_flowblock, vertexClass, faceFlags
+    use IGLOO_Lib_Mollify, only: cellLink
+    implicit none
+    type(obj_block),     intent(inout) :: geo(:)
+    type(obj_flowblock), intent(inout) :: gas(:)
+    type(cellLink),      intent(in)    :: links(:)
+    type(vertexClass), allocatable, intent(out) :: classes(:)
+    integer,             intent(out)   :: nmoved
+    type(idMap),  allocatable :: id(:)
+    type(faceFlags) :: flags(6)
+    logical,  allocatable :: is101(:)
+    integer,  allocatable :: parent(:), nmem(:), cls(:), fill(:), gidx(:,:)
+    real(R8), allocatable :: gpos(:,:)
+    integer  :: l, c, a, bb, ap, bp, nc, nn, ncls, b, f, m, n, i, j, k, r, ng, v(3,4), vp(3,4)
+    real(R8) :: h, x(3,4), xp(3,4), w
+
+    nmoved = 0
+    allocate(is101(size(links)))
+    do l = 1, size(links)
+      is101(l) = .false.
+      if (links(l)%pb < 1) cycle
+      call geo(links(l)%b)%ijk2fmn(links(l)%i, links(l)%j, links(l)%k, links(l)%f, m, n)
+      if (m > 0) is101(l) = geo(links(l)%b)%face(links(l)%f)%cell(m,n)%bcdef == 101
+    enddo
+    if (.not. any(is101)) return
+
+    !> (0) vertex classes: the face cell's corners joined to the partner's through orient
+    nc = merge(2, 4, mesh2D)
+    allocate(parent(2*nc*count(is101)), id(size(geo)))
+    do l = 1, size(links)
+      if (.not. is101(l)) cycle
+      do r = 1, 2
+        b = merge(links(l)%b, links(l)%pb, r == 1)
+        if (allocated(id(b)%q)) cycle
+        allocate(id(b)%q(1:geo(b)%Nx+1, 1:geo(b)%Ny+1, 1:merge(1, geo(b)%Nz+1, mesh2D)))
+        id(b)%q = 0
+      enddo
+    enddo
+    nn = 0
+    do l = 1, size(links)
+      if (.not. is101(l)) cycle
+      associate(lk => links(l))
+      call geo(lk%b)%ijk2fmn(lk%i, lk%j, lk%k, lk%f, m, n)
+      associate(o => geo(lk%b)%face(lk%f)%cell(m,n)%orient)
+      if (mesh2D .and. (o(2) /= 0 .or. o(3) /= 0)) &
+        error stop 'IGLOO: 101 orientation mixes the slab direction on a one-layer mesh'
+      do c = 1, nc
+        a = mod(c - 1, 2); bb = (c - 1)/2
+        ap = 1 + o(1)*(2*a - 1) + o(3)*(2*bb - 1)
+        bp = 1 + o(2)*(2*a - 1) + o(4)*(2*bb - 1)
+        if (mesh2D) bp = 0
+        if ((ap /= 0 .and. ap /= 2) .or. (bp /= 0 .and. bp /= 2)) &
+          error stop 'IGLOO: 101 orientation disagrees with the partner cells'
+        v(:, c)  = faceVertex(lk%f,  lk%i,  lk%j,  lk%k,  a,      bb)
+        vp(:, c) = faceVertex(lk%pf, lk%pi, lk%pj, lk%pk, ap/2, bp/2)
+        x(:, c)  = geo(lk%b )%node(:, v(1,c),  v(2,c),  v(3,c))
+        xp(:, c) = geo(lk%pb)%node(:, vp(1,c), vp(2,c), vp(3,c))
+      enddo
+      end associate
+      h = min(edgeMin(x, nc), edgeMin(xp, nc))
+      do c = 1, nc
+        if (mesh2D) then; w = norm2(x(1:2,c) - xp(1:2,c))
+        else;             w = norm2(x(:,c) - xp(:,c)); endif
+        if (w > 0.1_R8*h) error stop 'IGLOO: 101 orientation disagrees with the partner cells'
+        call join(nodeId(lk%b, v(:,c)), nodeId(lk%pb, vp(:,c)))
+      enddo
+      end associate
+    enddo
+
+    !> classes: the sets of two or more dual cells, numbered in traversal order
+    allocate(nmem(nn), cls(nn))
+    nmem = 0; cls = 0; ncls = 0
+    do r = 1, nn
+      nmem(root(r)) = nmem(root(r)) + 1
+    enddo
+    do b = 1, size(geo)
+      if (.not. allocated(id(b)%q)) cycle
+      do k = 1, size(id(b)%q, 3); do j = 1, size(id(b)%q, 2); do i = 1, size(id(b)%q, 1)
+        if (id(b)%q(i,j,k) == 0) cycle
+        r = root(id(b)%q(i,j,k))
+        if (nmem(r) < 2 .or. cls(r) > 0) cycle
+        ncls = ncls + 1; cls(r) = ncls
+      enddo; enddo; enddo
+    enddo
+    allocate(classes(ncls), fill(ncls))
+    fill = 0
+    do r = 1, nn
+      if (cls(r) > 0) allocate(classes(cls(r))%m(4, nmem(r)))
+    enddo
+    do b = 1, size(geo)
+      if (.not. allocated(id(b)%q)) cycle
+      do k = 1, size(id(b)%q, 3); do j = 1, size(id(b)%q, 2); do i = 1, size(id(b)%q, 1)
+        if (id(b)%q(i,j,k) == 0) cycle
+        c = cls(root(id(b)%q(i,j,k)))
+        if (c == 0) cycle
+        fill(c) = fill(c) + 1
+        classes(c)%m(:, fill(c)) = [b, i, j, k]
+      enddo; enddo; enddo
+    enddo
+
+    !> (a) + (b): face ghosts at the partner centres, the ring redone, no clip normal to a 101 face
+    do b = 1, size(geo)
+      ng = count(is101 .and. links(:)%b == b)
+      if (ng == 0) cycle
+      allocate(gidx(3, ng), gpos(3, ng))
+      ng = 0
+      do l = 1, size(links)
+        if (.not. is101(l) .or. links(l)%b /= b) cycle
+        ng = ng + 1
+        f = links(l)%f
+        gidx(:, ng) = faceGhost(f, links(l)%i, links(l)%j, links(l)%k, gas(b)%Nx, gas(b)%Ny, gas(b)%Nz)
+        gpos(:, ng) = geo(links(l)%pb)%center(:, links(l)%pi, links(l)%pj, links(l)%pk)
+        if (.not. allocated(flags(f)%f)) then
+          allocate(flags(f)%f(size(geo(b)%face(f)%cell, 1), size(geo(b)%face(f)%cell, 2)))
+          flags(f)%f = .false.
+        endif
+        call geo(b)%ijk2fmn(links(l)%i, links(l)%j, links(l)%k, f, m, n)
+        flags(f)%f(m, n) = .true.
+      enddo
+      call fill_dual_nodes(gas(b), geo(b), mesh2D, gidx, gpos)
+      call computeSkewFlag(gas(b), mesh2D)
+      call gas(b)%precomputeDualMetric(mesh2D, geo(b), flags)
+      call gas(b)%computeBBox
+      nmoved = nmoved + ng
+      deallocate(gidx, gpos)
+      do f = 1, 6
+        if (allocated(flags(f)%f)) deallocate(flags(f)%f)
+      enddo
+    enddo
+
+    !> (c) the class's octant volume to each member
+    do c = 1, ncls
+      w = 0._R8
+      do n = 1, size(classes(c)%m, 2)
+        associate(mb => classes(c)%m(:, n))
+        w = w + geo(mb(1))%dualW(mb(2), mb(3), mb(4))
+        end associate
+      enddo
+      do n = 1, size(classes(c)%m, 2)
+        associate(mb => classes(c)%m(:, n))
+        geo(mb(1))%dualW(mb(2), mb(3), mb(4)) = w
+        end associate
+      enddo
+      classes(c)%w = w
+    enddo
+
+  contains
+
+    !> Union-find node of dual cell (vertex vt + 1) of block bk, created on first use.
+    integer function nodeId(bk, vt)
+      integer, intent(in) :: bk, vt(3)
+      integer :: d(3)
+      d = [vt(1) + 1, vt(2) + 1, merge(1, vt(3) + 1, mesh2D)]
+      if (id(bk)%q(d(1), d(2), d(3)) == 0) then
+        nn = nn + 1
+        parent(nn) = nn
+        id(bk)%q(d(1), d(2), d(3)) = nn
+      endif
+      nodeId = id(bk)%q(d(1), d(2), d(3))
+    end function nodeId
+
+    integer function root(p)
+      integer, intent(in) :: p
+      root = p
+      do while (parent(root) /= root)
+        parent(root) = parent(parent(root))
+        root = parent(root)
+      enddo
+    end function root
+
+    subroutine join(p, q)
+      integer, intent(in) :: p, q
+      integer :: rp, rq
+      rp = root(p); rq = root(q)
+      if (rp /= rq) parent(max(rp, rq)) = min(rp, rq)
+    end subroutine join
+
+  end subroutine assembleInterfaceDual
+
+
+  !> Geometric vertex at corner (a, b) (along the face's m, n) of face cell (i,j,k) on face f.
+  pure function faceVertex(f, i, j, k, a, b) result(v)
+    integer, intent(in) :: f, i, j, k, a, b
+    integer :: v(3)
+    select case (f)
+    case (1); v = [i-1,   j-1+a, k-1+b]
+    case (2); v = [i,     j-1+a, k-1+b]
+    case (3); v = [i-1+a, j-1,   k-1+b]
+    case (4); v = [i-1+a, j,     k-1+b]
+    case (5); v = [i-1+a, j-1+b, k-1  ]
+    case default; v = [i-1+a, j-1+b, k]
+    end select
+  end function faceVertex
+
+
+  !> Face ghost node of face cell (i,j,k) on face f of a block of nx x ny x nz cells.
+  pure function faceGhost(f, i, j, k, nx, ny, nz) result(g)
+    integer, intent(in) :: f, i, j, k, nx, ny, nz
+    integer :: g(3)
+    select case (f)
+    case (1); g = [0,    j,    k]
+    case (2); g = [nx+1, j,    k]
+    case (3); g = [i,    0,    k]
+    case (4); g = [i,    ny+1, k]
+    case (5); g = [i,    j,    0]
+    case default; g = [i, j, nz+1]
+    end select
+  end function faceGhost
+
+
+  !> Shortest non-zero edge of a face cell's corners (corner c = 1 + a + 2b): one edge in 2D, four in 3D.
+  pure function edgeMin(x, nc) result(h)
+    real(R8), intent(in) :: x(3,4)
+    integer,  intent(in) :: nc
+    real(R8) :: h, e(4)
+    integer  :: q
+    if (nc == 2) then
+      e(1) = norm2(x(1:2,2) - x(1:2,1)); e(2:4) = 0._R8
+    else
+      e = [norm2(x(:,2) - x(:,1)), norm2(x(:,4) - x(:,2)), norm2(x(:,3) - x(:,4)), norm2(x(:,1) - x(:,3))]
+    endif
+    h = huge(1._R8)
+    do q = 1, 4
+      if (e(q) > 0._R8) h = min(h, e(q))
+    enddo
+    if (h == huge(1._R8)) h = 0._R8
+  end function edgeMin
 
 
 end module IGLOO_allocation
