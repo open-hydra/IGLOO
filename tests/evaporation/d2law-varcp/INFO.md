@@ -31,7 +31,7 @@ T = T(h) through the table (linear between its nodes); every constant is a case 
 V3 1.6e-8 W (0.004 of its tolerance, 3e-12 of the gross 5.24·10³ W).
 
 **RED.**
-- The latent term with a T-state factor (1/1250 in place of the h-state's 1): V2 fails on 1475 rows, by up to 22.4 K
+- The latent term with a T-state factor (1/1250 in place of the h-state's 1): V2 fails on 1500 rows, by up to 22.4 K
   (3.2e5 tolerances); V1 holds (it reads the measured T). The factor of the material's own scalar cp,
   1/`aux(ind_cp)`, divides by the zero cp of a tabulated material: every parcel fails at injection and V1 fails.
 - The deposit's enthalpy forced to cp·T + hOff (the constant-cp form): V3 fails by 4.1·10³ W (1.1e9 tolerances);

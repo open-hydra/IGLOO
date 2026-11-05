@@ -55,7 +55,7 @@ all **1500** cells are checked and the count is asserted.
 | gate | assertion | RED without `npdot` | GREEN |
 |---|---|---|---|
 | W1/W2 | both INI changes were read — the two log witnesses | present | present |
-| N | ≥ 1000 cells checked (non-vacuity) | 1475 | 1500 |
+| N | ≥ 1000 cells checked (non-vacuity) | 1500 | 1500 |
 | E3 | `abs(rho_p/n_p − (m_in+m_out)/2) / m̄ ≤ 1e-4` | **1.000** | 2.930e-05 |
 | E4 | `abs(u_p − 10)/10 ≤ 1e-11` | **5.003e+07** | 7.19e-14 |
 | E4 | `abs(v_p), abs(w_p) ≤ 1e-18` | 2.17e-14 | 4.34e-22 |
