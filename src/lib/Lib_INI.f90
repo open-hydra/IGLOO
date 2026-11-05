@@ -581,11 +581,17 @@ contains
     write(*,'(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,es10.3)') '  >> [material ', imat, '] evap=', mat%evapSelect, &
       ' liq=', mat%liqSelect, ' intf=', mat%intfSelect, ' boil=', mat%boilSelect, ' comb=', mat%combSelect, &
       ' solid=', mat%solidSelect, ' alpha-e=', mat%alphaE
-    if (len_trim(mat%productName) > 0 .and. .not. mat%resOn) write(*,'(a,i0,a,es10.3)') '  >> [material ', imat, &
-      '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap
-    if (len_trim(mat%productName) > 0 .and. mat%resOn) write(*,'(a,i0,a,es10.3,a,es10.3)') '  >> [material ', imat, &
-      '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap, ' residue=on d-residue=', mat%dRes
+    if (len_trim(mat%productName) > 0 .and. .not. mat%resOn .and. mat%xiLaw == 0) write(*,'(a,i0,a,es10.3)') &
+      '  >> [material ', imat, '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap
+    if (len_trim(mat%productName) > 0 .and. mat%resOn .and. mat%xiLaw == 0) write(*,'(a,i0,a,es10.3,a,es10.3)') &
+      '  >> [material ', imat, '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap, ' residue=on d-residue=', mat%dRes
+    !> under the law the retained fraction is the law's, not xi-cap
+    if (len_trim(mat%productName) > 0 .and. .not. mat%resOn .and. mat%xiLaw > 0) write(*,'(a,i0,a)') &
+      '  >> [material ', imat, '] product='//trim(mat%productName)//' xi-law=Gallier21'
+    if (len_trim(mat%productName) > 0 .and. mat%resOn .and. mat%xiLaw > 0) write(*,'(a,i0,a,es10.3)') &
+      '  >> [material ', imat, '] product='//trim(mat%productName)//' xi-law=Gallier21 residue=on d-residue=', mat%dRes
     if (mat%xiOx0 > 0._R8) write(*,'(a,i0,a,es10.3)') '  >> [material ', imat, '] xi-ox0=', mat%xiOx0
+    if (mat%xiLaw > 0 .and. len_trim(mat%productName) == 0) write(*,'(a,i0,a)') '  >> [material ', imat, '] xi-law=Gallier21'
   end subroutine finalize_material_models
 
 

@@ -72,6 +72,7 @@ module IGLOO_data_phases
     !> Optional per-material properties; each is read only by the model that needs it.
     real(R8) :: alphaE = 1._R8, kLiq = 0._R8, muLiq = 0._R8
     real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8, xiOx0 = 0._R8
+    integer  :: xiLaw = 0            !> the cap's retained fraction: 0 xi-cap, 1 Gallier et al. 2021's law
     real(R8) :: Tign = 0._R8, Tmelt = 2327._R8, hFus = 0._R8, Tnuc = 0._R8, cpSol = 0._R8
     real(R8) :: qComb = 0._R8
     real(R8) :: rhoSol = 0._R8       !> solid density [kg/m3]; 0 = the liquid density
@@ -302,6 +303,7 @@ contains
       if (self%combSelect > 0 .or. self%solidSelect > 0) then
         gr%Kburn = self%Kburn; gr%nBurn = self%nBurn; gr%Xeff  = self%Xeff
         gr%betaPart = self%betaPart; gr%xiCap = self%xiCap; gr%xiOx0 = self%xiOx0; gr%Tign = self%Tign
+        gr%xiLaw = self%xiLaw
         gr%Tmelt = self%Tmelt; gr%hFus = self%hFus; gr%Tnuc = self%Tnuc; gr%cpSol = self%cpSol
         gr%qComb = self%qComb
       endif
@@ -337,7 +339,8 @@ contains
     endif
 
     mdotSwitch = (self%evapSelect > 0)
-    mdl = determineModel(mdotSwitch, self%brkupEqOde, self%combSelect, self%solidSelect, cap=self%xiCap > 0._R8)
+    mdl = determineModel(mdotSwitch, self%brkupEqOde, self%combSelect, self%solidSelect, &
+                         cap=self%xiCap > 0._R8 .or. self%xiLaw > 0)
     self%neq  = computeNeq(mdl, eulerSwitch, srcBodyForce)
     !> Build fixed-size propFlags: [varCp, varRho, varSig, varMup, varPsat, varLv, varCpv]
     propFlags = [self%cpVariable, self%rhoVariable, .false., .false., .false., .false., .false.]
@@ -469,6 +472,7 @@ contains
       if (self%combSelect > 0 .or. self%solidSelect > 0) then
         part%Kburn = self%Kburn; part%nBurn = self%nBurn; part%Xeff = self%Xeff
         part%betaPart = self%betaPart; part%xiCap = self%xiCap; part%xiOx0 = self%xiOx0; part%Tign = self%Tign
+        part%xiLaw = self%xiLaw
         part%Tmelt = self%Tmelt; part%hFus = self%hFus; part%Tnuc = self%Tnuc; part%cpSol = self%cpSol
         part%qComb = self%qComb
       endif

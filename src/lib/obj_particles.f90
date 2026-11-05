@@ -116,6 +116,7 @@ module IGLOO_particles
     real(R8)     :: betaPart   = 0._R8  !> heat-partition fraction of q-comb to the particle
     real(R8)     :: xiCap      = 0._R8  !> oxide-cap fraction: the oxide formed by the burn retained on the drop
     real(R8)     :: xiOx0      = 0._R8  !> oxide mass fraction of the injected particle (model 8)
+    integer      :: xiLaw      = 0      !> the cap's retained fraction: 0 xi-cap, 1 Gallier et al. 2021's law
     real(R8)     :: Tign       = 0._R8  !> ignition temperature [K]
     real(R8)     :: Tmelt      = 2327._R8 !> melt temperature [K], default alumina (solidification)
     real(R8)     :: hFus       = 0._R8  !> heat of fusion [J/kg] (solidification)

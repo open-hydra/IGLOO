@@ -482,22 +482,29 @@ contains
   subroutine resolve_products(material)
     use IGLOO_variables,      only: nm
     use IGLOO_data_phases,    only: obj_material
-    use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch, capStretchX0
+    use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch, capStretchX0, buildXiLaw
     use IGLOO_Mod_MPI,        only: mpi_is_root
     implicit none
     type(obj_material), intent(inout) :: material(:)
     integer :: i, j, p
+    logical :: capOn
 
     do i = 1, nm
       associate(mat => material(i))
+      !> the cap: a constant retained fraction xi-cap, or Gallier's law alone (xi-cap beside it refused)
+      if (mat%xiLaw > 0 .and. mat%xiCap > 0._R8) &
+        error stop 'IGLOO: xi-cap beside xi-law=Gallier21: the law gives the retained fraction'
+      if (mat%xiLaw > 0 .and. mat%combSelect == 0) error stop 'IGLOO: xi-law=Gallier21 requires combustion=Beckstead'
+      capOn = mat%xiCap > 0._R8 .or. mat%xiLaw > 0
       if (mat%xiCap < 0._R8 .or. mat%xiCap > 1._R8) error stop '[ERROR] xi-cap must lie in [0, 1]'
       if (mat%xiOx0 < 0._R8 .or. mat%xiOx0 >= 1._R8) error stop '[ERROR] xi-ox0 must lie in [0, 1)'
-      if (mat%xiOx0 > 0._R8 .and. .not. (mat%combSelect > 0 .and. mat%xiCap > 0._R8)) &
-        error stop '[ERROR] xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0'
+      if (mat%xiOx0 > 0._R8 .and. .not. (mat%combSelect > 0 .and. capOn)) &
+        error stop '[ERROR] xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0 or xi-law=Gallier21'
       if ((len_trim(mat%productName) > 0 .or. mat%resOn .or. mat%dRes > 0._R8) .and. &
-          .not. (mat%combSelect > 0 .and. mat%xiCap > 0._R8)) &
-        error stop '[ERROR] product, residue and d-residue require combustion=Beckstead and xi-cap > 0'
-      if (mat%xiCap > 0._R8) then
+          .not. (mat%combSelect > 0 .and. capOn)) &
+        error stop '[ERROR] product, residue and d-residue require combustion=Beckstead and &
+                   &xi-cap > 0 or xi-law=Gallier21'
+      if (capOn) then
         p = 0
         do j = 1, nm
           if (len_trim(mat%productName) > 0 .and. trim(material(j)%matName) == trim(mat%productName)) p = j
@@ -517,7 +524,14 @@ contains
         mat%cpRes   = material(p)%cp
         mat%hOffRes = material(p)%hOff
         call buildLobeTable()
-        if (mat%xiOx0 > 0._R8) then
+        if (mat%xiLaw > 0) then
+          !> the law's stretch is the parcel's own, from its injected size (integrate)
+          call buildXiLaw()
+          mat%cStretch = 1._R8
+          if (mpi_is_root) write(*,'(a,i0,a)') '  >> [material ', i, '] oxide cap on product '//trim(mat%productName)// &
+            ': xi-law=Gallier21 (g of the current d_Al, held at its 20 and 400 um values outside them; h held past'// &
+            ' f_ox = 0.9), the stretch c per parcel'
+        elseif (mat%xiOx0 > 0._R8) then
           mat%cStretch = capStretchX0(mat%xiCap, mat%nBurn, mat%xiOx0, mat%rho, mat%rhoRes)
           write(*,'(a,i0,a,f9.6,a,f6.4)') '  >> [material ', i, '] oxide cap on product '//trim(mat%productName)// &
                                           ': stretch c = ', mat%cStretch, ' from xi-ox0 = ', mat%xiOx0

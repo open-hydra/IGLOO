@@ -23,10 +23,16 @@ program test_combustion
     !        typed here, and decreasing over 1001 points. [Gal21]
     !   CB10 capStretch(0.2, 1.8) = int_0^1 ds/F, the stretch that keeps Beckstead's burn time.
     !   CB11 capStretchX0(0.2, 1.8, 0.1): the stretch with an initial cap.
+    !   CB12 Gallier's deposition law (xi-law=Gallier21) at its nodes: Fig. 11's values at 70 um exactly, Fig. 7's
+    !        sizes at f_ox = 0 on the least-squares line through Fig. 7's points, both typed here. [Gal21]
+    !   CB13 the law between its nodes (linear in f_ox) and past its ends (h held past f_ox = 0.9, g held outside
+    !        20-400 um).
+    !   CB14 rhsAlCap under the law: F(9) = -xi(d_Al, f_ox) nu F(8), the law read through its slot.
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_Lib_Combustion, only: becksteadRate, nmp, imKb, imN, imXe, imBeta, &
-                                    imTig, imQc, aXeff, nuOx, buildLobeTable, lobeF, capStretch, capStretchX0
+                                    imTig, imQc, aXeff, nuOx, buildLobeTable, lobeF, capStretch, capStretchX0, &
+                                    buildXiLaw, xiGallier
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
     use verif_dump,   only: dump_curve
@@ -64,6 +70,9 @@ program test_combustion
     call run_CB9(ok_all)
     call run_CB10(ok_all)
     call run_CB11(ok_all)
+    call buildXiLaw()
+    call run_CB12_CB13(ok_all)
+    call run_CB14(ok_all)
 
     call dump_CB2()
     call dump_CB3()
@@ -364,6 +373,115 @@ contains
         ok = ok .and. pass
         call append_row('CB11_stretch_x0', 'c', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_CB11
+
+    !> Gallier's law typed from tests/combustion/burn-box-cap-gallier/reference/: h(f_ox), and g from the
+    !  least-squares line through Fig. 7's points, normalised at 70 um
+    pure function law_h(f) result(h)
+        real(R8), intent(in) :: f
+        real(R8), parameter :: fx(6) = [0._R8, 0.1_R8, 0.3_R8, 0.5_R8, 0.7_R8, 0.9_R8]
+        real(R8), parameter :: hv(6) = [0.069522_R8, 0.101342_R8, 0.150355_R8, 0.192828_R8, 0.280447_R8, 0.520769_R8]
+        real(R8) :: h
+        integer  :: k
+        if (f <= fx(1)) then; h = hv(1); return; end if
+        if (f >= fx(6)) then; h = hv(6); return; end if
+        do k = 1, 5
+            if (f <= fx(k+1)) exit
+        end do
+        h = hv(k) + (f - fx(k))/(fx(k+1) - fx(k))*(hv(k+1) - hv(k))
+    end function law_h
+
+    pure function law_g(d_um) result(g)
+        real(R8), intent(in) :: d_um
+        real(R8), parameter :: dx(6) = [20._R8, 50._R8, 70._R8, 100._R8, 220._R8, 400._R8]
+        real(R8), parameter :: fp(6) = [7.8595_R8, 7.3922_R8, 6.9633_R8, 6.1459_R8, 3.2639_R8, 1.6087_R8]
+        real(R8) :: g, a, b, d
+        b = (6._R8*sum(dx*fp) - sum(dx)*sum(fp))/(6._R8*sum(dx*dx) - sum(dx)**2)
+        a = (sum(fp) - b*sum(dx))/6._R8
+        d = min(max(d_um, 20._R8), 400._R8)
+        g = (a + b*d)/(a + b*70._R8)
+    end function law_g
+
+    subroutine run_CB12_CB13(ok)
+        !> the law at its nodes, between them and past its ends, against law_g x law_h
+        logical, intent(inout) :: ok
+        real(R8), parameter :: fn(6) = [0._R8, 0.1_R8, 0.3_R8, 0.5_R8, 0.7_R8, 0.9_R8]
+        real(R8), parameter :: hv(6) = [0.069522_R8, 0.101342_R8, 0.150355_R8, 0.192828_R8, 0.280447_R8, 0.520769_R8]
+        real(R8), parameter :: dn(6) = [20._R8, 50._R8, 70._R8, 100._R8, 220._R8, 400._R8]
+        real(R8), parameter :: fb(5) = [0.05_R8, 0.2_R8, 0.4_R8, 0.6_R8, 0.8_R8]
+        real(R8), parameter :: db(4) = [30._R8, 85._R8, 160._R8, 310._R8]
+        real(R8) :: err12a, err12b, err13a, err13b, x, y, tol
+        logical  :: pass
+        integer  :: i, j
+        err12a = 0._R8; err12b = 0._R8; err13a = 0._R8; err13b = 0._R8
+        do i = 1, 6
+            err12a = max(err12a, abs(xiGallier(70.e-6_R8, fn(i)) - hv(i)))
+            x = xiGallier(dn(i)*1.e-6_R8, 0._R8);  y = law_g(dn(i))*hv(1)
+            err12b = max(err12b, abs(x - y)/y)
+        end do
+        do i = 1, size(fb)
+            do j = 1, size(db)
+                x = xiGallier(db(j)*1.e-6_R8, fb(i));  y = law_g(db(j))*law_h(fb(i))
+                err13a = max(err13a, abs(x - y)/y)
+            end do
+        end do
+        !> past the ends: f_ox 0.95 and 1 hold h(0.9); 10 um and 1 mm hold g(20) and g(400)
+        x = xiGallier(70.e-6_R8, 0.95_R8);  err13b = max(err13b, abs(x - hv(6))/hv(6))
+        x = xiGallier(70.e-6_R8, 1._R8);    err13b = max(err13b, abs(x - hv(6))/hv(6))
+        x = xiGallier(10.e-6_R8, 0.3_R8);   y = law_g(20._R8)*hv(3);   err13b = max(err13b, abs(x - y)/y)
+        x = xiGallier(1.e-3_R8, 0.3_R8);    y = law_g(400._R8)*hv(3);  err13b = max(err13b, abs(x - y)/y)
+        write(*,'(a,2f10.6)') '  [INFO] CB13 g(20 um), g(400 um) = ', law_g(20._R8), law_g(400._R8)
+        pass = assert_lt('CB12a the law at Fig. 11''s nodes, 70 um: exact', err12a, 1.0e-300_R8)
+        ok = ok .and. pass
+        call append_row('CB12a_law_h_nodes', 'xi', err12a, err12a, 0._R8, 0._R8, 0._R8, pass)
+        tol = 1.0e-14_R8
+        pass = assert_lt('CB12b the law at Fig. 7''s sizes, f_ox = 0: the regression line, relative', err12b, tol)
+        ok = ok .and. pass
+        call append_row('CB12b_law_g_nodes', 'xi', err12b, err12b, 0._R8, 0._R8, tol, pass)
+        pass = assert_lt('CB13a the law between its nodes, relative', err13a, tol)
+        ok = ok .and. pass
+        call append_row('CB13a_law_between', 'xi', err13a, err13a, 0._R8, 0._R8, tol, pass)
+        pass = assert_lt('CB13b the law past its ends: h(0.9), g(20 um), g(400 um), relative', err13b, tol)
+        ok = ok .and. pass
+        call append_row('CB13b_law_ends', 'xi', err13b, err13b, 0._R8, 0._R8, tol, pass)
+    end subroutine run_CB12_CB13
+
+    subroutine run_CB14(ok)
+        !> one production rhsAlCap per oxide fraction under the law (slot imXl = 1), d_Al = 100 um
+        use IGLOO_particles, only: obj_particle
+        use Lib_RHS,         only: setupRHS, packAuxVars, nauxvar, nauxstate, rhsAlCap
+        logical, intent(inout) :: ok
+        real(R8), parameter :: fox(5) = [0._R8, 0.1_R8, 0.3_R8, 0.6_R8, 0.95_R8]
+        type(obj_particle) :: p
+        real(R8), allocatable :: aux(:), auxst(:)
+        real(R8) :: Z(9), F(9), gas(9), gasNodes(9,8), gasVert(3,8), mAl, mOx, dAl, xi, err, tol
+        logical  :: pf(7), pass
+        integer  :: i, nAux, nS, nE
+        call set_switches()
+        p%cp = 1250._R8;  p%rho = RHOP
+        p%Kburn = KBURN;  p%nBurn = NB;  p%Xeff = XEFF;  p%betaPart = BETA;  p%Tign = TIGN;  p%qComb = QCOMB
+        p%xiCap = 0._R8;  p%xiLaw = 1;  p%rhoRes = 3950._R8;  p%cpRes = 1887.6_R8;  p%cStretch = 1._R8
+        pf = .false.
+        call setupRHS(8, 0, 0, 0, 0, 0, 1, pf, [real(R8)::], 0, 0._R8, nAux, nS, nE)
+        allocate(aux(nauxvar), auxst(max(1, nauxstate)))
+        call packAuxVars(p, nauxvar, aux)
+        gas = [1.2_R8, 10._R8, 0._R8, 0._R8, 2000._R8, 1.8e-5_R8, 1.4_R8, 287._R8, 0.026_R8]
+        gasNodes = spread(gas, 2, 8);  gasVert = 0._R8
+        err = 0._R8
+        do i = 1, size(fox)
+            mAl = RHOP*PI/6._R8*D0**3
+            mOx = fox(i)/(1._R8 - fox(i))*mAl
+            Z = [0._R8, 0._R8, 0._R8, 10._R8, 0._R8, 0._R8, TP, mAl, mOx]
+            auxst = 0._R8
+            call rhsAlCap(9, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), gasNodes, gasVert, gas, 9, 8)
+            dAl = (6._R8*mAl/(PI*RHOP))**(1._R8/3._R8)
+            xi  = law_g(dAl*1.e6_R8)*law_h(mOx/(mAl + mOx))
+            err = max(err, abs(F(9) + xi*nuOx*F(8))/abs(xi*nuOx*F(8)))
+        end do
+        tol = 1.0e-14_R8
+        pass = assert_lt('CB14 rhsAlCap under the law: |F(9) + xi(d_Al, f_ox) nu F(8)|/|xi nu F(8)|', err, tol)
+        ok = ok .and. pass
+        call append_row('CB14_law_cap_growth', 'F9', err, err, 0._R8, 0._R8, tol, pass)
+    end subroutine run_CB14
 
     !> Beckstead (2005) burn-time correlation at p=1 atm, T0=300 K, SI seconds out
     pure function tb_corr(aC, d_um, xeff_) result(t_s)

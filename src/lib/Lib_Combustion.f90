@@ -6,12 +6,14 @@ module IGLOO_Lib_Combustion
     private
     public :: becksteadRate
     public :: buildLobeTable, lobeF, capStretch, capStretchX0
+    public :: buildXiLaw, xiGallier
 
     !> Metal parameter slots; the order is mirrored by Lib_RHS ind_mb../nmetal.
-    integer(I4), parameter, public :: nmp = 12
+    integer(I4), parameter, public :: nmp = 13
     integer(I4), parameter, public :: imKb=1, imN=2, imXe=3, imBeta=4, imXi=5
     integer(I4), parameter, public :: imTig=6, imHf=7, imCps=8, imQc=9
     integer(I4), parameter, public :: imRr=10, imCr=11, imCs=12   !> the cap: product density, heat capacity, stretch
+    integer(I4), parameter, public :: imXl=13                     !> the cap's retained fraction: 0 xi-cap, 1 Gallier21
 
     !> X_eff exponent of the Beckstead (2005) correlation.
     real(R8), parameter, public :: aXeff = 1.0_R8
@@ -26,6 +28,17 @@ module IGLOO_Lib_Combustion
     !> The lobe table in increasing f_ox: f_ox, (1 - f_ox)^(1/3) and F; set once by buildLobeTable.
     real(R8) :: lobeFr(NLOBE) = 0._R8, lobeUr(NLOBE) = 0._R8, lobeFv(NLOBE) = 0._R8
     logical  :: lobeBuilt = .false.
+
+    !> Gallier et al. 2021's deposition law, Figs. 11 and 7 (tests/combustion/burn-box-cap-gallier/reference/): h the
+    !  retained fraction against f_ox at 70 um, g the regression line through f_dep [%] against d_Al [um], at 70 um 1.
+    integer(I4), parameter :: NXH = 6, NXG = 6
+    real(R8), parameter :: xhF(NXH) = [0._R8, 0.1_R8, 0.3_R8, 0.5_R8, 0.7_R8, 0.9_R8]
+    real(R8), parameter :: xhV(NXH) = [0.069522_R8, 0.101342_R8, 0.150355_R8, 0.192828_R8, 0.280447_R8, 0.520769_R8]
+    real(R8), parameter :: xgD(NXG) = [20._R8, 50._R8, 70._R8, 100._R8, 220._R8, 400._R8]
+    real(R8), parameter :: xgP(NXG) = [7.8595_R8, 7.3922_R8, 6.9633_R8, 6.1459_R8, 3.2639_R8, 1.6087_R8]
+    !> g = 1 + xgS (d - 70), d in um held in [20, 400]; set once by buildXiLaw
+    real(R8) :: xgS = 0._R8
+    logical  :: xiLawBuilt = .false.
 
 contains
 
@@ -176,5 +189,46 @@ contains
         c = c*((1._R8 - x0)/rhoAl/((1._R8 - x0)/rhoAl + x0/rhoRes))**(n/3._R8)
 
     end function capStretchX0
+
+    !> g's slope from the least-squares line f = a + b d through Fig. 7's points: g = f(d)/f(70) = 1 + b (d - 70)/f(70).
+    subroutine buildXiLaw()
+        implicit none
+        real(R8) :: sx, sy, sxx, sxy, a, b, n
+
+        if (xiLawBuilt) return
+        n   = real(NXG, R8)
+        sx  = sum(xgD); sy = sum(xgP); sxx = sum(xgD*xgD); sxy = sum(xgD*xgP)
+        b   = (n*sxy - sx*sy)/(n*sxx - sx*sx)
+        a   = (sy - b*sx)/n
+        xgS = b/(a + 70._R8*b)
+        xiLawBuilt = .true.
+
+    end subroutine buildXiLaw
+
+    !> The retained fraction xi = g(d_Al) h(f_ox) in [0, 1]: g at the metal diameter dAl [m], held at its 20 and 400 um
+    !  values outside; h linear between Fig. 11's points, held past f_ox = 0.9.
+    pure function xiGallier(dAl, fox) result(xi)
+        implicit none
+        real(R8), intent(in) :: dAl, fox
+        real(R8) :: xi, d, g, h, w
+        integer  :: k
+
+        d = min(max(dAl*1.e6_R8, xgD(1)), xgD(NXG))
+        g = 1._R8 + xgS*(d - 70._R8)
+        if (fox <= xhF(1)) then
+            h = xhV(1)
+        elseif (fox >= xhF(NXH)) then
+            h = xhV(NXH)
+        else
+            k = 1
+            do while (fox > xhF(k+1))
+                k = k + 1
+            enddo
+            w = (fox - xhF(k))/(xhF(k+1) - xhF(k))
+            h = xhV(k) + w*(xhV(k+1) - xhV(k))
+        endif
+        xi = min(max(g*h, 0._R8), 1._R8)
+
+    end function xiGallier
 
 end module IGLOO_Lib_Combustion

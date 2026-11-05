@@ -45,7 +45,7 @@ module Lib_RHS
   integer :: ind_Le  = 0, ind_Yi  = 0, ind_e1 = 0, ind_e2  = 0
   integer :: ind_e3  = 0, ind_e4  = 0, ind_e5 = 0  !> alpha_e (LK interface); k_liq / mu_liq (P2T)
   integer :: ind_mb  = 0                            !> metal-block start (combustion), 0 = absent
-  integer, parameter :: nmetal = 12                 !> metal parameter block, order = IGLOO_Lib_Combustion imKb..imCs
+  integer, parameter :: nmetal = 13                 !> metal parameter block, order = IGLOO_Lib_Combustion imKb..imXl
   integer :: ind_rs  = 0                            !> rho-solid (solid density), 0 = absent
   integer :: ind_eps = 0                            !> emissivity (radiation), 0 = absent
   integer :: nauxvar = 0
@@ -332,7 +332,7 @@ contains
     if (ind_mb > 0) aux(ind_mb:ind_mb+nmetal-1) =                        &
       [particle%Kburn, particle%nBurn, particle%Xeff, particle%betaPart, &
        particle%xiCap, particle%Tign,  particle%hFus,  particle%cpSol,   &
-       particle%qComb, particle%rhoRes, particle%cpRes, particle%cStretch]
+       particle%qComb, particle%rhoRes, particle%cpRes, particle%cStretch, real(particle%xiLaw, R8)]
     !> solid density
     if (ind_rs > 0) aux(ind_rs) = particle%rhoSol
     !> radiation
@@ -1291,7 +1291,7 @@ contains
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
-    use IGLOO_Lib_Combustion,  only: becksteadRate, nmp, imXi, imRr, imCr, imCs, lobeF, nuOx
+    use IGLOO_Lib_Combustion,  only: becksteadRate, nmp, imXi, imRr, imCr, imCs, imXl, lobeF, nuOx, xiGallier
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
@@ -1343,6 +1343,8 @@ contains
     F(7)   = (Qdot + qrel) / (mAl*aux(ind_cp) + mOx*aux(ind_mb+imCr-1))
     F(8)   = mdot
     F(9)   = -aux(ind_mb+imXi-1)*nuOx*mdot
+    !> Gallier's law in place of xi-cap: the retained fraction at the metal diameter and oxide fraction
+    if (aux(ind_mb+imXl-1) > 0._R8) F(9) = -xiGallier(dAl, mOx/m)*nuOx*mdot
 
     if (eulerSwitch) then
       normVel  = norm2(Z(4:6))
