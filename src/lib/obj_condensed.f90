@@ -139,6 +139,7 @@ module IGLOO_data_phases
     !> Optional per-material properties; each is read only by the model that needs it.
     real(R8) :: alphaE = 1._R8, kLiq = 0._R8, muLiq = 0._R8
     real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8, xiOx0 = 0._R8
+    integer  :: xiLaw = 0            !> the cap's retained fraction: 0 xi-cap, 1 Gallier et al. 2021's law
     real(R8) :: Tign = 0._R8, Tmelt = 2327._R8, hFus = 0._R8, Tnuc = 0._R8, cpSol = 0._R8
     real(R8) :: qComb = 0._R8
     real(R8) :: rhoSol = 0._R8       !> rho-solid [kg/m3]; 0 = the liquid density

@@ -6,7 +6,7 @@ module IGLOO_Lib_Evaporation
     public :: assign_evaporation
     public :: assign_liquid, assign_interface, assign_boiling
     public :: assign_blowing, blowingFactor
-    public :: assign_combustion, assign_solidification, assign_residue
+    public :: assign_combustion, assign_solidification, assign_residue, assign_xilaw
     public :: evaporation
     public :: chiETC
     public :: boilingTemperatureCC, alphaBoil, zgrBoiling
@@ -183,6 +183,21 @@ contains
             error stop 'IGLOO: unknown residue token'
         end select
     end subroutine assign_residue
+
+    !> The oxide cap's retained fraction: constant, xi-cap; Gallier21, Gallier et al. 2021's deposition law.
+    subroutine assign_xilaw(word, xiLaw)
+        implicit none
+        character(len=*), intent(in)  :: word
+        integer,          intent(out) :: xiLaw
+        select case (word)
+        case('constant');  xiLaw = 0
+        case('Gallier21'); xiLaw = 1
+        case default
+            write(*,*) "Wrong xi-law input ---> "//trim(word)
+            write(*,*) "Choose one of: constant, Gallier21"
+            error stop 'IGLOO: unknown xi-law token'
+        end select
+    end subroutine assign_xilaw
 
 
     !> Evaporation rate mdot (< 0) and, for the models that provide it, the gas-side heat Qdot_evap:

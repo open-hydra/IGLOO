@@ -428,6 +428,7 @@ contains
     mat%betaPart = 0._R8
     mat%xiCap    = 0._R8
     mat%xiOx0    = 0._R8
+    mat%xiLaw    = 0
     mat%Tign     = 2350._R8          ! Al2O3-shell melting anchor
     mat%qComb    = 0._R8
     mat%Tmelt    = 2327._R8          ! alumina default
@@ -442,13 +443,14 @@ contains
 
 
   !> One key=value token from the material line of the phase file (written by ATLAS GPB from
-  !  [GPB-Phase*]): the eight model words call the assign_* selectors, the seventeen reals are read, the
+  !  [GPB-Phase*]): the nine model words call the assign_* selectors, the seventeen reals are read, the
   !  product name is kept, a breakup constant is kept for apply_breakup_tokens; an unknown key or a
   !  non-numeric value stops the run.
   subroutine apply_material_key(imat, mat, key, value)
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Evaporation, only: assign_evaporation, assign_liquid, assign_interface, &
-                                     assign_boiling, assign_combustion, assign_solidification, assign_residue
+                                     assign_boiling, assign_combustion, assign_solidification, assign_residue, &
+                                     assign_xilaw
     use IGLOO_Lib_Breakup,     only: assign_breakup, breakup_token, BRKTOK_SLOT
     implicit none
     integer,            intent(in)    :: imat
@@ -465,6 +467,7 @@ contains
     case ('combustion');        call assign_combustion(value, mat%combSelect)
     case ('solidification');    call assign_solidification(value, mat%solidSelect)
     case ('residue');           call assign_residue(value, mat%resOn)
+    case ('xi-law');            call assign_xilaw(value, mat%xiLaw)
     case ('breakup');           mat%brkupWord = value
       call assign_breakup(value, mat%brkupSelect, mat%brkupEqOde, mat%brkupEvent, mat%brkupHasChild)
     case ('alpha-e');   read(value,*,iostat=ios) mat%alphaE
