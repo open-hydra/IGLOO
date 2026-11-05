@@ -67,9 +67,10 @@ contains
 
 
   !> Trilinear interpolation of the gas at p0 in a hexahedron: Newton from xi to the local coordinates,
-  !  stopped once |x(xi) - p0| < max(1e-12 h, 64 eps L) (h the cell diagonal, L the largest node
-  !  coordinate magnitude), at most 10 steps (nIt), then shape-function weighting; xi returned clamped.
+  !  stopped once |x(xi) - p0| < hexTol(vertices), at most 10 steps (nIt), then shape-function weighting;
+  !  xi returned clamped.
   pure subroutine interp2ndOrder(vertices,gasNodes,p0,nsp,xi,gas,nIt)
+    use IGLOO_RayFaceIntersection3D, only: hexTol
     implicit none
     integer,  intent(in)    :: nsp
     real(R8), intent(in)    :: vertices(3,8), gasNodes(nsp,8)
@@ -80,7 +81,7 @@ contains
     real(R8) :: N(8), tol
     integer  :: it
 
-    tol = max(1.e-12_R8*norm2(vertices(:,7) - vertices(:,1)), 64*epsilon(1._R8)*maxval(abs(vertices)))
+    tol = hexTol(vertices)
     call hexInverse(vertices, p0, xi, tol, 10, N, it)
     if (present(nIt)) nIt = it
     xi = max(0._R8, min(1._R8, xi))

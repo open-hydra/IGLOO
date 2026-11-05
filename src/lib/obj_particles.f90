@@ -489,7 +489,7 @@ contains
     !> Block bbox early-out (z ignored when mesh2D); widened, by a bound on every cell's hexTol.
     bpad = 0._R8
     if (wide .and. all(abs(blk%bbox) < 0.5_R8*huge(1._R8))) &
-      bpad = max(1.e-12_R8*norm2(blk%bbox(:,2) - blk%bbox(:,1)), 64._R8*epsilon(1._R8)*maxval(abs(blk%bbox)))
+      bpad = reachTol(norm2(blk%bbox(:,2) - blk%bbox(:,1)), maxval(abs(blk%bbox)))
     if (p(1) < blk%bbox(1,1)-bpad .or. p(1) > blk%bbox(1,2)+bpad .or. &
         p(2) < blk%bbox(2,1)-bpad .or. p(2) > blk%bbox(2,2)+bpad) return
     if (.not.mesh2D) then
