@@ -346,10 +346,11 @@ key, and a breaking material without the column needs the key > 0. Setup prints
 per material that uses them.
 
 **`Conductivity`, `Viscosity` under `liquid-conduction = P2T`.** A `P2T` material takes its liquid
-conductivity from the `Conductivity` column, and, when it does not break, its liquid viscosity from
-the `Viscosity` column, both at the droplet's mean temperature in every right-hand side (linear
-between the nodes, the end values outside the table); a breaking `P2T` material uses the breakup
-viscosity above. Each column replaces its material-line token: a material whose column is non-zero
+conductivity from the `Conductivity` column at the droplet's mean temperature, and, when it does not
+break, its liquid viscosity from the `Viscosity` column at the surface temperature of the surface solve
+(linear between the nodes, the end values outside the table; see
+[Evaporation](../theory/evaporation.md#heat-conduction-inside-the-droplet)); a breaking `P2T` material
+uses the breakup viscosity above, the column likewise at the surface temperature in the surface solve. Each column replaces its material-line token: a material whose column is non-zero
 must not carry `k-liq` (or `mu-liq`), and a `P2T` material without the column needs the token > 0.
 Setup prints `k-liq tabulated from properties.dat (Tmin..Tmax K)` and `mu-liq tabulated from
 properties.dat (Tmin..Tmax K)` per material that uses them, and `Conductivity column not used` /

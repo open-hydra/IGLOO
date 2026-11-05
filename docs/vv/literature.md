@@ -195,7 +195,8 @@ their Appendix and their Fig. 4 are mutually inconsistent.
 at $\mathrm{Re} = 0$ (`[DS03]`), the uniform-temperature limit at $k_l \to \infty$, $\chi(\mathrm{Pe}_L)$
 against `[AS89]` eq. 39, the surface equation and the carry of the vapour leaving at $T_s$ under CEM
 at $\mathrm{Re} = 20$ (both state variables), model 4 and an event breakup model with the breakup
-viscosity, the conduction-fed flash in the boiling branch, radiation inside the surface balance, and
+viscosity, a `Viscosity` column at the surface temperature (`[AS89]` p. 1613) against its own bisection,
+the conduction-fed flash in the boiling branch, radiation inside the surface balance, and
 a 673-state robustness grid over the gas-side models (every slope finite).
 
 ### Boiling branch — ZGR (`tests/evaporation/boiling-zgr`)

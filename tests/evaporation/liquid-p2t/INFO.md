@@ -8,7 +8,9 @@
     k_eff = χ k_l,  χ = 1.86 + 0.86 tanh[2.245 log10(Pe_L/30)]                 [AS89] eq. 39
     Pe_L = U_s d ρ_l c_l/k_l,  U_s = (12.69/32) |ΔU| (μ_g/μ_l) Re^(1/3)/(1 + B_M)  [AS89] eqs. 25, 30, 32
 
-with `χ` once per call at `T̄` (`B_M` of the gas-side model at `T̄`; `χ = 1` without circulation, `Re = 0`). The
+with `μ_l` at the surface temperature (a `Viscosity` column; [AS89] p. 1613, "evaluated at the surface
+temperature"), so `χ` follows each trial `T_s` of the surface solve, and `k_l`, `c_l` and `B_M` (of the gas-side
+model) at `T̄` (for `k_l` IGLOO's choice: no published source); `χ = 1` without circulation, `Re = 0`. The
 gas-side models, the convective heat (and the drag's temperature ratio), the radiative heat and the vapour data take
 `T_s`; the evaporated mass leaves at `T_s`, so the mean temperature carries the receding surface's enthalpy:
 
@@ -38,6 +40,7 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
 | (j) | (a)'s state with ε 0.8, through `rhsEvaporation` and through `rhsEvapBreakup` (Reitz–Diwakar at slip 0: F(9) = 0) | `TsOut` = the root of `10π k_l d (T_s − T̄) = π d k_g 2 (T_g − T_s) + ε σ π d² (T_g⁴ − T_s⁴)`, which the test solves by Newton (350.198043716 K); `F(7) = [π d k_g 2 (T_g − T_s) + ε σ π d² (T_g⁴ − T_s⁴)]/(m c)` | 1e-13 rel. | 2.2e-16, 2.2e-16 (both) | the radiative heat left out of the surface balance: T_s 5.655e-4, F(7) 7.905e-4; the radiation line of the right-hand side at T̄: F(7) 2.868e-4; that line deleted: F(7) 4.734e-3 |
 | (j') | (a)'s state with an `Emissivity` table ε(T) = T/3000 beside the constant 0.5, both right-hand sides | `TsOut` = the root of `10π k_l d (T_s − T̄) = π d k_g 2 (T_g − T_s) + ε(T_s) σ π d² (T_g⁴ − T_s⁴)`, by Newton (350.028891081 K); `F(7)` with `ε(T_s)` | 1e-13 rel. | 2.4e-17, 4.1e-16 (both) | the constant inside the surface balance: 350.123791 K, T_s 2.711e-4; the surface balance's ε at T̄: 350.024762 K, 1.180e-5; the energy line's ε on the constant: F(7) 2.277e-3 |
 | (k) | (a)'s state at T̄ 400 K, `k-liq` 0 and a `Conductivity` table k_l = B T, B = 0.026/450 (ζ = k_g/k_l(T̄) = 1.125), through `rhsEvaporation` and through `rhsEvapBreakup` (Reitz–Diwakar at slip 0) | `TsOut` = (5T̄ + ζT_g)/(5 + ζ) = 436.734693878 K | 1e-13 rel. | 6.6e-17 (both) | k_l at T_s instead of T̄ (model 2): 434.329554 K, 5.507e-3; the table not handed to `p2tSurface` (k_l = 0): no root, NaN |
+| (l) | (d)'s state with a `Viscosity` table μ_l(T) = 1e-3 exp((320 − T)/20) (μ_l(T̄) = 1e-3, (d)'s), `mu-liq` 0.1 (a decoy), through `rhsEvaporation` (the column as μ_l) and through `rhsEvapBreakup` (Pilch–Erdman, the column as the breakup viscosity) | `TsOut` = the root, by bisection, of `T_s − T̄ = (Q_g(T_s) + ṁ(T_s) L_v)/(10π χ k_l d)` with U_s at μ_l(T_s) (eqs. 30, 32) and χ (eq. 39) typed in the test, the column interpolated in the test, `B_M`, `k_l`, `c_l` at `T̄`, `Q_g` and `ṁ` from the production gas side at `T_s` as (d)'s control: 323.475989296 K; the breakup rate F(9) at μ_l(T̄), (g)'s; guard: the root with μ_l frozen at `T̄` (323.682316697 K, (d)'s) at least 1e-9 K away | 1e-13 rel.; F(9) 1e-14 rel. | 1.5e-17 (both); F(9) 2.2e-15 | μ_l at T̄ (the right-hand side before this rule): 323.682316697 K, 6.378e-4 (0.206 K) on both; the breakup rate's viscosity at T_s: F(9) 4.084e-1 |
 
 Independent twins (python, the same states): T_s 323.682316697 K, F(7) 2.6403581310e4 K/s, h state 1.1036696988e8
 J/kg/s, F(9)/Z(9) 496.000253 1/s (the surface balance by `brentq`, the A–S formulas typed); leg (j)'s root

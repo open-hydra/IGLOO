@@ -329,8 +329,9 @@ Per-material override: the `liquid-conduction=` token on the material line of th
 `P2T` needs the liquid's conductivity, the `k-liq=` token [W m⁻¹ K⁻¹] on that line or the
 `Conductivity` column of the property table, and its viscosity: the `mu-liq=` token [Pa s] or the
 `Viscosity` column on a material that does not break, the breakup viscosity (the `Viscosity` column
-or `[IGLOO-Properties] mu`) on one that breaks, which then refuses `mu-liq`.  A column is read at the
-mean temperature $\bar T$ ([Input](../user/input.md#property-tables-inputpropertiesdat)).  `P2T`
+or `[IGLOO-Properties] mu`) on one that breaks, which then refuses `mu-liq`.  The `Conductivity` column is
+read at the mean temperature $\bar T$, the `Viscosity` column at the surface temperature (below;
+[Input](../user/input.md#property-tables-inputpropertiesdat)).  `P2T`
 applies to the evaporating models (2 and 4) and is refused on a material that does not evaporate.
 
 Under `ITC` (infinite thermal conductivity) the droplet temperature is uniform and every
@@ -360,8 +361,8 @@ clamp, $Y_s$ and $B_M$, the Knudsen length of LK, the $B_T$ of the d²-law, the 
 of CEM-B, the heats of ASM and TC, the convective heat and the temperature ratio of the drag
 laws, $L_v$ and $c_{p,v}$ when the table carries their columns, and the radiative exchange (with
 $\varepsilon(T_s)$ when the table carries the `Emissivity` column).  The density, the diameter, the
-heat capacity, the liquid conductivity and viscosity, the Eulerian energy moment and the
-trajectory's `T` stay at $\bar T$.
+heat capacity, the liquid conductivity, the Eulerian energy moment and the trajectory's `T` stay at
+$\bar T$; the liquid viscosity of a `Viscosity` column takes $T_s$ (below).
 
 The effective conductivity $k_\mathrm{eff} = \chi\,k_l$ accounts for the circulation inside a
 drop in a slip flow (Abramzon & Sirignano 1989, eqs. 30, 32, 39):
@@ -376,10 +377,13 @@ $$
 
 with $\chi = 1$ at $\mathrm{Pe}_L = 0$ (no slip: the conduction limit), $c_l$ the liquid's heat
 capacity (the slope of the enthalpy table when $c_p$ varies) and $B_M$ the gas-side model's
-Spalding number; $k_\mathrm{eff}$ is evaluated once per right-hand side, at $\bar T$.
+Spalding number.  $\mu_l$ is taken at the surface temperature, as Abramzon & Sirignano evaluate it
+(1989, p. 1613), so with a `Viscosity` column $U_s$, $\mathrm{Pe}_L$ and $k_\mathrm{eff}$ follow each trial
+$T_s$ of the surface solve; $k_l$, $c_l$ and $B_M$ stay at $\bar T$.  For $k_l$ this is IGLOO's choice: no
+published source states the temperature of the liquid conductivity in the parabolic profile.
 
 The surface equation is solved in every right-hand-side call, by Brent's method on the bracket
-between $\bar T$ and $T_1 = \bar T + \dot Q_\mathrm{net}(\bar T)/(10\pi k_\mathrm{eff} d)$ ($T_1$
+between $\bar T$ and $T_1 = \bar T + \dot Q_\mathrm{net}(\bar T)/(10\pi k_\mathrm{eff}(\bar T)\, d)$ ($T_1$
 clipped to $[\max(1\ \mathrm{K}, T_\mathrm{min} - 1), \max(T_g, T_\mathrm{max})]$, $T_\mathrm{min}$ and
 $T_\mathrm{max}$ the property table's range).  When the
 two ends do not bracket the root, the bracket is widened to $T_g$ (a heated drop) or to the low

@@ -691,7 +691,7 @@ contains
         mul = aux(ind_e5)
       endif
       call p2tSurface(tp, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mul, &
-                      psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl, epsTabM=epsTabM)
+                      psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl, epsTabM=epsTabM, mulTabM=mupTabM)
       !> no surface root: the scrub's penalty, the step is rejected
       if (p2tStat == 0) then
         F = 1.e30_R8
@@ -918,7 +918,7 @@ contains
       if (mod_propFlags(1)) then; cl = lookupTab(hTabM, tp + 0.5_R8) - lookupTab(hTabM, tp - 0.5_R8)
       else;                       cl = aux(ind_cp); endif
       call p2tSurface(tp, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mup, &
-                      psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl, epsTabM=epsTabM)
+                      psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl, epsTabM=epsTabM, mulTabM=mupTabM)
       !> no surface root: the scrub's penalty, the step is rejected
       if (p2tStat == 0) then
         F = 1.e30_R8
@@ -1005,12 +1005,13 @@ contains
   end subroutine rhsEvapBreakup
 
 
-  !> P2T surface temperature (parabolic profile inside the drop): the root of G(Ts) = Ts - tbar - Qnet(Ts)/K,
-  !  K = 10 pi keff d, keff = chi(Pe_L) kl once at tbar (Abramzon-Sirignano 1989 eqs. 25, 30, 32, 39), Qnet [W] the
-  !  gas-side, radiative and latent heats at Ts; Brent on an exact bracket. stat: 1 the root bracketed by tbar and the
-  !  first estimate, 2 after widening, 0 no bracket or no convergence (ts NaN).
+  !> P2T surface temperature (parabolic profile inside the drop): the root of G(Ts) = Ts - tbar - Qnet(Ts)/K(Ts),
+  !  K = 10 pi keff d, keff = chi(Pe_L) kl (Abramzon-Sirignano 1989 eqs. 25, 30, 32, 39): mu_l at Ts (a Viscosity
+  !  column), kl, cl and B_M at tbar; Qnet [W] the gas-side, radiative and latent heats at Ts; Brent on an exact
+  !  bracket. stat: 1 the root bracketed by tbar and the first estimate, 2 after widening, 0 no bracket or no
+  !  convergence (ts NaN).
   subroutine p2tSurface(tbar, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mul, &
-                        psatTabM, LvTabM, cpvTabM, ts, stat, klIn, epsTabM)
+                        psatTabM, LvTabM, cpvTabM, ts, stat, klIn, epsTabM, mulTabM)
     use Lib_Equations,         only: interphase
     use IGLOO_variables,       only: pi, blowSelect
     use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor, iLv, icpv, chiETC
@@ -1024,26 +1025,25 @@ contains
     integer,  intent(out) :: stat
     real(R8), intent(in), optional :: klIn   !> the liquid conductivity (else k-liq)
     real(R8), intent(in), optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
+    real(R8), intent(in), optional :: mulTabM(:)   !> the liquid viscosity table (a Viscosity column)
     integer,  parameter :: maxEval = 100
     real(R8), parameter :: tol4 = 4._R8*epsilon(1._R8)
-    real(R8) :: kl, BM, Us, PeL, K, q0, tLo, t1, g0, g1
+    real(R8) :: kl, BM, K, q0, tLo, t1, g0, g1
     real(R8) :: a, b, c, fa, fb, fc, dd, e, s, p, q, r, tol1, xm
     integer  :: nEval, sw
+    logical  :: muVar
 
     stat = 0
     ts = ieee_value(ts, ieee_quiet_nan)
     kl = aux(ind_e4)
     if (present(klIn)) kl = klIn
+    muVar = mod_propFlags(4) .and. present(mulTabM)
     q0 = qnet(tbar, BM)
     if (.not. ieee_is_finite(q0)) return
     if (q0 == 0._R8) then
       ts = tbar; stat = 1; return
     endif
-    !> keff at the mean state: the surface velocity of the internal circulation (A-S eqs. 30, 32), Pe_L = Re_L Pr_L
-    Us = 0._R8
-    if (Re > 0._R8) Us = (12.69_R8/32._R8)*slip*(gas(6)/mul)*Re**(1._R8/3._R8)/(1._R8 + BM)
-    PeL = Us*d*rho*cl/kl
-    K   = 10._R8*pi*chiETC(PeL)*kl*d
+    K = kAt(mul)
     !> bracket: tbar and the first estimate T1 = tbar + Qnet(tbar)/K, widened to Tg (heating) or the low end (cooling)
     tLo = max(1._R8, real(Tmin, R8) - 1._R8)
     g0  = -q0/K
@@ -1108,12 +1108,27 @@ contains
 
   contains
 
-    !> The surface balance's residual [K].
+    !> The surface balance's residual [K]; with a Viscosity column, K at the trial surface temperature.
     function gfun(T) result(g)
       real(R8), intent(in) :: T
       real(R8) :: g
-      g = T - tbar - qnet(T)/K
+      if (muVar) then
+        g = T - tbar - qnet(T)/kAt(tableValue(mulTabM, Tmin, Tmax, T))
+      else
+        g = T - tbar - qnet(T)/K
+      endif
     end function gfun
+
+    !> 10 pi keff d at the liquid viscosity mu: the internal circulation's surface velocity (A-S eqs. 30, 32),
+    !  Pe_L = Re_L Pr_L, chi(Pe_L) (eq. 39).
+    function kAt(mu) result(Kmu)
+      real(R8), intent(in) :: mu
+      real(R8) :: Kmu, Us, PeL
+      Us = 0._R8
+      if (Re > 0._R8) Us = (12.69_R8/32._R8)*slip*(gas(6)/mu)*Re**(1._R8/3._R8)/(1._R8 + BM)
+      PeL = Us*d*rho*cl/kl
+      Kmu = 10._R8*pi*chiETC(PeL)*kl*d
+    end function kAt
 
     !> The heat the liquid absorbs at the surface temperature T [W]; BMo, the Spalding number there.
     function qnet(T, BMo) result(qn)
