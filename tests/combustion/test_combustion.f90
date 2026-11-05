@@ -28,11 +28,13 @@ program test_combustion
     !   CB13 the law between its nodes (linear in f_ox) and past its ends (h held past f_ox = 0.9, g held outside
     !        20-400 um).
     !   CB14 rhsAlCap under the law: F(9) = -xi(d_Al, f_ox) nu F(8), the law read through its slot.
+    !   CB15 capLawPath: the law's stretch and the cap at burnout on its path, at 30 um and at 200 um with an
+    !        initial cap, against burn-box-cap-gallier/law_path.py (Gallier's lobe F, the same cells).
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_Lib_Combustion, only: becksteadRate, nmp, imKb, imN, imXe, imBeta, &
                                     imTig, imQc, aXeff, nuOx, buildLobeTable, lobeF, capStretch, capStretchX0, &
-                                    buildXiLaw, xiGallier
+                                    buildXiLaw, xiGallier, capLawPath
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
     use verif_dump,   only: dump_curve
@@ -73,6 +75,7 @@ program test_combustion
     call buildXiLaw()
     call run_CB12_CB13(ok_all)
     call run_CB14(ok_all)
+    call run_CB15(ok_all)
 
     call dump_CB2()
     call dump_CB3()
@@ -482,6 +485,31 @@ contains
         ok = ok .and. pass
         call append_row('CB14_law_cap_growth', 'F9', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_CB14
+
+    subroutine run_CB15(ok)
+        !> c and m_ox/m_p0 at burnout on the law's path (n 1.8, rho_Al 2950, rho_res 3950) against law_path.py
+        logical, intent(inout) :: ok
+        real(R8), parameter :: dp(2) = [30.e-6_R8, 200.e-6_R8], x0(2) = [0._R8, 0.1_R8]
+        real(R8), parameter :: cRef(2) = [1.340399716_R8, 1.339190401_R8], zRef(2) = [0.327788513_R8, 0.372591084_R8]
+        real(R8) :: c, z, errC, errZ, tol
+        logical  :: pass
+        integer  :: i
+        errC = 0._R8; errZ = 0._R8
+        do i = 1, 2
+            call capLawPath(dp(i), 1.8_R8, x0(i), 2950._R8, 3950._R8, c, z)
+            errC = max(errC, abs(c - cRef(i))/cRef(i))
+            errZ = max(errZ, abs(z - zRef(i))/zRef(i))
+        end do
+        tol = 1.0e-5_R8
+        pass = assert_lt('CB15 capLawPath vs law_path.py at 30 and 200 um (x0 0, 0.1): c, relative', errC, tol)
+        ok = ok .and. pass
+        call append_row('CB15a_law_stretch', 'c', errC, errC, 0._R8, 0._R8, tol, pass)
+        !> the path holds no F: the typed nine digits
+        tol = 1.0e-8_R8
+        pass = assert_lt('CB15 capLawPath vs law_path.py: m_ox/m_p0 at burnout, relative', errZ, tol)
+        ok = ok .and. pass
+        call append_row('CB15b_law_cap_end', 'z', errZ, errZ, 0._R8, 0._R8, tol, pass)
+    end subroutine run_CB15
 
     !> Beckstead (2005) burn-time correlation at p=1 atm, T0=300 K, SI seconds out
     pure function tb_corr(aC, d_um, xeff_) result(t_s)

@@ -42,7 +42,7 @@ contains
                        mod_bp, mod_bpMethod, mod_bpScale
     use oslo,              only: Run_ODESolver, no_jacobian
     use IGLOO_Lib_Breakup, only: nchild
-    use IGLOO_Lib_Combustion, only: imRr
+    use IGLOO_Lib_Combustion, only: imRr, capLawPath
     use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, eventCrossed, &
                                         eventPassed, solidTransition, solidTransitionTab, solidDiameter, &
                                         phUndercooled, breakupStateAtSwitch
@@ -127,6 +127,7 @@ contains
     real(R8) :: sEv
     integer  :: whichEv
     real(R8) :: timeLocal, din, dout, deltaS(3), dir(3), taup, tEvt, rhoEvt
+    real(R8) :: zEnd          ! the law's cap at burnout over m_p0 (unused here)
     integer  :: err, nDL, innerIter, jSlot
     integer,  parameter :: nStep=10
     !> Hard cap on child parcels one parent may shed in one call.
@@ -216,6 +217,9 @@ contains
                  part%stateVar(8) = part%m
                  part%stateVar(9) = 0._R8
                endif
+               !> Gallier's law: the parcel's own stretch, on the law's path from its injected size
+               if (part%xiLaw > 0) &
+                 call capLawPath(part%d, part%nBurn, part%xiOx0, part%rho, part%rhoRes, part%cStretch, zEnd)
       case(3); part%stateVar(8) = part%npdot
       case(4); part%stateVar(8) = part%m
                part%stateVar(9) = part%npdot

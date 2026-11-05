@@ -6,7 +6,7 @@ module IGLOO_Lib_Combustion
     private
     public :: becksteadRate
     public :: buildLobeTable, lobeF, capStretch, capStretchX0
-    public :: buildXiLaw, xiGallier
+    public :: buildXiLaw, xiGallier, capLawPath
 
     !> Metal parameter slots; the order is mirrored by Lib_RHS ind_mb../nmetal.
     integer(I4), parameter, public :: nmp = 13
@@ -230,5 +230,46 @@ contains
         xi = min(max(g*h, 0._R8), 1._R8)
 
     end function xiGallier
+
+    !> The law's stretch c = (d_Al0/d_p0)^n int_0^1 ds/F and the cap at burnout zEnd = m_ox/m_p0, on the path
+    !  dy/ds = -nu xi(d_Al0 s^(1/n), y/(x + y)) dx/ds, x = s^(3/n), y = m_ox/m_Al0: RK4 half-steps, midpoint rule.
+    pure subroutine capLawPath(dp0, n, x0, rhoAl, rhoRes, c, zEnd)
+        implicit none
+        real(R8), intent(in)  :: dp0, n, x0, rhoAl, rhoRes
+        real(R8), intent(out) :: c, zEnd
+        real(R8) :: r, dAl0, h, s, y, k1, k2, k3, k4
+        integer  :: k, j
+
+        r    = (1._R8 - x0)/rhoAl/((1._R8 - x0)/rhoAl + x0/rhoRes)
+        dAl0 = dp0*r**(1._R8/3._R8)
+        h    = -0.5_R8/real(NSTRETCH, R8)
+        y    = x0/(1._R8 - x0)
+        c    = 0._R8
+        do k = 0, NSTRETCH - 1
+            do j = 1, 2
+                s  = 1._R8 + real(2*k + j - 1, R8)*h
+                k1 = lawSlope(s, y)
+                k2 = lawSlope(s + 0.5_R8*h, y + 0.5_R8*h*k1)
+                k3 = lawSlope(s + 0.5_R8*h, y + 0.5_R8*h*k2)
+                k4 = lawSlope(s + h, y + h*k3)
+                y  = y + h/6._R8*(k1 + 2._R8*k2 + 2._R8*k3 + k4)
+                if (j == 1) c = c + 1._R8/lobeF(y/((s + h)**(3._R8/n) + y))
+            enddo
+        enddo
+        c    = c/real(NSTRETCH, R8)*r**(n/3._R8)
+        zEnd = (1._R8 - x0)*y
+
+    contains
+
+        pure function lawSlope(s, y) result(dy)
+            real(R8), intent(in) :: s, y
+            real(R8) :: dy, sc
+
+            sc = max(s, 0._R8)
+            dy = -nuOx*xiGallier(dAl0*sc**(1._R8/n), y/(sc**(3._R8/n) + y))*(3._R8/n)*sc**(3._R8/n - 1._R8)
+
+        end function lawSlope
+
+    end subroutine capLawPath
 
 end module IGLOO_Lib_Combustion

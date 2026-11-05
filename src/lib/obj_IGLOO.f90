@@ -399,7 +399,7 @@ contains
                                     TM_REDUCE, TM_FINALIZE, TM_SMOOTH
     use IGLOO_Mod_Footprint,  only: record_footprint
     use IGLOO_overlap,        only: mirrorSource, mirrorEuler
-    use IGLOO_Lib_Combustion, only: nuOx
+    use IGLOO_Lib_Combustion, only: nuOx, capLawPath
     use IGLOO_records,        only: rec_setup, ps_open, ps_text, ps_zone, ps_close, ps_begin, ps_end, &
                                     STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT
     use IGLOO_Lib_Erosion,    only: zeroWall
@@ -421,7 +421,7 @@ contains
     logical, allocatable :: skipIp(:)
     !> Scatter-cloud weight-quantum (dNscat) auto-sizing scratch.
     integer  :: c, nStreams, nValid
-    real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp, rRes
+    real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp, rRes, cLaw, zEnd
     type(obj_particle) :: ptmp   ! throwaway copy for the inject-only pre-pass
     character(len=4) :: fHead    !> the frozen-fraction header entry, blank for a material that does not solidify
     character(len=10) :: tsHead  !> the trajectory file's surface-temperature entry, blank for a material without P2T
@@ -551,7 +551,14 @@ contains
                 call ptmp%resolveInjectionRate(self%geoblock, self%gasblock, self%material(m2)%rhoTab)
                 !> residues per parent droplet: one, or the cap's mass over a residue's at d-residue
                 rRes = 1._R8
-                if (pgr%xiOx0 > 0._R8) then
+                if (pgr%xiLaw > 0) then
+                  !> the cap at burnout on the law's path, m_p0 zEnd, over a residue's
+                  if (pgr%dRes > 0._R8) then
+                    call capLawPath(ptmp%d, pgr%nBurn, pgr%xiOx0, ptmp%rho, pgr%rhoRes, cLaw, zEnd)
+                    rRes = zEnd*ptmp%d**3/ &
+                      (((1._R8 - pgr%xiOx0)/ptmp%rho + pgr%xiOx0/pgr%rhoRes)*pgr%rhoRes*pgr%dRes**3)
+                  endif
+                elseif (pgr%xiOx0 > 0._R8) then
                   !> the cap at burnout with its initial oxide, m_p0 (x0 + xi nu (1 - x0)), over a residue's
                   if (pgr%dRes > 0._R8) rRes = (pgr%xiOx0 + pgr%xiCap*nuOx*(1._R8 - pgr%xiOx0))*ptmp%d**3 / &
                     (((1._R8 - pgr%xiOx0)/ptmp%rho + pgr%xiOx0/pgr%rhoRes)*pgr%rhoRes*pgr%dRes**3)
