@@ -130,8 +130,10 @@ after its bounding-box test) and continues in every other block in index order; 
 contains the point takes the particle. The containment tests are inclusive (to the cell's tolerance), so a conformal
 interface leaves no gap. `bcDef`'s 101 branch, an index jump into the cell named by the bc file, runs
 only when no block contains the point. With
-`gas-order = 2` the ODE step ends at the block face, since the particle must change block there,
-where a single block would not end it: the interface is one more crossing of `print-dcell`'s
+`gas-order = 2` the ODE step ends at the block face, since the particle must change block there;
+a single block ends it there only for a parcel whose gas dual cell lies on the block boundary, the only dual
+cells where the geometric containment is tested (see [Cell-crossing tracking](#cell-crossing-tracking)), so
+for every other parcel the interface is one more crossing of `print-dcell`'s
 cadence (a row there with `print-dcell = 1`) and, without `print-dcell`, one more segment end (a
 row there only when the `print-ds` or `print-dtime` limit is reached), and the scatter markers beside it keep their times, their interpolated states moving with the step; the source and the eulerian densities are additive over the cut step, the eulerian
 velocity and temperature move at second order in the step (see **Block interfaces** in
