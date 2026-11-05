@@ -11,6 +11,7 @@ program test_boiling_zgr
     !   (e)  the boiling temperature at the pressure: Clausius-Clapeyron's inverse and the Psat table's
     !   (f)  the regime switch at T_B exactly
     !   (g)  (d) through rhsEvapBreakup
+    !   (k)  a P2T drop with a Conductivity column k_l = B T at A = 0: the flash -10 pi k_l(Tbar) d (Tbar - T_B)/Lv
     !
     use, intrinsic :: iso_fortran_env, only: I4 => int32, R8 => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_next_after
@@ -29,7 +30,9 @@ program test_boiling_zgr
     !> the case run by rhs_at, set by each leg
     real(R8) :: cTg, cTbar, cInvTb
     integer  :: cModel, cBoil
-    real(R8) :: hTab(TMIN_TAB:TMAX_TAB), dtab(1)
+    real(R8) :: hTab(TMIN_TAB:TMAX_TAB), dtab(1), klTabT(TMIN_TAB:TMAX_TAB)
+    logical  :: cKlTab = .false.
+    real(R8), parameter :: B_KL = 1.e-3_R8   !> (k) the Conductivity column's slope [W/m/K^2]
 
     real(R8) :: F(9), F2(9), ts, err, err2, ref, m, d, dT, G, Gf, Bf, A, kf, Tf, Qs, md, Qd, p, TB, x, y
     real(R8) :: worst, worst2, psatTab(280:500), invTb600
@@ -41,6 +44,7 @@ program test_boiling_zgr
     call init_report('verif_boiling_zgr.csv')
     do i = TMIN_TAB, TMAX_TAB
         hTab(i) = c_l*real(i, R8)
+        klTabT(i) = B_KL*real(i, R8)
     enddo
     dtab = 0._R8
 
@@ -197,6 +201,18 @@ program test_boiling_zgr
     ok_all = ok_all .and. pass
     call append_row('g_model4_flash', 'F8/F7', err, err, 0._R8, 0._R8, 1.e-13_R8, pass)
 
+    ! --- (k) a P2T drop with a Conductivity column at A = 0: the flash fed by k_l at the mean temperature -------------
+    cModel = 2; cBoil = 1; cTg = 600._R8; cInvTb = invTb600; cTbar = 610._R8; cKlTab = .true.
+    call rhs_at(F, ts, m)
+    d = rhs_d(m)
+    ref = -10._R8*PI*(B_KL*cTbar)*d*(cTbar - 600._R8)/Lv
+    err = abs(F(8)/ref - 1._R8)
+    pass = assert_lt('(k) F(8)/(-10 pi k_l(Tbar) d (Tbar - T_B)/Lv) - 1', err, 1.e-13_R8) .and. ts == 600._R8
+    write(*,'(a,es20.12,a,es20.12)') '  (k) F(8) =', F(8), '  -10 pi k_l(Tbar) d dT/Lv =', ref
+    ok_all = ok_all .and. pass
+    call append_row('k_conductivity_column_flash', 'F8', err, err, 0._R8, 0._R8, 1.e-13_R8, pass)
+    cKlTab = .false.
+
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then
         write(*,'(a)') 'test_boiling_zgr: OVERALL PASS'; stop 0
@@ -269,12 +285,12 @@ contains
         if (cModel == 4) then
             call setupRHS(4, 2, 2, 0, 0, cBoil, 0, propFlags, bp_rd, 1, 1._R8, nAux, nAuxSt, nEvV)
         else
-            call setupRHS(2, 0, 2, 0, 0, cBoil, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
+            call setupRHS(2, 0, 2, merge(1, 0, cKlTab), 0, cBoil, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
         endif
         mo = rho_l*(PI/6._R8)*d0**3
         p%cp = c_l;  p%rho = rho_l;  p%d = d0;  p%m = mo;  p%sigma = 0.072_R8;  p%mup = 1.e-3_R8
         p%Mv = Mv;  p%Lv = Lv;  p%cpv = cpv;  p%Le = 1._R8;  p%Yinf = 0._R8
-        p%LvMvOverRu = Lv*Mv/Ru;  p%invTboil = cInvTb;  p%alphaE = 1._R8
+        p%LvMvOverRu = Lv*Mv/Ru;  p%invTboil = cInvTb;  p%alphaE = 1._R8;  p%kLiq = 0._R8
         allocate(aux(nauxvar), auxst(max(1,nauxstate)))
         auxst = 0._R8
         call packAuxVars(p, nauxvar, aux)
@@ -282,7 +298,10 @@ contains
         gasNodes = spread(gas, 2, 8);  gasVert = 0._R8
         Z = 0._R8;  Z(7) = cTbar;  Z(8) = mo;  Z(9) = 1.e7_R8
         Fo = 0._R8
-        if (cModel == 2) then
+        if (cModel == 2 .and. cKlTab) then
+            call rhsEvaporation(8, 0._R8, Z(1:8), Fo(1:8), aux, nauxvar, auxst, max(1,nauxstate), &
+                                hTab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, TsOut=tso, kLiqTabM=klTabT)
+        elseif (cModel == 2) then
             call rhsEvaporation(8, 0._R8, Z(1:8), Fo(1:8), aux, nauxvar, auxst, max(1,nauxstate), &
                                 hTab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, TsOut=tso)
         else

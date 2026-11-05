@@ -262,13 +262,14 @@ contains
       gr%hOff = self%hOff
       if (.not.self%rhoVariable) gr%rho   = self%rho
       !> Breakup properties
+      !> the liquid viscosity table of a breaking or P2T material
+      if (self%brkupSelect > 0 .or. self%liqSelect > 0) gr%mupVariable = self%mupVariable
       if (self%brkupSelect > 0) then
         gr%brkupWord   = self%brkupWord
         gr%brkupSelect   = self%brkupSelect
         gr%brkupEvent    = self%brkupEvent
         gr%brkupEqOde    = self%brkupEqOde
         gr%brkupHasChild = self%brkupHasChild
-        gr%mupVariable = self%mupVariable
         gr%sigVariable = self%sigVariable
         if (.not.self%mupVariable) gr%mup   = self%mup
         if (.not.self%sigVariable) gr%sigma = self%sigma
@@ -343,6 +344,8 @@ contains
     if (self%brkupSelect > 0) then
       propFlags(3) = self%sigVariable
       propFlags(4) = self%mupVariable
+    elseif (self%liqSelect > 0) then
+      propFlags(4) = self%mupVariable   !> P2T's liquid viscosity table; no aux slot moves
     endif
     if (self%evapSelect > 0) propFlags(5) = self%psatVariable
     if (self%brkupSelect > 0) then

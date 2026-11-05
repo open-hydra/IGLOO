@@ -678,7 +678,8 @@ contains
               call tm_parcel_begin()
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                              mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab,    &
-                             mat%LvTab,mat%cpvTab, slot=ip, shed=gr%shed(ip), noShed=(loopCounter==maxLoop), wallblock=self%wall)
+                             mat%LvTab,mat%cpvTab, slot=ip, shed=gr%shed(ip), noShed=(loopCounter==maxLoop), wallblock=self%wall, &
+                             klTab=mat%klTab)
               call tm_parcel_end()
             enddo
             !$OMP END PARALLEL DO
@@ -845,11 +846,11 @@ contains
             if (gr%resOn) then
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                               mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
-                              mat%LvTab,mat%cpvTab, slot=ip, resid=gr%resid(ip), wallblock=self%wall)
+                              mat%LvTab,mat%cpvTab, slot=ip, resid=gr%resid(ip), wallblock=self%wall, klTab=mat%klTab)
             else
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                               mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
-                              mat%LvTab,mat%cpvTab, slot=ip, wallblock=self%wall)
+                              mat%LvTab,mat%cpvTab, slot=ip, wallblock=self%wall, klTab=mat%klTab)
             endif
             call tm_parcel_end()
           enddo

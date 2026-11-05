@@ -650,6 +650,10 @@ igloo_unit_test(test_boiling_zgr evaporation/boiling-zgr "unit;evaporation;zgr")
 # surface-temperature column holds (5 T + T_g)/6 on every row. It fails on a solver that refuses P2T at setup (no
 # output) and on a right-hand side that ignores it.
 igloo_e2e_case(temp-relax-p2t evaporation/temp-relax-p2t "e2e;evaporation;p2t")
+# temp-relax-p2t-kcol: temp-relax-p2t with its liquid conductivity a properties.dat column, k_l = B T, taken at the mean
+# temperature: T(x) against the closed form of tau_ITC (1 + k_g/(5 B T)), the surface column against
+# (5 T + zeta T_g)/(5 + zeta) on every row. It fails on a solver that ignores the column (refused at setup: no k-liq).
+igloo_e2e_case(temp-relax-p2t-kcol evaporation/temp-relax-p2t-kcol "e2e;evaporation;p2t")
 # boiling-zgr-flash, -hot, -switch: a superheated water drop at Re 0 under boiling = ZGR in the box gas (600 K, 2.07 bar)
 # against the boiling branch integrated with scipy (tools/zgr_oracle.py): the adiabatic flash (T_B = T_g: the identity
 # m (L_v - c (T - T_B)) constant and T(x)), the boiling in a gas 150 K above T_B (T(x), m(x)), and the switch at T_B into

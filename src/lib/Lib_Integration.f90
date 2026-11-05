@@ -12,7 +12,7 @@ contains
   !  steady gas field, one cell segment at a time, depositing source and Eulerian moments and, at the exit
   !  through a wall cell, its wall impact.
   subroutine integrate(part,geoblock,gasblock,srcblock,eulblock,     &
-                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, slot,shed,noShed,resid,wallblock)
+                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, slot,shed,noShed,resid,wallblock,klTab)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
     use IGLOO_variables,  only: iprint,dtprint,dsprint,dcellSet,tEnd,timeOn,snapOn,frozenOn, &
@@ -68,6 +68,8 @@ contains
     type(shedList),        intent(inout), optional :: resid
     !> [IGLOO-Erosion]: the wall-impact sums of every block.
     type(obj_wallblock),   intent(inout), optional :: wallblock(nb)
+    !> The material's liquid conductivity table (a Conductivity column); absent otherwise.
+    real(R8),              intent(in),    optional :: klTab(:)
     !> local variables
     type(obj_shed) :: shedRec   !> staged child record, pushed once complete
     type(obj_shed) :: resRec    !> the burnout residue's record
@@ -633,10 +635,12 @@ contains
       select case (part%model)
       case (2)
         call rhsEvaporation(neq, part%time, part%stateVar, Fs, auxLocal,nauxvar, stS,nauxstate, &
-                            hTab,rhoTab,psatTab,LvTab,cpvTab, gas,gasVert,gasS, ng,ngVert, mupTabM=mupTab, TsOut=tsurf)
+                            hTab,rhoTab,psatTab,LvTab,cpvTab, gas,gasVert,gasS, ng,ngVert, mupTabM=mupTab, TsOut=tsurf, &
+                            kLiqTabM=klTab)
       case (4)
         call rhsEvapBreakup(neq, part%time, part%stateVar, Fs, auxLocal,nauxvar, stS,nauxstate, &
-                            hTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, gas,gasVert,gasS, ng,ngVert, TsOut=tsurf)
+                            hTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, gas,gasVert,gasS, ng,ngVert, TsOut=tsurf, &
+                            kLiqTabM=klTab)
       case default
         tsurf = part%tp
       end select
@@ -1053,7 +1057,7 @@ contains
     subroutine rhs2(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
       call rhsEvaporation(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,psatTab,LvTab,cpvTab, &
-                          gas,gasVert,gasState, ng,ngVert, mupTabM=mupTab)
+                          gas,gasVert,gasState, ng,ngVert, mupTabM=mupTab, kLiqTabM=klTab)
     end subroutine rhs2
     subroutine rhs3(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
@@ -1062,7 +1066,7 @@ contains
     subroutine rhs4(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
       call rhsEvapBreakup(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,mupTab,sigTab,psatTab, &
-                          LvTab,cpvTab, gas,gasVert,gasState, ng,ngVert)
+                          LvTab,cpvTab, gas,gasVert,gasState, ng,ngVert, kLiqTabM=klTab)
     end subroutine rhs4
     subroutine rhs5(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)

@@ -16,6 +16,8 @@ program test_liquid_p2t
     !   (h)  model 2 with TAB (an event breakup model), the breakup viscosity as mu_l: F equals (d)'s
     !   (i)  boiling = ZGR at A = 0: the surface at T_B and the flash fed by the parabolic conduction 10 pi kl d dT
     !   (j)  grey-body radiation inside the surface balance, through both right-hand sides
+    !   (k)  a Conductivity column k_l = B T at Re 0: Ts = (5 Tbar + zeta Tg)/(5 + zeta), zeta = kg/k_l(Tbar), both
+    !        right-hand sides
     !
     use, intrinsic :: iso_fortran_env, only: I4 => int32, R8 => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -34,7 +36,9 @@ program test_liquid_p2t
     integer  :: cModel, cBrk, cEvap, cIntf, cBlow, cBoil
     character(len=16) :: cHeat
     logical  :: cH, cP2T
-    real(R8) :: hTab(TMIN_TAB:TMAX_TAB), dtab(1)
+    real(R8) :: hTab(TMIN_TAB:TMAX_TAB), dtab(1), klTabT(TMIN_TAB:TMAX_TAB)
+    logical  :: cKlTab
+    real(R8), parameter :: B_KL = 0.026_R8/450._R8   !> (k) the Conductivity column's slope [W/m/K^2]
 
     real(R8) :: F(9), Fi(9), Fd(9), Fh(9), ts, ts2, tsd, err, err2, ref, ref2, m, d, Re, zeta, K, chi, BM
     real(R8) :: Qg, md, G, Fdrag(3), BMs, chis, F7d, F8d
@@ -48,6 +52,7 @@ program test_liquid_p2t
     call init_report('verif_liquid_p2t.csv')
     do i = TMIN_TAB, TMAX_TAB
         hTab(i) = 4180._R8*real(i, R8)
+        klTabT(i) = B_KL*real(i, R8)
     enddo
     dtab = 0._R8
 
@@ -257,6 +262,22 @@ program test_liquid_p2t
     ok_all = ok_all .and. pass
     call append_row('j_radiation_model4', 'Ts,F7', err, err2, 0._R8, 0._R8, 1.e-13_R8, pass)
 
+    ! --- (k) a Conductivity column: k_l(Tbar) = B Tbar inside the surface balance ------------------------------------
+    call case_a(); cTbar = 400._R8; cKl = 0._R8; cKlTab = .true.
+    zeta = kg/(B_KL*cTbar)
+    ref = (5._R8*cTbar + zeta*cTg)/(5._R8 + zeta)
+    call rhs_at(F, ts)
+    err = abs(ts/ref - 1._R8)
+    cModel = 4; cBrk = 2; cSig = 0.072_R8; cMup = 1.e-3_R8; cMul = 0._R8
+    call rhs_at(Fi, ts2)
+    err2 = abs(ts2/ref - 1._R8)
+    pass = assert_lt('(k) model 2 TsOut/Ts(k_l(Tbar)) - 1', err, 1.e-13_R8) .and. &
+           assert_lt('(k) model 4 TsOut/Ts(k_l(Tbar)) - 1', err2, 1.e-13_R8) .and. &
+           all(ieee_is_finite(F(1:8))) .and. all(ieee_is_finite(Fi))
+    write(*,'(a,f8.5,a,f18.12,a,f18.12)') '  (k) zeta =', zeta, '  Ts =', ts, '  closed form =', ref
+    ok_all = ok_all .and. pass
+    call append_row('k_conductivity_column', 'Ts', err, err2, 0._R8, 0._R8, 1.e-13_R8, pass)
+
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then
         write(*,'(a)') 'test_liquid_p2t: OVERALL PASS'; stop 0
@@ -271,7 +292,7 @@ contains
         cModel = 2; cBrk = 0; cEvap = 1; cIntf = 0; cBlow = 0; cH = .false.; cP2T = .true.
         cTg = 600._R8; cSlip = 0._R8; cTbar = 300._R8; cD = 11.89e-6_R8; cRhol = 2950._R8; cCl = 1250._R8
         cKl = 0.026_R8; cMul = 1.e-3_R8; cMup = 0._R8; cSig = 0._R8; cYinf = 1._R8; cEps = 0._R8; cNp = 1.e7_R8
-        cBoil = 0; cInvTb = 1._R8/Tboil; cHeat = 'Ranz-Marshall'
+        cBoil = 0; cInvTb = 1._R8/Tboil; cHeat = 'Ranz-Marshall'; cKlTab = .false.
     end subroutine case_a
 
     !> (d)'s state: CEM, Tbar 320 K in an 800 K gas, slip 6 m/s (Re 20), d 50 um, rho 1000, c 4180, kl 0.6, mu_l 1e-3.
@@ -279,7 +300,7 @@ contains
         cModel = 2; cBrk = 0; cEvap = 2; cIntf = 0; cBlow = 0; cH = .false.; cP2T = .true.
         cTg = 800._R8; cSlip = 6._R8; cTbar = 320._R8; cD = 50.e-6_R8; cRhol = 1000._R8; cCl = 4180._R8
         cKl = 0.6_R8; cMul = 1.e-3_R8; cMup = 0._R8; cSig = 0._R8; cYinf = 0._R8; cEps = 0._R8; cNp = 1.e7_R8
-        cBoil = 0; cInvTb = 1._R8/Tboil; cHeat = 'Ranz-Marshall'
+        cBoil = 0; cInvTb = 1._R8/Tboil; cHeat = 'Ranz-Marshall'; cKlTab = .false.
     end subroutine case_d
 
     !> The drop's mass, diameter (the right-hand side's formula) and Reynolds number.
@@ -356,9 +377,16 @@ contains
         call prep(aux, auxst, gas, gasNodes, Z, mm)
         gasVert = 0._R8
         Fo = 0._R8
-        if (cModel == 2) then
+        if (cModel == 2 .and. cKlTab) then
+            call rhsEvaporation(8, 0._R8, Z(1:8), Fo(1:8), aux, nauxvar, auxst, max(1,nauxstate), &
+                                hTab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, TsOut=tso, kLiqTabM=klTabT)
+        elseif (cModel == 2) then
             call rhsEvaporation(8, 0._R8, Z(1:8), Fo(1:8), aux, nauxvar, auxst, max(1,nauxstate), &
                                 hTab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, TsOut=tso)
+        elseif (cKlTab) then
+            call rhsEvapBreakup(9, 0._R8, Z, Fo, aux, nauxvar, auxst, max(1,nauxstate), &
+                                hTab, dtab, dtab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, TsOut=tso, &
+                                kLiqTabM=klTabT)
         else
             call rhsEvapBreakup(9, 0._R8, Z, Fo, aux, nauxvar, auxst, max(1,nauxstate), &
                                 hTab, dtab, dtab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, TsOut=tso)

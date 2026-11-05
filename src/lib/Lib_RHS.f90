@@ -612,7 +612,7 @@ contains
   !> Model 2: variable mass via evaporation.
   subroutine rhsEvaporation(neq, time, Z, F, aux,naux, auxst,nauxst, &
                              hTabM, rhoTabM, psatTabM, LvTabM, cpvTabM, &
-                             gasNodes, gasVert,gas,nsp,nNodes, mupTabM, TsOut)
+                             gasNodes, gasVert,gas,nsp,nNodes, mupTabM, TsOut, kLiqTabM)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
@@ -629,13 +629,14 @@ contains
     real(R8), intent(in)    :: hTabM(:), rhoTabM(:), psatTabM(:), LvTabM(:), cpvTabM(:)
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
-    real(R8), intent(in),  optional :: mupTabM(:)   !> the breakup viscosity table (P2T of a breaking material)
+    real(R8), intent(in),  optional :: mupTabM(:)   !> the liquid viscosity table (P2T)
     real(R8), intent(out), optional :: TsOut        !> the surface temperature (the mean temperature under ITC)
+    real(R8), intent(in),  optional :: kLiqTabM(:)  !> the liquid conductivity table (P2T)
     ! locals
     real(R8) :: normVel, slip, mdot, Vdif(3), Re, cpFactor, tp, d, rho, m, psat, xi0_loc(3)
     real(R8) :: Fdrag(3), Qdot, Qdot_evap
     real(R8) :: ep(nep)
-    real(R8) :: ts, cl, mul, carry, TB, Nu
+    real(R8) :: ts, cl, mul, carry, TB, Nu, kl
     logical  :: override, boiling
     integer  :: p2tStat
 
@@ -659,6 +660,9 @@ contains
     Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
+    !> the liquid conductivity at the mean temperature: the column, else k-liq
+    kl = aux(ind_e4)
+    if (present(kLiqTabM)) kl = tableValue(kLiqTabM, Tmin, Tmax, tp)
 
     !> the boiling regime (ZGR): the mean temperature at or above the boiling temperature at the local pressure
     boiling = .false.
@@ -672,19 +676,17 @@ contains
     elseif (mod_liqSelect == 1) then
       if (mod_propFlags(1)) then; cl = lookupTab(hTabM, tp + 0.5_R8) - lookupTab(hTabM, tp - 0.5_R8)
       else;                       cl = aux(ind_cp); endif
-      !> one liquid viscosity: the breakup viscosity of a breaking material, else mu-liq
-      if (mod_brkSelect > 0) then
-        if (mod_propFlags(4)) then
-          mul = ieee_value(1._R8, ieee_quiet_nan)
-          if (present(mupTabM)) mul = tableValue(mupTabM, Tmin, Tmax, tp)
-        else
-          mul = aux(ind_mup)
-        endif
+      !> one liquid viscosity: the Viscosity column, else the breakup viscosity of a breaking material, else mu-liq
+      if (mod_propFlags(4)) then
+        mul = ieee_value(1._R8, ieee_quiet_nan)
+        if (present(mupTabM)) mul = tableValue(mupTabM, Tmin, Tmax, tp)
+      elseif (mod_brkSelect > 0) then
+        mul = aux(ind_mup)
       else
         mul = aux(ind_e5)
       endif
       call p2tSurface(tp, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mul, &
-                      psatTabM, LvTabM, cpvTabM, ts, p2tStat)
+                      psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl)
       !> no surface root: the scrub's penalty, the step is rejected
       if (p2tStat == 0) then
         F = 1.e30_R8
@@ -703,7 +705,7 @@ contains
     if (mod_propFlags(7)) ep(icpv) = tableValue(cpvTabM, Tmin, Tmax, ts)
     !> gas packs (5)=T,(6)=mu,(7)=gamma,(8)=R,(9)=k; signature is (rhog,Tg,gamma,Rg,mug,kg)
     if (boiling) then
-      call zgrAt(tp, TB, d, gas, nsp, Nu, ep(iLv), cpFactor, aux, naux, mdot, Qdot_evap)
+      call zgrAt(tp, TB, d, gas, nsp, Nu, ep(iLv), cpFactor, kl, mdot, Qdot_evap)
       override = .true.
     elseif (mod_propFlags(5)) then
       psat = tableValue(psatTabM, Tmin, Tmax, ts)
@@ -839,7 +841,7 @@ contains
   !  State: Z(1:3)=pos, Z(4:6)=vel, Z(7)=T/h, Z(8)=mass, Z(9)=npdot.
   subroutine rhsEvapBreakup(neq, time, Z, F, aux,naux, auxst,nauxst,     &
                              hTabM, rhoTabM, mupTabM, sigTabM, psatTabM, LvTabM, cpvTabM, &
-                             gasNodes, gasVert,gas,nsp,nNodes, TsOut)
+                             gasNodes, gasVert,gas,nsp,nNodes, TsOut, kLiqTabM)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
@@ -859,12 +861,13 @@ contains
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
     real(R8), intent(out), optional :: TsOut   !> the surface temperature (the mean temperature under ITC)
+    real(R8), intent(in),  optional :: kLiqTabM(:)  !> the liquid conductivity table (P2T)
     ! locals
     real(R8) :: normVel, slip, mdot, mdot_evap, Vdif(3), Re, mTraj, cpFactor, sigma, mup, psat
     real(R8) :: tp, d, rho, m, xi0_loc(3)
     real(R8) :: Fdrag(3), Qdot, Qdot_evap, acc(3), brkupVar(2)
     real(R8) :: ep(nep)
-    real(R8) :: ts, cl, carry, TB, Nu
+    real(R8) :: ts, cl, carry, TB, Nu, kl
     logical  :: override, boiling
     integer  :: p2tStat
 
@@ -890,6 +893,9 @@ contains
     Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
+    !> the liquid conductivity at the mean temperature: the column, else k-liq
+    kl = aux(ind_e4)
+    if (present(kLiqTabM)) kl = tableValue(kLiqTabM, Tmin, Tmax, tp)
 
     !> the boiling regime (ZGR), as model 2
     boiling = .false.
@@ -905,7 +911,7 @@ contains
       if (mod_propFlags(1)) then; cl = lookupTab(hTabM, tp + 0.5_R8) - lookupTab(hTabM, tp - 0.5_R8)
       else;                       cl = aux(ind_cp); endif
       call p2tSurface(tp, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mup, &
-                      psatTabM, LvTabM, cpvTabM, ts, p2tStat)
+                      psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl)
       !> no surface root: the scrub's penalty, the step is rejected
       if (p2tStat == 0) then
         F = 1.e30_R8
@@ -934,7 +940,7 @@ contains
     if (mod_propFlags(7)) ep(icpv) = tableValue(cpvTabM, Tmin, Tmax, ts)
     !> gas packs (5)=T,(6)=mu,(7)=gamma,(8)=R,(9)=k; signature is (rhog,Tg,gamma,Rg,mug,kg)
     if (boiling) then
-      call zgrAt(tp, TB, d, gas, nsp, Nu, ep(iLv), cpFactor, aux, naux, mdot_evap, Qdot_evap)
+      call zgrAt(tp, TB, d, gas, nsp, Nu, ep(iLv), cpFactor, kl, mdot_evap, Qdot_evap)
       override = .true.
     elseif (mod_propFlags(5)) then
       psat = tableValue(psatTabM, Tmin, Tmax, ts)
@@ -997,7 +1003,7 @@ contains
   !  gas-side, radiative and latent heats at Ts; Brent on an exact bracket. stat: 1 the root bracketed by tbar and the
   !  first estimate, 2 after widening, 0 no bracket or no convergence (ts NaN).
   subroutine p2tSurface(tbar, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mul, &
-                        psatTabM, LvTabM, cpvTabM, ts, stat)
+                        psatTabM, LvTabM, cpvTabM, ts, stat, klIn)
     use Lib_Equations,         only: interphase
     use IGLOO_variables,       only: pi, blowSelect
     use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor, iLv, icpv, chiETC
@@ -1009,6 +1015,7 @@ contains
     real(R8), intent(in)  :: psatTabM(:), LvTabM(:), cpvTabM(:)
     real(R8), intent(out) :: ts
     integer,  intent(out) :: stat
+    real(R8), intent(in), optional :: klIn   !> the liquid conductivity (else k-liq)
     integer,  parameter :: maxEval = 100
     real(R8), parameter :: tol4 = 4._R8*epsilon(1._R8)
     real(R8) :: kl, BM, Us, PeL, K, q0, tLo, t1, g0, g1
@@ -1018,6 +1025,7 @@ contains
     stat = 0
     ts = ieee_value(ts, ieee_quiet_nan)
     kl = aux(ind_e4)
+    if (present(klIn)) kl = klIn
     q0 = qnet(tbar, BM)
     if (.not. ieee_is_finite(q0)) return
     if (q0 == 0._R8) then
@@ -1143,16 +1151,16 @@ contains
 
 
   !> ZGR at the state with the gas's c_p and conductivity; a P2T drop's flash fed by the parabolic conduction (k_l).
-  pure subroutine zgrAt(tbar, TB, d, gas, nsp, Nu, Lv, cpFactor, aux, naux, mdot, Qdot)
+  pure subroutine zgrAt(tbar, TB, d, gas, nsp, Nu, Lv, cpFactor, kl, mdot, Qdot)
     use IGLOO_Lib_Evaporation, only: zgrBoiling
     implicit none
-    integer,  intent(in)  :: nsp, naux
-    real(R8), intent(in)  :: tbar, TB, d, gas(nsp), Nu, Lv, cpFactor, aux(naux)
+    integer,  intent(in)  :: nsp
+    real(R8), intent(in)  :: tbar, TB, d, gas(nsp), Nu, Lv, cpFactor, kl
     real(R8), intent(out) :: mdot, Qdot
     real(R8) :: cpg
     cpg = gas(7)*gas(8)/(gas(7) - 1._R8)
     if (mod_liqSelect == 1) then
-      call zgrBoiling(tbar, TB, d, gas(9), cpg, Nu, gas(5), Lv, cpFactor, mdot, Qdot, kCond=aux(ind_e4))
+      call zgrBoiling(tbar, TB, d, gas(9), cpg, Nu, gas(5), Lv, cpFactor, mdot, Qdot, kCond=kl)
     else
       call zgrBoiling(tbar, TB, d, gas(9), cpg, Nu, gas(5), Lv, cpFactor, mdot, Qdot)
     endif
