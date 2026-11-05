@@ -12,8 +12,8 @@ point exists to prevent — passes the suite.
 **Harness.** `igloo_refusal_case(name dir "expected" labels)` in `tests/CMakeLists.txt` runs the
 solver and hands its exit code to `tools/check_refusal.py`, which requires ALL of: exit **exactly
 the compiler's `error stop` code** — probed at configure time by `tools/stop_code_probe.f90` and
-handed over as `IGLOO_ERROR_STOP_RC`: 128 under ifx/ifort (exactly why `igloo_e2e_case`, whose
-rc ≥ 128 test means "died on signal", cannot host a refusal), 1 under gfortran; 0 = a plain `stop`
+handed over as `IGLOO_ERROR_STOP_RC`: 128 under ifx/ifort, 1 under gfortran (`igloo_e2e_case` fails
+every non-zero exit, so a refusal has its own helper); 0 = a plain `stop`
 or no refusal, 129–255 = a signal death after the message; the expected text in **`run_err.txt`** — the `error stop` payload, i.e. the string of
 the stop that ended the run, never an `[ERROR]` line merely printed to stdout before some other
 death; and nothing set up past the choke point — no "Placing particles" (injection), "Compute

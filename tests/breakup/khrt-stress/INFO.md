@@ -54,8 +54,8 @@ Measured sensitivity of the fixture (sprop2, all rc=0, all mass-exact):
    shedding has genuinely diverged; both are findings, so the `[WARNING]` is gated rather than
    tolerated.
 
-The `rc >= 128` signal gate comes from the shared `igloo_e2e_case` command, so a crash or OOM
-fails independently of any assertion above.
+The exit-code gate (any non-zero exit) comes from the shared `igloo_e2e_case` command, so a crash or
+OOM fails independently of any assertion above.
 
 ## Related
 
