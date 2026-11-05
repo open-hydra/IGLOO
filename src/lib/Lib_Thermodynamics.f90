@@ -31,7 +31,7 @@ module IGLOO_Lib_Properties
 
   character(len=*), parameter :: grammar = &
     'expected: VARIABLES = "Temperature", "Cp", "Density", "Enthalpy" (or "Enthalpy_abs")'// &
-    '[, "Psat"[, "Lv"][, "Mv"][, "Cpv"]][, "Sigma"][, "Viscosity"], '// &
+    '[, "Psat"[, "Lv"][, "Mv"][, "Cpv"]][, "Sigma"][, "Viscosity"][, "Conductivity"][, "Emissivity"], '// &
     'Temperature first and the others in any order, one zone per material, rows on consecutive integer kelvins'
 
 contains
@@ -135,16 +135,21 @@ contains
 
 
   !> Maps the header names to column indices of vars (column 1 is Temperature, read as the mesh).
-  pure subroutine classify_table_tokens(tokens, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
+  pure subroutine classify_table_tokens(tokens, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu, &
+                                        ikl, ieps)
     character(len=*), intent(in)  :: tokens(:)
     integer,          intent(out) :: icp, irho, ih, ips, code
     logical,          intent(out) :: relative
     integer,          intent(out) :: ilv, imv, icpv, isig, imu
-    integer :: t
+    integer,          intent(out), optional :: ikl, ieps   !> Conductivity, Emissivity
+    integer :: t, jkl, jeps
 
     icp = 0; irho = 0; ih = 0; ips = 0; relative = .true.
     ilv = 0; imv = 0; icpv = 0; isig = 0; imu = 0
+    jkl = 0; jeps = 0
     code = TAB_NO_TEMPERATURE
+    if (present(ikl))  ikl  = 0
+    if (present(ieps)) ieps = 0
     if (size(tokens) < 1) return
     if (tokens(1) /= 'Temperature' .and. tokens(1) /= 'temperature') return
     code = TAB_OK
@@ -179,7 +184,15 @@ contains
       case ('Viscosity', 'viscosity', 'VISCOSITY')
         if (imu > 0) code = TAB_DUPLICATE
         imu = t - 1
+      case ('Conductivity', 'conductivity', 'CONDUCTIVITY')
+        if (jkl > 0) code = TAB_DUPLICATE
+        jkl = t - 1
+      case ('Emissivity', 'emissivity', 'EMISSIVITY')
+        if (jeps > 0) code = TAB_DUPLICATE
+        jeps = t - 1
       end select
+      if (present(ikl))  ikl  = jkl
+      if (present(ieps)) ieps = jeps
       if (code /= TAB_OK) return
     enddo
     if (icp == 0) code = TAB_NO_CP

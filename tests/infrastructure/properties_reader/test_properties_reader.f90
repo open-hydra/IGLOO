@@ -14,6 +14,7 @@ program test_properties_reader
     !                 PR15 lookupTab at a non-finite temperature: NaN, and no invalid flag
     !                 PR-V2 validate_vapour_columns: each code once
     !                 PR-S2 validate_positive_column (Sigma, Viscosity): each code once
+    !                 PR-C1 classify_table_tokens: the Conductivity and Emissivity columns
     !   two-material  PR9 nm-: zone A tabulated, zone B all zero (Clausius-Clapeyron)
     !   atlas-water   PR10 atlas-: the table ATLAS GPB writes for water with psat-vapour = H2O
     !                 PR-V1 atlas-: its Lv, Mv, Cpv columns by name, Lv(T) and cpv(T) through tableValue
@@ -340,7 +341,7 @@ contains
         integer, intent(inout) :: nbad
         real(R8) :: tab(100:110), bad(100:110), T(11), cp(11), rho(11), h(11), nan, col(5)
         character(len=64) :: tok4(4), tok5(5), tok6(6)
-        integer :: k, icp, irho, ih, ips, code, ilv, imv, icpv, isig, imu
+        integer :: k, icp, irho, ih, ips, code, ilv, imv, icpv, isig, imu, ikl, ieps
         integer :: nzone, nsize, ndata, ntrail, badline, nannounced(nzone_max), nrows(nzone_max)
         logical :: relative
 
@@ -421,6 +422,26 @@ contains
         tok6 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'viscosity', 'Viscosity']
         call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
         call check(code == TAB_DUPLICATE,                                        'PR8 Viscosity twice: DUPLICATE', nbad)
+
+        ! PR-C1: the Conductivity and Emissivity names, their optional indices, the duplicate check without them
+        tok6 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'Emissivity', 'Conductivity']
+        call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu, ikl, ieps)
+        call check(code == TAB_OK .and. ieps == 4 .and. ikl == 5 .and. icp == 1 .and. irho == 2 .and. ih == 3 .and. &
+                   ips == 0 .and. isig == 0 .and. imu == 0, 'PR-C1 Emissivity and Conductivity: their columns, by name', nbad)
+        tok6 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'Emissivity', 'EMISSIVITY']
+        call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu, ikl, ieps)
+        call check(code == TAB_DUPLICATE,                                        'PR-C1 Emissivity twice: DUPLICATE', nbad)
+        call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
+        call check(code == TAB_DUPLICATE,                                        'PR-C1 Emissivity twice, no optionals: DUPLICATE', nbad)
+        tok6 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'conductivity', 'Conductivity']
+        call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu, ikl, ieps)
+        call check(code == TAB_DUPLICATE,                                        'PR-C1 Conductivity twice: DUPLICATE', nbad)
+        call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
+        call check(code == TAB_DUPLICATE,                                        'PR-C1 Conductivity twice, no optionals: DUPLICATE', nbad)
+        tok4 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy']
+        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu, ikl, ieps)
+        call check(code == TAB_OK .and. icp == 1 .and. irho == 2 .and. ih == 3 .and. ikl == 0 .and. ieps == 0, &
+                   'PR-C1 the 4-column header with the optionals: today''s indices, no Conductivity or Emissivity', nbad)
 
         ! PR-S2: the Sigma and Viscosity column check, in its order of precedence
         col = [0.07_R8, 0.06_R8, 0.05_R8, 0.04_R8, 0.03_R8]
