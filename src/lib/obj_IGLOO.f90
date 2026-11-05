@@ -542,7 +542,12 @@ contains
               do ip = 1, pgr%nInjected
                 ptmp = pgr%particle(ip)
                 ptmp%d = ptmp%dInj
-                if (all(ptmp%iInj == [0,0,0,0])) ptmp%stateVar(4:6) = ptmp%vInj
+                !> a database parent at the injection state reset_state restores, then its gas fallbacks
+                if (all(ptmp%iInj == [0,0,0,0])) then
+                  ptmp%stateVar(4:6) = ptmp%vInj
+                  ptmp%tp = ptmp%tpInj; ptmp%mdot = ptmp%mdotInj
+                  call ptmp%injectionGasState(self%geoblock, self%gasblock)
+                endif
                 call ptmp%resolveInjectionRate(self%geoblock, self%gasblock, self%material(m2)%rhoTab)
                 !> residues per parent droplet: one, or the cap's mass over a residue's at d-residue
                 rRes = 1._R8
@@ -569,8 +574,11 @@ contains
           do ip = 1, gr%nparticles
             !> Throwaway copy keeps the real particle pristine.
             ptmp = gr%particle(ip)
-            !> DB/assigned streams: seed the velocity as integrate does.
-            if (all(ptmp%iInj == [0,0,0,0])) ptmp%stateVar(4:6) = ptmp%vInj
+            !> DB/assigned streams: seed the velocity as integrate does, then the gas fallbacks at the injection cell.
+            if (all(ptmp%iInj == [0,0,0,0])) then
+              ptmp%stateVar(4:6) = ptmp%vInj
+              call ptmp%injectionGasState(self%geoblock, self%gasblock)
+            endif
             call ptmp%resolveInjectionRate(self%geoblock, self%gasblock, mat%rhoTab)
             if (ptmp%npdot > 0._R8) Ndot = Ndot + ptmp%npdot
             vsp = norm2(ptmp%stateVar(4:6))

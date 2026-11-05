@@ -147,6 +147,8 @@ module IGLOO_particles
     procedure, pass(self) :: capInjMass
     procedure, pass(self) :: computeSource
     procedure, pass(self) :: resolveInjectionRate
+    procedure, pass(self) :: dbInjectionFallback
+    procedure, pass(self) :: injectionGasState
   end type obj_particle
 
 contains
@@ -233,6 +235,45 @@ contains
       self%npdot = 0._R8                            ! degenerate => skip
     endif
   end subroutine resolveInjectionRate
+
+
+  !> A database stream's injection fallbacks: the gas velocity for a request >= threshold, the gas temperature for none.
+  pure subroutine dbInjectionFallback(self, gas, iu)
+    implicit none
+    class(obj_particle), intent(inout) :: self
+    real(R8),            intent(in)    :: gas(:,:)
+    integer,             intent(in)    :: iu
+
+    if (any(self%stateVar(4:6)>=threshold)) self%stateVar(4:6) = gas(iu:iu+2,1)
+    if (self%tp==0._R8) self%tp = gas(iu+3,1)
+
+  end subroutine dbInjectionFallback
+
+
+  !> A database stream's injection gas state on a throwaway copy: integrate's cell search at pInj, then the fallbacks.
+  subroutine injectionGasState(self, block, gasblock)
+    implicit none
+    class(obj_particle), intent(inout) :: self
+    type(obj_block),     intent(in)    :: block(nb)
+    type(obj_flowblock), intent(in)    :: gasblock(nb)
+    integer, parameter :: iu = 2, ng = iu + 7       !> one species: integrate's gas layout
+    real(R8), allocatable :: gas(:,:)
+
+    if (.not. (any(self%stateVar(4:6)>=threshold) .or. self%tp==0._R8)) return
+    self%stateVar(1:3) = self%pInj
+    self%i = 0
+    if (.not. self%findParticle(block)) return
+    if (ord2) then
+      call self%findDualCell(gasblock(self%i(1)))
+      if (mesh2D) then; allocate(gas(ng,4)); else; allocate(gas(ng,8)); endif
+    else
+      self%igas = self%i(2:4)
+      allocate(gas(ng,1))
+    endif
+    call gasblock(self%i(1))%gasProperties(gas, self%igas)
+    call self%dbInjectionFallback(gas, iu)
+
+  end subroutine injectionGasState
 
   !> Mass, momentum and energy flow rates of the stream at the current state.
   pure subroutine computeSource(self, M, P, E, hTab)

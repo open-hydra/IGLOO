@@ -17,7 +17,7 @@ contains
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
     use IGLOO_variables,  only: iprint,dtprint,dsprint,dcellSet,tEnd,timeOn,snapOn,frozenOn, &
-                                nb,toll,ord2,mesh2D,threshold,            &
+                                nb,toll,ord2,mesh2D,                      &
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
@@ -195,8 +195,7 @@ contains
       call gasblock(b)%gasProperties(gas,part%igas)   ! NOT hoistable: consumed just below
       if (all(part%iInj==[0,0,0,0])) then
         part%stateVar(4:6) = part%vInj   ! DB hand-off (pin_particles can't write stateVar pre-allocation)
-        if (any(part%stateVar(4:6)>=threshold)) part%stateVar(4:6) = gas(iu:iu+2,1)
-        if (part%tp==0._R8) part%tp = gas(iu+3,1)
+        call part%dbInjectionFallback(gas, iu)
       else
         call part%initializePart(geoblock,gasblock)
       endif
