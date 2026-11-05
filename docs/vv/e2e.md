@@ -222,6 +222,25 @@ uniform-temperature drop's ([Heat conduction inside the droplet](../theory/evapo
 $\lvert m - m_0\rvert \le$ 2.3e-18 kg.  The gas-side terms taken at the mean temperature put $T$
 20.08 K off; the column written as the mean is off by 0.028 K to 50 K on every row.
 
+### temp-relax-p2t-kcol
+
+Verifies the liquid conductivity of `liquid-conduction = P2T` read from the property table:
+`temp-relax-p2t`'s drop with its own `INPUT/properties.dat`, the common table plus a `Conductivity`
+column $k_l(T) = BT$, $B = 0.026/450$ W m⁻¹ K⁻², and no `k-liq` on the material line.  With
+$\zeta(\bar T) = k_g/k_l(\bar T)$ the surface temperature is $T_s = (5\bar T + \zeta T_g)/(5 + \zeta)$ and
+the mean temperature relaxes as $d\bar T/dt = (T_g - \bar T)/(\tau\,(1 + \zeta(\bar T)/5))$, integrated in
+closed form ([Heat conduction inside the droplet](../theory/evaporation.md#heat-conduction-inside-the-droplet)).
+
+| Witness | Requirement |
+|---------|-------------|
+| Every row with $\lvert T_g - T\rvert > 1$ K | $T(x)$ on the closed form, within `temp-relax`'s F12.6 budget |
+| The `T<sub>s` column, every row | $(5T + \zeta(T) T_g)/(5 + \zeta(T))$ within 1e-6 K |
+| Every row | $m = m_0$ within the E13.6 half-ULP; $u = u_g$, $v = w = 0$, $d = d_0$ |
+
+**Result:** 25/25 parcels, 1525 rows; $T$ worst at 0.023 of its tolerance, $T_s$ worst 8.0e-7 K.  The
+conductivity at the surface temperature puts $T$ 1.88 K off at 17.5 mm; the constant $k_l = k_g$ of
+`temp-relax-p2t`, 2.68 K.
+
 ### body-force
 
 Verifies the transverse body-force acceleration with exact linear Stokes drag

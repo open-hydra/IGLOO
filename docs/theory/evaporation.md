@@ -326,10 +326,12 @@ liquid-conduction = P2T   ; a parabolic temperature profile inside the droplet
 ```
 
 Per-material override: the `liquid-conduction=` token on the material line of the phase file.
-`P2T` needs the liquid's conductivity `k-liq=` [W m⁻¹ K⁻¹] on that line and its viscosity: the
-`mu-liq=` token [Pa s] on a material that does not break, the breakup viscosity (the `Viscosity`
-column or `[IGLOO-Properties] mu`) on one that breaks, which then refuses `mu-liq`.  `P2T` applies to
-the evaporating models (2 and 4) and is refused on a material that does not evaporate.
+`P2T` needs the liquid's conductivity, the `k-liq=` token [W m⁻¹ K⁻¹] on that line or the
+`Conductivity` column of the property table, and its viscosity: the `mu-liq=` token [Pa s] or the
+`Viscosity` column on a material that does not break, the breakup viscosity (the `Viscosity` column
+or `[IGLOO-Properties] mu`) on one that breaks, which then refuses `mu-liq`.  A column is read at the
+mean temperature $\bar T$ ([Input](../user/input.md#property-tables-inputpropertiesdat)).  `P2T`
+applies to the evaporating models (2 and 4) and is refused on a material that does not evaporate.
 
 Under `ITC` (infinite thermal conductivity) the droplet temperature is uniform and every
 gas-side quantity is taken at $T_p$.  Under `P2T` the liquid temperature is parabolic in the
@@ -356,9 +358,10 @@ radiative exchange and $\dot m \le 0$ the gas-side model's rate at the surface s
 gas-side quantity takes $T_s$: $p_\mathrm{sat}$ (Clausius–Clapeyron or the `Psat` column), the
 clamp, $Y_s$ and $B_M$, the Knudsen length of LK, the $B_T$ of the d²-law, the film temperature
 of CEM-B, the heats of ASM and TC, the convective heat and the temperature ratio of the drag
-laws, $L_v$ and $c_{p,v}$ when the table carries their columns, and the radiative exchange.
-The density, the diameter, the heat capacity, the Eulerian energy moment and the trajectory's
-`T` stay at $\bar T$.
+laws, $L_v$ and $c_{p,v}$ when the table carries their columns, and the radiative exchange (with
+$\varepsilon(T_s)$ when the table carries the `Emissivity` column).  The density, the diameter, the
+heat capacity, the liquid conductivity and viscosity, the Eulerian energy moment and the
+trajectory's `T` stay at $\bar T$.
 
 The effective conductivity $k_\mathrm{eff} = \chi\,k_l$ accounts for the circulation inside a
 drop in a slip flow (Abramzon & Sirignano 1989, eqs. 30, 32, 39):
@@ -441,7 +444,7 @@ G_f = \frac{\alpha_s\,\Delta T_f\,\pi d^2}{L_v}, \qquad
 $$
 
 and, for a `P2T` droplet, the parabolic conduction $G_f = 10\pi\,k_l\,d\,\Delta T_f/L_v$
-($\chi = 1$).  The gas heat reaches the surface through the film blown by the vapour:
+($\chi = 1$; $k_l$ at $\bar T$ when the table carries the `Conductivity` column).  The gas heat reaches the surface through the film blown by the vapour:
 
 $$
 A = \frac{c_{p,g}(T_g - T_B)}{L_v}, \qquad
@@ -543,7 +546,8 @@ a convective Sherwood number in `tests/evaporation/cemb-box` and `asm-box` (d²,
 temperature, against the rate laws along the measured state); the blowing factor in
 `mhb98-water-blowing`; a varying $c_p$ under evaporation in `d2law-varcp`.  The parabolic profile
 in `tests/evaporation/liquid-p2t` (the right-hand sides at fixed states) and `temp-relax-p2t` (its
-closed form end to end, with the `T<sub>s` column); the boiling branch in
+closed form end to end, with the `T<sub>s` column), and with a `Conductivity` column in
+`temp-relax-p2t-kcol`; the boiling branch in
 `tests/evaporation/boiling-zgr` and end to end in `boiling-zgr-flash` (the adiabatic flash),
 `boiling-zgr-hot` (the heat-fed boiling) and `boiling-zgr-switch` (the switch to CEM at $T_B$ and
 the burnout).  Function-level comparisons for all models: [../vv/literature.md](../vv/literature.md).

@@ -78,7 +78,7 @@ contains
     call reg%add('IGLOO-Models','evaporation',d_s(8),'NoEvaporation', &
       'Evaporation model; presence enables phase change','d2-law, CEM, CEM-B, ASM, TC',.false.)
     call reg%add('IGLOO-Models','liquid-conduction',d_s(11),'ITC', &
-      'Liquid-side conduction model, global default (per-material override: key=value on the material line of the phase file, from [GPB-Phase*]); P2T: parabolic temperature profile inside the droplet, needs k-liq and mu-liq on the material line; a breaking material takes the breakup viscosity instead of mu-liq','ITC, P2T',.false.)
+      'Liquid-side conduction model, global default (per-material override: key=value on the material line of the phase file, from [GPB-Phase*]); P2T: parabolic temperature profile inside the droplet, needs k-liq on the material line or a Conductivity column in properties.dat, and mu-liq or a Viscosity column; a breaking material takes the breakup viscosity instead of mu-liq','ITC, P2T',.false.)
     call reg%add('IGLOO-Models','interface',d_s(12),'VLE', &
       'Interface model, global default (per-material override: key=value on the material line of the phase file, from [GPB-Phase*]): VLE equilibrium or LK Langmuir-Knudsen non-equilibrium (Miller-Harstad-Bellan 1998)','VLE, LK',.false.)
     call reg%add('IGLOO-Models','blowing',d_s(20),'none', &
@@ -161,7 +161,8 @@ contains
       'properties.dat carries the Viscosity column takes it from there (give 0 here)','',.false.)
     call reg%add('IGLOO-Properties','emissivity',d_a(20,:),'0', &
       'Particle surface emissivity of the grey-body exchange with the gas temperature; one value per material; '// &
-      '0 = off (default)','',.false.)
+      '0 = off (default); a material whose properties.dat carries the Emissivity column takes eps(T) from there '// &
+      '(give 0 here)','',.false.)
 
     ! --- [IGLOO-BC] ---
     call reg%add('IGLOO-BC','ds',d_r(22),'0', &

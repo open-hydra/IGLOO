@@ -171,6 +171,17 @@ at setup; a value above 1 is cut to 1.0 with one warning per material.  Setup pr
 every radiating material (`>> [material i] emissivity ...: grey-body radiation with the gas
 temperature`).
 
+**An emissivity that depends on temperature.** A material whose zone of `INPUT/properties.dat`
+carries a non-zero `Emissivity` column ([Input](../user/input.md#property-tables-inputpropertiesdat))
+radiates with $\varepsilon(T)$ from that column, linear between the nodes and at its end values
+outside the table, taken at the temperature of each radiative term: $T_p$ in the energy equation (on
+the plateau of models 6 and 7, the melting temperature the state holds there), the surface
+temperature $T_s$ inside the `P2T` surface balance ([Evaporation](evaporation.md#heat-conduction-inside-the-droplet)),
+where the root of the balance then carries $\varepsilon(T_s)$.  The column replaces the key, which
+must be 0 for that material; rows above 1 are cut to 1.0 with one warning per material, and setup
+prints `>> [material i] emissivity tabulated from properties.dat (Tmin..Tmax K): grey-body radiation
+with the gas temperature`.
+
 **Where it enters.** $\dot Q_r$ is added to the heat of the energy equation of every ODE model
 ([Governing equations](governing-equations.md#energy-equation)), after the Stefan-blowing reduction,
 which does not scale it, and also where an evaporation model returns a heat rate of its own (ASM,
@@ -196,15 +207,16 @@ it is 1.1 % at 3.5 µm, 6.5 % at 20 µm and 32 % at 100 µm.
 **The Eulerian source branch.** `getSourceTerms` (`src/lib/obj_IGLOO.f90`), the function hydra's
 Eulerian coupling (`IGLOO-iter = 2`) calls for the drag and heat per unit volume of a cell's particle
 state ([Embedding in Hydra](../user/using.md#embedding-in-hydra)), adds the same term for each particle
-of the cell, with the diameter it rebuilds from the particle density and number density.  It takes
+of the cell, with the diameter it rebuilds from the particle density and number density, and with
+$\varepsilon$ at the cell's mean particle temperature for a material with the `Emissivity` column.  It takes
 the fourth power of the cell's mean particle temperature, not the mean of $T_p^4$; the latter is the
 larger, so a spread of temperatures within a cell makes this branch under-state the particles'
 emission.  The convective term, linear in $T_p$, has no such gap.
 
 **Coherence with ICE.** ICE's Eulerian condensed phase models the same exchange through
 `[ICE-Physics] emissivity`: over the whole sphere, with the same constant, the gas temperature as
-the sink and an emissivity above 1 cut to 1.  A case that runs both condensed solvers sets the two
-keys together, with the same value for a material both phases carry; neither solver compares them.
+the sink and an emissivity above 1 cut to 1.  A case that runs both condensed solvers sets the same
+emissivity in both for a material both phases carry; neither solver compares them.
 Each solver reads its own section: an `[ICE-Physics] emissivity` in the same `input.ini` leaves
 IGLOO's exchange off.
 
@@ -234,6 +246,7 @@ JAXA4 and Kavanau–Drake run end to end at a slip Mach number of $5.2\times10^{
 `NoHeat` is gated by [`no-exchange`](../vv/e2e.md#no-exchange).  The radiative exchange is gated by
 `test_radiation` (the term, the right-hand side of every ODE model, the Eulerian source branch),
 `rad-cool` (a hot particle cooled by radiation alone, against the closed form in $x$),
+`rad-cool-epscol` (the same with $\varepsilon(T) = T/3000$ from the property table),
 `emissivity-cap` (an emissivity above 1 cut to 1), `rad-foreign-key` (ICE's key leaves IGLOO's run
-unchanged) — all four in `tests/standard/` — and `tests/solidification/solid-box-rad` (the liquid,
+unchanged) — all five in `tests/standard/` — and `tests/solidification/solid-box-rad` (the liquid,
 plateau and solid regimes under radiation alone); see the `INFO.md` of each case.
