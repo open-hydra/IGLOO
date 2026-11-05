@@ -18,6 +18,7 @@ module IGLOO_particles
   type, public :: obj_particle
     real(R8), allocatable :: stateVar(:) !> ODE state vector (IC for solver), size neq
     real(R8), allocatable :: oldstate(:) !> checkpoint at each accepted step, size neq
+    real(R8)     :: timeOld = 0._R8 !> time of oldstate [s]
     real(R8), allocatable :: intE(:)     !> self velocity&temperature integral
     real(R8)     :: m         !> mass of the single self
     real(R8)     :: m0        !> initial mass (before mass sheddig due to breakup)
@@ -354,6 +355,7 @@ contains
     endif
     ! Save checkpoint for accepted-step tracking
     self%oldstate = self%stateVar
+    self%timeOld  = self%time
 
   end subroutine initializeCell
 
@@ -643,7 +645,7 @@ contains
           ind = iold; retry = .false.
         else
           call bcDef(blk%face(f)%cell(m,n),vertices,pold,vold,  &
-                      intersectionPoint,f,p,v,self%time,iold,   &
+                      intersectionPoint,f,p,v,self%time,self%timeOld,iold, &
                       self%angle,self%Af,found,self%gone,retry,refl,vHit=vh)
           if (present(reflected)) reflected = reflected .or. refl
           if (self%gone) then

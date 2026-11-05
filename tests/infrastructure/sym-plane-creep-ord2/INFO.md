@@ -6,7 +6,7 @@ the check recomputes the guard's criterion from the output.
 
 **Fixture.** `INPUT/` and `check.py` symlinked to `sym-plane-creep`'s; `input.ini` is its own with
 `gas-order = 2`. The six parcels stop after 200 reflections, 201 trajectory rows each, at x = 0.00420–0.00421 m and
-t = 0.0263–0.0279 s; their last 100 rows lie within 8e-6 m of each other.
+t = 0.0265–0.0281 s; their last 100 rows lie within 8e-6 m of each other.
 
 **Gates** (`check.py`, shared). K1 one `stuck in cell` line per parcel, no other guard or solver failure, the run
 ends normally; K2 six exits, code 0, on the plane, in the landing cell, before 1 s; K3 at least 101 and at most 201

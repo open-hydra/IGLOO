@@ -227,6 +227,12 @@ $\lvert m - m_0\rvert \le$ 2.3e-18 kg.  The gas-side terms taken at the mean tem
 Verifies the transverse body-force acceleration with exact linear Stokes drag
 (`toll = 1e-20`).  See [Body-force drift](body-force.md).
 
+### sym-plane-hop
+
+Parcels bouncing in place on a symmetry plane: the box with the gas at rest, three streams falling from 5e-5 m at 0.02, 0.05 and 0.08 m/s under gravity with Stokes drag.  Between impacts the normal motion is closed-form, $w(t) = -g\tau + (w_0 + g\tau)e^{-t/\tau}$, $z(t) = z_0 - g\tau t + \tau(w_0 + g\tau)(1 - e^{-t/\tau})$; each impact is a root of $z = 0$ and each rebound the impact speed reflected.  The hops shrink below the solver's steps, so a step holds a whole hop and the reflection must take its crossing on the step's own cubic; the stuck-bounce guard ends each parcel at its 100th reflection.
+
+**Result:** the 100th reflection within 4.4e-6 of the closed form's time (tolerance 5e-3, the rule's error accumulated over whole-hop steps); 101 rows per parcel, their times increasing and within 2.2e-3 hops of the reflections; every rebound leaving the plane.  The crossing on the straight chord ends the parcels 7.6–8.8 % early, drops up to 19 rows (times that fell back) and writes 11–14 rows per parcel moving into the plane.
+
 ### conv-nu
 
 Verifies Ranz–Marshall heat transfer at a constant, non-zero Reynolds number.

@@ -6,12 +6,12 @@ without the gas-order-1 rule.
 
 **Fixture.** `INPUT/` and `check.py` symlinked to `sym-plane-bounce`'s; `input.ini` is its own with
 `gas-order = 2` and the same `print-ds = 1e-5` m (a row at nearly every segment end). The six parcels bounce
-about 2 800 times each (2 758–2 768 trajectory rows), up to 49 times in one cell, and leave at the outlet in 1.46 s.
+about 2 800 times each (2 759–2 784 trajectory rows), up to 53 rows in one cell, and leave at the outlet in 1.46 s.
 
 **Gates** (`check.py`, shared). B1 no give-up guard and no solver failure; B2 six exits at the outlet, code 400;
-B3 on the plane; B4 more than 11 rows of one parcel in one cell (measured 50): the fixture exceeds the guard's
-limit by reflections; R1 the rows are the parcel rule's replayed on `ref-ends/` (16 578 of 16 845 segment ends,
-144 decisions within the print quantum).
+B3 on the plane; B4 more than 11 rows of one parcel in one cell (measured 53): the fixture exceeds the guard's
+limit by reflections; R1 the rows are the parcel rule's replayed on `ref-ends/` (16 607 of 16 877 segment ends,
+142 decisions within the print quantum).
 
 **RED.** Not a gate of the guard's rule (the twin is green either way); it fails if the fixture stops pressing the
 parcels onto the plane (B4) or if the plane stops reflecting (B2). R1 does not see the rule's reference moved at

@@ -801,6 +801,7 @@ contains
       part%stateVar = oldLocal
       part%time     = timeLocal
       part%oldState = oldLocal
+      part%timeOld  = timeLocal
       call part%updatePart(rhoTab,hTab,eulerSwitch)
       part%Tstay = timeLocal - tStart
     end subroutine revertToLastAccepted
@@ -877,6 +878,7 @@ contains
       part%stateVar = y
       part%time     = timeLocal
       part%oldState = oldLocal
+      part%timeOld  = timeLocal
       !> Apply the ETAB velocity kick to both the segment result and the resume state.
       if (kickPend) then
         part%stateVar(4:6) = part%stateVar(4:6) + kickDV
@@ -908,6 +910,7 @@ contains
             stateLocal(ind_sb1:ind_sb2) = breakupStateAtSwitch(whichEv, mod_brkSelect, t1, stateLocal(ind_sb1:ind_sb2))
           part%stateVar = y
           part%oldState = y
+          part%timeOld  = t1
         endif
         if (eventType) then
           if (allocated(eventLocal)) then

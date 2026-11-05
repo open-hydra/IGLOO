@@ -190,7 +190,7 @@ contains
 
   !> Apply the exit cell's boundary condition to the particle state: reflection (300 and non-wedge
   !  200), wedge fold (200), connected interface (101/103: retry in the partner cell), or exit (gone).
-  subroutine bcDef(cell,vertices,pold,vold,intersect,f,p,v,time,iold,angle,Af,found,gone,retry,reflected,vHit)
+  subroutine bcDef(cell,vertices,pold,vold,intersect,f,p,v,time,told,iold,angle,Af,found,gone,retry,reflected,vHit)
     use IGLOO_variables, only: pi, toll, delthe, axisDir
     implicit none
     class(obj_bc_cell), intent(in)    :: cell
@@ -200,12 +200,14 @@ contains
     logical,            intent(in)    :: found
     real(R8),           intent(inout) :: p(3), v(3)
     real(R8),           intent(inout) :: time
+    real(R8),           intent(in)    :: told        !> time of (pold, vold)
     integer,            intent(out)   :: iold(4)
     real(R8),           intent(out)   :: angle, Af
     logical,            intent(out)   :: gone, retry
     logical, optional,  intent(out)   :: reflected   !> the reflection branch was taken (grazing or specular)
     real(R8), optional, intent(out)   :: vHit(3)     !> exit branch: the velocity at the crossing point, else v
-    real(R8) :: nn(3), nn1(3), nn2(3), pstop(3), rot
+    real(R8) :: nn(3), nn1(3), nn2(3), pstop(3), rot, s, xc(3), vc(3), nOut(3)
+    logical  :: hit
     real(R8) :: azim
     integer      :: try
 
@@ -230,21 +232,36 @@ contains
         nn = cross(nn2,nn1)
         if (norm2(nn)>=toll) nn = nn/norm2(nn)
       enddo
-      ! Calculate reflected velocity components
-      pstop = intersect + minDist * myRay%direction
-      if (norm2(p-pold)>minDist) then
-        v = norm2(pstop-pold)/norm2(p-pold)*(v-vold)+vold
+      !> the crossing on the step's cubic through its two end states: its time within the step, its velocity outward
+      call hopCrossing(pold, vold, p, v, time - told, intersect, nn, s, xc, vc, hit)
+      if (hit) then
+        time = told + s*(time - told)
+        v    = vc
+        nOut = sign(1._R8, dot_product(nn, p - pold))*nn
+        if (abs(dot_product(v,nn)) < grazeFrac*norm2(v)) then
+          !> grazing: slide along the plane; the standoff keeps the ray off the face
+          v = v - dot_product(v,nn)*nn
+          p = xc - grazeOffset(vertices,nn)*nOut
+        else
+          v = v - 2._R8*dot_product(v,nn)*nn
+          p = xc - minDist*nOut
+        endif
       else
-        v = vold
-      endif
-      time = time - norm2(p-pstop)/norm2(0.5_R8*(v+vold))
-      if (abs(dot_product(v,nn)) < grazeFrac*norm2(v)) then
-        !> grazing: slide along the plane; the standoff keeps the ray off the face
-        v = v - dot_product(v,nn) * nn
-        p = intersect - sign(grazeOffset(vertices,nn), dot_product(myRay%direction,nn)) * nn
-      else
-        v = v - 2.0 * dot_product(v,nn) * nn
-        p = pstop - 2.0 * dot_product(pstop-intersect,nn) * nn
+        !> no usable step (no duration, a chord parallel to the face, no outward root): the chord's crossing
+        pstop = intersect + minDist * myRay%direction
+        if (norm2(p-pold)>minDist) then
+          v = norm2(pstop-pold)/norm2(p-pold)*(v-vold)+vold
+        else
+          v = vold
+        endif
+        time = time - norm2(p-pstop)/norm2(0.5_R8*(v+vold))
+        if (abs(dot_product(v,nn)) < grazeFrac*norm2(v)) then
+          v = v - dot_product(v,nn) * nn
+          p = intersect - sign(grazeOffset(vertices,nn), dot_product(myRay%direction,nn)) * nn
+        else
+          v = v - 2.0 * dot_product(v,nn) * nn
+          p = pstop - 2.0 * dot_product(pstop-intersect,nn) * nn
+        endif
       endif
 
     !> Wedge 200 face: fold position and velocity by -+delthe about axisDir.
