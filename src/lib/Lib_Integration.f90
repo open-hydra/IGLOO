@@ -249,7 +249,7 @@ contains
     do while (part%time<tEnd.and.iter<maxIter)
       iter = iter+1
       call part%initializeCell(eulerSwitch)
-      !> Set by the segment finalize or a revert to the last accepted step: a segment that ends neither way deposits nothing.
+      !> Zero until the finalize or a revert sets them; every exit that deposits sets them first.
       part%deltaL = 0._R8; part%Tstay = 0._R8
       if (eulerSwitch) part%intE = 0._R8
       if (sourceSwitch) call part%computeSource(massIn,Pin,Ein)
@@ -275,8 +275,9 @@ contains
         if (innerIter > maxInnerIter) then
           write(*,'(a,i0,a,i0,a)')                          &
             '[WARNING] Inner loop > ',maxInnerIter,' iter, part=',part%ID,' ==> marking gone'
-          doLoop    = .false.
-          part%gone = .true.
+          call revertToLastAccepted()
+          !> The reverted state crossed nothing: the cut step's crossing flags go with it.
+          IamOut = .false.; newGas = .false.; sectorOut = .false.
           exit
         endif
         t1     = part%time
@@ -792,6 +793,18 @@ contains
     end subroutine emitParcel
 
 
+    !> Back to the last accepted step, marked gone; a consuming parcel hands its remnant to the gas.
+    subroutine revertToLastAccepted()
+      doLoop    = .false.
+      part%gone = .true.
+      if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) consumed = .true.
+      part%stateVar = oldLocal
+      part%time     = timeLocal
+      part%oldState = oldLocal
+      call part%updatePart(rhoTab,hTab,eulerSwitch)
+      part%Tstay = timeLocal - tStart
+    end subroutine revertToLastAccepted
+
     !> Integrate one trajectory segment: run the ODE solver on [t1,t2] under solout interrupts,
     !  then finalize the segment (event/aux state, euler moments) or refine deltat and retry.
     subroutine ODEsystem()
@@ -841,16 +854,7 @@ contains
         write(*,'(a,i0,a,i0,a,es12.4,a)')                                   &
           '[IGLOO] Run_ODESolver err=',err,' part=',part%ID,                   &
           ' time=',part%time,' => marking gone'
-        doLoop    = .false.
-        part%gone = .true.
-        !> Consumption models hand the remnant to the gas, as on the non-finite exit below.
-        if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) consumed = .true.
-        !> Back to the last accepted step: the exit record and the deposits carry that progress.
-        part%stateVar = oldLocal
-        part%time     = timeLocal
-        part%oldState = oldLocal
-        call part%updatePart(rhoTab,hTab,eulerSwitch)
-        part%Tstay = timeLocal - tStart
+        call revertToLastAccepted()
         return
       endif
       !> Burnout: the droplet was consumed on a still-good state; falls through to the normal finalize.
@@ -867,16 +871,7 @@ contains
         if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8)           &
           write(*,'(A,ES10.3,A,ES10.3,A)') '          last good m/m0 =',                   &
                 oldLocal(8)/part%m0, '  (burnout fires at m =', mBurnTol, ' kg)'
-        part%stateVar = oldLocal
-        part%time     = timeLocal
-        part%oldState = oldLocal
-        part%gone     = .true.
-        doLoop        = .false.
-        !> Consumption models hand the remnant to the gas as on a clean burnout.
-        if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) consumed = .true.
-        !> Sync d/m/tp from the reverted state; the residence ends at the last good step.
-        call part%updatePart(rhoTab,hTab,eulerSwitch)
-        part%Tstay = timeLocal - tStart
+        call revertToLastAccepted()
         return
       endif
       part%stateVar = y

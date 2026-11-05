@@ -62,8 +62,8 @@ Each outer iteration covers one cell transit:
    $C_\tau\,\tau_p$ with $\tau_p$ the Stokes drag relaxation time (`tauFactor = 100`).
 3. `t2 = tStart + 20 · deltat` — generous XEND horizon; the solver stops early at cell
    crossings or events.
-4. **Inner loop** (`maxInnerIter = 10`): call `ODEsystem` repeatedly until `exitLoop`; if
-   the limit is reached the particle is flagged `gone`.
+4. **Inner loop** (at most `[IGLOO-ODE] max-inner-iter` calls, default 10): call `ODEsystem` repeatedly until
+   `exitLoop`; if the limit is reached the particle is flagged `gone` at its last accepted step.
 5. Source / Euler accumulation.
 6. Cell-tracking update (`IamOut`, `newGas`, `sectorOut`); BC handling, including the
    wedge fold when the segment ended on a sector plane.
@@ -150,8 +150,9 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
     one): closer than `nMaxStall × grazeStandoff` = 1e-4 m, a bounce that makes no progress, it is
     flagged `gone` with the same message. A particle that makes no net displacement for more than
     `nMaxStall = 100` iterations is flagged `gone` with a diagnostic message. A segment whose
-    solver loop runs more than `maxInnerIter = 10` times flags the particle `gone` with a warning,
-    and that segment deposits nothing. A particle that reaches `maxIter = 500000` outer iterations
+    solver loop runs more than `[IGLOO-ODE] max-inner-iter` (default 10) times flags the particle `gone` with a
+    warning, as a solver failure: it reverts to its last accepted step, the segment is deposited up to it and a
+    consuming parcel hands its remnant to the gas. A particle that reaches `maxIter = 500000` outer iterations
     is flagged `gone` with its exit record written.
 
 ---

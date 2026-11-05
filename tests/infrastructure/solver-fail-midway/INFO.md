@@ -4,8 +4,8 @@
 set when a segment finalizes, and deposited into the segment's cell after it. A segment can also end on a numerical
 failure: the ODE solver gives up (`Run_ODESolver err < 0`) or the state turns non-finite. The parcel then reverts to
 the last step the solver accepted, is marked gone there and the segment is deposited up to that step: the field
-holds each parcel's flow over the residence its exit record carries. A segment cut by the inner loop's cap deposits
-nothing. This case reaches the solver-failure exit mid-trajectory, after finalized segments, with the Eulerian
+holds each parcel's flow over the residence its exit record carries. A segment cut by the inner loop's cap ends the
+same way ([`inner-loop-cap`](../inner-loop-cap/INFO.md)). This case reaches the solver-failure exit mid-trajectory, after finalized segments, with the Eulerian
 output on, without touching the code.
 
 **Fixture.** A box from `tools/make_box_case.py --kv 1.0 --u2 5 --rp 1.0e-6` (60×5×5 cells, 0.15 m): the gas
@@ -47,23 +47,23 @@ out of the rule (a mutant): the injection row alone.
 `non-finite state` line). Each is forced by
 a one-line edit of `src/lib/Lib_Integration.f90` (never committed) on a copy of `standard/drag-stokes` (its
 `INPUT/`) with `out-file = ALL`, `out-time = on` and `mollify = off` added to `[IGLOO-General]`, at one thread,
-and judged by F2's balance. The reset of `part%deltaL`, `part%Tstay` and `part%intE` at the start of every segment
-(in `integrate`'s outer loop, after `initializeCell`) is witnessed by M2:
+and judged by F2's balance. Every exit that deposits sets the moments and the residence first, so the reset of
+`part%deltaL`, `part%Tstay` and `part%intE` at the start of every segment (in `integrate`'s outer loop, after
+`initializeCell`) is not read on these paths (M1: the same bytes with and without it); `inner-loop-cap` proves it
+unread on the whole suite by poisoning (its INFO.md).
 - M1, the solver failure at every parcel's fourth segment: in `ODEsystem`, right after the `select case
   (part%model)` block that calls `Run_ODESolver`, `if (iter == 4) err = -1`. 25 `Run_ODESolver err=` lines; the
   parcels revert to their last accepted step in the fourth cell (x = 0.009954 to 0.009955 m) and the segment is
   deposited up to it: −2.949e-7, with and without the reset (the revert sets the residence, the path and the
   moment integrals; the outputs are the same byte for byte).
-- M2, the inner-loop cap: in `integrate`'s outer loop, right after `innerIter = 0`,
-  `if (iter == 4) innerIter = maxInnerIter`. 25 `Inner loop >` lines; the cut segment deposits nothing: without
-  the reset it deposits the third segment's moments a second time, +2.3085e-1 (Σ ṁ T_stay of the third segment,
-  from the trajectory times: +2.3085e-1); with it −2.940e-7.
 - M3, the non-finite exit: in `ODEsystem`, after the same block, `if (iter == 4) y(1) = ieee_value(y(1),
   ieee_quiet_nan)` (with `ieee_value, ieee_quiet_nan` added to the module's `ieee_arithmetic` use list). 25
   `non-finite state` lines; +2.118e-2 when the reverted partial segment is deposited with the previous
   segment's residence, −2.949e-7 when the exit sets the residence of its last good step (`part%Tstay` after
   `updatePart` on that exit).
-- M2 with `body-accel = 0.0 0.0 -100.0`: without the reset the momentum source (`source.tec`, Fz) of the 25
-  fourth-segment cells carries the third segment's Σ ṁ T_stay g_z, −5.583421e-4 N (from the trajectory times:
-  −5.583423e-4); with it the term is absent, and the two runs differ in those 25 cells only. M1 with the same body
-  force deposits the accepted part's momentum there, Fz = −3.663038e-4 N, with and without the reset.
+- M1 with `body-accel = 0.0 0.0 -100.0` deposits the accepted part's momentum there, Fz = −3.663038e-4 N, with and
+  without the reset.
+
+The inner loop's cap is gated by `inner-loop-cap` rather than by a mutation: a cap forced before any call (an
+`innerIter` set to the bound at a segment's start) would revert to the previous segment's latch, a state the key's
+minimum of 1 never produces.

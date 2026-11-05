@@ -67,6 +67,8 @@ ref-dres
 ref-fail
 # solver-fail-refine runs its body-force sibling into ref-g/ (tests/infrastructure/solver-fail-refine/check.py)
 ref-g
+# inner-loop-cap runs its evaporating sibling into ref-consumed/ (tests/infrastructure/inner-loop-cap/check.py)
+ref-consumed
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/
