@@ -241,6 +241,30 @@ closed form ([Heat conduction inside the droplet](../theory/evaporation.md#heat-
 conductivity at the surface temperature puts $T$ 1.88 K off at 17.5 mm; the constant $k_l = k_g$ of
 `temp-relax-p2t`, 2.68 K.
 
+### temp-relax-p2t-mucol
+
+Verifies the liquid viscosity of `liquid-conduction = P2T` read from the property table at the surface
+temperature, under slip: 30 µm drops enter the shared box at 1 m/s (9 m/s slip, $\mathrm{Re} = 18$, Stokes drag)
+and 300 K, with $k_l = 0.026$ W m⁻¹ K⁻¹ on the material line, no mass transfer ($Y_\infty = 1$, $B_M = 0$) and their
+own `INPUT/properties.dat` carrying $\mu_l(T) = 0.1\,e^{(300 - T)/60}$ Pa s.  On every row the surface temperature is
+the root of $T_s - \bar T = \mathrm{Nu}\,k_g (T_g - T_s)/(10\,\chi\,k_l)$ with the internal circulation's
+$U_s = (12.69/32)\,\lvert\Delta U\rvert\,(\mu_g/\mu_l(T_s))\,\mathrm{Re}^{1/3}$ and $\chi(\mathrm{Pe}_L)$ (Abramzon &
+Sirignano 1989, eqs. 30, 32 and 39), $\mu_l(T_s)$ interpolated from the table file
+([Heat conduction inside the droplet](../theory/evaporation.md#heat-conduction-inside-the-droplet));
+$\mathrm{Pe}_L$ spans 20.8 to 78.2, across $\chi$'s centre at 30.
+
+| Witness | Requirement |
+|---------|-------------|
+| The `T<sub>s` column, every row | the root at the row's $(\bar T, u)$ within the F12.6 prints of $T_s$, $\bar T$ and $u$ carried through the root's derivatives, $+\,4\varepsilon\,T_s$ |
+| Rows at $\mathrm{Re} > 1$ | $\mu_l(\bar T)$ and $\mu_l = 0$ ($\chi = 2.72$) each put $T_s$ at least 100 tolerances away, on ≥ 3 rows of ≥ 20 parcels |
+| Every row, every exit | $m = m_0$ within the E13.6 half-ULP, $d = d_0$, $v = w = 0$; 25 exits at the outlet, no solver failure |
+
+**Result:** 25/25 parcels, 1525 rows; $T_s$ worst at 0.922 of its tolerance.  With the column's flag not reaching
+the parcel group the surface solve sees $\mu_l = 0$ and refuses it: every parcel ends at its injection point.
+Without that refusal $\chi = 2.72$ puts $T_s$ 23.49 K low at injection; $\mu_l$ at the mean temperature, 19.65 K
+high.  The mean temperature's history is not gated here (`temp-relax-p2t` and `temp-relax-p2t-kcol` gate it at
+$\mathrm{Re} = 0$).
+
 ### body-force
 
 Verifies the transverse body-force acceleration with exact linear Stokes drag

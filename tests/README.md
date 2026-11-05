@@ -54,7 +54,7 @@ tests/
 │   ├── drag/  temperature/       #   unit families
 │   └── drag-stokes/ drag-stokes-dopri5/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ scatter-placement/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ rad-cool/ rad-cool-epscol/ emissivity-cap/ rad-foreign-key/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/   # e2e
 ├── evaporation/                  # unit families: (root)  interface-neq/  tc-analytic/  evap-breakup/  liquid-p2t/  boiling-zgr/
-│   └── d2law/ d2law-line/ burnout-threshold/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ evap-breakup-box-varcp/ d2law-brk-dormant/ temp-relax-p2t/ temp-relax-p2t-kcol/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/     # e2e
+│   └── d2law/ d2law-line/ burnout-threshold/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ evap-breakup-box-varcp/ d2law-brk-dormant/ temp-relax-p2t/ temp-relax-p2t-kcol/ temp-relax-p2t-mucol/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/     # e2e
 ├── combustion/                   # unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ burn-box-ox0/ beckstead-air/ (e2e)
 ├── solidification/               # unit family (root) + solid-box/ solid-melt/ solid-melt-rhos/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-box-varcp/ solid-brk-khrt-varcp/ solid-brk-tab-rhos/ (e2e)
 ├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
@@ -111,9 +111,9 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 362/362 in a serial build (302 e2e + 59 unit, `self_test`, `registry-docs`, `exe-per-tree`, `e2e-rc-gate`, `lint-test-inputs`, `psd-plane-tool` and `history-census` among the latter, and the
+ctest 363/363 in a serial build (303 e2e + 59 unit, `self_test`, `registry-docs`, `exe-per-tree`, `e2e-rc-gate`, `lint-test-inputs`, `psd-plane-tool` and `history-census` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 28 more `mpi-*` cases, 390 in all (the 28 `mpi-*` pass). The e2e entries are 177 solver cases, two further
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 28 more `mpi-*` cases, 391 in all (the 28 `mpi-*` pass). The e2e entries are 178 solver cases, two further
 oracles on `khrt-e2e`'s run, the five thread-count gates, the ordered-window gate, the fifteen two-sweep gates, the one hundred setup refusals, `vv-order` (thirteen V&V
 figures independent of the record and zone order; skipped without matplotlib) and `check-order` (nine gate printouts independent of it); the unit entries are 47
 compiled unit tests, the property-table reader on five fixtures, `self_test`, `registry-docs`, `exe-per-tree`, `e2e-rc-gate`, `lint-test-inputs`, `psd-plane-tool` and `history-census`. Evaporation with
@@ -140,8 +140,8 @@ by `psd-plane-tool`. The surface tension and viscosity of a breaking material fr
 `Sigma` and `Viscosity` columns of `properties.dat` are gated by `test_properties_reader-sigma-mu`,
 `test_properties_reader` (PR8, PR-S2), `pe-sigma-table`, `refuse-sigma-both` and `refuse-sigma-column`. The
 `Conductivity`, `Viscosity` (under `liquid-conduction = P2T`) and `Emissivity` columns are gated by
-`test_properties_reader-columns` (PR-C2) and `test_properties_reader` (PR-C1), `temp-relax-p2t-kcol`,
-`rad-cool-epscol`, `test_liquid_p2t` (legs j', k), `test_boiling_zgr` (leg k), `test_radiation` (RU5, RU6) and the
+`test_properties_reader-columns` (PR-C2) and `test_properties_reader` (PR-C1), `temp-relax-p2t-kcol`, `temp-relax-p2t-mucol`,
+`rad-cool-epscol`, `test_liquid_p2t` (legs j', k, l), `test_boiling_zgr` (leg k), `test_radiation` (RU5, RU6) and the
 refusals `refuse-kliq-column-both`, `refuse-muliq-column-both`, `refuse-emissivity-column-both` and
 `refuse-emissivity-column`.
 The injection size distributions — a size-distribution file and the Normal, LogNormal and Rosin-Rammler

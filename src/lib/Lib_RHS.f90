@@ -1008,8 +1008,8 @@ contains
   !> P2T surface temperature (parabolic profile inside the drop): the root of G(Ts) = Ts - tbar - Qnet(Ts)/K(Ts),
   !  K = 10 pi keff d, keff = chi(Pe_L) kl (Abramzon-Sirignano 1989 eqs. 25, 30, 32, 39): mu_l at Ts (a Viscosity
   !  column), kl, cl and B_M at tbar; Qnet [W] the gas-side, radiative and latent heats at Ts; Brent on an exact
-  !  bracket. stat: 1 the root bracketed by tbar and the first estimate, 2 after widening, 0 no bracket or no
-  !  convergence (ts NaN).
+  !  bracket. stat: 1 the root bracketed by tbar and the first estimate, 2 after widening, 0 no bracket, no
+  !  convergence or mu_l not positive (ts NaN).
   subroutine p2tSurface(tbar, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mul, &
                         psatTabM, LvTabM, cpvTabM, ts, stat, klIn, epsTabM, mulTabM)
     use Lib_Equations,         only: interphase
@@ -1038,6 +1038,8 @@ contains
     kl = aux(ind_e4)
     if (present(klIn)) kl = klIn
     muVar = mod_propFlags(4) .and. present(mulTabM)
+    !> no liquid viscosity reached the solve (the inputs refuse mu_l <= 0): no root
+    if (.not. mul > 0._R8) return
     q0 = qnet(tbar, BM)
     if (.not. ieee_is_finite(q0)) return
     if (q0 == 0._R8) then

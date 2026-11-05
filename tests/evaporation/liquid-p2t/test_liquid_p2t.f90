@@ -23,9 +23,11 @@ program test_liquid_p2t
     !        mu_l at the surface temperature [AS89] (U_s eqs. 30, 32 and chi eq. 39 typed here, the column interpolated
     !        here, B_M, k_l and c_l at Tbar), by bisection; model 2 (the column as mu_l) and model 4 (as the breakup
     !        viscosity, its breakup rate at Tbar); the root with mu_l frozen at Tbar must differ
+    !   (m)  mu_l = 0 at (d)'s state (Re 20; the inputs refuse it): p2tSurface stat 0 and Ts NaN, model 2's F the
+    !        rejected step's 1e30 and its TsOut NaN
     !
     use, intrinsic :: iso_fortran_env, only: I4 => int32, R8 => real64
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_is_nan
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
     implicit none
@@ -326,6 +328,16 @@ program test_liquid_p2t
     write(*,'(a,f18.12,a,f18.12,a,f18.12)') '  (l) Ts =', ts, '  oracle =', tsOr, '  mu_l frozen at Tbar =', tsFrz
     ok_all = ok_all .and. pass
     call append_row('l_viscosity_column', 'Ts', err, err2, 0._R8, 0._R8, 1.e-13_R8, pass)
+
+    ! --- (m) no liquid viscosity at Re > 0: no surface root, the step rejected ----------------------------------------
+    call case_d(); cMul = 0._R8
+    call p2t_direct(ts2, stat)
+    call rhs_at(F, ts)
+    pass = assert_lt('(m) p2tSurface stat with mu_l = 0 at Re 20', real(stat, R8), 0.5_R8) .and. ieee_is_nan(ts2) .and. &
+           ieee_is_nan(ts) .and. all(F(1:8) == 1.e30_R8)
+    write(*,'(a,i0,a,es12.4,a,es12.4,a,es12.4)') '  (m) stat = ', stat, '  Ts =', ts2, '  TsOut =', ts, '  F(7) =', F(7)
+    ok_all = ok_all .and. pass
+    call append_row('m_viscosity_zero', 'stat', real(stat, R8), 0._R8, 0._R8, 0._R8, 0.5_R8, pass)
 
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then

@@ -76,6 +76,11 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
   balance — see [liquid-p2t/INFO.md](liquid-p2t/INFO.md).
 - `temp-relax-p2t` (e2e): temp-relax's drop with no mass transfer, τ = 1.2 τ_ITC and the trajectory's
   surface-temperature column — see [temp-relax-p2t/INFO.md](temp-relax-p2t/INFO.md).
+- `temp-relax-p2t-kcol` (e2e): the same drop with the liquid conductivity a property-table column, read at the mean
+  temperature — see [temp-relax-p2t-kcol/INFO.md](temp-relax-p2t-kcol/INFO.md).
+- `temp-relax-p2t-mucol` (e2e): a drop under slip (Re 18 to 1.25) with the liquid viscosity a property-table column:
+  the surface-temperature column against the root of the surface balance with μ_l at the surface temperature on every
+  row — see [temp-relax-p2t-mucol/INFO.md](temp-relax-p2t-mucol/INFO.md).
 
 ## Boiling of a superheated drop (`boiling = ZGR`)
 

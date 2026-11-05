@@ -6,7 +6,7 @@
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-stokes-dopri5/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ rad-cool/ rad-cool-epscol/ emissivity-cap/ rad-foreign-key/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ scatter-placement/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
-#   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/, liquid-p2t/, boiling-zgr/) + d2law/ d2law-line/ burnout-threshold/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ evap-breakup-box-varcp/ d2law-brk-dormant/ temp-relax-p2t/ temp-relax-p2t-kcol/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/ (e2e)
+#   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/, liquid-p2t/, boiling-zgr/) + d2law/ d2law-line/ burnout-threshold/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ evap-breakup-box-varcp/ d2law-brk-dormant/ temp-relax-p2t/ temp-relax-p2t-kcol/ temp-relax-p2t-mucol/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ burn-box-ox0/ beckstead-air/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-melt-rhos/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-box-varcp/ solid-brk-khrt-varcp/ solid-brk-tab-rhos/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ khrt-varcp/ breakup-per-material/ khrt-plane/ pe-sigma-table/ tab-wedge-slip/
@@ -639,9 +639,9 @@ igloo_unit_test(test_evap_probes evaporation "unit;evaporation")
 igloo_unit_test(test_vapour_tables evaporation "unit;evaporation")
 # liquid-conduction = P2T (the parabolic temperature profile inside the drop): test_liquid_p2t calls the right-hand
 # sides of ODE models 2 and 4 against the closed form at Re = 0, the infinite-conductivity limit, chi(Pe_L), the
-# surface balance with the sensible carry of the evaporated mass, the breakup viscosity as the liquid viscosity and
-# radiation inside the balance. It fails on a right-hand side that ignores liquid-conduction: F(7) is 6/5 of the
-# closed form.
+# surface balance with the sensible carry of the evaporated mass, the breakup viscosity as the liquid viscosity,
+# radiation inside the balance and the refusal of a liquid viscosity that is not positive. It fails on a right-hand
+# side that ignores liquid-conduction: F(7) is 6/5 of the closed form.
 igloo_unit_test(test_liquid_p2t evaporation/liquid-p2t "unit;evaporation;p2t")
 # boiling = ZGR (Zuo-Gomes-Rutland above the boiling temperature at the local pressure): test_boiling_zgr calls the
 # boiling branch, the boiling heat-transfer coefficient and the boiling temperature at the pressure, and the right-hand
@@ -657,6 +657,12 @@ igloo_e2e_case(temp-relax-p2t evaporation/temp-relax-p2t "e2e;evaporation;p2t")
 # temperature: T(x) against the closed form of tau_ITC (1 + k_g/(5 B T)), the surface column against
 # (5 T + zeta T_g)/(5 + zeta) on every row. It fails on a solver that ignores the column (refused at setup: no k-liq).
 igloo_e2e_case(temp-relax-p2t-kcol evaporation/temp-relax-p2t-kcol "e2e;evaporation;p2t")
+# temp-relax-p2t-mucol: a P2T drop under slip (Re 18 down to 1.25) with its liquid viscosity a properties.dat column:
+# the surface column on every row against the root of the surface balance with mu_l at the surface temperature
+# (Abramzon-Sirignano eqs. 30, 32, 39 typed in check.py). RED with the column's flag not wired to the group (mu_l = 0:
+# no root, every parcel ends at injection; without that refusal chi = 2.72, T_s -23.49 K) and with mu_l at the mean
+# temperature (+19.65 K).
+igloo_e2e_case(temp-relax-p2t-mucol evaporation/temp-relax-p2t-mucol "e2e;evaporation;p2t")
 # boiling-zgr-flash, -hot, -switch: a superheated water drop at Re 0 under boiling = ZGR in the box gas (600 K, 2.07 bar)
 # against the boiling branch integrated with scipy (tools/zgr_oracle.py): the adiabatic flash (T_B = T_g: the identity
 # m (L_v - c (T - T_B)) constant and T(x)), the boiling in a gas 150 K above T_B (T(x), m(x)), and the switch at T_B into

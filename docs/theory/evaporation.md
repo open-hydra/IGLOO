@@ -330,9 +330,10 @@ Per-material override: the `liquid-conduction=` token on the material line of th
 `Conductivity` column of the property table, and its viscosity: the `mu-liq=` token [Pa s] or the
 `Viscosity` column on a material that does not break, the breakup viscosity (the `Viscosity` column
 or `[IGLOO-Properties] mu`) on one that breaks, which then refuses `mu-liq`.  The `Conductivity` column is
-read at the mean temperature $\bar T$, the `Viscosity` column at the surface temperature (below;
-[Input](../user/input.md#property-tables-inputpropertiesdat)).  `P2T`
-applies to the evaporating models (2 and 4) and is refused on a material that does not evaporate.
+read at the mean temperature $\bar T$, the `Viscosity` column at the surface temperature in the surface
+solve (below; [Input](../user/input.md#property-tables-inputpropertiesdat)); the breakup of a breaking material
+(the rate of an ODE breakup model, the events of an event model) keeps its viscosity at $\bar T$.  `P2T` applies
+to the evaporating models (2 and 4) and is refused on a material that does not evaporate.
 
 Under `ITC` (infinite thermal conductivity) the droplet temperature is uniform and every
 gas-side quantity is taken at $T_p$.  Under `P2T` the liquid temperature is parabolic in the
@@ -379,7 +380,8 @@ with $\chi = 1$ at $\mathrm{Pe}_L = 0$ (no slip: the conduction limit), $c_l$ th
 capacity (the slope of the enthalpy table when $c_p$ varies) and $B_M$ the gas-side model's
 Spalding number.  $\mu_l$ is taken at the surface temperature, as Abramzon & Sirignano evaluate it
 (1989, p. 1613), so with a `Viscosity` column $U_s$, $\mathrm{Pe}_L$ and $k_\mathrm{eff}$ follow each trial
-$T_s$ of the surface solve; $k_l$, $c_l$ and $B_M$ stay at $\bar T$.  For $k_l$ this is IGLOO's choice: no
+$T_s$ of the surface solve; $k_l$, $c_l$ and $B_M$ stay at $\bar T$, and so does the viscosity of a breaking
+material's breakup rate or events.  For $k_l$ this is IGLOO's choice: no
 published source states the temperature of the liquid conductivity in the parabolic profile.
 
 The surface equation is solved in every right-hand-side call, by Brent's method on the bracket
@@ -550,8 +552,9 @@ a convective Sherwood number in `tests/evaporation/cemb-box` and `asm-box` (d²,
 temperature, against the rate laws along the measured state); the blowing factor in
 `mhb98-water-blowing`; a varying $c_p$ under evaporation in `d2law-varcp`.  The parabolic profile
 in `tests/evaporation/liquid-p2t` (the right-hand sides at fixed states) and `temp-relax-p2t` (its
-closed form end to end, with the `T<sub>s` column), and with a `Conductivity` column in
-`temp-relax-p2t-kcol`; the boiling branch in
+closed form end to end, with the `T<sub>s` column), with a `Conductivity` column in
+`temp-relax-p2t-kcol` and under slip with a `Viscosity` column in `temp-relax-p2t-mucol` (the `T<sub>s` column
+against the surface balance with $\mu_l(T_s)$ on every row); the boiling branch in
 `tests/evaporation/boiling-zgr` and end to end in `boiling-zgr-flash` (the adiabatic flash),
 `boiling-zgr-hot` (the heat-fed boiling) and `boiling-zgr-switch` (the switch to CEM at $T_B$ and
 the burnout).  Function-level comparisons for all models: [../vv/literature.md](../vv/literature.md).

@@ -31,8 +31,10 @@ SDIRK4 stepping over these jumps leaves a residual of one sign that grows with `
 in relative time than the oracle). Against the bare budget, over the ODE tolerance: worst 0.874 at 1e-9, 1.12 at
 1e-10, 0.761 at 1e-11 (the case's), 0.673 at 1e-12, 0.428 at 1e-13 under ifx; 0.860, 1.16, 0.735, 0.598, 0.465 under
 gfortran. The factor is 3.6 times the worst of the ifx scan, 3.4 times gfortran's. With `c_l = 1250` held in the
-liquid arm E1 fails by 691 times the tolerance at 30 mm and 5.3 times at 2.5 mm. The
-energy deposit closes at the print floor.
+liquid arm E1 fails by 691 times the tolerance at 30 mm and 5.3 times at 2.5 mm; with the chord of the adjacent
+kelvin cell, the nearest wrong model, by 3.20 (the next cell) and 3.53 times (the previous one), 17 and 19 times
+the worst of the correct code (measured at the case's ODE tolerance only). The energy deposit closes at the print
+floor.
 
 The re-melt through the table (a plateau ending at `f = 0`) and the whole freeze at the recalescence
 (`h(T_m) − h(T_n) ≥ h_fus`) do not occur here: the unit family's SG14 runs both against closed forms.
@@ -42,6 +44,8 @@ The re-melt through the table (a plateau ending at `f = 0`) and the whole freeze
 |---|---|
 | a solver that refuses a varying `Cp` under solidification | setup refuses the material, exit 128, no output |
 | `c_l = 1250` in the liquid arm (the table's value at 2400 K) | E1 +42.86 K at 30 mm (691 × tol; 5.3 × at 2.5 mm); E2c, the first plateau row at 40 mm; E6 offset 8.18e-2 (436 × the bound); S7 52.1 K; 483 violations |
+| the chord of the next kelvin cell, `c = h(i+2) − h(i+1)` | E1 worst 3.20 × tol (0.197 K at 30 mm, 200 rows); E6 offset 2.75e-4 (1.46 × the bound); S7 1.54 × before `x_n`, 1.46 × on the plateau; E5 0 parcels verified (E1 flags every parcel); E4 blind (2.9e-7: the deposit is booked on the table) |
+| the chord of the previous kelvin cell, `c = h(i) − h(i−1)` | E1 worst 3.53 × tol (0.217 K at 30 mm, 225 rows); E6 offset 3.03e-4 (1.61 ×); S7 1.70 × and 1.61 ×; E5 0; E4 blind |
 | `f0 = c_l(T_m)(T_m − T_n)/h_fus` | E6 offset 5.07e-2 (270 × the bound), the phase rule at 60 mm; 127 violations |
 | the source term on the constant-`cp` enthalpy (`cp` unset for a table) | E4 4.46e-2 |
 | the plane records reading `T` as an enthalpy | S7 32.1 K against 1863.4 K, 325 violations |
