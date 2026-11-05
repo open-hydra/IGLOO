@@ -20,6 +20,12 @@ program test_radiation
     !        m_ox = m_Al): Qr on the equal-volume sphere over the heat capacity m_Al c_Al + m_ox c_res
     !   RU4  getSourceTerms at zero slip under NoDrag and NoHeat: the energy component equals
     !        np*eps*sigma*pi*d^2*(Tg^4 - Tp^4), d = (6 rhop/(pi rho np))^(1/3): 1e-14 relative; eps = 0 gives 0
+    !   RU5  an Emissivity table eps(T) = T/3000: every right-hand side with a radiation site outside P2T (models 1,
+    !        2 and 4 under ITC, 3, 5, 6 by phase, 8) with the table minus without it (the aux constant 0.5) is RU2's
+    !        term with Qr = [eps(T_site) - 0.5] sigma pi d^2 (Tg^4 - T_site^4), T_site the site's temperature, within
+    !        8 ULP of the larger F, and 0 in every other component
+    !   RU6  getSourceTerms of a material with the Emissivity table (its constant 0): the energy component equals
+    !        np eps(Tp) sigma pi d^2 (Tg^4 - Tp^4), 1e-14 relative
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64, R16 => real128
     use IGLOO_Lib_Heat, only: radiativeHeat
@@ -42,6 +48,8 @@ program test_radiation
     call run_RU3(ok_all)
     call run_RU2(ok_all)
     call run_RU4(ok_all)
+    call run_RU5(ok_all)
+    call run_RU6(ok_all)
 
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then
@@ -160,30 +168,32 @@ contains
     end subroutine run_RU3
 
     !> one right-hand side call of the model set up last
-    subroutine call_rhs(model, neq, Z, F, aux, auxst, gas, htab)
+    subroutine call_rhs(model, neq, Z, F, aux, auxst, gas, htab, epsTab)
         use Lib_RHS, only: rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, rhsAlCombustion, &
                            rhsSolidification, rhsAlCap, nauxvar, nauxstate
         integer,  intent(in)    :: model, neq
         real(R8), intent(in)    :: Z(neq), aux(:), htab(:)
         real(R8), intent(out)   :: F(neq)
         real(R8), intent(inout) :: auxst(:), gas(9)
+        real(R8), intent(in), optional :: epsTab(:)   !> the Emissivity table, forwarded (absent stays absent)
         real(R8) :: gasNodes(9,8), gasVert(3,8), dtab(1)
         gasNodes = spread(gas, 2, 8);  gasVert = 0._R8;  dtab = 0._R8
         select case (model)
         case (1); call rhsStandard(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
-                                   htab, dtab, gasNodes, gasVert, gas, 9, 8)
+                                   htab, dtab, gasNodes, gasVert, gas, 9, 8, epsTabM=epsTab)
         case (2); call rhsEvaporation(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
-                                      htab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8)
+                                      htab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, epsTabM=epsTab)
         case (3); call rhsBreakupOnly(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
-                                      htab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8)
+                                      htab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, epsTabM=epsTab)
         case (4); call rhsEvapBreakup(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
-                                      htab, dtab, dtab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8)
+                                      htab, dtab, dtab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, &
+                                      epsTabM=epsTab)
         case (5); call rhsAlCombustion(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
-                                       htab, dtab, gasNodes, gasVert, gas, 9, 8)
+                                       htab, dtab, gasNodes, gasVert, gas, 9, 8, epsTabM=epsTab)
         case (6, 7); call rhsSolidification(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
-                                            dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8)
+                                            dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, epsTabM=epsTab)
         case (8); call rhsAlCap(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
-                                gasNodes, gasVert, gas, 9, 8)
+                                gasNodes, gasVert, gas, 9, 8, epsTabM=epsTab)
         end select
     end subroutine call_rhs
 
@@ -412,6 +422,205 @@ contains
         ref = qr_ref(EPS1, d, Tg, Tp)/(1250._R16*real(mAl, R16) + real(1887.6_R8, R16)*real(mOx, R16))
         call judge('model 8, F(7) = Qr(d_eq)/(m_Al c_Al + m_ox c_res) + q_rel', 'RU2_model8', 7, F1, F0, ref, ok)
     end subroutine run_RU2
+
+    !> F with an Emissivity table and F with the aux constant 0.5 alone, both on the radiation slot, for one model
+    subroutine rhs_pair_tab(model, brk, evap, comb, p, neq, Z, phase, Tg, htab, epsTab, F1, F0)
+        use IGLOO_particles, only: obj_particle
+        use Lib_RHS, only: packAuxVars, nauxvar, nauxstate, ind_sph
+        integer,  intent(in)  :: model, brk, evap, comb, neq, phase
+        type(obj_particle), intent(inout) :: p
+        real(R8), intent(in)  :: Z(neq), Tg, htab(:), epsTab(:)
+        real(R8), intent(out) :: F1(neq), F0(neq)
+        real(R8), allocatable :: aux(:), auxst(:)
+        real(R8) :: gas(9)
+        integer  :: nAux
+        p%emissivity = 0.5_R8
+        call setup(model, brk, evap, comb, .false., nAux, .true.)
+        allocate(aux(nauxvar), auxst(max(1, nauxstate)))
+        call packAuxVars(p, nauxvar, aux)
+        gas = [1.2_R8, 10._R8, 0._R8, 0._R8, Tg, 1.8e-5_R8, 1.4_R8, 287._R8, 0.026_R8]
+        auxst = 0._R8;  if (ind_sph > 0) auxst(ind_sph) = real(phase, R8)
+        call call_rhs(model, neq, Z, F1, aux, auxst, gas, htab, epsTab)
+        gas = [1.2_R8, 10._R8, 0._R8, 0._R8, Tg, 1.8e-5_R8, 1.4_R8, 287._R8, 0.026_R8]
+        auxst = 0._R8;  if (ind_sph > 0) auxst(ind_sph) = real(phase, R8)
+        call call_rhs(model, neq, Z, F0, aux, auxst, gas, htab)
+    end subroutine rhs_pair_tab
+
+    !> the emissivity table's value at a node T (all RU5 sites sit on nodes): eps(T) - 0.5
+    function deps(epsTab, T) result(e)
+        use IGLOO_Lib_Properties, only: Tmin
+        real(R8), intent(in) :: epsTab(:), T
+        real(R8) :: e
+        e = epsTab(nint(T) - Tmin + 1) - 0.5_R8
+    end function deps
+
+    subroutine run_RU5(ok)
+        use IGLOO_particles, only: obj_particle
+        use IGLOO_variables, only: sixOverPi, oneThird
+        use IGLOO_Lib_Properties, only: Tmin, Tmax
+        use IGLOO_Lib_Solidification, only: phLiquid, phUndercooled, phPlateau, phSolid
+        use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch
+        logical, intent(inout) :: ok
+        real(R8), parameter :: PI = 4._R8*atan(1._R8), UG = 10._R8, Ru = 8314.46_R8
+        real(R8), parameter :: Tph(0:3) = [2400._R8, 2300._R8, 2327._R8, 1800._R8], fph(0:3) = [0._R8, 0._R8, 0.5_R8, 1._R8]
+        type(obj_particle) :: p1, p2, p3, p4, p5, p6, p8
+        real(R8), allocatable :: epsTab(:)
+        real(R8) :: htab(1), Z7(7), Z8(8), Z9(9), F1(9), F0(9), m, d, Tg, Tp, mAl, mOx
+        real(R16) :: ref
+        integer  :: i, ph
+
+        call set_switches(0)
+        Tmin = 1;  Tmax = 4000
+        allocate(epsTab(Tmax - Tmin + 1))
+        do i = Tmin, Tmax
+            epsTab(i - Tmin + 1) = real(i, R8)/3000._R8
+        end do
+        htab = 0._R8
+
+        !> model 1 at 2400 K in a 600 K gas
+        p1%cp = 1250._R8;  p1%rho = 2950._R8;  p1%d = 30.0e-6_R8;  p1%m = p1%rho*PI/6._R8*p1%d**3
+        Tg = 600._R8;  Tp = 2400._R8
+        Z7 = [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, Tp]
+        call rhs_pair_tab(1, 0, 0, 0, p1, 7, Z7, 0, Tg, htab, epsTab, F1(1:7), F0(1:7))
+        ref = qr_ref(deps(epsTab, Tp), p1%d, Tg, Tp)/(1250._R16*real(p1%m, R16))
+        call judge5('model 1, F(7)', 'RU5_model1', 7, F1(1:7), F0(1:7), ref, ok)
+
+        !> model 2 (ITC) at 350 K in an 800 K gas
+        p2%cp = 4180._R8;  p2%rho = 1000._R8;  p2%d = 50.0e-6_R8;  p2%m = p2%rho*PI/6._R8*p2%d**3
+        p2%Mv = 18._R8;  p2%Lv = 2.26e6_R8;  p2%cpv = 1900._R8;  p2%Le = 1._R8;  p2%Yinf = 0._R8
+        p2%LvMvOverRu = p2%Lv*p2%Mv/Ru;  p2%invTboil = 1._R8/373.15_R8;  p2%alphaE = 1._R8
+        Tg = 800._R8;  Tp = 350._R8
+        m = p2%m;  d = (sixOverPi*m/p2%rho)**oneThird
+        Z8 = [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, Tp, m]
+        call rhs_pair_tab(2, 0, 1, 0, p2, 8, Z8, 0, Tg, htab, epsTab, F1(1:8), F0(1:8))
+        ref = qr_ref(deps(epsTab, Tp), d, Tg, Tp)/(4180._R16*real(m, R16))
+        call judge5('model 2, F(7)', 'RU5_model2', 7, F1(1:8), F0(1:8), ref, ok)
+
+        !> model 3 (Reitz-Diwakar at zero slip) at 2400 K
+        p3%cp = 1250._R8;  p3%rho = 2950._R8;  p3%d = 30.0e-6_R8;  p3%m = p3%rho*PI/6._R8*p3%d**3
+        p3%sigma = 6.0e-5_R8;  p3%mup = 1.0e-3_R8;  p3%mdot = 1.0e-3_R8
+        Tg = 600._R8;  Tp = 2400._R8
+        Z8 = [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, Tp, p3%mdot/p3%m]
+        m = p3%mdot/Z8(8);  d = (sixOverPi*m/p3%rho)**oneThird
+        call rhs_pair_tab(3, 2, 0, 0, p3, 8, Z8, 0, Tg, htab, epsTab, F1(1:8), F0(1:8))
+        ref = qr_ref(deps(epsTab, Tp), d, Tg, Tp)/(1250._R16*real(m, R16))
+        call judge5('model 3, F(7)', 'RU5_model3', 7, F1(1:8), F0(1:8), ref, ok)
+
+        !> model 4 (ITC, Reitz-Diwakar at zero slip) at 350 K in an 800 K gas
+        p4 = p2;  p4%sigma = 0.072_R8;  p4%mup = 1.0e-3_R8
+        Tg = 800._R8;  Tp = 350._R8
+        m = p4%m;  d = (sixOverPi*m/p4%rho)**oneThird
+        Z9 = [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, Tp, m, 1.0e6_R8]
+        call rhs_pair_tab(4, 2, 1, 0, p4, 9, Z9, 0, Tg, htab, epsTab, F1, F0)
+        ref = qr_ref(deps(epsTab, Tp), d, Tg, Tp)/(4180._R16*real(m, R16))
+        call judge5('model 4, F(7)', 'RU5_model4', 7, F1, F0, ref, ok)
+
+        !> model 5 at 3000 K in a 2000 K gas
+        p5%cp = 1250._R8;  p5%rho = 2700._R8;  p5%d = 100.0e-6_R8;  p5%m = p5%rho*PI/6._R8*p5%d**3
+        p5%Kburn = 4.28e-6_R8;  p5%nBurn = 1.8_R8;  p5%Xeff = 0.21_R8;  p5%betaPart = 0.3_R8
+        p5%Tign = 2350._R8;  p5%qComb = 31.0e6_R8
+        Tg = 2000._R8;  Tp = 3000._R8
+        m = p5%m;  d = (sixOverPi*m/p5%rho)**oneThird
+        Z8 = [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, Tp, m]
+        call rhs_pair_tab(5, 0, 0, 1, p5, 8, Z8, 0, Tg, htab, epsTab, F1(1:8), F0(1:8))
+        ref = qr_ref(deps(epsTab, Tp), d, Tg, Tp)/(1250._R16*real(m, R16))
+        call judge5('model 5, F(7)', 'RU5_model5', 7, F1(1:8), F0(1:8), ref, ok)
+
+        !> model 6, every phase, in a 600 K gas
+        p6%cp = 1250._R8;  p6%rho = 2950._R8;  p6%d = 10.0e-6_R8;  p6%m = p6%rho*PI/6._R8*p6%d**3
+        p6%Tmelt = 2327._R8;  p6%hFus = 1.07e6_R8;  p6%Tnuc = 2300._R8;  p6%cpSol = 600._R8
+        Tg = 600._R8
+        do ph = phLiquid, phSolid
+            Z8 = [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, Tph(ph), fph(ph)]
+            call rhs_pair_tab(6, 0, 0, 0, p6, 8, Z8, ph, Tg, htab, epsTab, F1(1:8), F0(1:8))
+            ref = qr_ref(deps(epsTab, Tph(ph)), p6%d, Tg, Tph(ph))/real(p6%m, R16)
+            select case (ph)
+            case (phLiquid)
+                call judge5('model 6 liquid, F(7)', 'RU5_model6_liquid', 7, F1(1:8), F0(1:8), ref/1250._R16, ok)
+            case (phUndercooled)
+                call judge5('model 6 undercooled, F(7)', 'RU5_model6_undercooled', 7, F1(1:8), F0(1:8), &
+                            ref/1250._R16, ok)
+            case (phPlateau)
+                call judge5('model 6 plateau, F(8)', 'RU5_model6_plateau', 8, F1(1:8), F0(1:8), -ref/1.07e6_R16, ok)
+            case (phSolid)
+                call judge5('model 6 solid, F(7)', 'RU5_model6_solid', 7, F1(1:8), F0(1:8), ref/600._R16, ok)
+            end select
+        end do
+
+        !> model 8 at 3000 K in a 2000 K gas, the cap as heavy as the metal
+        call buildLobeTable()
+        p8%cp = 1250._R8;  p8%rho = 2950._R8
+        p8%Kburn = 4.28e-6_R8;  p8%nBurn = 1.8_R8;  p8%Xeff = 0.21_R8;  p8%betaPart = 0.3_R8
+        p8%Tign = 2350._R8;  p8%qComb = 31.0e6_R8
+        p8%xiCap = 0.2_R8;  p8%rhoRes = 3950._R8;  p8%cpRes = 1887.6_R8;  p8%cStretch = capStretch(0.2_R8, 1.8_R8)
+        Tg = 2000._R8;  Tp = 3000._R8
+        mAl = 2950._R8*PI/6._R8*(100.0e-6_R8)**3;  mOx = mAl
+        d = (sixOverPi*(mAl/2950._R8 + mOx/3950._R8))**oneThird
+        Z9 = [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, Tp, mAl, mOx]
+        call rhs_pair_tab(8, 0, 0, 1, p8, 9, Z9, 0, Tg, htab, epsTab, F1, F0)
+        ref = qr_ref(deps(epsTab, Tp), d, Tg, Tp)/(1250._R16*real(mAl, R16) + real(1887.6_R8, R16)*real(mOx, R16))
+        call judge5('model 8, F(7)', 'RU5_model8', 7, F1, F0, ref, ok)
+    end subroutine run_RU5
+
+    !> one RU5 leg: RU2's judge under RU5's name
+    subroutine judge5(name, id, k, F1, F0, ref, ok)
+        character(len=*), intent(in) :: name, id
+        integer,  intent(in) :: k
+        real(R8), intent(in) :: F1(:), F0(:)
+        real(R16), intent(in) :: ref
+        logical, intent(inout) :: ok
+        real(R8) :: dF, tol, err
+        integer  :: j
+        logical  :: others, pass
+        dF  = F1(k) - F0(k)
+        tol = 8._R8*spacing(max(abs(F1(k)), abs(F0(k))))
+        err = real(abs(real(dF, R16) - ref), R8)
+        others = .true.
+        do j = 1, size(F1)
+            if (j /= k) others = others .and. F1(j) == F0(j)
+        end do
+        pass = err <= tol .and. others .and. ref /= 0._R16
+        write(*,'(a,a,a,es23.15,a,es23.15,a,es9.2,a,es9.2,a,l1)') '  [INFO] RU5 ', name, ': dF = ', dF, &
+            ', ref = ', real(ref, R8), ', |dF - ref| = ', err, ', tol = ', tol, ', other components equal ', others
+        if (pass) then; write(*,'(a)') '  [PASS] RU5 '//name
+        else;           write(*,'(a)') '  [FAIL] RU5 '//name; end if
+        ok = ok .and. pass
+        call append_row(id, 'dF', err, err, 0._R8, 0._R8, tol, pass)
+    end subroutine judge5
+
+    subroutine run_RU6(ok)
+        use IGLOO_module,    only: obj_IGLOO
+        use IGLOO_variables, only: dragSelect, heatSelect
+        use IGLOO_Lib_Properties, only: Tmin, Tmax
+        logical, intent(inout) :: ok
+        real(R8), parameter :: PI = 4._R8*atan(1._R8)
+        real(R8), parameter :: RHO = 2950._R8, DP = 30.0e-6_R8, NPV = 1.0e9_R8, TG = 600._R8, TP = 2000._R8
+        type(obj_IGLOO) :: ig
+        real(R8)  :: gas(9), vel(3), rhop, FQ(4), err
+        real(R16) :: d, ref
+        integer   :: i
+        dragSelect = DRAG_NONE;  heatSelect = HEAT_NONE
+        Tmin = 1;  Tmax = 4000
+        allocate(ig%material(1))
+        ig%material(1)%rhoVariable = .false.;  ig%material(1)%rho = RHO;  ig%material(1)%emissivity = 0._R8
+        ig%material(1)%epsVariable = .true.
+        allocate(ig%material(1)%epsTab(Tmin:Tmax))
+        do i = Tmin, Tmax
+            ig%material(1)%epsTab(i) = real(i, R8)/3000._R8
+        end do
+        gas  = [1.2_R8, 10._R8, 0._R8, 0._R8, TG, 1.4_R8, 287._R8, 1.8e-5_R8, 0.026_R8]
+        vel  = gas(2:4)
+        rhop = NPV*RHO*PI/6._R8*DP**3
+        FQ   = ig%getSourceTerms(gas, vel, TP, rhop, NPV, 1)
+        d    = (6._R16*real(rhop, R16)/(PIQ*real(RHO, R16)*real(NPV, R16)))**(1._R16/3._R16)
+        ref  = real(NPV, R16)*real(ig%material(1)%epsTab(2000), R16)*SIGQ*PIQ*d**2*(real(TG, R16)**4 - real(TP, R16)**4)
+        err  = real(abs(real(FQ(4), R16) - ref)/abs(ref), R8)
+        write(*,'(a,es23.15,a,es23.15,a)') '  [INFO] RU6 energy component ', FQ(4), ' W, closed form ', &
+            real(ref, R8), ' W'
+        ok = ok .and. assert_lt('RU6 getSourceTerms energy = np eps(Tp) sigma pi d^2 (Tg^4 - Tp^4), relative', err, &
+                                1.0e-14_R8)
+        call append_row('RU6_source_table', 'E', err, err, 0._R8, 0._R8, 1.0e-14_R8, err < 1.0e-14_R8)
+    end subroutine run_RU6
 
     !> a stale radiation index reaches past aux: the leg cannot run
     subroutine stale_flag(stale, name, ok)

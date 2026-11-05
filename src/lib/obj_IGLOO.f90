@@ -679,7 +679,7 @@ contains
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                              mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab,    &
                              mat%LvTab,mat%cpvTab, slot=ip, shed=gr%shed(ip), noShed=(loopCounter==maxLoop), wallblock=self%wall, &
-                             klTab=mat%klTab)
+                             klTab=mat%klTab, epsTab=mat%epsTab)
               call tm_parcel_end()
             enddo
             !$OMP END PARALLEL DO
@@ -846,11 +846,12 @@ contains
             if (gr%resOn) then
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                               mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
-                              mat%LvTab,mat%cpvTab, slot=ip, resid=gr%resid(ip), wallblock=self%wall, klTab=mat%klTab)
+                              mat%LvTab,mat%cpvTab, slot=ip, resid=gr%resid(ip), wallblock=self%wall, klTab=mat%klTab, &
+                              epsTab=mat%epsTab)
             else
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                               mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
-                              mat%LvTab,mat%cpvTab, slot=ip, wallblock=self%wall, klTab=mat%klTab)
+                              mat%LvTab,mat%cpvTab, slot=ip, wallblock=self%wall, klTab=mat%klTab, epsTab=mat%epsTab)
             endif
             call tm_parcel_end()
           enddo
@@ -970,7 +971,7 @@ contains
     real(R8),         intent(in) :: gas(9), vel(3), Tp, np, rhop
     real(R8) :: FdragQdot(4), vdiff(3), Fdrag(3)
     real(R8) :: rhog, Tg, gamma, mug, kg, Rg
-    real(R8) :: Re, Ma, Tr, Pr, Nu, Cd, slip, Qdot, d, rhom
+    real(R8) :: Re, Ma, Tr, Pr, Nu, Cd, slip, Qdot, d, rhom, eps
     real(R8), parameter :: oneThird =0.33333333333333333_R8, &
                            sixOverPi=1.90985931710274403_R8, &
                            piOver8  =0.39269908169872415_R8
@@ -993,8 +994,10 @@ contains
     Nu = heat(Re,Pr,Ma,heatSelect)
     Fdrag = piOver8*Cd*d*Re*mug*vdiff
     Qdot  = Nu*kg*pi*d*(Tg-Tp)
-    if (self%material(mID)%emissivity > 0._R8) &
-      Qdot = Qdot + radiativeHeat(self%material(mID)%emissivity, d, Tg, Tp)
+    !> the emissivity at Tp: the material's column, else its constant
+    eps = self%material(mID)%emissivity
+    if (self%material(mID)%epsVariable) eps = tableValue(self%material(mID)%epsTab, Tmin, Tmax, Tp)
+    if (eps > 0._R8) Qdot = Qdot + radiativeHeat(eps, d, Tg, Tp)
     Qdot  = Qdot + Fdrag(1)*vel(1)+Fdrag(2)*vel(2)+Fdrag(3)*vel(3)
     FdragQdot = [Fdrag, Qdot]*np
 

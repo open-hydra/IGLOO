@@ -12,7 +12,8 @@ contains
   !  steady gas field, one cell segment at a time, depositing source and Eulerian moments and, at the exit
   !  through a wall cell, its wall impact.
   subroutine integrate(part,geoblock,gasblock,srcblock,eulblock,     &
-                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, slot,shed,noShed,resid,wallblock,klTab)
+                        hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, slot,shed,noShed,resid,wallblock,klTab, &
+                        epsTab)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
     use IGLOO_variables,  only: iprint,dtprint,dsprint,dcellSet,tEnd,timeOn,snapOn,frozenOn, &
@@ -70,6 +71,8 @@ contains
     type(obj_wallblock),   intent(inout), optional :: wallblock(nb)
     !> The material's liquid conductivity table (a Conductivity column); absent otherwise.
     real(R8),              intent(in),    optional :: klTab(:)
+    !> The material's emissivity table (an Emissivity column); absent otherwise.
+    real(R8),              intent(in),    optional :: epsTab(:)
     !> local variables
     type(obj_shed) :: shedRec   !> staged child record, pushed once complete
     type(obj_shed) :: resRec    !> the burnout residue's record
@@ -636,11 +639,11 @@ contains
       case (2)
         call rhsEvaporation(neq, part%time, part%stateVar, Fs, auxLocal,nauxvar, stS,nauxstate, &
                             hTab,rhoTab,psatTab,LvTab,cpvTab, gas,gasVert,gasS, ng,ngVert, mupTabM=mupTab, TsOut=tsurf, &
-                            kLiqTabM=klTab)
+                            kLiqTabM=klTab, epsTabM=epsTab)
       case (4)
         call rhsEvapBreakup(neq, part%time, part%stateVar, Fs, auxLocal,nauxvar, stS,nauxstate, &
                             hTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, gas,gasVert,gasS, ng,ngVert, TsOut=tsurf, &
-                            kLiqTabM=klTab)
+                            kLiqTabM=klTab, epsTabM=epsTab)
       case default
         tsurf = part%tp
       end select
@@ -1052,34 +1055,37 @@ contains
     !> ODE right-hand sides for models 1-8, forwarding integrate's host-associated state.
     subroutine rhs1(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
-      call rhsStandard(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab, gas,gasVert,gasState, ng,ngVert)
+      call rhsStandard(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab, gas,gasVert,gasState, ng,ngVert, &
+                       epsTabM=epsTab)
     end subroutine rhs1
     subroutine rhs2(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
       call rhsEvaporation(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,psatTab,LvTab,cpvTab, &
-                          gas,gasVert,gasState, ng,ngVert, mupTabM=mupTab, kLiqTabM=klTab)
+                          gas,gasVert,gasState, ng,ngVert, mupTabM=mupTab, kLiqTabM=klTab, epsTabM=epsTab)
     end subroutine rhs2
     subroutine rhs3(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
-      call rhsBreakupOnly(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,mupTab,sigTab, gas,gasVert,gasState, ng,ngVert)
+      call rhsBreakupOnly(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,mupTab,sigTab, gas,gasVert,gasState, &
+                          ng,ngVert, epsTabM=epsTab)
     end subroutine rhs3
     subroutine rhs4(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
       call rhsEvapBreakup(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,mupTab,sigTab,psatTab, &
-                          LvTab,cpvTab, gas,gasVert,gasState, ng,ngVert, kLiqTabM=klTab)
+                          LvTab,cpvTab, gas,gasVert,gasState, ng,ngVert, kLiqTabM=klTab, epsTabM=epsTab)
     end subroutine rhs4
     subroutine rhs5(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
-      call rhsAlCombustion(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab, gas,gasVert,gasState, ng,ngVert)
+      call rhsAlCombustion(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab, gas,gasVert,gasState, ng,ngVert, &
+                           epsTabM=epsTab)
     end subroutine rhs5
     subroutine rhs6(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
       call rhsSolidification(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, rhoTab,mupTab,sigTab, &
-                             gas,gasVert,gasState, ng,ngVert)
+                             gas,gasVert,gasState, ng,ngVert, epsTabM=epsTab)
     end subroutine rhs6
     subroutine rhs8(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
-      call rhsAlCap(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, gas,gasVert,gasState, ng,ngVert)
+      call rhsAlCap(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, gas,gasVert,gasState, ng,ngVert, epsTabM=epsTab)
     end subroutine rhs8
 
 

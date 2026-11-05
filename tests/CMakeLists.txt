@@ -529,6 +529,9 @@ igloo_e2e_case(conv-nu-kd    standard/conv-nu-kd    "e2e;standard;heat")
 igloo_e2e_case(rad-cool standard/rad-cool "e2e;standard;heat;radiation")
 # emissivity-cap: rad-cool with emissivity 1.5, cut to 1.0 with one warning; rad-cool's oracle at 1.0.
 igloo_e2e_case(emissivity-cap standard/emissivity-cap "e2e;standard;heat;radiation")
+# rad-cool-epscol: rad-cool with the emissivity a properties.dat column, eps(T) = T/3000 at the particle's temperature
+# (rows above 1 cut with one warning): the closed form of dT/dt = -A T (T^4 - T_g^4), the exit and the deposit.
+igloo_e2e_case(rad-cool-epscol standard/rad-cool-epscol "e2e;standard;heat;radiation")
 # rad-foreign-key: drag-stokes plus an [ICE-Physics] emissivity: every artefact equal to drag-stokes's.
 igloo_e2e_case(rad-foreign-key standard/rad-foreign-key "e2e;standard;radiation;io")
 igloo_e2e_case(vie-plait   standard/vie-plait   "e2e;standard;drag;gas")

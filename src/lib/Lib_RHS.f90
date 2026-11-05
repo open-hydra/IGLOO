@@ -423,7 +423,7 @@ contains
   !> Model 1: constant mass, no breakup ODE.
   subroutine rhsStandard(neq, time, Z, F, aux,naux, auxst,nauxst, &
                           hTabM, rhoTabM,                  &
-                          gasNodes,gasVert,gas,nsp,nNodes)
+                          gasNodes,gasVert,gas,nsp,nNodes, epsTabM)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, toll, &
                                bodyForce, bodyAccel, srcBodyForce
@@ -438,6 +438,7 @@ contains
     real(R8), intent(in)    :: hTabM(:), rhoTabM(:)
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
+    real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
     ! locals
     real(R8) :: normVel, slip, Vdif(3), Re, cpFactor, tp, d, rho, m, xi0_loc(3)
     real(R8) :: Fdrag(3), Qdot
@@ -468,7 +469,7 @@ contains
     else
       Re = gas(1) * slip * d / gas(6)
       call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot)
-      if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), tp)*cpFactor
+      if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), tp, epsTabM), d, gas(5), tp)*cpFactor
     endif
     F(1:3) = Z(4:6)
     F(4:6) = Fdrag/m
@@ -510,7 +511,7 @@ contains
   !  Model 7 adds the breakup number rate Z(9), acting in the liquid phases only.
   subroutine rhsSolidification(neq, time, Z, F, aux,naux, auxst,nauxst, &
                                 rhoTabM, mupTabM, sigTabM,             &
-                                gasNodes,gasVert,gas,nsp,nNodes)
+                                gasNodes,gasVert,gas,nsp,nNodes, epsTabM)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, toll, bodyForce, bodyAccel, oneThird, sixOverPi
     use IGLOO_Lib_Combustion,     only: imHf, imCps
@@ -528,6 +529,7 @@ contains
     real(R8), intent(in)    :: rhoTabM(:), mupTabM(:), sigTabM(:)
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
+    real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
     ! locals
     real(R8) :: normVel, slip, Vdif(3), Re, d, m, xi0_loc(3)
     real(R8) :: Fdrag(3), QdotW
@@ -564,7 +566,7 @@ contains
     else
       Re = gas(1) * slip * d / gas(6)
       call interphase(gas, nsp, Vdif, slip, Z(7), d, Re, 1._R8, Fdrag, QdotW)
-      if (ind_eps > 0) QdotW = QdotW + radiativeHeat(aux(ind_eps), d, gas(5), Z(7))
+      if (ind_eps > 0) QdotW = QdotW + radiativeHeat(emissivityAt(aux(ind_eps), Z(7), epsTabM), d, gas(5), Z(7))
     endif
     F(1:3) = Z(4:6)
     F(4:6) = Fdrag/m
@@ -612,7 +614,7 @@ contains
   !> Model 2: variable mass via evaporation.
   subroutine rhsEvaporation(neq, time, Z, F, aux,naux, auxst,nauxst, &
                              hTabM, rhoTabM, psatTabM, LvTabM, cpvTabM, &
-                             gasNodes, gasVert,gas,nsp,nNodes, mupTabM, TsOut, kLiqTabM)
+                             gasNodes, gasVert,gas,nsp,nNodes, mupTabM, TsOut, kLiqTabM, epsTabM)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
@@ -629,6 +631,7 @@ contains
     real(R8), intent(in)    :: hTabM(:), rhoTabM(:), psatTabM(:), LvTabM(:), cpvTabM(:)
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
+    real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
     real(R8), intent(in),  optional :: mupTabM(:)   !> the liquid viscosity table (P2T)
     real(R8), intent(out), optional :: TsOut        !> the surface temperature (the mean temperature under ITC)
     real(R8), intent(in),  optional :: kLiqTabM(:)  !> the liquid conductivity table (P2T)
@@ -686,7 +689,7 @@ contains
         mul = aux(ind_e5)
       endif
       call p2tSurface(tp, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mul, &
-                      psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl)
+                      psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl, epsTabM=epsTabM)
       !> no surface root: the scrub's penalty, the step is rejected
       if (p2tStat == 0) then
         F = 1.e30_R8
@@ -721,7 +724,7 @@ contains
     !> Stefan-blowing reduction of the convective heat (MHB98 eq.19); skipped when the model returned its own Qdot
     if (blowSelect == 1 .and. .not.override) &
         Qdot = Qdot * blowingFactor(gas(7), gas(8), gas(6), gas(9), rho, d, m, mdot)
-    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), ts)*cpFactor
+    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), ts, epsTabM), d, gas(5), ts)*cpFactor
     F(1:3) = Z(4:6)
     F(4:6) = Fdrag / m
     if (bodyForce) F(4:6) = F(4:6) + bodyAccel
@@ -761,7 +764,7 @@ contains
   !  State: Z(1:3)=pos, Z(4:6)=vel, Z(7)=T/h, Z(8)=npdot.
   subroutine rhsBreakupOnly(neq, time, Z, F, aux,naux, auxst,nauxst, &
                              hTabM, rhoTabM, mupTabM, sigTabM, &
-                             gasNodes, gasVert,gas,nsp,nNodes)
+                             gasNodes, gasVert,gas,nsp,nNodes, epsTabM)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
@@ -778,6 +781,7 @@ contains
     real(R8), intent(in)    :: hTabM(:), rhoTabM(:), mupTabM(:), sigTabM(:)
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
+    real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
     ! locals
     real(R8) :: normVel, slip, Vdif(3), Re, cpFactor, tp, d, rho, m, sigma, mup, xi0_loc(3)
     real(R8) :: Fdrag(3), Qdot, acc(3), brkupVar(2)
@@ -806,7 +810,7 @@ contains
     Re   = gas(1) * slip * d / gas(6)
 
     call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot)
-    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), tp)*cpFactor
+    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), tp, epsTabM), d, gas(5), tp)*cpFactor
     acc = Fdrag / m
 
     ! Breakup: npdot rate — brkupVar from auxState (told/tc for KHRT)
@@ -841,7 +845,7 @@ contains
   !  State: Z(1:3)=pos, Z(4:6)=vel, Z(7)=T/h, Z(8)=mass, Z(9)=npdot.
   subroutine rhsEvapBreakup(neq, time, Z, F, aux,naux, auxst,nauxst,     &
                              hTabM, rhoTabM, mupTabM, sigTabM, psatTabM, LvTabM, cpvTabM, &
-                             gasNodes, gasVert,gas,nsp,nNodes, TsOut, kLiqTabM)
+                             gasNodes, gasVert,gas,nsp,nNodes, TsOut, kLiqTabM, epsTabM)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
@@ -860,6 +864,7 @@ contains
     real(R8), intent(in)    :: mupTabM(:), sigTabM(:), psatTabM(:), LvTabM(:), cpvTabM(:)
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
+    real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
     real(R8), intent(out), optional :: TsOut   !> the surface temperature (the mean temperature under ITC)
     real(R8), intent(in),  optional :: kLiqTabM(:)  !> the liquid conductivity table (P2T)
     ! locals
@@ -911,7 +916,7 @@ contains
       if (mod_propFlags(1)) then; cl = lookupTab(hTabM, tp + 0.5_R8) - lookupTab(hTabM, tp - 0.5_R8)
       else;                       cl = aux(ind_cp); endif
       call p2tSurface(tp, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mup, &
-                      psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl)
+                      psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl, epsTabM=epsTabM)
       !> no surface root: the scrub's penalty, the step is rejected
       if (p2tStat == 0) then
         F = 1.e30_R8
@@ -956,7 +961,7 @@ contains
     !> Stefan-blowing reduction of the convective heat (MHB98 eq.19); skipped when the model returned its own Qdot
     if (blowSelect == 1 .and. .not.override) &
         Qdot = Qdot * blowingFactor(gas(7), gas(8), gas(6), gas(9), rho, d, m, mdot_evap)
-    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), ts)*cpFactor
+    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), ts, epsTabM), d, gas(5), ts)*cpFactor
 
     !> per-droplet mass: evaporation plus the breakup share that keeps the stream mass
     mdot = mdot_evap - m*F(9)/Z(9)
@@ -1003,7 +1008,7 @@ contains
   !  gas-side, radiative and latent heats at Ts; Brent on an exact bracket. stat: 1 the root bracketed by tbar and the
   !  first estimate, 2 after widening, 0 no bracket or no convergence (ts NaN).
   subroutine p2tSurface(tbar, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mul, &
-                        psatTabM, LvTabM, cpvTabM, ts, stat, klIn)
+                        psatTabM, LvTabM, cpvTabM, ts, stat, klIn, epsTabM)
     use Lib_Equations,         only: interphase
     use IGLOO_variables,       only: pi, blowSelect
     use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor, iLv, icpv, chiETC
@@ -1016,6 +1021,7 @@ contains
     real(R8), intent(out) :: ts
     integer,  intent(out) :: stat
     real(R8), intent(in), optional :: klIn   !> the liquid conductivity (else k-liq)
+    real(R8), intent(in), optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
     integer,  parameter :: maxEval = 100
     real(R8), parameter :: tol4 = 4._R8*epsilon(1._R8)
     real(R8) :: kl, BM, Us, PeL, K, q0, tLo, t1, g0, g1
@@ -1127,11 +1133,26 @@ contains
       endif
       if (ovr) Qg = Qe
       if (blowSelect == 1 .and. .not.ovr) Qg = Qg*blowingFactor(gas(7), gas(8), gas(6), gas(9), rho, d, m, md)
-      if (ind_eps > 0) Qg = Qg + radiativeHeat(aux(ind_eps), d, gas(5), T)
+      if (ind_eps > 0) Qg = Qg + radiativeHeat(emissivityAt(aux(ind_eps), T, epsTabM), d, gas(5), T)
       qn = Qg + md*epT(iLv)
     end function qnet
 
   end subroutine p2tSurface
+
+
+  !> The emissivity at T: the material's column when given, else its constant.
+  pure function emissivityAt(eps0, T, epsTabM) result(eps)
+    use IGLOO_Lib_Properties, only: tableValue, Tmin, Tmax
+    implicit none
+    real(R8), intent(in) :: eps0, T
+    real(R8), intent(in), optional :: epsTabM(:)
+    real(R8) :: eps
+    if (present(epsTabM)) then
+      eps = tableValue(epsTabM, Tmin, Tmax, T)
+    else
+      eps = eps0
+    endif
+  end function emissivityAt
 
 
   !> The boiling temperature at the pressure p: the inverse of the material's Psat column, else of Clausius-Clapeyron.
@@ -1170,7 +1191,7 @@ contains
   !> Model 5: Beckstead d^n burn law; state layout as model 2 (Z(7)=T/h, Z(8)=mass).
   subroutine rhsAlCombustion(neq, time, Z, F, aux,naux, auxst,nauxst, &
                               hTabM, rhoTabM,                   &
-                              gasNodes, gasVert,gas,nsp,nNodes)
+                              gasNodes, gasVert,gas,nsp,nNodes, epsTabM)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
@@ -1187,6 +1208,7 @@ contains
     real(R8), intent(in)    :: hTabM(:), rhoTabM(:)
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
+    real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
     ! locals
     real(R8) :: normVel, slip, mdot, qrel, Vdif(3), Re, cpFactor, tp, d, rho, m, xi0_loc(3)
     real(R8) :: Fdrag(3), Qdot
@@ -1213,7 +1235,7 @@ contains
     Re   = gas(1) * slip * d / gas(6)
 
     call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot)
-    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), tp)*cpFactor
+    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), tp, epsTabM), d, gas(5), tp)*cpFactor
     !> Burn rate + heat release from the metal aux block (inert below T-ign)
     call becksteadRate(tp, d, rho, aux(ind_mb:ind_mb+nmp-1), mdot, qrel)
     F(1:3) = Z(4:6)
@@ -1246,7 +1268,7 @@ contains
   !  diameter, scaled by the exposed-surface factor F(f_ox) and the stretch c; drag, heat and radiation on the
   !  equal-volume sphere; the cap retains xi*nuOx of the metal burned.
   subroutine rhsAlCap(neq, time, Z, F, aux,naux, auxst,nauxst, &
-                      gasNodes, gasVert,gas,nsp,nNodes)
+                      gasNodes, gasVert,gas,nsp,nNodes, epsTabM)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
@@ -1261,6 +1283,7 @@ contains
     real(R8), intent(inout) :: auxst(nauxst)
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
+    real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
     ! locals
     real(R8) :: normVel, slip, mdot, qrel, Vdif(3), Re, tp, d, dAl, rho, mAl, mOx, m, scale, xi0_loc(3)
     real(R8) :: Fdrag(3), Qdot
@@ -1289,7 +1312,7 @@ contains
     Re   = gas(1) * slip * d / gas(6)
 
     call interphase(gas, nsp, Vdif, slip, tp, d, Re, 1._R8, Fdrag, Qdot)
-    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(aux(ind_eps), d, gas(5), tp)
+    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), tp, epsTabM), d, gas(5), tp)
     !> Burn rate and heat release of the metal (inert below T-ign), scaled by F(f_ox)*c
     call becksteadRate(tp, dAl, rho, aux(ind_mb:ind_mb+nmp-1), mdot, qrel)
     scale = lobeF(mOx/m)*aux(ind_mb+imCs-1)

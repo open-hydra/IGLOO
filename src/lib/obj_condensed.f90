@@ -351,13 +351,13 @@ contains
     if (self%brkupSelect > 0) then
       call setupRHS(mdl, self%brkupSelect, self%evapSelect, self%liqSelect, self%intfSelect, &
                     self%boilSelect, self%combSelect, propFlags, &
-                    self%bp, self%bpMethod, self%bpScale, nAux, nAuxSt, nEvV, radiation=self%emissivity > 0._R8, &
-                    solidDensity=self%rhoSol > 0._R8)
+                    self%bp, self%bpMethod, self%bpScale, nAux, nAuxSt, nEvV, &
+                    radiation=self%emissivity > 0._R8 .or. self%epsVariable, solidDensity=self%rhoSol > 0._R8)
     else
       call setupRHS(mdl, self%brkupSelect, self%evapSelect, self%liqSelect, self%intfSelect, &
                     self%boilSelect, self%combSelect, propFlags, &
-                    bp_empty, 1, 1._R8, nAux, nAuxSt, nEvV, radiation=self%emissivity > 0._R8, &
-                    solidDensity=self%rhoSol > 0._R8)
+                    bp_empty, 1, 1._R8, nAux, nAuxSt, nEvV, &
+                    radiation=self%emissivity > 0._R8 .or. self%epsVariable, solidDensity=self%rhoSol > 0._R8)
     endif
 
     do i = start, end
