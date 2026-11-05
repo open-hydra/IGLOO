@@ -897,7 +897,7 @@ cascade ends inside the box, every parcel is in it at $t_b = 5t^*$); the figures
 Hsiang & Faeth's correlations beside the products, not gated.
 
 Several members of this category have **no figure** and so no section below:
-`bc-center-2grp` (multi-group `bc_center` pinning), `inj-edge` and `inj-edge-payload` (injection points on
+`bc-center-2grp` (multi-group `bc_center` pinning), `inner-loop-cap` (the inner loop's cap on a mesh stretch), `inj-edge` and `inj-edge-payload` (injection points on
 the edges of the inlet cells), `axis-200` and `wedge-fold` (the
 axis face and the sector fold on the MOSE nozzle field), `two-mat` (two materials),
 `two-fam-bc` (one inlet table per family in `bc.txt`), `two-fam-bc-2blk` (the same on two blocks joined by

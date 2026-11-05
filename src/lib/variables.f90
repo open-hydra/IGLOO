@@ -75,6 +75,7 @@ module IGLOO_variables
   !> [IGLOO-ODE] fail-after [s]: the oxide-cap model (ODE model 8) fails once a parcel's last accepted time
   !  reaches it (the residue's failure path); 0 = off
   real(R8) :: failAfter = 0._R8
+  integer  :: maxInnerIter = 10   !> [IGLOO-ODE] max-inner-iter: solver calls per cell segment
 
   !> Parameters
   real(R8), parameter :: pi = acos(-1.0_R8)

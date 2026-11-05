@@ -60,6 +60,7 @@ output written).
 | `refuse-gas-order` | `gas-order = 3` | `IGLOO: gas-order must be 1 or 2` |
 | `refuse-out-file` | `out-file = nonsense` | `IGLOO: unknown out-file token` (accepted: E, S, E+S, ALL -- `ALL` is what hydra's MI2 cases write; `two-mat` runs it) |
 | `refuse-ode-solver` | `ode-solver = H-radau5` | `IGLOO: unknown ode-solver` |
+| `refuse-max-inner-iter` | `max-inner-iter = 0` (a segment capped before its first solver call) | `IGLOO: max-inner-iter must be at least 1` |
 | `refuse-boiling-temperature-both` | tc-box (`INPUT/` symlinked) with `boiling-temperature` and `Tboil` both in `[IGLOO-Properties]` | `give boiling-temperature or its alias Tboil, not both` |
 | `refuse-solid-hfus` | own `INPUT/phase.txt` `A 1 solidification=on cp-solid=600` (no `h-fus`), drag-stokes's `bc.txt`/`solfile.tec` | `solidification=on requires h-fus > 0` |
 | `refuse-solid-cpsolid` | `A 1 solidification=on h-fus=1.07e6` (no `cp-solid`) | `solidification=on requires cp-solid > 0` |
@@ -105,7 +106,7 @@ output written).
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All eighty-one exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All eighty-two exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next

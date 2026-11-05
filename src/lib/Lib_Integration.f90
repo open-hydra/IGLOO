@@ -22,7 +22,7 @@ contains
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
                                 nInjNoCell,                                &
                                 trajOn, scatOn, dNscat, sixOverPi, pi,    &
-                                planeOn, planeX, failAfter
+                                planeOn, planeX, failAfter, maxInnerIter
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs, grazeStandoff
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock, obj_wallblock
@@ -123,7 +123,7 @@ contains
     integer  :: whichEv
     real(R8) :: timeLocal, din, dout, deltaS(3), dir(3), taup, tEvt, rhoEvt
     integer  :: err, nDL, innerIter, jSlot
-    integer,  parameter :: maxInnerIter=10, nStep=10
+    integer,  parameter :: nStep=10
     !> Hard cap on child parcels one parent may shed in one call.
     integer,  parameter :: maxShed=1000
     real(R8), parameter :: safety=0.99, dtMin=1.e-14_R8, tauFactor=100._R8

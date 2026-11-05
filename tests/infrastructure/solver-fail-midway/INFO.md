@@ -42,8 +42,9 @@ binary from before the parcel rule (where no key means a row at every crossing):
 its entry into the failing cell (t = 7.4999e-3 against the exit's 7.5287e-3 s, 31 rows); with the last row left
 out of the rule (a mutant): the injection row alone.
 
-**The other exits, by mutation.** No fixture of the suite reaches the inner-loop cap or the non-finite exit (no
-run log holds an `Inner loop >` or a `non-finite state` line). Each is forced by
+**The other exits, by mutation.** The inner-loop cap is reached by [`inner-loop-cap`](../inner-loop-cap/INFO.md)
+(`[IGLOO-ODE] max-inner-iter`); no fixture of the suite reaches the non-finite exit (no run log holds a
+`non-finite state` line). Each is forced by
 a one-line edit of `src/lib/Lib_Integration.f90` (never committed) on a copy of `standard/drag-stokes` (its
 `INPUT/`) with `out-file = ALL`, `out-time = on` and `mollify = off` added to `[IGLOO-General]`, at one thread,
 and judged by F2's balance. The reset of `part%deltaL`, `part%Tstay` and `part%intE` at the start of every segment

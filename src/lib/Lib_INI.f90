@@ -824,7 +824,7 @@ contains
 
   !> [IGLOO-ODE]: solver name, maximum steps, tolerances, the forced failure of the oxide-cap model.
   subroutine read_ode()
-    use IGLOO_variables, only: ode_word, iopt, rtol, atol, failAfter
+    use IGLOO_variables, only: ode_word, iopt, rtol, atol, failAfter, maxInnerIter
     implicit none
 
     iopt = 0
@@ -857,6 +857,10 @@ contains
 
     call fini%get(section_name='IGLOO-ODE', option_name='fail-after', val=failAfter, error=error)
     if (error/=0) failAfter = 0._R8
+
+    call fini%get(section_name='IGLOO-ODE', option_name='max-inner-iter', val=maxInnerIter, error=error)
+    if (error/=0) maxInnerIter = 10
+    if (maxInnerIter < 1) error stop 'IGLOO: max-inner-iter must be at least 1'
 
   end subroutine read_ode
 

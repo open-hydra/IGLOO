@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (348 in a serial build: 290 e2e + 57 unit incl. `self_test`,
+One row per registered CTest entry (350 in a serial build: 292 e2e + 57 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree`, `e2e-rc-gate`, `lint-test-inputs`, `psd-plane-tool` and `history-census` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 28 `mpi-*`
-rows in their own section, 376).
+rows in their own section, 378).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (85 of 169 e2e fixtures)
+## Shared box fixture (85 of 170 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,7 +39,7 @@ writes with its defaults.
 Eighty-five fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other eighty-four:
+once here, referenced as **"shared box"** below. The other eighty-five:
 
 - non-uniform gas (twenty-six): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
@@ -67,7 +67,7 @@ once here, referenced as **"shared box"** below. The other eighty-four:
   `evap-breakup-box` and `evap-breakup-box-varcp` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
   (`--t-gas --kt`); `tab-hf92` and `etab-hf92` on a 1.2 m × 480-cell box at U=200 m/s, T=297 K in Hsiang & Faeth's air,
   one diameter with a slip per cell (`--d0 --rhog --mug`), the lateral faces reflecting (`--side-code 300`);
-- uniform gas on another mesh (thirty-one): `mhb98-water`, `mhb98-water-psat` and `mhb98-water-blowing` (a `make_box_case.py`
+- uniform gas on another mesh (thirty-two): `mhb98-water`, `mhb98-water-psat` and `mhb98-water-blowing` (a `make_box_case.py`
   variant lengthened to 0.17 m at the same Δx: water in air at T_G=298 K with a near-static
   U=1.9×10⁻⁴ m/s clock, the Miller-Harstad-Bellan Fig-2 conditions); `planar-slab` (a 20×20
   single-layer planar slab), `wall-approach` (a 100×20 single layer, the gas drifting toward the wall
@@ -82,7 +82,7 @@ once here, referenced as **"shared box"** below. The other eighty-four:
   with a 200×100 inlet, `make_box_case.py --nx 1 --ny 200 --nz 100`); `stuck-cell` and `plane-back` (the box with the gas at rest,
   `make_box_case.py --ug 0`), `sym-plane-bounce` and `sym-plane-bounce-ord2` (the box with the gas at 0.1 m/s,
   `--ug 0.1 --sym-face 5 --no-inlet`), `sym-plane-creep` and `sym-plane-creep-ord2` (the box with the gas at 3 mm/s,
-  `--ug 0.003 --sym-face 5 --no-inlet`), `boiling-zgr-switch` (the box with the gas at 1 m/s, `--ug 1.0`), `solid-melt` and `solid-melt-rhos` (the box with the gas at 3000 K, `--tg 3000`), `inj-dsdegen` (the box with geometric rows along y, `--ygrade 2`), `beckstead-air` (the box with air at 300 K and 0.04 m/s, one diameter per inlet cell, `--tg 300 --ug 0.04 --rp-sweep`) `wall-flux` (the box in 15 cells along x, its outlet face a dispersed-phase wall, `--no-inlet --outlet-code 301 --nx 15`) and `wall-laws` (`wall-flux`'s `INPUT/`, symlinked).
+  `--ug 0.003 --sym-face 5 --no-inlet`), `boiling-zgr-switch` (the box with the gas at 1 m/s, `--ug 1.0`), `solid-melt` and `solid-melt-rhos` (the box with the gas at 3000 K, `--tg 3000`), `inj-dsdegen` (the box with geometric rows along y, `--ygrade 2`), `beckstead-air` (the box with air at 300 K and 0.04 m/s, one diameter per inlet cell, `--tg 300 --ug 0.04 --rp-sweep`) `wall-flux` (the box in 15 cells along x, its outlet face a dispersed-phase wall, `--no-inlet --outlet-code 301 --nx 15`), `wall-laws` (`wall-flux`'s `INPUT/`, symlinked) and `inner-loop-cap` (the box with its right half's cells 1000 times its left half's, `--kv 1.0 --rp 1.0e-6 --stretch 1000`).
 
 `khrt-e2e-rt` and `khrt-e2e-threads` are further oracles on `khrt-e2e`'s run (the second at 1/2/4
 threads) and add no fixture, nor do the four `threads-*` gates (each runs its parent's inputs in private directories); `khrt-stress` differs from `khrt-e2e` only in `mShedLim`, `scatter-placement` from `khrt-stress` only in its output keys, and the twins
@@ -241,6 +241,7 @@ oracle possible.
 | **solver-fail-consumed-m4** | infrastructure (integration exit contract, model 4) | as `solver-fail-consumed` (its `check.py`) with `breakup=Reitz-Diawakar` added: the `err < 0` exit hands a model-4 parcel's remnant to the gas (resid 2.941e-7), every `bc` = 0. RED with model 4 not a consumption model on that exit: Σ`wdot` = 0, resid 1.0 | as `tc-hexadecane` | as `solver-fail-consumed` + `breakup=Reitz-Diawakar` (σ 0.072, μ_l 1e-3) |
 | **solver-fail-midway** | infrastructure (integration exit contract, Eulerian deposit) | *conservation* — the Eulerian mass Σ ρ_p V_cell (V_cell from `euler1.tec`'s nodes) against the exit records' Σ ṁ t (model 1 deposits ṁ over the residence): F1 every parcel fails once in the first cell past a gas velocity jump, after finalized segments (25 `Run_ODESolver err=` lines, exits at 0.075 ≤ x < 0.0775 m, t > 0), F1' each exit record past its parcel's entry into that cell, by more than 1e-12 s (the failing call's accepted steps kept; measured 2.8667e-5 s), F2 the balance within 1e-5 (the E13.6 `mdot` column: 8e-7; measured −2.9e-7), F3 the run ends normally; L1 (`tools/lastrow.py`) a sibling without row keys and with `out-time` (`ref-last/`): each trajectory its injection row and a last row at its exit record's state (F12.6 half-quantum, ES16.8 half-unit), once. RED with the revert to the last accepted step taken out: F1' on all 25 parcels (each exit record at its cell-entry time); L1 on a binary from before the parcel rule: every trajectory ends at its cell entry (25 parcels); with the last row left out: the injection row alone | own `solfile.tec` (`make_box_case.py --kv 1.0 --u2 5 --rp 1.0e-6`: U = 10 m/s up to x = 0.075 m, 5 m/s beyond) | inlet-face 401, κ_v = 1, d = 2 µm, ρ_p = 2950; Stokes; `max-steps-ode = 60`; `out-file = ALL`, `out-time`, `mollify = off` |
 | **solver-fail-refine** | infrastructure (integration exit contract, Eulerian deposit and source) | *conservation* — a solver failure on a refinement call (the call that integrates a cut step again after a crossing) ends the parcel at its last accepted step: R0 25 `Run_ODESolver err=` lines, one per parcel, at `time=` > 0; R1 every exit record inside the first cell (X ≤ 0.0025 m + 0.5e-6; measured 0.002497); R2 Σ ρ_p V_cell = Σ ṁ t of the exit records within 1e-5 (measured −2.9e-7); R3 a sibling `ref-g/` with `body-accel = 0.1 0.0 0.0`, `max-steps-ode = 7` and the ODE tolerances at 1e-6: Σ Fx (`source.tec`) = Σ ṁ (u_inj − \|u\|) + Σ ṁ g t, the drag reaction plus the impulse over the residence, within the prints (0.1235 of the impulse; measured +1.54e-2); R4 both runs end normally. RED with the revert kept for model 8 alone: R1 (X = 0.002502 m, the cut step's end past the face), R2 −1.000, R3 −9.840e-1 of the impulse; with the reverted path zeroed: R2 −1.000 alone | `solver-fail-midway`'s `INPUT/` (symlinked) | as `solver-fail-midway` with `max-steps-ode = 10` |
+| **inner-loop-cap** | infrastructure (integration exit contract, Eulerian deposit) | *conservation* — the inner loop's cap (`[IGLOO-ODE] max-inner-iter = 5`) reached by every parcel on the first cell past a mesh stretch: C0 one `Inner loop >` line per parcel, every exit record code 0 at X ≥ x_entry − 5e-7 m, each trajectory its injection row and the 30 left-half crossings at k Δx₁ (F12.6 half-quantum + eps), the 31st at x_entry = 30 Δx₁ = 1.4985015e-4 m, the run ends normally; C3 Σ ρ_p V_cell = Σ ṁ t_entry of the exit records within 1e-5 (the capped segment deposits nothing; measured −2.955e-7). RED: the key at 10 (no cap, 25 outlet exits: C0); the segment-start reset of the moments taken out: C3 +3.333e-2 (the capped segment deposits the previous one's moments again) | own `solfile.tec` (`make_box_case.py --kv 1.0 --rp 1.0e-6 --stretch 1000`: 30 cells of 4.995e-6 m, then 30 of 4.995e-3 m) | inlet-face 401, κ_v = 1, d = 2 µm, ρ_p = 2950; Stokes; `max-inner-iter = 5`; `out-file = ALL`, `out-time`, `mollify = off` |
 | **stuck-cell** | — (guard) | *integration exit contract*: parcels at rest in a gas at rest (402 inlet with \|v\| = 0) never leave their cell; S1 one `stuck in cell` line per parcel (25, the IDs of the exit records), S2 25 exit records at the injection points, S3 no other guard (no net progress, inner loop, outer maxIter, non-finite), S4 the run ends normally; L1 (`tools/lastrow.py`) a sibling without row keys and with `out-time` (`ref-last/`): each trajectory its injection row and a last row at its exit record's state, once. RED with the residency guard disabled: the zero-progress guard ends every parcel (S1, S3); L1 on a binary from before the parcel rule or with the last row left out: the injection row alone (25 parcels) | own `solfile.tec` (`make_box_case.py --ug 0`: the shared box's mesh, the gas at rest), own `bc.txt` (`make_fixture.py`) | inlet-face 402 at rest on every cell (gp 1.0, Tp 600 K); outlet + walls |
 | **plane-back** | — (Stokes drag under a body force, closed form) | *closed form + output contract* — drag-stokes's parcel thrown at 10 m/s into the gas at rest under `body-accel` −1000 m/s² along x turns at x* = 9.2745 mm and leaves through the inlet face at 11.285 ms: B0 every trajectory row on u(t) = (u₀ + gτ)e^(−t/τ) − gτ and its x(t) (200 rows, 0.739 of the print budget); B1 per parcel and plane `dir` +1 then −1 (150 records); B2 per plane Σ dir·ṁ = 0; B3 each record bracketed by its leg's rows in x, t and U, the sign of U its `dir`; B4 25 exits with code 402 at x = 0, no guard line. RED with the backward branch of the crossing rule removed: B1 75 records, B2 the whole 2.5e-3 kg/s through each plane | `stuck-cell`'s `solfile.tec` (symlinked), own `bc.txt` (`make_fixture.py`) | inlet-face 402 on every cell (gp 1.0, \|v\| 10 m/s, Tp 600 K); `body-accel = -1000.0 0.0 0.0`; `plane-x = 0.00125 0.0025 0.00625`; `out-time = on` |
 | **sym-plane-skate** | — (guard, census control) | *integration exit contract at a symmetry plane*: twelve streams launched from z = 1e-4 m toward a 300 plane, 0.1 and 50 m/s at 1° and 10°, gas order 1; C1 no give-up guard and no solver failure (no `stuck in cell`, `no net progress`, `Run_ODESolver err=`, inner-loop or outer cap, non-finite line), the run ends normally; C2 twelve exits, all at x = 0.15; C3 the 50 m/s, 1° streams slide on the plane (grazing projection, z = 1e-6 m), the 50 m/s, 10° streams leave reflected (z = 5.9e-3 m), the 0.1 m/s streams stop short of it. RED: the plane made an exit, 6 of 12 leave at z = 0 (C2, C3); the residency guard at one segment, 12 `stuck in cell` (C1) | shared box (`solfile.tec` symlinked); own `bc.txt` (`make_box_case.py --sym-face 5 --no-inlet`) | no inlet: twelve `[IGLOO-BC]` assigned streams, d = 11.89 µm, ρ_p = 2950; face 5 symmetry (300), outlet + walls; Schiller-Naumann, SDIRK4 at the default tolerances, `out-time` |
@@ -320,6 +321,7 @@ oracle possible.
 | **refuse-gas-order** | — (kind 8, refusal) | *setup refusal*: `gas-order = 3` → `IGLOO: gas-order must be 1 or 2` (RED on a reader without the check: it silently runs as 2, with a warning that cannot fire) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-out-file** | — (kind 8, refusal) | *setup refusal*: `out-file = nonsense` → `IGLOO: unknown out-file token` (RED on a reader without the check: it runs as both with a warning, and the registry default `E+S` parses as `E`) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-ode-solver** | — (kind 8, refusal) | *setup refusal*: `ode-solver = H-radau5` → `IGLOO: unknown ode-solver` (RED on a reader without the check: a plain `stop`) | as `drag-stokes` | as `drag-stokes` |
+| **refuse-max-inner-iter** | — (kind 8, refusal) | *setup refusal*: `[IGLOO-ODE] max-inner-iter = 0` → `IGLOO: max-inner-iter must be at least 1` (RED on a reader without the check: exit 0, every parcel capped at its first segment, 25 `Inner loop >` lines) | as `drag-stokes` | as `drag-stokes` |
 | **refuse-boiling-temperature-both** | — (kind 8, refusal) | *setup refusal*: `boiling-temperature` and its alias `Tboil` both given → `give boiling-temperature or its alias Tboil, not both` (RED on a reader without the alias: the second name is ignored and the run completes) | as `tc-box` | as `tc-box` |
 | **refuse-solid-hfus** | — (kind 8, refusal) | *setup refusal*: `solidification=on` without `h-fus` → `solidification=on requires h-fus > 0` (RED on a solver without the solidification model: its `solidification=on parsed but not implemented yet` stop) | as `drag-stokes` | own phase.txt |
 | **refuse-solid-cpsolid** | — (kind 8, refusal) | *setup refusal*: without `cp-solid` → `solidification=on requires cp-solid > 0` | as `drag-stokes` | own phase.txt |
@@ -507,12 +509,12 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-290 `e2e`-labelled + 57 `unit`-labelled + the optional `vortex-cloud-3way` = **348 CTest entries** in a
-serial build (+28 `mpi-*` under `USE_MPI`, 376), all green (counted from `tests/CMakeLists.txt`). The 290
-`e2e` entries are the 169 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+292 `e2e`-labelled + 57 `unit`-labelled + the optional `vortex-cloud-3way` = **350 CTest entries** in a
+serial build (+28 `mpi-*` under `USE_MPI`, 378), all green (counted from `tests/CMakeLists.txt`). The 292
+`e2e` entries are the 170 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the five `threads-*` thread-count gates, `window-khrt-e2e` (the particle files' ordered window under a
-64 KiB budget), the fifteen `repeat-*` two-sweep gates, the ninety-six `refuse-*` setup-refusal gates, `vv-order`
+64 KiB budget), the fifteen `repeat-*` two-sweep gates, the ninety-seven `refuse-*` setup-refusal gates, `vv-order`
 (the record-order independence of thirteen V&V figures) and `check-order` (of nine gate printouts). The
 57 `unit` entries are 46 compiled unit tests, the property-table reader on its four fixtures
 (`test_properties_reader`, `-two-material`, `-atlas-water`, `-sigma-mu`), `self_test`, `registry-docs`, `exe-per-tree`,
