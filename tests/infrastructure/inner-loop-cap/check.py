@@ -19,8 +19,10 @@ Gates
   C2  the Eulerian mass, sum over cells of rho_p * V_cell (V_cell from euler1.tec's nodes), equals the exit records'
       sum of mdot * t within TOL: the capped segment is deposited up to its last accepted step
   C4  ref-consumed/ (a sibling run with the IGLOO_EXE executable: this box with 30 um drops at kt = 0.5 and
-      evaporation = d2-law, capped alike): sum(wdot) over source.tec equals the injected flow
-      25 * krho/(1 - krho) * rho_g * u_g * A within TOL4: a consuming parcel's remnant reaches the gas at the cap
+      evaporation = d2-law, capped alike): sum(wdot) over source.tec equals the injected flow within TOL4: a
+      consuming parcel's remnant reaches the gas at the cap. The injected flow is read from the sibling's inputs:
+      over its 25 inlet (401) records, field 1 (krho/(1 - krho)) times rho_g * u_g * the cell's inlet face area
+      (INPUT/solfile.tec's nodes)
 """
 import os
 import re
@@ -47,9 +49,7 @@ T_HALF = 5.0e-9          # half the ES16.8 unit of t, relative
 EPS = 1.0e-8             # a finalized crossing ends within eps of the face
 # the E13.6 mdot column bounds the exit side at 8e-7 relative (half a unit of its sixth digit)
 TOL = 1.0e-5
-# ref-consumed: the injected flow from the inputs (krho of the inlet, the box's rho_g, u_g, 1 cm x 1 cm inlet cells)
-KRHO, RHO_G, AREA = 0.34, 1.2, 1.0e-4
-MDOT_IN = N_PARCELS * KRHO / (1.0 - KRHO) * RHO_G * U_G * AREA
+RHO_G = 1.2              # the box's gas density [kg/m^3]
 # source.tec prints E23.15: the closure's round-off
 TOL4 = 1.0e-10
 REF_PROPS = """
@@ -135,6 +135,33 @@ def load_wdot(path):
     return [float(v) for v in vals[3 * nnod:3 * nnod + ncel]]
 
 
+def injected_flow(d):
+    """The injected flow of the run in d from its inputs: over the 401 records of INPUT/bc.txt, field 1
+    (krho/(1 - krho_tot)) times rho_g * u_g * the area of the cell's face 1 (i = 1) from INPUT/solfile.tec's nodes."""
+    lines = open(os.path.join(d, "INPUT", "solfile.tec")).read().splitlines()
+    zi = next(n for n, l in enumerate(lines) if l.strip().upper().startswith("ZONE"))
+    I, J, K = (int(re.search(r"\b%s=(\d+)" % a, lines[zi]).group(1)) for a in "IJK")
+    nn = I * J * K
+    toks = [t for l in lines[zi + 1:] for t in l.split() if re.match(r"^[-+0-9.]", t)]
+    vals = [float(t) for t in toks[:3 * nn]]
+    y, z = vals[nn:2 * nn], vals[2 * nn:3 * nn]
+    node = lambda q, j, k: q[I * (j + J * k)]  # noqa: E731
+    bc = [l.split() for l in open(os.path.join(d, "INPUT", "bc.txt")).read().splitlines() if l.strip()]
+    flow, n401, i = 0.0, 0, 0
+    while i < len(bc):
+        h = bc[i]
+        code = int(h[5])
+        if code == 401:
+            if h[4] != "1":
+                raise ValueError(f"{d}/INPUT/bc.txt: a 401 record off face 1: {' '.join(h)}")
+            j, k = int(h[2]) - 1, int(h[3]) - 1
+            area = (node(y, j + 1, k) - node(y, j, k)) * (node(z, j, k + 1) - node(z, j, k))
+            flow += float(bc[i + 1][0]) * RHO_G * U_G * area
+            n401 += 1
+        i += 2 if code in (101, 201, 401, 402, 403) else 1
+    return flow, n401
+
+
 def ref_consumed():
     """The sibling run: this case's input with d2-law evaporation, 30 um drops at kt = 0.5; returns (rc, dir)."""
     d = os.path.join(HERE, "ref-consumed")
@@ -190,9 +217,12 @@ def main():
         rc |= fail(f"C4 sibling run (ref-consumed) exit {rcr}, {ncap} 'Inner loop >' lines (want {N_PARCELS})")
     else:
         s = sum(load_wdot(os.path.join(d, "OUTPUT", "source.tec")))
-        rel4 = (s - MDOT_IN) / MDOT_IN
-        print(f"   ref-consumed: {ncap} parcels capped; sum(wdot) {s:.15e} kg/s against the injected {MDOT_IN:.15e} "
-              f"kg/s; relative {rel4:+.3e} (tol {TOL4:.0e})")
+        mdot_in, n401 = injected_flow(d)
+        rel4 = (s - mdot_in) / mdot_in
+        print(f"   ref-consumed: {ncap} parcels capped; sum(wdot) {s:.15e} kg/s against the injected {mdot_in:.15e} "
+              f"kg/s ({n401} inlet cells); relative {rel4:+.3e} (tol {TOL4:.0e})")
+        if n401 != N_PARCELS:
+            rc |= fail(f"C4 {n401} inlet (401) records in ref-consumed/INPUT/bc.txt, {N_PARCELS} expected")
         if abs(rel4) > TOL4:
             rc |= fail(f"C4 the gas receives {rel4:+.3e} of the injected flow: a capped drop's remnant is lost")
         else:

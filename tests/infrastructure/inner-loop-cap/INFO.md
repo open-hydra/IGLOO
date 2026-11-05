@@ -32,10 +32,11 @@ crossing: entry at x_entry = 30 Δx₁ = 1.4985015e-4 m. `out-file = ALL`, `out-
 - C4 `ref-consumed/`: `check.py` runs a sibling with the `IGLOO_EXE` executable — this box with 30 µm drops at
   κ_t = 0.5 (`make_box_case.py --kv 1.0 --kt 0.5 --rp 1.5e-5 --stretch 1000`) and `evaporation = d2-law` (`d2law`'s
   `[IGLOO-Properties]`), capped alike (25 `Inner loop >` lines, about 5 % of each drop's mass evaporated at the
-  cap): Σ wdot over `source.tec` equals the injected flow 25 κ_ρ/(1 − κ_ρ) ρ_g u_g A (inputs only) within 1e-10
-  (`source.tec` prints E23.15). Measured +1.9e-15.
+  cap): Σ wdot over `source.tec` equals the injected flow Σ κ_ρ/(1 − κ_ρ) ρ_g u_g A over the 25 inlet cells, read
+  from the sibling's inputs (field 1 of its 401 records, each cell's face area from its `solfile.tec`), within
+  1e-10 (`source.tec` prints E23.15). Measured +2.1e-15.
 
-**RED.** The cap's old exit (marked gone with the cut step's end and the latched time, no revert): C1 fails on
+**RED.** The cap without the revert (marked gone with the cut step's end and the latched time): C1 fails on
 every trajectory (32 rows: the cut step's stale crossing relocates the parcel and writes a row at X = 0.005145 m;
 the exit record's |X − u_g t|, the last cut step, stays below the print), C2 −9.709e-1 (the capped segment
 deposits nothing), C4 −9.984e-1 (no remnant reaches the gas). The `consumed` hand-off taken out of the revert: C4
@@ -44,5 +45,5 @@ deposits nothing), C4 −9.984e-1 (no remnant reaches the gas). The `consumed` h
 **The segment-start reset.** `integrate` zeroes `part%deltaL`, `part%Tstay` and `part%intE` at the start of every
 segment; every exit that deposits (the finalize, the revert of a solver failure, a non-finite state or the cap)
 sets them first. Proven unread by poisoning: a build whose reset writes a quiet NaN into the three leaves every e2e
-case's `OUTPUT/` byte-identical at one thread. The same poison on the cap's old exit puts 50 NaN fields into this
-case's `euler1.tec`: the cap was the one exit that read it.
+case's `OUTPUT/` byte-identical at one thread. The same poison on the cap without the revert puts 50 NaN fields into
+this case's `euler1.tec`: that exit was the one that read it.

@@ -1478,8 +1478,8 @@ igloo_e2e_case(solver-fail-refine infrastructure/solver-fail-refine "e2e;infrast
 # every parcel finalizes its 30 left crossings (4 solver calls each) and is capped on the first right cell (7 calls).
 # C0 the cap once per parcel there; C1 each parcel ends at its last accepted step, one state in that cell, its
 # trajectory ending at the cell entry; C2 the Eulerian mass equals the exit records' mdot*t within 1e-5; C4 a sibling of
-# evaporating drops (ref-consumed/) hands the gas the whole injected flow within 1e-10. RED with the cap's old exit (no
-# revert): C1 32 rows, C2 -9.709e-1, C4 -9.984e-1; without the consumed hand-off: C4 -9.455e-1.
+# evaporating drops (ref-consumed/) hands the gas the whole injected flow within 1e-10. RED with the cap without the
+# revert: C1 32 rows, C2 -9.709e-1, C4 -9.984e-1; without the consumed hand-off: C4 -9.455e-1.
 igloo_e2e_case(inner-loop-cap infrastructure/inner-loop-cap "e2e;infrastructure;exits")
 # stuck-cell: parcels at rest in a gas at rest (402 inlet, |v| = 0): the residency guard ends each one once, at its
 # injection point, before the zero-progress guard or the outer cap. L1: a sibling without row keys (ref-last/) ends

@@ -942,7 +942,7 @@ Several members of this category have **no figure** and so no section below:
 the edges of the inlet cells), `axis-200` and `wedge-fold` (the
 axis face and the sector fold on the MOSE nozzle field), `two-mat` (two materials),
 `two-fam-bc` (one inlet table per family in `bc.txt`), `two-fam-bc-2blk` (the same on two blocks joined by
-a 101 connection), `two-fam-bc-2blk-mollify` (the same with the field mollifier on), `chimera-2blk` (two overlapping blocks joined by chimera faces), `chimera-2blk-mollify` and `chimera-2blk-shift-mollify` (the same with the field mollifier on, the second with block 2 shifted by half a cell), the three `two-fam-bc-2blk-ord2-dual*` cases and `swirl-wedge-2blk-ord2-dual` (the gas-order-2 dual across a 101 face), `periodic-2d-ord2-dual` (the same across a periodic (201) face, on a box of two periods held to itself one period away), `varcp-tmin` (a varying-$c_p$ table that ends below the parcels' temperature), `tab-wedge-slip` (the breakup event's slip at the parcel's azimuth on a gas-order-1 wedge) and the
+a 101 connection), `two-fam-bc-2blk-mollify` (the same with the field mollifier on), `chimera-2blk` (two overlapping blocks joined by chimera faces), `chimera-2blk-mollify` and `chimera-2blk-shift-mollify` (the same with the field mollifier on, the second with block 2 shifted by half a cell), the three `two-fam-bc-2blk-ord2-dual*` cases and `swirl-wedge-2blk-ord2-dual` (the gas-order-2 dual across a 101 face), `periodic-2d-ord2-dual` (the same across a periodic (201) face, on a box of two periods held to itself one period away), `varcp-tmin` (a varying-$c_p$ table that ends below the parcels' temperature) and the
 `refusals/*` gates —
 behavioral cases with no reference curve, summarised in the table on the
 [Overview](index.md).  This page is organized around comparison figures;
@@ -1070,6 +1070,22 @@ injection column off by $+33$ % / $-37$ % while the tiling total stays unchanged
 
 **Result:** 79 folds, no multi-sector fold; velocity residual $\le 7\cdot10^{-6}$;
 cell mass within $4\cdot10^{-3}$; tiling total 1.000044.
+
+### tab-wedge-slip
+
+The breakup event's slip on an axisymmetric wedge at gas order 1, where the gas handed to the parcel is the meridian
+frame's cell value: the ODE and the event model (TAB, ETAB, KH-RT) must both take the gas velocity rotated to the
+parcel's azimuth.  Three rotated copies of one 200 µm water drop (azimuths −0.45°, 0 and +0.45° on a 1° annular wedge
+with $U = 100$ m/s and the solid-body swirl $W = 200\,y$ m/s), each with a 67.1 m/s slip, break up once under TAB at
+$t_{ev} \approx 9.45\times10^{-5}$ s inside their first cell.  The exact dynamics is rotation-equivariant, so the three
+break up at one time; the gate is the off-centre pair's difference, within $5\times10^{-8}$ s (2.5 times the largest
+measured over solver tolerances, gas orders and compilers).  A gas-order-2 sibling, whose sampled velocity is already
+rotated, is the control.
+
+**Result:** $|t_{ev}(+0.45°) - t_{ev}(-0.45°)|$ = 3.8e-9 s at gas order 1 and 5.3e-10 s at gas order 2.  The slip
+formed from the unrotated cell value puts the pair 5.17e-7 s apart, 10 times the tolerance, and leaves the gas-order-2
+control unchanged.  The centre copy's offset from the pair's mean is printed, not gated: between −3.2e-8 and +2.1e-8 s,
+its sign changing with the solver tolerance.
 
 ### periodic-y
 
