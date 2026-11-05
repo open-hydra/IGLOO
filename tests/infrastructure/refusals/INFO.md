@@ -2,7 +2,8 @@
 
 **Purpose.** IGLOO refuses several inputs with an `error stop` at a single choke point in
 `read_cdp_properties` (`src/lib/IO.f90`) — a model its material cannot carry (`liquid-conduction = P2T`
-on a material that does not evaporate or has no `k-liq` or `mu-liq`, `boiling = ZGR` on a material that
+on a material that does not evaporate or has neither `k-liq` nor a `Conductivity` column, or neither `mu-liq` nor a
+`Viscosity` column, `boiling = ZGR` on a material that
 does not evaporate), a misleading model combination
 (`interface = LK` with an evaporation model outside CEM, CEM-B, ASM, TC, where LK is inert), and
 a `properties.dat` that does not match `phase.txt` (zone count, temperature range). Without a
@@ -28,6 +29,8 @@ output written).
 | `refuse-p2t-muliq` | as `refuse-p2t-kliq` with its own `INPUT/phase.txt` (`A 1 k-liq=0.6`), the other three files symlinked | `liquid-conduction=P2T requires mu-liq > 0` |
 | `refuse-p2t-mu-two` | `breakup/khrt-evap-frozen` (Reitz-KHRT, `[IGLOO-Properties] mu = 1.0e-3`) + `liquid-conduction = P2T`, its own `INPUT/phase.txt` (`A 1 k-liq=0.6 mu-liq=1.0e-3`), `khrt-e2e`'s other three files symlinked: a breaking material has one liquid viscosity, the breakup one | `liquid-conduction=P2T with breakup takes the breakup viscosity` |
 | `refuse-p2t-mu-zero` | as `refuse-p2t-mu-two` with `A 1 k-liq=0.6` and `mu = 0.0` | `requires mu > 0` (`IGLOO: Breakup requires mu > 0: …`) |
+| `refuse-kliq-column-both` | `evaporation/temp-relax-p2t` (`A 1 k-liq=0.026 mu-liq=1.0e-3`) with its own `properties.dat`: the drop's range (250..700 K) and a `Conductivity` column k_l = 0.026/450 T (`bc.txt`, `solfile.tec` symlinked to `temp-relax`'s) | `IGLOO: k-liq given both on the material line and as a properties.dat Conductivity column` |
+| `refuse-muliq-column-both` | as `refuse-kliq-column-both` with a `Viscosity` column of 1.0e-3 Pa s instead | `IGLOO: mu-liq given both on the material line and as a properties.dat Viscosity column` |
 | `refuse-zgr` | `INPUT/` symlinked; `[IGLOO-Models] boiling = ZGR` on a material that does not evaporate | `boiling=ZGR requires an evaporating material` |
 | `refuse-lk-d2law` | `INPUT/` symlinked; `evaporation = d2-law` + `interface = LK` (the `interface = LK` guard fires before the `[IGLOO-Properties]` requirements) | `interface=LK needs evaporation in` |
 | `refuse-properties-zones` | own `INPUT/`: drag-stokes's `bc.txt`/`solfile.tec`, two-mat's `phase.txt` (A, B), the ONE-zone `common/properties.dat`; `input.ini` also carries two-mat's `[GPB-Phase2]` | `zone count /= number of materials` |
@@ -95,6 +98,8 @@ output written).
 | `refuse-sigma-nm` | `tab-e2e` with `sigma = 0.072 0.072`, `mu = 1.0e-3 1.0e-3` for its one material | `sigma: size /= number of materials` |
 | `refuse-sigma-both` | `pe-sigma-table` (`INPUT/` symlinked: its `Sigma` and `Viscosity` columns) with `[IGLOO-Properties] sigma = 0.072` | `IGLOO: sigma given both in [IGLOO-Properties] and as a properties.dat column` |
 | `refuse-sigma-column` | `pe-sigma-table`'s case with its own `properties.dat`, the `Sigma` column at −0.01 N/m on the 320 K row (`bc.txt`, `solfile.tec` symlinked to `pilch-erdman-e2e`'s) | `Sigma column: a value that is not positive` |
+| `refuse-emissivity-column-both` | `standard/rad-cool` (`[IGLOO-Properties] emissivity = 0.8`) with its own `properties.dat`: the particle's range (500..2500 K) and an `Emissivity` column ε = T/3000 (`bc.txt`, `solfile.tec` symlinked to `rad-cool`'s targets) | `IGLOO: emissivity given both in [IGLOO-Properties] and as a properties.dat column` |
+| `refuse-emissivity-column` | `standard/rad-cool` without `[IGLOO-Properties] emissivity`, its own `properties.dat` as above with the `Emissivity` column 0 at 1000 K | `Emissivity column: zero on some rows and not on others` |
 | `refuse-bc-legacy` | own `INPUT/bc.txt`: `drag-stokes`'s with every code in the legacy single-digit schema (401 → 4, 400 → 1; `python3 make_bc_refusals.py`, run from this directory) | `IGLOO: bc.txt line is not six integers with a 3-digit code` |
 | `refuse-bc-empty-payload` | own `INPUT/bc.txt`: `drag-stokes`'s with the first inlet payload line empty (`make_bc_refusals.py`) | `IGLOO: bc.txt inlet payload line is empty` |
 | `refuse-body-accel` | `body-force` (`INPUT/` symlinked) with `body-accel = 0.0 -200.0` | `body-accel: expected 3 values (gx gy gz)` |
@@ -106,7 +111,7 @@ output written).
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All eighty-two exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All eighty-six exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
@@ -114,7 +119,10 @@ line) — neither is their payload. **The two vapour-column cases are RED**
 on a reader that does not know the `Lv`, `Mv`, `Cpv` columns: both stop at `Evaporation requires Mv` (exit 128,
 not their payload). **The two `Sigma` cases are RED** on a reader that does not know the `Sigma` and
 `Viscosity` columns: `refuse-sigma-both` stops at `Breakup requires mu` (its only key is `sigma`),
-`refuse-sigma-column` at `Breakup requires sigma` (exit 128, not their payload). **The ten size-distribution cases are
+`refuse-sigma-column` at `Breakup requires sigma` (exit 128, not their payload). **The four column cases
+(`refuse-kliq-column-both`, `refuse-muliq-column-both`, `refuse-emissivity-column-both`, `refuse-emissivity-column`) are
+RED** on a reader that does not know the `Conductivity` and `Emissivity` columns and reads `Viscosity` for a breaking
+material only: each runs to completion (exit 0, output written). **The ten size-distribution cases are
 RED** on a reader that splits the inlet line with a list-directed read: a path ends at its slash (`tables`,
 `INPUT`), so nine of them stop at `unsupported distribution law` with exit 1 and no payload, and the
 600-character line is cut to 512 characters and run as a Dirac (exit 0, output written). The six table

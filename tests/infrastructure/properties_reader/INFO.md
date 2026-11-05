@@ -3,10 +3,11 @@
 Pins the reader of `INPUT/<prefix>properties.dat` — `read_cdp_properties`, the PRODUCTION routine —
 on fixtures that no e2e case carries: a table that starts above 1 K, a `Psat` column, columns in
 another order, both enthalpy datums, two materials of which one is tabulated, the `Sigma` and
-`Viscosity` columns of a breaking material, and the file ATLAS GPB writes. `test_ini_pipeline` stops at `read_IGLOO_input`; this test drives the next reader.
+`Viscosity` columns of a breaking material, the `Conductivity`, `Viscosity` and `Emissivity` columns of a
+non-breaking P2T material, and the file ATLAS GPB writes. `test_ini_pipeline` stops at `read_IGLOO_input`; this test drives the next reader.
 
-One executable, four ctest entries, one working directory each (the reader loads `input.ini` from
-the working directory, and the four fixtures need different `[IGLOO-Properties]`):
+One executable, five ctest entries, one working directory each (the reader loads `input.ini` from
+the working directory, and the five fixtures need different `[IGLOO-Properties]`):
 
 | ctest | directory | `[IGLOO-Properties]` |
 |---|---|---|
@@ -14,6 +15,7 @@ the working directory, and the four fixtures need different `[IGLOO-Properties]`
 | `test_properties_reader-two-material` | `two-material/` | the same, one value per material |
 | `test_properties_reader-atlas-water` | `atlas-water/` | mhb98-water's Tboil 373.15 K, Le, Yinf (evaporation CEM); `Lv`, `Mv`, `cpv` from the table's columns |
 | `test_properties_reader-sigma-mu` | `sigma-mu/` | two materials that break (TAB): `sigma = 0 0.05`, `mu = 0 1e-3` (0 for zone A, which has the columns) |
+| `test_properties_reader-columns` | `columns/` | two evaporating materials (TC), one value per material; `emissivity = 0 0.5` (0 for zone A, which has the column) |
 
 ## Legs (`test_properties_reader.f90`)
 
@@ -27,6 +29,7 @@ the working directory, and the four fixtures need different `[IGLOO-Properties]`
 | PR9 | `nm-`, two zones | zone A tabulated (`psat(560 K) = 1 atm`, `psat(1 K) = 0` by underflow); zone B all zero → no table |
 | PR10 | `atlas-` | `H2O(L)` on `[280, 380]`, cp 4184, rho 997, absolute datum `hOff = -17112459.6`, psat(300 K) = `3.533623e+03` as written |
 | PR-V1 | `atlas-` | `Lv`, `Mv`, `Cpv` located by name: both tables built, `Mv = 18.015` from its column; `Lv` and `cpv` through `tableValue` at 250, 298.15, 300, 337.5, 373.15 and 400 K equal to the file's own rows read by the test (list-directed) by the same formula — exact on a node and outside the table, `4 ε` between nodes; the scalar `Lv` = `Lv(298.15 K)` |
+| PR-C2 | `kc-`, two zones, T 280..380 | zone A (`A 1 liquid-conduction=P2T`, no `k-liq`, no `mu-liq`, no breakup): its `Conductivity = 0.1 + 1e-4 T`, `Viscosity = 3e-3 exp(−(T − 280)/100)` and `Emissivity = 0.5 + 0.002 (T − 280)` columns built on `[280, 380]`, bitwise equal to the file's rows read by the test (list-directed), the `Emissivity` row of 1.2 at 300 K at exactly 1 and every other row unchanged; zone B (ITC) all zero: no tables, no flags, `emissivity = 0.5` from `[IGLOO-Properties]` |
 | PR-S1 | `sm-`, two zones, T 270..370 | zone A's `Sigma = 0.036 + 1e-3 (T − 300)` and `Viscosity = 0.05 exp(−(T − 300)/10)`: both tables built on `[270, 370]`, bitwise equal to the file's rows read by the test (list-directed) at the 101 nodes; through `tableValue` the end nodes at 200 K and 400 K, NaN at a NaN temperature; zone B all zero: no tables, `sigma = 0.05` and `mu = 1e-3` from `[IGLOO-Properties]` |
 
 The checks behind the reader (`classify_table_tokens`, `scan_rows`, `check_table_nodes`,
@@ -43,6 +46,7 @@ synthetic input:
 | PR-V2 | `validate_vapour_columns` | every code once on columns beside PR4's Psat curve (`Lv·Mv/Ru` = its 5000 K slope): OK, all zero ABSENT, a NaN NONFINITE, `Cpv` zero on three rows PARTIAL, `Cpv` negative NONPOSITIVE, `Mv` not constant MV_VARIES, no Psat column WITHOUT_PSAT, `Lv` in kJ/kg CC_MISMATCH; with the `Mv` column absent the slope takes `MvKey` (18 accepted, 18/2.5 refused) |
 | PR-S2 | `validate_positive_column` | every code once, in precedence order: a positive column OK, all zero ABSENT, a NaN beside a zero and a negative value NONFINITE, a zero among non-zero rows beside a negative value PARTIAL, a negative value NONPOSITIVE |
 | PR5 | `check_table_nodes` | 1e-7 K off the nodes accepted; a uniform 0.4 K offset and a missing node refused; one row, a NaN, a node below 0 K |
+| PR-C1 | `classify_table_tokens` | `Emissivity` and `Conductivity` located by name through the optional indices; each named twice: a name twice, with and without the optional arguments; the 4-column header with them: 0 |
 | PR8 | `classify_table_tokens` | the 4-column header; aliases in another order (`Psat` first, `enthalpy_abs`); both enthalpy names; a name twice; `Temperature` not first; no Cp / Density / enthalpy; `VISCOSITY` and `sigma` located by name (absent: 0); `Sigma` with `SIGMA`, `viscosity` with `Viscosity`: a name twice |
 | PR11 | `check_table_columns` | `h = cp*T` relative; an offset absolute (accepted) and relative (refused); a row off `cp*T`; `h` not increasing; `rho = 0`; `cp < 0`; a NaN; a varying cp with `h` its trapezoid sum (accepted) and its right Riemann sum (refused) |
 | PR12 | `tableValue` | linear between the nodes; the end values outside; `tab(Tmax)` at `Tmax`; NaN for a NaN temperature |
@@ -76,6 +80,10 @@ PR8 and PR-S2 are RED on one mutation each: the `Sigma` names dropped from `clas
 (PR8's two `Sigma` legs fail, and the `sigma-mu` reader stops at setup, `Breakup requires sigma > 0`:
 zone A's key is 0), the sigma table stored from the `Viscosity` column (PR-S1's bitwise and
 end-value legs), and each test of `validate_positive_column` removed (its own PR-S2 leg).
+
+PR-C1 is RED with the two names dropped from `classify_table_tokens`: five of its six assertions fail (the
+indices 0, no duplicate seen). PR-C2 is RED on the reader without the three columns: the `columns` reader stops at
+setup (`liquid-conduction=P2T requires k-liq > 0`: zone A's material line carries no `k-liq`).
 
 `abs-` keeps a constant cp on purpose: the datum `hOff` and the relative-header check exist only for a
 constant-cp table, so a varying cp would let PR7 pass on any reader.

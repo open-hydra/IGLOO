@@ -14,9 +14,10 @@ contains
 
   !> Read the phase file (one line per material: "<name> <groups> [key=value ...]", the tokens being
   !  the per-material models ATLAS GPB writes from [GPB-Phase*]) and properties.dat (columns named by
-  !  its VARIABLES line: cp, rho, h, an optional Psat and its pair's Lv, Mv, Cpv, optional Sigma and
-  !  Viscosity); breakup/evaporation constants come from [IGLOO-Properties] (Lv, Mv, cpv, sigma, mu from
-  !  there or from their columns).
+  !  its VARIABLES line: cp, rho, h, an optional Psat and its pair's Lv, Mv, Cpv, optional Sigma,
+  !  Viscosity, Conductivity and Emissivity); breakup/evaporation constants come from [IGLOO-Properties]
+  !  (Lv, Mv, cpv, sigma, mu, emissivity from there or from their columns; k-liq, mu-liq from the material line
+  !  or from their columns).
   subroutine read_cdp_properties(prefix,material)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_variables,       only: nm, phaseChange, breakup_word, evaporation_word, &
@@ -47,9 +48,9 @@ contains
     character(len=512)     :: tablefile
     character(len=tok_len) :: tokens(ntok_max)
     integer                :: ntok, icp, irho, ih, ips, code, Ni, i0
-    integer                :: ilv, imv, icpv, isig, imu
+    integer                :: ilv, imv, icpv, isig, imu, ikl, ieps, nCut
     integer                :: nzone, nsize, ndata, ntrail, badline, nannounced(nzone_max), nrows(nzone_max)
-    logical                :: relative, found, exists
+    logical                :: relative, found, exists, given
     real(R8)               :: ratio
     real(R8), allocatable  :: colLv(:), colMv(:), colCpv(:), colPs(:)   !> a material's vapour columns, 0 if absent
     character(len=16)      :: vapNames
@@ -123,13 +124,9 @@ contains
       !> interface=LK requires a vapor-fraction-driven evaporation model
       if (material(i)%intfSelect == 1 .and. material(i)%evapSelect == 1) &
         error stop '[ERROR] interface=LK needs evaporation in {CEM,CEM-B,ASM,TC}; d2-law is BT-driven, LK inert'
-      !> liquid-conduction=P2T: an evaporating material, its liquid conductivity and one liquid viscosity
+      !> liquid-conduction=P2T: an evaporating material and one liquid viscosity (k_l and mu_l after the table)
       if (material(i)%liqSelect > 0 .and. material(i)%evapSelect == 0) &
         error stop '[ERROR] liquid-conduction=P2T requires an evaporating material'
-      if (material(i)%liqSelect > 0 .and. .not. material(i)%kLiq > 0._R8) &
-        error stop '[ERROR] liquid-conduction=P2T requires k-liq > 0'
-      if (material(i)%liqSelect > 0 .and. material(i)%brkupSelect == 0 .and. .not. material(i)%muLiq > 0._R8) &
-        error stop '[ERROR] liquid-conduction=P2T requires mu-liq > 0'
       if (material(i)%liqSelect > 0 .and. material(i)%brkupSelect > 0 .and. material(i)%muLiq > 0._R8) &
         error stop '[ERROR] liquid-conduction=P2T with breakup takes the breakup viscosity: remove mu-liq'
       !> boiling=ZGR: an evaporating material
@@ -163,7 +160,8 @@ contains
     if (.not. exists) call refuse_table(tablefile, 'no such file')
     call read_variables_line(tablefile, tokens, ntok, found)
     if (.not. found) call refuse_table(tablefile, 'no VARIABLES line')
-    call classify_table_tokens(tokens(1:ntok), icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
+    call classify_table_tokens(tokens(1:ntok), icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu, &
+                               ikl, ieps)
     if (code /= TAB_OK) call refuse_table(tablefile, table_reason(code))
     !> "Enthalpy" = relative (cp*T, or the SP-database integral), "Enthalpy_abs" = formation enthalpy included
     hDatum = merge('relative', 'absolute', relative)
@@ -268,16 +266,10 @@ contains
 
       !> sigma and mu of a breaking material: a non-zero Sigma/Viscosity column or the [IGLOO-Properties] entry
       if (mat%brkupSelect > 0) then
-        code = COL_ABSENT
-        if (isig > 0) code = validate_positive_column(blk%vars(isig,1:Ni,1,1))
-        if (code /= COL_OK .and. code /= COL_ABSENT) &
-          call refuse_table(tablefile, trim(zone_label(i, mat%matName))//'Sigma column: '//column_reason(code))
-        if (code == COL_OK) then
+        given = .false.
+        if (isig > 0) call read_positive_column(i, mat%matName, blk%vars(isig,1:Ni,1,1), 'Sigma', 'sigma', mat%sigTab, given)
+        if (given) then
           mat%sigVariable = .true.
-          allocate(mat%sigTab(Tmin:Tmax))
-          mat%sigTab(Tmin:Tmax) = blk%vars(isig,1:Ni,1,1)
-          write(*,'(A,I0,A,I0,A,I0,A)') '  >> [material ', i, '] sigma tabulated from properties.dat (', &
-                                        Tmin, '..', Tmax, ' K)'
           if (allocated(ini_sigma)) then
             if (ini_sigma(i) /= 0._R8) error stop 'IGLOO: sigma given both in [IGLOO-Properties] and as a properties.dat column'
           endif
@@ -286,16 +278,10 @@ contains
           if (.not. (mat%sigma > 0._R8)) &
             error stop 'IGLOO: Breakup requires sigma > 0: a Sigma column in properties.dat or [IGLOO-Properties] sigma'
         endif
-        code = COL_ABSENT
-        if (imu > 0) code = validate_positive_column(blk%vars(imu,1:Ni,1,1))
-        if (code /= COL_OK .and. code /= COL_ABSENT) &
-          call refuse_table(tablefile, trim(zone_label(i, mat%matName))//'Viscosity column: '//column_reason(code))
-        if (code == COL_OK) then
+        given = .false.
+        if (imu > 0) call read_positive_column(i, mat%matName, blk%vars(imu,1:Ni,1,1), 'Viscosity', 'mu', mat%mupTab, given)
+        if (given) then
           mat%mupVariable = .true.
-          allocate(mat%mupTab(Tmin:Tmax))
-          mat%mupTab(Tmin:Tmax) = blk%vars(imu,1:Ni,1,1)
-          write(*,'(A,I0,A,I0,A,I0,A)') '  >> [material ', i, '] mu tabulated from properties.dat (', &
-                                        Tmin, '..', Tmax, ' K)'
           if (allocated(ini_mu)) then
             if (ini_mu(i) /= 0._R8) error stop 'IGLOO: mu given both in [IGLOO-Properties] and as a properties.dat column'
           endif
@@ -303,6 +289,57 @@ contains
           if (allocated(ini_mu)) mat%mup = ini_mu(i)
           if (.not. (mat%mup > 0._R8)) &
             error stop 'IGLOO: Breakup requires mu > 0: a Viscosity column in properties.dat or [IGLOO-Properties] mu'
+        endif
+      endif
+
+      !> liquid-conduction=P2T: the liquid conductivity, a non-zero Conductivity column or the token k-liq
+      if (mat%liqSelect > 0) then
+        given = .false.
+        if (ikl > 0) call read_positive_column(i, mat%matName, blk%vars(ikl,1:Ni,1,1), 'Conductivity', 'k-liq', &
+                                               mat%klTab, given)
+        if (given) then
+          mat%klVariable = .true.
+          if (mat%kLiq /= 0._R8) &
+            error stop 'IGLOO: k-liq given both on the material line and as a properties.dat Conductivity column'
+        elseif (.not. mat%kLiq > 0._R8) then
+          error stop '[ERROR] liquid-conduction=P2T requires k-liq > 0 or a Conductivity column in properties.dat'
+        endif
+      elseif (ikl > 0) then
+        if (any(blk%vars(ikl,1:Ni,1,1) /= 0._R8)) write(*,'(A,I0,A)') '  >> [material ', i, &
+          '] Conductivity column not used: this material does not run liquid-conduction=P2T'
+      endif
+      !> the P2T liquid viscosity of a non-breaking material: a non-zero Viscosity column or the token mu-liq
+      if (mat%liqSelect > 0 .and. mat%brkupSelect == 0) then
+        given = .false.
+        if (imu > 0) call read_positive_column(i, mat%matName, blk%vars(imu,1:Ni,1,1), 'Viscosity', 'mu-liq', &
+                                               mat%mupTab, given)
+        if (given) then
+          mat%mupVariable = .true.
+          if (mat%muLiq /= 0._R8) &
+            error stop 'IGLOO: mu-liq given both on the material line and as a properties.dat Viscosity column'
+        elseif (.not. mat%muLiq > 0._R8) then
+          error stop '[ERROR] liquid-conduction=P2T requires mu-liq > 0 or a Viscosity column in properties.dat'
+        endif
+      elseif (mat%brkupSelect == 0 .and. imu > 0) then
+        if (any(blk%vars(imu,1:Ni,1,1) /= 0._R8)) write(*,'(A,I0,A)') '  >> [material ', i, &
+          '] Viscosity column not used: this material neither breaks nor runs liquid-conduction=P2T'
+      endif
+
+      !> the grey-body emissivity eps(T): a non-zero Emissivity column or [IGLOO-Properties] emissivity; rows above 1 cut
+      if (ieps > 0) then
+        given = .false.
+        call read_positive_column(i, mat%matName, blk%vars(ieps,1:Ni,1,1), 'Emissivity', 'emissivity', mat%epsTab, &
+                                  given, ': grey-body radiation with the gas temperature')
+        if (given) then
+          if (mat%emissivity /= 0._R8) &
+            error stop 'IGLOO: emissivity given both in [IGLOO-Properties] and as a properties.dat column'
+          nCut = count(mat%epsTab > 1._R8)
+          if (nCut > 0) then
+            write(*,'(A,I0,A,I0,A,ES10.3,A)') '[WARNING] IGLOO: properties.dat Emissivity column above 1 cut to 1.0 '// &
+              'for material ', i, ' (', nCut, ' rows, largest ', maxval(mat%epsTab), ')'
+            where (mat%epsTab > 1._R8) mat%epsTab = 1._R8
+          endif
+          mat%epsVariable = .true.
         endif
       endif
 
@@ -411,6 +448,33 @@ contains
     enddo
     close(unit)
     call resolve_products(material)
+
+  contains
+
+    !> A material's optional positive column: refused when malformed, tabulated when non-zero, absent when all zero.
+    subroutine read_positive_column(i, name, col, label, what, tab, given, tail)
+      integer,               intent(in)    :: i
+      character(len=*),      intent(in)    :: name, label, what
+      real(R8),              intent(in)    :: col(:)
+      real(R8), allocatable, intent(inout) :: tab(:)
+      logical,               intent(out)   :: given
+      character(len=*),      intent(in), optional :: tail
+      integer :: c
+      c = validate_positive_column(col)
+      if (c /= COL_OK .and. c /= COL_ABSENT) &
+        call refuse_table(tablefile, trim(zone_label(i, name))//label//' column: '//column_reason(c))
+      given = c == COL_OK
+      if (.not. given) return
+      allocate(tab(Tmin:Tmax))
+      tab(Tmin:Tmax) = col
+      if (present(tail)) then
+        write(*,'(A,I0,A,I0,A,I0,A)') '  >> [material ', i, '] '//what//' tabulated from properties.dat (', &
+                                      Tmin, '..', Tmax, ' K)'//tail
+      else
+        write(*,'(A,I0,A,I0,A,I0,A)') '  >> [material ', i, '] '//what//' tabulated from properties.dat (', &
+                                      Tmin, '..', Tmax, ' K)'
+      endif
+    end subroutine read_positive_column
 
   end subroutine read_cdp_properties
 

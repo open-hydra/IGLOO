@@ -47,6 +47,8 @@ module IGLOO_data_phases
     integer  :: brkupSelect=0
     logical  :: sigVariable
     logical  :: mupVariable
+    logical  :: klVariable  = .false.   !> k_l(T) from the Conductivity column (P2T)
+    logical  :: epsVariable = .false.   !> eps(T) from the Emissivity column
     real(R8) :: mup   !> liquid material viscosity (defined if mup=const)
     real(R8) :: sigma !> liquid material surface tension (defined if sigma=const)
     real(R8), allocatable :: bp(:)        !> the breakup model's constants
@@ -110,6 +112,8 @@ module IGLOO_data_phases
     integer  :: brkupSelect=0
     logical  :: sigVariable=.false.
     logical  :: mupVariable=.false.
+    logical  :: klVariable=.false.    !> k_l(T) from the Conductivity column (P2T)
+    logical  :: epsVariable=.false.   !> eps(T) from the Emissivity column
     real(R8) :: mup   = 0._R8 !> liquid material viscosity       (defined if mup=const)
     real(R8) :: sigma = 0._R8 !> liquid material surface tension (defined if sigma=const)
     real(R8), allocatable :: bp(:)        !> the breakup model's constants: [IGLOO-Models], then the tokens
@@ -151,7 +155,7 @@ module IGLOO_data_phases
     !> sub-objects
     type(obj_group), allocatable :: group(:)
     !> Thermodynamic tables (defined if variable properties)
-    real(R8), dimension(:), allocatable :: hTab, cpTab, rhoTab, sigTab, mupTab, psatTab, LvTab, cpvTab
+    real(R8), dimension(:), allocatable :: hTab, cpTab, rhoTab, sigTab, mupTab, psatTab, LvTab, cpvTab, klTab, epsTab
   contains
     procedure, pass(self), public :: assign_material2group
   end type obj_material
@@ -301,6 +305,7 @@ contains
       endif
       if (self%solidSelect > 0) gr%rhoSol = self%rhoSol
       gr%emissivity = self%emissivity
+      gr%klVariable = self%klVariable; gr%epsVariable = self%epsVariable
       gr%productName = self%productName; gr%prodID = self%prodID
       gr%rhoRes = self%rhoRes; gr%cpRes = self%cpRes; gr%hOffRes = self%hOffRes; gr%cStretch = self%cStretch
       gr%resOn = self%resOn; gr%dRes = self%dRes

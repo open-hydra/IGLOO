@@ -139,7 +139,8 @@ igloo_unit_test(test_ini_pipeline       infrastructure/ini_pipeline       "unit;
 # same rows from 1 K, the Psat column looked up by name in any order, both enthalpy datums; two-material -- a
 # tabulated zone next to an all-zero one; atlas-water -- the bytes ATLAS GPB writes for water with
 # psat-vapour = H2O, so both repositories test the same file; sigma-mu -- the Sigma and Viscosity columns
-# of a breaking material next to an all-zero zone that keeps the [IGLOO-Properties] constants.
+# of a breaking material next to an all-zero zone that keeps the [IGLOO-Properties] constants; columns -- the
+# Conductivity, Viscosity and Emissivity columns of a non-breaking P2T material next to an all-zero zone.
 add_executable(test_properties_reader infrastructure/properties_reader/test_properties_reader.f90)
 target_link_libraries(test_properties_reader PRIVATE verif_support)
 set_target_properties(test_properties_reader PROPERTIES LINKER_LANGUAGE Fortran)
@@ -148,7 +149,7 @@ if(USE_OPENMP)
         COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
         LINK_FLAGS    "${OpenMP_Fortran_FLAGS}")
 endif()
-foreach(_set hexadecane two-material atlas-water sigma-mu)
+foreach(_set hexadecane two-material atlas-water sigma-mu columns)
     if(_set STREQUAL "hexadecane")
         set(_name test_properties_reader)
     else()
@@ -1150,6 +1151,11 @@ igloo_refusal_case(refuse-p2t-mu-two       infrastructure/refusals/p2t-mu-two
                    "liquid-conduction=P2T with breakup takes the breakup viscosity" "e2e;refusal;evaporation;breakup")
 igloo_refusal_case(refuse-p2t-mu-zero      infrastructure/refusals/p2t-mu-zero
                    "requires mu > 0"                                    "e2e;refusal;evaporation;breakup")
+# a P2T liquid property given twice: the material-line token and its properties.dat column.
+igloo_refusal_case(refuse-kliq-column-both  infrastructure/refusals/kliq-column-both
+                   "IGLOO: k-liq given both on the material line and as a properties.dat Conductivity column" "e2e;refusal;evaporation;io")
+igloo_refusal_case(refuse-muliq-column-both infrastructure/refusals/muliq-column-both
+                   "IGLOO: mu-liq given both on the material line and as a properties.dat Viscosity column" "e2e;refusal;evaporation;io")
 igloo_refusal_case(refuse-zgr              infrastructure/refusals/zgr
                    "boiling=ZGR requires an evaporating material"       "e2e;refusal;infrastructure")
 igloo_refusal_case(refuse-lk-d2law         infrastructure/refusals/lk-d2law
@@ -1327,6 +1333,11 @@ igloo_refusal_case(refuse-sigma-both       infrastructure/refusals/sigma-both
                    "IGLOO: sigma given both in [IGLOO-Properties] and as a properties.dat column" "e2e;refusal;breakup;io")
 igloo_refusal_case(refuse-sigma-column     infrastructure/refusals/sigma-column
                    "Sigma column: a value that is not positive" "e2e;refusal;breakup;io")
+# the Emissivity column: given with [IGLOO-Properties] emissivity, and zero on one row.
+igloo_refusal_case(refuse-emissivity-column-both infrastructure/refusals/emissivity-column-both
+                   "IGLOO: emissivity given both in [IGLOO-Properties] and as a properties.dat column" "e2e;refusal;radiation;io")
+igloo_refusal_case(refuse-emissivity-column infrastructure/refusals/emissivity-column
+                   "Emissivity column: zero on some rows and not on others" "e2e;refusal;radiation;io")
 igloo_refusal_case(refuse-sigma-size       infrastructure/refusals/sigma-size
                    "sigma: size mismatch with other property vectors" "e2e;refusal;breakup")
 igloo_refusal_case(refuse-sigma-nm         infrastructure/refusals/sigma-nm

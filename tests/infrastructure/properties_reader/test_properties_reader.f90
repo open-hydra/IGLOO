@@ -20,6 +20,8 @@ program test_properties_reader
     !                 PR-V1 atlas-: its Lv, Mv, Cpv columns by name, Lv(T) and cpv(T) through tableValue
     !   sigma-mu      PR-S1 sm-: zone A's Sigma and Viscosity columns tabulated, zone B all zero (the
     !                 [IGLOO-Properties] constants)
+    !   columns       PR-C2 kc-: zone A's Conductivity, Viscosity and Emissivity columns of a non-breaking P2T
+    !                 material (the Emissivity row above 1 cut to 1), zone B all zero (its [IGLOO-Properties] emissivity)
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_IO_INI,         only: read_IGLOO_input
@@ -68,6 +70,8 @@ program test_properties_reader
         call atlas_water_legs(nbad)
     case ('sigma-mu')
         call sigma_mu_legs(nbad)
+    case ('columns')
+        call columns_legs(nbad)
     case default
         write(*,'(a)') 'test_properties_reader: unknown mode "'//trim(mode)//'"'
         nbad = 1
@@ -312,6 +316,60 @@ contains
         call check(mat(2)%sigma == 0.05_R8 .and. mat(2)%mup == 1.e-3_R8, &
                    'PR-S1 sm-: zone B sigma = 0.05, mu = 1e-3 from [IGLOO-Properties]', nbad)
     end subroutine sigma_mu_legs
+
+
+    !> PR-C2: a non-breaking P2T material takes its Conductivity, Viscosity and Emissivity columns as its tables,
+    !  bitwise, the Emissivity row above 1 at exactly 1; a material whose three columns are zero allocates nothing
+    !  and keeps its [IGLOO-Properties] emissivity.
+    subroutine columns_legs(nbad)
+        integer, intent(inout) :: nbad
+        type(obj_material), allocatable :: mat(:)
+        character(len=32) :: prefix
+        real(R8) :: T(200), kl(200), mu(200), eps(200), epsCut(200), row(7)
+        integer  :: u, ios, n
+        character(len=512) :: line
+
+        prefix = 'kc-'
+        call read_cdp_properties(prefix, mat)
+        call check(nm == 2 .and. Tmin == 280 .and. Tmax == 380,   'PR-C2 kc-: two materials, Tmin = 280, Tmax = 380', nbad)
+        call check(mat(1)%klVariable .and. mat(1)%mupVariable .and. mat(1)%epsVariable, &
+                   'PR-C2 kc-: zone A k_l, mu_l and eps tabulated', nbad)
+        if (allocated(mat(1)%klTab) .and. allocated(mat(1)%mupTab) .and. allocated(mat(1)%epsTab)) then
+            open(newunit=u, file='INPUT/kc-properties.dat', status='old', action='read')
+            n = 0
+            do
+                read(u, '(a)', iostat=ios) line
+                if (ios /= 0) exit
+                read(line, *, iostat=ios) row
+                if (ios /= 0) then
+                    if (n > 0) exit
+                    cycle
+                endif
+                n = n + 1
+                T(n) = row(1); kl(n) = row(5); mu(n) = row(6); eps(n) = row(7)
+            enddo
+            close(u)
+            call check(n == 101 .and. nint(T(1)) == Tmin,         'PR-C2 kc-: zone A read here spans the table', nbad)
+            call check(lbound(mat(1)%klTab,1) == Tmin .and. ubound(mat(1)%klTab,1) == Tmax .and. &
+                       lbound(mat(1)%mupTab,1) == Tmin .and. ubound(mat(1)%mupTab,1) == Tmax .and. &
+                       lbound(mat(1)%epsTab,1) == Tmin .and. ubound(mat(1)%epsTab,1) == Tmax, &
+                       'PR-C2 kc-: k_l, mu_l and eps tables on [280, 380]', nbad)
+            call check(all(mat(1)%klTab == kl(1:n)),             'PR-C2 kc-: k_l(T) = the column, bitwise at the 101 nodes', nbad)
+            call check(all(mat(1)%mupTab == mu(1:n)),            'PR-C2 kc-: mu_l(T) = the column, bitwise at the 101 nodes', nbad)
+            call check(count(eps(1:n) > 1._R8) == 1 .and. eps(21) == 1.2_R8, &
+                       'PR-C2 kc-: the file holds one Emissivity row above 1 (1.2 at 300 K)', nbad)
+            epsCut(1:n) = min(eps(1:n), 1._R8)
+            call check(mat(1)%epsTab(300) == 1._R8,              'PR-C2 kc-: eps(300 K) = 1.2 cut to exactly 1', nbad)
+            call check(all(mat(1)%epsTab == epsCut(1:n)),        'PR-C2 kc-: every other eps row = the column, bitwise', nbad)
+        else
+            call check(.false.,                                   'PR-C2 kc-: k_l, mu_l and eps tables allocated', nbad)
+        endif
+        call check(.not. mat(2)%klVariable .and. .not. mat(2)%mupVariable .and. .not. mat(2)%epsVariable .and. &
+                   .not. allocated(mat(2)%klTab) .and. .not. allocated(mat(2)%mupTab) .and. &
+                   .not. allocated(mat(2)%epsTab), 'PR-C2 kc-: zone B all zero, no tables', nbad)
+        call check(mat(2)%emissivity == 0.5_R8 .and. mat(1)%emissivity == 0._R8, &
+                   'PR-C2 kc-: zone B emissivity = 0.5 from [IGLOO-Properties], zone A 0', nbad)
+    end subroutine columns_legs
 
 
     !> A column read from the file at T: linear between the nodes, the end value outside (tableValue's rule).
