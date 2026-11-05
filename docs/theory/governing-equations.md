@@ -218,7 +218,9 @@ epsilon — relative to the cell and reachable in floating point —, $\boldsymb
 $[0,1]^3$), or bilinear with an analytic inverse.
 On an axisymmetric wedge the meridian field is sampled at the particle's $(x, r)$ and its
 velocity rotated to the particle's azimuth before it enters the ODE.  When
-`gas-order = 1`, the cell-centre values are used directly.
+`gas-order = 1`, the cell-centre values are used directly, the velocity rotated to the particle's azimuth
+as well.  At both gas orders the rotated velocity enters the ODE and the slip a breakup event model (TAB,
+ETAB, KH-RT) evaluates at a step end.
 
 The dual mesh of a block reaches one node past each boundary face, a ring of ghost nodes
 filled once per sweep: by linear extrapolation from the interior, mirrored at a solid face,

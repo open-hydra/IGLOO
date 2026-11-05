@@ -34,11 +34,12 @@ position, so any point inside the mesh serves.
 
 Usage:
     make_wedge_case.py <out_dir> [--omega OM] [--u0 U] [--delthe-deg D]
-                       [--theta0-deg T0] [--nx NX] [--nr NR] [--blocks {1,2}] [--stretch R]
+                       [--theta0-deg T0] [--nx NX] [--nr NR] [--lx LX] [--blocks {1,2}] [--stretch R]
         writes <out_dir>/solfile.tec and <out_dir>/bc.txt
     --theta0-deg shifts the sector centre off the azimuth origin (k-planes at T0 -+ D/2):
         only for the refusal fixture -- IGLOO takes refDir as the sector centre and refuses
-        anything else. --nx/--nr shrink the mesh (refusal fixtures need no resolution).
+        anything else. --nx/--nr shrink the mesh (refusal fixtures need no resolution); --lx L
+        shortens the domain along x (default 2.0 m): --lx 0.2 --nx 20 is the first 20 cells of the default mesh.
     --blocks 2 and --stretch R need an even --nx.
 """
 import argparse
@@ -159,7 +160,7 @@ def write_bc(path, blocks=1):
 
 
 def main():
-    global NX, NR
+    global NX, NR, LX
     p = argparse.ArgumentParser(usage=__doc__)
     p.add_argument("out_dir")
     p.add_argument("--omega", type=float, default=OMEGA)
@@ -168,12 +169,13 @@ def main():
     p.add_argument("--theta0-deg", type=float, default=0.0)
     p.add_argument("--nx", type=int, default=NX)
     p.add_argument("--nr", type=int, default=NR)
+    p.add_argument("--lx", type=float, default=LX, help="domain length along x [m] (default 2.0)")
     p.add_argument("--blocks", type=int, choices=(1, 2), default=1,
                    help="2: two zones split at node nx/2, joined by a 101 face")
     p.add_argument("--stretch", type=float, default=1.0,
                    help="the second half's cells along x this many times the first half's (default 1)")
     a = p.parse_args()
-    NX, NR = a.nx, a.nr
+    NX, NR, LX = a.nx, a.nr, a.lx
     if a.stretch <= 0.0:
         p.error("--stretch must be > 0")
     if (a.blocks == 2 or a.stretch != 1.0) and NX % 2:

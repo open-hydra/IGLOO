@@ -1154,7 +1154,8 @@ contains
           d = (sixOverPi*m/rho)**oneThird
         endif
 
-        Vdif = gasState(2:4)-y(4:6)
+        !> The gas at the parcel's azimuth (gas order 1 on a wedge carries the meridian frame's value).
+        Vdif = meridianToAzimuth(gasState(2:4), y(1:3)) - y(4:6)
         vel  = norm2(Vdif)
         Re   = gasState(1)*vel*d/gasState(6)
         call interphase(gasState(:),ng,Vdif,vel,tp,d,Re,1._R8,Fdrag)

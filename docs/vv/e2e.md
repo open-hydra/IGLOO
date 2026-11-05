@@ -680,7 +680,7 @@ the temperature of every row within its print budget; across every interval in w
 event, a shed, the stripping) it brackets the temperature between the marches at the interval's extreme diameters
 and slips.  The energy handed to the gas must telescope at the table's enthalpy.
 
-**Result:** 8373 rows, the worst at 0.915 of its tolerance; 1977 intervals inside their brackets; the energy within
+**Result:** 8373 rows, the worst at 0.919 of its tolerance; 1977 intervals inside their brackets; the energy within
 0.27 of its print budget.  The shed's enthalpy at $c_p T$ breaks the energy balance by $10^5$ tolerances; the heat
 rate with a temperature-state factor leaves every row 14 K off.
 
@@ -901,7 +901,7 @@ Several members of this category have **no figure** and so no section below:
 the edges of the inlet cells), `axis-200` and `wedge-fold` (the
 axis face and the sector fold on the MOSE nozzle field), `two-mat` (two materials),
 `two-fam-bc` (one inlet table per family in `bc.txt`), `two-fam-bc-2blk` (the same on two blocks joined by
-a 101 connection), `two-fam-bc-2blk-mollify` (the same with the field mollifier on), `chimera-2blk` (two overlapping blocks joined by chimera faces), `chimera-2blk-mollify` and `chimera-2blk-shift-mollify` (the same with the field mollifier on, the second with block 2 shifted by half a cell), the three `two-fam-bc-2blk-ord2-dual*` cases and `swirl-wedge-2blk-ord2-dual` (the gas-order-2 dual across a 101 face), `periodic-2d-ord2-dual` (the same across a periodic (201) face, on a box of two periods held to itself one period away), `varcp-tmin` (a varying-$c_p$ table that ends below the parcels' temperature) and the
+a 101 connection), `two-fam-bc-2blk-mollify` (the same with the field mollifier on), `chimera-2blk` (two overlapping blocks joined by chimera faces), `chimera-2blk-mollify` and `chimera-2blk-shift-mollify` (the same with the field mollifier on, the second with block 2 shifted by half a cell), the three `two-fam-bc-2blk-ord2-dual*` cases and `swirl-wedge-2blk-ord2-dual` (the gas-order-2 dual across a 101 face), `periodic-2d-ord2-dual` (the same across a periodic (201) face, on a box of two periods held to itself one period away), `varcp-tmin` (a varying-$c_p$ table that ends below the parcels' temperature), `tab-wedge-slip` (the breakup event's slip at the parcel's azimuth on a gas-order-1 wedge) and the
 `refusals/*` gates —
 behavioral cases with no reference curve, summarised in the table on the
 [Overview](index.md).  This page is organized around comparison figures;
