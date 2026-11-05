@@ -364,9 +364,10 @@ diameter and number rate (SB1).
 capacities quoted on the [Solidification](../theory/solidification.md) page; every gate is a
 closed form of its own inputs.
 
-**Gates.** `test_solidification` (SG0–SG12, SB1); e2e companions `solid-box`, `solid-melt`,
+**Gates.** `test_solidification` (SG0–SG14, SB1); e2e companions `solid-box`, `solid-melt`,
 `solid-box-euler`, `solid-box-2mat`, `scatter-weight-solid`, `solid-brk-tab`, `solid-brk-khrt`,
-`solid-box-rhos`, `solid-box-varrho`, `solid-brk-tab-rhos`, `burn-box-residue` — see
+`solid-box-rhos`, `solid-box-varrho`, `solid-box-varcp`, `solid-brk-khrt-varcp`, `solid-brk-tab-rhos`,
+`burn-box-residue` — see
 [End-to-End Cases](e2e.md).
 
 <figure>

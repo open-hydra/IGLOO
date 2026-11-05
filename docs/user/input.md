@@ -313,7 +313,8 @@ After `Temperature` the columns may come in any order; the lowercase names are a
 (`PSAT`, `LV`, `MV`, `CPV`, `SIGMA`, `VISCOSITY`, `CONDUCTIVITY`, `EMISSIVITY` as well). A column whose property is constant in T is read as a constant; one that varies
 becomes a table, linear between the nodes. Outside the table the density holds its end values and
 the enthalpy continues its first and last segments, both as in ICE. With a varying `Cp` the particle
-state is the enthalpy, and its temperature is read back through the same table, so the table may
+state is the enthalpy (a solidifying material keeps the temperature and takes the table's chord as its liquid heat
+capacity, see [Solidification](../theory/solidification.md#a-varying-liquid-heat-capacity)), and its temperature is read back through the same table, so the table may
 start at any temperature (see [Governing equations](../theory/governing-equations.md)).
 
 **`Psat`.** An evaporating material takes its saturation pressure from the column, linear between

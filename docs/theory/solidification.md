@@ -88,13 +88,36 @@ c_l\,T_m + h_\mathrm{off} - h_\mathrm{fus} - c_s\,(T_m - T) & \text{solid}
 \end{cases}
 $$
 
-with $h_\mathrm{off}$ the datum of the material's enthalpy table.  It is continuous
+with $h_\mathrm{off}$ the datum of the material's enthalpy table (with a varying $c_l$, the table's own
+$h_l(T)$ in place of $c_l\,T + h_\mathrm{off}$, see below).  It is continuous
 across every event, so the recalescence and the start of melting exchange nothing
 with the gas: the latent heat passes between droplet and gas only through the
 plateau's $\dot Q$.  The source term values the stream at this enthalpy, so the
 energy deposited in a plateau cell is the heat the droplet loses there,
 $-\dot n_p\,\dot Q(T_m)\,\Delta t$ (negative while it melts), and the total deposited
 by a droplet is $m\,[h(\text{entry}) - h(\text{exit})]$.
+
+### A varying liquid heat capacity
+
+With a varying `Cp` column the liquid's enthalpy is the table's $h_l(T)$, linear between the
+integer nodes, and the state stays the temperature.  In the liquid phases
+
+$$
+m\,c_l(T)\,\frac{dT_p}{dt} = \dot Q, \qquad c_l(T) = h_l(i+1) - h_l(i),\quad i = \lfloor T \rfloor,
+$$
+
+the chord of the kelvin cell holding $T$ (the index clamped to the table's end segments): the exact
+derivative of the interpolated $h_l$, so the energy the source term books closes to the integrator's
+error.  The recalescence takes the table's enthalpy difference,
+
+$$
+f_0 = \frac{h_l(T_m) - h_l(T_n)}{h_\mathrm{fus}},
+$$
+
+and a droplet that freezes whole lands at $T = T_m - [h_l(T_m) - h_l(T_n) - h_\mathrm{fus}]/c_s$; a plateau that
+melts to $f = 0$ continues as a liquid at the $T$ where $h_l(T) = h_l(T_m) - f\,h_\mathrm{fus}$.  The enthalpy is
+$h_l(T)$, $h_l(T_m) - f\,h_\mathrm{fus}$ and $h_l(T_m) - h_\mathrm{fus} - c_s\,(T_m - T)$; the solid keeps
+`cp-solid`.  The chord changes at every integer kelvin, a step the integrator meets once per kelvin of cooling.
 
 ---
 
@@ -199,10 +222,10 @@ All per material, as `key=value` tokens on the material line of the phase file
 | `T-nuc` | nucleation temperature (K), below `T-melt` | 0.8 `T-melt` |
 | `rho-solid` | density of the solid (kg/m³), not negative | the liquid density |
 
-Setup refuses a solidifying material that also evaporates or burns, one with a negative
-`rho-solid`, and one whose `properties.dat` has a varying `Cp` column: the model
-integrates the temperature with a constant heat capacity.  A varying `Density` column is the
-liquid's ([Density and diameter](#density-and-diameter)).  Melting uses the same keys, and
+Setup refuses a solidifying material that also evaporates or burns, and one with a negative
+`rho-solid`.  A varying `Cp` column is the liquid's ([A varying liquid heat
+capacity](#a-varying-liquid-heat-capacity)), and so is a varying `Density` column
+([Density and diameter](#density-and-diameter)).  Melting uses the same keys, and
 a breaking material takes its surface tension and viscosity as any other (see [Breakup](breakup.md)).
 
 For alumina the NIST-JANAF tables ([JANAF98], Al₂O₃ liquid and α-Al₂O₃) give
@@ -239,6 +262,8 @@ the outlet, the exit flows, the energy balance, the Eulerian mass and the scatte
 `solid-box-rhos` and `solid-box-varrho` (`rho-solid` and a liquid density table: the mass and
 the diameter of every row, the plateau and the cooling against their closed forms or an
 independent integration), `solid-brk-tab-rhos` (TAB with `rho-solid`: a frozen drop keeps the
-mass of its last breakup) and
-the two-sweep `repeatability/solid-box`, plus seven setup refusals.  See
+mass of its last breakup), `solid-box-varcp` and `solid-brk-khrt-varcp` (a varying liquid heat capacity:
+the liquid on the table's chords against their cell-by-cell solution, the recalescence, the energy on the table,
+and the same under KH-RT with a density table) and
+the two-sweep `repeatability/solid-box`, plus six setup refusals.  See
 `tests/solidification/INFO.md`.
