@@ -638,8 +638,10 @@ contains
           write(*,'(A,I2,A)') '     >> ODE system (neq=', gr%neq, '):'
           if (gr%evapSelect/=0) write(*,*) '       - evaporation --> ', trim(gr%evapWord)
           if (gr%combSelect/=0 .and. gr%prodID == 0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
-          if (gr%combSelect/=0 .and. gr%prodID > 0) write(*,'(A)') '        - combustion  --> Beckstead d^n burn '// &
-            'law with an oxide cap (xi-cap, product '//trim(gr%productName)//')'
+          if (gr%combSelect/=0 .and. gr%prodID > 0 .and. gr%xiLaw == 0) write(*,'(A)') '        - combustion  --> '// &
+            'Beckstead d^n burn law with an oxide cap (xi-cap, product '//trim(gr%productName)//')'
+          if (gr%combSelect/=0 .and. gr%prodID > 0 .and. gr%xiLaw > 0) write(*,'(A)') '        - combustion  --> '// &
+            'Beckstead d^n burn law with an oxide cap (xi-law=Gallier21, product '//trim(gr%productName)//')'
           if (gr%solidSelect/=0 .and. .not.gr%brkupEqOde) &
             write(*,*) '       - solidification --> supercooling + recalescence (model 6)'
           if (gr%solidSelect/=0 .and. gr%brkupEqOde) &

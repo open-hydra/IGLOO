@@ -59,9 +59,11 @@ def xi(d_al, fox):
     return min(max(g(d_al * 1e6) * h(fox), 0.0), 1.0)
 
 
-def path(dp0, n, x0, rho_al, rho_res, cells=4096, x_end=0.0):
+def path(dp0, n, x0, rho_al, rho_res, cells=4096, x_end=0.0, frac=False):
     """(c, z) on the law's path: RK4 half-steps in s, the midpoint rule for c on the cells; z = m_ox/m_p0 at
-    m_Al/m_Al0 = x_end (the path stops in the cell that holds it, by a last RK4 step to it)."""
+    m_Al/m_Al0 = x_end (by a last RK4 step to it from the half-step that holds it). With frac, also the fraction of
+    Beckstead's burn time d_p0^n/K_eff at which m_Al/m_Al0 reaches x_end: int_{s_end}^1 ds/F over int_0^1 ds/F, the
+    cell that holds s_end counted by the share of it above s_end."""
     r = (1.0 - x0) / rho_al / ((1.0 - x0) / rho_al + x0 / rho_res)
     dal0 = dp0 * r ** (1.0 / 3.0)
     s_end = x_end ** (n / 3.0)
@@ -78,16 +80,18 @@ def path(dp0, n, x0, rho_al, rho_res, cells=4096, x_end=0.0):
         return y + hs / 6.0 * (k1 + 2 * k2 + 2 * k3 + k4)
 
     hh = -0.5 / cells
-    y, c, z = x0 / (1.0 - x0), 0.0, None
+    y, c, z, above = x0 / (1.0 - x0), 0.0, None, 0.0
     for i in range(2 * cells):
         s = 1.0 + i * hh
         if x_end > 0.0 and z is None and s + hh <= s_end:
             z = (1.0 - x0) * rk4(s, y, s_end - s)
         y = rk4(s, y, hh)
         if i % 2 == 0:
-            c += 1.0 / LOBE.F(y / ((s + hh) ** (3.0 / n) + y))
-    c = c / cells * r ** (n / 3.0)
-    return c, (z if x_end > 0.0 else (1.0 - x0) * y)
+            q = 1.0 / LOBE.F(y / ((s + hh) ** (3.0 / n) + y))
+            c += q
+            above += q * min(max((s - s_end) * cells, 0.0), 1.0)
+    out = (c / cells * r ** (n / 3.0), (z if x_end > 0.0 else (1.0 - x0) * y))
+    return out + (above / c,) if frac else out
 
 
 # the unit legs of CB15: d_p0 [m], n, x0, rho_Al, rho_res (burn-box's metal, burn-box-cap's product)
