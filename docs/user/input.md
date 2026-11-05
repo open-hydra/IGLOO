@@ -135,7 +135,8 @@ Controls the gas field source, output modes, and miscellaneous run-time options.
 | `phase` | string | `''` | ATLAS name of the condensed phase to read (`[GPB-Phase*] name`): the files become `INPUT/<phase>-{phase.txt,properties.dat,bc.txt}` and every output gets the `<phase>-` prefix. Absent keeps the prefix in force (unnamed `INPUT/phase.txt` standalone; the parent app's assignment under hydra-MI2). Must not contain `-` |
 | `gas-order` | integer | `2` | Gas interpolation order: `1` = cell-center value, `2` = second-order reconstruction |
 | `out-file` | string | `E+S` | Output fields: `E` = Eulerian only, `S` = source only, `E+S` (also `S+E`, `ES`, `SE`, `ALL`, `both`, case-insensitive; or absent) = both; any other token is refused |
-| `fsample-traj` | integer | `100` | Scatter-cloud density: nominal markers per injection stream (sets the quantum `dNscat`: a parcel writes `ṅ_ref/dNscat` markers per second, `ṅ_ref` its number rate at entry); trajectory rows follow `print-ds`, `print-dtime` and `print-dcell`, not this key |
+| `fsample-traj` | integer | `100` | Scatter-cloud density: nominal markers per injection stream (sets the quantum `dNscat`: a parcel writes `ṅ_ref/dNscat` markers per second, `ṅ_ref` its number rate at entry raised to `scatter-floor`'s floor); trajectory rows follow `print-ds`, `print-dtime` and `print-dcell`, not this key |
+| `scatter-floor` | real | `0.1` | Scatter-cloud floor F ≥ 0: a parcel whose number rate at entry is below F times its material's mean stream rate writes markers at that floor, at least F·`fsample-traj` per domain transit time, their weights scaled down so the cloud stays unbiased; a breakup child keeps its parent's rate; `0` = off. A negative value, a list or a value that does not read as a number stops the run |
 | `print-ds` | real | `−1` | Trajectory row distance [m]: a row at a segment end when the parcel is this far from its last row; `≤ 0` = off; ignored when `print-dcell` is set. The rows fall on segment ends: a value equal to their spacing (a cell edge) is decided by each step's overshoot, one clear of it is not (see [Trajectories](using.md#trajectories)) |
 | `print-dtime` | real | `−1` | Trajectory row interval [s]: a row at a segment end when the time since the parcel's last row reaches it; ignored when `print-ds` is set; with `print-dcell` set, a row at the first segment end at or past a target time that starts one `print-dtime` after the parcel's start and moves on by `print-dtime` at every row written, `print-dcell`'s rows included; `≤ 0` = off |
 | `print-dcell` | integer | — | Diagnostic crossing cadence: when set, a row at every `print-dcell`-th cell crossing, at `time-end` and at a boundary exit, besides `print-dtime`'s rows, and `print-ds` is ignored; absent = off. A value below 1 stops the run, and so does a `print-ds`, `print-dtime` or `print-dcell` that does not read as a number |
@@ -222,7 +223,7 @@ Controls injection particle placement.
 | `x`, `y`, `z` | Injection point coordinates (scalar or array) [m] |
 | `mdot` | Mass flow rate per particle [kg/s] (scalar or array) |
 | `diam` | Particle diameter [m] (scalar or array) |
-| `temp0` | Initial temperature [K] (optional, defaults to gas temperature) |
+| `temp0` | Initial temperature [K] (optional, defaults to the gas temperature of the cell holding the injection point) |
 | `up`, `vp`, `wp` | Initial velocity components [m/s] (optional) |
 
 ### `[IGLOO-ODE]`
