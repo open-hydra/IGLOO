@@ -383,7 +383,7 @@ contains
     use IGLOO_variables,  only: ode_word,iopt,rtol,atol, ord2, nm, nb,     &
                                 eulerSwitch, sourceSwitch, unitTraj, unitScat, &
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
-                                trajOn, scatOn, dNscat, trajSample, threshold, &
+                                trajOn, scatOn, dNscat, npFloor, scatterFloor, trajSample, threshold, &
                                 probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
                                 nConnHit, nSweepHit, nRimExit, nInjNoCell, nKHRTwarn, &
                                 unitSnap, snapOn, timeOn, tEnd, frozenOn, unitPlane, planeOn
@@ -521,7 +521,7 @@ contains
       endif
 
       !> Scatter cloud: one zone per material; auto-size the weight quantum dNscat to ~trajSample points per stream.
-      dNscat = 0._R8
+      dNscat = 0._R8; npFloor = 0._R8
       if (scatOn) then
         open(newunit=unitScat,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'scatter-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
              access='stream', form='unformatted', status='replace')
@@ -592,6 +592,7 @@ contains
         if (Ndot>0._R8 .and. nStreams>0) &
           dNscat = Ndot*tauRef / real(max(trajSample*nStreams,1), R8)
         if (.not. (dNscat>0._R8)) dNscat = 0._R8       ! guard NaN/neg => scatter silently skipped
+        if (dNscat>0._R8) npFloor = scatterFloor*Ndot/real(nStreams,R8)   ! the floor: F times the mean stream's rate
         if (mpi_is_root) &
           write(*,'(A,A,A,ES10.3,A,I0,A)') '     >> scatter cloud [',trim(mat%matName),     &
               ']: dNscat=',dNscat,' droplets/pt (nominal ~',trajSample,                      &

@@ -110,6 +110,15 @@ contains
     !> Particles' trajectories output-printing sampling frequency
     call fini%get(section_name='IGLOO-General', option_name='fsample-traj', val=trajSample, error=error)
     if (error/=0) trajSample = 100
+    !> scatter-floor = F >= 0: no parcel's marker rate below F times the mean stream's; absent = 0.1.
+    scatterFloor = 0.1_R8
+    if (inSection('IGLOO-General','scatter-floor')) then
+      if (fini%count_values(section_name='IGLOO-General', option_name='scatter-floor') /= 1) &
+        error stop 'IGLOO: [IGLOO-General] scatter-floor must be a number >= 0'
+      call fini%get(section_name='IGLOO-General', option_name='scatter-floor', val=scatterFloor, error=error)
+      if (error/=0 .or. .not. ieee_is_finite(scatterFloor) .or. scatterFloor < 0._R8) &
+        error stop 'IGLOO: [IGLOO-General] scatter-floor must be a number >= 0'
+    endif
     !> Trajectory rows: print-dcell present = the diagnostic crossing cadence; else print-ds, then print-dtime
     dcellSet = inSection('IGLOO-General','print-dcell')
     iprint = 1

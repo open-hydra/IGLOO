@@ -27,7 +27,9 @@ contains
     call reg%add('IGLOO-General','out-file',d_s(2),'E+S', &
       'Output field: E = equivalent eulerian, S = coupling source, E+S or ALL = both (also absent/blank); any other token is refused','E, S, E+S, ALL',.false.)
     call reg%add('IGLOO-General','fsample-traj',d_i(2),'100', &
-      'Scatter-cloud density: nominal markers per injection stream; sets the quantum dNscat = Ndot*tauRef/(fsample-traj*nStreams), a parcel writing npRef/dNscat markers per second (npRef its number rate at entry; a breakup child keeps the rate of its parent). Not a trajectory sampling frequency (trajectory rows follow print-ds, print-dtime and print-dcell)','',.false.)
+      'Scatter-cloud density: nominal markers per injection stream; sets the quantum dNscat = Ndot*tauRef/(fsample-traj*nStreams), a parcel writing npRef/dNscat markers per second (npRef its number rate at entry, raised to the scatter-floor; a breakup child keeps the rate of its parent). Not a trajectory sampling frequency (trajectory rows follow print-ds, print-dtime and print-dcell)','',.false.)
+    call reg%add('IGLOO-General','scatter-floor',d_r(40),'0.1', &
+      'Scatter-cloud floor F >= 0: a parcel whose number rate at entry is below F times the material''s mean stream rate Ndot/nStreams writes markers at that floor (at least F*fsample-traj per domain transit time tauRef), its weights scaled down to stay unbiased; a breakup child keeps its parent''s rate; 0 = off','',.false.)
     call reg%add('IGLOO-General','probe-ids',d_s(21),'-', &
       'DEBUG: integrate only the listed particle IDs, space-separated, a-b intervals allowed (e.g. 1 2 6 496-497); absent or empty = all','',.false.)
     call reg%add('IGLOO-General','print-dcell',d_s(14),'-', &

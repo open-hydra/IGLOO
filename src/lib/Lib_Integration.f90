@@ -22,7 +22,7 @@ contains
                                 bodyAccel, srcBodyForce, axisym,           &
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
                                 nInjNoCell,                                &
-                                trajOn, scatOn, dNscat, sixOverPi, pi,    &
+                                trajOn, scatOn, dNscat, npFloor, sixOverPi, pi, &
                                 planeOn, planeX, failAfter, maxInnerIter
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs, grazeStandoff
@@ -250,7 +250,11 @@ contains
     nReflW = 0; posReflW = part%stateVar(1:3)
     !> Scatter cloud: the marker rate npRef/dNscat, fixed at entry (a breakup child's is its parent's); the accumulator
     !  seeded with the golden-ratio phase of the parcel's own ID.
-    if (part%time==0._R8 .or. part%npRef < 0._R8) part%npRef = part%npdot
+    if (part%time==0._R8 .or. part%npRef < 0._R8) then
+      part%npRef = part%npdot
+      !> the material's floor, applied only below 1e-6 of it (a rate that close keeps its own bits)
+      if (part%npRef < (1._R8 - 1.e-6_R8)*npFloor) part%npRef = npFloor
+    endif
     wAcc = dNscat * mod(real(part%ID,R8)*0.6180339887498949_R8, 1._R8)
     do while (part%time<tEnd.and.iter<maxIter)
       iter = iter+1

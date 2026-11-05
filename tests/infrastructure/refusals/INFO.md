@@ -104,13 +104,15 @@ output written).
 | `refuse-body-accel` | `body-force` (`INPUT/` symlinked) with `body-accel = 0.0 -200.0` | `body-accel: expected 3 values (gx gy gz)` |
 | `refuse-plane-x` | `INPUT/` symlinked; `plane-x = abc` | `IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]` |
 | `refuse-plane-x-empty` | `INPUT/` symlinked; `plane-x =` with nothing after the `=` | `IGLOO: [IGLOO-General] plane-x is empty` |
+| `refuse-scatter-floor-sign` | `INPUT/` symlinked to `drag-stokes`'s; `scatter-floor = -1` | `IGLOO: [IGLOO-General] scatter-floor must be a number >= 0` |
+| `refuse-scatter-floor-count` | `INPUT/` symlinked to `drag-stokes`'s; `scatter-floor = 1 2` (FiNeR reads a list's first value with no error) | `IGLOO: [IGLOO-General] scatter-floor must be a number >= 0` |
 | `refuse-bc-no-g` | own `INPUT/bc.txt`: `drag-stokes`'s as written before ATLAS's mixture rule over the dispersed phases (401 lines of nine fields, field 1 `krho`, no G); drag-stokes's `solfile.tec`, `common/phase.txt` and `common/properties.dat` | `IGLOO: bc.txt 401 line without G (an ATLAS before the mixture rule): regenerate it` — refused in `read_cdp_bc_file` at the first 401 line, the file named first (a `krho` sum of 1 or more is ATLAS's to refuse) |
 | `refuse-krho-negative` | own `INPUT/bc.txt`: `drag-stokes`'s with every inlet field 1, krho/(1 − krho_tot), negated (`make_bc_refusals.py`) | `IGLOO: bc.txt 401 inlet: krho/(1 - krho_tot) and G must be finite and >= 0` — refused after the file is read, the cell, its smallest field 1 (−0.515) and its smallest G (0) printed first |
 | `refuse-gas-no-density` | own `INPUT/solfile.tec`: a 2×2×2 box (`tools/make_box_case.py --nx 2 --ny 2 --nz 2`) whose density variable `"Roi( 1 )"` is renamed `"Q( 1 )"` (`python3 make_gas_refusals.py`, run from this directory); drag-stokes's `phase.txt`, `properties.dat` and `bc.txt` symlinked (the stop comes before the boundary file is read) | `IGLOO: the gas file has no density variable (Roi(s) or rho(s))` — refused at the gas import (`allocation.f90` `import_gas`), the block named first |
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All eighty-five exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All eighty-seven exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
