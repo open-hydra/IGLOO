@@ -298,7 +298,7 @@ contains
         allocate(p%stateVar(9))
         p%stateVar = [0._R8, 0._R8, 0._R8, v(1), v(2), v(3), T9, mAl, mOx]
         p%m = mAl + mOx;  p%npdot = NPD
-        call p%computeSource(M, P3, E)
+        call p%computeSource(M, P3, E, [0._R8])
         Eref = NPD*(mAl*(CAL*T9 + HAL) + mOx*(CRES*T9 + HRES) + 0.5_R8*(mAl + mOx)*dot_product(v, v))
         err = abs(E - Eref)/abs(Eref)
         tol = 1.0e-14_R8

@@ -191,7 +191,7 @@ contains
         case (5); call rhsAlCombustion(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
                                        htab, dtab, gasNodes, gasVert, gas, 9, 8, epsTabM=epsTab)
         case (6, 7); call rhsSolidification(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
-                                            dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, epsTabM=epsTab)
+                                            htab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, epsTabM=epsTab)
         case (8); call rhsAlCap(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
                                 gasNodes, gasVert, gas, 9, 8, epsTabM=epsTab)
         end select

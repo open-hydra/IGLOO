@@ -510,12 +510,12 @@ contains
   !> Models 6 and 7: solidification; Z(7) = T, Z(8) = frozen fraction f, phase from auxst.
   !  Model 7 adds the breakup number rate Z(9), acting in the liquid phases only.
   subroutine rhsSolidification(neq, time, Z, F, aux,naux, auxst,nauxst, &
-                                rhoTabM, mupTabM, sigTabM,             &
+                                hTabM, rhoTabM, mupTabM, sigTabM,      &
                                 gasNodes,gasVert,gas,nsp,nNodes, epsTabM)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, toll, bodyForce, bodyAccel, oneThird, sixOverPi
     use IGLOO_Lib_Combustion,     only: imHf, imCps
-    use IGLOO_Lib_Solidification, only: plateauRate, solidDiameter, phUndercooled, phPlateau, phSolid
+    use IGLOO_Lib_Solidification, only: plateauRate, solidDiameter, tableSlope, phUndercooled, phPlateau, phSolid
     use IGLOO_Lib_Breakup,        only: breakupOde
     use IGLOO_Lib_Properties,     only: tableValue, Tmin, Tmax
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -526,7 +526,7 @@ contains
     real(R8), intent(out)   :: F(neq)
     real(R8), intent(in)    :: aux(naux)
     real(R8), intent(inout) :: auxst(nauxst)
-    real(R8), intent(in)    :: rhoTabM(:), mupTabM(:), sigTabM(:)
+    real(R8), intent(in)    :: hTabM(:), rhoTabM(:), mupTabM(:), sigTabM(:)
     real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
     real(R8), intent(inout) :: gas(nsp)
     real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
@@ -575,7 +575,9 @@ contains
     select case (nint(auxst(ind_sph)))
     case (phPlateau); F(8) = plateauRate(QdotW, m, aux(ind_mb+imHf-1))
     case (phSolid);   F(7) = QdotW/(m*aux(ind_mb+imCps-1))
-    case default;     F(7) = QdotW/(m*aux(ind_cp))
+    case default
+      if (mod_propFlags(1)) then; F(7) = QdotW/(m*tableSlope(hTabM, Z(7)))
+      else;                       F(7) = QdotW/(m*aux(ind_cp)); endif
     end select
     !> model 7: the breakup number rate, liquid phases only (KH-RT timer read and written there)
     if (mod_model == 7) then

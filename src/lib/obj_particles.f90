@@ -6,7 +6,7 @@ module IGLOO_particles
   use IGLOO_Lib_Drag
   use IGLOO_Lib_Heat
   use IGLOO_Lib_Properties, only: tableValue, comp_TfromTab, Tmin, Tmax
-  use IGLOO_Lib_Solidification, only: hSolid, solidDiameter, solidPhaseAtInjection
+  use IGLOO_Lib_Solidification, only: hSolid, hSolidTab, solidDiameter, solidPhaseAtInjection
   use IGLOO_bcBox
   use IGLOO_data_block, only: obj_block, obj_flowblock, obj_bc_cell
   use IGLOO_RayFaceIntersection3D
@@ -235,10 +235,11 @@ contains
   end subroutine resolveInjectionRate
 
   !> Mass, momentum and energy flow rates of the stream at the current state.
-  pure subroutine computeSource(self, M, P, E)
+  pure subroutine computeSource(self, M, P, E, hTab)
     implicit none
     class(obj_particle), intent(in)  :: self
     real(R8),            intent(out) :: M, P(3), E
+    real(R8),            intent(in)  :: hTab(:)   !> the material's enthalpy table
     real(R8) :: v(3), normVel, enthalpy, mdot_inst
 
     v = self%stateVar(4:6); normVel = norm2(v)
@@ -247,8 +248,12 @@ contains
     enthalpy = self%stateVar(7)
     if (.not.self%varCp) enthalpy = self%cp*enthalpy + self%hOff
     !> solidification: the latent heat of fusion is part of the enthalpy
-    if (self%solidSelect > 0) enthalpy = hSolid(self%stateVar(7), self%stateVar(8), self%solidPhase, self%cp, &
-                                                self%cpSol, self%hFus, self%Tmelt, self%hOff)
+    if (self%solidSelect > 0 .and. self%varCp) then
+      enthalpy = hSolidTab(self%stateVar(7), self%stateVar(8), self%solidPhase, hTab, self%cpSol, self%hFus, self%Tmelt)
+    elseif (self%solidSelect > 0) then
+      enthalpy = hSolid(self%stateVar(7), self%stateVar(8), self%solidPhase, self%cp, &
+                        self%cpSol, self%hFus, self%Tmelt, self%hOff)
+    endif
     !> model 8: the metal and its cap, each at its own heat capacity and datum
     if (self%model == 8) enthalpy = (self%stateVar(8)*(self%cp*self%stateVar(7) + self%hOff) +      &
                                      self%stateVar(9)*(self%cpRes*self%stateVar(7) + self%hOffRes)) / &
@@ -369,7 +374,7 @@ contains
     integer :: nE
     
     ! Temperature or enthalpy
-    if (self%varCp) then; self%hp = self%stateVar(7); self%Tp = comp_TfromTab(hTab,self%hp)
+    if (self%varCp .and. self%solidSelect == 0) then; self%hp = self%stateVar(7); self%Tp = comp_TfromTab(hTab,self%hp)
     else;                 self%tp = self%stateVar(7); endif
     ! Model-dependent physics state
     select case(self%model)

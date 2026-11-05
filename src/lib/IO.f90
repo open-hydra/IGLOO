@@ -260,9 +260,6 @@ contains
       endif
       write(*,'(A,I0,A,ES12.4,A)') '  >> [material ', i, '] enthalpy datum '//trim(mat%hDatum)// &
                                    ' (hOff = ', mat%hOff, ' J/kg)'
-      !> solidification integrates T with constant cp
-      if (mat%solidSelect > 0 .and. mat%cpVariable) &
-        error stop '[ERROR] solidification=on requires a constant-cp material (temperature state)'
 
       !> sigma and mu of a breaking material: a non-zero Sigma/Viscosity column or the [IGLOO-Properties] entry
       if (mat%brkupSelect > 0) then

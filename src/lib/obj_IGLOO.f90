@@ -592,7 +592,7 @@ contains
 
       if (mpi_is_root) then
         write(*,*)" Compute particles dynamics for material: ",trim(mat%matName)
-        if (mat%cpVariable) write(*,*) ' >> Solving enthalpy equation'
+        if (mat%cpVariable .and. mat%solidSelect == 0) write(*,*) ' >> Solving enthalpy equation'
       endif
       do g = 1, mat%ngroups
         group: associate(gr => mat%group(g))
@@ -782,7 +782,7 @@ contains
                 kid%n0   = kid%npdot
                 kid%mdot = kid%npdot * kid%m
                 !> ODE state: enthalpy/temperature slot, then the model-3 count slot
-                if (kid%varCp) then
+                if (kid%varCp .and. kid%solidSelect == 0) then
                   kid%stateVar(7) = lookupTab(mat%hTab, kid%tp)
                 else
                   kid%stateVar(7) = kid%tp
@@ -920,7 +920,8 @@ contains
           call mollifyEulerBlocks(self%euler(:, fam), self%geoblock, self%links, self%donors)
           call tm_unnest()
           do b = 1, nb
-            call self%euler(b, fam)%normalize(self%material(m)%hTab, self%material(m)%cpVariable)
+            call self%euler(b, fam)%normalize(self%material(m)%hTab, &
+                                             self%material(m)%cpVariable .and. self%material(m)%solidSelect == 0)
           enddo
         enddo
       enddo

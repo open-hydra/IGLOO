@@ -44,8 +44,8 @@ contains
     use IGLOO_Lib_Breakup, only: nchild
     use IGLOO_Lib_Combustion, only: imRr
     use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, eventCrossed, &
-                                        eventPassed, solidTransition, solidDiameter, phUndercooled, &
-                                        breakupStateAtSwitch
+                                        eventPassed, solidTransition, solidTransitionTab, solidDiameter, &
+                                        phUndercooled, breakupStateAtSwitch
     use IGLOO_Mod_MPI,     only: mpi_size_, region_fail, region_failed
     use IGLOO_records,     only: recList, rec_emit, rec_emit_traj, rec_push, rec_break, &
                                  STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT, &
@@ -200,7 +200,9 @@ contains
       else
         call part%initializePart(geoblock,gasblock)
       endif
-      if (part%varCp) then; part%stateVar(7) = lookupTab(hTab,part%tp); else; part%stateVar(7) = part%tp; endif
+      !> a solidifying parcel integrates T whatever its table
+      if (part%varCp .and. .not. mod_isSolid) then; part%stateVar(7) = lookupTab(hTab,part%tp)
+      else;                                         part%stateVar(7) = part%tp; endif
       !> the injection mass: the initial cap (model 8), a frozen fraction at rho-solid, else the injected diameter
       call part%injectionMass(rhoTab); part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot
       part%n0 = part%npdot
@@ -257,7 +259,7 @@ contains
       !> Zero until the finalize or a revert sets them; every exit that deposits sets them first.
       part%deltaL = 0._R8; part%Tstay = 0._R8
       if (eulerSwitch) part%intE = 0._R8
-      if (sourceSwitch) call part%computeSource(massIn,Pin,Ein)
+      if (sourceSwitch) call part%computeSource(massIn,Pin,Ein,hTab)
       entryPos = part%stateVar(1:3)   ! cell-entry position (for the closed-form body-force work)
       i = part%i(2); j = part%i(3); k = part%i(4);
       if (ord2) then; deltat = part%computeDeltat(gasVert)
@@ -293,7 +295,7 @@ contains
       if (present(resid) .and. consumed .and. part%model == 8) resBorn = part%stateVar(9) > 0._R8
             
       if (sourceSwitch) then
-        call part%computeSource(massOut,Pout,Eout)
+        call part%computeSource(massOut,Pout,Eout,hTab)
         !> A droplet consumed inside the cell has zero outgoing flux.
         if (consumed) then
           massOut = 0._R8
@@ -302,7 +304,9 @@ contains
         endif
         !> A KH shed hands the child's birth flux to the child, not to the gas.
         if (shedM > 0._R8) then
-          hShed   = part%stateVar(7); if (.not.part%varCp) hShed = part%cp*hShed + part%hOff
+          hShed   = part%stateVar(7)
+          if (.not.part%varCp) then; hShed = part%cp*hShed + part%hOff
+          elseif (mod_isSolid) then; hShed = lookupTab(hTab, hShed); endif
           vShed   = norm2(shedV)
           massOut = massOut + shedM
           Pout    = Pout    + shedM*shedV
@@ -704,7 +708,7 @@ contains
         vel = ya(4:6) + s*(yb(4:6) - ya(4:6))
         z7  = ya(7) + s*(yb(7) - ya(7))
         tc  = ta + s*(tb - ta)
-        if (mod_propFlags(1)) then; tp = comp_TfromTab(hTab, z7); else; tp = z7; endif
+        if (mod_propFlags(1) .and. .not. mod_isSolid) then; tp = comp_TfromTab(hTab, z7); else; tp = z7; endif
         if (mod_propFlags(2)) then; rho = tableValue(rhoTab, Tmin, Tmax, tp); else; rho = auxLocal(ind_rho); endif
         !> The stream's number rate, droplet mass and mass flow at the crossing.
         select case(mod_model)
@@ -757,7 +761,7 @@ contains
             + (3._R8*s**2 - 2._R8*s**3)*yb(1:3) + (s**3 - s**2)*h*yb(4:6)
         vel = ya(4:6) + s*(yb(4:6) - ya(4:6))
         z7  = ya(7) + s*(yb(7) - ya(7))
-        if (mod_propFlags(1)) then; tp = comp_TfromTab(hTab, z7); else; tp = z7; endif
+        if (mod_propFlags(1) .and. .not. mod_isSolid) then; tp = comp_TfromTab(hTab, z7); else; tp = z7; endif
         if (mod_propFlags(2)) then; rho = tableValue(rhoTab, Tmin, Tmax, tp); else; rho = auxLocal(ind_rho); endif
         select case(mod_model)
         case(3)
@@ -910,7 +914,11 @@ contains
         if (scatOn .and. dNscat>0._R8) call emitScatter(timeLocal, oldLocal, t1, y)
         if (solidEv .and. .not.(IamOut .or. newGas .or. sectorOut)) then
           phaseEv = nint(stateLocal(ind_sph))
-          call solidTransition(whichEv, part%cp, part%cpSol, part%Tmelt, part%hFus, y(7), y(8), phaseEv)
+          if (mod_propFlags(1)) then
+            call solidTransitionTab(whichEv, hTab, part%cpSol, part%Tmelt, part%hFus, y(7), y(8), phaseEv)
+          else
+            call solidTransition(whichEv, part%cp, part%cpSol, part%Tmelt, part%hFus, y(7), y(8), phaseEv)
+          endif
           stateLocal(ind_sph) = real(phaseEv, R8)
           !> Breakup state at the switch: the TAB/ETAB oscillator, the KH-RT timer.
           if ((mod_brkSelect == 4 .or. mod_brkSelect == 5) .and. allocated(eventLocal)) &
@@ -928,7 +936,8 @@ contains
             !> The density at the segment-end state, the one the event block derived d with.
             rhoEvt = part%rho
             if (mod_propFlags(2)) then
-              if (mod_propFlags(1)) then; tEvt = comp_TfromTab(hTab,y(7)); else; tEvt = y(7); endif
+              if (mod_propFlags(1) .and. .not. mod_isSolid) then; tEvt = comp_TfromTab(hTab,y(7))
+              else;                                               tEvt = y(7); endif
               rhoEvt = tableValue(rhoTab, Tmin, Tmax, tEvt)
             endif
             !> Resync the frozen per-droplet d and m in auxLocal after an event.
@@ -1045,8 +1054,13 @@ contains
 
       call eventFunction(part%solidPhase, part%oldState(7), part%oldState(8), part%Tnuc, part%Tmelt, g, which)
       if (which == 0 .or. .not.eventPassed(g)) return
-      call solidTransition(which, part%cp, part%cpSol, part%Tmelt, part%hFus, &
-                           part%oldState(7), part%oldState(8), part%solidPhase)
+      if (mod_propFlags(1)) then
+        call solidTransitionTab(which, hTab, part%cpSol, part%Tmelt, part%hFus, &
+                                part%oldState(7), part%oldState(8), part%solidPhase)
+      else
+        call solidTransition(which, part%cp, part%cpSol, part%Tmelt, part%hFus, &
+                             part%oldState(7), part%oldState(8), part%solidPhase)
+      endif
       part%stateVar(7:8) = part%oldState(7:8)
       !> Breakup state at the switch, as the segment finalize sets it.
       part%brkupVar(1:2) = breakupStateAtSwitch(which, mod_brkSelect, part%time, part%brkupVar(1:2))
@@ -1080,7 +1094,7 @@ contains
     end subroutine rhs5
     subroutine rhs6(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
-      call rhsSolidification(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, rhoTab,mupTab,sigTab, &
+      call rhsSolidification(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,mupTab,sigTab, &
                              gas,gasVert,gasState, ng,ngVert, epsTabM=epsTab)
     end subroutine rhs6
     subroutine rhs8(neq, time, Z, F)
@@ -1151,7 +1165,7 @@ contains
       brkOn = eventType
       if (brkOn .and. mod_isSolid) brkOn = nint(stateLocal(ind_sph)) <= phUndercooled
       if (brkOn) then
-        if (mod_propFlags(1)) then; tp = comp_TfromTab(hTab,y(7)); else; tp = y(7);                 endif
+        if (mod_propFlags(1) .and. .not. mod_isSolid) then; tp = comp_TfromTab(hTab,y(7)); else; tp = y(7); endif
         if (mod_propFlags(2)) then; rho   = tableValue(rhoTab, Tmin, Tmax, tp); else; rho   = auxLocal(ind_rho); endif
         if (mod_propFlags(3)) then; sigma = tableValue(sigTab, Tmin, Tmax, tp); else; sigma = auxLocal(ind_sig); endif
         if (mod_propFlags(4)) then; mup   = tableValue(mupTab, Tmin, Tmax, tp); else; mup   = auxLocal(ind_mup); endif
@@ -1355,7 +1369,7 @@ contains
         factor = rho/particle%deltaL
       end select
       moment = particle%intE(1:3)*factor
-      energy = particle%intE( 4 )*factor !> T*rho_p (cpVariable=false) or h*rho_p (cpVariable=true)
+      energy = particle%intE( 4 )*factor !> T*rho_p (the T state) or h*rho_p (the h state: a varying cp, no solidification)
 
       !> += accumulators; velocity/temperature hold numerators until finalize.
       !$OMP ATOMIC UPDATE

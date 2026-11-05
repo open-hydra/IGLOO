@@ -468,9 +468,9 @@ contains
         do ph = phLiquid, phSolid
             Z = 0._R8;  Z(4) = UG;  Z(7) = Tph(ph);  Z(8) = merge(0.5_R8, merge(1._R8, 0._R8, ph == phSolid), ph == phPlateau)
             auxst = 0._R8;  auxst(ind_sph) = real(ph, R8)
-            call rhsSolidification(13, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, &
+            call rhsSolidification(13, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, noTab, &
                                    gasNodes, gasVert, gas, 9, 8)
-            call rhsSolidification(13, 0._R8, Z, FP, auxP, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, &
+            call rhsSolidification(13, 0._R8, Z, FP, auxP, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, noTab, &
                                    gasNodes, gasVert, gas, 9, 8)
             q   = NU*KG*PI*D*(TG - Tph(ph))
             ref = 0._R8
@@ -686,7 +686,7 @@ contains
                 auxst = 0._R8;  auxst(ind_sph) = real(ph, R8)
                 if (ind_sb1 > 0) auxst(ind_sb1:ind_sb2) = [TOLD, TC]
                 Z7 = 0._R8;  Z7(4) = UP;  Z7(7) = Tph(ph);  Z7(8) = fph(ph);  Z7(9) = np7
-                call rhsSolidification(15, TIME, Z7, F7, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, &
+                call rhsSolidification(15, TIME, Z7, F7, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, &
                                        noTab, gasNodes, gasVert, gas, 9, 8)
                 !> the direct breakup rate on the rebuilt d and the RHS's acceleration
                 slip = norm2(gas(2:4) - Z7(4:6))
@@ -713,7 +713,7 @@ contains
                 p%m = M;   p%d = D
                 auxst = 0._R8;  auxst(ind_sph) = real(ph, R8)
                 Z6 = 0._R8;  Z6(1:8) = Z7(1:8)
-                call rhsSolidification(13, TIME, Z6, F6, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, &
+                call rhsSolidification(13, TIME, Z6, F6, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, &
                                        noTab, gasNodes, gasVert, gas, 9, 8)
                 deallocate(aux, auxst)
                 e16 = maxval(abs(F7(1:6) - F6(1:6))/max(abs(F6(1:6)), tiny(1._R8)), mask=(F6(1:6) /= 0._R8))
@@ -787,7 +787,7 @@ contains
         do i = 1, 3
             Z = 0._R8;  Z(4) = UG;  Z(7) = Tph(i);  Z(8) = fs(i)
             auxst = 0._R8;  auxst(ind_sph) = real(phs(i), R8)
-            call rhsSolidification(13, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, &
+            call rhsSolidification(13, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, noTab, &
                                    gasNodes, gasVert, gas, 9, 8)
             dcf = D*(1._R8 - fs(i) + fs(i)*RHOP/RHOS)**(1._R8/3._R8)
             q   = NU*KG*PI*dcf*(TG - Tph(i))
@@ -820,7 +820,7 @@ contains
         call packAuxVars(p, nauxvar, aux)
         Z = 0._R8;  Z(4) = UG;  Z(7) = Tph(3);  Z(8) = 1._R8
         auxst = 0._R8;  auxst(ind_sph) = real(phSolid, R8)
-        call rhsSolidification(13, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, &
+        call rhsSolidification(13, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, noTab, &
                                gasNodes, gasVert, gas, 9, 8)
         dcf = D*(RHOP/RHOS)**(1._R8/3._R8)
         ref = (NU*KG*PI*dcf*(TG - Tph(3)) + radiativeHeat(EPS, dcf, TG, Tph(3)))/(M*CS)
@@ -875,7 +875,7 @@ contains
         do ph = phLiquid, phSolid
             auxst = 0._R8;  auxst(ind_sph) = real(ph, R8);  auxst(ind_sb1:ind_sb2) = [TOLD, TC]
             Z = 0._R8;  Z(4) = UP;  Z(7) = Tph(ph);  Z(8) = fph(ph);  Z(9) = np7
-            call rhsSolidification(9, TIME, Z, F, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, &
+            call rhsSolidification(9, TIME, Z, F, aux, nauxvar, auxst, max(1, nauxstate), noTab, noTab, noTab, noTab, &
                                    gasNodes, gasVert, gas, 9, 8)
             !> the closed forms at the constant-mass diameter of the rebuilt m and the phase's frozen fraction
             df   = (6._R8*m7*((1._R8 - fph(ph))/RHOP + fph(ph)/RHOS)/PI)**(1._R8/3._R8)
