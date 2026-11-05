@@ -143,6 +143,8 @@ ALLOW = [
      ("plane-back",), None, "tests/infrastructure/plane-back/check.py"),
     ("beckstead-air checks B0-B4", {"ledger"}, r"B[0-4]", ("tests/combustion/beckstead-air/INFO.md",),
      ("beckstead-air",), None, "tests/combustion/beckstead-air/check.py"),
+    ("burnout-threshold checks B0-B2", {"ledger"}, r"B[0-2]", ("tests/evaporation/burnout-threshold/INFO.md",),
+     ("burnout-threshold",), None, "tests/evaporation/burnout-threshold/check.py"),
     ("output checks O1-O2", {"ledger"}, r"O[12]",
      ("tests/standard/out-off/INFO.md", "tests/standard/vie-plait-dense/INFO.md"), ("out-off", "vie-plait-dense"),
      None, "tests/standard/out-off/check.py, tests/standard/vie-plait-dense/check.py"),
