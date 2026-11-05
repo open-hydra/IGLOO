@@ -72,7 +72,7 @@ contains
   pure function determineModel(phaseChange, brkupEqOde, combSelect, solidSelect, cap) result(model)
     logical, intent(in) :: phaseChange, brkupEqOde
     integer, intent(in) :: combSelect, solidSelect
-    logical, intent(in), optional :: cap   !> the burning material carries an oxide cap (xi-cap > 0)
+    logical, intent(in), optional :: cap   !> the burning material carries an oxide cap (xi-cap > 0 or the law)
     integer :: model
     logical :: capped
     capped = .false.

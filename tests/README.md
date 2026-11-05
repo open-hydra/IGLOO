@@ -111,10 +111,10 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 366/366 in a serial build (306 e2e + 59 unit, `self_test`, `registry-docs`, `exe-per-tree`, `e2e-rc-gate`, `lint-test-inputs`, `psd-plane-tool` and `history-census` among the latter, and the
+ctest 371/371 in a serial build (311 e2e + 59 unit, `self_test`, `registry-docs`, `exe-per-tree`, `e2e-rc-gate`, `lint-test-inputs`, `psd-plane-tool` and `history-census` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 28 more `mpi-*` cases, 394 in all (the 28 `mpi-*` pass). The e2e entries are 179 solver cases, two further
-oracles on `khrt-e2e`'s run, the five thread-count gates, the ordered-window gate, the fifteen two-sweep gates, the one hundred and two setup refusals, `vv-order` (thirteen V&V
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 28 more `mpi-*` cases, 399 in all (the 28 `mpi-*` pass). The e2e entries are 181 solver cases, two further
+oracles on `khrt-e2e`'s run, the five thread-count gates, the ordered-window gate, the fifteen two-sweep gates, the one hundred and five setup refusals, `vv-order` (thirteen V&V
 figures independent of the record and zone order; skipped without matplotlib) and `check-order` (nine gate printouts independent of it); the unit entries are 47
 compiled unit tests, the property-table reader on five fixtures, `self_test`, `registry-docs`, `exe-per-tree`, `e2e-rc-gate`, `lint-test-inputs`, `psd-plane-tool` and `history-census`. Evaporation with
 ODE breakup (model 4), breakup events in the mass state and the KH-shed source are gated by `test_evap_breakup`,

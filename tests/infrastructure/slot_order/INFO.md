@@ -10,21 +10,21 @@ take two contiguous slices by their **own** named indices:
 | slice | written by `packAuxVars` | read as | by |
 |---|---|---|---|
 | `aux(ind_Mv : ind_Mv+nep-1)` | `Mv, Lv, cpv, Le, Yinf, LvMvOverRu, invTboil, alphaE, kLiq, muLiq` | `ep(iMv .. imuLiq)` of `IGLOO_Lib_Evaporation` | `rhsEvaporation`, `rhsEvapBreakup` (also `aux(ind_Lv)` directly) |
-| `aux(ind_mb : ind_mb+nmetal-1)` | `Kburn, nBurn, Xeff, betaPart, xiCap, Tign, hFus, cpSol, qComb, rhoRes, cpRes, cStretch` | `mp(imKb .. imCs)` of `IGLOO_Lib_Combustion` | `rhsAlCombustion`, `rhsAlCap` (`becksteadRate`; the cap's `imXi`, `imRr`, `imCr`, `imCs`); `rhsSolidification` (`imHf`, `imCps`) |
+| `aux(ind_mb : ind_mb+nmetal-1)` | `Kburn, nBurn, Xeff, betaPart, xiCap, Tign, hFus, cpSol, qComb, rhoRes, cpRes, cStretch, xiLaw` | `mp(imKb .. imXl)` of `IGLOO_Lib_Combustion` | `rhsAlCombustion`, `rhsAlCap` (`becksteadRate`; the cap's `imXi`, `imRr`, `imCr`, `imCs`, `imXl`); `rhsSolidification` (`imHf`, `imCps`) |
 
 The two orders are written in three files; nothing ties them together but this test. A swap of two slots that
 a model reads (`T-ign` with `h-fus`) changes a result some e2e case sees; a swap between slots that only one
 model reads changes nothing elsewhere, and this test catches it whatever the model.
 
 ## Tests
-Every property gets a distinct value (101..110 for the ten evaporation parameters, 201..212 for the twelve
+Every property gets a distinct value (101..110 for the ten evaporation parameters, 201..213 for the thirteen
 metal parameters); after `setupRHS` + `packAuxVars` every named read must return the property of that name.
 
 | id | model | checks |
 |---|---|---|
 | S1 | 2 (CEM) | `nep = 10`; the slice inside `aux`; `ep(name)` for the ten names; `ind_Lv .. ind_e5` minus `ind_Mv` = the `ep` indices |
 | S2 | 4 (CEM + Reitz-Diwakar) | as S1 |
-| S3 | 5 (Beckstead) | `nmp = nmetal = 12`; the slice inside `aux`; `mp(name)` for the twelve names; the oxide cap's three (product density, heat capacity, stretch) at slots 10, 11, 12, after the nine of the burn law and solidification |
+| S3 | 5 (Beckstead) | `nmp = nmetal = 13`; the slice inside `aux`; `mp(name)` for the thirteen names; the oxide cap's three (product density, heat capacity, stretch) at slots 10, 11, 12, after the nine of the burn law and solidification, and the law of the retained fraction (`xi-law`) at slot 13 |
 | S4 | 6 (solidification) | as S3, and `h-fus`, `cp-solid` at `ind_mb + imHf − 1`, `ind_mb + imCps − 1` |
 
 ## RED (one line of `packAuxVars` each)

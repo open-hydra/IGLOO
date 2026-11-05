@@ -89,6 +89,9 @@ output written).
 | `refuse-cap-product` | own `INPUT/phase.txt`: `burn-box`'s line with `xi-cap=0.2` and no `product`; `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `xi-cap > 0 requires product = a 0-group material of the phase file` |
 | `refuse-cap-varcp` | `combustion/burn-box-cap`'s `phase.txt` (symlinked) and its own ten-row two-zone table, the `OX` zone's `Cp` rising 0.01 J/(kg·K) per K (the enthalpy its integral, so the table itself is valid; `burn-box-cap/make_table.py varcp`) | `xi-cap > 0 requires a constant-cp, constant-density material and product` |
 | `refuse-cap-relative` | as above with a relative ten-row table (an `Enthalpy` column, `make_table.py relative`) | `xi-cap > 0 requires the absolute enthalpy datum (an Enthalpy_abs column)` |
+| `refuse-xi-law-token` | own `INPUT/phase.txt`: `burn-box-cap`'s line with `xi-law=Gallier` (an unknown word); `burn-box`'s `bc.txt`/`solfile.tec`, `burn-box-cap`'s table | `IGLOO: unknown xi-law token` |
+| `refuse-xi-law-cap` | as above with `xi-cap=0.2` beside `xi-law=Gallier21` | `IGLOO: xi-cap beside xi-law=Gallier21` |
+| `refuse-xi-law-noburn` | as above, `A 1 xi-law=Gallier21 product=OX`: no burn law | `IGLOO: xi-law=Gallier21 requires combustion=Beckstead` |
 | `refuse-ox0-range` | own `INPUT/phase.txt`: `combustion/burn-box-ox0`'s two lines with `xi-ox0=1.0` (a particle without metal); `burn-box`'s `bc.txt`/`solfile.tec`, `burn-box-cap`'s table; `refusals/cap-product`'s settings | `xi-ox0 must lie in [0, 1)` |
 | `refuse-ox0-nocap` | own `INPUT/phase.txt`: `burn-box`'s line with `xi-ox0=0.1` (no `xi-cap`, no product line); `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `refusals/cap-product`'s settings | `xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0` |
 | `refuse-brk-sigma` | `tab-e2e` (`INPUT/` symlinked) without `[IGLOO-Properties] sigma` | `Breakup requires sigma` |
@@ -112,7 +115,7 @@ output written).
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All eighty-seven exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All ninety exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next

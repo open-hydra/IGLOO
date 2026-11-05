@@ -511,6 +511,28 @@ diameter 2.1e-6, temperature 3.5e-5 K; 25/25 burnouts at 7.22466e-3 to 7.22467e-
 [7.22465e-3, 7.22467e-3] s; 25/25 residues, mass 1.2e-6, flows 8.6e-7; books 1.9e-6 (mass) and 2.3e-6 (energy); the
 scatter quanta 5.7e-5.
 
+### burn-box-cap-gallier
+
+Gallier's deposition law ([Gallier's deposition law](../theory/combustion.md#galliers-deposition-law)): burn-box-cap's
+parcels with `xi-law=Gallier21` in place of a constant fraction.  The oracle builds the law from the committed tables
+of Figs. 7 and 11, never from IGLOO, and integrates the metal, the cap and the temperature by RK4, the cap's mass
+being no function of the metal's alone; the stretch is the parcel's own on the law's path ($c = 1.340400$ at
+30 µm).  The gates check the log, every trajectory row's mass, diameter and temperature, and the mass source.
+
+**Result:** 1525 rows: mass within 2.3e-6, diameter 2.3e-6, temperature 2.2e-5 K; the mass source within 1.8e-6.
+
+### burn-box-residue-gallier
+
+The residue under the law: five inlet sizes (20, 70, 100, 200, 400 µm) burned out inside the box.  The cap's growth
+in the metal mass holds no time, so the residue's mass over the injected one is the law's path from the injected
+size, between its value at the burnout threshold and at zero metal; the burnout time lies between the path's time to
+the threshold and Beckstead's $d_0^n/K_\mathrm{eff}$.  With Gallier's densities the residue's size ratio is set
+beside the paper's.
+
+**Result:** 25/25 residues inside their mass window, 25/25 burnouts inside their time window; books 5.2e-7 (mass)
+and 3.2e-7 (energy); $\beta$ = 0.581, 0.565, 0.507, 0.400 at 20, 70, 200, 400 µm against Gallier's 0.57, 0.55,
+0.49, 0.40.
+
 ### solid-box
 
 Solidification (model 6): molten droplets injected at 2400 K into the 600 K box gas at
