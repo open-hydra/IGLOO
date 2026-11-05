@@ -327,6 +327,21 @@ the budget by $\sim$250×.
   {% include "vv/images/d2law-line.svg" ignore missing %}
 </figure>
 
+### burnout-threshold
+
+The burnout mass on both sides of $m_0 = 10^{-14}$ kg: a consuming parcel ends at the first accepted step whose
+mass is at or below $m_b = \min(10^{-6} m_0, 10^{-20}\,\mathrm{kg})$.  `d2law-line`'s case with one diameter per
+inlet cell, $D_0$ = 0.1–10 µm log-spaced (`make_box_case.py --rp-sweep`), at $\rho_p$ = 8000, where the bounds
+cross at 1.34 µm: the lighter drops burn out at $10^{-6}$ of their mass ($d_b = 0.01\,D_0$), the heavier ones at
+$10^{-20}$ kg ($d_b$ = 13.4 nm).  The oracle builds $m_b$ from the inputs alone (`tools/burnout.py`) and gates every
+parcel's burnout inside the box, its exit diameter at or below $d(m_b)$ (twice the print), and its life not shorter
+than the closed form $(D_0^2 - d(m_b)^2)/K_0$ to $10^{-3}$: the slow heating only lengthens it.
+
+**Result:** 25/25 burnouts; $d_p/d(m_b)$ 0.9917–0.9999; the lives $3.26$–$3.36\times10^{-3}$ longer than
+$D_0^2/K_0$.  A $10^{-15}$ kg threshold fails the exit diameter on every parcel (46 to 100 times $d(m_b)$) and
+consumes the ten below 0.62 µm at injection; either bound alone fails it on the sizes past the crossing (the 14
+below, the 11 above), the larger of the two on all 25.
+
 ### tab-e2e
 
 The TAB validation case: a 25-drop **radius-based** Weber sweep across the
@@ -386,7 +401,8 @@ release, so the $d^n$ law is the only dynamics.  The oracle codes Eq. 7 from the
 $t_b = a\,D^n/(X_\mathrm{eff}\,p^{0.1}\,T_0^{0.2})$ with $a = 0.00735$, $n = 1.8$ and
 $X_\mathrm{eff} = 0.21$ (a mole fraction): $K_\mathrm{eff} = 1.416955\times10^{-6}$ m$^{1.8}$/s, and
 the case's `K-burn` $= K_\mathrm{eff}/X_\mathrm{eff}$ to nine digits.  A parcel ends at the step whose
-mass reaches the solver's floor of $10^{-15}$ kg ($d_\mathrm{floor} = 0.865$ µm); its exit record
+mass reaches the burnout mass $m_b = \min(10^{-6} m_0, 10^{-20}\,\mathrm{kg}) = 10^{-20}$ kg ($d_\mathrm{floor}$ =
+18.6 nm; the absolute ODE tolerance, $10^{-25}$, sits below it); its exit record
 carries that state's time and diameter.  The gates: the input against Eq. 7; 25 burnouts inside the
 box, one per inlet cell, each at or below $d_\mathrm{floor}$; each exit time against
 $(D_0^n - d_p^n)/K_\mathrm{eff}$ to $10^{-5}$ and not before the floor's time; $d^n = D_0^n -
@@ -400,9 +416,9 @@ prints the rounded $0.003\,D^{1.99}$, 16.5–16.8 % above the drawn line), Eq. 7
 IGLOO's 25 burnout times.  Eq. 7 at this condition lies 2.8× (10 µm) to 1.17× (1000 µm) above the
 drawn fit, inside the scatter of the 12 sources.  Plotted, not gated against the data.
 
-**Result:** 25/25 burnouts; exit times within $3.9\times10^{-8}$ of Eq. 7's, the last step's overshoot
-past the floor $+2.5\times10^{-7}$ to $+1.37\times10^{-3}$ of its time; 170 rows within their print
-budget (0.997 of it at most).
+**Result:** 25/25 burnouts; exit times within $3.9\times10^{-9}$ of Eq. 7's, the last step's end
+$-2.7\times10^{-9}$ to $+2.5\times10^{-6}$ of the floor's time past it; 170 rows within their print
+budget (0.998 of it at most).
 
 <figure>
   {% include "vv/images/beckstead-air.svg" ignore missing %}
@@ -426,14 +442,14 @@ the mass source within 1.3e-6.
 The burnout residue ([The burnout residue](../theory/combustion.md#the-burnout-residue)): a faster burn
 law burns every capped parcel out inside the box, and each cap becomes a parcel of the freezing product
 `OX`.  The gates check one residue per parcel burned out, its birth row against its parent's exit
-record, its mass $\xi\nu(m_0 - 10^{-15}\,\mathrm{kg})$ and diameter, the mass and energy books with the
+record, its mass $\xi\nu(m_0 - m_b)$ and diameter, the mass and energy books with the
 birth flux withdrawn, and every row of its freezing (undercooled at birth, the nucleation jump, the
 relaxation to the gas) against the closed forms.  Two siblings run with the same executable: `d-residue`
 with the burning line in two groups (the IDs, the size, the number rate), and `[IGLOO-ODE] fail-after`,
 the residue born after a solver failure at the parcel's last accepted step.
 
-**Result:** 25/25 residues; mass 5.2e-6, books 8.5e-7 (mass) and 5.8e-7 (energy); the freezing rows within
-0.096 of their print budget; 50/50 residues with `d-residue`; after the forced failure every parent ends
+**Result:** 25/25 residues; mass 2.3e-7, books 3.7e-7 (mass) and 1.3e-6 (energy); the freezing rows within
+0.29 of their print budget; 50/50 residues with `d-residue`; after the forced failure every parent ends
 at or past `fail-after` and its residue's mass is the burn law's at that time (3.8e-6).
 
 ### burn-box-ox0
@@ -444,12 +460,12 @@ whole particle's, so each parcel is injected at $m_{p0} = (\pi/6)\,d_{p0}^3/((1 
 with a tenth of that mass as its cap.  The oracle integrates the burn law from that cap, with the stretch re-evaluated
 from it ($c = 1.388383$), on Gallier's exact lobe.  The gates check the log, the injection rows, every trajectory row's
 mass, diameter and temperature, the burnout inside Beckstead's time for the injected diameter, the residue's mass
-$m_\mathrm{ox0} + \xi\nu(m_\mathrm{Al0} - 10^{-15}\,\mathrm{kg})$ and flow, the mass and energy books (the inflow at the
+$m_\mathrm{ox0} + \xi\nu(m_\mathrm{Al0} - m_b)$ and flow, the mass and energy books (the inflow at the
 mixture's enthalpy) and the scatter quanta.
 
 **Result:** the stretch printed 1.388382 (7.2e-7); the injection mass within 4.7e-7; 725 rows: mass within 2.6e-6,
-diameter 2.1e-6, temperature 3.5e-5 K; 25/25 burnouts at 7.1985e-3 to 7.2003e-3 s, inside $[t(s_b), t_b]$ =
-[7.1974e-3, 7.2247e-3] s; 25/25 residues, mass 2.9e-6, flows 3.3e-6; books 5.2e-7 (mass) and 6.2e-8 (energy); the
+diameter 2.1e-6, temperature 3.5e-5 K; 25/25 burnouts at 7.22466e-3 to 7.22467e-3 s, inside $[t(s_b), t_b]$ =
+[7.22465e-3, 7.22467e-3] s; 25/25 residues, mass 1.2e-6, flows 8.6e-7; books 1.9e-6 (mass) and 2.3e-6 (energy); the
 scatter quanta 5.7e-5.
 
 ### solid-box
@@ -552,12 +568,12 @@ times.
 
 `boiling-zgr-flash` with the gas at 1 m/s and $d_0$ = 20 µm: the drop flashes down to $T_B$
 ($x$ = 0.0612 m, $m/m_0 = 0.926$), evaporates under CEM below it, cools to its wet bulb (463.8 K) and
-is consumed at $x$ = 0.0862 m.  The reference integrates the branch to $T_B$ and CEM from there to
-$m$ = 1e-15 kg (scipy, an event at $T_B$).  Witnesses: rows on both sides of $T_B$, every parcel
+is consumed at $x$ = 0.0864 m.  The reference integrates the branch to $T_B$ and CEM from there to
+the burnout mass $m_b$ = 1e-20 kg (scipy, an event at $T_B$).  Witnesses: rows on both sides of $T_B$, every parcel
 consumed within 2.5e-4 m of the reference's burnout, no non-finite state or solver failure.  The
 absolute ODE tolerance is 1e-22, below the mass of the last rows.
 
-**Result:** 25/25 parcels; $T$ worst at 0.310 of its tolerance, $m$ at 0.967; the burnouts 2e-6 m
+**Result:** 25/25 parcels; $T$ worst at 0.310 of its tolerance, $m$ at 0.967; the burnouts 2.4e-7 m
 from the reference's.  The regime test bypassed consumes every drop by $x$ = 0.025 m; the 0.5 K floor
 of the superheat dropped leaves the drop above $T_B$ to the outlet.
 
@@ -673,7 +689,7 @@ state and `solver-fail-consumed-m4` the solver-failure exit.
 
 **Result:** composed rate within $1.4\cdot10^{-4}$ of the measured diameter over the breakup
 window (tolerance $2\cdot10^{-3}$), the d²-law integral within half its budget after it,
-source closure $5\cdot10^{-16}$, 25 burnouts at $x=0.544$ m.
+source closure $4\cdot10^{-16}$, 25 burnouts at $x=0.602$ m.
 
 ### khrt-varcp
 
@@ -697,7 +713,7 @@ with $c_p = 1250 + (T - 300)$ J/(kg K) on a table.  The latent term enters
 $\mathrm{d}h/\mathrm{d}t = (Q + \dot m L_v)/m$ with no heat-capacity factor; the check integrates it along the
 measured diameter on every run of rows on one Reitz–Diwakar branch and brackets the branch switch.
 
-**Result:** 4450 rows, the worst at 0.802 of its tolerance; the mass audit and the energy deposit closed.  The latent
+**Result:** 4695 rows, the worst at 0.802 of its tolerance; the mass audit and the energy deposit closed.  The latent
 term with a temperature-state factor puts the rows up to 61 K off and lets the drops leave the box.
 
 ---

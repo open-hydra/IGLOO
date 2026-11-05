@@ -108,8 +108,11 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
    (and `sectorOut` when the point left the wedge sector); for `ord2` mode a separate
    gas-dual-cell test sets `newGas`.
 3. **Burnout test** — for the mass-consuming models (2 evaporation, 4 evaporation with ODE
-   breakup, 5 combustion) the droplet is declared consumed once its mass drops to
-   `mBurnTol = 1e-15` kg.
+   breakup, 5 combustion, 8 the capped burn: the metal's mass) the droplet is declared
+   consumed once its mass slot drops to $m_b = \min(10^{-6} m_0, 10^{-20}\,\mathrm{kg})$, $m_0$ the
+   drop's reference mass: its mass at injection, a child's at its birth, a KH-RT drop's at its
+   last RT breakup or KH shed (a TAB or ETAB event keeps the injection mass).  The step that
+   crosses $m_b$ can end below zero; the burnout state's mass is then set to 0.
 4. **NaN / tiny-step guard** — `exitLoop` is set if `any(y/=y)`, `deltat < dtMin`, or the
    step moved the particle by less than the containment tolerance.
 5. **Event breakup** — `breakupEvent` (TAB/ETAB/KHRT) detects and applies discrete
