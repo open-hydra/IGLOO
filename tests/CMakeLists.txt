@@ -1593,8 +1593,9 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
         ENVIRONMENT "OMP_NUM_THREADS=2;KMP_STACKSIZE=100M"
         TIMEOUT 900)
     # the cross-rank sum in rank order: at n = 3 and 4 the grid fields are the same bytes with the library's
-    # default collectives and with I_MPI_ADJUST_ALLREDUCE=8, and within 1e-12 of n = 1. Fixture: the
-    # 1672-parcel vortex cloud (every cell fed by every rank); check.py sets one thread per rank itself.
+    # default collectives and with its ring allreduce (I_MPI_ADJUST_ALLREDUCE=8; Open MPI's coll_tuned algorithm 4
+    # under use_dynamic_rules), and within 1e-12 of n = 1. Fixture: the 1672-parcel vortex cloud (every cell fed by
+    # every rank); check.py sets one thread per rank itself.
     add_test(NAME mpi-determinism
         COMMAND python3 -B check.py "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}"
                                    "$<TARGET_FILE:IGLOO>"
