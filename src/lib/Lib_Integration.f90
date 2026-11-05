@@ -128,8 +128,8 @@ contains
     integer,  parameter :: maxShed=1000
     real(R8), parameter :: safety=0.99, dtMin=1.e-14_R8, tauFactor=100._R8
     real(R8), parameter :: escapeDist=1.e-6_R8   ! min displacement per sliver-escape hop (startedOut)
-    !> Burnout threshold on droplet mass [kg]: a consuming droplet at m <= mBurnTol is declared consumed.
-    real(R8), parameter :: mBurnTol=1.e-15_R8
+    !> Burnout threshold on the droplet mass: the lower of a fraction of its reference mass m0 and an absolute bound [kg].
+    real(R8), parameter :: epsBurn=1.e-6_R8, mBurnAbs=1.e-20_R8
 
     !> MPI: a parcel of this loop failed; its rank aborts after the join (empty blocks keep the window whole)
     if (region_failed()) then
@@ -860,6 +860,8 @@ contains
       endif
       !> Burnout: the droplet was consumed on a still-good state; falls through to the normal finalize.
       if (burnedOut) then
+        !> The step that crosses the threshold can end below zero: the burnout state holds no negative mass.
+        y(8) = max(y(8), 0._R8)
         part%gone = .true.
         consumed  = .true.     !> remnant transfers to the gas; see the source block
       endif
@@ -871,7 +873,7 @@ contains
         !> Report the remaining mass fraction for mass-evolving models.
         if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8)           &
           write(*,'(A,ES10.3,A,ES10.3,A)') '          last good m/m0 =',                   &
-                oldLocal(8)/part%m0, '  (burnout fires at m =', mBurnTol, ' kg)'
+                oldLocal(8)/part%m0, '  (burnout fires at m =', min(epsBurn*part%m0, mBurnAbs), ' kg)'
         call revertToLastAccepted()
         return
       endif
@@ -1118,7 +1120,7 @@ contains
 
       !> Burnout test on the droplet mass (model 8: the metal's), consumption models only.
       if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) then
-        if (y(8) <= mBurnTol) burnedOut = .true.   ! y(8) IS the droplet mass [kg]
+        if (y(8) <= min(epsBurn*part%m0, mBurnAbs)) burnedOut = .true.   ! y(8) IS the droplet mass [kg]
       endif
 
       !> Solidification: the step ends strictly past the phase's threshold from a start at or before it.

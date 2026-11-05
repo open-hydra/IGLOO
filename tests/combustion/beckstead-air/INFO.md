@@ -38,21 +38,25 @@ The uniform-gas box of `tools/make_box_case.py` (60×5×5 cells over 0.15 × 0.0
   longest burn, 2.81 s at 1 mm, ends at x = 0.112 m inside the 0.15 m box; the 10 µm burn ends at x = 28 µm).
 - **K-burn carries `K_eff/X_eff` to nine digits.** The late trajectory rows of the 121–1000 µm parcels resolve the
   burn rate to 1e-8: K-burn written to seven digits (6.747407e-6, 1.0e-8 below `K_eff/X_eff`) puts 6 of the 170 rows
-  over their print budget (3.23×); nine digits (7.5e-12) leave every row inside it.
+  over their print budget (3.14×); nine digits (7.5e-12) leave every row inside it.
 - `properties.dat` → `tests/common/properties.dat` (ρ_p = 2950 kg/m³, c_p = 1250 J/kg/K); the oracle reads ρ_p only
   for `d_floor` (it cancels in d^n(t)).
 - `input.ini`: `out-time = on` (the time on every row and exit record), `print-dcell = 1`, `out-file = S`;
-  `[IGLOO-ODE] H-sdirk4`, `relative-tol = 1e-10`, `absolute-tol = 1e-20` — the absolute tolerance sits below the
+  `[IGLOO-ODE] H-sdirk4`, `relative-tol = 1e-10`, `absolute-tol = 1e-25` — the absolute tolerance sits below the
   smallest mass it controls (a 10 µm particle weighs 1.5e-12 kg); `time-end` absent (off).
 
-**The burnout.** A parcel ends at the accepted step whose end mass is at or below 1e-15 kg, the solver's absolute
-floor: `d_floor = (6 m_b/(π ρ_p))^{1/3} = 0.8651 µm`, `t_floor = (D0^n − d_floor^n)/K_eff` (0.98779 `t_b` at 10 µm,
-0.99981 `t_b` at 100 µm). The exit record (bc 0) carries that step's end state, so its `t` and `d_p` are one state;
-the overshoot `t_exit − t_floor` is the part of that last step past the floor: +1.8e-8 … +1.9e-6 s, +2.5e-7 …
-+1.37e-3 of `t_floor` (the largest at 10 µm). The 13 sizes up to 100 µm (every D below 120.7 µm) burn out before
+**The burnout.** A parcel ends at the accepted step whose end mass is at or below the burnout mass
+`m_b = min(1e-6 m0, 1e-20 kg)` (`tools/burnout.py`), 1e-20 kg on every parcel here (m0 ≥ 1.5e-12 kg):
+`d_floor = (6 m_b/(π ρ_p))^{1/3} = 18.64 nm`, `t_floor = (D0^n − d_floor^n)/K_eff` (`t_b`(1 − 1.22e-5) at 10 µm,
+`t_b`(1 − 1.9e-7) at 100 µm). The exit record (bc 0) carries that step's end state, so its `t` and `d_p` are one
+state; the overshoot `t_exit − t_floor`, the part of that last step past the floor less the time integration's error,
+is −3.8e-9 … +6.1e-9 s, −2.7e-9 … +2.5e-6 of `t_floor` (the largest at 10 µm). The absolute tolerance must sit
+below m_b: at `absolute-tol = 1e-20` the last 1e-20 kg of the mass is outside the error control, the printed `d_p`
+is any size below d_floor at the step's `t`, and B2's residual reaches (d_floor/D0)^n, 1.22e-5 at 10 µm (FAIL);
+at 1e-25 it is 3.9e-9. The 13 sizes up to 100 µm (every D below 120.7 µm) burn out before
 the first cell face (x = 2.5 mm, reached at t = 0.0625 s): their trajectory holds the injection row only, and the
-burn time comes from the exit record. The longest solver call of the 10 µm parcel takes 62 computed steps (the
-least `max-steps-ode` it runs with); the 1 mm parcel writes 45 rows and its longest call takes 331. A run takes
+burn time comes from the exit record. The longest solver call of the 10 µm parcel takes 540 computed steps (the
+least `max-steps-ode` it runs with); the 1 mm parcel writes 45 rows and its longest call takes 907. A run takes
 about 0.6 s; the log carries no revert, stuck, no-progress, outer-maxIter or solver-error line.
 
 ## What it verifies (`check.py`, Eq. 7 coded from the paper)
@@ -60,9 +64,9 @@ about 0.6 s; the log carries no revert, stuck, no-progress, outer-maxIter or sol
 | id | gate | tolerance | measured |
 |---|---|---|---|
 | B0 | `phase.txt`: K-burn × X-eff = `K_eff` of Eq. 7; n-burn = 1.8, X-eff = 0.21 | 1e-6 relative | 7.5e-12 |
-| B1 | 25 exit records, one per inlet cell (the exit (Y, Z) names the cell, its `bc.txt` record D0 = 2 rp), every `bc` = 0, `d_p ≤ d_floor`(1 + 1e-5), `t > 0` — the burnout witness no other bc-0 ending meets; each parcel's first row at d = D0, every row in its cell's (Y, Z) | half an E13.6 unit; F12.6 | `d_p` ≤ 0.8641 µm; 0.40 of the unit |
-| B2 | `\|t_exit − (D0^n − d_p^n)/K_eff\| ≤ EPS t_exit`; the floor, one-sided: `t_exit ≥ t_floor (1 − EPS)`; the overshoot printed, not gated | EPS = 1e-5 (5 × measured, floored) | 3.9e-8; 25/25 |
-| B3 | every row: `\|d^n − (D0^n − K_eff t)\|` within the row's print budget, `n d^{n−1}` × half an E13.6 unit of d + `K_eff` × half an ES16.8 unit of t | 1 | 0.9967 (170 rows) |
+| B1 | 25 exit records, one per inlet cell (the exit (Y, Z) names the cell, its `bc.txt` record D0 = 2 rp), every `bc` = 0, `d_p ≤ d_floor`(1 + 1e-5), `t > 0` — the burnout witness no other bc-0 ending meets; each parcel's first row at d = D0, every row in its cell's (Y, Z) | half an E13.6 unit; F12.6 | `d_p` ≤ 18.613 nm; 0.40 of the unit |
+| B2 | `\|t_exit − (D0^n − d_p^n)/K_eff\| ≤ EPS t_exit`; the floor, one-sided: `t_exit ≥ t_floor (1 − EPS)`; the overshoot printed, not gated | EPS = 1e-5 (5 × measured, floored) | 3.9e-9; 25/25 |
+| B3 | every row: `\|d^n − (D0^n − K_eff t)\|` within the row's print budget, `n d^{n−1}` × half an E13.6 unit of d + `K_eff` × half an ES16.8 unit of t | 1 | 0.9984 (170 rows) |
 | B4 | `T_p = 300 K` and `u_p = (u_g, 0, 0)` on every row and exit record | half an F12.6 unit | exact |
 
 ## RED
@@ -74,8 +78,8 @@ about 0.6 s; the log carries no revert, stuck, no-progress, outer-maxIter or sol
 | `T-ign = 350` (above the injection temperature) | B1: nothing burns, 25 exits at the outlet (bc 400) |
 | `beta-part=0.3 q-comb=1000000` (a heat release) | B4: T_p 882 K above 300 K |
 | `kv 0.99` in `bc.txt` (a slip) | B4: 4.0e-4 m/s |
-| the oracle without `d_floor` (t_floor = t_b) | B2's floor check: t_exit at 10 µm 1.09 % short of t_b |
-| K-burn to seven digits (6.747407e-6) | B3: 6 of 170 rows over their budget, 3.23× |
+| the oracle without `d_floor` (t_floor = t_b) | passes: the 10 µm parcel ends 9.7e-6 of t_b short of t_b, inside EPS (d_floor^n/K_eff is 1.22e-5 of t_b there); B1 is the floor's witness |
+| K-burn to seven digits (6.747407e-6) | B3: 6 of 170 rows over their budget, 3.14× |
 
 ## Comparison plot
 `verify.py` writes `OUTPUT/beckstead-air.svg` (non-gating; no-op without matplotlib), on Fig. 1's axes (log-log,

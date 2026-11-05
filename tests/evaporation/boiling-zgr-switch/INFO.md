@@ -9,17 +9,17 @@
 `boiling-zgr-flash` with the gas at 1 m/s (`make_box_case.py --ug 1.0`) and d₀ = 20 µm: the drop (T₀ = 640.002 K)
 flashes in the boiling branch until its mean temperature reaches the boiling temperature at the gas pressure
 (599.999999959 K, x = 0.061238 m, m/m₀ = 0.925908), then cools in CEM to its wet bulb (463.83 K) and is consumed at
-x = 0.086235 m. `INPUT/bc.txt` and `solfile.tec` come from `make_fixture.py`; `properties.dat` is `boiling-zgr-flash`'s.
-The absolute ODE tolerance is 1e-22, below the mass (4e-12 kg at injection, 1e-15 kg at burnout): with 1e-11 the
+x = 0.086356 m. `INPUT/bc.txt` and `solfile.tec` come from `make_fixture.py`; `properties.dat` is `boiling-zgr-flash`'s.
+The absolute ODE tolerance is 1e-22, below the mass (4e-12 kg at injection, 1e-20 kg at burnout): with 1e-11 the
 integrator leaves the mass of the last rows uncontrolled (up to 1.4 % off at m = 4e-14 kg), and at 1e-26 or below the
 step across the switch at T_B falls under the integrator's floor (`Run_ODESolver err` at x = 0.06 m).
 
 `check.py` (inputs only, the trajectory read by name, scipy needed): T(x) and m(x) on every row against
 `tools/zgr_oracle.py` — the boiling branch integrated by scipy `solve_ivp` (LSODA, rtol 1e-12) to T = T_B, then CEM
-(Radau, rtol 1e-10) to m = 1e-15 kg — at t = x/u_g; T within 5e-7 K + |dT/dx| 5e-7 m + 1e-6 K — worst 0.310 of it;
+(Radau, rtol 1e-10) to the burnout mass m_b = min(1e-6 m₀, 1e-20 kg) = 1e-20 kg — at t = x/u_g; T within 5e-7 K + |dT/dx| 5e-7 m + 1e-6 K — worst 0.310 of it;
 m within the E13.6 half-ULP of m + |dm/dx| 5e-7 m + 1e-8 m — worst 0.967 of it. Witnesses: every parcel has rows above
 and below T_B; every parcel burns out inside the box (an exit record of code 0 within 2.5e-4 m of the oracle's
-burnout, 2e-6 m measured, its diameter that of m ≤ 1e-15 kg); no `non-finite state` or `Run_ODESolver err` line.
+burnout, 2.4e-7 m measured, its diameter that of m ≤ m_b); no `non-finite state` or `Run_ODESolver err` line.
 
 ## Fails on
 - a solver that refuses `boiling = ZGR` at setup: no trajectory file;

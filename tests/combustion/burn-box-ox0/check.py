@@ -19,11 +19,13 @@ t. Nothing is read from the code under test to build an expectation: the inputs 
   I   every burning parcel's injection row: m = m_p0 = 4.278788e-11 kg within 2e-6, d = d_p0
   C   every burning parcel's row before its exit record against the oracle at its t: m and d 4e-6, T 0.1 K; the
       coast u = u_g, v = w = 0
-  B   each parent's exit record (bc 0) at a time inside [t(s_b), t_b] = [7.1974415e-03, 7.2246741e-03] s, 3e-6 at
-      each end; s_b = (1e-15 kg/m_Al0)^(n/3), the burnout threshold on the metal
+  B   each parent's exit record (bc 0) at a time inside [t(s_b), t_b] = [7.2246481e-03, 7.2246741e-03] s, 3e-6 at
+      each end; s_b = (m_b/m_Al0)^(n/3), m_b = min(1e-6 m_p0, 1e-20 kg) = 1e-20 kg (tools/burnout.py) the burnout
+      threshold on the metal; t(s_b) = int_{s_b}^1 ds/(K_eff c F(f_ox(s))/d_Al0^n), a midpoint rule on cells
+      geometric near s_b (scipy's quad agrees to 4e-13): the burn rate depends on s alone
   R1  one residue per parent burned out inside the box: the product's IDs 1-25 = the parents' exit records with
       X < Lx - 1e-6; the product's banner counts them
-  R2  each residue's birth row: m = m_ox0 + xi nu (m_Al0 - 1e-15 kg) = 1.883055e-11 kg within 3e-5, d = (6 m/(pi
+  R2  each residue's birth row: m = m_ox0 + xi nu (m_Al0 - m_b) = 1.883092e-11 kg within 3e-5, d = (6 m/(pi
       rho_res))^(1/3) of the printed m within 5e-6
   R3  sum of wdot(A) = sum of the parents' mdot - sum of the residues' mdot (exit records), wdot(OX) = 0: 1e-5
   R3e sum of the energy source = sum_parents mdot (h_mix(600 K) + u_g^2/2) - sum_residues mdot (c_res T_exit +
@@ -33,8 +35,8 @@ t. Nothing is read from the code under test to build an expectation: the inputs 
 
 X0 = 0 checks a run of the line without xi-ox0 (c 1.397686, m_p0 = (pi/6) rho_Al d_p0^3, no xi-ox0 line in the log).
 
-The gate fails on the stretch not re-evaluated (W, C1 3.2e-3, B: the burnouts 0.63 % before the window), on the factor
-(d_Al0/d_p0)^n dropped (W, C, B 4.6 % early), on the split on (pi/6) rho_Al d_p0^3 (I, R2, R5 2.5e-2), on the split
+The gate fails on the stretch not re-evaluated (W, C1 3.2e-3, B: the burnouts 0.67 % before the window), on the factor
+(d_Al0/d_p0)^n dropped (W, C, B 4.7 % early), on the split on (pi/6) rho_Al d_p0^3 (I, R2, R5 2.5e-2), on the split
 skipped (C1 0.14, R2 0.14, R3e 0.35), on the number rate left at mdot/((pi/6) rho_Al d_p0^3) (R3 4.7e-2, R5 2.5e-2), on
 the scatter pre-pass's number rate on (pi/6) rho_Al d_p0^3 (S 2.6e-2) and on the xi-ox0 line missing from the log (W).
 """
@@ -47,6 +49,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
 from datcols import zones  # noqa: E402
+from burnout import burn_mass  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("burnboxcap_oracle", os.path.join(HERE, "..", "burn-box-cap", "check.py"))
 cap = importlib.util.module_from_spec(_spec)
@@ -61,7 +64,6 @@ XI, NU = cap.XI, cap.NU
 RHO_AL, C_AL, D0, NB = bb.RHO_P, bb.CP_P, bb.D0, bb.NB
 RHO_RES, C_RES = 3950.0, 1887.6
 HOFF_A, HOFF_RES = -372687.5, -1.723894e7
-MB = 1.0e-15
 LX, LY, LZ = 0.15, 0.05, 0.05
 N_PARENTS, TRAJ_SAMPLE = 25, 100
 DT = 1.0e-6
@@ -70,6 +72,7 @@ C_STRETCH = STRETCH[X0]
 MP0 = math.pi / 6.0 * D0 ** 3 / ((1.0 - X0) / RHO_AL + X0 / RHO_RES)
 MAL0, MOX0 = (1.0 - X0) * MP0, X0 * MP0
 DAL0 = (6.0 * MAL0 / (math.pi * RHO_AL)) ** (1.0 / 3.0)
+MB = burn_mass(MP0)                               # the whole particle is m0; m_b on the metal
 MRES = MOX0 + XI * NU * (MAL0 - MB)
 SB = (MB / MAL0) ** (NB / 3.0)
 TB = D0 ** NB / KEFF
@@ -111,23 +114,29 @@ def rk4(s, T, h):
 
 
 def oracle(times):
-    """(s, T) at each of the sorted times and the time s crosses s_b (linear within its step): RK4 from (1, T_g) at
-    t = 0 in steps of at most DT, continued past the last time until the crossing."""
-    out, st = {}, {"s": 1.0, "T": bb.T_G, "t": 0.0, "t_sb": None}
-
-    def step(h):
-        s1, T1 = rk4(st["s"], st["T"], h)
-        if st["t_sb"] is None and s1 <= SB < st["s"]:
-            st["t_sb"] = st["t"] + h * (st["s"] - SB) / (st["s"] - s1)
-        st["s"], st["T"], st["t"] = s1, T1, st["t"] + h
-
+    """(s, T) at each of the sorted times: RK4 from (1, T_g) at t = 0 in steps of at most DT."""
+    out, st = {}, {"s": 1.0, "T": bb.T_G, "t": 0.0}
     for tq in times:
         while st["t"] < tq - 1e-15:
-            step(min(DT, tq - st["t"]))
+            h = min(DT, tq - st["t"])
+            st["s"], st["T"] = rk4(st["s"], st["T"], h)
+            st["t"] += h
         out[tq] = (st["s"], st["T"])
-    while st["t_sb"] is None and st["t"] < 2.0 * TB:
-        step(DT)
-    return out, st["t_sb"] if st["t_sb"] is not None else float("nan")
+    return out
+
+
+def t_of_s(sb, n=100000):
+    """The time s falls to sb: int_sb^1 ds/(K_eff c F(f_ox(s))/d_Al0^n), midpoint on cells growing by 2 % from sb
+    to 1e-3, then n uniform cells to 1 (the integrand grows as s^(-5/3) toward 0 through F)."""
+    def rate(s):
+        mal, mox, _, _ = state(s)
+        return KEFF * C_STRETCH * cap.LOBE.F(mox / (mal + mox)) / DAL0 ** NB
+    edges, a = [sb], sb
+    while a < 1.0e-3:
+        a = min(a * 1.02, 1.0e-3)
+        edges.append(a)
+    edges += [1.0e-3 + (1.0 - 1.0e-3) * k / n for k in range(1, n + 1)]
+    return sum((hi - lo) / rate(0.5 * (lo + hi)) for lo, hi in zip(edges[:-1], edges[1:]))
 
 
 def read_source(path):
@@ -204,7 +213,8 @@ def main():
 
     # C: every row before its parcel's exit record against the oracle; B: the burnout times
     before = [(pid, r) for pid, rs in rows.items() for r in rs if pid in ex and r["t"] < ex[pid]["t"]]
-    orc, t_sb = oracle(sorted({r["t"] for _, r in before}))
+    orc = oracle(sorted({r["t"] for _, r in before}))
+    t_sb = t_of_s(SB)
     wm = wd = wT = coast = vw = 0.0
     at_m = at_d = at_T = None
     for pid, r in before:
@@ -257,7 +267,7 @@ def main():
         m, d = rs[0]["m<sub>p"], rs[0]["d<sub>p"]
         wm2 = max(wm2, abs(m - MRES) / MRES)
         wd2 = max(wd2, abs(d - (6.0 * m / (math.pi * RHO_RES)) ** (1.0 / 3.0)) / d)
-    checks.append(("R2 residue mass vs m_ox0 + xi nu (m_Al0 - 1e-15 kg) = %.6e kg: worst %.2e <= %.0e; d vs "
+    checks.append(("R2 residue mass vs m_ox0 + xi nu (m_Al0 - m_b) = %.6e kg: worst %.2e <= %.0e; d vs "
                    "(6 m/(pi rho_res))^(1/3) of the printed m: worst %.2e <= %.0e" % (MRES, wm2, TOL_M2, wd2, TOL_D2),
                    len(res) > 0 and wm2 <= TOL_M2 and wd2 <= TOL_D2))
 

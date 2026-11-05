@@ -29,7 +29,7 @@ files carry no `f` column): `burn-box`'s `bc.txt` and `solfile.tec` and `burn-bo
     OX 0
 
 `m_p0 = 4.278788e-11 kg` (`ρ_mix` 3026.62 kg/m³), `m_Al0 = 3.850909e-11 kg`, `d_Al0 = 2.921332e-5 m`. The 25
-parcels burn out near x = 0.072 m at 765.25 K; each residue (`m = 1.883055e-11 kg`, `d = 2.0881e-5 m`, 0.696 of
+parcels burn out near x = 0.072 m at 764.84 K; each residue (`m = 1.883092e-11 kg`, `d = 2.0881e-5 m`, 0.696 of
 `d_p0`) relaxes to 678.16 K at the outlet.
 
 ## What it verifies (`check.py`)
@@ -39,12 +39,12 @@ parcels burn out near x = 0.072 m at 765.25 K; each residue (`m = 1.883055e-11 k
 | W | the log: `xi-ox0= 1.000E-01`; `stretch c =  1.388382 from xi-ox0 = 0.1000` read back against 1.388383; the capped banner; `combustion product (residues: 25)` | 3e-6 relative | 7.2e-7 |
 | I | each burning parcel's injection row: `m = m_p0`, `d = d_p0` | 2e-6 relative; exact | 4.7e-7; exact |
 | C | every trajectory row of A before its parcel's exit record against the oracle at the row's `t` (RK4 on `(s, T)`, Gallier's exact `F`, `c` typed): `m = m_Al + m_ox`, the equal-volume `d`, `T`; the coast `u = u_g`, `v = w = 0` (725 rows) | 4e-6, 4e-6 relative; 0.1 K | 2.6e-6, 2.1e-6; 3.5e-5 K |
-| B | each parent's exit record (bc 0) at a time inside `[t(s_b), t_b] = [7.1974437e-3, 7.2246741e-3] s`, `s_b = (1e-15 kg/m_Al0)^{n/3}`: the burnout fires on the first accepted step with `m_Al ≤ 1e-15 kg`, and no step with `m_Al < 0` is accepted | 3e-6 relative at each end | 7.1985146e-3 to 7.2002811e-3 s |
+| B | each parent's exit record (bc 0) at a time inside `[t(s_b), t_b] = [7.2246481e-3, 7.2246741e-3] s`, `s_b = (m_b/m_Al0)^{n/3}`, `m_b = min(1e-6 m_p0, 1e-20 kg) = 1e-20 kg` (`tools/burnout.py`), `t(s_b)` the burn law's quadrature from 1 to `s_b` (the rate depends on `s` alone): the burnout fires on the first accepted step with `m_Al ≤ m_b` | 3e-6 relative at each end | 7.2246567e-3 to 7.2246705e-3 s |
 | R1 | one residue per parent burned out inside the box: IDs 1–25 = the parents' exit records with `X < Lx − 1e-6`; the product's banner 25 | exact | 25 |
-| R2 | each residue's birth row: `m = m_ox0 + ξν(m_Al0 − 1e-15 kg) = 1.883055e-11 kg`; `d = (6m/(π ρ_res))^{1/3}` of the printed `m` | 3e-5; 5e-6 relative | 2.9e-6; 1.6e-6 |
-| R3 | `Σ wdot(A) = Σ ṁ(parents) − Σ ṁ(residues)` (exit records); `wdot(OX) = 0` | 1e-5 relative | 5.2e-7 |
-| R3e | `Σ E = Σ ṁ_p (h_mix(600 K) + u²/2) − Σ ṁ_r (c_res T_exit + hOff_res + u²/2)`, `h_mix(600 K) = −1.271057e6 J/kg` | 1e-5 relative | 6.2e-8 |
-| R5 | each residue's `ṁ = (m_res/m_p0)` × its parent's | 1e-5 relative | 3.3e-6 |
+| R2 | each residue's birth row: `m = m_ox0 + ξν(m_Al0 − m_b) = 1.883092e-11 kg`; `d = (6m/(π ρ_res))^{1/3}` of the printed `m` | 3e-5; 5e-6 relative | 1.2e-6; 2.7e-6 |
+| R3 | `Σ wdot(A) = Σ ṁ(parents) − Σ ṁ(residues)` (exit records); `wdot(OX) = 0` | 1e-5 relative | 1.9e-6 |
+| R3e | `Σ E = Σ ṁ_p (h_mix(600 K) + u²/2) − Σ ṁ_r (c_res T_exit + hOff_res + u²/2)`, `h_mix(600 K) = −1.271057e6 J/kg` | 1e-5 relative | 2.3e-6 |
+| R5 | each residue's `ṁ = (m_res/m_p0)` × its parent's | 1e-5 relative | 8.6e-7 |
 | S | the scatter quanta of A and OX: `dNscat = (Σ_p ṁ_p/m_p0)(L_ref/u_g)/(100 × 25)`, `L_ref` the box diagonal | 1e-3 relative | 5.7e-5 |
 
 Each parcel and its residue ride one `(j, k)` column: the printout is the same at one and at five threads.
@@ -53,10 +53,10 @@ Each parcel and its residue ride one `(j, k)` column: the printout is the same a
 
 | mutation | what fails |
 |---|---|
-| the stretch not re-evaluated (`capStretch(ξ, n)`, 1.397685) | W (6.7e-3); C1 3.2e-3, C3 0.74 K; B: the burnouts at 7.1518e-3 s, 0.63 % before the window |
-| the factor `(d_Al0/d_p0)^n` dropped (the metal burning in its own Beckstead time) | W (4.9e-2); C1 2.2e-2, C3 5.3 K; B: 6.8636e-3 s, 4.6 % before the window |
+| the stretch not re-evaluated (`capStretch(ξ, n)`, 1.397685) | W (6.7e-3); C1 3.2e-3, C3 0.74 K; B: the burnouts at 7.1766e-3 s, 0.67 % before the window |
+| the factor `(d_Al0/d_p0)^n` dropped (the metal burning in its own Beckstead time) | W (4.9e-2); C1 2.2e-2, C3 5.3 K; B: 6.8872e-3 s, 4.7 % before the window |
 | the split on `(π/6) ρ_Al d_p0³` | I 2.5e-2; C1 3.2e-2; B 1.5 % early; R2 2.5e-2; R5 2.5e-2 |
-| the split skipped (the whole `m_p0` as metal, the cap from zero) | C1 0.14, C3 32.9 K; B 1.9 % late; R2 0.14; R3e 0.35 (I holds: the injection row is unchanged) |
+| the split skipped (the whole `m_p0` as metal, the cap from zero) | C1 0.14, C3 32.9 K; B 2.2 % late; R2 0.14; R3e 0.35 (I holds: the injection row is unchanged) |
 | the number rate left at `ṁ/((π/6) ρ_Al d_p0³)` | R3 4.7e-2; R3e 5.6e-3; R5 2.5e-2 |
 | the scatter pre-pass's number rate on `(π/6) ρ_Al d_p0³` | S 2.6e-2 on both clouds |
 | the `xi-ox0` line missing from the log | W |

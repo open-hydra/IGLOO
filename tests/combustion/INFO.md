@@ -47,7 +47,8 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
 
 - **p/T0 dependence** of the Beckstead correlation (weak: p^0.1·T0^0.2) is folded
   into the user-supplied `K-burn`; only the X_eff weighting is applied in-code.
-- **Burnout** fires at `m ≤ 1e-15 kg` (the metal's mass under model 8): `burn-box` and `burn-box-cap` are sized
+- **Burnout** fires at `m ≤ min(1e-6 m₀, 1e-20 kg)`, m₀ the parcel's reference mass (the metal's mass under model
+  8, against the whole particle's m₀): `burn-box` and `burn-box-cap` are sized
   so that the parcels exit at ~50 % d^n loss; `burn-box-residue` burns them out inside the box, as `beckstead-air`
   does at 10–1000 µm. Near burnout,
   unphysical trial states (m ≤ 0 ⇒ d = NaN) are scrubbed to the 1e30 penalty like models 3/4.

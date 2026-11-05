@@ -10,8 +10,9 @@ code under test:
   X_eff = C_O2 = 0.21 (a mole fraction, air) =>  d^n(t) = D0^n - K_eff t,  K_eff = X_eff p^0.1 T0^0.2 / a
   = 89.403847 um^1.8/ms = 1.4169555e-6 m^1.8/s (1 um^1.8/ms = 10^-7.8 m^1.8/s)
 
-A parcel ends at the accepted step whose end mass is at or below the burnout floor m_b = 1e-15 kg (the solver's
-absolute rule): d_floor = (6 m_b/(pi rho_p))^(1/3), rho_p from INPUT/properties.dat at 300 K. Its exit record (bc 0)
+A parcel ends at the accepted step whose end mass is at or below the burnout floor m_b = min(1e-6 m0, 1e-20 kg)
+(tools/burnout.py; m0 = pi/6 rho_p D0^3 is above 1e-14 kg on every parcel here, so m_b = 1e-20 kg):
+d_floor = (6 m_b/(pi rho_p))^(1/3), rho_p from INPUT/properties.dat at 300 K. Its exit record (bc 0)
 carries that state's time and diameter. A parcel at zero slip moves along x only, so its exit (Y, Z) names its inlet
 cell (m, n), and the cell's bc.txt record (the reader's order: n outer, m inner) its D0 = 2 rp.
 
@@ -26,15 +27,17 @@ cell (m, n), and the cell's bc.txt record (the reader's order: n outer, m inner)
       an E13.6 unit of d plus K_eff x half an ES16.8 unit of t
   B4  nothing else moves: T_p = 300 K and u_p = (u_g, 0, 0) on every row and exit record, within half an F12.6 unit
 
-Measured: B0 7.5e-12; B2 3.9e-8 (EPS is the floor 1e-5 of 5 x that), the overshoot +2.5e-7 ... +1.37e-3 of t_floor
-(the largest at 10 um); B3 0.9967 of the budget on 170 rows; B4 exact. K-burn carries K_eff/X_eff to nine digits:
+Measured: B0 7.5e-12; B2 3.9e-9 (EPS is the floor 1e-5 of 5 x that), the overshoot -2.7e-9 ... +2.5e-6 of t_floor
+(the largest at 10 um); B3 0.9984 of the budget on 170 rows; B4 exact. K-burn carries K_eff/X_eff to nine digits:
 the late rows of the 121-1000 um parcels resolve the input to 1e-8, and seven digits (6.747407e-6, 1.0e-8 below)
-put 6 of 170 rows over their budget (3.23 x).
+put 6 of 170 rows over their budget (3.14 x).
 
 The gate fails on K-burn x 1.01 (B0 1.0e-2; B2 1.0e-2 and the floor on every parcel; B3, 9.8e-3 of D0^n), on the
 X_eff exponent 1.1 in the solver (B2 0.14, B3), on T-ign = 350 K, above the injection temperature (B1: nothing burns,
 25 exits at the outlet), on a heat release (beta-part 0.3, q-comb 1e6: B4, T_p 882 K from 300 K) and on kv 0.99 (B4,
-4.0e-4 m/s); its floor check fails on an oracle without d_floor (10 um: t_exit 1.09 % short of t_b).
+4.0e-4 m/s). An oracle without d_floor (t_floor = t_b) passes B2's floor check: d_floor^n/K_eff is 1.22e-5 of t_b at
+10 um, the 10 um parcel ends 9.7e-6 of t_b short of it, inside EPS; B1 is the floor's witness (a 1e-15 kg floor
+would leave d_p near 0.86 um, 46 x d_floor, on every parcel).
 """
 import math
 import os
@@ -44,6 +47,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
 from datcols import rows  # noqa: E402
 from proptab import load_properties, table_value  # noqa: E402
+from burnout import burn_diam  # noqa: E402
 
 TRAJ = os.path.join(HERE, "OUTPUT", "trajectories-A.dat")
 OUTLOC = os.path.join(HERE, "OUTPUT", "outloc-A.dat")
@@ -61,11 +65,10 @@ KEFF = X_EFF * P_ATM ** 0.1 * T0 ** 0.2 / A_EQ7 * UNIT
 U_G, T_G = 0.04, 300.0
 NY, NZ, DY, DZ = 5, 5, 0.01, 0.01
 N_CELLS = NY * NZ
-M_BURN = 1.0e-15                  # the burnout floor on the particle mass [kg] (the solver's absolute rule)
 
 # ---- tolerances ----
 TOL_B0 = 1.0e-6
-EPS = 1.0e-5                      # B2: 5 x the measured worst residual (3.9e-8), floored at 1e-5
+EPS = 1.0e-5                      # B2: 5 x the measured worst residual (3.9e-9), floored at 1e-5
 TOL_FLOOR = 1.0e-5                # B1: d_p at or below d_floor, within 1e-5
 HALF_F12 = 0.5e-6                 # half an F12.6 unit
 TOL_POS = 0.5e-6                  # (Y, Z) of a record against its cell centre
@@ -126,9 +129,7 @@ def main():
 
     tmin, tmax, cols = load_properties(PROPS)
     rho_p = table_value(cols["rho"], tmin, tmax, T_G)
-    d_floor = (6.0 * M_BURN / (math.pi * rho_p)) ** (1.0 / 3.0)
-    print("Eq. 7 at air, 1 atm, 300 K: K_eff = %.9e m^1.8/s; rho_p %.1f kg/m^3 => d_floor %.6e m" % (
-        KEFF, rho_p, d_floor))
+    print("Eq. 7 at air, 1 atm, 300 K: K_eff = %.9e m^1.8/s; rho_p %.1f kg/m^3" % (KEFF, rho_p))
 
     # ---- B0 ----
     tok = phase_tokens(PHASE)
@@ -139,6 +140,9 @@ def main():
                 kb * xe, rel, TOL_B0, nb, xe))
 
     d0 = inlet_d0(BC)
+    d_floor = {c: burn_diam(math.pi / 6.0 * rho_p * D ** 3, rho_p) for c, D in d0.items()}
+    print("burnout floor d_floor = %.6e .. %.6e m (m_b from m0 = pi/6 rho_p D0^3)" % (
+        min(d_floor.values()), max(d_floor.values())))
     ex = rows(OUTLOC)
     tr = rows(TRAJ)
     by_id = {}
@@ -155,7 +159,7 @@ def main():
             continue
         cells[c] = e
     nbc = sum(1 for e in ex if e["bc"] != 0)
-    over = [e for e in ex if not (e["d<sub>p</sub>"] <= d_floor * (1.0 + TOL_FLOOR) and e["t"] > 0.0)]
+    over = [e for c, e in cells.items() if not (e["d<sub>p</sub>"] <= d_floor[c] * (1.0 + TOL_FLOOR) and e["t"] > 0.0)]
     ok = len(ex) == N_CELLS and len(cells) == N_CELLS and not bad and nbc == 0 and not over
     for b in bad[:5]:
         print("      " + b)
@@ -182,7 +186,7 @@ def main():
         D0 = d0[c]
         t, dp = e["t"], e["d<sub>p</sub>"]
         res = abs(t - (D0 ** NB - dp ** NB) / KEFF) / t
-        t_floor = (D0 ** NB - d_floor ** NB) / KEFF
+        t_floor = (D0 ** NB - d_floor[c] ** NB) / KEFF
         worst2 = max(worst2, res)
         ovs.append((t - t_floor) / t_floor)
         if t < t_floor * (1.0 - EPS):
