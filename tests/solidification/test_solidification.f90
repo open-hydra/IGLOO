@@ -46,6 +46,10 @@ program test_solidification
     !        direct breakupOde at that d in the liquid phases (1e-12), exactly 0 on the plateau and the solid.
     !   SG13 breakupStateAtSwitch for phase changes 0-4 and breakup models 0, 3, 4, 5: a nucleated TAB/ETAB
     !        oscillator at rest, the KH-RT timer restarted at a re-melt, the state kept otherwise (exact).
+    !   SG14 the table routines on h(T) = 50 T + 0.25 T^2 (Cp = 1250 + 0.5 (T - 2400)), 1..5000 K: (a) the whole
+    !        freeze of nucleationJumpTab at T-nuc with h-fus = 4e5 against Tm - (h(Tm) - h(Tn) - hfus)/cs, h(Tn) on
+    !        the table's interpolant; (b) the re-melt of solidTransitionTab caught up at f = -0.05 against the
+    !        interpolant's inverse; both the phase, f and the enthalpy across the switch.
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -106,6 +110,7 @@ program test_solidification
     call run_SG12(ok_all)
     call run_SG12m7(ok_all)
     call run_SG13(ok_all)
+    call run_SG14(ok_all)
     call run_SB1(ok_all)
 
     call finalize_report(exit_code)
@@ -939,6 +944,74 @@ contains
         call flag('SG13 breakupStateAtSwitch: TAB/ETAB at rest at nucleation, the KH-RT timer at a re-melt, else kept', &
                   'SG13_switch', nbad == 0, ok)
     end subroutine run_SG13
+
+    !> h(T) = 50 T + 0.25 T^2 [J/kg], the enthalpy of Cp = 1250 + 0.5 (T - 2400), exact at the integer nodes
+    pure function hQuad(T) result(h)
+        real(R8), intent(in) :: T
+        real(R8) :: h
+        h = 50._R8*T + 0.25_R8*T*T
+    end function hQuad
+
+    !> the table's linear interpolant of hQuad between its integer nodes: hQuad plus 0.25 (T - i)(i + 1 - T)
+    pure function hLinQuad(T) result(h)
+        real(R8), intent(in) :: T
+        real(R8) :: h, s
+        s = T - real(floor(T), R8)
+        h = hQuad(T) + 0.25_R8*s*(1._R8 - s)
+    end function hLinQuad
+
+    subroutine run_SG14(ok)
+        !> the table routines' whole freeze and re-melt on the table of hQuad (1..5000 K)
+        use IGLOO_Lib_Solidification, only: nucleationJumpTab, solidTransitionTab, hSolidTab
+        use IGLOO_Lib_Properties,     only: Tmin, Tmax
+        logical, intent(inout) :: ok
+        real(R8), parameter :: FPAST = -0.05_R8          ! a re-melt caught up past f = 0
+        real(R8), allocatable :: hTab(:)
+        real(R8) :: dh, Ta, fa, Tref, H, err, errh, h0, hm, tol, tolh
+        integer  :: lo, hi, i, pa
+        logical  :: pass
+        lo = Tmin;  hi = Tmax
+        Tmin = 1;  Tmax = 5000
+        allocate(hTab(Tmin:Tmax))
+        do i = Tmin, Tmax
+            hTab(i) = hQuad(real(i, R8))
+        end do
+        hm   = hQuad(TM)
+        tolh = 4._R8*epsilon(1._R8)*hm
+        !> (a) whole freeze: h(Tm) - h(Tn) >= hfus lands the solid at Tm - (h(Tm) - h(Tn) - hfus)/cs
+        dh   = hm - hLinQuad(TN)
+        h0   = hLinQuad(TN)
+        call nucleationJumpTab(TN, hTab, CS, TM, HFUS2, Ta, fa, pa)
+        Tref = TM - (dh - HFUS2)/CS
+        tol  = 8._R8*epsilon(1._R8)*hm/CS
+        err  = abs(Ta - Tref)
+        errh = abs(hSolidTab(Ta, fa, pa, hTab, CS, HFUS2, TM) - h0)
+        write(*,'(a,f12.6,a,es10.3,a,es10.3,a)') '  [INFO] SG14a T_after = ', Ta, ' K, |T - T_ref| = ', err, &
+            ' K, |h jump| = ', errh, ' J/kg'
+        pass = (dh >= HFUS2) .and. (pa == phSolid) .and. (fa == 1._R8) .and. (Ta < TM) .and. (err <= tol) .and. &
+               (errh <= tolh)
+        call flag('SG14a nucleationJumpTab whole freeze: solid, f = 1, T = Tm - (h(Tm) - h(Tn) - hfus)/cs, h kept', &
+                  'SG14a_whole_tab', pass, ok)
+        !> (b) re-melt caught up at f < 0: the liquid at the T where h(T) = h(Tm) - f hfus, on the interpolant
+        Ta = TM;  fa = FPAST;  pa = phPlateau
+        h0 = hSolidTab(Ta, fa, pa, hTab, CS, HFUS, TM)
+        call solidTransitionTab(3, hTab, CS, TM, HFUS, Ta, fa, pa)
+        H  = hm - FPAST*HFUS
+        i  = floor((sqrt(2500._R8 + H) - 50._R8)/0.5_R8)
+        if (hQuad(real(i, R8)) > H) i = i - 1
+        if (hQuad(real(i + 1, R8)) <= H) i = i + 1
+        Tref = real(i, R8) + (H - hQuad(real(i, R8)))/(hQuad(real(i + 1, R8)) - hQuad(real(i, R8)))
+        tol  = 8._R8*epsilon(1._R8)*hm/(hQuad(real(i + 1, R8)) - hQuad(real(i, R8)))
+        err  = abs(Ta - Tref)
+        errh = abs(hSolidTab(Ta, fa, pa, hTab, CS, HFUS, TM) - h0)
+        write(*,'(a,f12.6,a,es10.3,a,es10.3,a)') '  [INFO] SG14b T_after = ', Ta, ' K, |T - T_ref| = ', err, &
+            ' K, |h jump| = ', errh, ' J/kg'
+        pass = (pa == phLiquid) .and. (fa == 0._R8) .and. (Ta > TM) .and. (err <= tol) .and. (errh <= tolh)
+        call flag('SG14b solidTransitionTab re-melt at f = -0.05: liquid, f = 0, h(T) = h(Tm) - f hfus on the table', &
+                  'SG14b_remelt_tab', pass, ok)
+        deallocate(hTab)
+        Tmin = lo;  Tmax = hi
+    end subroutine run_SG14
 
     subroutine run_SB1(ok)
         !> birthResidue on a freezing product (T-melt 2327, T-nuc 1861.6 K, rho 3950) from one parent record
