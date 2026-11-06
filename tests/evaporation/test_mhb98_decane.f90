@@ -5,9 +5,8 @@ program test_mhb98_decane
     ! Fig. 4(b) spans ~200 K across models, against 0.47 K in Fig. 2(b) (see
     ! evaporation/mhb98-water/INFO.md).  What separates them here is the evaporative
     ! heat-transfer reduction f2 (their eq. 19) -- NOT non-equilibrium: at D0=2 mm the
-    ! Langmuir-Knudsen correction is L_K/(D/2)*beta = 4.9e-5 against Xs_eq ~ 0.63, i.e.
-    ! 8e-5 relative, exactly as vacuous as in Fig. 2.  Here beta ~ 1.6 => f2 ~ 0.40: the
-    ! convective heat is cut by 60%.
+    ! Langmuir-Knudsen correction is 0.1 to 0.3 % of chi_s (Fig. 7(a)'s 2000 um curve, DC4).
+    ! Here beta ~ 1.6 => f2 ~ 0.40: the convective heat is cut by 60%.
     !
     ! A UNIT test, not an e2e box case, because MHB98's Fig. 4 droplet is at FIXED SLIP
     ! (suspended-drop experiment; Re decays only through D): a free-flying drop (their
@@ -26,6 +25,19 @@ program test_mhb98_decane
     !                     Sh/Nu coefficient 0.552 (their eq. 6), vs three quantities
     !                     measured off Fig. 4 by pixel calibration -- beta, T_d(3.5 s),
     !                     D^2(4.0 s).  This is the Fig. 4 reproduction point.
+    !   DC4  small drops : MHB98 Fig. 7(a) -- the Langmuir-Knudsen depression where it is large
+    !                     (D0 = 10, 50, 500, 2000 um at Re_d,0 = 17). PRODUCTION's kernels
+    !                     (evaporation CEM + LK, heat Ranz-Marshall, blowingFactor) at Re' = kappa Re,
+    !                     kappa = (0.552/0.600)^2, which turns IGLOO's 0.600 into MHB98's 0.552
+    !                     exactly (Re enters only Sh and Nu); RK4, dt = tau_d,0/16000, to
+    !                     m = 0.01 m0. r = 100 (chi_s,eq - chi_s,neq)/chi_s,neq, chi_s,neq
+    !                     recovered from production's mdot by inverting CEM. Gated: the 57
+    !                     digitized nodes of t/tau_d,0 in [0.20, 1.00]
+    !                     (mhb98-fig7a/mhb98_fig7a_M7.csv), |r/r_fig - 1| <= 6 %; the nodes
+    !                     outside the window are printed. The figure is the oracle, so DC4 sees
+    !                     an error made in production and in m7_mdot alike (L_K doubled in both
+    !                     passes DC1 and fails here). Vacuous: alpha_E = 1, Le = 1 (Sc = Pr),
+    !                     P_G = 1 atm (Patm used for the gas pressure passes).
     !
     ! COEFFICIENT SPLIT (deliberate, documented): IGLOO's Ranz-Marshall is
     ! Nu = 2 + 0.600 sqrt(Re) Pr^(1/3) (Lib_Heat.f90) and its CEM Sh likewise carries 0.600
@@ -104,6 +116,7 @@ program test_mhb98_decane
 
     call run_DC1_DC2(ok_all)
     call run_DC3(ok_all)
+    call run_DC4(ok_all)
 
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then
@@ -284,6 +297,152 @@ contains
         call dump_traj(tI, d2I, TdI, nI, tR, d2R, TdR, nR)
     end subroutine run_DC3
 
+    !> DC4: production's kernels at kappa Re against MHB98 Fig. 7(a), per initial diameter.
+    subroutine run_DC4(ok)
+        logical, intent(inout) :: ok
+        real(R8), parameter :: KAPPA = (C_MHB98/C_IGLOO)**2, TOL4 = 0.06_R8
+        integer,  parameter :: NFIG = 68, NMAX = 24000
+        !> mhb98-fig7a/mhb98_fig7a_M7.csv: D0 [um], t/tau_d,0, r [%], gated
+        integer,  parameter :: FIG_D0(NFIG) = [ &
+            10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, &
+            10, 10, 10, 10, 10, 10, 10, 50, 50, 50, 50, 50, 50, 50, &
+            50, 50, 50, 50, 50, 50, 500, 500, 500, 500, 500, 500, 500, 500, &
+            500, 500, 500, 500, 500, 500, 500, 2000, 2000, 2000, 2000, 2000, 2000, 2000, &
+            2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000]
+        real(R8), parameter :: FIG_T(NFIG) = [ &
+            0.10_R8, 0.15_R8, 0.20_R8, 0.25_R8, 0.30_R8, 0.35_R8, 0.40_R8, 0.45_R8, 0.50_R8, 0.55_R8, &
+            0.60_R8, 0.65_R8, 0.70_R8, 0.75_R8, 0.80_R8, 0.85_R8, 0.90_R8, 0.95_R8, 1.00_R8, 1.05_R8, &
+            1.10_R8, 0.10_R8, 0.20_R8, 0.25_R8, 0.35_R8, 0.40_R8, 0.50_R8, 0.60_R8, 0.65_R8, 0.75_R8, &
+            0.85_R8, 0.90_R8, 1.00_R8, 1.05_R8, 0.10_R8, 0.20_R8, 0.25_R8, 0.30_R8, 0.35_R8, 0.45_R8, &
+            0.50_R8, 0.55_R8, 0.60_R8, 0.75_R8, 0.80_R8, 0.85_R8, 0.90_R8, 1.00_R8, 1.10_R8, 0.10_R8, &
+            0.20_R8, 0.25_R8, 0.30_R8, 0.35_R8, 0.40_R8, 0.45_R8, 0.50_R8, 0.55_R8, 0.60_R8, 0.65_R8, &
+            0.70_R8, 0.75_R8, 0.85_R8, 0.90_R8, 0.95_R8, 1.00_R8, 1.05_R8, 1.10_R8]
+        real(R8), parameter :: FIG_R(NFIG) = [ &
+            21.217_R8, 21.298_R8, 21.544_R8, 21.709_R8, 22.213_R8, 22.512_R8, 22.903_R8, &
+            23.614_R8, 24.162_R8, 25.008_R8, 25.589_R8, 26.688_R8, 27.728_R8, 29.085_R8, &
+            30.626_R8, 32.434_R8, 34.348_R8, 37.078_R8, 40.642_R8, 46.107_R8, 54.763_R8, &
+            4.2913_R8, 4.3242_R8, 4.3741_R8, 4.51_R8, 4.6146_R8, 4.8684_R8, 5.1953_R8, &
+            5.3978_R8, 5.8268_R8, 6.4604_R8, 7.0006_R8, 8.4108_R8, 9.7633_R8, 0.43114_R8, &
+            0.43445_R8, 0.44114_R8, 0.44538_R8, 0.45311_R8, 0.47077_R8, 0.48912_R8, 0.50335_R8, &
+            0.51997_R8, 0.58877_R8, 0.61759_R8, 0.6616_R8, 0.71417_R8, 0.85804_R8, 1.2013_R8, &
+            0.10679_R8, 0.10802_R8, 0.10927_R8, 0.11053_R8, 0.11266_R8, 0.11616_R8, 0.1184_R8, &
+            0.12069_R8, 0.12396_R8, 0.12978_R8, 0.13536_R8, 0.13956_R8, 0.14667_R8, 0.16325_R8, &
+            0.17622_R8, 0.19022_R8, 0.21334_R8, 0.25051_R8, 0.31151_R8]
+        logical,  parameter :: FIG_G(NFIG) = [ &
+            .false., .false., .true., .true., .true., .true., .true., .true., .true., .true., &
+            .true., .true., .true., .true., .true., .true., .true., .true., .true., .false., &
+            .false., .false., .true., .true., .true., .true., .true., .true., .true., .true., &
+            .true., .true., .true., .false., .false., .true., .true., .true., .true., .true., &
+            .true., .true., .true., .true., .true., .true., .true., .true., .false., .false., &
+            .true., .true., .true., .true., .true., .true., .true., .true., .true., .true., &
+            .true., .true., .true., .true., .true., .true., .false., .false.]
+        integer,  parameter :: DIAMS(4) = [10, 50, 500, 2000]
+        real(R8), allocatable :: ts(:), rs(:)
+        real(R8) :: d0, tau0, usl, tEnd, rp, rel, worst, worstAll
+        integer  :: k, i, n, ngate, nbad, nbadAll
+        logical  :: pass
+        character(len=16) :: rowid
+        allocate(ts(NMAX), rs(NMAX))
+        worstAll = 0._R8; nbadAll = 0
+        write(*,'(a,f8.5)') '  DC4 vs MHB98 Fig.7(a) (M7), production at kappa Re, kappa = ', KAPPA
+        do k = 1, 4
+            d0   = real(DIAMS(k), R8)*1.e-6_R8
+            tau0 = rho_l*d0*d0/(18._R8*mu_g)
+            usl  = Re0*mu_g/(rho_g*d0)
+            call trajectory_dc4(d0, usl, tau0, KAPPA, NMAX, ts, rs, n, tEnd)
+            worst = 0._R8; ngate = 0; nbad = 0
+            write(*,'(a,i5,a,f7.4,a,f9.4,a)') '    D0 = ', DIAMS(k), ' um: end t/tau ', tEnd, ', r(0) = ', rs(1), ' %'
+            do i = 1, NFIG
+                if (FIG_D0(i) /= DIAMS(k)) cycle
+                if (FIG_T(i) > ts(n)) then
+                    write(*,'(a,f5.2,a)') '      t/tau ', FIG_T(i), ' past the end'; cycle
+                end if
+                rp  = at_time(ts(1:n), rs(1:n), n, FIG_T(i), interp=.true.)
+                rel = rp/FIG_R(i) - 1._R8
+                if (FIG_G(i)) then
+                    ngate = ngate + 1; worst = max(worst, abs(rel))
+                    if (abs(rel) > TOL4) nbad = nbad + 1
+                end if
+                write(*,'(a,f5.2,a,es11.4,a,es11.4,a,f7.2,a,a)') '      t/tau ', FIG_T(i), '  r ', rp, &
+                    '  fig ', FIG_R(i), '  ', 100._R8*rel, ' %', merge(' gated  ', ' printed', FIG_G(i))
+            end do
+            pass = (nbad == 0) .and. (ngate > 0)
+            write(rowid,'(a,i0,a)') 'DC4_', DIAMS(k), 'um'
+            write(*,'(a,i5,a,i2,a,f6.2,a,a)') '  [', DIAMS(k), ' um] ', ngate, ' gated nodes, worst |r/r_fig - 1| ', &
+                100._R8*worst, ' %', merge('  PASS', '  FAIL', pass)
+            call append_row(trim(rowid), 'r_vs_fig7a', worst, worst, 0._R8, 0._R8, TOL4, pass)
+            ok = ok .and. pass
+            worstAll = max(worstAll, worst); nbadAll = nbadAll + nbad
+        end do
+        pass = assert_lt('DC4 r vs Fig.7(a), worst gated node (rel)', worstAll, TOL4)
+        write(*,'(a,i0,a)') '        ', nbadAll, ' gated node(s) beyond 6 %'
+    end subroutine run_DC4
+
+    !> DC4's trajectory: production's kernels at kappa Re (fixed slip usl), RK4 at dt = tau0/16000 until
+    !  m <= 0.01 m0; ts = t/tau0 and rs = r [%] at every step, r from production's mdot by inverting CEM.
+    subroutine trajectory_dc4(d0, usl, tau0, kap, nmax, ts, rs, n, tEnd)
+        real(R8), intent(in)  :: d0, usl, tau0, kap
+        integer,  intent(in)  :: nmax
+        real(R8), intent(out) :: ts(:), rs(:), tEnd
+        integer,  intent(out) :: n
+        real(R8) :: y(2), k1(2), k2(2), k3(2), k4(2), dt, t, dEnd
+        dt = tau0/16000._R8; dEnd = d0*0.01_R8**(1._R8/3._R8)
+        y = [d0, Td0]; t = 0._R8; n = 1
+        ts(1) = 0._R8; rs(1) = r_dc4(y(1), y(2), kap, usl)
+        do while (y(1) > dEnd .and. n < nmax)
+            k1 = rhs_dc4(y, kap, usl);                  k2 = rhs_dc4(y + 0.5_R8*dt*k1, kap, usl)
+            k3 = rhs_dc4(y + 0.5_R8*dt*k2, kap, usl);   k4 = rhs_dc4(y + dt*k3, kap, usl)
+            y  = y + dt/6._R8*(k1 + 2._R8*k2 + 2._R8*k3 + k4)
+            t  = t + dt
+            if (y(1) /= y(1) .or. y(2) /= y(2)) exit
+            n = n + 1
+            ts(n) = t/tau0; rs(n) = r_dc4(y(1), y(2), kap, usl)
+        end do
+        tEnd = ts(n)
+    end subroutine trajectory_dc4
+
+    !> DC4's right-hand side: rhs2's production branch at the Reynolds number kap Re, slip usl.
+    function rhs_dc4(yy, kap, usl) result(dy)
+        real(R8), intent(in) :: yy(2), kap, usl
+        real(R8) :: dy(2), dloc, m, Re, Nu, mdot, f2, Qe
+        logical  :: ovr
+        dloc = max(yy(1), 1.e-9_R8)
+        m    = rho_l*PI*dloc**3/6._R8
+        Re   = kap*rho_g*usl*dloc/mu_g
+        call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, yy(2), dloc, Re, 1._R8, CEM, LK, ep, mdot, Qe, ovr)
+        if (ovr) error stop 'test_mhb98_decane: model overrides Qdot -> f2 would double-count'
+        Nu = heat(Re, Pr, 0._R8, RANZ_MARSHALL)
+        f2 = blowingFactor(gam, Rg, mu_g, kg, rho_l, dloc, m, mdot)
+        dy(1) = 2._R8*mdot/(rho_l*PI*dloc*dloc)
+        dy(2) = (f2*Nu*PI*dloc*kg*(Tg - yy(2)) + mdot*Lv)/(m*cl)
+    end function rhs_dc4
+
+    !> r [%] at (d, T_d): chi_s,neq from production's mdot (CEM inverted at Sh' = 2 + 0.6 sqrt(kap Re) Sc^(1/3)),
+    !  chi_s,eq = p_sat,CC(T_d)/P_G (MHB98 eq. 10).
+    function r_dc4(d, Td, kap, usl) result(r)
+        real(R8), intent(in) :: d, Td, kap, usl
+        real(R8) :: r, Re, mdot, Qe, Sh, Dv, BM, Ys, Mg, xneq, xeq
+        logical  :: ovr
+        Re = kap*rho_g*usl*d/mu_g
+        call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Td, d, Re, 1._R8, CEM, LK, ep, mdot, Qe, ovr)
+        Sh   = 2._R8 + 0.6_R8*sqrt(Re)*Sc**(1._R8/3._R8)
+        Dv   = kg/(rho_g*cp_g*Le)
+        BM   = expm1q(-mdot/(PI*d*rho_g*Dv*Sh))
+        Ys   = BM/(1._R8 + BM)
+        Mg   = Ru/Rg
+        xneq = Ys*Mg/(Mv - Ys*(Mv - Mg))
+        xeq  = Patm*exp(-(Lv*Mv/Ru)*(1._R8/Td - 1._R8/Tboil))/(rho_g*Rg*Tg)
+        r    = 100._R8*(xeq - xneq)/xneq
+    end function r_dc4
+
+    !> exp(x) - 1 without cancellation (quadruple precision).
+    pure function expm1q(x) result(e)
+        use, intrinsic :: iso_fortran_env, only: QP => real128
+        real(R8), intent(in) :: x
+        real(R8) :: e
+        e = real(exp(real(x, QP)) - 1._QP, R8)
+    end function expm1q
+
     !> LSQ slope of D^2 -> beta (their eq. 28), on the FIXED window t in [2.5, 4.0] s.
     !  The window is physical, not fractional: Fig. 4 only spans 0-4.5 s, the first ~1.5 s is
     !  the heat-up transient where the D^2 law is invalid (the paper says so), and at FIXED
@@ -307,12 +466,24 @@ contains
         b = rho_l*Pr/(8._R8*mu_g)*K*1.e-6_R8
     end function beta_late
 
-    pure function at_time(ts, ys, n, tq) result(v)
+    !> The sample nearest tq; interp = .true.: linear between the samples around tq (ts increasing).
+    pure function at_time(ts, ys, n, tq, interp) result(v)
         real(R8), intent(in) :: ts(:), ys(:), tq
         integer,  intent(in) :: n
+        logical,  intent(in), optional :: interp
         real(R8) :: v, best
         integer  :: i
         v = ys(n); best = huge(1._R8)
+        if (present(interp)) then
+            if (interp) then
+                do i = 2, n
+                    if (ts(i) >= tq) then
+                        v = ys(i-1) + (ys(i) - ys(i-1))*(tq - ts(i-1))/(ts(i) - ts(i-1)); return
+                    end if
+                end do
+                return
+            end if
+        end if
         do i = 1, n
             if (abs(ts(i)-tq) < best) then; best = abs(ts(i)-tq); v = ys(i); end if
         end do
