@@ -418,7 +418,8 @@ inversion of a varying $c_p$ on tables that start above 1 K, against ICE's rule 
 independent of thread and rank), `axis_dispatch` (bcdef-200 face classification: the
 axis face reflects, the wedge faces fold, independent of face index and axis
 direction), `graze_standoff` (the grazing-reflection standoff never exceeds the cell it
-places a particle into) and `dual_clip` (the ord2 dual mesh tiles the domain:
+places a particle into), `hop_crossing` (a reflection's crossing from the step's two end states, the first
+outward root of their cubic Hermite) and `dual_clip` (the ord2 dual mesh tiles the domain:
 $\sum$ dual cell volumes $=$ domain volume, boundary duals clipped) are routine-level
 checks of the tracking and BC machinery; each carries its own `INFO.md`.
 

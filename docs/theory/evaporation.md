@@ -6,7 +6,8 @@ the material line of the phase file, written by ATLAS GPB from `[GPB-Phase*]`) a
 `src/lib/Lib_Evaporation.f90::evaporation`.  The droplet mass is state variable 8 and
 $\dot{m}_\mathrm{evap}$ its rate (model 2; in model 4, evaporation with ODE breakup, breakup adds
 its share at constant stream mass — see [Governing equations](governing-equations.md)).  A
-droplet whose mass falls to `mBurnTol = 1e-15` kg is consumed and its remnant handed to the gas.
+droplet whose mass falls to $m_b = \min(10^{-6} m_0, 10^{-20}\,\mathrm{kg})$, $m_0$ its reference mass
+([Time integration](time-integration.md)), is consumed and its remnant handed to the gas.
 
 Two further selectors act on every gas-side model: the `interface` axis (equilibrium or
 Langmuir–Knudsen non-equilibrium surface state) and the `blowing` axis (Stefan-blowing

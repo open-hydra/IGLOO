@@ -62,8 +62,8 @@ Each outer iteration covers one cell transit:
    $C_\tau\,\tau_p$ with $\tau_p$ the Stokes drag relaxation time (`tauFactor = 100`).
 3. `t2 = tStart + 20 · deltat` — generous XEND horizon; the solver stops early at cell
    crossings or events.
-4. **Inner loop** (`maxInnerIter = 10`): call `ODEsystem` repeatedly until `exitLoop`; if
-   the limit is reached the particle is flagged `gone`.
+4. **Inner loop** (at most `[IGLOO-ODE] max-inner-iter` calls, default 10): call `ODEsystem` repeatedly until
+   `exitLoop`; if the limit is reached the particle is flagged `gone` at its last accepted step.
 5. Source / Euler accumulation.
 6. Cell-tracking update (`IamOut`, `newGas`, `sectorOut`); BC handling, including the
    wedge fold when the segment ended on a sector plane.
@@ -108,8 +108,11 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
    (and `sectorOut` when the point left the wedge sector); for `ord2` mode a separate
    gas-dual-cell test sets `newGas`.
 3. **Burnout test** — for the mass-consuming models (2 evaporation, 4 evaporation with ODE
-   breakup, 5 combustion) the droplet is declared consumed once its mass drops to
-   `mBurnTol = 1e-15` kg.
+   breakup, 5 combustion, 8 the capped burn: the metal's mass) the droplet is declared
+   consumed once its mass slot drops to $m_b = \min(10^{-6} m_0, 10^{-20}\,\mathrm{kg})$, $m_0$ the
+   drop's reference mass: its mass at injection, a child's at its birth, a KH-RT drop's at its
+   last RT breakup or KH shed (a TAB or ETAB event keeps the injection mass).  The step that
+   crosses $m_b$ can end below zero; the burnout state's mass is then set to 0.
 4. **NaN / tiny-step guard** — `exitLoop` is set if `any(y/=y)`, `deltat < dtMin`, or the
    step moved the particle by less than the containment tolerance.
 5. **Event breakup** — `breakupEvent` (TAB/ETAB/KHRT) detects and applies discrete
@@ -150,8 +153,9 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
     one): closer than `nMaxStall × grazeStandoff` = 1e-4 m, a bounce that makes no progress, it is
     flagged `gone` with the same message. A particle that makes no net displacement for more than
     `nMaxStall = 100` iterations is flagged `gone` with a diagnostic message. A segment whose
-    solver loop runs more than `maxInnerIter = 10` times flags the particle `gone` with a warning,
-    and that segment deposits nothing. A particle that reaches `maxIter = 500000` outer iterations
+    solver loop runs more than `[IGLOO-ODE] max-inner-iter` (default 10) times flags the particle `gone` with a
+    warning, as a solver failure: it reverts to its last accepted step, the segment is deposited up to it and a
+    consuming parcel hands its remnant to the gas. A particle that reaches `maxIter = 500000` outer iterations
     is flagged `gone` with its exit record written.
 
 ---

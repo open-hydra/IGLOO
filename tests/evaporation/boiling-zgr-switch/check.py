@@ -5,10 +5,10 @@ mean temperature reaches the boiling temperature at the gas pressure, then the c
 Inputs only (input.ini, INPUT/bc.txt: T0 = kt T_g, d0 = 2 rp, the gas at u_g = 1 m/s); the run's columns are read by
 the names of their header (tests/tools/datcols.py). T(x) and m(x) against tools/zgr_oracle.py: the boiling branch
 (the vapour leaving at T_B) integrated by scipy solve_ivp (LSODA, rtol 1e-12) to T = T_B, then CEM (Radau, rtol 1e-10)
-to m = 1e-15 kg, at t = x/u_g. Tolerances per row (the prints): T 5e-7 K + |dT/dx| 5e-7 m + 1e-6 K; m the E13.6
+to m = m_b = min(1e-6 m0, 1e-20 kg) (tools/burnout.py), at t = x/u_g. Tolerances per row (the prints): T 5e-7 K + |dT/dx| 5e-7 m + 1e-6 K; m the E13.6
 half-ULP of m + |dm/dx| 5e-7 m + 1e-8 m. Witnesses: rows above and below T_B on every parcel; every parcel burnt out
 inside the box (an exit record of code 0 at the oracle's burnout position within 2.5e-4 m, its diameter that of
-m <= 1e-15 kg); no 'non-finite state' or 'Run_ODESolver err' line in run_out.txt.
+m <= m_b); no 'non-finite state' or 'Run_ODESolver err' line in run_out.txt.
 """
 import math
 import os
@@ -48,7 +48,7 @@ def main():
         print("[FAIL] the oracle neither crosses T_B nor burns out inside the box")
         return 1
     xc, xb = drop.tc*UG, drop.tburn*UG
-    d_burn = Z.diam(Z.MBURN)
+    d_burn = Z.diam(drop.mburn)
     print(f"oracle: T0 {T0:.6f} K, d0 {d0:.3e} m, m0 {m0:.6e} kg, T_B(p) {tb:.9f} K; T_B crossed at x = {xc:.6f} m "
           f"(m/m0 {drop.state(drop.tc)[1]/m0:.6f}), burnout at x = {xb:.6f} m")
     nv, wT, wm = 0, (0.0, ""), (0.0, "")

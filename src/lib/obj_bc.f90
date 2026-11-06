@@ -19,6 +19,7 @@ module IGLOO_bcBox
   public :: periodicTransport
   public :: faceAzimuth, wedgeAzimTol
   public :: grazeOffset, grazeStandoff, grazeCellFrac
+  public :: hopCrossing
 
 contains
 
@@ -39,6 +40,74 @@ contains
     endif
 
   end function grazeOffset
+
+  !> First outward crossing of the plane (pI, nn) on the cubic Hermite of a step's end states over h: s the bracket's
+  !  non-negative side, xc and vc the path's state there; found = .false. for h <= 0, a chord parallel to the plane
+  !  or no outward crossing in (0,1].
+  pure subroutine hopCrossing(pa, va, pb, vb, h, pI, nn, s, xc, vc, found)
+    implicit none
+    real(R8), intent(in)  :: pa(3), va(3), pb(3), vb(3), h, pI(3), nn(3)
+    real(R8), intent(out) :: s, xc(3), vc(3)
+    logical,  intent(out) :: found
+    real(R8) :: dn, nOut(3), pA0, pB0, vA0, vB0, c1, c2, c3, qa, qb, qc, q, disc, r(2), brk(4), a, b, m
+    integer  :: nbrk, k, it
+
+    found = .false.; s = 0._R8; xc = pb; vc = vb
+    if (.not.(h > 0._R8)) return
+    dn = dot_product(nn, pb - pa)
+    if (.not.(abs(dn) > 0._R8)) return
+    nOut = sign(1._R8, dn)*nn
+    !> g(s) = nOut.(H(s) - pI) = pA0 + c1 s + c2 s^2 + c3 s^3
+    pA0 = dot_product(nOut, pa - pI); pB0 = dot_product(nOut, pb - pI)
+    vA0 = h*dot_product(nOut, va);    vB0 = h*dot_product(nOut, vb)
+    c1 = vA0
+    c2 = -3._R8*pA0 - 2._R8*vA0 + 3._R8*pB0 - vB0
+    c3 =  2._R8*pA0 +       vA0 - 2._R8*pB0 + vB0
+    !> [0,1] split at the roots of g'(s) = c1 + 2 c2 s + 3 c3 s^2 inside it: g is monotone on each piece
+    qa = 3._R8*c3; qb = 2._R8*c2; qc = c1
+    nbrk = 1; brk(1) = 0._R8
+    if (qa /= 0._R8) then
+      disc = qb*qb - 4._R8*qa*qc
+      if (disc > 0._R8) then
+        q = -0.5_R8*(qb + sign(sqrt(disc), qb))
+        r = [q/qa, 0._R8]
+        if (q /= 0._R8) r(2) = qc/q
+        if (r(1) > r(2)) r = [r(2), r(1)]
+        do k = 1, 2
+          if (r(k) > 0._R8 .and. r(k) < 1._R8) then; nbrk = nbrk + 1; brk(nbrk) = r(k); endif
+        enddo
+      endif
+    elseif (qb /= 0._R8) then
+      r(1) = -qc/qb
+      if (r(1) > 0._R8 .and. r(1) < 1._R8) then; nbrk = nbrk + 1; brk(nbrk) = r(1); endif
+    endif
+    nbrk = nbrk + 1; brk(nbrk) = 1._R8
+    do k = 1, nbrk - 1
+      a = brk(k); b = brk(k+1)
+      if (g(a) < 0._R8 .and. g(b) >= 0._R8) then
+        do it = 1, 200
+          if (.not.(b - a > 4._R8*spacing(b))) exit
+          m = 0.5_R8*(a + b)
+          if (g(m) < 0._R8) then; a = m; else; b = m; endif
+        enddo
+        s = b
+        xc = (2._R8*s**3 - 3._R8*s**2 + 1._R8)*pa + (s**3 - 2._R8*s**2 + s)*h*va  &
+           + (3._R8*s**2 - 2._R8*s**3)*pb + (s**3 - s**2)*h*vb
+        vc = ((6._R8*s**2 - 6._R8*s)*pa + (3._R8*s**2 - 4._R8*s + 1._R8)*h*va    &
+           + (6._R8*s - 6._R8*s**2)*pb + (3._R8*s**2 - 2._R8*s)*h*vb)/h
+        found = .true.
+        return
+      endif
+    enddo
+
+  contains
+
+    pure real(R8) function g(t)
+      real(R8), intent(in) :: t
+      g = pA0 + t*(c1 + t*(c2 + t*c3))
+    end function g
+
+  end subroutine hopCrossing
 
   !> Azimuthal projection of a boundary face's outward normal about axisDir, in [-1,1]:
   !  |azim| ~ 1 for a wedge face (fold), ~ 0 for the axis face or a face normal to the axis
@@ -121,7 +190,7 @@ contains
 
   !> Apply the exit cell's boundary condition to the particle state: reflection (300 and non-wedge
   !  200), wedge fold (200), connected interface (101/103: retry in the partner cell), or exit (gone).
-  subroutine bcDef(cell,vertices,pold,vold,intersect,f,p,v,time,iold,angle,Af,found,gone,retry,reflected,vHit)
+  subroutine bcDef(cell,vertices,pold,vold,intersect,f,p,v,time,told,iold,angle,Af,found,gone,retry,reflected,vHit)
     use IGLOO_variables, only: pi, toll, delthe, axisDir
     implicit none
     class(obj_bc_cell), intent(in)    :: cell
@@ -131,12 +200,14 @@ contains
     logical,            intent(in)    :: found
     real(R8),           intent(inout) :: p(3), v(3)
     real(R8),           intent(inout) :: time
+    real(R8),           intent(in)    :: told        !> time of (pold, vold)
     integer,            intent(out)   :: iold(4)
     real(R8),           intent(out)   :: angle, Af
     logical,            intent(out)   :: gone, retry
     logical, optional,  intent(out)   :: reflected   !> the reflection branch was taken (grazing or specular)
     real(R8), optional, intent(out)   :: vHit(3)     !> exit branch: the velocity at the crossing point, else v
-    real(R8) :: nn(3), nn1(3), nn2(3), pstop(3), rot
+    real(R8) :: nn(3), nn1(3), nn2(3), pstop(3), rot, s, xc(3), vc(3), nOut(3)
+    logical  :: hit
     real(R8) :: azim
     integer      :: try
 
@@ -161,21 +232,36 @@ contains
         nn = cross(nn2,nn1)
         if (norm2(nn)>=toll) nn = nn/norm2(nn)
       enddo
-      ! Calculate reflected velocity components
-      pstop = intersect + minDist * myRay%direction
-      if (norm2(p-pold)>minDist) then
-        v = norm2(pstop-pold)/norm2(p-pold)*(v-vold)+vold
+      !> the crossing on the step's cubic through its two end states: its time within the step, its velocity outward
+      call hopCrossing(pold, vold, p, v, time - told, intersect, nn, s, xc, vc, hit)
+      if (hit) then
+        time = told + s*(time - told)
+        v    = vc
+        nOut = sign(1._R8, dot_product(nn, p - pold))*nn
+        if (abs(dot_product(v,nn)) < grazeFrac*norm2(v)) then
+          !> grazing: slide along the plane; the standoff keeps the ray off the face
+          v = v - dot_product(v,nn)*nn
+          p = xc - grazeOffset(vertices,nn)*nOut
+        else
+          v = v - 2._R8*dot_product(v,nn)*nn
+          p = xc - minDist*nOut
+        endif
       else
-        v = vold
-      endif
-      time = time - norm2(p-pstop)/norm2(0.5_R8*(v+vold))
-      if (abs(dot_product(v,nn)) < grazeFrac*norm2(v)) then
-        !> grazing: slide along the plane; the standoff keeps the ray off the face
-        v = v - dot_product(v,nn) * nn
-        p = intersect - sign(grazeOffset(vertices,nn), dot_product(myRay%direction,nn)) * nn
-      else
-        v = v - 2.0 * dot_product(v,nn) * nn
-        p = pstop - 2.0 * dot_product(pstop-intersect,nn) * nn
+        !> no usable step (no duration, a chord parallel to the face, no outward root): the chord's crossing
+        pstop = intersect + minDist * myRay%direction
+        if (norm2(p-pold)>minDist) then
+          v = norm2(pstop-pold)/norm2(p-pold)*(v-vold)+vold
+        else
+          v = vold
+        endif
+        time = time - norm2(p-pstop)/norm2(0.5_R8*(v+vold))
+        if (abs(dot_product(v,nn)) < grazeFrac*norm2(v)) then
+          v = v - dot_product(v,nn) * nn
+          p = intersect - sign(grazeOffset(vertices,nn), dot_product(myRay%direction,nn)) * nn
+        else
+          v = v - 2.0 * dot_product(v,nn) * nn
+          p = pstop - 2.0 * dot_product(pstop-intersect,nn) * nn
+        endif
       endif
 
     !> Wedge 200 face: fold position and velocity by -+delthe about axisDir.

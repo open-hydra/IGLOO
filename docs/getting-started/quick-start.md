@@ -147,7 +147,7 @@ A passing run prints:
 ```
 
 !!! warning "Pass criterion"
-    The e2e harness uses the oracle (`check.py` exit code), not the solver's exit status or an empty stderr. A run that crashes mid-integration will fail the oracle because `OUTPUT/trajectories-A.dat` will be absent or empty.
+    The e2e harness fails a case whose solver exits non-zero, then runs the finiteness check and the oracle (`check.py` exit code); stderr is not read. A run that crashes fails on its exit code; one that ends cleanly with wrong numbers fails the oracle.
 
 ---
 

@@ -49,9 +49,8 @@ OUTLOC = "OUTPUT/outloc-A.dat"
 LOG    = "run_out.txt"
 NPART  = 25
 #> Mass-balance floor measured at 2.941e-7 and THREAD-INVARIANT (identical at OMP 1/2/5);
-#> it is the E13.6 source print, not the physics. RED -- `consumed` removed from the burnout
-#> branch -- was measured at 2.048e-4. This tolerance sits 34x above the floor and 20x below
-#> that signature. Do not loosen it past ~5e-5 or the gate stops seeing the dropped remnant.
+#> it is the E13.6 source print, not the physics. This tolerance sits 34x above the floor. The
+#> burnout remnant (<= 1e-20 kg, 3.1e-9 of m0) lies below the floor: H3 does not see it dropped.
 MASS_TOL = 1.0e-5
 
 # ---- known test inputs (SI); NOT read from production ----
@@ -166,7 +165,7 @@ def _log_count(pat):
 def check_exit_paths():
     """H1/H2 -- how the parcels LEAVE. The rhsEvaporation finite scrub makes a negative Newton
     trial mass (d = (6m/pi/rho)^(1/3) would be a NaN) a 1e30 slope: the step is rejected, and
-    the drop reaches mBurnTol -- a clean burnout through the normal branch. Without the scrub
+    the drop reaches the burnout threshold -- a clean burnout through the normal branch. Without the scrub
     all 25 end on `non-finite state ==> reverting to last good step` at m/m0 = 1.36e-3.
     H3 (below) is what pins the mass; these two pin the PATH."""
     n_nan  = _log_count("non-finite state")
@@ -188,8 +187,9 @@ def check_exit_paths():
 def check_mass_balance():
     """H3 -- the consumption contract: a drop that burns out inside the domain hands its
     whole stream to the gas (computeSource zeroes massOut when `consumed`), so the summed
-    source must equal the injected mass flow. Guards the DECISION, not the scrub: RED is a
-    build with `consumed` removed from the burnout branch (measured resid 3.6e-3)."""
+    source must equal the injected mass flow. The books, not the scrub's witness: with `consumed`
+    removed from the burnout branch it reads 2.955e-7 and passes (the remnant is <= 1e-20 kg per
+    drop); evaporation/evap-breakup-box's mass closure witnesses that hand-off."""
     if not (os.path.exists(SRC) and os.path.exists(OUTLOC)):
         print(f"[FAIL] H3 {SRC} or {OUTLOC} missing -- source output off?")
         return 1

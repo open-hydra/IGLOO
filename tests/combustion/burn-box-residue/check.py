@@ -11,7 +11,8 @@ build an expectation: the inputs below, the product's line and table, and the pr
   R1  one residue per parcel that burned out inside the box: the product's IDs = the parents' exit records with
       X < Lx - 1e-6 (25 here); the product's banner counts them
   R2  each residue's birth row = its parent's exit record (X, Y, Z, T printed alike, the speed within its print);
-      m = xi nu (m0 - 1e-15 kg) within 3e-5 (the burnout threshold is 2.4e-5 of m0), d = (6 m/(pi rho_res))^(1/3)
+      m = xi nu (m0 - m_b) within 3e-5 (m_b = min(1e-6 m0, 1e-20 kg) = 1e-20 kg, 2.4e-10 of m0, tools/burnout.py;
+      3e-5 bounds the cap's integration and print), d = (6 m/(pi rho_res))^(1/3)
       of the printed m within 5e-6 (the E13.6 prints of d and m)
   R3  sum of wdot(A) = sum of the parents' mdot - sum of the residues' mdot (exit records), wdot(OX) = 0: 1e-5
   R3e sum of the energy source = sum_parents mdot (h_A(600 K) + u^2/2) - sum_residues mdot (h_OX(T_exit) + u^2/2),
@@ -22,7 +23,7 @@ build an expectation: the inputs below, the product's line and table, and the pr
   R5  each residue's mdot = (m_res/m0) x its parent's: 1e-5
   D   ref-dres/: d-residue = 5e-6 m and the burning line in two groups (bc.txt's face table written twice): 50
       distinct residue IDs, 1-25 and 26-50 (the second group's at 25 + its parents' IDs); d = 5e-6 m; npdot (the exit
-      record's mdot over the birth row's m) = 60.958139 x its parent's (4e-5); R3, R3e; T = 600 K at the outlet
+      record's mdot over the birth row's m) = 60.959601 x its parent's (4e-5); R3, R3e; T = 600 K at the outlet
   F   ref-fail/: [IGLOO-ODE] fail-after = 3.6e-3 s: every parent ends at t* >= 3.6e-3 s; its exit record is its
       residue's birth row; m_res = xi nu (m0 - m_Al(t*)), m_Al(t*) from the burn law (Gallier's F by bisection,
       c = 1.397686) at the printed t*: 1e-5; R1, R3, R3e
@@ -33,11 +34,11 @@ build an expectation: the inputs below, the product's line and table, and the pr
       birth (its exit record's mdot over its first row's m) over its material's dNscat, tau its exit t less its
       birth t, every printed input with its half-ULP; the parcels of one ID summed (A's groups restart their IDs).
       A residue takes its own rate at birth against the product's quantum, not its parent's: in ref-dres the two
-      differ 61-fold (the residue's number rate and the product's dNscat both 60.958 x the parent's)
+      differ 61-fold (the residue's number rate and the product's dNscat both 60.960 x the parent's)
 
-The gate fails on a residue sized with the burning material's density (R2: d 2.168897e-5 m), on a birth flux left
+The gate fails on a residue sized with the burning material's density (R2: d 2.1689e-5 m), on a birth flux left
 in the gas books (R3: 0.378 of the injected flow), on the product's datum left out of the birth flux (R3e 100.7 %),
-on a residue born solid at its parent's temperature (R4: 63.9 K at the outlet), on d-residue ignored (D), on a
+on a residue born solid at its parent's temperature (R4: 64.1 K at the outlet), on d-residue ignored (D), on a
 residue ID without its group's offset (D: 25 distinct IDs), on a failure exit that keeps the segment-start state
 (F: the residue's mass), and on a residue whose markers follow its parent's rate or the burning material's quantum
 (S in ref-dres).
@@ -53,6 +54,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
 from datcols import group, parcel_zones, zones  # noqa: E402
+from burnout import burn_mass  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("burnboxcap_oracle", os.path.join(HERE, "..", "burn-box-cap", "check.py"))
 cap = importlib.util.module_from_spec(_spec)
@@ -67,7 +69,7 @@ RHO_RES, CL, CS, HF, TM = 3950.0, 1887.6, 1360.0, 1.08949e6, 2327.0
 TN = 0.8 * TM
 HOFF_A, HOFF_L = -372687.5, -1.723894e7
 M0 = cap.M0
-MB = 1.0e-15
+MB = burn_mass(M0)
 LX = 0.15
 D_RES = 5.0e-6
 FAIL_AFTER = 3.6e-3
@@ -277,7 +279,7 @@ def check_main(checks):
         m, d = rs[0]["m<sub>p"], rs[0]["d<sub>p"]
         wm = max(wm, abs(m - mres) / mres)
         wd = max(wd, abs(d - (6.0 * m / (math.pi * RHO_RES)) ** (1.0 / 3.0)) / d)
-    checks.append(("R2 residue mass vs xi nu (m0 - 1e-15 kg) = %.6e kg: worst %.2e <= %.0e; d vs (6 m/(pi rho_res))^(1/3)"
+    checks.append(("R2 residue mass vs xi nu (m0 - m_b) = %.6e kg: worst %.2e <= %.0e; d vs (6 m/(pi rho_res))^(1/3)"
                    " of the printed m: worst %.2e <= %.0e" % (mres, wm, TOL_M2, wd, TOL_D2),
                    wm <= TOL_M2 and wd <= TOL_D2))
     checks += books("main", par, res_exit, wA, ox_zero, E)

@@ -14,6 +14,7 @@ mean temperature: m c dT/dt = pi d k_g Nu (T_g - T) + mdot L_v, mdot = -pi d (k_
 d = (6 m/(pi rho_l))^(1/3).  Gas: rho 1.2, R 287, gamma 1.4, k 0.026 (tools/make_box_case.py); liquid rho 958, c 4186.
 """
 import math
+import os
 import sys
 
 try:
@@ -29,8 +30,11 @@ CPG = GAM*RG/(GAM - 1.0)
 MG = RU/RG
 RHOL, CL, LV, MV = 958.0, 4186.0, 2.26e6, 18.0
 NU = 2.0
-MBURN = 1e-15                  # IGLOO's burnout mass [kg]
 EPS = 2.220446049250313e-16
+
+if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from burnout import burn_mass  # noqa: E402
 
 
 def t_boil(p, tboil):
@@ -89,7 +93,8 @@ class Drop:
         self.tb = t_boil(RHOG*RG*tg, tboil)
         self.m0 = RHOL*math.pi/6.0*d0**3
         self.tc = None                       # the time T crosses T_B (none if it does not before tend)
-        self.tburn = None                    # the burnout time (m = 1e-15 kg)
+        self.mburn = burn_mass(self.m0)      # the burnout mass m_b [kg]
+        self.tburn = None                    # the burnout time (m = m_b)
 
         def rhs_zgr(t, y):
             e, s = zgr_rate(y[0], y[1]*self.m0, self.tb, tg)
@@ -107,7 +112,7 @@ class Drop:
         self.s1, self.s2 = s1, None
         if len(s1.t_events[0]):
             self.tc = s1.t_events[0][0]
-            burn = lambda t, y: y[1]*self.m0 - MBURN
+            burn = lambda t, y: y[1]*self.m0 - self.mburn
             burn.terminal = True
             s2 = solve_ivp(rhs_cem, (self.tc, tend), list(s1.y_events[0][0]), method='Radau', rtol=1e-10,
                            atol=[1e-8, 1e-14], dense_output=True, events=burn)

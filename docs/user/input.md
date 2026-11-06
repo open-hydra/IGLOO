@@ -236,6 +236,7 @@ Selects and tunes the ODE integrator.
 | `absolute-tol` | real | `1e-10` | Absolute ODE tolerance |
 | `max-steps-ode` | integer | `100000` | Maximum internal steps per integrator call (`iopt(1)`) |
 | `fail-after` | real | `0` | Forces the solver failure of the oxide-cap model (ODE model 8) once a parcel's last accepted time reaches this value [s]: the failure path of the [burnout residue](../theory/combustion.md#the-burnout-residue); 0 = off |
+| `max-inner-iter` | integer | `10` | Maximum ODE solver calls on one cell segment (its first call and the refinements of its crossing); a parcel that needs more ends at its last accepted step, as on a solver failure; below 1 is refused |
 
 `H-sdirk4` is recommended for stiff cases (evaporation, small Stokes number). `H-dopri5` is faster for non-stiff drag-only cases.
 

@@ -22,7 +22,7 @@ contains
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
                                 nInjNoCell,                                &
                                 trajOn, scatOn, dNscat, sixOverPi, pi,    &
-                                planeOn, planeX, failAfter
+                                planeOn, planeX, failAfter, maxInnerIter
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs, grazeStandoff
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock, obj_wallblock
@@ -123,13 +123,13 @@ contains
     integer  :: whichEv
     real(R8) :: timeLocal, din, dout, deltaS(3), dir(3), taup, tEvt, rhoEvt
     integer  :: err, nDL, innerIter, jSlot
-    integer,  parameter :: maxInnerIter=10, nStep=10
+    integer,  parameter :: nStep=10
     !> Hard cap on child parcels one parent may shed in one call.
     integer,  parameter :: maxShed=1000
     real(R8), parameter :: safety=0.99, dtMin=1.e-14_R8, tauFactor=100._R8
     real(R8), parameter :: escapeDist=1.e-6_R8   ! min displacement per sliver-escape hop (startedOut)
-    !> Burnout threshold on droplet mass [kg]: a consuming droplet at m <= mBurnTol is declared consumed.
-    real(R8), parameter :: mBurnTol=1.e-15_R8
+    !> Burnout threshold on the droplet mass: the lower of a fraction of its reference mass m0 and an absolute bound [kg].
+    real(R8), parameter :: epsBurn=1.e-6_R8, mBurnAbs=1.e-20_R8
 
     !> MPI: a parcel of this loop failed; its rank aborts after the join (empty blocks keep the window whole)
     if (region_failed()) then
@@ -249,7 +249,7 @@ contains
     do while (part%time<tEnd.and.iter<maxIter)
       iter = iter+1
       call part%initializeCell(eulerSwitch)
-      !> Set by the segment finalize or a revert to the last accepted step: a segment that ends neither way deposits nothing.
+      !> Zero until the finalize or a revert sets them; every exit that deposits sets them first.
       part%deltaL = 0._R8; part%Tstay = 0._R8
       if (eulerSwitch) part%intE = 0._R8
       if (sourceSwitch) call part%computeSource(massIn,Pin,Ein)
@@ -275,8 +275,9 @@ contains
         if (innerIter > maxInnerIter) then
           write(*,'(a,i0,a,i0,a)')                          &
             '[WARNING] Inner loop > ',maxInnerIter,' iter, part=',part%ID,' ==> marking gone'
-          doLoop    = .false.
-          part%gone = .true.
+          call revertToLastAccepted()
+          !> The reverted state crossed nothing: the cut step's crossing flags go with it.
+          IamOut = .false.; newGas = .false.; sectorOut = .false.
           exit
         endif
         t1     = part%time
@@ -792,6 +793,19 @@ contains
     end subroutine emitParcel
 
 
+    !> Back to the last accepted step, marked gone; a consuming parcel hands its remnant to the gas.
+    subroutine revertToLastAccepted()
+      doLoop    = .false.
+      part%gone = .true.
+      if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) consumed = .true.
+      part%stateVar = oldLocal
+      part%time     = timeLocal
+      part%oldState = oldLocal
+      part%timeOld  = timeLocal
+      call part%updatePart(rhoTab,hTab,eulerSwitch)
+      part%Tstay = timeLocal - tStart
+    end subroutine revertToLastAccepted
+
     !> Integrate one trajectory segment: run the ODE solver on [t1,t2] under solout interrupts,
     !  then finalize the segment (event/aux state, euler moments) or refine deltat and retry.
     subroutine ODEsystem()
@@ -841,20 +855,13 @@ contains
         write(*,'(a,i0,a,i0,a,es12.4,a)')                                   &
           '[IGLOO] Run_ODESolver err=',err,' part=',part%ID,                   &
           ' time=',part%time,' => marking gone'
-        doLoop    = .false.
-        part%gone = .true.
-        !> Consumption models hand the remnant to the gas, as on the non-finite exit below.
-        if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) consumed = .true.
-        !> Back to the last accepted step: the exit record and the deposits carry that progress.
-        part%stateVar = oldLocal
-        part%time     = timeLocal
-        part%oldState = oldLocal
-        call part%updatePart(rhoTab,hTab,eulerSwitch)
-        part%Tstay = timeLocal - tStart
+        call revertToLastAccepted()
         return
       endif
       !> Burnout: the droplet was consumed on a still-good state; falls through to the normal finalize.
       if (burnedOut) then
+        !> The step that crosses the threshold can end below zero: the burnout state holds no negative mass.
+        y(8) = max(y(8), 0._R8)
         part%gone = .true.
         consumed  = .true.     !> remnant transfers to the gas; see the source block
       endif
@@ -866,22 +873,14 @@ contains
         !> Report the remaining mass fraction for mass-evolving models.
         if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8)           &
           write(*,'(A,ES10.3,A,ES10.3,A)') '          last good m/m0 =',                   &
-                oldLocal(8)/part%m0, '  (burnout fires at m =', mBurnTol, ' kg)'
-        part%stateVar = oldLocal
-        part%time     = timeLocal
-        part%oldState = oldLocal
-        part%gone     = .true.
-        doLoop        = .false.
-        !> Consumption models hand the remnant to the gas as on a clean burnout.
-        if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) consumed = .true.
-        !> Sync d/m/tp from the reverted state; the residence ends at the last good step.
-        call part%updatePart(rhoTab,hTab,eulerSwitch)
-        part%Tstay = timeLocal - tStart
+                oldLocal(8)/part%m0, '  (burnout fires at m =', min(epsBurn*part%m0, mBurnAbs), ' kg)'
+        call revertToLastAccepted()
         return
       endif
       part%stateVar = y
       part%time     = timeLocal
       part%oldState = oldLocal
+      part%timeOld  = timeLocal
       !> Apply the ETAB velocity kick to both the segment result and the resume state.
       if (kickPend) then
         part%stateVar(4:6) = part%stateVar(4:6) + kickDV
@@ -913,6 +912,7 @@ contains
             stateLocal(ind_sb1:ind_sb2) = breakupStateAtSwitch(whichEv, mod_brkSelect, t1, stateLocal(ind_sb1:ind_sb2))
           part%stateVar = y
           part%oldState = y
+          part%timeOld  = t1
         endif
         if (eventType) then
           if (allocated(eventLocal)) then
@@ -1120,7 +1120,7 @@ contains
 
       !> Burnout test on the droplet mass (model 8: the metal's), consumption models only.
       if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) then
-        if (y(8) <= mBurnTol) burnedOut = .true.   ! y(8) IS the droplet mass [kg]
+        if (y(8) <= min(epsBurn*part%m0, mBurnAbs)) burnedOut = .true.   ! y(8) IS the droplet mass [kg]
       endif
 
       !> Solidification: the step ends strictly past the phase's threshold from a start at or before it.
@@ -1159,7 +1159,8 @@ contains
           d = (sixOverPi*m/rho)**oneThird
         endif
 
-        Vdif = gasState(2:4)-y(4:6)
+        !> The gas at the parcel's azimuth (gas order 1 on a wedge carries the meridian frame's value).
+        Vdif = meridianToAzimuth(gasState(2:4), y(1:3)) - y(4:6)
         vel  = norm2(Vdif)
         Re   = gasState(1)*vel*d/gasState(6)
         call interphase(gasState(:),ng,Vdif,vel,tp,d,Re,1._R8,Fdrag)

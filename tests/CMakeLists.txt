@@ -6,11 +6,11 @@
 #
 #   support/            verif_* modules (norms/report/oracle/interp/dump/driver) + test_self + twosweep
 #   standard/           drag/ temperature/ (unit) + drag-stokes/ drag-stokes-dopri5/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ rad-cool/ emissivity-cap/ rad-foreign-key/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ scatter-placement/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/ (e2e; + vortex-cloud-3way, optional)
-#   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/, liquid-p2t/, boiling-zgr/) + d2law/ d2law-line/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ evap-breakup-box-varcp/ d2law-brk-dormant/ temp-relax-p2t/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/ (e2e)
+#   evaporation/        unit families (root, interface-neq/, tc-analytic/, evap-breakup/, liquid-p2t/, boiling-zgr/) + d2law/ d2law-line/ burnout-threshold/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ evap-breakup-box-varcp/ d2law-brk-dormant/ temp-relax-p2t/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/ (e2e)
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ burn-box-ox0/ beckstead-air/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-melt-rhos/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-brk-tab-rhos/ (e2e)
-#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ khrt-varcp/ breakup-per-material/ khrt-plane/ pe-sigma-table/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ tec_read/ tec_write/ fmt/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ inlet-401-g/ inlet-zero-load/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ sym-plane-creep/ sym-plane-creep-ord2/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,bc-no-g,krho-negative,gas-no-density}
+#   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ khrt-varcp/ breakup-per-material/ khrt-plane/ pe-sigma-table/ tab-wedge-slip/
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ hop_crossing/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ tec_read/ tec_write/ fmt/ rc-gate/ (unit) + db-injection/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ inlet-401-g/ inlet-zero-load/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ inner-loop-cap/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ sym-plane-creep/ sym-plane-creep-ord2/ sym-plane-hop/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,max-inner-iter,boiling-temperature-both,solid-{hfus,cpsolid,tnuc,evap,comb,varcp},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,bc-no-g,krho-negative,gas-no-density}
 #   repeatability/      two-sweep gates (twosweep driver): 15 cases
 #   mpi/                registered only under USE_MPI: 9 rank-count cases + 4 consistency + 1 determinism
 #                       + 14 two-sweep cases
@@ -71,18 +71,29 @@ function(igloo_unit_test name srcdir labels)
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 endfunction()
 
+# The run's exit code: a signal death (rc > 128) and any other non-zero exit (ifx's `error stop` 128, a runtime error
+# number, gfortran's 2, an `error stop 1`) fail the case before its oracle can read a partial OUTPUT/.
+function(igloo_rc_gate out what)
+    set(${out} "rc=$?; if [ \"$rc\" -gt 128 ]; then echo \"[FAIL] ${what} died on signal (exit $rc)\"; exit 1; elif [ \"$rc\" -ne 0 ]; then echo \"[FAIL] ${what} exit $rc\"; exit 1; fi" PARENT_SCOPE)
+endfunction()
+
+# The e2e command around an executable: run it in the case dir, gate its exit code, check every output number is
+# finite, then the case's oracle.
+function(igloo_e2e_command out exe)
+    igloo_rc_gate(_gate solver)
+    set(${out} "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${exe} 1>run_out.txt 2>run_err.txt; ${_gate}; python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_finite.py || exit 1; python3 -B check.py" PARENT_SCOPE)
+endfunction()
+
 # e2e case: run this build tree's IGLOO in the case dir, check every output number is finite, then its oracle
 # (IGLOO_EXE names the executable for sibling runs).
-# Ordinary solver exit codes are deliberately NOT gated (benign ifort stderr warnings);
-# PASS == check_finite.py and check.py exit 0.
-# EXCEPT signals (rc >= 128): check.py can read the PARTIAL
-# trajectory a crashed run leaves and pass on it. A crashed solver must
-# never be green, so death-by-signal fails the case outright. This is
-# the narrowest possible gate -- it does not touch the benign-stderr
-# tolerance that the comment above is about.
+# PASS == the solver exits 0, then check_finite.py and check.py exit 0. Any non-zero exit fails the case before
+# check.py runs: check.py could read the PARTIAL output a crashed run leaves and pass on it, and a runtime's crash
+# codes cannot be listed by value (a severe run-time error exits with its error number, gfortran's runtime with 2,
+# a caught signal with 1). IGLOO never exits non-zero benignly; stderr is not read (benign compiler warnings).
 function(igloo_e2e_case name casedir labels)
+    igloo_e2e_command(_cmd "$<TARGET_FILE:IGLOO>")
     add_test(NAME ${name}
-        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; $<TARGET_FILE:IGLOO> 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ge 128 ]; then echo \"[FAIL] solver died on signal (exit $rc)\"; exit 1; fi; python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_finite.py || exit 1; python3 -B check.py"
+        COMMAND bash -c "${_cmd}"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
     set_tests_properties(${name} PROPERTIES
         LABELS "${labels}"
@@ -95,10 +106,9 @@ endfunction()
 # ./test.sh run is unchanged and these tests simply do not exist. Run them with
 #   USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF   (built in build/mpi; see mpi/INFO.md)
 #
-# Three deliberate departures from igloo_e2e_case:
-#  * rc gate is `!= 0`, not `>= 128`. Measured on this host (Intel MPI 2021.9.0): mpiexec returns
-#    255 when ANY rank dies on a signal and 0 on a clean run, so a `>=128` gate would work only by
-#    luck of that value. IGLOO never exits non-zero benignly (khrt-e2e-rt relies on it too).
+# Its rc gate is igloo_e2e_case's rule (any non-zero exit fails) with mpiexec's code: measured on this host
+# (Intel MPI 2021.9.0), mpiexec returns 255 when ANY rank dies on a signal and 0 on a clean run.
+# Two deliberate departures from igloo_e2e_case:
 #  * OMP_NUM_THREADS is per-case, because ranks x threads must stay bounded.
 #  * each case gets its OWN directory rather than sharing the serial case's OUTPUT/ under a
 #    RESOURCE_LOCK -- the repeatability/ pattern. A private dir cannot race the serial variant at
@@ -175,6 +185,9 @@ igloo_unit_test(test_axis_dispatch      infrastructure/axis_dispatch      "unit;
 # it at a fraction of the cell. Pins the invariant across 12 decades of cell
 # thickness.
 igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;infrastructure;bc")
+# A reflection's crossing from the step's two end states: hopCrossing's first outward root of the cubic Hermite, exact
+# on paths of degree <= 3 (a whole hop in one step, three crossings in one step, none, a straight step).
+igloo_unit_test(test_hop_crossing       infrastructure/hop_crossing       "unit;infrastructure;bc")
 # The boundary search's face: a ray along a triangle edge, in its plane or off it, is no hit (RT1; RED with the ratio
 # form of the parallel test, 0/0: NaN and +Inf hits); intersectPolyhedron returns the exit face at its distance for
 # every face hint from points on a face, an edge and a corner of a box (RT2; RED: a face the ray runs along at NaN).
@@ -302,9 +315,9 @@ endif()
 # does) and carry their own input.ini, so these tests never share an OUTPUT/ with the
 # single-sweep cases -- which they otherwise would clobber under `ctest -j`.
 # A non-empty `gasfile` additionally runs the 3-sweep gas-refresh cycle.
-# Signal handling matches igloo_e2e_case: ordinary solver exit codes are not gated, death by signal is.
-# A case the solver must REFUSE at setup. The e2e helper cannot host one: ifx `error stop 'msg'`
-# exits 128, which its rc >= 128 test reads as "died on signal". tools/check_refusal.py needs
+# Its rc gate is igloo_e2e_case's: any non-zero exit of the harness fails the case.
+# A case the solver must REFUSE at setup. The e2e helper cannot host one: its rc test fails any
+# non-zero exit, and a refusal's exit is the runtime's `error stop` code. tools/check_refusal.py needs
 # exit == IGLOO_ERROR_STOP_RC (below) AND the expected text in stderr (the error-stop payload that
 # ended the run) AND nothing set up past the choke point (no "Placing particles"/"Compute particles
 # dynamics", no OUTPUT/*.dat) -- a green solver fails it on every count (as drag-stokes's own output
@@ -339,9 +352,11 @@ endfunction()
 function(igloo_twosweep_case name casedir labels gasfile)
     set(_oracle "python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_twosweep.py")
     set(_run "${CMAKE_CURRENT_BINARY_DIR}/twosweep")
-    set(_cmd "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${_run} 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ge 128 ]; then echo \"[FAIL] harness died on signal (exit $rc)\"; exit 1; fi; ${_oracle} steady || exit 1")
+    igloo_rc_gate(_gate harness)
+    set(_cmd "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${_run} 1>run_out.txt 2>run_err.txt; ${_gate}; ${_oracle} steady || exit 1")
     if(NOT "${gasfile}" STREQUAL "")
-        string(APPEND _cmd "; rm -rf OUTPUT; mkdir -p OUTPUT; ${_run} ${gasfile} 1>run_out_gas.txt 2>run_err_gas.txt; rc=$?; if [ \"$rc\" -ge 128 ]; then echo \"[FAIL] gas-cycle died on signal (exit $rc)\"; exit 1; fi; ${_oracle} gas-cycle || exit 1")
+        igloo_rc_gate(_gate gas-cycle)
+        string(APPEND _cmd "; rm -rf OUTPUT; mkdir -p OUTPUT; ${_run} ${gasfile} 1>run_out_gas.txt 2>run_err_gas.txt; ${_gate}; ${_oracle} gas-cycle || exit 1")
     endif()
     add_test(NAME ${name} COMMAND bash -c "${_cmd}"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${casedir}")
@@ -443,6 +458,17 @@ add_test(NAME exe-per-tree COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/
 set_tests_properties(exe-per-tree PROPERTIES
     LABELS "unit;infrastructure;build"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# e2e-rc-gate: the e2e command around a probe that ends on a run-time error (an exit code below 128) and writes no
+# OUTPUT/; passes only when the exit-code gate stops the command and the oracle never runs.
+add_executable(crash_code_probe tools/crash_code_probe.f90)
+igloo_e2e_command(_rc "$<TARGET_FILE:crash_code_probe>")
+add_test(NAME e2e-rc-gate COMMAND bash -c "${_rc}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/infrastructure/rc-gate")
+set_tests_properties(e2e-rc-gate PROPERTIES
+    LABELS "unit;infrastructure;harness"
+    PASS_REGULAR_EXPRESSION "\\[FAIL\\] solver exit [0-9]+"
+    FAIL_REGULAR_EXPRESSION "\\[PASS\\] rc-gate"
+    TIMEOUT 60)
 # lint-test-inputs: every test INI separates list values by one blank (FiNeR counts blanks + 1) and is ASCII.
 add_test(NAME lint-test-inputs COMMAND python3 -B ${CMAKE_CURRENT_SOURCE_DIR}/tools/lint_inputs.py
     ${CMAKE_CURRENT_SOURCE_DIR})
@@ -636,6 +662,9 @@ igloo_threads_case(threads-d2law evaporation/d2law "e2e;evaporation;omp")
 # d2law-line: Tier-V analytic line — cp_p x100 freezes B_T so K is a pure
 # closed form of the inputs (Godsave/Spalding); companion to the run-conditioned d2law.
 igloo_e2e_case(d2law-line evaporation/d2law-line "e2e;evaporation;val;d2line")
+# burnout-threshold: 25 drops of 0.1-10 um under the d2-law, the burnout mass min(1e-6 m0, 1e-20 kg) on both sides
+# of m0 = 1e-14 kg: the remnant d_p <= d(m_b) and the full life against the closed form.
+igloo_e2e_case(burnout-threshold evaporation/burnout-threshold "e2e;evaporation;burnout")
 # d2law-varcp: d2law with a varying cp (the enthalpy state under evaporation): d2law's mass-rate oracle, the enthalpy
 # history along the measured diameter, and the energy deposit at the table's enthalpy.
 igloo_e2e_case(d2law-varcp evaporation/d2law-varcp "e2e;evaporation;heat")
@@ -821,6 +850,10 @@ igloo_threads_case(threads-tab-e2e breakup/tab-e2e "e2e;breakup;omp")
 # [HF93] (not gated). RED with the slip at 6 m/s (no drop breaks), a 5 cm box (still breaking), a 0.3 m box (out
 # before t_b).
 igloo_e2e_case(tab-hf92 breakup/tab-hf92 "e2e;breakup;val;tab")
+# tab-wedge-slip: three rotated copies of one TAB drop on a gas-order-1 wedge with swirl (azimuths -0.45, 0, +0.45 deg)
+# break up at one time: E1 |t_ev(+) - t_ev(-)| <= 5e-8 s, E2 the same on a gas-order-2 sibling (ref-ord2/, the
+# control). RED with the event slip in the meridian frame at gas order 1: 5.17e-7 s.
+igloo_e2e_case(tab-wedge-slip breakup/tab-wedge-slip "e2e;breakup;axisym")
 # etab-e2e: ETAB vs Tanner 97/98 — shared TAB oscillator (onset + t_bu) plus
 # the deterministic exponential-cascade product size across the bag/stripping branches.
 igloo_e2e_case(etab-e2e breakup/etab-e2e "e2e;breakup;val;etab")
@@ -842,8 +875,8 @@ igloo_e2e_case(reitz-diwakar-e2e breakup/reitz-diwakar-e2e "e2e;breakup;val;rd")
 # event whose npdot never reaches the model-3 ODE state y(8), so the event
 # reverts.
 igloo_e2e_case(khrt-e2e breakup/khrt-e2e "e2e;breakup;val;khrt")
-# The rc guard is stricter than igloo_e2e_case's (any non-zero exit fails, a signal death among them): without it a
-# solver that dies on a signal reaches check_rt.py, which then judges whatever partial OUTPUT survives.
+# The rc guard is igloo_e2e_case's rule (any non-zero exit fails), kept for its own oracle: without it a solver that
+# dies reaches check_rt.py, which then judges whatever partial OUTPUT survives.
 add_test(NAME khrt-e2e-rt
     COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; $<TARGET_FILE:IGLOO> 1>run_out.txt 2>run_err.txt; rc=$?; if [ \"$rc\" -ne 0 ]; then echo \"[FAIL] solver exit $rc\"; exit 1; fi; python3 -B check_rt.py"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/breakup/khrt-e2e")
@@ -1213,6 +1246,9 @@ igloo_refusal_case(refuse-out-file         infrastructure/refusals/out-file
                    "IGLOO: unknown out-file token"                      "e2e;refusal;infrastructure")
 igloo_refusal_case(refuse-ode-solver       infrastructure/refusals/ode-solver
                    "IGLOO: unknown ode-solver"                          "e2e;refusal;infrastructure")
+# max-inner-iter = 0 would cap every segment before its first solver call: RED on a reader without the check (exit 0).
+igloo_refusal_case(refuse-max-inner-iter   infrastructure/refusals/max-inner-iter
+                   "IGLOO: max-inner-iter must be at least 1"           "e2e;refusal;infrastructure")
 # boiling-temperature and its alias Tboil are one key: both given is ambiguous. RED on a reader that
 # ignores the second name: the run goes through (exit 0).
 igloo_refusal_case(refuse-boiling-temperature-both infrastructure/refusals/boiling-temperature-both
@@ -1416,6 +1452,13 @@ igloo_e2e_case(solver-fail-midway infrastructure/solver-fail-midway "e2e;infrast
 # record lies inside the cell, the field holds the exit records' mdot*t, and a body-force sibling closes Fx on the drag
 # reaction plus the impulse. RED with the revert taken out: X past the face, the field -1.000, Fx -9.840e-1 of it.
 igloo_e2e_case(solver-fail-refine infrastructure/solver-fail-refine "e2e;infrastructure;euler")
+# inner-loop-cap: a mesh stretch (left cells 5e-6 m, right cells 1000 times longer) and [IGLOO-ODE] max-inner-iter = 5:
+# every parcel finalizes its 30 left crossings (4 solver calls each) and is capped on the first right cell (7 calls).
+# C0 the cap once per parcel there; C1 each parcel ends at its last accepted step, one state in that cell, its
+# trajectory ending at the cell entry; C2 the Eulerian mass equals the exit records' mdot*t within 1e-5; C4 a sibling of
+# evaporating drops (ref-consumed/) hands the gas the whole injected flow within 1e-10. RED with the cap's old exit (no
+# revert): C1 32 rows, C2 -9.709e-1, C4 -9.984e-1; without the consumed hand-off: C4 -9.455e-1.
+igloo_e2e_case(inner-loop-cap infrastructure/inner-loop-cap "e2e;infrastructure;exits")
 # stuck-cell: parcels at rest in a gas at rest (402 inlet, |v| = 0): the residency guard ends each one once, at its
 # injection point, before the zero-progress guard or the outer cap. L1: a sibling without row keys (ref-last/) ends
 # every trajectory once at its exit record (RED before the parcel rule: the injection row alone).
@@ -1443,6 +1486,10 @@ igloo_e2e_case(sym-plane-bounce-ord2 infrastructure/sym-plane-bounce-ord2 "e2e;i
 # row at every reflection) also bounds the rows per parcel: RED with the window at 10 reflections, 21 rows each.
 igloo_e2e_case(sym-plane-creep infrastructure/sym-plane-creep "e2e;infrastructure;bc;guard")
 igloo_e2e_case(sym-plane-creep-ord2 infrastructure/sym-plane-creep-ord2 "e2e;infrastructure;bc;guard;gas")
+# sym-plane-hop: three parcels bouncing in place on the plane in a gas at rest (Stokes drag, gravity), the hops shorter
+# than the solver's steps: the 100th reflection at the closed form's time within 5e-3, a row per reflection with its
+# time increasing, every rebound leaving the plane. RED with the chord's crossing: -8.8e-2, 82 rows, 14 rows w < 0.
+igloo_e2e_case(sym-plane-hop infrastructure/sym-plane-hop "e2e;infrastructure;bc")
 # exit-census: seven assigned streams in drag-stokes's box, each stopped one way: three leave through the outlet,
 # three are inside at time-end, one starts outside the box (no cell holds it) and is not integrated. Every parcel
 # leaves one exit record, code 0 where the integration stopped inside. RED with no record for the time-end and

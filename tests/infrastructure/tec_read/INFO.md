@@ -15,7 +15,7 @@ interface that passes the count by value, and asserts it (`omp_get_max_threads`)
 **The suite's files**: every tracked `.tec` input under `tests/`, from the list CMake writes at configure time
 (`build/…/tests/tec_read_files.txt`: the `.tec` files of the source tree outside the directories runs and checks
 write `.tec` outputs into — `OUTPUT/`, `ref-*/`, `tec_n*/`, `_run-*/`, `threads-omp*/` — symlinks resolved, duplicates
-dropped). The test fails unless the list holds `SUITE_FILES` = 68 files, the number of tracked inputs: adding a
+dropped). The test fails unless the list holds `SUITE_FILES` = 70 files, the number of tracked inputs: adding a
 tracked `.tec` input moves that constant. Each file must also be one ORION reads right: no line of 1000 characters
 or more (ORION cuts a line there), no CR byte, no POINT zone.
 

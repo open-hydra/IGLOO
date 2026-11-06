@@ -53,7 +53,7 @@ Set via `ode-solver` in `[IGLOO-ODE]`.
 | `H-sdirk4` | Stiff implicit (default) | Evaporation or cases with very small particle inertia; more expensive per step but stable with large `dt` |
 
 For stiff cases (e.g. small droplets at high gas temperature), SDIRK4 will take
-fewer but costlier steps and converge where DOPRI5 would hit `maxInnerIter`.
+fewer but costlier steps and converge where DOPRI5 would hit the inner loop's cap (`[IGLOO-ODE] max-inner-iter`).
 
 !!! warning "Verify that particles advance"
     A solver stall (step size collapsing towards `dtMin`) ends a particle through the

@@ -28,11 +28,11 @@ Each parcel bounces about 2 800 times and slides to the outlet in 1.46 s; up to 
 - B3 every parcel leaves on the plane, z ≤ 1e-5 m.
 - B4 some parcel has more than nMaxCell + 1 = 11 rows in one cell along x, the first by (most rows, ID, cell)
   named: the fixture keeps a parcel in one cell for more reflections than the guard allows (measured 49, 2 724–2 731
-  rows per parcel; at gas order 2 50, 2 758–2 768 rows).
+  rows per parcel; at gas order 2 53, 2 759–2 784 rows).
 - R1 the rows are the parcel rule's (`print-ds`) on the segment ends of a sibling run in `ref-ends/` that writes
   every one (`print-dtime = 1e-300` in place of `print-ds`; `tools/replay.py`), row for row, a decision within the
   print quantum of the limit (2e-6 m) accepted either way: 16 365 rows of 16 497 segment ends, 75 decisions within
-  the quantum (gas order 2: 16 578 of 16 845, 144); the 132 ends left out lie within 1e-5 m of the row before. Under
+  the quantum (gas order 2: 16 607 of 16 877, 142); the 132 ends left out lie within 1e-5 m of the row before. Under
   `check-order` (`IGLOO_REUSE_SIBLING=1`) the `ref-ends/` the case's run left is read.
 
 **RED.** With every segment that ends inside the cell counted, reflections included: the six parcels end with

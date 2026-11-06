@@ -95,8 +95,9 @@ so all three live in consistent units.
 
 ### Burnout
 
-A burning (or evaporating) droplet whose mass falls to $m \le 10^{-15}$ kg on an
-accepted step is declared **consumed**: the parcel ends inside the domain, its
+A burning (or evaporating) droplet whose mass falls to $m \le m_b = \min(10^{-6} m_0,
+10^{-20}\,\mathrm{kg})$ on an accepted step, $m_0$ its reference mass ([Time integration](time-integration.md)),
+is declared **consumed**, the remnant it hands the gas at once at most $10^{-6}$ of its reference mass and $10^{-20}$ kg: the parcel ends inside the domain, its
 outgoing flux for the cell is zero, and the mass, momentum and energy it still carried
 at cell entry are deposited on the gas through the source block.  The same hand-off
 applies when a consuming model reverts a non-finite state to its last good step, and at a

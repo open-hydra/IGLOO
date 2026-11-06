@@ -17,7 +17,7 @@ z = 0, a symmetry plane; no inlet); `input.ini` is `sym-plane-bounce`'s: six ass
 z = 1e-4 m, three per incidence on y = 0.015, 0.025, 0.035 m, 0.1 m/s at 1° (IDs 1–3) and at 10° (IDs 4–6) toward
 the plane; d = 11.89 µm, ρ_p = 2950 kg/m³, Schiller-Naumann drag, SDIRK4 at its default tolerances,
 `body-accel = 0 0 -9.81`, `print-dcell = 1`, `out-time`. Each parcel lands in its injection cell and stops there
-after 200 reflections, at x = 0.00420–0.00421 m and t = 0.0263–0.0279 s: its first window, which holds the fall
+after 200 reflections, at x = 0.00420–0.00421 m and t = 0.0265–0.0281 s: its first window, which holds the fall
 from the injection height, spans 2.2e-4 m, its second 7.7e-6 m.
 
 **The bound.** 1e-4 m per 100 reflections lies 54 times below the least advance of `sym-plane-bounce`'s parcels

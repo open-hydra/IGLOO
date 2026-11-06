@@ -31,19 +31,22 @@ Re 20: stripping). `phase.txt`/`properties.dat` are `../../common`'s (ρ_l 2950,
 and L_v = 2e5 J/kg are verification inputs chosen so that the breakup window, an evaporation share
 inside it and the burnout all fall inside the box; a physical liquid cannot satisfy all three in a
 frozen-gas box (drops that break at realistic σ are too large to evaporate within the residence).
+The last 1e-15 kg of a drop takes 58 mm (1.16 ms): the drop heats toward the gas (599.9 K at its burnout), so
+B_T and the d² rate fall toward zero and d falls about linearly with x in the tail (observed).
 `mollify = off`: B2 reads the unsmoothed field.
 
 | quantity | predicted (re-typed closures, before the run) | measured |
 |---|---|---|
 | d/d0 at the first row past x = 0.04 m | 0.46 | 0.4597 |
 | breakup window (rows with We_r ≥ 6.5) | 14–15 rows | ≥ 15 rows |
-| burnout (m ≤ 1e-15 kg) | x = 0.543 m, t = 11.15 ms | x = 0.544066 m (all 25) |
+| m = 1e-15 kg | x = 0.543 m, t = 11.15 ms | x = 0.5434 m (log-interpolated between the rows at 0.5425 and 0.545 m, all 25) |
+| burnout (m ≤ m_b = 1e-20 kg) | — | x = 0.601625–0.601687 m (all 25) |
 
 ## What it verifies
 
 | gate | assertion |
 |---|---|
-| G0 | witnesses: parents 1..25, injection rows at d0 ± 1 %, u0 ± 1e-3, T0 ± 0.3; Σ outloc column 7 (model 4: the stream's flow at exit) ≤ 1e-3 of the injected flow `25·krho/(1−krho)·ρ_g U A`: every drop leaves at burnout (measured 1.9e-4) |
+| G0 | witnesses: parents 1..25, injection rows at d0 ± 1 %, u0 ± 1e-3, T0 ± 0.3; Σ outloc column 7 (model 4: the stream's flow at exit) ≤ 1e-3 of the injected flow `25·krho/(1−krho)·ρ_g U A`: every drop leaves at burnout (measured 1.7e-9) |
 | B1 | closure: Σ `wdot` over `source.tec` = the injected flow to 1e-12 (every drop is consumed in the box) |
 | B2 | sign: no cell below −1e-6 of the largest (evaporation is the only mass exchange; breakup moves mass between drops) |
 | B3 | end of life: 25 parents end at 0.45 < x < 0.65 m, no `Run_ODESolver err=` line, no `non-finite state` line |
@@ -61,8 +64,8 @@ column 7. The rate gates C1/C2 and the witnesses B3/W1 are the ones that see a w
 ## Tolerances
 - C1 `2e-3`: ≈ 3× the Richardson term of the T_p/u sampling (6.3e-4 at the window end, derived on the
   exact solution sampled at every cell crossing and printed F12.6/E13.6). Measured worst **1.39e-4**.
-- C2: the d2law case's budget, unchanged. Measured worst resid/tol **0.512**.
-- B1 `1e-12` against the case-input flow (no printed value enters): measured **5.4e-16**.
+- C2: the d2law case's budget, unchanged. Measured worst resid/tol **0.497**.
+- B1 `1e-12` against the case-input flow (no printed value enters): measured **3.6e-16**.
 - B2 measured: min `wdot` = 0.0 (no cell below zero), max 6.16e-5 kg/s.
 
 ## Falsification (measured)
@@ -70,7 +73,7 @@ column 7. The rate gates C1/C2 and the witnesses B3/W1 are the ones that see a w
 |---|---|
 | `F(8) = n·ṁ_evap` (no breakup share) | every parcel lost at injection: SDIRK4 gives up at t = 1.88e-10 s (predicted 1.9e-10 s), 25 `Run_ODESolver err=-1` lines; B1 Σ `wdot` = 0, resid **1.000**; B2 no deposit; B3 0/25 in band; W1 0/25; C1, C2 0 parcels |
 | breakup share dropped (`F(8) = ṁ_evap`) | B1 Σ `wdot` = −1.112 kg/s (the gas loses mass to the breakup cells), B2 min/max **−8.5**, W1 d/d0 = 0.966, B3 parcels leave alive at x = 0.8, C1 **0.881** (predicted 0.68 on a shorter window) |
-| model 4 left out of the burnout test | B3 only: 25 `Run_ODESolver err=-1` lines at t = 12.3 ms, x = 0.6025 m; B1 still closes (the failure exit hands the remnant to the gas) |
+| model 4 left out of the burnout test | B3 only: 25 `Run_ODESolver err=-1` lines at t = 12.3 ms, x = 0.6025 m (0.9 mm past the burnout: B3's x band cannot tell them apart, its error-line count does); B1 still closes (the failure exit hands the remnant to the gas) |
 | this solver | all seven PASS |
 
 ## Pass criterion

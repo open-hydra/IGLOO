@@ -201,6 +201,9 @@ contains
     call reg%add('IGLOO-ODE','fail-after',d_r(27),'0', &
       'A forced solver failure of the oxide-cap model (ODE model 8) once a parcel''s last accepted time reaches this '// &
       'value [s]: the failure path of the burnout residue; 0 = off','',.false.)
+    call reg%add('IGLOO-ODE','max-inner-iter',d_i(9),'10', &
+      'Maximum ODE solver calls on one cell segment (its first call and the refinements of its crossing); a parcel '// &
+      'that needs more ends at its last accepted step','',.false.)
 
     ! --- [IGLOO-Erosion] ---
     call reg%add('IGLOO-Erosion','model',d_s(26),'-', &

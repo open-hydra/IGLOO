@@ -18,7 +18,7 @@ diameter; the diameter is derived at the segment-end temperature, so the density
 `khrt-e2e`'s Reitz-87 rate oracle assumes its constant density and is not run.
 
 ## Pass criterion
-All gates. Measured: exit mass flow within 5.98e-7 of the injected; budgets within 6e-7; D worst 0.998.
+All gates. Measured: exit mass flow within 5.95e-7 of the injected; budgets within 6e-7; D worst 0.998.
 
 ## Falsification
 - The stream mass flow taken at the density of the previous segment end: the exit total is 3.68e-4 above the

@@ -113,16 +113,16 @@ leave**, not about the rate law.
 Without a finite scrub in `rhsEvaporation` all 25 parcels end on
 
     [WARNING] Particle   N non-finite state ==> reverting to last good step, marking gone
-              last good m/m0 = 1.357E-03  (burnout fires at m = 1.000E-15 kg)
+              last good m/m0 = 1.357E-03  (burnout fires at m = 1.000E-20 kg)
 
-— `mBurnTol` is never reached. The NaN is manufactured **inside `rhsEvaporation`**, not by
+— the burnout threshold is never reached. The NaN is manufactured **inside `rhsEvaporation`**, not by
 the boiling clamp: on a Newton trial state with `m < 0` the RHS evaluates
 `d = (6m/(pi rho))^(1/3)`, which is NaN, and that poisons `Re`, `mdot` and `F(7:8)`; without
 the scrub the Inf/NaN slope rides until `solout` catches the state. Measured, this case is the
 suite's only instance.
 
 With the scrub the bad trial becomes a `1e30` slope, the step is rejected, `deltat` shrinks,
-and the drop reaches `mBurnTol` — a **clean burnout** through the normal branch, not through
+and the drop reaches the burnout threshold — a **clean burnout** through the normal branch, not through
 the solver-failure exit. That branch is gated separately in
 [`infrastructure/solver-fail-consumed`](../../infrastructure/solver-fail-consumed/INFO.md),
 which forces it with an unreachable ODE tolerance; its siblings `solver-fail-consumed-m4`
@@ -136,17 +136,21 @@ limit on a refinement call) are the branch's other cases.
 | H2b | all 25 parcels wrote an exit row | 25 | 25 |
 | H3 | `Σ wdot` = `Σ npdot·m_inj` within `1e-5` | 2.941e-7 (passes) | 2.941e-7 |
 
-The scrub moves the exit from `x = 0.070520` (the non-finite exit) to `x = 0.070854` — the
-drops evaporate a little further before they are removed — and with it the last trajectory
-row, the `outloc` row and the burnout cells of `source.tec`. The physics rows are read well
+With the scrub the drops burn out at `x = 0.068222`–`0.068233`, downstream of the non-finite exit —
+the drops evaporate further before they are removed — and with it move the last trajectory
+row, the `outloc` row and the burnout cells of `source.tec`. The step that crosses the burnout mass
+(1e-20 kg) ends below zero on four parcels (IDs 16, 17, 21, 22; −3.38e-19 kg): the burnout sets
+their mass to 0, and their exit records print `d = 0` (observed; without that clamp `d` prints NaN
+and `check_finite.py` fails). The physics rows are read well
 before burnout and are the same either way (25 drops gated, 0 rate violations, 0 non-swelling).
 
-**H3 guards the consumption contract, not the scrub.** Both the non-finite exit and the
+**H3 is the mass books, not the scrub's witness.** Both the non-finite exit and the
 burnout set `consumed`, so H3 reads the same with or without the scrub — H1 is the scrub's
-witness. H3's own RED, on a throwaway build with `consumed` removed from the
-burnout branch: resid **2.048e-4** against a floor of **2.941e-7** that is identical at
-`OMP_NUM_THREADS` 1, 2 and 5. The `1e-5` tolerance therefore sits 34x above the floor and 20x
-below the signature; **do not loosen it past ~5e-5** or it stops seeing the dropped remnant.
+witness. The burnout hands the gas at most 1e-20 kg per drop (3.1e-9 of m₀): with `consumed`
+removed from the burnout branch H3 reads **2.955e-7** against a floor of **2.941e-7** (identical
+at `OMP_NUM_THREADS` 1, 2 and 5) and passes, so this case does not witness the burnout's hand-off;
+`evaporation/evap-breakup-box`'s mass closure (1.7e-9 against 1e-12) and `evaporation/evap-breakup-box-varcp`'s
+energy and mass books do. The `1e-5` tolerance sits 34x above the floor.
 
 ## Spray-level rejection
 As for the other evaporation/breakup cases: dense-spray SMD / penetration is out of scope
