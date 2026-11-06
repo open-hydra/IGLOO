@@ -1147,8 +1147,10 @@ igloo_e2e_case(chimera-2blk-shift-mollify infrastructure/chimera-2blk-shift-moll
 # cells 1-8 against the shifted one-block run (S3-1), block 1's mirrored totals 0 (S3-2), block 2's = block 1's cells
 # 28-34 plus 0.7 of the cut cell 27 (S3-3). RED with the centroid map: S3-1 cell 8 at 7.9e3 of the tolerance (rho1);
 # with the weights swapped: 1.1e4; with a cut cell's chord share flipped: S3-2 4.6e-4 of Sum |S|. At gas order 2
-# (its ref-ord2 sibling): block 2's x-columns (S3-4), block 1's mirrored totals 0 (S3-5); RED with the centroid
-# map: S3-4 column 8 at 1.05e4, S3-5 6.0e-4 of Sum |S|.
+# (its ref-ord2 sibling): block 2's x-columns (S3-4), block 1's mirrored totals 0 (S3-5), block 2's = block 1's
+# dual cells 28-35 plus 0.2 of the cut dual cell 27 (S3-6); RED with the centroid map: S3-4 column 8 at 1.05e4,
+# S3-5 6.0e-4 of Sum |S|; with the cut dual cells dropped: S3-4 column 1 at 1.3e3, S3-6 18 of the tolerance; with
+# the records looked up by the geometry cell: 724, 6.1.
 igloo_e2e_case(chimera-2blk-shift3 infrastructure/chimera-2blk-shift3 "e2e;infrastructure;bc;chimera")
 # varcp-tmin: a varying-cp table from 280 K, the parcels at 600 K on its extended last segment.
 igloo_e2e_case(varcp-tmin infrastructure/varcp-tmin "e2e;infrastructure;heat")

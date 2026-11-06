@@ -25,11 +25,17 @@ the inlet followed by 60 cells up to x = 0.15075 (block 2's cell i is its cell 2
 | S3-3 | target | block 2's mirrored totals equal block 1's cells 28–34 plus 0.7 of cell 27, per component, within (ε/dx) Σ_rows\|S₁(27)\| + 1e-12 Σ\|S\|, ε = 1e-8 m the crossing tolerance of `obj_particles.f90`: each parcel crosses cell 27 in one segment on a straight +x path, whose ends lie past the faces by at most ε |
 | S3-4 | target | `ref-ord2`: block 2's x-columns 1–9, ρ_p of `euler1`/`euler2` as the mean over a column's 25 cells of equal volume, against `ref-shift3-ord2`'s columns 28–36, S3-1's tolerance on the column profile (columns: a parcel on a dual-node line in y and z sits on a four-way tie of dual cells) |
 | S3-5 | target | `ref-ord2`: block 1's mirrored totals within 1e-12 of Σ\|S\| |
+| S3-6 | target | `ref-ord2`: block 2's mirrored totals equal block 1's dual deposits D in 28–35 plus 0.2 of dual 27, per component. On equal octants a cell's output is G(i) = (D(i) + D(i+1))/2 (the end cells take their half dual cells whole), so with G the x-column sums Σ₂₈₋₃₅ D + 0.2 D(27) = Σ₂₈₋₃₄ G + 0.85 G(27) − 0.15 G(26) up to 0.075 of D's second difference at 27. The chord rule takes 0.2 D(27) on a parcel's single segment; split pieces move it by at most 0.08 q′h² = 0.04 \|D(28) − D(26)\| (q the deposit rate along x, linear over the cell, h its length). Tolerance 1.5 × 0.04 \|G(28) − G(26)\| + 3 × 0.075 × the larger \|second difference of G\| at 26 and 27 + (ε/dx) Σ_rows(\|S₁(26)\| + \|S₁(27)\|) + 1e-12 Σ\|S\| |
 
 **GREEN** (OMP_NUM_THREADS = 1). S3-1 of the tolerance, cells 1–7 / cell 8: ρ1 0.083 / 0.36, ρ2 0.022 / 0.29,
 `Fx` 0.030 / 0.29, `E` 0.029 / 0.29. S3-2 0 exactly. S3-3 0.21 of the tolerance. S3-4 of the tolerance, column 1 /
 columns 2–9: ρ1 0.43 / ≤ 0.16, ρ2 0.44 / ≤ 0.15; the log of `ref-ord2` counts 288 dual cells of each block covered
-by the other and 36 cut. S3-5 0 exactly.
+by the other and 36 cut. S3-5 0 exactly. S3-6 0.083 of the tolerance. Column 1 of S3-4 lies above the 0.39 a
+volume split of the cut dual cells gives (measured 0.37 / 0.39): the parcels of the boundary rows cross dual cell
+27 in two segments, split at the geometry face x = 0.065, and their share inside block 2 (0.4 of the second
+segment) is closer to the true one than 0.2 of the whole, which cancels part of the volume split's error on dual
+cell 28 in block 2's dual cell 1; the shift of column 1 between the two equals the sum of these parcels' share
+differences.
 
 **RED.** A centroid map (each deposit to the one cell of the other block that holds the cell's centroid): S3-1
 cells 1–7 at 0.81–0.85, cell 8 at 7.9e3 (ρ1), 184 (ρ2), 13 (`Fx`), 14 (`E`); S3-2 4.5e-4 (`Fx`), 7.6e-4 (`E`) of
@@ -40,4 +46,6 @@ S3-1 cell 8 at 1.1e4 (ρ1), 245 (ρ2), 17 (`Fx`), 18 (`E`), cells 1–7 at 0.96�
 (`Fx`). At gas order 2, a centroid map on the geometry cells after the reduction: S3-4 columns 8 and 9 at 1.05e4
 and 3.2e3 (ρ1), 245 and 65 (ρ2), columns 1–7 at 0.81–0.83; S3-5 6.0e-4 (`Fx`), 1.0e-3 (`E`). The exact weights
 without the chord split: S3-5 2.4e-4 (`Fx`), 4.0e-4 (`E`) (block 1 receives the part of block 2's cut dual cell
-made outside it).
+made outside it). At gas order 2 the cut dual cells dropped (λ = 0): S3-4 column 1 at 1.3e3 (ρ1), 79 (ρ2), S3-6
+18 (`Fx`), 19 (`E`); a cut record looked up by the geometry cell in place of the dual cell: S3-4 column 1 at 724
+(ρ1), 41 (ρ2), S3-6 6.1 (`Fx`), 6.5 (`E`).

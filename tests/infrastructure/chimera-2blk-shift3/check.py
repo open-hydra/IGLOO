@@ -22,6 +22,14 @@ Target
        volume) against ref-shift3-ord2's columns 28-36, S3-1's tolerance on the column profile (columns: a
        parcel on a dual-node line in y and z sits on a four-way tie of dual cells)
   S3-5 ord2: block 1's mirrored totals within 1e-12 of Sum |S|
+  S3-6 ord2: block 2's mirrored totals equal block 1's dual deposits D in 28-35 plus 0.2 of dual 27 (the part
+       of it inside block 2), per component. On equal octants a cell's output is G(i) = (D(i) + D(i+1))/2
+       (the end cells take their half dual cells whole), so Sum_28-35 D + 0.2 D(27) = Sum_28-34 G
+       + 0.85 G(27) - 0.15 G(26) up to 0.075 of D's second difference, with G the x-column sums. The chord
+       rule takes 0.2 D(27) exactly on a parcel's single segment; split pieces move it by at most
+       0.08 q' h^2 = 0.04 |D(28) - D(26)|. Tolerance 1.5 x 0.04 |G(28) - G(26)| + 3 x 0.075 x the larger
+       |second difference of G| at 26 and 27 + (EPS_CROSS/dx) Sum_rows (|S1(26)| + |S1(27)|)
+       + 1e-12 Sum |S|
 """
 import importlib.util
 import os
@@ -193,6 +201,32 @@ def s3_4(o2, ref2):
     return rc
 
 
+def s3_6(o2):
+    rc, worst = 0, 0.0
+    _, zones = C2.read_zones(os.path.join(o2, "OUTPUT", "source.tec"))
+    mir = mirrored(o2)
+    if sorted(mir) != [1, 2] or any(len(v) != len(zones[0][3]) for v in mir.values()):
+        return fail(f"S3-6 mirrored-total lines {mir!r}: expected blocks 1 and 2, {len(zones[0][3])} values each")
+    dx = box.LX / box.NX
+    for n, name in enumerate(zones[0][3]):
+        G = {i: sum(column(zones[0], name, i)) for i in range(CUT1 - 2, 35)}
+        A = {i: sum(abs(v) for v in column(zones[0], name, i)) for i in (CUT1 - 1, CUT1)}
+        l1 = sum(sum(abs(v) for v in z[3][name]) for z in zones)
+        want = sum(G[i] for i in range(CUT1 + 1, 35)) + 0.85 * G[CUT1] - 0.15 * G[CUT1 - 1]
+        d2 = max(abs(G[i - 1] - 2.0 * G[i] + G[i + 1]) for i in (CUT1 - 1, CUT1))
+        tol = (1.5 * 0.04 * abs(G[CUT1 + 1] - G[CUT1 - 1]) + 3.0 * 0.075 * d2
+               + EPS_CROSS / dx * (A[CUT1 - 1] + A[CUT1]) + TOL_TOTAL * l1)
+        if abs(mir[2][n] - want) > tol:
+            rc |= fail(f"S3-6 {name}: block 2's mirrored total {mir[2][n]:.15e} against block 1's duals 28-35 + 0.2 "
+                       f"dual 27 {want:.15e}, {abs(mir[2][n] - want) / max(tol, 1e-300):.3g} of the tolerance")
+        if l1 > 0.0:
+            worst = max(worst, abs(mir[2][n] - want) / tol)
+    if rc == 0:
+        print(f"S3-6 gas order 2: block 2's mirrored totals equal block 1's duals 28-35 + 0.2 of dual 27: worst "
+              f"{worst:.3g} of the tolerance PASS")
+    return rc
+
+
 def main():
     rc = 0
     ref, c1 = run("ref-shift3", shifted_box)
@@ -204,6 +238,7 @@ def main():
     rc |= s3_23(HERE, "S3-2", "S3-3")
     rc |= s3_4(o2, ref2)
     rc |= s3_23(o2, "S3-5", None)
+    rc |= s3_6(o2)
     if rc == 0:
         print("\n[PASS] chimera-2blk-shift3")
     return rc

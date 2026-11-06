@@ -123,7 +123,7 @@ geometry cell at gas order 1, the dual cell at gas order 2). On a mesh with chim
 solver keeps a copy of the overlap in each block, so every deposit cell $d'$ of a block $t$ takes the parts
 of the other blocks' deposits made inside $t$, split by the exact intersection of the cells:
 $S'(d') = S(d') + \sum_{d} W(d \to d')\, I(d, t)$, with $W(d \to d') = |d \cap d'| / |d \cap t|$
-($\sum_{d'} W = 1$) and $I(d, t)$ the part of $S(d)$ made inside $t$: all of it when $d$ lies inside $t$, none
+($\sum_{d'} W = 1$ to rounding) and $I(d, t)$ the part of $S(d)$ made inside $t$: all of it when $d$ lies inside $t$, none
 when it lies outside, and when $t$'s boundary cuts $d$ the sum over the segments in $d$ of each segment's
 deposit times the fraction $\lambda$ of its chord (cell entry to segment end) inside $t$, accumulated while the
 parcels are tracked (the chord stands for the path in the cell, the deposit rate taken uniform along it).
