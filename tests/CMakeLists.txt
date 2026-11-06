@@ -10,8 +10,8 @@
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ burn-box-ox0/ burn-box-cap-gallier/ burn-box-residue-gallier/ beckstead-air/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-melt-rhos/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-box-varcp/ solid-brk-khrt-varcp/ solid-brk-tab-rhos/ solid-remelt-khrt/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ khrt-varcp/ breakup-per-material/ khrt-plane/ khrt-exit-children/ khrt-hf93/ pe-sigma-table/ tab-wedge-slip/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ hop_crossing/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ tec_read/ tec_write/ fmt/ rc-gate/ (unit) + db-injection/ db-varrho/ db-varrho-ord2/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ inlet-401-g/ inlet-zero-load/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ inner-loop-cap/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ sym-plane-creep/ sym-plane-creep-ord2/ sym-plane-hop/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,kliq-column-both,muliq-column-both,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,max-inner-iter,boiling-temperature-both,boiling-pressure,boiling-pressure-noevap,solid-{hfus,cpsolid,tnuc,evap,comb},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},xi-law-{token,cap,noburn},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},emissivity-column,emissivity-column-both,bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,bc-no-g,krho-negative,gas-no-density,scatter-floor-{sign,count}}
-#   repeatability/      two-sweep gates (twosweep driver): 15 cases
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ hop_crossing/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ tec_read/ tec_write/ fmt/ rc-gate/ (unit) + db-injection/ db-varrho/ db-varrho-ord2/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ inlet-401-g/ inlet-zero-load/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ inner-loop-cap/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ sym-plane-creep/ sym-plane-creep-ord2/ sym-plane-hop/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ chimera-2blk-shift3/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,kliq-column-both,muliq-column-both,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,max-inner-iter,boiling-temperature-both,boiling-pressure,boiling-pressure-noevap,solid-{hfus,cpsolid,tnuc,evap,comb},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},xi-law-{token,cap,noburn},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},emissivity-column,emissivity-column-both,bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,bc-no-g,krho-negative,gas-no-density,scatter-floor-{sign,count}}
+#   repeatability/      two-sweep gates (twosweep driver): 16 cases
 #   mpi/                registered only under USE_MPI: 9 rank-count cases + 6 consistency + 1 determinism
 #                       + 14 two-sweep cases
 #
@@ -449,6 +449,10 @@ igloo_twosweep_case(repeat-swirl-wedge  repeatability/swirl-wedge
 # repeat-burn-box-residue: the combustion product's group is emptied every sweep (its residues are born by the solve).
 igloo_twosweep_case(repeat-burn-box-residue repeatability/burn-box-residue
                     "e2e;repeatability;combustion" "")
+# repeat-chimera-shift: the chimera cut cells' records are zeroed every sweep. RED with them zeroed on the first sweep
+# only: sweep 1's euler1 2.6e-2, source 9.4e-5 of the scale from sweep 0's.
+igloo_twosweep_case(repeat-chimera-shift repeatability/chimera-shift
+                    "e2e;repeatability;chimera" "")
 # docs/user/registry.md is DocGen OUTPUT that is also TRACKED, so it can silently
 # disagree with the registry it documents. Regenerate
 # into the build tree and diff. Kind 8 (contract meta-test): no physics, no figure.
@@ -1133,10 +1137,16 @@ igloo_e2e_case(chimera-2blk-shift-ord2 infrastructure/chimera-2blk-shift-ord2 "e
 # mirror too); with the exchange left out of the mirrored totals, G-M2s 3.6e-4 of Sum |S|.
 igloo_e2e_case(chimera-2blk-mollify infrastructure/chimera-2blk-mollify "e2e;infrastructure;bc;chimera;mollify")
 # chimera-2blk-shift-mollify: chimera-2blk-shift-ord2's blocks (block 2 shifted by half a cell, two donors of
-# weight 1/2) on a uniform gas with the mollifier on: the once-counted total of the smoothed run equals the
-# unsmoothed run's (G-M2s; RED with the halo's exchange left out of the mirrored totals: 5.7e-5 of Sum |S|);
-# each block's seam against the one-block run on its own cells is printed, not gated.
+# weight 1/2) on a uniform gas with the mollifier on. Unsmoothed: block 2's cells 1-8 against the shifted one-block
+# run within the split's bound (G-X1), block 1's mirrored totals 0 (G-X2), block 2's = block 1's cells 28-34 plus half
+# of the cut cell 27 (G-X3); smoothed: each block within the seam bound of its one-block run (G-C6s), the once-counted
+# total (G-M2s). RED with the centroid map: G-X1 cell 8 at 1.4e4 of the tolerance (rho1), G-X3 1.3e-3 of Sum |S|.
 igloo_e2e_case(chimera-2blk-shift-mollify infrastructure/chimera-2blk-shift-mollify "e2e;infrastructure;bc;chimera;mollify")
+# chimera-2blk-shift3: block 2 shifted by 0.3 of a cell (shares 0.3 and 0.7), gas-order 1, mollify off: block 2's
+# cells 1-8 against the shifted one-block run (S3-1), block 1's mirrored totals 0 (S3-2), block 2's = block 1's cells
+# 28-34 plus 0.7 of the cut cell 27 (S3-3). RED with the centroid map: S3-1 cell 8 at 7.9e3 of the tolerance (rho1);
+# with the weights swapped: 1.1e4; with a cut cell's chord share flipped: S3-2 4.6e-4 of Sum |S|.
+igloo_e2e_case(chimera-2blk-shift3 infrastructure/chimera-2blk-shift3 "e2e;infrastructure;bc;chimera")
 # varcp-tmin: a varying-cp table from 280 K, the parcels at 600 K on its extended last segment.
 igloo_e2e_case(varcp-tmin infrastructure/varcp-tmin "e2e;infrastructure;heat")
 
@@ -1718,7 +1728,8 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
             ENVIRONMENT "OMP_NUM_THREADS=${nthreads};KMP_STACKSIZE=100M"
             TIMEOUT 900)
     endfunction()
-    # every repeatability case but burn-box-residue (its rank side is mpi-consistency-residue's) at 2 ranks x 2 threads
+    # every repeatability case but burn-box-residue and chimera-shift (their rank side is mpi-consistency-residue's and
+    # mpi-consistency-chimera-shift's) at 2 ranks x 2 threads
     # (children, RNG, evaporation, ord2 accumulator shape, two materials, the explicit solver, the wedge, the exit code's
     # reset, the gas-refresh cycle on drag-stokes, drag-stokes-time-end, vie-plait and swirl-wedge)
     igloo_twosweep_case_mpi(mpi-repeat-drag-stokes        mpi/repeat-drag-stokes        2 2 "e2e;mpi;repeatability" "INPUT/solfile.tec")

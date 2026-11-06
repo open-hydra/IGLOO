@@ -10,10 +10,11 @@ contains
 
   !> Integrate one particle from its current state to domain exit (or burnout) through the
   !  steady gas field, one cell segment at a time, depositing source and Eulerian moments and, at the exit
-  !  through a wall cell, its wall impact.
+  !  through a wall cell, its wall impact; in a deposit cell another block's boundary cuts, the part of each
+  !  segment's deposits made inside that block also joins the cell's record.
   subroutine integrate(part,geoblock,gasblock,srcblock,eulblock,     &
                         hTab,cpTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, slot,shed,noShed,resid,wallblock,klTab, &
-                        epsTab)
+                        epsTab,cuts)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
     use IGLOO_variables,  only: iprint,dtprint,dsprint,dcellSet,tEnd,timeOn,snapOn,frozenOn, &
@@ -23,7 +24,7 @@ contains
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
                                 nInjNoCell,                                &
                                 trajOn, scatOn, dNscat, npFloor, sixOverPi, pi, &
-                                planeOn, planeX, failAfter, maxInnerIter
+                                planeOn, planeX, failAfter, maxInnerIter, nm
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs, grazeStandoff
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock, obj_wallblock
@@ -47,6 +48,7 @@ contains
                                         eventPassed, solidTransition, solidTransitionTab, solidDiameter, &
                                         phUndercooled, breakupStateAtSwitch
     use IGLOO_Mod_MPI,     only: mpi_size_, region_fail, region_failed
+    use IGLOO_overlap,     only: overlapCuts, chordInside
     use IGLOO_records,     only: recList, rec_emit, rec_emit_traj, rec_push, rec_break, &
                                  STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT, &
                                  L_ROW, L_ROW_T, L_ROW_F, L_ROW_TF, L_ROW_S, L_ROW_TS, &
@@ -73,6 +75,8 @@ contains
     real(R8),              intent(in),    optional :: klTab(:)
     !> The material's emissivity table (an Emissivity column); absent otherwise.
     real(R8),              intent(in),    optional :: epsTab(:)
+    !> Chimera: the deposit cells cut by another block's boundary and their records; absent otherwise.
+    type(overlapCuts),     intent(inout), optional :: cuts
     !> local variables
     type(obj_shed) :: shedRec   !> staged child record, pushed once complete
     type(obj_shed) :: resRec    !> the burnout residue's record
@@ -83,6 +87,7 @@ contains
     real(R8) :: Ein, Eout, Pin(3), Pout(3), massIn, massOut, vol
     real(R8) :: entryPos(3)   ! cell-entry position, for the closed-form body-force work (models 1,3)
     real(R8) :: pMid(3)       ! segment mid position: azimuth of the meridian-frame source deposit
+    real(R8) :: dSrc(5), dEul(6)  ! the segment's source and eulerian deposits, for a cut cell's records
     real(R8) :: wAcc          ! scatter-cloud accumulator: npRef*h per step, a marker per dNscat (host-associated)
     real(R8) :: wAccOld       ! wAcc at the last latched state, restored when a cut step is integrated again
     !> The parcel's rows per particle file, written at its end by emitParcel
@@ -351,20 +356,23 @@ contains
         endif
         if (ord2) then
           call computeSrcField(part, srcblock(b), part%igas(1), part%igas(2), part%igas(3), &
-                               massIn, massOut, Pin, Pout, Ein, Eout)
+                               massIn, massOut, Pin, Pout, Ein, Eout, dSrc)
         else
-          call computeSrcField(part, srcblock(b), i, j, k, massIn, massOut, Pin, Pout, Ein, Eout)
+          call computeSrcField(part, srcblock(b), i, j, k, massIn, massOut, Pin, Pout, Ein, Eout, dSrc)
         endif
       endif
 
       !> Eulerian moments, deposited on the gas dual cell (ord2) or the geo cell.
       if (eulerSwitch) then
         if (ord2) then
-          call computeEulField(part, eulblock(b), part%igas(1), part%igas(2), part%igas(3))
+          call computeEulField(part, eulblock(b), part%igas(1), part%igas(2), part%igas(3), dEul)
         else
-          call computeEulField(part, eulblock(b), i, j, k)
+          call computeEulField(part, eulblock(b), i, j, k, dEul)
         endif
       endif
+
+      !> Chimera: the part of the segment's deposits made inside each block whose boundary cuts the deposit cell.
+      if (present(cuts)) call depositCuts()
 
       !> Wedge sector exit: fold the azimuth back into the band after the deposits, before the cell logic.
       foldOnly = sectorOut .and. .not.(newGas .or. IamOut)
@@ -1313,19 +1321,23 @@ contains
 
 
 
-    !> Deposit the segment's net mass/momentum/energy exchange into source cell (ii,jj,kk).
-    subroutine computeSrcField(particle,sblock,ii,jj,kk,masIn,masOut,momIn,momOut,enIn,enOut)
+    !> Deposit the segment's net mass/momentum/energy exchange into source cell (ii,jj,kk); dOut: what it added
+    !  (mass, momentum, energy; mass 0 for a material that keeps its mass).
+    subroutine computeSrcField(particle,sblock,ii,jj,kk,masIn,masOut,momIn,momOut,enIn,enOut,dOut)
       implicit none
       class(obj_particle),   intent(in)    :: particle
       type(obj_sourceblock), intent(inout) :: sblock
       real(R8),              intent(inout) :: masIn, momIn(3), enIn
       integer,               intent(in)    :: ii, jj, kk
       real(R8),              intent(in)    :: masOut, momOut(3), enOut
+      real(R8),              intent(out)   :: dOut(5)
       integer :: nmat
 
       nmat = particle%mID
+      dOut = [0._R8, momIn - momOut, enIn - enOut]
       !> Mass source only for materials that lose mass to the gas (evaporation or combustion).
       if (phaseChange .or. particle%model==5 .or. particle%model==8) then
+        dOut(1) = masIn - masOut
         !$OMP ATOMIC UPDATE
         sblock%sourceMass(nmat,ii,jj,kk) = sblock%sourceMass(nmat,ii,jj,kk) + (masIn-masOut)
       else
@@ -1343,14 +1355,17 @@ contains
 
     end subroutine computeSrcField
 
-    !> Deposit the segment's Eulerian moments (density, number, momentum, energy) into cell (ii,jj,kk).
-    subroutine computeEulField(particle,eblock,ii,jj,kk)
+    !> Deposit the segment's Eulerian moments (density, number, momentum, energy) into cell (ii,jj,kk); dOut: what
+    !  it added.
+    subroutine computeEulField(particle,eblock,ii,jj,kk,dOut)
       implicit none
       class(obj_particle),  intent(in)    :: particle
       type(obj_eulerblock), intent(inout) :: eblock
       integer,              intent(in)    :: ii, jj, kk
+      real(R8),             intent(out)   :: dOut(6)
       real(R8) :: rho, factor, np, moment(3), energy
 
+      dOut = 0._R8
       if (particle%deltaL<toll) return
       !> Normalize by the deposition cell volume.
       if (ord2) then; vol = gasblock(b)%cellVol(ii, jj, kk)
@@ -1391,8 +1406,51 @@ contains
       eblock%velocity(3,ii,jj,kk)  = eblock%velocity(3,ii,jj,kk)  + moment(3)
       !$OMP ATOMIC UPDATE
       eblock%temperature(ii,jj,kk) = eblock%temperature(ii,jj,kk) + energy
+      dOut = [rho, np, moment, energy]
 
     end subroutine computeEulField
+
+    !> The segment's deposits times the fraction of its chord (cell entry to segment end) inside the other block,
+    !  into each record of its deposit cell.
+    subroutine depositCuts()
+      integer  :: r, r0, ii, jj, kk, nmat, fam
+      real(R8) :: lam
+      if (ord2) then; ii = part%igas(1); jj = part%igas(2); kk = part%igas(3)
+      else;           ii = i; jj = j; kk = k; endif
+      r0 = cuts%idx(b)%first(ii, jj, kk)
+      if (r0 == 0) return
+      nmat = part%mID; fam = part%famID
+      do r = r0, r0 + cuts%idx(b)%cnt(ii, jj, kk) - 1
+        lam = chordInside(entryPos, part%stateVar(1:3), cuts%rec(r))
+        if (lam <= 0._R8) cycle
+        if (sourceSwitch) then
+          !$OMP ATOMIC UPDATE
+          cuts%acc(nmat, r)    = cuts%acc(nmat, r)    + lam*dSrc(1)
+          !$OMP ATOMIC UPDATE
+          cuts%acc(nm + 1, r)  = cuts%acc(nm + 1, r)  + lam*dSrc(2)
+          !$OMP ATOMIC UPDATE
+          cuts%acc(nm + 2, r)  = cuts%acc(nm + 2, r)  + lam*dSrc(3)
+          !$OMP ATOMIC UPDATE
+          cuts%acc(nm + 3, r)  = cuts%acc(nm + 3, r)  + lam*dSrc(4)
+          !$OMP ATOMIC UPDATE
+          cuts%acc(nm + 4, r)  = cuts%acc(nm + 4, r)  + lam*dSrc(5)
+        endif
+        if (eulerSwitch) then
+          !$OMP ATOMIC UPDATE
+          cuts%accE(1, fam, r) = cuts%accE(1, fam, r) + lam*dEul(1)
+          !$OMP ATOMIC UPDATE
+          cuts%accE(2, fam, r) = cuts%accE(2, fam, r) + lam*dEul(2)
+          !$OMP ATOMIC UPDATE
+          cuts%accE(3, fam, r) = cuts%accE(3, fam, r) + lam*dEul(3)
+          !$OMP ATOMIC UPDATE
+          cuts%accE(4, fam, r) = cuts%accE(4, fam, r) + lam*dEul(4)
+          !$OMP ATOMIC UPDATE
+          cuts%accE(5, fam, r) = cuts%accE(5, fam, r) + lam*dEul(5)
+          !$OMP ATOMIC UPDATE
+          cuts%accE(6, fam, r) = cuts%accE(6, fam, r) + lam*dEul(6)
+        endif
+      enddo
+    end subroutine depositCuts
 
   end subroutine integrate
 

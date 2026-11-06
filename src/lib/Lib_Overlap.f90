@@ -1,11 +1,12 @@
-!> The chimera overlap: every cell mapped to the cells of the other blocks that hold its centroid, and
-!  the owner-only deposits copied into every block that covers them.
+!> The chimera overlap: every deposit cell mapped to the cells of the other blocks it intersects (gas order 1:
+!  by exact intersection; gas order 2: the cell of each other block that holds its centroid), and the
+!  owner-only deposits copied into every block that covers them.
 module IGLOO_overlap
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   implicit none
   private
 
-  public :: hasChimeraFaces, buildOverlapMap, mirrorSource, mirrorEuler
+  public :: hasChimeraFaces, buildOverlapMap, mirrorSource, mirrorEuler, resetCuts
   public :: cellOverlapVolume, cellVolume24, cellTargets, overlapStatus, chordInside, lexVertices, octantVertices
   public :: bucketBuild, bucketCandidates
 
@@ -58,10 +59,33 @@ module IGLOO_overlap
     integer  :: nbr(3, MAXV)
   end type polyT
 
-  !> The gather lists of every block; allocated only on a mesh with chimera (102) faces.
+  !> One block's cut deposit cells: first(i,j,k) the cell's first record (0: not cut), cnt(i,j,k) its records.
+  type, public :: cutIndex
+    integer, allocatable :: first(:,:,:), cnt(:,:,:)
+  end type cutIndex
+
+  !> The cut deposit cells of every block, their records (contiguous per cell) and, per sweep, the part of their
+  !  deposits made inside the other block: acc(nm + 4, nrec) (mass per material, momentum, energy) and
+  !  accE(6, nfam, nrec) (density, number, velocity and temperature numerators).
+  type, public :: overlapCuts
+    type(cutIndex),  allocatable :: idx(:)
+    type(cutRecord), allocatable :: rec(:)
+    real(R8), allocatable :: acc(:,:), accE(:,:,:)
+  end type overlapCuts
+
+  !> The gather lists of every block; allocated only on a mesh with chimera (102) faces; cuts only when a
+  !  deposit cell is cut by another block's boundary.
   type, public :: overlapMap
     type(overlapBlock), allocatable :: blk(:)
+    type(overlapCuts),  allocatable :: cuts
   end type overlapMap
+
+  !> One target block's gather entries in source order: target cell, (block, i, j, k), weight, record.
+  type :: entryList
+    integer :: n = 0
+    integer,  allocatable :: tc(:), src(:,:), rec(:)
+    real(R8), allocatable :: w(:)
+  end type entryList
 
   !> What one block received beyond its own deposits (the mirror, then the smoothing's chimera halo):
   !  mass per material, momentum, energy.
@@ -102,17 +126,39 @@ contains
   end function hasChimeraFaces
 
 
-  !> Each cell's centroid searched in every other block (searchInBlock, inclusive containment, seeded
-  !  with the last hit there); a hit (b, c) -> (t, c') joins c to the gather list of c', unless the
-  !  centroid lies on a chimera (102) face of t (there t's grid is interpolated, not solved). npair(b, t)
-  !  counts the cells of b covered by t.
-  subroutine buildOverlapMap(geo, ovl, npair)
+  !> The overlap map of the geometry: npair(b, t) counts the deposit cells of b inside t, ncut(b, t) those cut
+  !  by t's boundary (gas order 1; none at gas order 2).
+  subroutine buildOverlapMap(geo, ovl, npair, ncut)
     use IGLOO_data_block, only: obj_block
-    use IGLOO_particles,  only: searchInBlock
+    use IGLOO_variables,  only: ord2
     implicit none
     type(obj_block),      intent(in)  :: geo(:)
     type(overlapMap),     intent(out) :: ovl
     integer, allocatable, intent(out) :: npair(:,:)
+    integer, allocatable, intent(out), optional :: ncut(:,:)
+    integer, allocatable :: nc(:,:)
+
+    if (ord2) then
+      call centroidMap(geo, ovl, npair)
+      allocate(nc(size(geo), size(geo)))
+      nc = 0
+    else
+      call exactMap(geo, ovl, npair, nc)
+    endif
+    if (present(ncut)) call move_alloc(nc, ncut)
+  end subroutine buildOverlapMap
+
+
+  !> Gas order 2: each cell's centroid searched in every other block (searchInBlock, inclusive containment,
+  !  seeded with the last hit there); a hit (b, c) -> (t, c') joins c to the gather list of c' with w = 1,
+  !  unless the centroid lies on a chimera (102) face of t (there t's grid is interpolated, not solved).
+  subroutine centroidMap(geo, ovl, npair)
+    use IGLOO_data_block, only: obj_block
+    use IGLOO_particles,  only: searchInBlock
+    implicit none
+    type(obj_block),      intent(in)    :: geo(:)
+    type(overlapMap),     intent(inout) :: ovl
+    integer, allocatable, intent(out)   :: npair(:,:)
     type(hitList), allocatable :: hits(:)
     integer,  allocatable :: seed(:,:), pos(:)
     integer  :: nb, b, t, i, j, k, c, ct, loc(3)
@@ -187,7 +233,234 @@ contains
       ncell = g%Nx*g%Ny*g%Nz
     end function ncell
 
-  end subroutine buildOverlapMap
+  end subroutine centroidMap
+
+
+  !> Gas order 1: every cell d of block b against the cells of each other block t that its box overlaps
+  !  (cellTargets): |d ∩ t| >= (1 - EPS_OVL) V24(d) inside, <= EPS_OVL V24(d) disjoint, else cut (a record:
+  !  t's cells near d and their faces on t's boundary); every stored weight joins d to the gather list of its
+  !  target in source order (block, then cell); n and cov count what covers each cell; the guards stop the run.
+  subroutine exactMap(geo, ovl, npair, ncut)
+    use IGLOO_data_block,            only: obj_block
+    use IGLOO_RayFaceIntersection3D, only: hexTol
+    implicit none
+    type(obj_block),      intent(in)    :: geo(:)
+    type(overlapMap),     intent(inout) :: ovl
+    integer, allocatable, intent(out)   :: npair(:,:), ncut(:,:)
+    type(bucketGrid), allocatable :: grid(:)
+    type(entryList),  allocatable :: lst(:)
+    type(cutRecord),  allocatable :: recs(:), tmp(:)
+    logical,  allocatable :: mark(:)
+    integer,  allocatable :: cand(:), pos(:)
+    real(R8), allocatable :: vc(:,:,:), w(:), blo(:,:), bhi(:,:)
+    real(R8) :: vd(3,8), gv(3,8), v24, sumOv
+    integer  :: nb, b, t, i, j, k, c, m, nc, nrec, r, ct, s, mx
+
+    nb = size(geo)
+    allocate(ovl%blk(nb), npair(nb, nb), ncut(nb, nb), grid(nb), lst(nb))
+    npair = 0; ncut = 0
+    mx = 0
+    do t = 1, nb
+      allocate(blo(3, ncell(geo(t))), bhi(3, ncell(geo(t))))
+      do k = 1, geo(t)%Nz; do j = 1, geo(t)%Ny; do i = 1, geo(t)%Nx
+        c = i + (j-1)*geo(t)%Nx + (k-1)*geo(t)%Nx*geo(t)%Ny
+        call lexVertices(geo(t), i, j, k, vd)
+        blo(:, c) = minval(vd, dim=2); bhi(:, c) = maxval(vd, dim=2)
+      enddo; enddo; enddo
+      call bucketBuild(blo, bhi, grid(t))
+      deallocate(blo, bhi)
+      allocate(ovl%blk(t)%n(ncell(geo(t))), ovl%blk(t)%cov(ncell(geo(t))))
+      ovl%blk(t)%n = 1; ovl%blk(t)%cov = 1._R8
+      mx = max(mx, ncell(geo(t)))
+    enddo
+    allocate(mark(mx), recs(16))
+    mark = .false.
+    allocate(ovl%cuts)
+    allocate(ovl%cuts%idx(nb))
+    do b = 1, nb
+      allocate(ovl%cuts%idx(b)%first(geo(b)%Nx, geo(b)%Ny, geo(b)%Nz), &
+               ovl%cuts%idx(b)%cnt(geo(b)%Nx, geo(b)%Ny, geo(b)%Nz))
+      ovl%cuts%idx(b)%first = 0; ovl%cuts%idx(b)%cnt = 0
+    enddo
+    nrec = 0
+
+    do b = 1, nb
+      do k = 1, geo(b)%Nz; do j = 1, geo(b)%Ny; do i = 1, geo(b)%Nx
+        c = i + (j-1)*geo(b)%Nx + (k-1)*geo(b)%Nx*geo(b)%Ny
+        call lexVertices(geo(b), i, j, k, vd)
+        v24 = cellVolume24(vd)
+        do t = 1, nb
+          if (t == b) cycle
+          call bucketCandidates(grid(t), minval(vd, dim=2), maxval(vd, dim=2), mark, cand, nc)
+          if (nc == 0) cycle
+          allocate(vc(3, 8, nc), w(nc))
+          do m = 1, nc
+            call lexVertices(geo(t), cellI(geo(t), cand(m)), cellJ(geo(t), cand(m)), cellK(geo(t), cand(m)), vc(:,:,m))
+          enddo
+          call cellTargets(vd, v24, vc, w, sumOv)
+          select case (overlapStatus(v24, sumOv))
+          case (1); error stop 'IGLOO: chimera overlap: a cell with a non-positive volume'
+          case (2); error stop 'IGLOO: chimera overlap: the cells of a block overlap each other'
+          end select
+          if (sumOv > EPS_OVL*v24) then
+            ovl%blk(b)%n(c)   = ovl%blk(b)%n(c) + 1
+            ovl%blk(b)%cov(c) = ovl%blk(b)%cov(c) + sumOv/v24
+            r = 0
+            if (sumOv >= (1._R8 - EPS_OVL)*v24) then
+              npair(b, t) = npair(b, t) + 1
+            else
+              ncut(b, t) = ncut(b, t) + 1
+              nrec = nrec + 1
+              if (nrec > size(recs)) then
+                allocate(tmp(2*size(recs))); tmp(1:size(recs)) = recs; call move_alloc(tmp, recs)
+              endif
+              call geo(b)%getVertices([i, j, k], gv)
+              call makeCutRecord(recs(nrec), geo(t), t, cand(1:nc), hexTol(gv))
+              if (ovl%cuts%idx(b)%first(i, j, k) == 0) ovl%cuts%idx(b)%first(i, j, k) = nrec
+              ovl%cuts%idx(b)%cnt(i, j, k) = ovl%cuts%idx(b)%cnt(i, j, k) + 1
+              r = nrec
+            endif
+            do m = 1, nc
+              if (w(m) > 0._R8) call pushEntry(lst(t), cand(m), [b, i, j, k], w(m), r)
+            enddo
+          endif
+          deallocate(vc, w)
+        enddo
+      enddo; enddo; enddo
+    enddo
+
+    !> Target-major gather lists, each target's entries in source order.
+    do t = 1, nb
+      associate(o => ovl%blk(t), e => lst(t))
+      allocate(o%start(0:ncell(geo(t))), o%src(4, e%n), o%w(e%n), o%rec(e%n), pos(ncell(geo(t))))
+      o%start = 0
+      do s = 1, e%n
+        o%start(e%tc(s)) = o%start(e%tc(s)) + 1
+      enddo
+      do ct = 1, ncell(geo(t))
+        o%start(ct) = o%start(ct-1) + o%start(ct)
+      enddo
+      pos = o%start(0:ncell(geo(t))-1)
+      do s = 1, e%n
+        pos(e%tc(s)) = pos(e%tc(s)) + 1
+        o%src(:, pos(e%tc(s))) = e%src(:, s)
+        o%w(pos(e%tc(s)))      = e%w(s)
+        o%rec(pos(e%tc(s)))    = e%rec(s)
+      enddo
+      deallocate(pos)
+      end associate
+    enddo
+    if (nrec == 0) then
+      deallocate(ovl%cuts)
+    else
+      allocate(ovl%cuts%rec(nrec))
+      ovl%cuts%rec = recs(1:nrec)
+    endif
+
+  contains
+
+    integer function ncell(g)
+      type(obj_block), intent(in) :: g
+      ncell = g%Nx*g%Ny*g%Nz
+    end function ncell
+
+    integer function cellI(g, c)
+      type(obj_block), intent(in) :: g
+      integer,         intent(in) :: c
+      cellI = mod(c - 1, g%Nx) + 1
+    end function cellI
+
+    integer function cellJ(g, c)
+      type(obj_block), intent(in) :: g
+      integer,         intent(in) :: c
+      cellJ = mod((c - 1)/g%Nx, g%Ny) + 1
+    end function cellJ
+
+    integer function cellK(g, c)
+      type(obj_block), intent(in) :: g
+      integer,         intent(in) :: c
+      cellK = (c - 1)/(g%Nx*g%Ny) + 1
+    end function cellK
+
+    !> The record of a cell cut by block g's boundary: g's cells cand (12-plane data) and the planes of their
+    !  faces on g's boundary, normals into g; tol the cut cell's containment tolerance.
+    subroutine makeCutRecord(rc, g, tb, cand, tol)
+      use IGLOO_RayFaceIntersection3D, only: guide, computeFacePlane
+      type(cutRecord), intent(out) :: rc
+      type(obj_block), intent(in)  :: g
+      integer,         intent(in)  :: tb, cand(:)
+      real(R8),        intent(in)  :: tol
+      real(R8) :: vt(3,8), pl(3,2)
+      integer  :: q, f, fm, fn, np, ci, cj, ck
+      rc%t = tb; rc%tol = tol
+      np = 0
+      do q = 1, size(cand)
+        ci = cellI(g, cand(q)); cj = cellJ(g, cand(q)); ck = cellK(g, cand(q))
+        do f = 1, 6
+          call g%ijk2fmn(ci, cj, ck, f, fm, fn)
+          if (fm /= 0) np = np + 1
+        enddo
+      enddo
+      allocate(rc%pn(3, np), rc%pp(3, np), rc%hn(3,2,6,size(cand)), rc%hc(3,2,6,size(cand)), &
+               rc%hd(2,6,size(cand)), rc%ht(size(cand)))
+      np = 0
+      do q = 1, size(cand)
+        ci = cellI(g, cand(q)); cj = cellJ(g, cand(q)); ck = cellK(g, cand(q))
+        call g%getVertices([ci, cj, ck], vt, norms=rc%hn(:,:,:,q), centroids=rc%hc(:,:,:,q), degen=rc%hd(:,:,q), &
+                           tol=rc%ht(q))
+        do f = 1, 6
+          call g%ijk2fmn(ci, cj, ck, f, fm, fn)
+          if (fm == 0) cycle
+          np = np + 1
+          pl = computeFacePlane(vt(:, guide(f,:)))
+          rc%pn(:, np) = -pl(:,1)
+          rc%pp(:, np) = pl(:,2)
+        enddo
+      enddo
+    end subroutine makeCutRecord
+
+  end subroutine exactMap
+
+
+  !> Appends one gather entry.
+  subroutine pushEntry(e, tc, src, w, rec)
+    implicit none
+    type(entryList), intent(inout) :: e
+    integer,         intent(in)    :: tc, src(4), rec
+    real(R8),        intent(in)    :: w
+    integer,  allocatable :: ti(:), ts(:,:), tr(:)
+    real(R8), allocatable :: tw(:)
+    integer :: n
+    if (.not. allocated(e%tc)) then
+      allocate(e%tc(64), e%src(4, 64), e%rec(64), e%w(64))
+    elseif (e%n == size(e%tc)) then
+      n = 2*e%n
+      allocate(ti(n), ts(4, n), tr(n), tw(n))
+      ti(1:e%n) = e%tc(1:e%n); ts(:, 1:e%n) = e%src(:, 1:e%n); tr(1:e%n) = e%rec(1:e%n); tw(1:e%n) = e%w(1:e%n)
+      call move_alloc(ti, e%tc); call move_alloc(ts, e%src); call move_alloc(tr, e%rec); call move_alloc(tw, e%w)
+    endif
+    e%n = e%n + 1
+    e%tc(e%n) = tc; e%src(:, e%n) = src; e%rec(e%n) = rec; e%w(e%n) = w
+  end subroutine pushEntry
+
+
+  !> The records' accumulators for a sweep, zeroed: acc with the source, accE with the eulerian fields.
+  subroutine resetCuts(cuts, nm, nfam, srcOn, eulOn)
+    implicit none
+    type(overlapCuts), intent(inout) :: cuts
+    integer,           intent(in)    :: nm, nfam
+    logical,           intent(in)    :: srcOn, eulOn
+    if (allocated(cuts%acc))  deallocate(cuts%acc)
+    if (allocated(cuts%accE)) deallocate(cuts%accE)
+    if (srcOn) then
+      allocate(cuts%acc(nm + 4, size(cuts%rec)))
+      cuts%acc = 0._R8
+    endif
+    if (eulOn) then
+      allocate(cuts%accE(6, nfam, size(cuts%rec)))
+      cuts%accE = 0._R8
+    endif
+  end subroutine resetCuts
 
 
   !> True when p lies on a chimera (102) face of block g at its cell loc: within the cell's containment
@@ -220,8 +493,8 @@ contains
 
 
   !> Source: every cell adds, from a snapshot of the owner-only amounts (mass, momentum, energy per
-  !  cell), the deposits of the cells mapped onto it, with no volume factor; mirrored(t) sums what
-  !  block t received.
+  !  cell), w times the deposit of each cell mapped onto it (the whole deposit, or a cut cell's record),
+  !  with no volume factor; mirrored(t) sums what block t received.
   subroutine mirrorSource(src, ovl, mirrored)
     use IGLOO_data_block, only: obj_sourceblock
     implicit none
@@ -229,9 +502,11 @@ contains
     type(overlapMap),                  intent(in)    :: ovl
     type(mirroredTotals), allocatable, intent(inout) :: mirrored(:)
     type(srcSnap), allocatable :: snap(:)
-    integer :: nb, t, i, j, k, ct, s, bs, si, sj, sk, nx, ny
+    integer  :: nb, t, i, j, k, ct, s, bs, si, sj, sk, nx, ny, r, nmat
+    real(R8) :: wt, im(size(src(1)%sourceMass, 1)), io(3), ie
 
     nb = size(src)
+    nmat = size(src(1)%sourceMass, 1)
     allocate(snap(nb))
     do t = 1, nb
       snap(t)%mass = src(t)%sourceMass
@@ -250,30 +525,46 @@ contains
         ct = i + (j-1)*nx + (k-1)*nx*ny
         do s = ovl%blk(t)%start(ct-1) + 1, ovl%blk(t)%start(ct)
           bs = ovl%blk(t)%src(1,s); si = ovl%blk(t)%src(2,s); sj = ovl%blk(t)%src(3,s); sk = ovl%blk(t)%src(4,s)
-          src(t)%sourceMass(:,i,j,k) = src(t)%sourceMass(:,i,j,k) + snap(bs)%mass(:,si,sj,sk)
-          src(t)%sourceMom(:,i,j,k)  = src(t)%sourceMom(:,i,j,k)  + snap(bs)%mom(:,si,sj,sk)
-          src(t)%sourceEn(i,j,k)     = src(t)%sourceEn(i,j,k)     + snap(bs)%en(si,sj,sk)
-          mirrored(t)%mass = mirrored(t)%mass + snap(bs)%mass(:,si,sj,sk)
-          mirrored(t)%mom  = mirrored(t)%mom  + snap(bs)%mom(:,si,sj,sk)
-          mirrored(t)%en   = mirrored(t)%en   + snap(bs)%en(si,sj,sk)
+          wt = ovl%blk(t)%w(s); r = ovl%blk(t)%rec(s)
+          if (r == 0 .and. wt == 1._R8) then
+            src(t)%sourceMass(:,i,j,k) = src(t)%sourceMass(:,i,j,k) + snap(bs)%mass(:,si,sj,sk)
+            src(t)%sourceMom(:,i,j,k)  = src(t)%sourceMom(:,i,j,k)  + snap(bs)%mom(:,si,sj,sk)
+            src(t)%sourceEn(i,j,k)     = src(t)%sourceEn(i,j,k)     + snap(bs)%en(si,sj,sk)
+            mirrored(t)%mass = mirrored(t)%mass + snap(bs)%mass(:,si,sj,sk)
+            mirrored(t)%mom  = mirrored(t)%mom  + snap(bs)%mom(:,si,sj,sk)
+            mirrored(t)%en   = mirrored(t)%en   + snap(bs)%en(si,sj,sk)
+            cycle
+          endif
+          if (r == 0) then
+            im = snap(bs)%mass(:,si,sj,sk); io = snap(bs)%mom(:,si,sj,sk); ie = snap(bs)%en(si,sj,sk)
+          else
+            im = ovl%cuts%acc(1:nmat, r); io = ovl%cuts%acc(nmat+1:nmat+3, r); ie = ovl%cuts%acc(nmat+4, r)
+          endif
+          src(t)%sourceMass(:,i,j,k) = src(t)%sourceMass(:,i,j,k) + wt*im
+          src(t)%sourceMom(:,i,j,k)  = src(t)%sourceMom(:,i,j,k)  + wt*io
+          src(t)%sourceEn(i,j,k)     = src(t)%sourceEn(i,j,k)     + wt*ie
+          mirrored(t)%mass = mirrored(t)%mass + wt*im
+          mirrored(t)%mom  = mirrored(t)%mom  + wt*io
+          mirrored(t)%en   = mirrored(t)%en   + wt*ie
         enddo
       enddo; enddo; enddo
     enddo
   end subroutine mirrorSource
 
 
-  !> Eulerian densities of one family: every cell adds, from a snapshot of the owner-only fields, the
-  !  amount q*V of each cell mapped onto it, as q*(V_source/V_target) (the ratio first: coincident
-  !  cells transfer q to within an ULP).
-  subroutine mirrorEuler(eul, geo, ovl)
+  !> Eulerian densities of family fam: every cell adds, from a snapshot of the owner-only fields, w times the
+  !  amount q*V of each cell mapped onto it (the whole cell, or a cut cell's record), as q*((V_source*w)/V_target)
+  !  (the ratio first: coincident cells transfer q to within an ULP); V the deposit cells' volumes (geo).
+  subroutine mirrorEuler(eul, geo, ovl, fam)
     use IGLOO_data_block, only: obj_block, obj_eulerblock
     implicit none
     type(obj_eulerblock), intent(inout) :: eul(:)
-    type(obj_block),      intent(in)    :: geo(:)
+    class(obj_block),     intent(in)    :: geo(:)
     type(overlapMap),     intent(in)    :: ovl
+    integer,              intent(in)    :: fam
     type(eulSnap), allocatable :: snap(:)
-    integer  :: nb, t, i, j, k, ct, s, bs, si, sj, sk, nx, ny
-    real(R8) :: r
+    integer  :: nb, t, i, j, k, ct, s, bs, si, sj, sk, nx, ny, rc
+    real(R8) :: r, wt, e(6)
 
     nb = size(eul)
     allocate(snap(nb))
@@ -291,11 +582,26 @@ contains
         ct = i + (j-1)*nx + (k-1)*nx*ny
         do s = ovl%blk(t)%start(ct-1) + 1, ovl%blk(t)%start(ct)
           bs = ovl%blk(t)%src(1,s); si = ovl%blk(t)%src(2,s); sj = ovl%blk(t)%src(3,s); sk = ovl%blk(t)%src(4,s)
-          r = geo(bs)%cellVol(si,sj,sk)/geo(t)%cellVol(i,j,k)
-          eul(t)%density(i,j,k)     = eul(t)%density(i,j,k)     + snap(bs)%density(si,sj,sk)*r
-          eul(t)%np(i,j,k)          = eul(t)%np(i,j,k)          + snap(bs)%np(si,sj,sk)*r
-          eul(t)%velocity(:,i,j,k)  = eul(t)%velocity(:,i,j,k)  + snap(bs)%velocity(:,si,sj,sk)*r
-          eul(t)%temperature(i,j,k) = eul(t)%temperature(i,j,k) + snap(bs)%temperature(si,sj,sk)*r
+          wt = ovl%blk(t)%w(s); rc = ovl%blk(t)%rec(s)
+          if (rc == 0 .and. wt == 1._R8) then
+            r = geo(bs)%cellVol(si,sj,sk)/geo(t)%cellVol(i,j,k)
+            eul(t)%density(i,j,k)     = eul(t)%density(i,j,k)     + snap(bs)%density(si,sj,sk)*r
+            eul(t)%np(i,j,k)          = eul(t)%np(i,j,k)          + snap(bs)%np(si,sj,sk)*r
+            eul(t)%velocity(:,i,j,k)  = eul(t)%velocity(:,i,j,k)  + snap(bs)%velocity(:,si,sj,sk)*r
+            eul(t)%temperature(i,j,k) = eul(t)%temperature(i,j,k) + snap(bs)%temperature(si,sj,sk)*r
+            cycle
+          endif
+          r = (geo(bs)%cellVol(si,sj,sk)*wt)/geo(t)%cellVol(i,j,k)
+          if (rc == 0) then
+            e = [snap(bs)%density(si,sj,sk), snap(bs)%np(si,sj,sk), snap(bs)%velocity(:,si,sj,sk), &
+                 snap(bs)%temperature(si,sj,sk)]
+          else
+            e = ovl%cuts%accE(:, fam, rc)
+          endif
+          eul(t)%density(i,j,k)     = eul(t)%density(i,j,k)     + e(1)*r
+          eul(t)%np(i,j,k)          = eul(t)%np(i,j,k)          + e(2)*r
+          eul(t)%velocity(:,i,j,k)  = eul(t)%velocity(:,i,j,k)  + e(3:5)*r
+          eul(t)%temperature(i,j,k) = eul(t)%temperature(i,j,k) + e(6)*r
         enddo
       enddo; enddo; enddo
     enddo
@@ -590,13 +896,13 @@ contains
   end function polyVolume
 
 
-  !> The weights of a deposit cell d (lexicographic nodes vd) into another block from its candidate cells there
-  !  (vc(:,:,k)): sumOv = |d ∩ t| = the sum of the overlaps, w(k) = |d ∩ c_k| over the sum of the overlaps
-  !  above EPS_OVL of it (the others 0), the largest set to 1 alone when >= 1 - EPS_OVL; a candidate whose
-  !  nodes equal d's bit for bit takes w = 1 alone and sumOv = V24(d), without clipping.
-  pure subroutine cellTargets(vd, vc, w, sumOv)
+  !> The weights of a deposit cell d (lexicographic nodes vd, V24 v24) into another block from its candidate
+  !  cells there (vc(:,:,k)): sumOv = |d ∩ t| = the sum of the overlaps, w(k) = |d ∩ c_k| over the sum of the
+  !  overlaps above EPS_OVL of it (the others 0), the largest set to 1 alone when >= 1 - EPS_OVL; a candidate
+  !  whose nodes equal d's bit for bit takes w = 1 alone and sumOv = v24, without clipping.
+  pure subroutine cellTargets(vd, v24, vc, w, sumOv)
     implicit none
-    real(R8), intent(in)  :: vd(:,:), vc(:,:,:)
+    real(R8), intent(in)  :: vd(:,:), v24, vc(:,:,:)
     real(R8), intent(out) :: w(:), sumOv
     real(R8) :: kept
     integer  :: k, kmax
@@ -605,7 +911,7 @@ contains
     do k = 1, size(vc, 3)
       if (all(vc(:,:,k) == vd)) then
         w(k) = 1._R8
-        sumOv = cellVolume24(vd)
+        sumOv = v24
         return
       endif
     enddo

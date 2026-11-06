@@ -91,7 +91,7 @@ contains
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
     integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar, b, b2, nMoved, nWallFace, nDrop
     character(len=16)    :: dualCodes
-    integer, allocatable :: npair(:,:), resCount(:)
+    integer, allocatable :: npair(:,:), ncut(:,:), resCount(:)
     character(len=2)     :: method
 
     if (self%staticDone) then
@@ -164,11 +164,13 @@ contains
     if (mpi_is_root) call reportNonAligned(self%links)
     self%connFaces = hasConnectedFaces(self%geoblock)
     if (hasChimeraFaces(self%geoblock)) then
-      call buildOverlapMap(self%geoblock, self%ovl, npair)
+      call buildOverlapMap(self%geoblock, self%ovl, npair, ncut)
       if (mpi_is_root) then
         do b = 1, size(npair, 1); do b2 = 1, size(npair, 2)
           if (npair(b, b2) > 0) write(*,'(A,3(I0,A))') ' [IGLOO] chimera overlap: ', npair(b, b2), &
             ' cells of block ', b, ' covered by block ', b2
+          if (ncut(b, b2) > 0) write(*,'(A,3(I0,A))') ' [IGLOO] chimera overlap: ', ncut(b, b2), &
+            ' cells of block ', b, ' cut by the boundary of block ', b2
         enddo; enddo
       endif
     endif
@@ -393,12 +395,12 @@ contains
     use IGLOO_Lib_Statistics, only: rngSeedFor
     use IGLOO_Mod_MPI,        only: mpi_size_, mpi_abort_all, owns_particle,           &
                                     mpi_allreduce_sum_i4_array, mpi_is_root, rank_suffix, &
-                                    reduce_accumulators, region_fail_check
+                                    reduce_accumulators, region_fail_check, mpi_ordered_sum_r8_array
     use IGLOO_Mod_Timing,     only: tm_phase, tm_nest, tm_unnest, tm_parcel_begin, tm_parcel_end, &
                                     TM_IDLE, TM_ACCUM, TM_GHOST, TM_SOLVE, TM_LOOP, TM_CENSUS, &
                                     TM_REDUCE, TM_FINALIZE, TM_SMOOTH
     use IGLOO_Mod_Footprint,  only: record_footprint
-    use IGLOO_overlap,        only: mirrorSource, mirrorEuler
+    use IGLOO_overlap,        only: mirrorSource, mirrorEuler, resetCuts
     use IGLOO_Lib_Combustion, only: nuOx, capLawPath
     use IGLOO_records,        only: rec_setup, ps_open, ps_text, ps_zone, ps_close, ps_begin, ps_end, &
                                     STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT
@@ -444,6 +446,7 @@ contains
     call tm_phase(TM_ACCUM)
     call allocateAccumulators(self%source, self%euler, sourceSwitch, eulerSwitch)
     call initialize_fields(self%source,self%euler,sourceSwitch,eulerSwitch)
+    if (allocated(self%ovl%cuts)) call resetCuts(self%ovl%cuts, nm, size(self%euler, 2), sourceSwitch, eulerSwitch)
     call zeroWall(self%wall)
     call record_footprint(self%geoblock, self%gasblock, self%source, self%euler)
     call tm_phase(TM_GHOST)
@@ -697,7 +700,7 @@ contains
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                              mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab,    &
                              mat%LvTab,mat%cpvTab, slot=ip, shed=gr%shed(ip), noShed=(loopCounter==maxLoop), wallblock=self%wall, &
-                             klTab=mat%klTab, epsTab=mat%epsTab)
+                             klTab=mat%klTab, epsTab=mat%epsTab, cuts=self%ovl%cuts)
               call tm_parcel_end()
             enddo
             !$OMP END PARALLEL DO
@@ -865,11 +868,12 @@ contains
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                               mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
                               mat%LvTab,mat%cpvTab, slot=ip, resid=gr%resid(ip), wallblock=self%wall, klTab=mat%klTab, &
-                              epsTab=mat%epsTab)
+                              epsTab=mat%epsTab, cuts=self%ovl%cuts)
             else
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                               mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
-                              mat%LvTab,mat%cpvTab, slot=ip, wallblock=self%wall, klTab=mat%klTab, epsTab=mat%epsTab)
+                              mat%LvTab,mat%cpvTab, slot=ip, wallblock=self%wall, klTab=mat%klTab, epsTab=mat%epsTab, &
+                              cuts=self%ovl%cuts)
             endif
             call tm_parcel_end()
           enddo
@@ -896,6 +900,22 @@ contains
     call tm_phase(TM_REDUCE)
     call reduce_accumulators(self%source, self%euler, sourceSwitch, eulerSwitch, self%wall)
     call tm_phase(TM_FINALIZE)
+    !> Chimera: the cut records summed in rank order, then (gas order 1) the overlap mirror on the summed deposits.
+    if (allocated(self%ovl%cuts)) then
+      if (allocated(self%ovl%cuts%acc))  call mpi_ordered_sum_r8_array(self%ovl%cuts%acc,  size(self%ovl%cuts%acc))
+      if (allocated(self%ovl%cuts%accE)) call mpi_ordered_sum_r8_array(self%ovl%cuts%accE, size(self%ovl%cuts%accE))
+    endif
+    if (allocated(self%ovl%blk) .and. .not. ord2) then
+      if (sourceSwitch) call mirrorSource(self%source, self%ovl, self%mirrored)
+      if (eulerSwitch) then
+        do m = 1, nm
+          do g = 1, self%material(m)%ngroups
+            fam = self%material(m)%group(g)%famID
+            call mirrorEuler(self%euler(:, fam), self%geoblock, self%ovl, fam)
+          enddo
+        enddo
+      endif
+    endif
     !> One dual cell per 101 vertex class, before the nonlinear finalize.
     if (allocated(self%classes)) call combineInterfaceDual(self%source, self%euler, self%classes, self%gasblock)
 
@@ -905,7 +925,7 @@ contains
       do b = 1, nb
         call self%source(b)%finalize(self%geoblock(b))
       enddo
-      if (allocated(self%ovl%blk)) call mirrorSource(self%source, self%ovl, self%mirrored)
+      if (allocated(self%ovl%blk) .and. ord2) call mirrorSource(self%source, self%ovl, self%mirrored)
       call tm_nest(TM_SMOOTH)
       allocate(exch(nm + 4, nb))
       call mollifySourceBlocks(self%source, self%geoblock, self%links, self%donors, exch)
@@ -933,7 +953,7 @@ contains
           do b = 1, nb
             call self%euler(b, fam)%reduce(self%geoblock(b))
           enddo
-          if (allocated(self%ovl%blk)) call mirrorEuler(self%euler(:, fam), self%geoblock, self%ovl)
+          if (allocated(self%ovl%blk) .and. ord2) call mirrorEuler(self%euler(:, fam), self%geoblock, self%ovl, fam)
           call tm_nest(TM_SMOOTH)
           call mollifyEulerBlocks(self%euler(:, fam), self%geoblock, self%links, self%donors)
           call tm_unnest()

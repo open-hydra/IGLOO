@@ -372,12 +372,12 @@ contains
         va = boxNodes(X0 + [5._real64, 0._real64, 0._real64]*H, [H, H, H])
         vc(:,:,1) = boxNodes(X0 + [4.3_real64, 0._real64, 0._real64]*H, [H, H, H])
         vc(:,:,2) = boxNodes(X0 + [5.3_real64, 0._real64, 0._real64]*H, [H, H, H])
-        call cellTargets(va, vc, w, sumOv)
+        call cellTargets(va, cellVolume24(va), vc, w, sumOv)
         nbad = count(abs(w - [0.3_real64, 0.7_real64]) > 1.0e-14_real64)
         vb = vc(:,:,2)
         vc(:,:,1) = boxNodes(X0 + [5._real64, 0._real64, 0._real64]*H, [H, H, H])
         vc(:,:,2) = boxNodes(X0 + [6._real64, 0._real64, 0._real64]*H, [H, H, H])
-        call cellTargets(vb, vc, w, ov)
+        call cellTargets(vb, cellVolume24(vb), vc, w, ov)
         nbad = nbad + count(abs(w - [0.7_real64, 0.3_real64]) > 1.0e-14_real64)
         call verdict('U-X4 a 0.3-cell shift: a block-1 cell''s weights 0.3, 0.7 into block 2''s cells k - 1, k, a '// &
                      'block-2 cell''s 0.7, 0.3 into block 1''s (1e-14)', nbad == 0, nbad)
@@ -386,10 +386,10 @@ contains
         va = boxNodes(X0, [H, H, H])
         vc(:,:,1) = va
         vc(:,:,2) = boxNodes(X0 + [H, 0._real64, 0._real64], [H, H, H])
-        call cellTargets(va, vc, w, sumOv)
+        call cellTargets(va, cellVolume24(va), vc, w, sumOv)
         nbad = merge(0, 1, w(1) == 1._real64 .and. w(2) == 0._real64)
         va(1, 8) = nearest(va(1, 8), 1._real64)
-        call cellTargets(va, vc, w, sumOv)
+        call cellTargets(va, cellVolume24(va), vc, w, sumOv)
         nbad = nbad + merge(0, 1, w(1) == 1._real64 .and. w(2) == 0._real64)
         print '(a,2es24.16)', '  [info] U-X5 a node moved by an ULP: W = ', w
         call verdict('U-X5 coincident cells: W = 1 exactly, one target; a node moved by an ULP: W = 1 exactly by the '// &
@@ -539,23 +539,25 @@ contains
         r = trim(adjustl(buf))
     end function es15
 
-    !> U-T: block 1 = columns 1..I1 of a regular grid of edge H, block 2 = NX2 columns from x = (I0 - 1/2) H
-    !  - delta; face 2 of block 1 and face 1 of block 2 are chimera faces. delta = 0: block 1's column I0 and
-    !  block 2's column I1 - I0 + 1 have their centroids on the other block's chimera face.
+    !> U-T': block 1 = columns 1..I1 of a regular grid of edge H, block 2 = NX2 columns from x0 = (I0 - 1 + s) H
+    !  (s = 1/2 - delta/H, the delta cases of the tie band, then s = 0.3); face 2 of block 1 and face 1 of block 2
+    !  are chimera faces. Block 1's column I0 and block 2's column I1 - I0 + 1 are cut by the other block's
+    !  boundary (1 - s of them inside it), the overlap's other columns inside it, each over two cells of weights
+    !  s and 1 - s; closed forms of the weights, records, coverage count and covered fraction.
     subroutine tieCase()
         use IGLOO_data_block, only: obj_block
         use IGLOO_overlap,    only: overlapMap, buildOverlapMap
-        use IGLOO_variables,  only: mesh2D
+        use IGLOO_variables,  only: mesh2D, ord2
         integer, parameter :: NY = 3, NZ = 2, I0 = 5, I1 = 8, NX2 = 6
         real(real64), parameter :: H = 1.0e-2_real64
         type(obj_block), allocatable :: geo(:)
         type(overlapMap) :: ovl
         integer, allocatable :: npair(:,:)
-        real(real64) :: tau, delta, x0(2), v(3,8)
-        integer :: icase, b, i, j, k, f, nfr, nexp, nbad
+        real(real64) :: tau, delta, x0(2), v(3,8), fin, wexp, covExp, wErr, cErr
+        integer :: icase, b, i, j, k, f, nbad, t, ct, s, bs, si, cutCol(2), ti, ncutSrc(2), nent(2), nexpEnt
         character(len=60) :: lab
 
-        mesh2D = .false.
+        mesh2D = .false.; ord2 = .false.
         !> the tie tolerance of the two cells that hold the fringe centroids (block 2's first, block 1's last)
         tau = 0._real64
         do b = 1, 2
@@ -565,13 +567,16 @@ contains
             if (b == 2) v(1, :) = v(1, :) + 0.5_real64*H
             tau = max(tau, max(1.e-12_real64*norm2(v(:,7) - v(:,1)), 64._real64*epsilon(1._real64)*maxval(abs(v))))
         enddo
-        do icase = 1, 3
+        cutCol = [I0, I1 - I0 + 1]
+        do icase = 1, 4
             select case (icase)
-            case (1); delta = 0._real64;          lab = 'on the face'
-            case (2); delta = 0.25_real64*tau;    lab = 'inside by tau/4 (the tie band)'
-            case (3); delta = 2._real64*tau;      lab = 'inside by 2 tau'
+            case (1); x0 = [0._real64, (I0 - 1 + 0.5_real64)*H];                lab = 'half shift'
+            case (2); x0 = [0._real64, (I0 - 1 + 0.5_real64)*H - 0.25_real64*tau]; lab = 'half shift less tau/4'
+            case (3); x0 = [0._real64, (I0 - 1 + 0.5_real64)*H - 2._real64*tau];   lab = 'half shift less 2 tau'
+            case (4); x0 = [0._real64, (I0 - 1 + 0.3_real64)*H];                lab = '0.3 shift'
             end select
-            x0 = [0._real64, (I0 - 1 + 0.5_real64)*H - delta]
+            !> 1 - s: the fraction of a cut column inside the other block
+            fin = (I0*H - x0(2))/H
             if (allocated(geo)) deallocate(geo)
             allocate(geo(2))
             do b = 1, 2
@@ -590,18 +595,53 @@ contains
             geo(1)%face(2)%cell(:,:)%bcdef = 102
             geo(2)%face(1)%cell(:,:)%bcdef = 102
             call buildOverlapMap(geo, ovl, npair)
-            !> fringe columns: block 1's column I0, block 2's column I1 - I0 + 1
-            nfr = 0
-            do k = 1, NZ; do j = 1, NY
-                nfr = nfr + ovl%blk(1)%n(I0 + (j-1)*I1 + (k-1)*I1*NY) - 1
-                nfr = nfr + ovl%blk(2)%n(I1 - I0 + 1 + (j-1)*NX2 + (k-1)*NX2*NY) - 1
-            enddo; enddo
-            nexp = merge(2*NY*NZ, 0, icase == 3)
-            nbad = abs(nfr - nexp) + count(npair /= reshape([0, (I1 - I0 + merge(1, 0, icase == 3))*NY*NZ, &
-                                                              (I1 - I0 + merge(1, 0, icase == 3))*NY*NZ, 0], [2, 2]))
-            call verdict('U-T fringe centroids '//trim(lab)//': '//trim(merge('covered    ', 'not covered', icase == 3))// &
-                         ' (map pairs '//itoaT(npair(2, 1))//' and '//itoaT(npair(1, 2))//', fringe coverage '// &
-                         itoaT(nfr)//' of '//itoaT(2*NY*NZ)//')', nbad == 0, nbad)
+            nbad = 0; wErr = 0._real64; cErr = 0._real64; ncutSrc = 0; nent = 0
+            do t = 1, 2
+                b = 3 - t
+                do k = 1, NZ; do j = 1, NY; do ti = 1, geo(t)%Nx
+                    ct = ti + (j-1)*geo(t)%Nx + (k-1)*geo(t)%Nx*NY
+                    do s = ovl%blk(t)%start(ct-1) + 1, ovl%blk(t)%start(ct)
+                        nent(t) = nent(t) + 1
+                        bs = ovl%blk(t)%src(1, s); si = ovl%blk(t)%src(2, s)
+                        if (bs /= b .or. ovl%blk(t)%src(3, s) /= j .or. ovl%blk(t)%src(4, s) /= k) nbad = nbad + 1
+                        !> the expected weight of source column si into target column ti
+                        if (si == cutCol(b)) then
+                            wexp = merge(1._real64, 0._real64, ti == merge(1, I1, t == 2))
+                            if (ovl%blk(t)%rec(s) == 0) nbad = nbad + 1
+                            ncutSrc(t) = ncutSrc(t) + 1
+                        else
+                            if (ovl%blk(t)%rec(s) /= 0) nbad = nbad + 1
+                            if (t == 2) then
+                                wexp = merge(1._real64 - fin, merge(fin, 0._real64, ti == si - I0 + 1), ti == si - I0)
+                            else
+                                wexp = merge(fin, merge(1._real64 - fin, 0._real64, ti == si + I0), ti == si + I0 - 1)
+                            endif
+                        endif
+                        wErr = max(wErr, abs(ovl%blk(t)%w(s) - wexp))
+                    enddo
+                enddo; enddo; enddo
+            enddo
+            !> coverage of every cell of both blocks
+            do b = 1, 2
+                do k = 1, NZ; do j = 1, NY; do i = 1, geo(b)%Nx
+                    ct = i + (j-1)*geo(b)%Nx + (k-1)*geo(b)%Nx*NY
+                    if (i == cutCol(b)) then
+                        covExp = 1._real64 + fin
+                    elseif ((b == 1 .and. i > I0) .or. (b == 2 .and. i < cutCol(2))) then
+                        covExp = 2._real64
+                    else
+                        covExp = 1._real64
+                    endif
+                    if (ovl%blk(b)%n(ct) /= merge(1, 2, covExp == 1._real64)) nbad = nbad + 1
+                    cErr = max(cErr, abs(ovl%blk(b)%cov(ct) - covExp))
+                enddo; enddo; enddo
+            enddo
+            nexpEnt = (1 + 2*(I1 - I0))*NY*NZ
+            nbad = nbad + count(nent /= nexpEnt) + count(ncutSrc /= NY*NZ) &
+                 + merge(0, 1, wErr <= 1.0e-12_real64) + merge(0, 1, cErr <= 1.0e-14_real64)
+            call verdict('U-T'' '//trim(lab)//': weights s, 1 - s to '//es(wErr)//' (1e-12), '// &
+                         itoaT(ncutSrc(2))//' and '//itoaT(ncutSrc(1))//' cut cells with a record, coverage n and cov '// &
+                         '(1 + the fraction covered) to '//es(cErr)//' (1e-14)', nbad == 0, nbad)
         enddo
     end subroutine tieCase
 
@@ -631,7 +671,7 @@ contains
         real(real64) :: sm(NMAT, NX, NY, NZ), so(3, NX, NY, NZ), se(NX, NY, NZ)
         real(real64) :: ed(NX, NY, NZ), en(NX, NY, NZ), ev(3, NX, NY, NZ), et(NX, NY, NZ)
         real(real64) :: expM(NMAT+4, 2), gotM(NMAT+4, 2), sumNS(NMAT+4), l1(NMAT+4), cellS(NMAT+4), werr, vmis
-        integer :: lo(2), hi(2), b, i, j, k, g, c, nsrc, neul, ncov, nm4
+        integer :: lo(2), hi(2), b, i, j, k, g, c, nsrc, neul, ncov, ncv, nm4
         logical :: own
 
         mesh2D = .false.
@@ -679,7 +719,7 @@ contains
         call buildOverlapMap(geo, ovl, npair)
         !> expected mirrored totals (the other block's owner deposits in this block's overlap columns, in
         !  this block's cell order) and Sum (n - 1) S over the owner-only fields
-        expM = 0._real64; sumNS = 0._real64; l1 = 0._real64; ncov = 0
+        expM = 0._real64; sumNS = 0._real64; l1 = 0._real64; ncov = 0; ncv = 0
         do b = 1, 2
             do k = 1, NZ; do j = 1, NY; do i = 1, geo(b)%Nx
                 g = lo(b) + i - 1
@@ -688,12 +728,13 @@ contains
                 sumNS = sumNS + (ovl%blk(b)%n(c) - 1)*cellS
                 l1 = l1 + abs(cellS)
                 if (ovl%blk(b)%n(c) /= merge(2, 1, g >= I0 .and. g <= I1)) ncov = ncov + 1
+                if (ovl%blk(b)%cov(c) /= merge(2._real64, 1._real64, g >= I0 .and. g <= I1)) ncv = ncv + 1
                 if (g >= I0 .and. g <= I1 .and. (b == 1 .eqv. g > ISPLIT)) &
                     expM(:, b) = expM(:, b) + [sm(:, g, j, k), so(:, g, j, k), se(g, j, k)]
             enddo; enddo; enddo
         enddo
         call mirrorSource(src, ovl, mir)
-        call mirrorEuler(eul, geo, ovl)
+        call mirrorEuler(eul, geo, ovl, 1)
 
         nsrc = 0; neul = 0; werr = 0._real64; vmis = 0._real64
         do b = 1, 2
@@ -720,6 +761,7 @@ contains
                      werr <= 1.0e-14_real64, neul)
         call verdict('U-M (i) coverage count: 2 in the overlap, 1 elsewhere; the map pairs 4 x 5 x 4 cells each way', &
                      ncov == 0 .and. all(npair == reshape([0, 80, 80, 0], [2, 2])), ncov)
+        call verdict('U-M (i) covered fraction cov: 2 in the overlap, 1 elsewhere, exactly', ncv == 0, ncv)
         nsrc = count(abs(gotM - expM) > 1.0e-14_real64*spread(l1, 2, 2))
         call verdict('U-M (i) mirrored totals: the other block''s owner deposits in the overlap', nsrc == 0, nsrc)
         nsrc = count(abs(gotM(:, 1) + gotM(:, 2) - sumNS) > 1.0e-14_real64*l1)
