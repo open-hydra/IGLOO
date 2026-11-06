@@ -1264,3 +1264,24 @@ $We = 600$.
 <figure>
   {% include "vv/images/etab-hf92.svg" ignore missing %}
 </figure>
+
+### khrt-hf93
+
+`tab-hf92`'s water series under Reitz KH-RT with no KH shed, its parent drop set beside the core
+drop Hsiang & Faeth measured at the end of shear breakup ([HF93] eqs. [1]–[8]): at $t_b = 5\,t^*$
+the relative velocity $u_b/u_0 = 1/(1 + C)$ and $d_b/d_0 = (1 + C)\,(4 Eo_{cr}/(3\bar C_D We))^{1/2}$,
+$C = (3\bar C_D t_b/4t^*)(\rho_G/\rho_L)^{1/2}$, $\bar C_D = 5$, $Eo_{cr} = 16$, fitted over
+$100 < We < 600$. The paper prints $(1 + 3C)$ in its eq. [3] and the coefficient 2.3 in its eq. [8];
+its derivation and its Figs. 2 and 4 give $(1 + C)$, and its constants give 2.0656 (both are drawn).
+The gates are the figure's preconditions: every class has a parcel, every parcel a first RT event
+on a trajectory row of its own (rows at every segment end, four planes in the first cell).
+
+**Result:** 126/126 parcels have a first RT. Before it the parent is 0.967 $d_0$ at $We = 15$ and
+0.88–0.91 $d_0$ above $We = 80$: 1.10 times the core drop at $We = 15$, 6.5 times at $We = 600$;
+its relative velocity is 0.98–0.99 $u_0$ against 0.61, and the RT comes at 2.2–1.3 $t^*$, before
+$t_b$. KH-RT has no core drop: the RT event replaces the stripped parent whole, and the cascade
+runs on past $t_b$.
+
+<figure>
+  {% include "vv/images/khrt-hf93.svg" ignore missing %}
+</figure>
