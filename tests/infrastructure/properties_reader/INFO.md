@@ -4,10 +4,10 @@ Pins the reader of `INPUT/<prefix>properties.dat` — `read_cdp_properties`, the
 on fixtures that no e2e case carries: a table that starts above 1 K, a `Psat` column, columns in
 another order, both enthalpy datums, two materials of which one is tabulated, the `Sigma` and
 `Viscosity` columns of a breaking material, the `Conductivity`, `Viscosity` and `Emissivity` columns of a
-non-breaking P2T material, and the file ATLAS GPB writes. `test_ini_pipeline` stops at `read_IGLOO_input`; this test drives the next reader.
+non-breaking P2T material, two boiling points given away from one atmosphere, and the file ATLAS GPB writes. `test_ini_pipeline` stops at `read_IGLOO_input`; this test drives the next reader.
 
-One executable, five ctest entries, one working directory each (the reader loads `input.ini` from
-the working directory, and the five fixtures need different `[IGLOO-Properties]`):
+One executable, six ctest entries, one working directory each (the reader loads `input.ini` from
+the working directory, and the six fixtures need different `[IGLOO-Properties]`):
 
 | ctest | directory | `[IGLOO-Properties]` |
 |---|---|---|
@@ -16,6 +16,7 @@ the working directory, and the five fixtures need different `[IGLOO-Properties]`
 | `test_properties_reader-atlas-water` | `atlas-water/` | mhb98-water's Tboil 373.15 K, Le, Yinf (evaporation CEM); `Lv`, `Mv`, `cpv` from the table's columns |
 | `test_properties_reader-sigma-mu` | `sigma-mu/` | two materials that break (TAB): `sigma = 0 0.05`, `mu = 0 1e-3` (0 for zone A, which has the columns) |
 | `test_properties_reader-columns` | `columns/` | two evaporating materials (TC), one value per material; `emissivity = 0 0.5` (0 for zone A, which has the column) |
+| `test_properties_reader-boiling-pressure` | `boiling-pressure/` | two evaporating materials (CEM): `Lv`, `Mv` one value each, `boiling-temperature = 393.15 406.7` at `boiling-pressure = 2.0e5 303975.0`; its output may not hold the Clausius-Clapeyron notice for material 2, which has a `Psat` column (`FAIL_REGULAR_EXPRESSION`) |
 
 ## Legs (`test_properties_reader.f90`)
 

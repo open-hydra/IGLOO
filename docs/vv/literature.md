@@ -103,7 +103,8 @@ Tests the evaporation closures in `Lib_Evaporation.f90` at function level.
 
 **What is tested.** The Sherwood / Nusselt prefactor structure at Re = 0 for the
 d²-law, CEM, CEM-B and ASM models; cross-model Re = 0 consistency (CEM/CEM-B/ASM
-must agree to machine precision; d²-law agrees at $\mathrm{Nu}=2$); the
+must agree to machine precision, ASM and CEM to 9 ε for $B_M \ge 10^{-2}$, where both take
+$\ln(1 + B_M)$ from the same rounded argument; d²-law agrees at $\mathrm{Nu}=2$); the
 Abramzon–Sirignano $F(B)$ correction factor `[AS89]`; Ranz–Marshall Sh coefficient
 in CEM `[RM52]`.  Value pins: XE1 the d²-law / CEM ratio at $\mathrm{Nu} = 2$ ($= 1$);
 XE2 $\dot{m} < 0$ (mass loss) from the production call sites with the gas state in
@@ -185,7 +186,8 @@ the paper's native-resolution stencil (`tests/evaporation/mhb98-fig7a/`, method 
 2.2 %, 1.3 % and 1.9 % against 6 %; $r$ spans 22–42 %, 4.4–8.6 %, 0.44–0.87 % and
 0.11–0.22 % over that window.  The figure is the oracle, so DC4 sees an error made in
 production and in the re-code alike: $L_K$ doubled in both passes DC1–DC3 and fails DC4.
-All six checks pass.
+Every curve must reach all its gated nodes (17, 11, 13 and 16): a trajectory that ends early
+fails, not just skips them.  All six checks pass.
 
 **Documented deviations, quantified not hidden.** IGLOO's Ranz–Marshall carries
 $0.600$ where `[MHB98]` eq. (6) prints $0.552$ (8.7 %), so DC1/DC2 run the oracle at

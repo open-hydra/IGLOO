@@ -2,8 +2,8 @@
 """Gate: Tonini-Cossali evaporation of an n-hexadecane drop with TEMPERATURE-
 DEPENDENT liquid density (TC2012 Fig. 11 conditions).
 
-Two things are validated, both along the MEASURED Tp(x) (so the gate is on the mass-rate
-law and the variable-density diameter, not on the Tp evolution):
+Two things are validated along the MEASURED Tp(x) (so they gate the mass-rate law and the
+variable-density diameter, not the Tp evolution, which PC2 below gates):
 
   (1) VARIABLE-DENSITY MASS RATE (Tier V, tight). The oracle integrates the DROPLET MASS
       m(x) with the TC2012 PRESENT-MODEL rate -- the transcendental m_hat + (T~s-1)*Lev*
@@ -30,7 +30,7 @@ linear between the nodes). Two more gates pin that the column is what the run us
   (4) PC1: the plateau (max Tp over the gated drops) within 1 K of the 0-D replica of the kernel
       (zero_d.py with this fixture: 493.69 K). psat by Clausius-Clapeyron with the same sink puts
       it at 487.1 K. The rate gate (1) cannot tell the table from a Clausius-Clapeyron line with
-      Lv = 2.58e5: the oracle on that line reads 4.4e-3 against the table's 3.3e-3, both under 2 %.
+      Lv = 2.58e5: the oracle on that line reads 3.1e-3 against the table's 3.3e-3, both under 2 %.
   (5) PC2: the heating path. Tp on every row below the replica's plateau minus 1 K within 0.1 K of the
       replica's Tp at the same time t = (x - x0)/u_g (the drop coasts at the gas speed). The replica
       takes cp_l(T) from the table's Cp column; (1), (2) and PC1 do not depend on cp_l, PC2 does.

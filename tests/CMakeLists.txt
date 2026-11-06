@@ -1306,7 +1306,7 @@ igloo_refusal_case(refuse-boiling-pressure infrastructure/refusals/boiling-press
 # the same key on a material that does not evaporate (-1 Pa), refused as ICE refuses it. RED on a reader that
 # checks it only for evaporation: the run goes through (exit 0).
 igloo_refusal_case(refuse-boiling-pressure-noevap infrastructure/refusals/boiling-pressure-noevap
-                   "IGLOO: [IGLOO-Properties] boiling-pressure must be positive and finite" "e2e;refusal")
+                   "IGLOO: [IGLOO-Properties] boiling-pressure must be positive and finite" "e2e;refusal;infrastructure")
 # Solidification (ODE models 6 and 7): the latent heat and the solid heat capacity have no default, T-nuc must
 # lie below T-melt, no other phase model on the material, rho-solid not negative.
 igloo_refusal_case(refuse-solid-hfus       infrastructure/refusals/solid-hfus
