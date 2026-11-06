@@ -17,9 +17,10 @@ contains
   !  its VARIABLES line: cp, rho, h, an optional Psat and its pair's Lv, Mv, Cpv, optional Sigma,
   !  Viscosity, Conductivity and Emissivity); breakup/evaporation constants come from [IGLOO-Properties]
   !  (Lv, Mv, cpv, sigma, mu, emissivity from there or from their columns; k-liq, mu-liq from the material line
-  !  or from their columns).
+  !  or from their columns; boiling-temperature at boiling-pressure, one atmosphere unless given).
   subroutine read_cdp_properties(prefix,material)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
+    use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
     use IGLOO_variables,       only: nm, phaseChange, breakup_word, evaporation_word, &
                                      liqSelect, intfSelect, boilSelect
     use IGLOO_data_phases,     only: obj_material
@@ -30,13 +31,13 @@ contains
                                      vapour_reason, tableValue, COL_OK, COL_ABSENT, validate_positive_column, &
                                      column_reason
     use IGLOO_IO_INI,          only: ini_Mv, ini_Lv, ini_Tboil, ini_cpv, ini_Le, ini_Yinf, &
-                                        ini_sigma, ini_mu, ini_emissivity, &
+                                        ini_sigma, ini_mu, ini_emissivity, ini_pBoil, &
                                         set_material_defaults, apply_material_key, finalize_material_models, &
                                         read_breakup_constants, apply_breakup_tokens
     use Lib_ORION_data
     use Lib_Tecplot
     use IGLOO_Lib_Breakup,     only: assign_breakup
-    use IGLOO_Lib_Evaporation, only: assign_evaporation, Patm, Ru
+    use IGLOO_Lib_Evaporation, only: assign_evaporation, Patm, Ru, invTboil_at
     implicit none
     character(len=32),  intent(in)  :: prefix
     type(obj_material), intent(out), allocatable :: material(:)
@@ -205,6 +206,7 @@ contains
     if (allocated(ini_Mv))    then; if (size(ini_Mv)    /= nm) error stop '[ERROR] [IGLOO-Properties] Mv: size /= number of materials';    endif
     if (allocated(ini_Lv))    then; if (size(ini_Lv)    /= nm) error stop '[ERROR] [IGLOO-Properties] Lv: size /= number of materials';    endif
     if (allocated(ini_Tboil)) then; if (size(ini_Tboil) /= nm) error stop '[ERROR] [IGLOO-Properties] boiling-temperature (alias Tboil): size /= number of materials'; endif
+    if (allocated(ini_pBoil)) then; if (size(ini_pBoil) /= nm) error stop '[ERROR] [IGLOO-Properties] boiling-pressure: size /= number of materials'; endif
     if (allocated(ini_cpv))   then; if (size(ini_cpv)   /= nm) error stop '[ERROR] [IGLOO-Properties] cpv: size /= number of materials';   endif
     if (allocated(ini_Le))    then; if (size(ini_Le)    /= nm) error stop '[ERROR] [IGLOO-Properties] Le: size /= number of materials';    endif
     if (allocated(ini_Yinf))  then; if (size(ini_Yinf)  /= nm) error stop '[ERROR] [IGLOO-Properties] Yinf: size /= number of materials';  endif
@@ -374,6 +376,14 @@ contains
         if (allocated(ini_Tboil)) then; material(i)%Tboil = ini_Tboil(i)
         else; error stop '[ERROR] Evaporation requires boiling-temperature (alias Tboil) in [IGLOO-Properties]'
         endif
+        material(i)%pBoil = Patm
+        if (allocated(ini_pBoil)) then
+          if (.not. (ini_pBoil(i) > 0._R8 .and. ieee_is_finite(ini_pBoil(i)))) then
+            write(*,'(A,I0,A,ES12.5)') ' [ERROR] [IGLOO-Properties] boiling-pressure of material ', i, ' = ', ini_pBoil(i)
+            error stop 'IGLOO: [IGLOO-Properties] boiling-pressure must be positive and finite'
+          endif
+          material(i)%pBoil = ini_pBoil(i)
+        endif
         ! Pre-compute constants
         material(i)%LvMvOverRu = material(i)%Lv * material(i)%Mv / 8314.46_R8
         material(i)%invTboil   = 1._R8 / material(i)%Tboil
@@ -384,7 +394,7 @@ contains
         if (mat%evapSelect == 0) then
           write(*,'(A,I0,A)') '  >> [material ', i, '] Psat column not used: this material does not evaporate'
         else
-          code = validate_psat_column(blk%vars(ips,1:Ni,1,1), Tmin, Tmax, mat%Tboil, Patm)
+          code = validate_psat_column(blk%vars(ips,1:Ni,1,1), Tmin, Tmax, mat%Tboil, mat%pBoil)
           if (code == PSAT_ABSENT) then
             write(*,'(A,I0,A)') '  >> [material ', i, '] Psat column all zero: Clausius-Clapeyron is used'
           elseif (code /= PSAT_OK) then
@@ -394,9 +404,9 @@ contains
             allocate(mat%psatTab(Tmin:Tmax))
             mat%psatTab(Tmin:Tmax) = blk%vars(ips,:,1,1)
             i0 = int(mat%Tboil)
-            ratio = (mat%psatTab(i0) + (mat%psatTab(i0+1) - mat%psatTab(i0))*(mat%Tboil - real(i0,R8)))/Patm
+            ratio = (mat%psatTab(i0) + (mat%psatTab(i0+1) - mat%psatTab(i0))*(mat%Tboil - real(i0,R8)))/mat%pBoil
             write(*,'(A,I0,A,I0,A,I0,A,F7.4)') '  >> [material ', i, '] p_sat tabulated from properties.dat (', &
-              Tmin, '..', Tmax, ' K), psat(boiling-temperature)/Patm = ', ratio
+              Tmin, '..', Tmax, ' K), psat(boiling-temperature)/boiling-pressure = ', ratio
           endif
         endif
       endif
@@ -439,6 +449,16 @@ contains
             endif
           endif
         endif
+      endif
+
+      !> boiling-temperature given at boiling-pressure: the same Clausius-Clapeyron line anchored at one atmosphere
+      if (mat%evapSelect > 0 .and. mat%pBoil /= Patm) then
+        if (.not. mat%LvMvOverRu > 0._R8) error stop 'IGLOO: boiling-pressure needs Lv > 0 and Mv > 0'
+        mat%invTboil = invTboil_at(mat%Tboil, mat%pBoil, mat%LvMvOverRu)
+        if (.not. mat%invTboil > 0._R8) error stop &
+          'IGLOO: boiling-pressure and boiling-temperature give no one-atmosphere boiling point on the Clausius-Clapeyron line'
+        write(*,'(A,I0,A,ES12.5,A,ES12.5,A,ES12.5,A)') '  >> [material ', i, '] boiling-temperature ', mat%Tboil, &
+          ' K at boiling-pressure ', mat%pBoil, ' Pa: Clausius-Clapeyron through ', 1._R8/mat%invTboil, ' K at one atmosphere'
       endif
 
       end associate 

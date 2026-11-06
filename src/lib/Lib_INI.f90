@@ -16,6 +16,7 @@ module IGLOO_IO_INI
   real(R8), allocatable, public :: ini_cpv(:),   ini_Le(:), ini_Yinf(:)
   real(R8), allocatable, public :: ini_sigma(:), ini_mu(:), ini_psat(:)
   real(R8), allocatable, public :: ini_emissivity(:)
+  real(R8), allocatable, public :: ini_pBoil(:)
 
 
 contains
@@ -595,8 +596,8 @@ contains
   end subroutine finalize_material_models
 
 
-  !> [IGLOO-Properties]: optional per-material property vectors (psat, Mv, Lv, boiling-temperature, cpv, Le,
-  !  Yinf, sigma, mu, emissivity), all of one length.
+  !> [IGLOO-Properties]: optional per-material property vectors (psat, Mv, Lv, boiling-temperature,
+  !  boiling-pressure, cpv, Le, Yinf, sigma, mu, emissivity), all of one length.
   subroutine read_properties()
     implicit none
     integer :: n, nref
@@ -637,6 +638,14 @@ contains
       if (n /= nref) error stop '[ERROR] [IGLOO-Properties] boiling-temperature (alias Tboil): size mismatch with other property vectors'
       allocate(ini_Tboil(n))
       call fini%get(section_name='IGLOO-Properties', option_name=keyTB, val=ini_Tboil, error=error)
+    endif
+    !> boiling-pressure: the pressure at which boiling-temperature is given
+    if (inSection('IGLOO-Properties','boiling-pressure')) then
+      n = fini%count_values(section_name='IGLOO-Properties', option_name='boiling-pressure')
+      if (nref < 0) nref = n
+      if (n /= nref) error stop '[ERROR] [IGLOO-Properties] boiling-pressure: size mismatch with other property vectors'
+      allocate(ini_pBoil(n))
+      call fini%get(section_name='IGLOO-Properties', option_name='boiling-pressure', val=ini_pBoil, error=error)
     endif
     if (inSection('IGLOO-Properties','cpv')) then
       n = fini%count_values(section_name='IGLOO-Properties', option_name='cpv')

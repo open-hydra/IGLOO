@@ -10,6 +10,7 @@ module IGLOO_Lib_Evaporation
     public :: evaporation
     public :: chiETC
     public :: boilingTemperatureCC, alphaBoil, zgrBoiling
+    public :: psat_CC, invTboil_at
 
     !> Evaporation parameter array: contiguous layout (order mirrored by Lib_RHS ind_Mv..)
     integer(I4), parameter, public :: nep = 10
@@ -732,6 +733,17 @@ contains
         psat = Patm * exp(-LvMvOverRu * (1._R8/T - invTboil))
 
     end function psat_CC
+
+
+    !> 1/T of the one-atmosphere boiling point on the Clausius-Clapeyron line through (Tboil, pBoil).
+    pure function invTboil_at(Tboil, pBoil, LvMvOverRu) result(invT)
+        implicit none
+        real(R8), intent(in) :: Tboil, pBoil, LvMvOverRu
+        real(R8) :: invT
+
+        invT = 1._R8/Tboil + log(pBoil/Patm)/LvMvOverRu
+
+    end function invTboil_at
 
 
 end module IGLOO_Lib_Evaporation

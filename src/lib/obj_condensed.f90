@@ -131,6 +131,7 @@ module IGLOO_data_phases
     real(R8) :: Mv         = 0._R8
     real(R8) :: Lv         = 0._R8
     real(R8) :: Tboil      = 0._R8
+    real(R8) :: pBoil      = 101325._R8  !> pressure at which Tboil is given [Pa]
     real(R8) :: cpv        = 0._R8
     real(R8) :: Le         = 1._R8
     real(R8) :: Yinf       = 0._R8

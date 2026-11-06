@@ -22,6 +22,9 @@ program test_properties_reader
     !                 [IGLOO-Properties] constants)
     !   columns       PR-C2 kc-: zone A's Conductivity, Viscosity and Emissivity columns of a non-breaking P2T
     !                 material (the Emissivity row above 1 cut to 1), zone B all zero (its [IGLOO-Properties] emissivity)
+    !   boiling-pressure  BP1 bp-: material A's boiling-temperature given at boiling-pressure 2e5 Pa, Clausius-Clapeyron:
+    !                 the anchor folded, the curve through (T_b, p_B) against the closed form p_B exp(-a (1/T - 1/T_b))
+    !                 BP2 bp-: material B's Psat column, through (T_b, 3 atm), checked against its boiling-pressure
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_IO_INI,         only: read_IGLOO_input
@@ -72,6 +75,8 @@ program test_properties_reader
         call sigma_mu_legs(nbad)
     case ('columns')
         call columns_legs(nbad)
+    case ('boiling-pressure')
+        call boiling_pressure_legs(nbad)
     case default
         write(*,'(a)') 'test_properties_reader: unknown mode "'//trim(mode)//'"'
         nbad = 1
@@ -709,6 +714,42 @@ contains
             endif
         enddo
     end function roundtrip
+
+
+    !> boiling-pressure: the Clausius-Clapeyron line through (boiling-temperature, boiling-pressure).
+    subroutine boiling_pressure_legs(nbad)
+        use IGLOO_Lib_Evaporation, only: psat_CC, boilingTemperatureCC
+        integer, intent(inout) :: nbad
+        type(obj_material), allocatable :: mat(:)
+        character(len=32) :: prefix
+        real(R8), parameter :: TBA = 393.15_R8, PBA = 2.0e5_R8, TBB = 406.7_R8, PBB = 303975._R8
+        real(R8), parameter :: A = 2.26e6_R8*18._R8/8314.46_R8, T2 = 350._R8
+        real(R8) :: invT, rInv, rTb, rT2, dTb, rTbB
+
+        prefix = 'bp-'
+        call read_cdp_properties(prefix, mat)
+        call check(nm == 2 .and. size(mat) == 2,                 'BP bp-: two materials', nbad)
+        if (size(mat) /= 2) return
+        ! BP1: Clausius-Clapeyron through (T_b, p_B); the closed form p_B exp(-a (1/T - 1/T_b)) is the oracle
+        call check(mat(1)%pBoil == PBA .and. .not. mat(1)%psatVariable, &
+                   'BP1 bp-: material A, boiling-pressure 2e5 Pa read, Clausius-Clapeyron', nbad)
+        invT = 1._R8/TBA + log(PBA/Patm)/A
+        rInv = abs(mat(1)%invTboil - invT)/invT
+        rTb  = psat_CC(TBA, mat(1)%LvMvOverRu, mat(1)%invTboil)/PBA - 1._R8
+        rT2  = psat_CC(T2, mat(1)%LvMvOverRu, mat(1)%invTboil)/(PBA*exp(-A*(1._R8/T2 - 1._R8/TBA))) - 1._R8
+        dTb  = boilingTemperatureCC(PBA, mat(1)%LvMvOverRu, mat(1)%invTboil) - TBA
+        write(*,'(a,es10.3,a,es10.3,a,es10.3,a,es10.3,a)') '   BP1: invTboil ', rInv, ' rel; psat(T_b)/p_B - 1 ', rTb, &
+            '; psat(350 K) ', rT2, ' rel; T_B(p_B) - T_b ', dTb, ' K'
+        call check(rInv <= 2._R8*epsilon(1._R8), 'BP1 bp-: invTboil = 1/T_b + ln(p_B/p_atm)/a to 4u', nbad)
+        call check(abs(rTb) <= 2.e-14_R8,        'BP1 bp-: psat(T_b) = p_B to 2e-14', nbad)
+        call check(abs(rT2) <= 2.e-14_R8,        'BP1 bp-: psat(350 K) = the closed form to 2e-14', nbad)
+        call check(abs(dTb) <= 1.e-12_R8,        'BP1 bp-: the boiling temperature at p_B = T_b within 1e-12 K', nbad)
+        ! BP2: the Psat column passes its check against boiling-pressure (3 atm), not one atmosphere
+        call check(mat(2)%pBoil == PBB .and. mat(2)%psatVariable .and. allocated(mat(2)%psatTab), &
+                   'BP2 bp-: material B, boiling-pressure 3 atm read, Psat column tabulated', nbad)
+        rTbB = psat_CC(TBB, mat(2)%LvMvOverRu, mat(2)%invTboil)/PBB - 1._R8
+        call check(abs(rTbB) <= 2.e-14_R8,       'BP2 bp-: its Clausius-Clapeyron anchor folded too, psat(T_b) = p_B', nbad)
+    end subroutine boiling_pressure_legs
 
 
     subroutine check(cond, name, nbad)

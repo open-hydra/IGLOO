@@ -145,9 +145,13 @@ contains
       'Latent heat of vaporization; one value per material; a material whose properties.dat carries the Lv '// &
       'column takes it from there (give 0 here)','',.false.)
     call reg%add('IGLOO-Properties','boiling-temperature',d_a(5,:),'0', &
-      'Boiling temperature [K]; one value per material, overrides properties.dat','',.false.)
+      'Boiling temperature [K] at boiling-pressure; one value per material, overrides properties.dat','',.false.)
     call reg%add('IGLOO-Properties','Tboil',d_a(5,:),'0', &
       'Alias of boiling-temperature, the name ICE also accepts; give one or the other, not both','',.false.)
+    call reg%add('IGLOO-Properties','boiling-pressure',d_a(39,:),'101325', &
+      'Pressure [Pa] at which boiling-temperature is given: the Clausius-Clapeyron line passes through '// &
+      '(boiling-temperature, boiling-pressure) and a Psat column must give boiling-pressure there within a factor 2; '// &
+      'one value per material','',.false.)
     call reg%add('IGLOO-Properties','cpv',d_a(6,:),'0', &
       'Vapour specific heat; one value per material; a material whose properties.dat carries the Cpv column '// &
       'takes it from there (give 0 here)','',.false.)
