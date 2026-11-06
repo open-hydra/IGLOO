@@ -1127,8 +1127,9 @@ igloo_e2e_case(two-fam-bc-2blk-ord2-dual-default infrastructure/two-fam-bc-2blk-
 # block. RED with each block's own dual: Fy 6.2e-4, Fz 4.4e-4, v_p 9.3e-4, w_p 3.3e-4 of the scale.
 igloo_e2e_case(swirl-wedge-2blk-ord2-dual infrastructure/swirl-wedge-2blk-ord2-dual "e2e;infrastructure;bc;gas;axisym;euler")
 # chimera-2blk-shift-ord2:chimera-2blk with block 2 shifted by half a cell, gas-order 2, T linear in x: each 102
-# ghost node interpolated between two centres of the other block. A control: on a linear field the own linear
-# fill is exact too (test_ghost_bc's G6u separates them on a quadratic field).
+# ghost node interpolated between two centres of the other block (a control: on a linear field the own linear
+# fill is exact too; test_ghost_bc's G6u separates them on a quadratic field). G-X4: block 2's x-columns against the
+# shifted one-block run, the mirror on the dual cells; RED with the centroid map: column 8 at 1.4e4 of the tolerance.
 igloo_e2e_case(chimera-2blk-shift-ord2 infrastructure/chimera-2blk-shift-ord2 "e2e;infrastructure;bc;chimera;gas")
 # chimera-2blk-mollify: chimera-2blk with the field mollifier at its default (8 passes), each chimera face smoothed
 # through the halo of its layer-1 donors: check.py holds each block's smoothed source and eulerian fields cell by
@@ -1145,7 +1146,9 @@ igloo_e2e_case(chimera-2blk-shift-mollify infrastructure/chimera-2blk-shift-moll
 # chimera-2blk-shift3: block 2 shifted by 0.3 of a cell (shares 0.3 and 0.7), gas-order 1, mollify off: block 2's
 # cells 1-8 against the shifted one-block run (S3-1), block 1's mirrored totals 0 (S3-2), block 2's = block 1's cells
 # 28-34 plus 0.7 of the cut cell 27 (S3-3). RED with the centroid map: S3-1 cell 8 at 7.9e3 of the tolerance (rho1);
-# with the weights swapped: 1.1e4; with a cut cell's chord share flipped: S3-2 4.6e-4 of Sum |S|.
+# with the weights swapped: 1.1e4; with a cut cell's chord share flipped: S3-2 4.6e-4 of Sum |S|. At gas order 2
+# (its ref-ord2 sibling): block 2's x-columns (S3-4), block 1's mirrored totals 0 (S3-5); RED with the centroid
+# map: S3-4 column 8 at 1.05e4, S3-5 6.0e-4 of Sum |S|.
 igloo_e2e_case(chimera-2blk-shift3 infrastructure/chimera-2blk-shift3 "e2e;infrastructure;bc;chimera")
 # varcp-tmin: a varying-cp table from 280 K, the parcels at 600 K on its extended last segment.
 igloo_e2e_case(varcp-tmin infrastructure/varcp-tmin "e2e;infrastructure;heat")

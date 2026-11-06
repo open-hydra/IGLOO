@@ -900,18 +900,23 @@ contains
     call tm_phase(TM_REDUCE)
     call reduce_accumulators(self%source, self%euler, sourceSwitch, eulerSwitch, self%wall)
     call tm_phase(TM_FINALIZE)
-    !> Chimera: the cut records summed in rank order, then (gas order 1) the overlap mirror on the summed deposits.
+    !> Chimera: the cut records summed in rank order, then the overlap mirror on the summed deposits (the deposit
+    !  cells: geometry cells at gas order 1, dual cells at gas order 2).
     if (allocated(self%ovl%cuts)) then
       if (allocated(self%ovl%cuts%acc))  call mpi_ordered_sum_r8_array(self%ovl%cuts%acc,  size(self%ovl%cuts%acc))
       if (allocated(self%ovl%cuts%accE)) call mpi_ordered_sum_r8_array(self%ovl%cuts%accE, size(self%ovl%cuts%accE))
     endif
-    if (allocated(self%ovl%blk) .and. .not. ord2) then
+    if (allocated(self%ovl%blk)) then
       if (sourceSwitch) call mirrorSource(self%source, self%ovl, self%mirrored)
       if (eulerSwitch) then
         do m = 1, nm
           do g = 1, self%material(m)%ngroups
             fam = self%material(m)%group(g)%famID
-            call mirrorEuler(self%euler(:, fam), self%geoblock, self%ovl, fam)
+            if (ord2) then
+              call mirrorEuler(self%euler(:, fam), self%gasblock, self%ovl, fam)
+            else
+              call mirrorEuler(self%euler(:, fam), self%geoblock, self%ovl, fam)
+            endif
           enddo
         enddo
       endif
@@ -925,7 +930,6 @@ contains
       do b = 1, nb
         call self%source(b)%finalize(self%geoblock(b))
       enddo
-      if (allocated(self%ovl%blk) .and. ord2) call mirrorSource(self%source, self%ovl, self%mirrored)
       call tm_nest(TM_SMOOTH)
       allocate(exch(nm + 4, nb))
       call mollifySourceBlocks(self%source, self%geoblock, self%links, self%donors, exch)
@@ -953,7 +957,6 @@ contains
           do b = 1, nb
             call self%euler(b, fam)%reduce(self%geoblock(b))
           enddo
-          if (allocated(self%ovl%blk) .and. ord2) call mirrorEuler(self%euler(:, fam), self%geoblock, self%ovl, fam)
           call tm_nest(TM_SMOOTH)
           call mollifyEulerBlocks(self%euler(:, fam), self%geoblock, self%links, self%donors)
           call tm_unnest()

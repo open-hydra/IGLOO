@@ -50,8 +50,10 @@ ref-ds
 # chimera-2blk-shift-mollify runs the box shifted by half a cell into ref-shift/ and ref-shift-raw/ (its check.py)
 ref-shift
 ref-shift-raw
-# chimera-2blk-shift3 runs the box shifted by 0.3 of a cell into ref-shift3/ (its check.py)
+# chimera-2blk-shift3 runs the box shifted by 0.3 of a cell into ref-shift3/ and ref-shift3-ord2/, itself at gas
+# order 2 into ref-ord2/ (its check.py)
 ref-shift3
+ref-shift3-ord2
 # etab-e2e-dopri5 runs its H-sdirk4 sibling into ref-sdirk4/ (tests/breakup/etab-e2e-dopri5/check.py)
 ref-sdirk4
 # out-exit-row runs its gas-order and cadence siblings into ref-o1-*/ and ref-o2-*/ (tests/standard/out-exit-row/check.py)

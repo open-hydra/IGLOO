@@ -1,6 +1,6 @@
-!> The chimera overlap: every deposit cell mapped to the cells of the other blocks it intersects (gas order 1:
-!  by exact intersection; gas order 2: the cell of each other block that holds its centroid), and the
-!  owner-only deposits copied into every block that covers them.
+!> The chimera overlap: every deposit cell (a geometry cell at gas order 1, a dual cell at gas order 2) mapped to
+!  the deposit cells of the other blocks it intersects, by exact intersection, and the owner-only deposits copied
+!  into every block that covers them.
 module IGLOO_overlap
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   implicit none
@@ -95,10 +95,12 @@ module IGLOO_overlap
     real(R8) :: en = 0._R8
   end type mirroredTotals
 
-  !> A block's target cell of each of its cells in every block (0 = not covered).
-  type :: hitList
-    integer, allocatable :: v(:,:)
-  end type hitList
+  !> A block's dual cells (n1 x n2 x n3 = nd) and their octants: dual(o) the dual cell of octant o, a dual cell
+  !  d's octants list(start(d-1)+1 : start(d)).
+  type :: dualOcts
+    integer :: n1 = 0, n2 = 0, n3 = 0, nd = 0
+    integer, allocatable :: dual(:), start(:), list(:)
+  end type dualOcts
 
   !> Owner-only copies of one block's fields.
   type :: srcSnap
@@ -126,8 +128,8 @@ contains
   end function hasChimeraFaces
 
 
-  !> The overlap map of the geometry: npair(b, t) counts the deposit cells of b inside t, ncut(b, t) those cut
-  !  by t's boundary (gas order 1; none at gas order 2).
+  !> The overlap map of the deposit cells: npair(b, t) counts those of b inside t, ncut(b, t) those cut by t's
+  !  boundary.
   subroutine buildOverlapMap(geo, ovl, npair, ncut)
     use IGLOO_data_block, only: obj_block
     use IGLOO_variables,  only: ord2
@@ -139,9 +141,7 @@ contains
     integer, allocatable :: nc(:,:)
 
     if (ord2) then
-      call centroidMap(geo, ovl, npair)
-      allocate(nc(size(geo), size(geo)))
-      nc = 0
+      call dualMap(geo, ovl, npair, nc)
     else
       call exactMap(geo, ovl, npair, nc)
     endif
@@ -149,94 +149,7 @@ contains
   end subroutine buildOverlapMap
 
 
-  !> Gas order 2: each cell's centroid searched in every other block (searchInBlock, inclusive containment,
-  !  seeded with the last hit there); a hit (b, c) -> (t, c') joins c to the gather list of c' with w = 1,
-  !  unless the centroid lies on a chimera (102) face of t (there t's grid is interpolated, not solved).
-  subroutine centroidMap(geo, ovl, npair)
-    use IGLOO_data_block, only: obj_block
-    use IGLOO_particles,  only: searchInBlock
-    implicit none
-    type(obj_block),      intent(in)    :: geo(:)
-    type(overlapMap),     intent(inout) :: ovl
-    integer, allocatable, intent(out)   :: npair(:,:)
-    type(hitList), allocatable :: hits(:)
-    integer,  allocatable :: seed(:,:), pos(:)
-    integer  :: nb, b, t, i, j, k, c, ct, loc(3)
-    real(R8) :: p(3), pold(3), vold(3)
-
-    nb = size(geo)
-    allocate(ovl%blk(nb), hits(nb), npair(nb, nb), seed(3, nb))
-    npair = 0
-    do b = 1, nb
-      allocate(hits(b)%v(ncell(geo(b)), nb))
-      hits(b)%v = 0
-    enddo
-
-    do b = 1, nb
-      seed = 0
-      do k = 1, geo(b)%Nz; do j = 1, geo(b)%Ny; do i = 1, geo(b)%Nx
-        c = i + (j-1)*geo(b)%Nx + (k-1)*geo(b)%Nx*geo(b)%Ny
-        p = geo(b)%center(:, i, j, k)
-        do t = 1, nb
-          if (t == b) cycle
-          pold = p
-          if (any(seed(:,t) /= 0)) pold = geo(t)%center(:, seed(1,t), seed(2,t), seed(3,t))
-          vold = p - pold
-          if (norm2(vold) <= 0._R8) vold = [1._R8, 0._R8, 0._R8]
-          if (.not. searchInBlock(geo(t), p, seed(:,t), 0, .false., pold, vold, loc)) cycle
-          seed(:,t) = loc
-          if (onChimeraFace(geo(t), loc, p)) cycle
-          hits(b)%v(c, t) = loc(1) + (loc(2)-1)*geo(t)%Nx + (loc(3)-1)*geo(t)%Nx*geo(t)%Ny
-          npair(b, t) = npair(b, t) + 1
-        enddo
-      enddo; enddo; enddo
-    enddo
-
-    do t = 1, nb
-      associate(o => ovl%blk(t))
-      allocate(o%start(0:ncell(geo(t))), o%n(ncell(geo(t))))
-      do c = 1, ncell(geo(t))
-        o%n(c) = 1 + count(hits(t)%v(c,:) > 0)
-      enddo
-      o%start = 0
-      do b = 1, nb
-        if (b == t) cycle
-        do c = 1, ncell(geo(b))
-          ct = hits(b)%v(c, t)
-          if (ct > 0) o%start(ct) = o%start(ct) + 1
-        enddo
-      enddo
-      do ct = 1, ncell(geo(t))
-        o%start(ct) = o%start(ct-1) + o%start(ct)
-      enddo
-      allocate(o%src(4, o%start(ncell(geo(t)))), pos(ncell(geo(t))))
-      allocate(o%w(o%start(ncell(geo(t)))), o%rec(o%start(ncell(geo(t)))), o%cov(ncell(geo(t))))
-      o%w = 1._R8; o%rec = 0; o%cov = real(o%n, R8)
-      pos = o%start(0:ncell(geo(t))-1)
-      do b = 1, nb
-        if (b == t) cycle
-        do k = 1, geo(b)%Nz; do j = 1, geo(b)%Ny; do i = 1, geo(b)%Nx
-          ct = hits(b)%v(i + (j-1)*geo(b)%Nx + (k-1)*geo(b)%Nx*geo(b)%Ny, t)
-          if (ct == 0) cycle
-          pos(ct) = pos(ct) + 1
-          o%src(:, pos(ct)) = [b, i, j, k]
-        enddo; enddo; enddo
-      enddo
-      deallocate(pos)
-      end associate
-    enddo
-
-  contains
-
-    integer function ncell(g)
-      type(obj_block), intent(in) :: g
-      ncell = g%Nx*g%Ny*g%Nz
-    end function ncell
-
-  end subroutine centroidMap
-
-
-  !> Gas order 1: every cell d of block b against the cells of each other block t that its box overlaps
+  !> Gas order 1: every geometry cell d of block b against the cells of each other block t that its box overlaps
   !  (cellTargets): |d ∩ t| >= (1 - EPS_OVL) V24(d) inside, <= EPS_OVL V24(d) disjoint, else cut (a record:
   !  t's cells near d and their faces on t's boundary); every stored weight joins d to the gather list of its
   !  target in source order (block, then cell); n and cov count what covers each cell; the guards stop the run.
@@ -251,17 +164,17 @@ contains
     type(entryList),  allocatable :: lst(:)
     type(cutRecord),  allocatable :: recs(:), tmp(:)
     logical,  allocatable :: mark(:)
-    integer,  allocatable :: cand(:), pos(:)
+    integer,  allocatable :: cand(:)
     real(R8), allocatable :: vc(:,:,:), w(:), blo(:,:), bhi(:,:)
     real(R8) :: vd(3,8), gv(3,8), v24, sumOv
-    integer  :: nb, b, t, i, j, k, c, m, nc, nrec, r, ct, s, mx
+    integer  :: nb, b, t, i, j, k, c, m, nc, nrec, r, mx
 
     nb = size(geo)
     allocate(ovl%blk(nb), npair(nb, nb), ncut(nb, nb), grid(nb), lst(nb))
     npair = 0; ncut = 0
     mx = 0
     do t = 1, nb
-      allocate(blo(3, ncell(geo(t))), bhi(3, ncell(geo(t))))
+      allocate(blo(3, ncellOf(geo(t))), bhi(3, ncellOf(geo(t))))
       do k = 1, geo(t)%Nz; do j = 1, geo(t)%Ny; do i = 1, geo(t)%Nx
         c = i + (j-1)*geo(t)%Nx + (k-1)*geo(t)%Nx*geo(t)%Ny
         call lexVertices(geo(t), i, j, k, vd)
@@ -269,9 +182,9 @@ contains
       enddo; enddo; enddo
       call bucketBuild(blo, bhi, grid(t))
       deallocate(blo, bhi)
-      allocate(ovl%blk(t)%n(ncell(geo(t))), ovl%blk(t)%cov(ncell(geo(t))))
+      allocate(ovl%blk(t)%n(ncellOf(geo(t))), ovl%blk(t)%cov(ncellOf(geo(t))))
       ovl%blk(t)%n = 1; ovl%blk(t)%cov = 1._R8
-      mx = max(mx, ncell(geo(t)))
+      mx = max(mx, ncellOf(geo(t)))
     enddo
     allocate(mark(mx), recs(16))
     mark = .false.
@@ -331,24 +244,7 @@ contains
 
     !> Target-major gather lists, each target's entries in source order.
     do t = 1, nb
-      associate(o => ovl%blk(t), e => lst(t))
-      allocate(o%start(0:ncell(geo(t))), o%src(4, e%n), o%w(e%n), o%rec(e%n), pos(ncell(geo(t))))
-      o%start = 0
-      do s = 1, e%n
-        o%start(e%tc(s)) = o%start(e%tc(s)) + 1
-      enddo
-      do ct = 1, ncell(geo(t))
-        o%start(ct) = o%start(ct-1) + o%start(ct)
-      enddo
-      pos = o%start(0:ncell(geo(t))-1)
-      do s = 1, e%n
-        pos(e%tc(s)) = pos(e%tc(s)) + 1
-        o%src(:, pos(e%tc(s))) = e%src(:, s)
-        o%w(pos(e%tc(s)))      = e%w(s)
-        o%rec(pos(e%tc(s)))    = e%rec(s)
-      enddo
-      deallocate(pos)
-      end associate
+      call gatherLists(ovl%blk(t), lst(t), ncellOf(geo(t)))
     enddo
     if (nrec == 0) then
       deallocate(ovl%cuts)
@@ -357,69 +253,351 @@ contains
       ovl%cuts%rec = recs(1:nrec)
     endif
 
-  contains
-
-    integer function ncell(g)
-      type(obj_block), intent(in) :: g
-      ncell = g%Nx*g%Ny*g%Nz
-    end function ncell
-
-    integer function cellI(g, c)
-      type(obj_block), intent(in) :: g
-      integer,         intent(in) :: c
-      cellI = mod(c - 1, g%Nx) + 1
-    end function cellI
-
-    integer function cellJ(g, c)
-      type(obj_block), intent(in) :: g
-      integer,         intent(in) :: c
-      cellJ = mod((c - 1)/g%Nx, g%Ny) + 1
-    end function cellJ
-
-    integer function cellK(g, c)
-      type(obj_block), intent(in) :: g
-      integer,         intent(in) :: c
-      cellK = (c - 1)/(g%Nx*g%Ny) + 1
-    end function cellK
-
-    !> The record of a cell cut by block g's boundary: g's cells cand (12-plane data) and the planes of their
-    !  faces on g's boundary, normals into g; tol the cut cell's containment tolerance.
-    subroutine makeCutRecord(rc, g, tb, cand, tol)
-      use IGLOO_RayFaceIntersection3D, only: guide, computeFacePlane
-      type(cutRecord), intent(out) :: rc
-      type(obj_block), intent(in)  :: g
-      integer,         intent(in)  :: tb, cand(:)
-      real(R8),        intent(in)  :: tol
-      real(R8) :: vt(3,8), pl(3,2)
-      integer  :: q, f, fm, fn, np, ci, cj, ck
-      rc%t = tb; rc%tol = tol
-      np = 0
-      do q = 1, size(cand)
-        ci = cellI(g, cand(q)); cj = cellJ(g, cand(q)); ck = cellK(g, cand(q))
-        do f = 1, 6
-          call g%ijk2fmn(ci, cj, ck, f, fm, fn)
-          if (fm /= 0) np = np + 1
-        enddo
-      enddo
-      allocate(rc%pn(3, np), rc%pp(3, np), rc%hn(3,2,6,size(cand)), rc%hc(3,2,6,size(cand)), &
-               rc%hd(2,6,size(cand)), rc%ht(size(cand)))
-      np = 0
-      do q = 1, size(cand)
-        ci = cellI(g, cand(q)); cj = cellJ(g, cand(q)); ck = cellK(g, cand(q))
-        call g%getVertices([ci, cj, ck], vt, norms=rc%hn(:,:,:,q), centroids=rc%hc(:,:,:,q), degen=rc%hd(:,:,q), &
-                           tol=rc%ht(q))
-        do f = 1, 6
-          call g%ijk2fmn(ci, cj, ck, f, fm, fn)
-          if (fm == 0) cycle
-          np = np + 1
-          pl = computeFacePlane(vt(:, guide(f,:)))
-          rc%pn(:, np) = -pl(:,1)
-          rc%pp(:, np) = pl(:,2)
-        enddo
-      enddo
-    end subroutine makeCutRecord
-
   end subroutine exactMap
+
+
+  !> Gas order 2: every dual cell d of block b (the union of its octants inside b) against the dual cells of each
+  !  other block t whose octants' boxes overlap one of d's: |d ∩ d'| the sum over their octant pairs (all pairs
+  !  bit-equal: W = 1 without clipping); then exactMap's classes, guards, weights, records and gather lists.
+  subroutine dualMap(geo, ovl, npair, ncut)
+    use IGLOO_data_block,            only: obj_block
+    use IGLOO_RayFaceIntersection3D, only: reachTol
+    implicit none
+    type(obj_block),      intent(in)    :: geo(:)
+    type(overlapMap),     intent(inout) :: ovl
+    integer, allocatable, intent(out)   :: npair(:,:), ncut(:,:)
+    type(bucketGrid), allocatable :: grid(:)
+    type(entryList),  allocatable :: lst(:)
+    type(cutRecord),  allocatable :: recs(:), tmp(:)
+    type(dualOcts),   allocatable :: oc(:)
+    logical,  allocatable :: mark(:), seenD(:), seenG(:)
+    integer,  allocatable :: cand(:), dl(:), gl(:), slot(:)
+    real(R8), allocatable :: w(:), blo(:,:), bhi(:,:)
+    real(R8) :: va(3,8), vb(3,8), v24, sumOv, tol
+    integer  :: nb, b, t, d, q, q2, m, nc, ndl, ngl, nrec, r, mxo, mxd, mxg, gi, gj, gk, oa, ob
+    logical  :: same
+
+    nb = size(geo)
+    allocate(ovl%blk(nb), npair(nb, nb), ncut(nb, nb), grid(nb), lst(nb), oc(nb))
+    npair = 0; ncut = 0
+    mxo = 0; mxd = 0; mxg = 0
+    do t = 1, nb
+      call dualOctants(geo(t), oc(t))
+      allocate(blo(3, size(oc(t)%dual)), bhi(3, size(oc(t)%dual)))
+      do oa = 1, size(oc(t)%dual)
+        call octOf(geo(t), oa, va)
+        blo(:, oa) = minval(va, dim=2); bhi(:, oa) = maxval(va, dim=2)
+      enddo
+      call bucketBuild(blo, bhi, grid(t))
+      deallocate(blo, bhi)
+      allocate(ovl%blk(t)%n(oc(t)%nd), ovl%blk(t)%cov(oc(t)%nd))
+      ovl%blk(t)%n = 1; ovl%blk(t)%cov = 1._R8
+      mxo = max(mxo, size(oc(t)%dual)); mxd = max(mxd, oc(t)%nd); mxg = max(mxg, ncellOf(geo(t)))
+    enddo
+    allocate(mark(mxo), seenD(mxd), seenG(mxg), slot(mxd), dl(mxd), gl(mxg), recs(16))
+    mark = .false.; seenD = .false.; seenG = .false.
+    allocate(ovl%cuts)
+    allocate(ovl%cuts%idx(nb))
+    do b = 1, nb
+      allocate(ovl%cuts%idx(b)%first(oc(b)%n1, oc(b)%n2, oc(b)%n3), ovl%cuts%idx(b)%cnt(oc(b)%n1, oc(b)%n2, oc(b)%n3))
+      ovl%cuts%idx(b)%first = 0; ovl%cuts%idx(b)%cnt = 0
+    enddo
+    nrec = 0
+
+    do b = 1, nb
+      do d = 1, oc(b)%nd
+        gi = mod(d - 1, oc(b)%n1) + 1
+        gj = mod((d - 1)/oc(b)%n1, oc(b)%n2) + 1
+        gk = (d - 1)/(oc(b)%n1*oc(b)%n2) + 1
+        if (oc(b)%start(d) == oc(b)%start(d-1)) cycle
+        v24 = 0._R8; tol = 0._R8
+        do q = oc(b)%start(d-1) + 1, oc(b)%start(d)
+          call octOf(geo(b), oc(b)%list(q), va)
+          v24 = v24 + cellVolume24(va)
+          tol = max(tol, reachTol(norm2(va(:,8) - va(:,1)), maxval(abs(va))))
+        enddo
+        do t = 1, nb
+          if (t == b) cycle
+          !> the dual cells of t (and their geometry cells) holding an octant whose box overlaps one of d's
+          ndl = 0; ngl = 0
+          do q = oc(b)%start(d-1) + 1, oc(b)%start(d)
+            call octOf(geo(b), oc(b)%list(q), va)
+            call bucketCandidates(grid(t), minval(va, dim=2), maxval(va, dim=2), mark, cand, nc)
+            do m = 1, nc
+              if (.not. seenD(oc(t)%dual(cand(m)))) then
+                seenD(oc(t)%dual(cand(m))) = .true.; ndl = ndl + 1; dl(ndl) = oc(t)%dual(cand(m))
+              endif
+              if (.not. seenG((cand(m) - 1)/8 + 1)) then
+                seenG((cand(m) - 1)/8 + 1) = .true.; ngl = ngl + 1; gl(ngl) = (cand(m) - 1)/8 + 1
+              endif
+            enddo
+          enddo
+          seenD(dl(1:ndl)) = .false.; seenG(gl(1:ngl)) = .false.
+          if (ndl == 0) cycle
+          call sortInts(dl(1:ndl)); call sortInts(gl(1:ngl))
+          allocate(w(ndl))
+          w = 0._R8
+          sumOv = -1._R8
+          do m = 1, ndl
+            q2 = oc(t)%start(dl(m)-1)
+            same = oc(t)%start(dl(m)) - q2 == oc(b)%start(d) - oc(b)%start(d-1)
+            q = oc(b)%start(d-1)
+            do while (same .and. q < oc(b)%start(d))
+              q = q + 1; q2 = q2 + 1
+              call octOf(geo(b), oc(b)%list(q), va); call octOf(geo(t), oc(t)%list(q2), vb)
+              same = all(va == vb)
+            enddo
+            if (same) then
+              w(m) = 1._R8
+              sumOv = v24
+              exit
+            endif
+          enddo
+          if (sumOv < 0._R8) then
+            do m = 1, ndl
+              slot(dl(m)) = m
+            enddo
+            do q = oc(b)%start(d-1) + 1, oc(b)%start(d)
+              call octOf(geo(b), oc(b)%list(q), va)
+              call bucketCandidates(grid(t), minval(va, dim=2), maxval(va, dim=2), mark, cand, nc)
+              do m = 1, nc
+                call octOf(geo(t), cand(m), vb)
+                ob = slot(oc(t)%dual(cand(m)))
+                w(ob) = w(ob) + cellOverlapVolume(va, vb)
+              enddo
+            enddo
+            call weighTargets(w, sumOv)
+          endif
+          select case (overlapStatus(v24, sumOv))
+          case (1); error stop 'IGLOO: chimera overlap: a cell with a non-positive volume'
+          case (2); error stop 'IGLOO: chimera overlap: the cells of a block overlap each other'
+          end select
+          if (sumOv > EPS_OVL*v24) then
+            ovl%blk(b)%n(d)   = ovl%blk(b)%n(d) + 1
+            ovl%blk(b)%cov(d) = ovl%blk(b)%cov(d) + sumOv/v24
+            r = 0
+            if (sumOv >= (1._R8 - EPS_OVL)*v24) then
+              npair(b, t) = npair(b, t) + 1
+            else
+              ncut(b, t) = ncut(b, t) + 1
+              nrec = nrec + 1
+              if (nrec > size(recs)) then
+                allocate(tmp(2*size(recs))); tmp(1:size(recs)) = recs; call move_alloc(tmp, recs)
+              endif
+              call makeCutRecord(recs(nrec), geo(t), t, gl(1:ngl), tol)
+              if (ovl%cuts%idx(b)%first(gi, gj, gk) == 0) ovl%cuts%idx(b)%first(gi, gj, gk) = nrec
+              ovl%cuts%idx(b)%cnt(gi, gj, gk) = ovl%cuts%idx(b)%cnt(gi, gj, gk) + 1
+              r = nrec
+            endif
+            do m = 1, ndl
+              if (w(m) > 0._R8) call pushEntry(lst(t), dl(m), [b, gi, gj, gk], w(m), r)
+            enddo
+          endif
+          deallocate(w)
+        enddo
+      enddo
+    enddo
+
+    do t = 1, nb
+      call gatherLists(ovl%blk(t), lst(t), oc(t)%nd)
+    enddo
+    if (nrec == 0) then
+      deallocate(ovl%cuts)
+    else
+      allocate(ovl%cuts%rec(nrec))
+      ovl%cuts%rec = recs(1:nrec)
+    endif
+
+  end subroutine dualMap
+
+
+  !> The dual cells of block g (gas order 2: (Nx+1) x (Ny+1) x (Nz+1, or 1 on a one-layer mesh)) and their octants
+  !  (octant id oct + 8 (c - 1), oct = 1 + da + 2 db + 4 dc of geometry cell c, in dual cell (i+da, j+db, k+dc)),
+  !  each dual cell's in ascending id.
+  subroutine dualOctants(g, oc)
+    use IGLOO_data_block, only: obj_block
+    use IGLOO_variables,  only: mesh2D
+    implicit none
+    type(obj_block), intent(in)  :: g
+    type(dualOcts),  intent(out) :: oc
+    integer, allocatable :: pos(:)
+    integer :: i, j, k, c, da, db, dc, o, d
+
+    oc%n1 = g%Nx + 1; oc%n2 = g%Ny + 1; oc%n3 = merge(1, g%Nz + 1, mesh2D)
+    oc%nd = oc%n1*oc%n2*oc%n3
+    allocate(oc%dual(8*ncellOf(g)), oc%start(0:oc%nd))
+    oc%start = 0
+    do k = 1, g%Nz; do j = 1, g%Ny; do i = 1, g%Nx
+      c = i + (j-1)*g%Nx + (k-1)*g%Nx*g%Ny
+      do dc = 0, 1; do db = 0, 1; do da = 0, 1
+        o = 1 + da + 2*db + 4*dc + 8*(c - 1)
+        d = (i + da) + (j + db - 1)*oc%n1 + (merge(1, k + dc, mesh2D) - 1)*oc%n1*oc%n2
+        oc%dual(o) = d
+        oc%start(d) = oc%start(d) + 1
+      enddo; enddo; enddo
+    enddo; enddo; enddo
+    do d = 1, oc%nd
+      oc%start(d) = oc%start(d-1) + oc%start(d)
+    enddo
+    allocate(oc%list(oc%start(oc%nd)), pos(oc%nd))
+    pos = oc%start(0:oc%nd-1)
+    do o = 1, size(oc%dual)
+      pos(oc%dual(o)) = pos(oc%dual(o)) + 1
+      oc%list(pos(oc%dual(o))) = o
+    enddo
+  end subroutine dualOctants
+
+
+  !> The nodes of octant o (dualOctants' id) of block g, lexicographic.
+  pure subroutine octOf(g, o, v)
+    use IGLOO_data_block, only: obj_block
+    implicit none
+    type(obj_block), intent(in)  :: g
+    integer,         intent(in)  :: o
+    real(R8),        intent(out) :: v(3,8)
+    integer :: c, oct
+    c = (o - 1)/8 + 1; oct = mod(o - 1, 8)
+    call octantVertices(g, cellI(g, c), cellJ(g, c), cellK(g, c), mod(oct, 2), mod(oct/2, 2), oct/4, v)
+  end subroutine octOf
+
+
+  !> Raw overlaps w (> 0 somewhere) to weights: sumOv their sum; those <= EPS_OVL sumOv dropped, the rest
+  !  renormalized; the largest >= 1 - EPS_OVL snapped to 1 alone (cellTargets' rule).
+  pure subroutine weighTargets(w, sumOv)
+    implicit none
+    real(R8), intent(inout) :: w(:)
+    real(R8), intent(out)   :: sumOv
+    real(R8) :: kept
+    integer  :: kmax
+    sumOv = sum(w)
+    if (sumOv <= 0._R8) then
+      w = 0._R8
+      return
+    endif
+    where (w <= EPS_OVL*sumOv) w = 0._R8
+    kept = sum(w)
+    w = w/kept
+    kmax = maxloc(w, 1)
+    if (w(kmax) >= 1._R8 - EPS_OVL) then
+      w = 0._R8
+      w(kmax) = 1._R8
+    endif
+  end subroutine weighTargets
+
+
+  !> Ascending insertion sort.
+  pure subroutine sortInts(a)
+    implicit none
+    integer, intent(inout) :: a(:)
+    integer :: x, m, y
+    do x = 2, size(a)
+      m = a(x); y = x - 1
+      do while (y >= 1)
+        if (a(y) <= m) exit
+        a(y+1) = a(y); y = y - 1
+      enddo
+      a(y+1) = m
+    enddo
+  end subroutine sortInts
+
+
+  !> A target block's gather lists from its entries in source order: start over its nct deposit cells, src, w, rec.
+  subroutine gatherLists(o, e, nct)
+    implicit none
+    type(overlapBlock), intent(inout) :: o
+    type(entryList),    intent(in)    :: e
+    integer,            intent(in)    :: nct
+    integer, allocatable :: pos(:)
+    integer :: s, ct
+    allocate(o%start(0:nct), o%src(4, e%n), o%w(e%n), o%rec(e%n), pos(nct))
+    o%start = 0
+    do s = 1, e%n
+      o%start(e%tc(s)) = o%start(e%tc(s)) + 1
+    enddo
+    do ct = 1, nct
+      o%start(ct) = o%start(ct-1) + o%start(ct)
+    enddo
+    pos = o%start(0:nct-1)
+    do s = 1, e%n
+      pos(e%tc(s)) = pos(e%tc(s)) + 1
+      o%src(:, pos(e%tc(s))) = e%src(:, s)
+      o%w(pos(e%tc(s)))      = e%w(s)
+      o%rec(pos(e%tc(s)))    = e%rec(s)
+    enddo
+  end subroutine gatherLists
+
+
+  !> The record of a cell cut by block g's boundary: g's cells cand (12-plane data) and the planes of their
+  !  faces on g's boundary, normals into g; tol the cut cell's containment tolerance.
+  subroutine makeCutRecord(rc, g, tb, cand, tol)
+    use IGLOO_data_block,            only: obj_block
+    use IGLOO_RayFaceIntersection3D, only: guide, computeFacePlane
+    implicit none
+    type(cutRecord), intent(out) :: rc
+    type(obj_block), intent(in)  :: g
+    integer,         intent(in)  :: tb, cand(:)
+    real(R8),        intent(in)  :: tol
+    real(R8) :: vt(3,8), pl(3,2)
+    integer  :: q, f, fm, fn, np, ci, cj, ck
+    rc%t = tb; rc%tol = tol
+    np = 0
+    do q = 1, size(cand)
+      ci = cellI(g, cand(q)); cj = cellJ(g, cand(q)); ck = cellK(g, cand(q))
+      do f = 1, 6
+        call g%ijk2fmn(ci, cj, ck, f, fm, fn)
+        if (fm /= 0) np = np + 1
+      enddo
+    enddo
+    allocate(rc%pn(3, np), rc%pp(3, np), rc%hn(3,2,6,size(cand)), rc%hc(3,2,6,size(cand)), &
+             rc%hd(2,6,size(cand)), rc%ht(size(cand)))
+    np = 0
+    do q = 1, size(cand)
+      ci = cellI(g, cand(q)); cj = cellJ(g, cand(q)); ck = cellK(g, cand(q))
+      call g%getVertices([ci, cj, ck], vt, norms=rc%hn(:,:,:,q), centroids=rc%hc(:,:,:,q), degen=rc%hd(:,:,q), &
+                         tol=rc%ht(q))
+      do f = 1, 6
+        call g%ijk2fmn(ci, cj, ck, f, fm, fn)
+        if (fm == 0) cycle
+        np = np + 1
+        pl = computeFacePlane(vt(:, guide(f,:)))
+        rc%pn(:, np) = -pl(:,1)
+        rc%pp(:, np) = pl(:,2)
+      enddo
+    enddo
+  end subroutine makeCutRecord
+
+
+  !> Cell count and the (i, j, k) of linear cell index c (i + (j-1) Nx + (k-1) Nx Ny) of block g.
+  pure integer function ncellOf(g)
+    use IGLOO_data_block, only: obj_block
+    implicit none
+    type(obj_block), intent(in) :: g
+    ncellOf = g%Nx*g%Ny*g%Nz
+  end function ncellOf
+
+  pure integer function cellI(g, c)
+    use IGLOO_data_block, only: obj_block
+    implicit none
+    type(obj_block), intent(in) :: g
+    integer,         intent(in) :: c
+    cellI = mod(c - 1, g%Nx) + 1
+  end function cellI
+
+  pure integer function cellJ(g, c)
+    use IGLOO_data_block, only: obj_block
+    implicit none
+    type(obj_block), intent(in) :: g
+    integer,         intent(in) :: c
+    cellJ = mod((c - 1)/g%Nx, g%Ny) + 1
+  end function cellJ
+
+  pure integer function cellK(g, c)
+    use IGLOO_data_block, only: obj_block
+    implicit none
+    type(obj_block), intent(in) :: g
+    integer,         intent(in) :: c
+    cellK = (c - 1)/(g%Nx*g%Ny) + 1
+  end function cellK
 
 
   !> Appends one gather entry.
@@ -461,35 +639,6 @@ contains
       cuts%accE = 0._R8
     endif
   end subroutine resetCuts
-
-
-  !> True when p lies on a chimera (102) face of block g at its cell loc: within the cell's containment
-  !  tolerance (hexTol) of the face's plane.
-  logical function onChimeraFace(g, loc, p)
-    use IGLOO_data_block,            only: obj_block
-    use IGLOO_RayFaceIntersection3D, only: guide, computeFacePlane, hexTol
-    implicit none
-    type(obj_block), intent(in) :: g
-    integer,         intent(in) :: loc(3)
-    real(R8),        intent(in) :: p(3)
-    real(R8) :: vert(3,8), plane(3,2), tol
-    integer  :: f, m, n
-
-    onChimeraFace = .false.
-    call g%getVertices(loc, vert)
-    tol = hexTol(vert)
-    do f = 1, 6
-      if (.not. allocated(g%face(f)%cell)) cycle
-      call g%ijk2fmn(loc(1), loc(2), loc(3), f, m, n)
-      if (m == 0) cycle
-      if (g%face(f)%cell(m,n)%bcdef /= 102) cycle
-      plane = computeFacePlane(vert(:, guide(f,:)))
-      if (abs(dot_product(plane(:,1), p - plane(:,2))) <= tol) then
-        onChimeraFace = .true.
-        return
-      endif
-    enddo
-  end function onChimeraFace
 
 
   !> Source: every cell adds, from a snapshot of the owner-only amounts (mass, momentum, energy per
@@ -554,7 +703,8 @@ contains
 
   !> Eulerian densities of family fam: every cell adds, from a snapshot of the owner-only fields, w times the
   !  amount q*V of each cell mapped onto it (the whole cell, or a cut cell's record), as q*((V_source*w)/V_target)
-  !  (the ratio first: coincident cells transfer q to within an ULP); V the deposit cells' volumes (geo).
+  !  (the ratio first: coincident cells transfer q to within an ULP); V the deposit cells' volumes (geo: the
+  !  geometry blocks at gas order 1, the gas blocks at gas order 2).
   subroutine mirrorEuler(eul, geo, ovl, fam)
     use IGLOO_data_block, only: obj_block, obj_eulerblock
     implicit none
