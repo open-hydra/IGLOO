@@ -9,13 +9,14 @@ sweep) — a mode nothing else here exercises.
 
 Driver: [../support/twosweep.f90](../support/twosweep.f90) → `build/verif/tests/twosweep`.
 Oracle: [../tools/check_twosweep.py](../tools/check_twosweep.py). An MPI build also runs every case
-here at two ranks (`mpi-repeat-<case>`, see [../mpi/INFO.md](../mpi/INFO.md)).
+here but `burn-box-residue` and `chimera-shift` at two ranks (`mpi-repeat-<case>`, see [../mpi/INFO.md](../mpi/INFO.md);
+their rank side is `mpi-consistency-residue`'s and `mpi-consistency-chimera-shift`'s).
 
 ## Layout
 
 Each case is a thin directory: `INPUT` is a **symlink** to the parent e2e case's INPUT
-(as `breakup/khrt-stress` does) and `input.ini` is a copy (on `two-mat`, `drag-stokes-dopri5` and
-`burn-box-residue` a symlink to the parent's; on `drag-stokes-time-end` the parent's plus `time-end`). They are deliberately
+(as `breakup/khrt-stress` does) and `input.ini` is a copy (on `two-mat`, `drag-stokes-dopri5`,
+`burn-box-residue` and `chimera-shift` a symlink to the parent's; on `drag-stokes-time-end` the parent's plus `time-end`). They are deliberately
 *not* run inside the parent case's directory — under `ctest -j` the two tests would race
 over the same `OUTPUT/`.
 
@@ -34,6 +35,7 @@ over the same `OUTPUT/`.
 | `evap-breakup` | `evaporation/evap-breakup-box` | ODE model 4's droplet mass and number rate, re-seeded at injection every sweep. RED with the number rate seeded on the first sweep only: sweep 1 starts at the previous burnout's number rate (8.17× the injected) with the injected droplet mass — outloc 25/25 and trajectories 5378/5450 records differ, scatter 149280 vs 18273 records, `source.tec` max\|rel\| 603 |
 | `swirl-wedge` | `standard/swirl-wedge` | the twin on a wedge (`Nk = 1`, the sector fold): the state set once at setup (the sector normals, the azimuth frame `refDir`) must survive a solve, and every DB parcel's azimuthal velocity must be restored at injection; plus the gas-refresh cycle. RED with `refDir` rotated by δ at the end of `solve` (a stand-in for any write to setup-time wedge state): sweep 1 differs from sweep 0 |
 | `burn-box-residue` | `combustion/burn-box-residue` | the combustion product's group, filled by the solve (the burnout residues) and emptied by `reset_state` with the residue lists. RED with the product's group skipped by `reset_state`: sweep 1's product exit file holds 50 records against 25 (sweep 0's residues beside its own) |
+| `chimera-shift` | `infrastructure/chimera-2blk-shift-mollify` | the records of the chimera cells cut by the other block's boundary (the part of each deposit made inside the other block), filled by the solve and zeroed every sweep with the accumulators. RED with them zeroed on the first sweep only: sweep 1's mirror adds sweep 0's cut parts again, `euler1.tec` max\|rel\| 2.6e-2, `euler2.tec` 1.8e-2, `source.tec` 9.4e-5 |
 
 ## The RNG stream
 
@@ -61,7 +63,7 @@ would pass every gate in this directory.
 
 ## Two modes
 
-- **steady** (all fifteen) — gas held fixed; sweep 1 must reproduce sweep 0. `repeat-drag-stokes-dopri5` and
+- **steady** (all sixteen) — gas held fixed; sweep 1 must reproduce sweep 0. `repeat-drag-stokes-dopri5` and
   `repeat-tab-dopri5` are the odd ones out: they gate not a state leak but determinism on the DOPRI5 path
   (`solout` reads `x − xold` for the scatter cloud AND for the TAB/ETAB oscillator advance, and `dopri5.f`
   keeps the previous grid point in the COMMON block `/CONDO5/`). RED on a DOPRI5 whose `/CONDO5/` is shared

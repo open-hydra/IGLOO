@@ -8,7 +8,9 @@ other block and is interpolated there.
 A control: on a linear field the block's own linear fill is exact at its ghost nodes too, so nothing
 here separates the interpolation from it (test_ghost_bc's G6u does, on a quadratic field).
 
-check.py runs the box as one unshifted block (make_box_case.py, this input.ini) into ref-1blk/.
+check.py runs the box as one unshifted block (make_box_case.py, this input.ini) into ref-1blk/, and the
+shifted one-block box on a uniform gas (a half cell at the inlet, then 60 cells shifted by half up to x =
+0.15125: block 2's cell i is its cell 27 + i) into ref-shift/.
 
   E1  the chimera routing line: 50 facelets, none with an empty donor layer, unresolved or header-only
   R1  the ghost line: 98 ghost nodes interpolated, none uncovered; no ghost node away from its donors
@@ -20,7 +22,14 @@ check.py runs the box as one unshifted block (make_box_case.py, this input.ini) 
       Block 2 (shifted by half a cell, its rows on other points than the one-block run's for 43 % of them): at
       least half of this run's rows matched, a guard against a vacuous comparison
   C2  no stuck, no-progress or maxIter line
+  G-X4 block 2's x-columns 1-9 (rho_p of euler1 and euler2, the mean over a column's 25 cells of equal volume)
+      against ref-shift's columns 28-36: |q - R| <= 3 |R(c+1) - R(c-1)|/16 + 1e-12 of the profile's scale.
+      Columns, not cells: every parcel runs on a dual-node line in y and z, a four-way tie of dual cells that
+      a block change can resolve otherwise, moving a deposit within its column. rho_p does not depend on T
+      here (Stokes drag on the solution's constant viscosity, constant gas and particle densities), so the
+      uniform reference stands for this run's gradient
 """
+import importlib.util
 import os
 import re
 import shutil
@@ -32,6 +41,9 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
 import make_box_case as box  # noqa: E402
 
 IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
+spec = importlib.util.spec_from_file_location("chimera_2blk_check", os.path.join(HERE, "..", "chimera-2blk", "check.py"))
+C2 = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(C2)                # read_zones
 GRADIENT, FAMILIES = 1000.0, 2
 X_OUT, N_EXITS = 0.15125, 25 * FAMILIES
 ROUTING = (" [IGLOO] chimera facelets: 50 (0 with an empty donor layer, 0 unresolved (code 100), "
@@ -40,6 +52,7 @@ GHOSTS = " [IGLOO] ghost nodes at connected faces: 98 interpolated, 0 not covere
 CHANGES = (" [IGLOO] block changes: 50 via the connected cell, 0 via the block sweep, 0 rim exits; "
            "stencil refreshed on a block change at a boundary entry: 0")
 TOL_T, TOL_U = 8.0e-5, 2.0e-6
+NX_SHIFT, OFF_SHIFT = 61, 27          # ref-shift: a half cell + 60 cells; block 2's cell i is its cell 27 + i
 X_B1 = 0.085                         # block 1's chimera face toward block 2
 MIN_B2 = 0.5                         # block 2's rows matched, at least (measured 1090 of 1920)
 
@@ -64,6 +77,52 @@ def run_sibling():
     with open(os.path.join(ref, "run_out.txt"), "w") as out, open(os.path.join(ref, "run_err.txt"), "w") as err:
         r = subprocess.run([IGLOO], cwd=ref, stdout=out, stderr=err)
     return ref, r.returncode
+
+
+def run_shift():
+    """The one-block box shifted by half a cell on a uniform gas, this input.ini, into ref-shift/."""
+    ref = os.path.join(HERE, "ref-shift")
+    shutil.rmtree(ref, ignore_errors=True)
+    os.makedirs(os.path.join(ref, "OUTPUT"))
+    os.makedirs(os.path.join(ref, "INPUT"))
+    dx = box.LX / box.NX
+    box.write_solfile(os.path.join(ref, "INPUT", "solfile.tec"), nx=NX_SHIFT,
+                      xnodes=[0.0] + [(k + 0.5) * dx for k in range(NX_SHIFT)])
+    box.write_bc(os.path.join(ref, "INPUT", "bc.txt"), box.KV, box.KT, box.RP, nx=NX_SHIFT, families=FAMILIES)
+    box.write_phase(os.path.join(ref, "INPUT", "phase.txt"), FAMILIES)
+    os.symlink(os.path.join(HERE, "..", "..", "common", "properties.dat"),
+               os.path.join(ref, "INPUT", "properties.dat"))
+    shutil.copy(os.path.join(HERE, "input.ini"), ref)
+    with open(os.path.join(ref, "run_out.txt"), "w") as out, open(os.path.join(ref, "run_err.txt"), "w") as err:
+        r = subprocess.run([IGLOO], cwd=ref, stdout=out, stderr=err)
+    return ref, r.returncode
+
+
+def columns(path, zone, name):
+    """Per x-column of a zone, the mean of a cell variable over the column's cells."""
+    ni, nj, nk, cells = C2.read_zones(path)[1][zone]
+    v = cells[name]
+    return [sum(v[(kk * nj + jj) * ni + i] for kk in range(nk) for jj in range(nj)) / (nj * nk) for i in range(ni)]
+
+
+def gx4(ref):
+    rc, out = 0, []
+    for f in ("euler1.tec", "euler2.tec"):
+        q = columns(os.path.join("OUTPUT", f), 1, "rho<sub>p")
+        R = columns(os.path.join(ref, "OUTPUT", f), 0, "rho<sub>p")
+        scale = max(abs(v) for v in R)
+        ms = []
+        for i in range(1, 10):
+            c = OFF_SHIFT + i
+            tol = 3.0 * abs(R[c] - R[c - 2]) / 16.0 + 1.0e-12 * scale
+            ms.append(abs(q[i - 1] - R[c - 1]) / tol)
+        out.append(f"{f} rho_p " + " ".join(f"{m:.3g}" for m in ms))
+        if max(ms) > 1.0:
+            rc |= fail(f"G-X4 {f} rho_p: block 2's columns 1-9 at " + " ".join(f"{m:.3g}" for m in ms)
+                       + " of the tolerance against ref-shift's columns 28-36")
+    if rc == 0:
+        print("G-X4 block 2's columns 1-9 against the shifted one-block run, of the tolerance: " + "; ".join(out) + " PASS")
+    return rc
 
 
 def trajectories(path):
@@ -138,6 +197,12 @@ def main():
                        f"{'every row' if lab == 'block 1' else f'at least {MIN_B2:.0%}'})")
         else:
             print(f"X1 {lab}: {what} PASS")
+
+    sh, code = run_shift()
+    if code != 0:
+        rc |= fail(f"G-X4 the shifted one-block run exited {code}")
+    else:
+        rc |= gx4(sh)
 
     hits = len(re.findall(r"stuck in cell|no net progress|outer maxIter", log))
     if hits:

@@ -239,24 +239,31 @@ ghost nodes hold the overlapping block's gas interpolated at the node (see [Conn
 ghost ring](#connected-faces-the-gas-ghost-ring)).
 
 **The overlap's deposits.** The gas solver keeps a complete copy of the overlap in each block, so every
-copy that covers a location receives the deposits made there. When the file holds a chimera facelet the
-setup maps every cell to the cell of each other block that contains its centroid (inclusive containment:
-a centroid on a face between two of that block's cells goes to one of them) — except a centroid lying on
-that block's chimera face, within max(10⁻¹² h, 64 ε L) of the face (h the cell diagonal, L its largest node
-coordinate): there the other block's grid is the fringe, interpolated from this one, not a copy of the
-flow — and prints one line per ordered block pair,
+copy that covers a location receives the deposits made there. A particle deposits into the block it is
+tracked in, in its deposit cell: the geometry cell at `gas-order = 1`, the gas dual cell at `gas-order = 2`
+(the union of its octants inside the block). When the file holds a chimera facelet the setup intersects
+every deposit cell with the deposit cells of each other block, exactly (each hexahedron as 24 tetrahedra,
+each pair of tetrahedra clipped by the other's planes; at gas order 2 octant by octant): a cell that lies
+inside the other block (to a relative 10⁻¹²) gives its deposit to the cells it meets there in proportion to
+the volumes it shares with them; a cell the other block's boundary cuts gives them only the part of its
+deposit made inside the other block — while the particles are tracked, each segment's deposit in such a cell
+is split by the fraction of its chord (cell entry to segment end) that lies inside that block. The setup
+prints one line per ordered block pair, and a second when a block's boundary cuts cells of the other,
 
 ```
  [IGLOO] chimera overlap: N cells of block b covered by block b'
+ [IGLOO] chimera overlap: M cells of block b cut by the boundary of block b'
 ```
 
-A particle deposits into the block it is tracked in; at the end of `solve`, after the deposits are
-reduced to the geometry cells and before the field mollifier, every cell adds the deposits the other
-blocks made in the cells mapped onto it, from a copy of the owner-only fields (so a deposit is mirrored
-once into each other covering block, never twice): source amounts as they are, eulerian densities
-scaled by the volume ratio, so the amount is preserved. Each sweep prints, per block, what the overlap
-added to its source beyond its own deposits — the mirrored deposits and, with the field mollifier on, what
-its chimera face cells took from the donor halo (below) —
+and stops on a cell of non-positive volume (`IGLOO: chimera overlap: a cell with a non-positive volume`) or
+on a cell that overlaps the cells of a block by more than its volume (`IGLOO: chimera overlap: the cells of
+a block overlap each other`). At the end of `solve`, right after the deposits are summed (over the MPI
+ranks too) and before the gas-order-2 reduction and the field mollifier, every deposit cell adds the parts
+the other blocks' cells gave it, from a copy of the owner-only fields (so a deposit is mirrored once into
+each other covering block, never twice): source amounts times the weight, eulerian densities times the
+weight and the ratio of the two deposit cells' volumes, so the amount is preserved. Each sweep prints, per
+block, what the overlap added to its source beyond its own deposits — the mirrored deposits and, with the
+field mollifier on, what its chimera face cells took from the donor halo (below) —
 
 ```
  [IGLOO] chimera overlap: block b mirrored source (mass, momentum, energy): ...
@@ -264,10 +271,16 @@ its chimera face cells took from the donor halo (below) —
 
 and keeps it in `mirrored(b)` (mass per material, momentum, energy), valid like `source` between a
 `solve` and the next `reset_state`: the once-counted total of an overlapping mesh is the sum over every
-block minus the mirrored totals. A parent solver that sums its own copies of the overlap can weight each
-cell by `1/ovl%blk(b)%n(c)`, the number of blocks that cover the centroid of cell `c` (cells numbered
-`i + (j−1)·Nx + (k−1)·Nx·Ny`). Verified by `chimera-2blk` (each block's fields equal the one-block run on
-its cells; the mirrored totals) and `test_mollify_blocks` (U-M).
+block minus the mirrored totals. For a parent solver that sums its own copies of the overlap, the map
+keeps per deposit cell `c` of block `b` (numbered `i + (j−1)·Nx + (k−1)·Nx·Ny` over the deposit cells)
+`ovl%blk(b)%n(c)`, 1 plus the number of other blocks that cover a part of it, and `ovl%blk(b)%cov(c)`, 1 plus
+the fraction of its volume they cover: weighting each cell by `1/cov(c)` counts each deposit once to the
+volume split; the sum over the blocks minus the mirrored totals is the exact once-counted total. Verified by
+`chimera-2blk` (coincident cells: each block's fields equal the one-block run on its cells; the mirrored
+totals), `chimera-2blk-shift-mollify` and `chimera-2blk-shift3` (block 2 shifted by half and by 0.3 of a
+cell: the copies against the shifted box run as one block, the mirrored totals against the deposits made
+inside the other block, at both gas orders), `chimera-2blk-shift-ord2` and `test_mollify_blocks` (U-X1–U-X7,
+U-T′, U-M).
 
 **Smoothing.** The field mollifier crosses a chimera face through a one-cell halo: each facelet with
 layer-1 donors takes their weighted value and volume, and its cell takes the interior-face flux against
@@ -275,9 +288,8 @@ them; the donors are not debited, so each block's total changes by what its chim
 exchange joins the block's mirrored totals (see [Field
 mollification](../theory/mollification.md#block-interfaces-and-periodic-faces)). Where the overlap's cells
 coincide, each block's smoothed fields equal the one-block ones on its cells; where they do not (two
-donors per facelet), only to the interpolation error of the halo and of the centroid map, which gives a
-centroid lying on an interior face of the other block to one of the two cells it touches. A facelet with an empty
-layer 1 keeps zero flux. Verified by `chimera-2blk-mollify`, `chimera-2blk-shift-mollify`,
+donors per facelet), to the interpolation error of the halo and of the volume split (a deposit taken as
+uniform over the cell it is split from). A facelet with an empty layer 1 keeps zero flux. Verified by `chimera-2blk-mollify`, `chimera-2blk-shift-mollify`,
 `test_mollify_blocks` (U-M (ii), (iii)) and `test_bc_families` (F6b).
 
 ---

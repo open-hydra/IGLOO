@@ -118,11 +118,20 @@ of a curved hexahedron is not the sum of its octants'): a class's density is its
 interior dual cell's its amount over $V$, so beside the face the two blocks differ from one block by up
 to that ratio (7.6e-5 on the wedge of `swirl-wedge-2blk-ord2-dual`).
 
-**Chimera overlaps.** A parcel deposits into the block it is tracked in. On a mesh with chimera
-(102) faces the gas solver keeps a copy of the overlap in each block, so after the reduction (and
-before the smoothing) every cell adds the owner-only deposits of the cells of the other blocks whose
-centroids it contains (a centroid on its chimera face excepted): $S'(c') = S(c') + \sum_{c \to c'} S(c)$, amounts as they are. The mirrored
-part of block $b$, $M(b) = \sum_{c'} \big(S'(c') - S(c')\big)$, plus what the field mollifier's chimera halo
+**Chimera overlaps.** A parcel deposits into the block it is tracked in, in its deposit cell $d$ (the
+geometry cell at gas order 1, the dual cell at gas order 2). On a mesh with chimera (102) faces the gas
+solver keeps a copy of the overlap in each block, so every deposit cell $d'$ of a block $t$ takes the parts
+of the other blocks' deposits made inside $t$, split by the exact intersection of the cells:
+$S'(d') = S(d') + \sum_{d} W(d \to d')\, I(d, t)$, with $W(d \to d') = |d \cap d'| / |d \cap t|$
+($\sum_{d'} W = 1$ to rounding) and $I(d, t)$ the part of $S(d)$ made inside $t$: all of it when $d$ lies inside $t$, none
+when it lies outside, and when $t$'s boundary cuts $d$ the sum over the segments in $d$ of each segment's
+deposit times the fraction $\lambda$ of its chord (cell entry to segment end) inside $t$, accumulated while the
+parcels are tracked (the chord stands for the path in the cell, the deposit rate taken uniform along it).
+The eulerian densities move with the amounts, $q'(d') = q(d') + \sum_d I_q(d, t)\,\big(V(d) W\big)/V(d')$, $V$ the
+deposit cells' volumes (the divisor of the deposits). The transfer reads a copy of the owner-only fields
+and runs right after the deposits are summed over the ranks, before the dual cells are reduced to the
+geometry cells and before the smoothing. The mirrored
+part of block $b$, $M(b) = \sum_{d'} \big(S'(d') - S(d')\big)$, plus what the field mollifier's chimera halo
 then brings into the block ([Field mollification](mollification.md#block-interfaces-and-periodic-faces)), is
 reported per sweep, so the once-counted total is the sum of the final source over every block minus
 $\sum_b M(b)$, exactly (see [Boundary conditions](../user/boundary-conditions.md#chimera-faces-code-102)).

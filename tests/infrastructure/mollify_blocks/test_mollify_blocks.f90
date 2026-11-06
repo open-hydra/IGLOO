@@ -22,19 +22,29 @@ program test_mollify_blocks
     !        wrapped (zero flux in i and k), to 1e-13 of the field scale: one block in 3D and in 2D,
     !        and the 3D grid cut along x into two blocks, each with its own pair (101 and 201 links
     !        together); Sum(q V) to 1e-13 of Sum(|q| V)
-    !   U-T  the overlap map's tie rule at a chimera face: two blocks of a regular grid overlapping
-    !        along x, block 2 shifted by half a cell, so that a column of each block has its centroids
-    !        on the other block's chimera (102) face: neither is covered by the other block (coverage
-    !        count 1), while centroids on the other block's interior faces are (inclusive); moved inside
-    !        by a quarter of the tie tolerance tau = max(1e-12 h, 64 eps L) of the cell holding them
-    !        they are still on the face, by 2 tau they are covered
+    !   U-X1 the exact intersection of two hexahedra (24 tetrahedra each, clipped pairwise): two cubes of edge
+    !        H offset by s H give (1 - s_x)(1 - s_y)(1 - s_z) H^3 to 1e-14 of H^3, touching and apart 0
+    !   U-X2 a unit cube and itself turned by 45 degrees about z: 2(sqrt 2 - 1) to 1e-14
+    !   U-X3 a warped 3 x 3 x 3 block and a warped cell inside it: the overlaps with the 27 cells, and with
+    !        their 216 octants, sum to the cell's V24 to 1e-13 (V24 - cellVol printed, not asserted)
+    !   U-X4 a block shifted by 0.3 cell: an inside cell's weights 0.3 and 0.7 on the right targets (1e-14)
+    !   U-X5 coincident cells: W = 1 exactly, one target; one node moved by an ULP: W = 1 by the snap
+    !   U-X6 chordInside: the fraction of a chord inside the other block's cells (closed forms, 1e-14); a point on
+    !        the other block's boundary (zero length or below the tolerance) counts outside
+    !   U-X7 overlapStatus: 0 valid, 1 a non-positive volume (an inverted cell), 2 a block's cells overlapping
+    !   U-X8 timing only: every candidate pair of two NG^3 boxes offset by (0.3, 0.2, 0.1) cells (NG = 12,
+    !        IGLOO_UX8_N sets it), the pair count and the wall time
+    !   U-T' the overlap map between shifted cells: two blocks of a regular grid overlapping along x,
+    !        block 2 shifted by half a cell (less tau/4 and less 2 tau, tau = max(1e-12 h, 64 eps L)) and
+    !        by 0.3: the weights s and 1 - s (1e-12), a record on the cut columns' entries only, the
+    !        coverage count, and cov = 1 + the covered fraction (1e-14)
     !   U-M  (i) the chimera overlap mirror (IGLOO_overlap): one 3D grid of warped cells cut into two
     !        blocks that overlap by four columns (the overlap map built by buildOverlapMap from the
     !        geometry), random owner-only source and eulerian fields (each overlap cell's deposit in
     !        the block that owns it, 0 in the other); after mirrorSource each block's source equals
     !        the grid's on its range bit for bit, after mirrorEuler its eulerian densities to 1e-14 of
     !        the field scale (the two copies of a warped cell can differ in volume by an ULP, and the
-    !        amount moves as q V_source/V_target), the coverage count is 2 in the overlap and 1
+    !        amount moves as q V_source/V_target), the coverage count and cov are 2 in the overlap and 1
     !        elsewhere, the mirrored totals equal the other copy's owner deposits and their sum equals
     !        Sum (n - 1) S over the owner-only fields, to 1e-14 of Sum |S|
     !        (ii) the grid cut into two blocks that overlap by whole columns, each holding the grid's
@@ -71,6 +81,7 @@ program test_mollify_blocks
     call periodicCase('3D periodic y',     10,  7,  6, [integer::])
     call periodicCase('2D periodic y',     12,  9,  1, [integer::])
     call periodicCase('3D periodic y, x',  12,  7,  6, [6])
+    call clipCases()
     call tieCase()
     call mirrorCase()
     !                   label                Nx  Ny  Nz  overlap columns
@@ -275,23 +286,282 @@ contains
         enddo
     end subroutine periodicSmooth
 
-    !> U-T: block 1 = columns 1..I1 of a regular grid of edge H, block 2 = NX2 columns from x = (I0 - 1/2) H
-    !  - delta; face 2 of block 1 and face 1 of block 2 are chimera faces. delta = 0: block 1's column I0 and
-    !  block 2's column I1 - I0 + 1 have their centroids on the other block's chimera face.
+    !> U-X1..U-X8: the exact intersection of two hexahedra (IGLOO_overlap), its weights, guards and chord split.
+    subroutine clipCases()
+        use IGLOO_data_block, only: obj_block
+        use IGLOO_overlap,    only: cellOverlapVolume, cellVolume24, cellTargets, overlapStatus, chordInside, &
+                                    lexVertices, octantVertices, cutRecord, bucketGrid, bucketBuild, bucketCandidates
+        use IGLOO_variables,  only: mesh2D
+        real(real64), parameter :: H = 2.5e-3_real64, X0(3) = [0.0625_real64, 0.0125_real64, 0.005_real64]
+        real(real64), parameter :: PI = 3.141592653589793_real64
+        real(real64) :: va(3,8), vb(3,8), vc(3,8,2), w(2), s(3), ov, ex, err, v24, sumOv, rot(2,2)
+        real(real64) :: ex6(9), got6(9), tsec
+        real(real64), allocatable :: blo(:,:), bhi(:,:)
+        type(obj_block) :: blk, one
+        type(cutRecord) :: rec
+        type(bucketGrid) :: grid
+        logical, allocatable :: mark(:)
+        integer, allocatable :: cand(:)
+        integer :: n, i, j, k, a, b, e, nbad, nc, npair, ng, c0, c1, crate
+        character(len=40) :: env
+
+        mesh2D = .false.
+        !> U-X1: two cubes of edge H offset by s H
+        nbad = 0
+        do n = 1, 5
+            select case (n)
+            case (1); s = [0.3_real64, 0._real64, 0._real64]
+            case (2); s = [0.5_real64, 0.5_real64, 0._real64]
+            case (3); s = [0.3_real64, 0.2_real64, 0.1_real64]
+            case (4); s = [1._real64, 0._real64, 0._real64]
+            case (5); s = [1.2_real64, 0._real64, 0._real64]
+            end select
+            va = boxNodes(X0, [H, H, H]); vb = boxNodes(X0 + s*H, [H, H, H])
+            ov = cellOverlapVolume(va, vb)
+            ex = product(max(0._real64, 1._real64 - s))*H**3
+            err = abs(ov - ex)/H**3
+            print '(a,3f5.2,a,es23.15,a,es9.2)', '  [info] U-X1 s =', s, ': |a ∩ b|/H^3 = ', ov/H**3, ', off ', err
+            if (err > 1.0e-14_real64) nbad = nbad + 1
+        enddo
+        call verdict('U-X1 two cubes offset by (0.3,0,0), (0.5,0.5,0), (0.3,0.2,0.1), touching, apart: the closed form '// &
+                     'to 1e-14 of H^3', nbad == 0, nbad)
+
+        !> U-X2: a unit cube and itself rotated by 45 degrees about its z axis
+        va = boxNodes([-0.5_real64, -0.5_real64, -0.5_real64], [1._real64, 1._real64, 1._real64])
+        rot = reshape([cos(PI/4), sin(PI/4), -sin(PI/4), cos(PI/4)], [2, 2])
+        vb = va
+        do e = 1, 8
+            vb(1:2, e) = matmul(rot, va(1:2, e))
+        enddo
+        ov = cellOverlapVolume(va, vb)
+        call verdict('U-X2 unit cube and itself turned by 45 degrees: '//es15(ov)//' against 2(sqrt 2 - 1) = '// &
+                     es15(2._real64*(sqrt(2._real64) - 1._real64))//' (1e-14)', &
+                     abs(ov - 2._real64*(sqrt(2._real64) - 1._real64)) <= 1.0e-14_real64, 1)
+
+        !> U-X3: a warped 3 x 3 x 3 block and a warped cell inside it; the tiling, by the cells and by their octants
+        call warpedBlock(blk, 3, H, 0.1_real64*H, 0)
+        va = boxNodes([0.8_real64*H, 0.8_real64*H, 0.8_real64*H], [1.4_real64*H, 1.4_real64*H, 1.4_real64*H])
+        do e = 1, 8
+            va(:, e) = va(:, e) + 0.1_real64*H*warp(va(:, e)/H, 1)
+        enddo
+        v24 = cellVolume24(va)
+        sumOv = 0._real64; ov = 0._real64
+        do k = 1, 3; do j = 1, 3; do i = 1, 3
+            call lexVertices(blk, i, j, k, vb)
+            sumOv = sumOv + cellOverlapVolume(va, vb)
+            do c0 = 0, 7
+                call octantVertices(blk, i, j, k, iand(c0, 1), iand(c0/2, 1), iand(c0/4, 1), vb)
+                ov = ov + cellOverlapVolume(va, vb)
+            enddo
+        enddo; enddo; enddo
+        one%Nx = 1; one%Ny = 1; one%Nz = 1
+        allocate(one%node(3, 0:1, 0:1, 0:1))
+        do k = 0, 1; do j = 0, 1; do i = 0, 1
+            one%node(:, i, j, k) = va(:, 1 + i + 2*j + 4*k)
+        enddo; enddo; enddo
+        call one%precomputeMetric
+        print '(a,es9.2,a)', '  [info] U-X3 V24 - cellVol (hexVolume''s five tetrahedra) = ', (v24 - one%cellVol(1,1,1))/v24, &
+            ' of V24 (not asserted)'
+        call verdict('U-X3 the 27 warped cells tile the warped cell: Sum |d ∩ c| = V24(d) to '//es(abs(sumOv - v24)/v24)// &
+                     ' (1e-13)', abs(sumOv - v24) <= 1.0e-13_real64*v24, 1)
+        call verdict('U-X3 their 216 octants tile it too: '//es(abs(ov - v24)/v24)//' (1e-13)', &
+                     abs(ov - v24) <= 1.0e-13_real64*v24, 1)
+
+        !> U-X4: block 2 shifted by 0.3 cell along x: an inside cell's two weights
+        va = boxNodes(X0 + [5._real64, 0._real64, 0._real64]*H, [H, H, H])
+        vc(:,:,1) = boxNodes(X0 + [4.3_real64, 0._real64, 0._real64]*H, [H, H, H])
+        vc(:,:,2) = boxNodes(X0 + [5.3_real64, 0._real64, 0._real64]*H, [H, H, H])
+        call cellTargets(va, cellVolume24(va), vc, w, sumOv)
+        nbad = count(abs(w - [0.3_real64, 0.7_real64]) > 1.0e-14_real64)
+        vb = vc(:,:,2)
+        vc(:,:,1) = boxNodes(X0 + [5._real64, 0._real64, 0._real64]*H, [H, H, H])
+        vc(:,:,2) = boxNodes(X0 + [6._real64, 0._real64, 0._real64]*H, [H, H, H])
+        call cellTargets(vb, cellVolume24(vb), vc, w, ov)
+        nbad = nbad + count(abs(w - [0.7_real64, 0.3_real64]) > 1.0e-14_real64)
+        call verdict('U-X4 a 0.3-cell shift: a block-1 cell''s weights 0.3, 0.7 into block 2''s cells k - 1, k, a '// &
+                     'block-2 cell''s 0.7, 0.3 into block 1''s (1e-14)', nbad == 0, nbad)
+
+        !> U-X5: coincident cells, then one node moved by an ULP
+        va = boxNodes(X0, [H, H, H])
+        vc(:,:,1) = va
+        vc(:,:,2) = boxNodes(X0 + [H, 0._real64, 0._real64], [H, H, H])
+        call cellTargets(va, cellVolume24(va), vc, w, sumOv)
+        nbad = merge(0, 1, w(1) == 1._real64 .and. w(2) == 0._real64)
+        va(1, 8) = nearest(va(1, 8), 1._real64)
+        call cellTargets(va, cellVolume24(va), vc, w, sumOv)
+        nbad = nbad + merge(0, 1, w(1) == 1._real64 .and. w(2) == 0._real64)
+        print '(a,2es24.16)', '  [info] U-X5 a node moved by an ULP: W = ', w
+        call verdict('U-X5 coincident cells: W = 1 exactly, one target; a node moved by an ULP: W = 1 exactly by the '// &
+                     'snap, one target', nbad == 0, nbad)
+
+        !> U-X6: the chord split against one cell, then against two cells with a gap
+        call makeRecord(rec, [X0], [1])
+        ex6 = [1._real64, 0._real64, 0.7_real64, 0._real64, 1._real64, 0._real64, 0.5_real64, 0._real64, 0._real64]
+        got6(1) = chordInside(X0 + [0.2_real64, 0.5_real64, 0.5_real64]*H, X0 + [0.8_real64, 0.5_real64, 0.5_real64]*H, rec)
+        got6(2) = chordInside(X0 + [1.2_real64, 0.5_real64, 0.5_real64]*H, X0 + [1.8_real64, 0.5_real64, 0.5_real64]*H, rec)
+        got6(3) = chordInside(X0 + [-0.3_real64, 0.5_real64, 0.5_real64]*H, X0 + [0.7_real64, 0.5_real64, 0.5_real64]*H, rec)
+        got6(4) = chordInside(X0 + [0._real64, 0.5_real64, 0.5_real64]*H + [0.5_real64*rec%tol, 0._real64, 0._real64], &
+                              X0 + [-0.5_real64, 0.5_real64, 0.5_real64]*H, rec)
+        got6(5) = chordInside(X0 + [0.5_real64, 0.5_real64, 0.5_real64]*H, X0 + [0.5_real64, 0.5_real64, 0.5_real64]*H, rec)
+        got6(6) = chordInside(X0 + [1.5_real64, 0.5_real64, 0.5_real64]*H, X0 + [1.5_real64, 0.5_real64, 0.5_real64]*H, rec)
+        !> on the cell's face (the other block's boundary): zero length, and half the tolerance outward
+        got6(8) = chordInside(X0 + [0._real64, 0.5_real64, 0.5_real64]*H, X0 + [0._real64, 0.5_real64, 0.5_real64]*H, rec)
+        got6(9) = chordInside(X0 + [0._real64, 0.5_real64, 0.5_real64]*H, &
+                              X0 + [0._real64, 0.5_real64, 0.5_real64]*H - [0.5_real64*rec%tol, 0._real64, 0._real64], rec)
+        call makeRecord(rec, [X0, X0 + [2._real64*H, 0._real64, 0._real64]], [1, 2])
+        got6(7) = chordInside(X0 + [0.5_real64, 0.5_real64, 0.5_real64]*H, X0 + [2.5_real64, 0.5_real64, 0.5_real64]*H, rec)
+        nbad = count(abs(got6 - ex6) > 1.0e-14_real64)
+        print '(a,9f8.4)', '  [info] U-X6 lambda: ', got6
+        call verdict('U-X6 chordInside: inside 1, outside 0, crossing at 0.3 of the chord 0.7, from the plane outward 0, '// &
+                     'zero length inside 1 and outside 0, out and back in 0.5, on the plane at zero length and half the '// &
+                     'tolerance outward 0 (1e-14)', nbad == 0, nbad)
+
+        !> U-X7: the guards
+        va = boxNodes(X0, [2._real64*H, H, H])
+        vc(:,:,1) = boxNodes(X0, [H, H, H])
+        vc(:,:,2) = boxNodes(X0 + [H, 0._real64, 0._real64], [H, H, H])
+        nbad = merge(0, 1, overlapStatus(cellVolume24(va), cellOverlapVolume(va, vc(:,:,1)) &
+                                                          + cellOverlapVolume(va, vc(:,:,2))) == 0)
+        vb = va
+        do e = 1, 8, 2
+            vb(:, e) = va(:, e+1); vb(:, e+1) = va(:, e)
+        enddo
+        nbad = nbad + merge(0, 1, overlapStatus(cellVolume24(vb), cellOverlapVolume(vb, vc(:,:,1)) &
+                                                                 + cellOverlapVolume(vb, vc(:,:,2))) == 1)
+        vc(:,:,2) = boxNodes(X0 + [0.7_real64*H, 0._real64, 0._real64], [1.3_real64*H, H, H])
+        nbad = nbad + merge(0, 1, overlapStatus(cellVolume24(va), cellOverlapVolume(va, vc(:,:,1)) &
+                                                                 + cellOverlapVolume(va, vc(:,:,2))) == 2)
+        call verdict('U-X7 overlapStatus: a valid pair 0, an inverted cell 1, two overlapping cells of one block 2', &
+                     nbad == 0, nbad)
+
+        !> U-X8 (timing, not asserted): every candidate pair of two NG^3 boxes offset by (0.3, 0.2, 0.1) cells
+        ng = 12
+        call get_environment_variable('IGLOO_UX8_N', env)
+        if (len_trim(env) > 0) read(env, *) ng
+        allocate(blo(3, ng**3), bhi(3, ng**3), mark(ng**3))
+        do k = 1, ng; do j = 1, ng; do i = 1, ng
+            n = i + ng*(j - 1 + ng*(k - 1))
+            blo(:, n) = ([i, j, k] - 1 + [0.3_real64, 0.2_real64, 0.1_real64])*H
+            bhi(:, n) = blo(:, n) + H
+        enddo; enddo; enddo
+        call bucketBuild(blo, bhi, grid)
+        mark = .false.
+        npair = 0; ov = 0._real64
+        call system_clock(c0, crate)
+        do k = 1, ng; do j = 1, ng; do i = 1, ng
+            va = boxNodes(([i, j, k] - 1)*H*[1._real64, 1._real64, 1._real64], [H, H, H])
+            call bucketCandidates(grid, va(:,1), va(:,8), mark, cand, nc)
+            do a = 1, nc
+                b = cand(a)
+                ov = ov + cellOverlapVolume(va, boxNodes(blo(:, b), [H, H, H]))
+            enddo
+            npair = npair + nc
+        enddo; enddo; enddo
+        call system_clock(c1)
+        tsec = real(c1 - c0, real64)/real(crate, real64)
+        ex = (real(ng, real64) - 0.3_real64)*(real(ng, real64) - 0.2_real64)*(real(ng, real64) - 0.1_real64)*H**3
+        print '(a,i0,a,i0,a,f8.2,a,es9.2,a,es9.2,a)', '  [info] U-X8 ', ng, '^3 cells: ', npair, ' candidate pairs, ', tsec, &
+            ' s on one core (', tsec/max(npair, 1), ' s per pair); Sum |a ∩ b| off the closed form by ', abs(ov - ex)/ex, &
+            ' (not asserted; IGLOO_UX8_N sets the size)'
+
+    end subroutine clipCases
+
+    !> The lexicographic nodes of the box [lo, lo + ext].
+    pure function boxNodes(lo, ext) result(v)
+        real(real64), intent(in) :: lo(3), ext(3)
+        real(real64) :: v(3,8)
+        integer :: a, b, c
+        do c = 0, 1; do b = 0, 1; do a = 0, 1
+            v(:, 1 + a + 2*b + 4*c) = lo + [a, b, c]*ext
+        enddo; enddo; enddo
+    end function boxNodes
+
+    !> A smooth displacement field of unit amplitude (two variants).
+    pure function warp(p, m) result(d)
+        real(real64), intent(in) :: p(3)
+        integer,      intent(in) :: m
+        real(real64) :: d(3)
+        if (m == 0) then
+            d = [sin(1.3_real64*p(2) + 0.4_real64*p(3)), cos(0.9_real64*p(3) + 1.1_real64*p(1)), &
+                 sin(0.7_real64*p(1) - 1.2_real64*p(2))]
+        else
+            d = [cos(0.6_real64*p(3) - 1.4_real64*p(2)), sin(1.2_real64*p(1) + 0.5_real64*p(3)), &
+                 cos(1.1_real64*p(2) + 0.8_real64*p(1))]
+        endif
+    end function warp
+
+    !> An n^3 block of cells of edge h, every node moved by amp times warp(x/h, m).
+    subroutine warpedBlock(g, n, h, amp, m)
+        use IGLOO_data_block, only: obj_block
+        type(obj_block), intent(inout) :: g
+        integer,         intent(in)    :: n, m
+        real(real64),    intent(in)    :: h, amp
+        integer :: i, j, k
+        g%Nx = n; g%Ny = n; g%Nz = n
+        allocate(g%node(3, 0:n, 0:n, 0:n), g%center(3, n, n, n))
+        do k = 0, n; do j = 0, n; do i = 0, n
+            g%node(:, i, j, k) = [i, j, k]*h
+            g%node(:, i, j, k) = g%node(:, i, j, k) + amp*warp(g%node(:, i, j, k)/h, m)
+        enddo; enddo; enddo
+        call g%compute_geometry
+        call g%precomputeMetric
+    end subroutine warpedBlock
+
+    !> A cut record whose other block is the cells of edge 2.5e-3 m at lo(:, c): their six face planes (normals
+    !  into the cell) and 12-plane data; the tolerance of the first.
+    subroutine makeRecord(r, lo, ids)
+        use IGLOO_overlap,               only: cutRecord
+        use IGLOO_RayFaceIntersection3D, only: guide, computeFacePlane, precomputeHex12
+        type(cutRecord), intent(out) :: r
+        real(real64),    intent(in)  :: lo(:)
+        integer,         intent(in)  :: ids(:)
+        real(real64) :: v(3,8), g(3,8), pl(3,2)
+        integer :: c, f, nc
+        nc = size(ids)
+        allocate(r%pn(3, 6*nc), r%pp(3, 6*nc), r%hn(3,2,6,nc), r%hc(3,2,6,nc), r%hd(2,6,nc), r%ht(nc))
+        do c = 1, nc
+            v = boxNodes(lo(3*c-2:3*c), [2.5e-3_real64, 2.5e-3_real64, 2.5e-3_real64])
+            !> getVertices' order from the lexicographic one
+            g(:,1) = v(:,1); g(:,2) = v(:,5); g(:,3) = v(:,7); g(:,4) = v(:,3)
+            g(:,5) = v(:,2); g(:,6) = v(:,6); g(:,7) = v(:,8); g(:,8) = v(:,4)
+            call precomputeHex12(g, r%hn(:,:,:,c), r%hc(:,:,:,c), r%hd(:,:,c), r%ht(c))
+            do f = 1, 6
+                pl = computeFacePlane(g(:, guide(f,:)))
+                r%pn(:, 6*(c-1) + f) = -pl(:,1)
+                r%pp(:, 6*(c-1) + f) = pl(:,2)
+            enddo
+        enddo
+        r%t = 2
+        r%tol = r%ht(1)
+    end subroutine makeRecord
+
+    function es15(x) result(r)
+        real(real64), intent(in) :: x
+        character(:), allocatable :: r
+        character(24) :: buf
+        write(buf, '(es23.16)') x
+        r = trim(adjustl(buf))
+    end function es15
+
+    !> U-T': block 1 = columns 1..I1 of a regular grid of edge H, block 2 = NX2 columns from x0 = (I0 - 1 + s) H
+    !  (s = 1/2 - delta/H, the delta cases of the tie band, then s = 0.3); face 2 of block 1 and face 1 of block 2
+    !  are chimera faces. Block 1's column I0 and block 2's column I1 - I0 + 1 are cut by the other block's
+    !  boundary (1 - s of them inside it), the overlap's other columns inside it, each over two cells of weights
+    !  s and 1 - s; closed forms of the weights, records, coverage count and covered fraction.
     subroutine tieCase()
         use IGLOO_data_block, only: obj_block
         use IGLOO_overlap,    only: overlapMap, buildOverlapMap
-        use IGLOO_variables,  only: mesh2D
+        use IGLOO_variables,  only: mesh2D, ord2
         integer, parameter :: NY = 3, NZ = 2, I0 = 5, I1 = 8, NX2 = 6
         real(real64), parameter :: H = 1.0e-2_real64
         type(obj_block), allocatable :: geo(:)
         type(overlapMap) :: ovl
         integer, allocatable :: npair(:,:)
-        real(real64) :: tau, delta, x0(2), v(3,8)
-        integer :: icase, b, i, j, k, f, nfr, nexp, nbad
+        real(real64) :: tau, delta, x0(2), v(3,8), fin, wexp, covExp, wErr, cErr
+        integer :: icase, b, i, j, k, f, nbad, t, ct, s, bs, si, cutCol(2), ti, ncutSrc(2), nent(2), nexpEnt
         character(len=60) :: lab
 
-        mesh2D = .false.
+        mesh2D = .false.; ord2 = .false.
         !> the tie tolerance of the two cells that hold the fringe centroids (block 2's first, block 1's last)
         tau = 0._real64
         do b = 1, 2
@@ -301,13 +571,16 @@ contains
             if (b == 2) v(1, :) = v(1, :) + 0.5_real64*H
             tau = max(tau, max(1.e-12_real64*norm2(v(:,7) - v(:,1)), 64._real64*epsilon(1._real64)*maxval(abs(v))))
         enddo
-        do icase = 1, 3
+        cutCol = [I0, I1 - I0 + 1]
+        do icase = 1, 4
             select case (icase)
-            case (1); delta = 0._real64;          lab = 'on the face'
-            case (2); delta = 0.25_real64*tau;    lab = 'inside by tau/4 (the tie band)'
-            case (3); delta = 2._real64*tau;      lab = 'inside by 2 tau'
+            case (1); x0 = [0._real64, (I0 - 1 + 0.5_real64)*H];                lab = 'half shift'
+            case (2); x0 = [0._real64, (I0 - 1 + 0.5_real64)*H - 0.25_real64*tau]; lab = 'half shift less tau/4'
+            case (3); x0 = [0._real64, (I0 - 1 + 0.5_real64)*H - 2._real64*tau];   lab = 'half shift less 2 tau'
+            case (4); x0 = [0._real64, (I0 - 1 + 0.3_real64)*H];                lab = '0.3 shift'
             end select
-            x0 = [0._real64, (I0 - 1 + 0.5_real64)*H - delta]
+            !> 1 - s: the fraction of a cut column inside the other block
+            fin = (I0*H - x0(2))/H
             if (allocated(geo)) deallocate(geo)
             allocate(geo(2))
             do b = 1, 2
@@ -326,18 +599,53 @@ contains
             geo(1)%face(2)%cell(:,:)%bcdef = 102
             geo(2)%face(1)%cell(:,:)%bcdef = 102
             call buildOverlapMap(geo, ovl, npair)
-            !> fringe columns: block 1's column I0, block 2's column I1 - I0 + 1
-            nfr = 0
-            do k = 1, NZ; do j = 1, NY
-                nfr = nfr + ovl%blk(1)%n(I0 + (j-1)*I1 + (k-1)*I1*NY) - 1
-                nfr = nfr + ovl%blk(2)%n(I1 - I0 + 1 + (j-1)*NX2 + (k-1)*NX2*NY) - 1
-            enddo; enddo
-            nexp = merge(2*NY*NZ, 0, icase == 3)
-            nbad = abs(nfr - nexp) + count(npair /= reshape([0, (I1 - I0 + merge(1, 0, icase == 3))*NY*NZ, &
-                                                              (I1 - I0 + merge(1, 0, icase == 3))*NY*NZ, 0], [2, 2]))
-            call verdict('U-T fringe centroids '//trim(lab)//': '//trim(merge('covered    ', 'not covered', icase == 3))// &
-                         ' (map pairs '//itoaT(npair(2, 1))//' and '//itoaT(npair(1, 2))//', fringe coverage '// &
-                         itoaT(nfr)//' of '//itoaT(2*NY*NZ)//')', nbad == 0, nbad)
+            nbad = 0; wErr = 0._real64; cErr = 0._real64; ncutSrc = 0; nent = 0
+            do t = 1, 2
+                b = 3 - t
+                do k = 1, NZ; do j = 1, NY; do ti = 1, geo(t)%Nx
+                    ct = ti + (j-1)*geo(t)%Nx + (k-1)*geo(t)%Nx*NY
+                    do s = ovl%blk(t)%start(ct-1) + 1, ovl%blk(t)%start(ct)
+                        nent(t) = nent(t) + 1
+                        bs = ovl%blk(t)%src(1, s); si = ovl%blk(t)%src(2, s)
+                        if (bs /= b .or. ovl%blk(t)%src(3, s) /= j .or. ovl%blk(t)%src(4, s) /= k) nbad = nbad + 1
+                        !> the expected weight of source column si into target column ti
+                        if (si == cutCol(b)) then
+                            wexp = merge(1._real64, 0._real64, ti == merge(1, I1, t == 2))
+                            if (ovl%blk(t)%rec(s) == 0) nbad = nbad + 1
+                            ncutSrc(t) = ncutSrc(t) + 1
+                        else
+                            if (ovl%blk(t)%rec(s) /= 0) nbad = nbad + 1
+                            if (t == 2) then
+                                wexp = merge(1._real64 - fin, merge(fin, 0._real64, ti == si - I0 + 1), ti == si - I0)
+                            else
+                                wexp = merge(fin, merge(1._real64 - fin, 0._real64, ti == si + I0), ti == si + I0 - 1)
+                            endif
+                        endif
+                        wErr = max(wErr, abs(ovl%blk(t)%w(s) - wexp))
+                    enddo
+                enddo; enddo; enddo
+            enddo
+            !> coverage of every cell of both blocks
+            do b = 1, 2
+                do k = 1, NZ; do j = 1, NY; do i = 1, geo(b)%Nx
+                    ct = i + (j-1)*geo(b)%Nx + (k-1)*geo(b)%Nx*NY
+                    if (i == cutCol(b)) then
+                        covExp = 1._real64 + fin
+                    elseif ((b == 1 .and. i > I0) .or. (b == 2 .and. i < cutCol(2))) then
+                        covExp = 2._real64
+                    else
+                        covExp = 1._real64
+                    endif
+                    if (ovl%blk(b)%n(ct) /= merge(1, 2, covExp == 1._real64)) nbad = nbad + 1
+                    cErr = max(cErr, abs(ovl%blk(b)%cov(ct) - covExp))
+                enddo; enddo; enddo
+            enddo
+            nexpEnt = (1 + 2*(I1 - I0))*NY*NZ
+            nbad = nbad + count(nent /= nexpEnt) + count(ncutSrc /= NY*NZ) &
+                 + merge(0, 1, wErr <= 1.0e-12_real64) + merge(0, 1, cErr <= 1.0e-14_real64)
+            call verdict('U-T'' '//trim(lab)//': weights s, 1 - s to '//es(wErr)//' (1e-12), '// &
+                         itoaT(ncutSrc(2))//' and '//itoaT(ncutSrc(1))//' cut cells with a record, coverage n and cov '// &
+                         '(1 + the fraction covered) to '//es(cErr)//' (1e-14)', nbad == 0, nbad)
         enddo
     end subroutine tieCase
 
@@ -367,7 +675,7 @@ contains
         real(real64) :: sm(NMAT, NX, NY, NZ), so(3, NX, NY, NZ), se(NX, NY, NZ)
         real(real64) :: ed(NX, NY, NZ), en(NX, NY, NZ), ev(3, NX, NY, NZ), et(NX, NY, NZ)
         real(real64) :: expM(NMAT+4, 2), gotM(NMAT+4, 2), sumNS(NMAT+4), l1(NMAT+4), cellS(NMAT+4), werr, vmis
-        integer :: lo(2), hi(2), b, i, j, k, g, c, nsrc, neul, ncov, nm4
+        integer :: lo(2), hi(2), b, i, j, k, g, c, nsrc, neul, ncov, ncv, nm4
         logical :: own
 
         mesh2D = .false.
@@ -415,7 +723,7 @@ contains
         call buildOverlapMap(geo, ovl, npair)
         !> expected mirrored totals (the other block's owner deposits in this block's overlap columns, in
         !  this block's cell order) and Sum (n - 1) S over the owner-only fields
-        expM = 0._real64; sumNS = 0._real64; l1 = 0._real64; ncov = 0
+        expM = 0._real64; sumNS = 0._real64; l1 = 0._real64; ncov = 0; ncv = 0
         do b = 1, 2
             do k = 1, NZ; do j = 1, NY; do i = 1, geo(b)%Nx
                 g = lo(b) + i - 1
@@ -424,12 +732,13 @@ contains
                 sumNS = sumNS + (ovl%blk(b)%n(c) - 1)*cellS
                 l1 = l1 + abs(cellS)
                 if (ovl%blk(b)%n(c) /= merge(2, 1, g >= I0 .and. g <= I1)) ncov = ncov + 1
+                if (ovl%blk(b)%cov(c) /= merge(2._real64, 1._real64, g >= I0 .and. g <= I1)) ncv = ncv + 1
                 if (g >= I0 .and. g <= I1 .and. (b == 1 .eqv. g > ISPLIT)) &
                     expM(:, b) = expM(:, b) + [sm(:, g, j, k), so(:, g, j, k), se(g, j, k)]
             enddo; enddo; enddo
         enddo
         call mirrorSource(src, ovl, mir)
-        call mirrorEuler(eul, geo, ovl)
+        call mirrorEuler(eul, geo, ovl, 1)
 
         nsrc = 0; neul = 0; werr = 0._real64; vmis = 0._real64
         do b = 1, 2
@@ -456,6 +765,7 @@ contains
                      werr <= 1.0e-14_real64, neul)
         call verdict('U-M (i) coverage count: 2 in the overlap, 1 elsewhere; the map pairs 4 x 5 x 4 cells each way', &
                      ncov == 0 .and. all(npair == reshape([0, 80, 80, 0], [2, 2])), ncov)
+        call verdict('U-M (i) covered fraction cov: 2 in the overlap, 1 elsewhere, exactly', ncv == 0, ncv)
         nsrc = count(abs(gotM - expM) > 1.0e-14_real64*spread(l1, 2, 2))
         call verdict('U-M (i) mirrored totals: the other block''s owner deposits in the overlap', nsrc == 0, nsrc)
         nsrc = count(abs(gotM(:, 1) + gotM(:, 2) - sumNS) > 1.0e-14_real64*l1)

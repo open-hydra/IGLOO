@@ -49,10 +49,10 @@ differ (1650 against 2900) and all 50 exits. The payload checks are gated by the
 
 **The fields in the overlap.** A parcel deposits into the block it is tracked in: the parcels change
 block at x = 0.085, so the overlap's deposits are made in block 1 and block 2's cells 1–8 receive none of
-their own. The setup maps every cell to the cell of the other block that holds its centroid, unless the
-centroid lies on that block's chimera face (`chimera
-overlap: 200 cells of block 1 covered by block 2` and the converse), and after the deposits are reduced
-every cell adds what the other block deposited in the cells mapped onto it: with `mollify = off` block 2's
+their own. The setup intersects every cell with the cells of the other block; here the overlap's cells
+coincide, so each covered cell meets one cell of the other block whole, with weight 1 (`chimera
+overlap: 200 cells of block 1 covered by block 2` and the converse), and after the deposits are summed
+every cell adds what the other block deposited in the cell it coincides with: with `mollify = off` block 2's
 cells 1–8 then equal the one-block cells 27–34, block 1's cells equal the one-block cells, and the two
 blocks' totals minus the mirrored totals equal the one-block total. **RED** (G-M1, G-M2) without the
 mirror: block 2's overlap cells hold 0 — `source.tec` off by 7.0e-3 (`Fx`) and 2.2e-2 (`E`) of the field

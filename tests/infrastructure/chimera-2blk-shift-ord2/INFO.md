@@ -1,11 +1,13 @@
-# chimera-2blk-shift-ord2 — ghost nodes of chimera faces between misaligned cells (control)
+# chimera-2blk-shift-ord2 — chimera faces between misaligned cells at gas order 2
 
 **Purpose.** Under gas-order 2 the ghost nodes of a chimera (102) face are interpolated from the
 overlapping block's gas. With block 2 shifted by half a cell, each ghost node lies halfway between two
 centres of the other block: the interpolation runs on every node, through the donor search of the
 chimera payload. On a linear field the block's own linear fill is exact at the ghost too, so this case
 cannot tell the two apart; it is a control of the chimera path under gas-order 2. The quadratic field
-that separates them is in `test_ghost_bc` (G6u).
+that separates them is in `test_ghost_bc` (G6u). At gas order 2 the overlap mirror acts on the dual
+cells, whose faces lie at the cell centres: x = 0.085 and x = 0.06625 are dual faces of the other block, so
+no dual cell is cut, and the copies follow the exact intersection of the dual cells (G-X4).
 
 **Fixture** (`python3 ../../tools/make_box_case.py INPUT --blocks 2 --overlap 4 --shift 0.5 --families 2
 --gradient 1000`, output committed; `properties.dat` from `common/`, symlinked): block 1 holds cells
@@ -15,7 +17,8 @@ per layer), every other face 400. Uniform gas (ρ 1.2, U 10 m/s) but T = 600 + 1
 Two families of material A. `gas-order = 2`, `mollify = off`.
 
 **Gates** (`check.py`; it runs the box as one unshifted block of 60 cells, same gas and families, into
-`ref-1blk/`):
+`ref-1blk/`, and the shifted one-block box on a uniform gas — a half cell at the inlet, then 60 cells shifted by
+half up to x = 0.15125, block 2's cell i its cell 27 + i — into `ref-shift/`):
 
 | id | kind | assertion |
 |---|---|---|
@@ -25,9 +28,13 @@ Two families of material A. `gas-order = 2`, `mollify = off`.
 | C1 | control | 50 exits, all at block 2's outlet, x = 0.15125 |
 | X1 | control | trajectory rows matched by family (read from the zone title), parcel and x with the one-block run: T within 8e-5 K, velocity within 2e-6 on every matched row. Block 1 (x < 0.085, up to its chimera face; its cells are the one-block cells): every row of either run matched (2410 = 2410). Block 2 (shifted by half a cell, so 43 % of its rows sit on points where the one-block run has none): at least half of this run's rows matched (1090 of 1920), a guard against a vacuous comparison, not a sharp gate. With gfortran both runs write more crossing rows: 2674 = 2674 and 1506 of 2128 |
 | C2 | control | no stuck, no-progress or maxIter line |
+| G-X4 | target | block 2's x-columns 1–9, ρ_p of `euler1`/`euler2` as the mean over a column's 25 cells of equal volume, against `ref-shift`'s columns 28–36: \|q − R\| ≤ 3\|R(c+1) − R(c−1)\|/16 + 1e-12 of the profile's scale. Columns, not cells: every parcel runs on a dual-node line in y and z, a four-way tie of dual cells that a block change can resolve otherwise, moving a deposit within its column. ρ_p does not depend on T here (Stokes drag on the solution's constant viscosity, constant gas and particle densities), so the uniform reference stands for this run's gradient |
 
 **Numbers** (OMP 5): X1 T 8e-6 K, velocity 1e-6 (one printed digit); the tolerance on T sits ten
-times above. **RED** with the gas sampler's Newton stopped at an absolute residual of 1e-5 m: X1 T
+times above. G-X4 (OMP 1) of the tolerance, columns 1 / 2–9: ρ1 0.67 / ≤ 0.21, ρ2 0.67 / ≤ 0.18 (column 1, block 2's
+first dual cells clipped at the block's start, is the reduction of a half dual cell); the log counts 288 dual
+cells of each block covered by the other, none cut. **RED** of G-X4 with a centroid map on the geometry
+cells after the reduction: columns 1–6 at 1.26 (ρ1) and 1.31 (ρ2), column 8 at 1.4e4 and 310. **RED** with the gas sampler's Newton stopped at an absolute residual of 1e-5 m: X1 T
 4.47e-4 K, 5.6 times the tolerance (the floor of `two-fam-bc-2blk-stretch-ord2`). On edited copies of
 this run's trajectory file: one block-1 row's T raised by 1e-4 K, or one block-1 row deleted, fails block 1
 (a deleted row passed the earlier 75 % of all rows); every block-2 row moved by 1e-6 m fails block 2's
