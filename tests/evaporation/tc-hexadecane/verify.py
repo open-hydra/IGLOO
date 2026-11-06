@@ -14,11 +14,11 @@ Two panels vs a NORMALIZED lifetime t/t_life (each series scaled by its own fina
 
 Case properties -- see INFO.md/PROVENANCE.md: p_sat(T) is TC2012's own Table-1 curve (the Psat
 column of INPUT/properties.dat), the energy sink is Table 1's latent heat at the boiling point
-(Lv=2.2695e5), cp_l=2800 is the NIST/Chemeo value at the ~490K operating point, the gas is at
-1 atm with its film properties at 529.1 K. The plateau sits at 493.7 K against the digitized 493.7 K.
+(Lv=2.2695e5), cp_l(T) is the liquid's from the Romeo-Lemmon equation of state (the Cp column), the
+gas is at 1 atm with air's properties at 529.1 K. The plateau sits at 493.7 K against the digitized 493.7 K.
 
 The x-axis is NORMALIZED by each curve's lifetime because the run's absolute tau=t*Dv/R^2
-(528.6 at the end of life) is 2.5 times the figure's (212.8), a scale the case does not explain;
+(512.9 at the end of life) is 2.4 times the figure's (212.8), a scale the case does not explain;
 the normalized SHAPE is the comparison.
 Both digitized curves are NON-gating; the tight gate (check.py) is IGLOO-vs-the-TC-kernel.
 """

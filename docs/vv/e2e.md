@@ -701,11 +701,10 @@ Tonini–Cossali analytical evaporation (Stefan–Fuchs); the companion unit tes
 The Tonini–Cossali validation case: an **n-hexadecane** drop reproducing
 TC2012 Fig. 11 ($R_{d,0}$=10 µm, $T_{d,0}$=300 K, air at 600 K and one atmosphere, the gas-film
 properties at the film temperature 529.1 K: $k_g$ and $c_{p,g}$ of air, $D_v$ by Fuller, $c_{p,v}$
-of the vapour).  It is the suite's
-variable-property case — the liquid density falls with temperature, so the
-drop *swells* as it heats before the $D^2$-law evaporation — and therefore the only
-one exercising the temperature-dependent property tables (`rhoTab`/`cpTab`/`hTab`)
-inside the integration.
+of the vapour).  It is the suite's variable-property evaporation case — the liquid density falls
+with temperature, so the drop *swells* as it heats before the $D^2$-law evaporation, and the
+liquid's $c_{p,\ell}(T)$ is a column, so the drop's state is its enthalpy — exercising the
+temperature-dependent property tables (`rhoTab`/`cpTab`/`hTab`) inside the integration.
 
 IGLOO's TC kernel **is** TC2012's *present model* (eq. 16): its small-rate
 limit reduces to eq. 16's stated form $\hat m=(\hat P_{vs}-\chi_{v,\infty})/[\tfrac12(\tilde
@@ -719,20 +718,25 @@ case's `properties.dat` (piecewise Clausius-Clapeyron through the table's anchor
 energy sink is Table 1's latent heat at the boiling point, $L_v=2.2695\times10^5$ J/kg: the
 curve and the sink are decoupled, which a single scalar $L_v$ cannot do (the curve's effective
 latent heat is $\approx$258 kJ/kg over the operating range).  The gate's oracle reads the same
-column; two further gates assert that the run reported the tabulation and that its plateau
+column; three further gates assert that the run reported the tabulation, that its plateau
 lies within 1 K of a 0-D replica of the kernel (`zero_d.py`, 493.69 K; with psat by
-Clausius-Clapeyron at the same sink it is 487.13 K).  The rate gate alone cannot tell the table
-from a Clausius-Clapeyron fit to the same anchors ($4.4\times10^{-3}$ against a floor of
-$3.1\times10^{-3}$, tolerance 2 %); the two plateau gates can.  Liquid
-$c_{p,\ell}=2800$ J/(kg K) is the NIST/Chemeo value at ~490 K.  The digitized TC2012 Fig. 11
+Clausius-Clapeyron at the same sink it is 487.13 K) and that its heating path lies within 0.1 K of
+the replica's (the replica takes $c_{p,\ell}(T)$ from the same column).  The rate gate alone cannot
+tell the table from a Clausius-Clapeyron fit to the same anchors ($3.1\times10^{-3}$ against the
+table's $3.3\times10^{-3}$, tolerance 2 %); the plateau gates can.  Neither the rate gate nor the
+plateau sees the heat capacities; the heating path does: a constant $c_{p,\ell}$ of 2800 J/(kg K)
+moves it by 12.8 K, a vapour $c_{p,v}$ of 2300 by 0.90 K.  Liquid $c_{p,\ell}(T)$ is the
+Romeo–Lemmon equation of state for n-hexadecane at one atmosphere (2216 J/(kg K) at 300 K, 2874 at
+490 K; its cp data reach 454 K).  The digitized TC2012 Fig. 11
 present-model curves are a non-gating overlay on the normalized lifetime: in the figure's time
-$\tau = t D_v/R_{d,0}^2$ the run's drop lives 2.5 times as long as the figure's, a factor no
+$\tau = t D_v/R_{d,0}^2$ the run's drop lives 2.4 times as long as the figure's, a factor no
 property of the case explains, since TC2012's eq. 1 and IGLOO both scale the rate with
 $\rho_\infty D_v$.
 
-**Result:** measured $d^2(x)$ within $0.31\,\%$ of the kernel on all 25 drops, every drop
-swells (peak 1.089); plateau 493.7 K against the digitized 493.7 K, on its 0-D replica to the
-printed digit; heat-up fraction 0.600 against the figure's 0.637.
+**Result:** measured $d^2(x)$ within $0.33\,\%$ of the kernel on all 25 drops, every drop
+swells (peak 1.091); plateau 493.7 K against the digitized 493.7 K, on its 0-D replica to the
+printed digit, the heating path to $3\times10^{-4}$ K; heat-up fraction 0.591 against the
+figure's 0.637 (0.600 with a constant $c_{p,\ell}$ of 2800: TC2012 takes its properties constant).
 
 <figure>
   {% include "vv/images/tc-hexadecane.svg" ignore missing %}
