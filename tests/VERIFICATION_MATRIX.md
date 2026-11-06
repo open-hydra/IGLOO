@@ -1,8 +1,8 @@
 # Verification matrix
 
-One row per registered CTest entry (375 in a serial build: 314 e2e + 60 unit incl. `self_test`,
+One row per registered CTest entry (376 in a serial build: 315 e2e + 60 unit incl. `self_test`,
 `registry-docs`, `exe-per-tree`, `e2e-rc-gate`, `lint-test-inputs`, `psd-plane-tool` and `history-census` + the optional `vortex-cloud-3way`; a `USE_MPI` build adds the 28 `mpi-*`
-rows in their own section, 403).
+rows in their own section, 404).
 Companion to [`REFERENCES.md`](REFERENCES.md) (bibliography — all `[tags]`
 below resolve there). Regenerate the reconciliation with
 `ctest --test-dir build/verif -N`.
@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (90 of 182 e2e fixtures)
+## Shared box fixture (90 of 183 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -39,9 +39,9 @@ writes with its defaults.
 Ninety fixtures run on that **same** axis-aligned uniform-gas box. The gas field is held *fixed*
 across all of them; cases differ only by particle injection properties, enabled
 models, body acceleration, and boundary conditions — never by the gas. Stated
-once here, referenced as **"shared box"** below. The other ninety-two:
+once here, referenced as **"shared box"** below. The other ninety-three:
 
-- non-uniform gas (twenty-seven): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
+- non-uniform gas (twenty-nine): `db-2daxi` (the MOSE nozzle solution on a 200×180-cell axisymmetric
   wedge), `axis-200` (the same solution with face 3 retagged `axisymmetric`) and `wedge-fold`
   (`axis-200` plus swirl on the near-axis parcel); `swirl-wedge`, `swirl-wedge-deposit`,
   `swirl-wedge-spin` and `swirl-wedge-ord1` (a 200×40-cell annular wedge from `tools/make_wedge_case.py`, analytic solid-body
@@ -58,7 +58,8 @@ once here, referenced as **"shared box"** below. The other ninety-two:
   across the periodic pair, `--wave-y 100`), `periodic-2d-ord2-dual` (the same box over two periods,
   `--periods 2`) `rot-2blk` (the box as two blocks, block 2 rotated 180° about y,
   T = 600 + 2000 z K, `--blocks 2 --rotate2 y --zgradient 2000`) `body-force-z` (the box with
-  T = 600 + 2000 z K, `--zgradient 2000`), `solver-fail-midway` (the box with the gas at 5 m/s beyond
+  T = 600 + 2000 z K, `--zgradient 2000`), `db-varrho` and `db-varrho-ord2` (the box with T = 600 + 1000 x K,
+  `--gradient 1000`, the second at gas order 2), `solver-fail-midway` (the box with the gas at 5 m/s beyond
   x = 0.075 m, `--kv 1.0 --u2 5 --rp 1.0e-6`) and `solver-fail-refine` (`solver-fail-midway`'s `INPUT/`, symlinked);
 - uniform gas on a `tools/make_pe_case.py` box with the shared box's 0.05 m cross-section (twenty-seven):
   `pilch-erdman-e2e`, `pe-sigma-table`, `reitz-diwakar-e2e`, `rd-evap-frozen`, `khrt-e2e`, `khrt-e2e-euler`, `khrt-stress`,
@@ -68,7 +69,7 @@ once here, referenced as **"shared box"** below. The other ninety-two:
   `evap-breakup-box` and `evap-breakup-box-varcp` on a 0.8 m × 320-cell box at U=50 m/s, T=600 K
   (`--t-gas --kt`); `tab-hf92` and `etab-hf92` on a 1.2 m × 480-cell box at U=200 m/s, T=297 K in Hsiang & Faeth's air,
   one diameter with a slip per cell (`--d0 --rhog --mug`), the lateral faces reflecting (`--side-code 300`);
-- uniform gas on another mesh (thirty-six): `mhb98-water`, `mhb98-water-psat` and `mhb98-water-blowing` (a `make_box_case.py`
+- uniform gas on another mesh (thirty-seven): `mhb98-water`, `mhb98-water-psat` and `mhb98-water-blowing` (a `make_box_case.py`
   variant lengthened to 0.17 m at the same Δx: water in air at T_G=298 K with a near-static
   U=1.9×10⁻⁴ m/s clock, the Miller-Harstad-Bellan Fig-2 conditions); `planar-slab` (a 20×20
   single-layer planar slab), `wall-approach` (a 100×20 single layer, the gas drifting toward the wall
@@ -83,7 +84,8 @@ once here, referenced as **"shared box"** below. The other ninety-two:
   with a 200×100 inlet, `make_box_case.py --nx 1 --ny 200 --nz 100`); `stuck-cell`, `plane-back` and `sym-plane-hop` (the box with the gas at rest,
   `make_box_case.py --ug 0`; `sym-plane-hop` with `sym-plane-skate`'s `bc.txt`), `sym-plane-bounce` and `sym-plane-bounce-ord2` (the box with the gas at 0.1 m/s,
   `--ug 0.1 --sym-face 5 --no-inlet`), `sym-plane-creep` and `sym-plane-creep-ord2` (the box with the gas at 3 mm/s,
-  `--ug 0.003 --sym-face 5 --no-inlet`), `boiling-zgr-switch` (the box with the gas at 1 m/s, `--ug 1.0`), `solid-melt` and `solid-melt-rhos` (the box with the gas at 3000 K, `--tg 3000`), `tc-hexadecane`, `solver-fail-consumed` and `solver-fail-consumed-m4` (the box at one atmosphere with air's properties at 529.1 K, `--rho 0.5884146341463415 --kl 0.04256 --gam 1.38328`, the last two with its `INPUT/` symlinked), `inj-dsdegen` (the box with geometric rows along y, `--ygrade 2`), `beckstead-air` (the box with air at 300 K and 0.04 m/s, one diameter per inlet cell, `--tg 300 --ug 0.04 --rp-sweep`) `wall-flux` (the box in 15 cells along x, its outlet face a dispersed-phase wall, `--no-inlet --outlet-code 301 --nx 15`), `wall-laws` (`wall-flux`'s `INPUT/`, symlinked) and `inner-loop-cap` (the box with its right half's cells 1000 times its left half's, `--kv 1.0 --rp 1.0e-6 --stretch 1000`).
+  `--ug 0.003 --sym-face 5 --no-inlet`), `boiling-zgr-switch` (the box with the gas at 1 m/s, `--ug 1.0`), `khrt-exit-children` (the box with the gas at
+  200 m/s, `--ug 200`), `solid-melt` and `solid-melt-rhos` (the box with the gas at 3000 K, `--tg 3000`), `tc-hexadecane`, `solver-fail-consumed` and `solver-fail-consumed-m4` (the box at one atmosphere with air's properties at 529.1 K, `--rho 0.5884146341463415 --kl 0.04256 --gam 1.38328`, the last two with its `INPUT/` symlinked), `inj-dsdegen` (the box with geometric rows along y, `--ygrade 2`), `beckstead-air` (the box with air at 300 K and 0.04 m/s, one diameter per inlet cell, `--tg 300 --ug 0.04 --rp-sweep`) `wall-flux` (the box in 15 cells along x, its outlet face a dispersed-phase wall, `--no-inlet --outlet-code 301 --nx 15`), `wall-laws` (`wall-flux`'s `INPUT/`, symlinked) and `inner-loop-cap` (the box with its right half's cells 1000 times its left half's, `--kv 1.0 --rp 1.0e-6 --stretch 1000`).
 
 `khrt-e2e-rt` and `khrt-e2e-threads` are further oracles on `khrt-e2e`'s run (the second at 1/2/4
 threads) and add no fixture, nor do the four `threads-*` gates (each runs its parent's inputs in private directories); `khrt-stress` differs from `khrt-e2e` only in `mShedLim`, `scatter-placement` from `khrt-stress` only in its output keys, and the twins
@@ -227,6 +229,7 @@ oracle possible.
 | **khrt-varcp** | `[Reitz87]` (the breakup model; the gate is the enthalpy state) | *independent integration + conservation* — `khrt-e2e` (model 3) with cp = 4182 + 10(T − 270) on a table (the enthalpy state): P premises (25 injection rows, 263 parcels, median heating 13.7 K); E Σ E of `source.tec` = the injected minus the exiting energy flow at the table's enthalpy (0.249 of the print budget); M the exit mass-flow total (1e-5) and the mass and momentum budgets; K on every run of rows at one d an RK4 of dh/dt = 6k_g Nu (T_g − T)/(ρ_p d²) with the Schiller-Naumann velocity between rows (8373 rows, worst 0.930 of the print budget), across every interval in which d changes the comparison bracket (1977 of 1977). RED: the KH shed's enthalpy at cp T + h_off (E 1.0·10⁵ tolerances); the child's enthalpy slot at its temperature (P, E, K); model 3's heat rate with a T-state factor (P, K 8373 of 8373) | as `khrt-e2e` | `khrt-varrho`'s `bc.txt` (κ_t 0.9); own `properties.dat` (`make_table.py`); `out-time = on` |
 | **breakup-per-material** | `[ORA87]`, `[Reitz87]` (the models; the gate is an input contract) | *sibling equality* — four water materials in `tab-e2e`'s box, each with its own breakup model and constants from the tokens of its phase-file line over `[IGLOO-Models]` (A: `TAB-Comega=10` before `breakup=TAB`; B: `breakup=Reitz-KHRT KHRT-B1=40` over `B1 = 30`; C: none, σ = μ = 0; D: `breakup=Reitz-KHRT` with an unused `TAB-Comega=10`); `check.py` reruns the case once per material with that material's model and constants given to all four in `[IGLOO-Models]` (`ref-A` … `ref-D`): trajectories and exits equal as sorted multisets, B's and D's children lines equal (68 and 94 children), C's 6025 rows at their injected d. Exact. RED on a reader without the tokens (setup stops at the first one); mutants: every group given material 1's breakup fields (B, C, D fail), a token applied whatever its model (D: KH off), the per-material read without `[IGLOO-Models]` (A, B), a token kept only for the model known as it is read (A) | as `tab-e2e` | `tab-e2e`'s `bc.txt` with κ_ρ 0.085 (the four families sum to 0.34); σ = 0.072, μ = 1e-3 for A, B, D |
 | **khrt-plane** | `[Reitz87]` (the breakup model; the gate is the output) | *conservation + path consistency* — `khrt-e2e` with `plane-x = 0.03875 0.075 0.11125 0.15` (mid-cell, a cell face, mid-cell, the outlet face): P0 every record on a listed plane at its position (792); P1 on every plane the forward `mdot` minus the backward = the injected 17/55 kg/s (1e-8; 1.26e-9, 6.83e-10, 6.40e-10, 1.39e-10 over 119, 180, 227, 266 records); P2 each injected parcel once per plane, each child once per plane downstream of its birth (1330); P3 each child's parent another parcel on its (Y, Z) line (241); P4 each record between the two path rows bracketing its plane, m = ρπd³/6, `mdot` = `npdot`·m (792); P5 the outlet records against the exit records (266); P6 every child's first trajectory row its birth state on its parent's path, d below the parent's last row before the birth (241). RED: `plane-x` not read (no file); no check at the segment finalize (P1 1.00 at the face planes, P2, P5, P6); records for injected parcels only (P1 0.10–0.25); the birth row never written (P6 0 of 241); the model-3 d from the auxiliary d (P4 719 of 792) | as `khrt-e2e` (`INPUT/` symlinked) | as `khrt-e2e` |
+| **khrt-exit-children** | `[Reitz87]` (the breakup model; the gate is the output) | *conservation + premise* — KH-RT children shed on their parent's exit step: five water drops placed 5e-11 m before the outlet at 0.01 m/s in a 200 m/s gas, `B1 = 0.1`, `mShedLim = 1e-4`, so each first step crosses the outlet, is final and sheds (5.41e-3 of the drop's mass, 54 × `mShedLim`). X0 one child per parent born on its exit step (its exit record at the parent's exit time, its first row at the parent's exit X; 5, d 1.98461e-5 m), every exit at the outlet (400), the log's child count; X1 the outlet plane's records = the exit flows of each parent and its exit-step children, which record no crossing (E13.6 + ES16.8 half-ULPs; worst 0.43 of it); X2 the exit flows against the 5 × 1e-4 kg/s injected (1.1e-10 against 2.5e-10). RED with the exit-step child dropped (the shed still lowers the parent's flow): X0 0 of 5, X1 1.07e4 and X2 1.08e4 times their bounds, every other case green; with the default `B1`, `mShedLim`: X0 (no shed) | shared 0.15 m box, **U=200 m/s** (`make_box_case.py --ug 200`) | DB `[IGLOO-BC]`: x = 0.14999999995 m, d = 0.6 mm, u_p = 0.01 m/s, 1e-4 kg/s each; `breakup=Reitz-KHRT`, `B1 = 0.1`, `mShedLim = 1e-4`; water (`khrt-e2e`'s); `print-dtime = 1e-12`, `out-time = on`, `plane-x = 0.15` |
 | **db-injection** | infrastructure (no paper; RED on a DB branch that writes `stateVar(4:6)` at pinning: SIGSEGV in setup) | *behavioral* — no reference curve; asserts placement fidelity, `vInj` hand-off (u starts at u_p=1), Stokes relaxation, and domain exits | shared box | **assigned-position (DB)** injection: 5 parcels at explicit x=0.01, y=0.005…0.045, z=0.025, u_p=1.0 m/s, d=11.89 µm, ṁ=1e-4, T=300 K; outlet + walls |
 | **db-varrho** | — (the gas file and the property table) | *closed form* — the scatter quantum of four database streams without `temp0` or a velocity on a density table: G-DB1 the logged `dNscat` against Ṅ τ_ref/(100 × 4), Tᵢ and V_ref read at the cells holding the streams in `solfile.tec`, ρ(Tᵢ) from the table (6.879E+03, tolerance 0.507); G-DB2 each first row's m_p and T at that state; G-DB3 markers of all four parcels. RED with the streams left at T = 0 and out of V_ref: 0.000E+00, no marker; with the velocity not taken from the gas: 6.879E+04; with cell (1,1,1)'s gas: 6.791E+03 | shared box with T = 600 + 1000 x (`--gradient 1000`), `temp-relax-varrho`'s table | **assigned-position** (DB), four parcels at cell centres, at the gas velocity and temperature |
 | **db-varrho-ord2** | — (the gas file, the property table, the printed injection state) | *closed form* — db-varrho's four streams at `gas-order = 2`: G-DB1 the logged dNscat against Ṅ(L_ref/V_ref)/(100 × 4) with Ṅ and V_ref from the injection state integrate gave each stream (its first row: the gas of the first node of the dual cell it finds, the centre of the previous cell along x), the ES10.3 half-ULP plus 1e-6 (measured 6.875E+03 against 6875.455); G-DB2 each first row's T a cell-centre temperature of that dual cell, its speed 10 m/s, its m_p = π/6 ρ(T) d³; G-DB3 markers of all four parcels. RED: the pre-pass without the injection gas (dNscat 0, no marker), the pre-pass on the dual cell's last node (6.879E+03, 7× the tolerance) | box (60×5×5) | db-varrho's `INPUT/` (linked), `gas-order = 2` |
@@ -535,9 +538,9 @@ under `mpiexec` would otherwise pass every oracle while decomposing nothing.
 
 ## Reconciliation
 
-314 `e2e`-labelled + 60 `unit`-labelled + the optional `vortex-cloud-3way` = **375 CTest entries** in a
-serial build (+28 `mpi-*` under `USE_MPI`, 403), all green (counted from `tests/CMakeLists.txt`). The 314
-`e2e` entries are the 182 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
+315 `e2e`-labelled + 60 `unit`-labelled + the optional `vortex-cloud-3way` = **376 CTest entries** in a
+serial build (+28 `mpi-*` under `USE_MPI`, 404), all green (counted from `tests/CMakeLists.txt`). The 315
+`e2e` entries are the 183 `igloo_e2e_case` solver cases, two further oracles on `khrt-e2e`'s run
 (`khrt-e2e-rt`, the KHRT RT-shatter persistence gate, and `khrt-e2e-threads`, the same case at 1/2/4
 threads), the five `threads-*` thread-count gates, `window-khrt-e2e` (the particle files' ordered window under a
 64 KiB budget), the fifteen `repeat-*` two-sweep gates, the one hundred and seven `refuse-*` setup-refusal gates, `vv-order`

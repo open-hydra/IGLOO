@@ -36,5 +36,6 @@ number rate times the mass at that d) would be wrong at every plane downstream.
 No parcel moves toward −x here (the gas drives every parcel forward): the backward branch of the crossing rule is
 not exercised (`infrastructure/plane-back` exercises it). No child is shed on its parent's exit step in this run
 (P5's exit-step term is empty), nor in `khrt-stress`, `khrt-shed-noexchange`, `khrt-evap-live` or `solid-brk-khrt`
-with a plane at the outlet. Model 3 does
+with a plane at the outlet; [khrt-exit-children](../khrt-exit-children/INFO.md) gates that term, every parent there
+shedding on its exit step. Model 3 does
 not solidify: the record at a segment end that a phase change shortens is not exercised.
