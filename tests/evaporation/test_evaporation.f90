@@ -12,7 +12,8 @@ program test_evaporation
     !   EV4  CEM in the BOILING clamp (Tp=420 K > 404 K): mdot finite and equal to the
     !        closed form at Xs = 1-xsCap.
     !   EV5  CEM-B boiling: EV4 x the 1/3-rule film factor (Tf/Tg)^0.7.
-    !   EV6  ASM boiling: CEM at Re=0 (Sh*=2) within 9 eps (the rounding of the two sequences), qd finite.
+    !   EV6  ASM boiling: CEM at Re=0 (Sh*=2) within 9 eps (the rounding of the two sequences), qd finite;
+    !        the bound holds for B_M >= 1e-2, where both take log(1 + B_M) (below, ASM's series log1pS).
     !   EV6b the same at Tp = 350 K, out of the clamp (B_M = 0.1135).
     !   EV7  CEM+LK boiling: finite and negative.
     !   EV8  psatExt = the Clausius-Clapeyron value re-typed: mdot, Qdot, override as without it
@@ -215,7 +216,9 @@ contains
 
     !> EV6 (420 K, the boiling clamp) and EV6b (350 K, B_M = 0.1135): ASM at Re = 0 is CEM (Sh* = 2 + 0/F_M = 2,
     !> the same Dv and ln(1+BM)), to the rounding of the two operation sequences: |m_ASM - m_CEM| <= 9 eps |m_CEM|
-    !> (9 roundings of u = eps/2 per routine). Vacuous: F_M cancels at Re = 0, and Le = 1 hides a missing Le.
+    !> (9 roundings of u = eps/2 per routine), for B_M >= 1e-2 where both take log(1 + B_M): below it ASM's
+    !> series log1pS and CEM's log of the rounded 1 + B_M differ by up to eps/(2 B_M) relative.
+    !> Vacuous: F_M cancels at Re = 0, and Le = 1 hides a missing Le.
     !> Uncapped, ASM's F_correction(Inf) = Inf*Inf/Inf makes mdot NaN.
     subroutine run_EV6(ok)
         logical, intent(inout) :: ok

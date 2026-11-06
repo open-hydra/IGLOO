@@ -33,7 +33,8 @@ program test_mhb98_decane
     !                     m = 0.01 m0. r = 100 (chi_s,eq - chi_s,neq)/chi_s,neq, chi_s,neq
     !                     recovered from production's mdot by inverting CEM. Gated: the 57
     !                     digitized nodes of t/tau_d,0 in [0.20, 1.00]
-    !                     (mhb98-fig7a/mhb98_fig7a_M7.csv), |r/r_fig - 1| <= 6 %; the nodes
+    !                     (mhb98-fig7a/mhb98_fig7a_M7.csv; 17/11/13/16 per curve, each one
+    !                     reached by the trajectory), |r/r_fig - 1| <= 6 %; the nodes
     !                     outside the window are printed. The figure is the oracle, so DC4 sees
     !                     an error made in production and in m7_mdot alike (L_K doubled in both
     !                     passes DC1 and fails here). Vacuous: alpha_E = 1, Le = 1 (Sc = Pr),
@@ -337,13 +338,15 @@ contains
             .true., .true., .true., .true., .true., .true., .true., .true., .true., .true., &
             .true., .true., .true., .true., .true., .true., .false., .false.]
         integer,  parameter :: DIAMS(4) = [10, 50, 500, 2000]
+        !> the gated nodes of each curve, every one reached by the trajectory
+        integer,  parameter :: NGATE_EXP(4) = [17, 11, 13, 16]
         real(R8), allocatable :: ts(:), rs(:)
         real(R8) :: d0, tau0, usl, tEnd, rp, rel, worst, worstAll
-        integer  :: k, i, n, ngate, nbad, nbadAll
+        integer  :: k, i, n, ngate, nbad, nbadAll, ngateAll
         logical  :: pass
         character(len=16) :: rowid
         allocate(ts(NMAX), rs(NMAX))
-        worstAll = 0._R8; nbadAll = 0
+        worstAll = 0._R8; nbadAll = 0; ngateAll = 0
         write(*,'(a,f8.5)') '  DC4 vs MHB98 Fig.7(a) (M7), production at kappa Re, kappa = ', KAPPA
         do k = 1, 4
             d0   = real(DIAMS(k), R8)*1.e-6_R8
@@ -366,16 +369,16 @@ contains
                 write(*,'(a,f5.2,a,es11.4,a,es11.4,a,f7.2,a,a)') '      t/tau ', FIG_T(i), '  r ', rp, &
                     '  fig ', FIG_R(i), '  ', 100._R8*rel, ' %', merge(' gated  ', ' printed', FIG_G(i))
             end do
-            pass = (nbad == 0) .and. (ngate > 0)
+            pass = (nbad == 0) .and. (ngate == NGATE_EXP(k))
             write(rowid,'(a,i0,a)') 'DC4_', DIAMS(k), 'um'
-            write(*,'(a,i5,a,i2,a,f6.2,a,a)') '  [', DIAMS(k), ' um] ', ngate, ' gated nodes, worst |r/r_fig - 1| ', &
-                100._R8*worst, ' %', merge('  PASS', '  FAIL', pass)
+            write(*,'(a,i5,a,i2,a,i2,a,f6.2,a,a)') '  [', DIAMS(k), ' um] ', ngate, ' of ', NGATE_EXP(k), &
+                ' gated nodes, worst |r/r_fig - 1| ', 100._R8*worst, ' %', merge('  PASS', '  FAIL', pass)
             call append_row(trim(rowid), 'r_vs_fig7a', worst, worst, 0._R8, 0._R8, TOL4, pass)
             ok = ok .and. pass
-            worstAll = max(worstAll, worst); nbadAll = nbadAll + nbad
+            worstAll = max(worstAll, worst); nbadAll = nbadAll + nbad; ngateAll = ngateAll + ngate
         end do
         pass = assert_lt('DC4 r vs Fig.7(a), worst gated node (rel)', worstAll, TOL4)
-        write(*,'(a,i0,a)') '        ', nbadAll, ' gated node(s) beyond 6 %'
+        write(*,'(a,i0,a,i0,a)') '        ', nbadAll, ' gated node(s) beyond 6 %, ', ngateAll, ' of 57 reached'
     end subroutine run_DC4
 
     !> DC4's trajectory: production's kernels at kappa Re (fixed slip usl), RK4 at dt = tau0/16000 until
