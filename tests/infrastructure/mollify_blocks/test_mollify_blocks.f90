@@ -29,7 +29,8 @@ program test_mollify_blocks
     !        their 216 octants, sum to the cell's V24 to 1e-13 (V24 - cellVol printed, not asserted)
     !   U-X4 a block shifted by 0.3 cell: an inside cell's weights 0.3 and 0.7 on the right targets (1e-14)
     !   U-X5 coincident cells: W = 1 exactly, one target; one node moved by an ULP: W = 1 by the snap
-    !   U-X6 chordInside: the fraction of a chord inside the other block's cells (closed forms, 1e-14)
+    !   U-X6 chordInside: the fraction of a chord inside the other block's cells (closed forms, 1e-14); a point on
+    !        the other block's boundary (zero length or below the tolerance) counts outside
     !   U-X7 overlapStatus: 0 valid, 1 a non-positive volume (an inverted cell), 2 a block's cells overlapping
     !   U-X8 timing only: every candidate pair of two NG^3 boxes offset by (0.3, 0.2, 0.1) cells (NG = 12,
     !        IGLOO_UX8_N sets it), the pair count and the wall time
@@ -294,7 +295,7 @@ contains
         real(real64), parameter :: H = 2.5e-3_real64, X0(3) = [0.0625_real64, 0.0125_real64, 0.005_real64]
         real(real64), parameter :: PI = 3.141592653589793_real64
         real(real64) :: va(3,8), vb(3,8), vc(3,8,2), w(2), s(3), ov, ex, err, v24, sumOv, rot(2,2)
-        real(real64) :: ex6(7), got6(7), tsec
+        real(real64) :: ex6(9), got6(9), tsec
         real(real64), allocatable :: blo(:,:), bhi(:,:)
         type(obj_block) :: blk, one
         type(cutRecord) :: rec
@@ -395,7 +396,7 @@ contains
 
         !> U-X6: the chord split against one cell, then against two cells with a gap
         call makeRecord(rec, [X0], [1])
-        ex6 = [1._real64, 0._real64, 0.7_real64, 0._real64, 1._real64, 0._real64, 0.5_real64]
+        ex6 = [1._real64, 0._real64, 0.7_real64, 0._real64, 1._real64, 0._real64, 0.5_real64, 0._real64, 0._real64]
         got6(1) = chordInside(X0 + [0.2_real64, 0.5_real64, 0.5_real64]*H, X0 + [0.8_real64, 0.5_real64, 0.5_real64]*H, rec)
         got6(2) = chordInside(X0 + [1.2_real64, 0.5_real64, 0.5_real64]*H, X0 + [1.8_real64, 0.5_real64, 0.5_real64]*H, rec)
         got6(3) = chordInside(X0 + [-0.3_real64, 0.5_real64, 0.5_real64]*H, X0 + [0.7_real64, 0.5_real64, 0.5_real64]*H, rec)
@@ -403,12 +404,17 @@ contains
                               X0 + [-0.5_real64, 0.5_real64, 0.5_real64]*H, rec)
         got6(5) = chordInside(X0 + [0.5_real64, 0.5_real64, 0.5_real64]*H, X0 + [0.5_real64, 0.5_real64, 0.5_real64]*H, rec)
         got6(6) = chordInside(X0 + [1.5_real64, 0.5_real64, 0.5_real64]*H, X0 + [1.5_real64, 0.5_real64, 0.5_real64]*H, rec)
+        !> on the cell's face (the other block's boundary): zero length, and half the tolerance outward
+        got6(8) = chordInside(X0 + [0._real64, 0.5_real64, 0.5_real64]*H, X0 + [0._real64, 0.5_real64, 0.5_real64]*H, rec)
+        got6(9) = chordInside(X0 + [0._real64, 0.5_real64, 0.5_real64]*H, &
+                              X0 + [0._real64, 0.5_real64, 0.5_real64]*H - [0.5_real64*rec%tol, 0._real64, 0._real64], rec)
         call makeRecord(rec, [X0, X0 + [2._real64*H, 0._real64, 0._real64]], [1, 2])
         got6(7) = chordInside(X0 + [0.5_real64, 0.5_real64, 0.5_real64]*H, X0 + [2.5_real64, 0.5_real64, 0.5_real64]*H, rec)
         nbad = count(abs(got6 - ex6) > 1.0e-14_real64)
-        print '(a,7f8.4)', '  [info] U-X6 lambda: ', got6
+        print '(a,9f8.4)', '  [info] U-X6 lambda: ', got6
         call verdict('U-X6 chordInside: inside 1, outside 0, crossing at 0.3 of the chord 0.7, from the plane outward 0, '// &
-                     'zero length inside 1 and outside 0, out and back in 0.5 (1e-14)', nbad == 0, nbad)
+                     'zero length inside 1 and outside 0, out and back in 0.5, on the plane at zero length and half the '// &
+                     'tolerance outward 0 (1e-14)', nbad == 0, nbad)
 
         !> U-X7: the guards
         va = boxNodes(X0, [2._real64*H, H, H])

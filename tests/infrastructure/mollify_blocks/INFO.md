@@ -31,7 +31,7 @@ through `binomial_smooth`, 8 passes each.
 | U-X3 | a 3 × 3 × 3 block of cells of edge H, every node moved by a smooth field of amplitude 0.1 H, and a cell inside it warped by another: its overlaps with the 27 cells, and with their 216 octants (`octantVertices`), sum to its V24 (the signed volume of its 24 tetrahedra) to 1e-13 (measured 6.2e-16 and 4.7e-16); V24 − `cellVol` (`hexVolume`'s five tetrahedra) printed, not asserted (1.6e-2 of V24) | PASS |
 | U-X4 | the other block shifted by 0.3 cell: a cell's two weights (`cellTargets`) 0.3 and 0.7 on the cells k − 1 and k of the other block, and the other block's cell's 0.7 and 0.3, to 1e-14 | PASS |
 | U-X5 | coincident cells: W = 1 exactly and one target, without clipping; one node moved by an ULP: the clipping path, then W = 1 exactly (the sliver below 1e-12 dropped, the largest weight snapped), one target | PASS |
-| U-X6 | `chordInside` against one cell of edge 2.5 mm, then two with a gap: inside 1, outside 0, a chord crossing the face at 0.3 of its length 0.7, from the face (within the tolerance) outward 0, zero length inside 1 and outside 0, out of the first cell and into the second 0.5, to 1e-14 | PASS |
+| U-X6 | `chordInside` against one cell of edge 2.5 mm, then two with a gap: inside 1, outside 0, a chord crossing the face at 0.3 of its length 0.7, from the face (within the tolerance) outward 0, zero length inside 1 and outside 0, out of the first cell and into the second 0.5, on the cell's face (the other block's boundary) at zero length and half the tolerance outward 0, to 1e-14 | PASS |
 | U-X7 | `overlapStatus`: a cell over two cells that tile it 0; the same cell inverted (its two x node planes exchanged) 1; over two cells of one block that overlap each other 2 | PASS |
 | U-X8 | timing, not asserted: `cellOverlapVolume` over every candidate pair (`bucketCandidates`) of two NG³ boxes offset by (0.3, 0.2, 0.1) cells, the pair count and the wall time on one core; NG = 12 by default (12 167 pairs), `IGLOO_UX8_N=47` the plan's size (804 357 pairs, 5.7e-5 s per pair on a shared host) | info |
 | U-T′ | the overlap map between shifted cells (`buildOverlapMap`, gas order 1): two blocks of a regular 1 cm grid overlapping along x, face 2 of block 1 and face 1 of block 2 chimera faces, block 2 shifted by half a cell, by half a cell less a quarter and less twice the tie tolerance max(1e-12 h, 64 ε L), and by 0.3: every pair's weight is s or 1 − s (s the shift's fraction) to 1e-12, the entries of the two cut columns (the column of each block the other block's boundary cuts) and only those carry a record (6 cut cells each way), every target block holds 42 entries, the coverage count is 2 where a part of the cell is covered and cov is 1 plus the fraction covered, to 1e-14; measured: weights ≤ 1.4e-15, cov ≤ 1.3e-15 | PASS |
@@ -49,7 +49,9 @@ through `binomial_smooth`, 8 passes each.
 - **The weights swapped**: U-X4 fails on its four weights (and U-X5).
 - **The weights stored raw** (no drop below 1e-12, no snap): U-X5 fails, W = 1 − 8.9e-16 and a sliver target
   of 7.6e-16.
-- **λ ↔ 1 − λ**: U-X6 fails on four of its seven chords (0.3 for 0.7).
+- **λ ↔ 1 − λ**: U-X6 fails on four of its nine chords (0.3 for 0.7).
+- **A chord shorter than the tolerance judged by an inclusive containment test** (a point on the other block's
+  boundary inside it): U-X6 fails on its two chords on the face, 1 for 0.
 - **A status on |V24|**: U-X7 fails, 0 for the inverted cell.
 - **No flux at the cut** (every link left out of the face maps, i.e. each block smoothed with zero
   flux at its 101 faces): U1a fails on all eight cuts, every cell of every block differing, worst 0.43

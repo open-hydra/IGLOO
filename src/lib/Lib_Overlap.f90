@@ -1100,7 +1100,8 @@ contains
 
   !> The fraction of the chord p0 -> p1 inside the other block of record r: the chord split at its crossings
   !  with the record's planes (a distance within r%tol counts as 0), each piece kept when its midpoint lies in
-  !  one of the record's cells; a chord of zero length counts 1 when its point lies in one, else 0.
+  !  one of the record's cells; a chord not longer than r%tol counts 1 when its start lies in one of them off
+  !  every record plane, else 0 (a point on the other block's boundary is outside, as a chord leaving from it).
   real(R8) function chordInside(p0, p1, r)
     implicit none
     real(R8),        intent(in) :: p0(3), p1(3)
@@ -1109,7 +1110,10 @@ contains
     integer  :: k, ns, a, b
 
     chordInside = 0._R8
-    if (all(p1 == p0)) then
+    if (norm2(p1 - p0) <= r%tol) then
+      do k = 1, size(r%pp, 2)
+        if (abs(dot_product(r%pn(:,k), p0 - r%pp(:,k))) <= r%tol) return
+      enddo
       if (inside(p0)) chordInside = 1._R8
       return
     endif
