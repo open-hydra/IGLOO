@@ -10,7 +10,7 @@ import os, re, sys
 
 SRC, OUTLOC, TRAJ, LOG = "OUTPUT/source.tec", "OUTPUT/outloc-A.dat", "OUTPUT/trajectories-A.dat", "run_out.txt"
 NPART = 25
-TOL   = 1.0e-5          # floor 2.941e-7, thread-invariant (OMP 1/2/5); RED here is exactly 1.0
+TOL   = 1.0e-5          # floor 1.022e-6, thread-invariant (OMP 1/2/5); RED here is exactly 1.0
 
 
 def log_count(pat):

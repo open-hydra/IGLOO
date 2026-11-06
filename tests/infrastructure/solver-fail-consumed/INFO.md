@@ -68,12 +68,12 @@ run where nothing failed at all, which is the whole point of the fixture.
 | | `err < 0` branch without `consumed` | this solver |
 |---|---|---|
 | S1 | PASS — 25 `Run_ODESolver err=` lines (the branch fires either way) | PASS |
-| S4 | **FAIL** — `Σ wdot = 0.000000e+00`, resid **1.000** | PASS — `1.545455e-02 kg/s`, resid **2.941e-07** |
+| S4 | **FAIL** — `Σ wdot = 0.000000e+00`, resid **1.000** | PASS — `7.578067e-03 kg/s`, resid **1.022e-06** |
 
 `rc = 0` in both cases: the solver reports nothing wrong.
 
 ## Pass criterion
-All five gates PASS. Tolerance `1e-5` sits 34× above the measured floor (`2.941e-7`, the
+All five gates PASS. Tolerance `1e-5` sits 9.8× above the measured floor (`1.022e-6`, the
 `E13.6` source print; identical at `OMP_NUM_THREADS` 1, 2 and 5) and five orders below the
 RED signature. No tuning is involved — S1–S3 are exact integer counts, S5 an exact code. S5 is RED on a writer without the
 `bc` column (no exit row is wide enough to hold it).
