@@ -48,6 +48,8 @@ green, nothing decomposed. Without the witness this whole directory would be a v
 | `mpi-consistency-two-mat` | 1 vs 4; 4 at 1 and 5 threads | the same gate (same `check.py`, symlinked) on the `nm=2` fixture |
 | `mpi-consistency-psd` | 1 vs 4; 4 at 1 and 5 threads | the same gate on `psd-table`'s 20 000 parcels, whose diameters are drawn from a tabulated law (below) |
 | `mpi-consistency-residue` | 1 vs 4; 4 at 1 and 5 threads | the same gate on `burn-box-residue`: each burnout residue lives on the rank of its parent, at an index the ownership filter knows nothing of, so its ID (the group's offset plus its parent's ID), rows and exit record and the source field must not depend on the decomposition; its own `check.py` imports the shared one and adds the product's banner, which must count the 25 residues over every rank. RED with a rank-local residue counter: the product's three files differ as multisets at every 4-rank arm; RED with the banner's count left rank-local: 7 at 4 ranks while every file comparison passes |
+| `mpi-consistency-chimera` | 1 vs 4; 4 at 1 and 5 threads | the same gate on `chimera-2blk-mollify` (two overlapping blocks joined by chimera faces, the field mollifier on): the overlap mirror copies each block's deposits into the other after the cross-rank sum, so the fields and the root's mirrored-total lines (axis 5) do not depend on the decomposition. RED with the mirror ahead of the cross-rank sum: every field still passes (the mirror is linear), the root's totals are 0.30 of the 1-rank values at every 4-rank arm |
+| `mpi-consistency-chimera-shift` | 1 vs 4; 4 at 1 and 5 threads | the same gate on `chimera-2blk-shift-mollify` (block 2 shifted by half a cell): the same RED, 0.30–0.31 of the 1-rank totals |
 | `mpi-determinism` | 1, 3, 4 | the rank-order cross-rank sum: grid bytes at n = 3 and 4 independent of the collective algorithm (below) |
 | `mpi-repeat-<case>` (14) | 2 | every `repeatability/` case but `burn-box-residue` (its rank side is `mpi-consistency-residue`'s) under `mpiexec`: the two-sweep harness (`setup_static`, then `reset_state` + `solve` + `writeout` per sweep) with the rank witness on every log, `check_twosweep.py` unchanged; the gas-refresh cycle on `drag-stokes`, `drag-stokes-time-end` (the exit code's reset: sweeps that end inside, at the outlet, inside), `vie-plait` and `swirl-wedge` |
 
@@ -62,7 +64,7 @@ lets the two run concurrently under `ctest -j`.
 The variant cases prove each case's own oracle still passes under `mpiexec`. That is necessary
 and not sufficient: an oracle checks **physics**, and most of what MPI can break here is not physics.
 `mpi-consistency` runs the same binary at 1 and 4 ranks (the ctest thread count, 2), then at 4 ranks
-with 1 and with 5 threads per rank, and compares every run with the 1-rank run on four axes:
+with 1 and with 5 threads per rank, and compares every run with the 1-rank run on five axes:
 
 1. **Witness** — the 4-rank run reports `MPI ranks = 4`; the 1-rank run must not print the banner at
    all (it prints only when decomposed, which is what keeps serial and `-n 1` byte-identical).
@@ -74,6 +76,9 @@ with 1 and with 5 threads per rank, and compares every run with the 1-rank run o
    gathers the indices and places every block by group and ID, which is the 1-rank file's order.
 4. **Grid fields** — `.tec` on **scale-relative** error via [`tools/compare_tec.py`](../tools/compare_tec.py),
    never a per-value relative error. See that file for the measurement behind the choice.
+5. **Chimera mirror** — on a mesh with chimera faces, the root's `chimera overlap: block b mirrored source`
+   lines equal the 1-rank run's, each value within 1e-12 of the line's largest: the totals are what the
+   mirror copied, and they are the 1-rank totals only when the mirror acts on the rank-summed fields.
 
 Plus an integration criterion, because two runs that both produced nothing would agree perfectly: the
 records of all of a run's `.dat` files together must span more than 1e-9 m in x (on a fixture one cell

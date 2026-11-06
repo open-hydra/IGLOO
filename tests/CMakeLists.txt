@@ -12,7 +12,7 @@
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ khrt-varcp/ breakup-per-material/ khrt-plane/ khrt-exit-children/ khrt-hf93/ pe-sigma-table/ tab-wedge-slip/
 #   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ hop_crossing/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ tec_read/ tec_write/ fmt/ rc-gate/ (unit) + db-injection/ db-varrho/ db-varrho-ord2/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ inlet-401-g/ inlet-zero-load/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ inner-loop-cap/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ sym-plane-creep/ sym-plane-creep-ord2/ sym-plane-hop/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,kliq-column-both,muliq-column-both,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,max-inner-iter,boiling-temperature-both,boiling-pressure,boiling-pressure-noevap,solid-{hfus,cpsolid,tnuc,evap,comb},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},xi-law-{token,cap,noburn},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},emissivity-column,emissivity-column-both,bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,bc-no-g,krho-negative,gas-no-density,scatter-floor-{sign,count}}
 #   repeatability/      two-sweep gates (twosweep driver): 15 cases
-#   mpi/                registered only under USE_MPI: 9 rank-count cases + 4 consistency + 1 determinism
+#   mpi/                registered only under USE_MPI: 9 rank-count cases + 6 consistency + 1 determinism
 #                       + 14 two-sweep cases
 #
 # Run everything via ../test.sh (it builds this tree's IGLOO, which every e2e case runs, and publishes it to bin/).
@@ -1674,6 +1674,18 @@ if(USE_MPI AND MPIEXEC_EXECUTABLE)
         LABELS "e2e;mpi;combustion;consistency"
         ENVIRONMENT "OMP_NUM_THREADS=2;KMP_STACKSIZE=100M"
         TIMEOUT 900)
+    # the same gate on the chimera overlap mirror (chimera-2blk-mollify, and its half-shifted sibling): the fields and
+    # the mirrored-total lines the root prints must not depend on the decomposition (the mirror acts on rank-summed fields)
+    foreach(_c chimera chimera-shift)
+        add_test(NAME mpi-consistency-${_c}
+            COMMAND python3 -B check.py "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}"
+                                       "$<TARGET_FILE:IGLOO>"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mpi/consistency-${_c}")
+        set_tests_properties(mpi-consistency-${_c} PROPERTIES
+            LABELS "e2e;mpi;infrastructure;consistency;chimera"
+            ENVIRONMENT "OMP_NUM_THREADS=2;KMP_STACKSIZE=100M"
+            TIMEOUT 900)
+    endforeach()
     # the cross-rank sum in rank order: at n = 3 and 4 the grid fields are the same bytes with the library's
     # default collectives and with its ring allreduce (I_MPI_ADJUST_ALLREDUCE=8; Open MPI's coll_tuned algorithm 4
     # under use_dynamic_rules), and within 1e-12 of n = 1. Fixture: the 1672-parcel vortex cloud (every cell fed by

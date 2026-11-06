@@ -7,7 +7,7 @@ The other cases under `tests/mpi/` prove that each case's own oracle still passe
 That is necessary and not sufficient: an oracle checks PHYSICS, and the things MPI can break here are
 mostly not physics. This gate compares runs of the same binary over a rank axis (1 vs 4 ranks at the
 ctest thread count) and a thread axis (4 ranks at 1 and at 5 threads per rank) against the 1-rank
-run, on four axes:
+run, on five axes:
 
   1. WITNESS -- the 4-rank run must report `MPI ranks = 4` and the 1-rank run must NOT print the line
      at all. Without this the gate is vacuous in the most likely wrong configuration: a USE_MPI=OFF
@@ -25,6 +25,11 @@ run, on four axes:
      accumulated under `!$OMP ATOMIC UPDATE`, so changing the rank count re-partitions a
      non-associative sum; that is the same FP-reassociation class already floored at <= 4e-15
      run-to-run.
+  5. CHIMERA MIRROR -- on a mesh with chimera (102) faces, every arm prints the same
+     ` [IGLOO] chimera overlap: block b mirrored source` lines as the 1-rank run, each value within
+     1e-12 of the line's largest magnitude: the root prints what the mirror copied, which equals the
+     1-rank total only when the mirror runs on the rank-summed fields. Inert where the 1-rank log has
+     no such line.
 
 Plus an integration criterion: two runs that both produced nothing would agree perfectly. Every run
 must show particles that actually moved: the records of all its .dat files together span more than
@@ -42,6 +47,7 @@ import collections
 import glob
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -53,6 +59,8 @@ from compare_tec import compare_tec, DEFAULT_TOL          # noqa: E402
 ARMS = ((1, None), (4, None), (4, 1), (4, 5))
 MIN_RECORDS = 20          #> below this the comparison is too thin to mean anything
 MIN_MOVE = 1.0e-9         #> metres; a particle that moved less never left its injection point
+TOL_MIRROR = 1.0e-12      #> axis 5: of the largest magnitude on the line
+MIRROR = re.compile(r"\[IGLOO\] chimera overlap: block (\d+) mirrored source \(mass, momentum, energy\):(.*)")
 
 
 def data_lines(path):
@@ -105,6 +113,16 @@ def label(arm):
     return f"n={n}" if t is None else f"n={n},omp={t}"
 
 
+def mirror_lines(text):
+    """Axis 5: {block: values} of the run log's mirrored-total lines (empty without chimera faces)."""
+    out = {}
+    for ln in text.split("\n"):
+        m = MIRROR.search(ln)
+        if m:
+            out[int(m.group(1))] = [float(x) for x in m.group(2).split()]
+    return out
+
+
 def run(mpiexec, npflag, exe, arm, keep):
     n, t = arm
     shutil.rmtree("OUTPUT", ignore_errors=True)
@@ -151,7 +169,7 @@ def run(mpiexec, npflag, exe, arm, keep):
     if not snap:
         print(f"[FAIL] n={n}: no .dat output at all")
         return None
-    return snap
+    return snap, mirror_lines(text)
 
 
 def main():
@@ -162,7 +180,7 @@ def main():
 
     print(f"MPI consistency gate: {' vs '.join(label(a) for a in ARMS)}; the rank count, then the "
           f"thread count, is the only variable")
-    snaps, keeps = {}, {}
+    snaps, keeps, mirrors = {}, {}, {}
     for arm in ARMS:
         keeps[arm] = f"tec_{tag(arm)}"
         shutil.rmtree(keeps[arm], ignore_errors=True)
@@ -170,9 +188,9 @@ def main():
         got = run(mpiexec, npflag, exe, arm, keeps[arm])
         if got is None:
             return 1
-        snaps[arm] = got
+        snaps[arm], mirrors[arm] = got
         print(f"  {label(arm)}: " + "  ".join(
-            f"{name}={h}({nr}r,{nl}L,{nz}Z)" for name, (h, nr, nl, nz, _) in sorted(got.items())))
+            f"{name}={h}({nr}r,{nl}L,{nz}Z)" for name, (h, nr, nl, nz, _) in sorted(snaps[arm].items())))
 
     ref = ARMS[0]
     bad = []
@@ -222,13 +240,27 @@ def main():
         bad.append("no .tec field was compared -- this fixture is supposed to write source/euler "
                    "output, so axis 4 silently covered nothing")
 
+    #> Axis 5.
+    for arm in ARMS[1:]:
+        if sorted(mirrors[arm]) != sorted(mirrors[ref]):
+            bad.append(f"mirrored-total lines for blocks {sorted(mirrors[arm])} at {label(arm)}, "
+                       f"{sorted(mirrors[ref])} at {label(ref)}")
+            continue
+        for b, vref in sorted(mirrors[ref].items()):
+            v = mirrors[arm][b]
+            scale = max(abs(x) for x in vref) if vref else 0.0
+            if len(v) != len(vref) or any(abs(x - y) > TOL_MIRROR * scale for x, y in zip(v, vref)):
+                bad.append(f"block {b} mirrored totals differ beyond {TOL_MIRROR:.0e} of the line's largest "
+                           f"value:\n      {label(ref)}: {vref}\n      {label(arm)}: {v}")
+
     if bad:
         for b in bad:
             print(f"  [FAIL] {b}")
         return 1
 
+    nmir = f", {len(mirrors[ref])} mirrored-total line(s) equal" if mirrors[ref] else ""
     print(f"  [PASS] {len(snaps[ref])} .dat byte-identical, layout identical, "
-          f"{ntec} .tec comparison(s) within scale-relative {DEFAULT_TOL:.0e}, across "
+          f"{ntec} .tec comparison(s) within scale-relative {DEFAULT_TOL:.0e}{nmir}, across "
           f"{', '.join(label(a) for a in ARMS)}")
     return 0
 
