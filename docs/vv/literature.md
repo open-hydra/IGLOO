@@ -380,7 +380,7 @@ closed form of its own inputs.
 
 **Gates.** `test_solidification` (SG0–SG14, SB1); e2e companions `solid-box`, `solid-melt`,
 `solid-box-euler`, `solid-box-2mat`, `scatter-weight-solid`, `solid-brk-tab`, `solid-brk-khrt`,
-`solid-box-rhos`, `solid-box-varrho`, `solid-box-varcp`, `solid-brk-khrt-varcp`, `solid-brk-tab-rhos`,
+`solid-box-rhos`, `solid-box-varrho`, `solid-box-varcp`, `solid-brk-khrt-varcp`, `solid-brk-tab-rhos`, `solid-remelt-khrt`,
 `burn-box-residue` — see
 [End-to-End Cases](e2e.md).
 

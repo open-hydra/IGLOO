@@ -259,6 +259,8 @@ Eulerian field), `solid-box-2mat` (a model-6 material followed by a model-1 one)
 `solid-brk-tab` and `solid-brk-khrt` (TAB and Reitz-KHRT on molten drops that freeze: breakup
 only while liquid, the size held from the nucleation on, KH children born liquid, every exit at
 the outlet, the exit flows, the energy balance, the Eulerian mass and the scatter rows),
+`solid-remelt-khrt` (a Reitz-KHRT drop that freezes, re-melts in a hotter gas and breaks up: the
+re-melt restarts the KH-RT clock, the first RT breakup follows it by $\tau_\mathrm{RT}$),
 `solid-box-rhos` and `solid-box-varrho` (`rho-solid` and a liquid density table: the mass and
 the diameter of every row, the plateau and the cooling against their closed forms or an
 independent integration), `solid-brk-tab-rhos` (TAB with `rho-solid`: a frozen drop keeps the

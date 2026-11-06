@@ -45,7 +45,8 @@ program test_solidification
     !        (6 m ((1 - f)/rho_l + f/rho_s)/pi)^(1/3) of m = mdot/Z(9), Ranz-Marshall at its Re (1e-14), F(9) the
     !        direct breakupOde at that d in the liquid phases (1e-12), exactly 0 on the plateau and the solid.
     !   SG13 breakupStateAtSwitch for phase changes 0-4 and breakup models 0, 3, 4, 5: a nucleated TAB/ETAB
-    !        oscillator at rest, the KH-RT timer restarted at a re-melt, the state kept otherwise (exact).
+    !        oscillator at rest, the KH-RT timer restarted at a re-melt, the state kept otherwise (exact); the
+    !        finalize's re-melt restart end to end: solid-remelt-khrt.
     !   SG14 the table routines on h(T) = 50 T + 0.25 T^2 (Cp = 1250 + 0.5 (T - 2400)), 1..5000 K: (a) the whole
     !        freeze of nucleationJumpTab at T-nuc with h-fus = 4e5 against Tm - (h(Tm) - h(Tn) - hfus)/cs, h(Tn) on
     !        the table's interpolant; (b) the re-melt of solidTransitionTab caught up at f = -0.05 against the
