@@ -15,15 +15,14 @@ enthalpy and density, read from the table file itself; the injected droplet mass
 | K1 | solid-brk-khrt's: family 2 sheds nothing, family 1's logged children are its child exit records, every child with two rows | exact | 175 logged, 175 records; 0 in family 2 |
 | K2 | from a parcel's first frozen row on every row carries that row's `m` (`d` follows `ρ(T)` at a constant mass); every family-2 parcel's `m` decreased on that row; on every trajectory row `\|m − ρ(T) π d³/6\|` | exact; the E13.6 half-ULPs of `d` and `m` | 13425 rows; 25 of 25 stripped; 13675 rows, worst 0.963 of the bound |
 | K3 | solid-brk-khrt's: every exit at the outlet, each family's exit flows sum to 25 injected flows | 1e-5 | 225 records, worst 1.1e-6 |
-| K4 | `Σ E` of `source.tec` = `Σ ṁ (h(T_0) + v_0²/2)` injected minus `Σ ṁ (h_exit + \|u\|²/2)` over the exit records, `h` from the table by the record's phase | 1e-5 | 1.3e-7 |
-| K5 | solid-brk-khrt's Eulerian mass per family | 1e-5 | 1.5e-7, 1.1e-6 |
+| K4 | `Σ E` of `source.tec` = `Σ ṁ (h(T_0) + v_0²/2)` injected minus `Σ ṁ (h_exit + \|u\|²/2)` over the exit records, `h` from the table by the record's phase | 1e-5 | 4.8e-8 |
+| K5 | solid-brk-khrt's Eulerian mass per family | 1e-5 | 2.0e-7, 1.1e-6 |
 | K6 | every scatter row: `0 < m ≤` the larger injected droplet mass, `\|m − ρ(T) π d³/6\|` within the row's print bound, `0 ≤ f ≤ 1`; rows with `0 < f < 1` and with `f = 1` | first-order print bound | 87455 rows, worst 0.988; 342 and 87010 |
 | K7 | every Eulerian cell holding particles: `T_p` between the gas temperature and the hotter injection temperature | 1e-9 relative | 600.000–2042.794 K and 871.005–2327.000 K |
 
 K2 states solid-brk-khrt's frozen-size gate in the mass: with a density table the diameter of a frozen drop follows
 its temperature. K7 has no counterpart in solid-brk-khrt. The scatter cloud holds 87455 rows against
-solid-brk-khrt's 953832: it is saturated at one marker per accepted step during the RT cascade (solid-brk-khrt's
-INFO), so its size follows the integrator's steps there, which the table's properties change.
+solid-brk-khrt's 85206, about 12 MB each.
 
 ## RED (each measured by one mutation of the code)
 | mutation | what fails |

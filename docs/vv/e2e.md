@@ -195,7 +195,7 @@ with $d(T)$ on every row, to print precision.  The breakup counterparts `tab-var
 them: no mass to the gas, and the exit mass-flow total.
 
 **Result:** 25/25 parcels, the printed diameter within print precision of $d(T)$; the TAB masses constant
-between events, $\lvert\dot w\rvert$ 2.2e-18 of the injected flow, the KHRT exit mass flow within 6e-7.  A model-1
+between events, $\lvert\dot w\rvert$ 2.2e-18 of the injected flow, the KHRT exit mass flow within 7e-7.  A model-1
 parcel printing its injection diameter fails every heated row; a density that continues the table's end
 segments puts the 210 K and 840 K masses 0.68 % above and 0.75 % below (2370 violations); a mass resynced at a
 stale density drifts by
@@ -775,8 +775,8 @@ the temperature of every row within its print budget; across every interval in w
 event, a shed, the stripping) it brackets the temperature between the marches at the interval's extreme diameters
 and slips.  The energy handed to the gas must telescope at the table's enthalpy.
 
-**Result:** 8373 rows, the worst at 0.919 of its tolerance; 1977 intervals inside their brackets; the energy within
-0.27 of its print budget.  The shed's enthalpy at $c_p T$ breaks the energy balance by $10^5$ tolerances; the heat
+**Result:** 8373 rows, the worst at 0.930 of its tolerance; 1977 intervals inside their brackets; the energy within
+0.25 of its print budget.  The shed's enthalpy at $c_p T$ breaks the energy balance by $10^5$ tolerances; the heat
 rate with a temperature-state factor leaves every row 14 K off.
 
 ### evap-breakup-box-varcp

@@ -51,7 +51,7 @@ and goes red with the outer-loop capture reinstated (measured).
 
 ## Mass conservation
 `check.py::check_mass_conservation` asserts total exit parcel mass-flow == injected
-(3.09091e-01, tol 1e-4); measured 3.09091e-01 (6.4e-07). The event finalize re-derives
+(3.09091e-01, tol 1e-4); measured 3.09091e-01 (6.2e-07). The event finalize re-derives
 `mdot = npdot·ρ·d³·π/6`; a solver that takes both inputs stale (`d` from a once-per-call
 `auxLocal`, `npdot` from segment start) **creates ~29 % mass** (exit 3.99106e-01 against the
 injected 3.09091e-01), which the KH and RT gates do not see. **Do not remove this gate without
@@ -113,10 +113,10 @@ current mass, `m = ṁ/ṅ`, at the case's constant density (ρ_p = 1000 kg/m³)
 
 with `h` half a unit of the sixth digit of the E13.6 prints (the 1e-9 covers `3(h(d)/d)²`): the prints' worst case,
 which a diameter computed from the mass in double precision meets on every row. At least 1000 rows of 10 parcels are
-required. Measured: 565,201 rows of 254 parcels, the largest at 0.987 of the bound (`khrt-e2e-euler`, which runs this
-check, 553,795 rows at 0.994; `mpi-khrt` runs it too). RED with the scatter row printing model 3's per-droplet
-diameter, which only a breakup event resyncs: 2,552 rows of 16 parcels off the identity, the worst by 7.2271e-2
-(`khrt-e2e-euler`: 2,605 of 553,795).
+required. Measured: 14,490 rows of 262 parcels, the largest at 0.991 of the bound (`khrt-e2e-euler`, which runs this
+check, 14,490 rows at 0.994; `mpi-khrt` runs it too). RED with the scatter row printing model 3's per-droplet
+diameter, which only a breakup event resyncs: 564 rows of 28 parcels off the identity, the worst by 6.7814e-2
+(`khrt-e2e-euler`: 564 of 14,490).
 
 ## Trajectory zones (`check.py::check_zones`)
 `trajectories-A.dat` holds one ordered zone per parcel, `ZONE T="Mat A Group  1 ID <id> parent <pid>"` with `I`
@@ -161,9 +161,9 @@ end-to-end — not the Reitz-87 correlation itself.
   which is the tolerance floor). Reitz-87 p.318 states this reduction explicitly ("the
   maximum growth rate occurs at Λ = 9.02a").
 - **`test_khrt_interaction`** — the KH↔RT path agreement: `ReitzKHRT` (ODE) and
-  `ReitzKHRTevent` (event) each carry their own copy of the KH and RT blocks, and the test pins,
-  at identical state, that the ODE's KH rate is exactly zero iff the event path takes the RT
-  branch.
+  `ReitzKHRTevent` (event) take the KH and RT wave scales from one routine (`khrtWaves`) and each
+  carry their own copy of the `tc/told` accumulator, and the test pins, at identical state, that
+  the ODE's KH rate is exactly zero iff the event path takes the RT branch.
 
 ### Provenance of the `0.87` in Eq. (4)
 Reitz-87 Eq. (4) prints `(1 + 0.87·We_g^1.67)^0.6`; **Beale-Reitz 1999** (`KHRT-hybrid.pdf`)

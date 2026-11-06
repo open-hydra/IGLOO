@@ -857,9 +857,9 @@ igloo_e2e_case(solid-brk-tab-rhos solidification/solid-brk-tab-rhos "e2e;solidif
 
 # ---------- breakup: KHRT ------------------------------------------------------
 igloo_unit_test(test_breakup_khrt breakup/reitz-khrt "unit;breakup;khrt")
-# test_khrt_interaction: KHRT is the only model live on BOTH paths at once, and each path carries its own verbatim
-# copy of the KH/RT blocks. Gates that ReitzKHRT (ODE) and ReitzKHRTevent (event) agree on the RT predicate and on
-# the tc/told accumulator, so the duplication cannot drift. Also pins that RT preempts an otherwise-firing KH shed,
+# test_khrt_interaction: KHRT is the only model live on BOTH paths at once; both take the KH/RT wave scales from one
+# routine and each carries its own copy of the tc/told accumulator. Gates that ReitzKHRT (ODE) and ReitzKHRTevent
+# (event) agree on the RT predicate and on the accumulator, so the two paths cannot drift. Also pins that RT preempts an otherwise-firing KH shed,
 # the parcel mass conserved across the shed.
 igloo_unit_test(test_khrt_interaction breakup/reitz-khrt "unit;breakup;khrt")
 # test_kh_rayleigh_limit: the only KH reference that does NOT re-type the Reitz-87 fit — recovers
@@ -932,7 +932,7 @@ set_tests_properties(khrt-e2e-rt PROPERTIES
 # plus "the runaway guard did not fire". INPUT/ is a symlink to ../khrt-e2e/INPUT.
 igloo_e2e_case(khrt-stress breakup/khrt-stress "e2e;breakup;khrt;stress")
 # threads-khrt-stress: khrt-stress at 1, 2 and 5 threads -- 25 parents and their 701 children, two parcel loops with
-# an ordered window each, and the suite's largest particle file (scatter, 195 MB).
+# an ordered window each, and a 5 MB scatter file.
 igloo_threads_case(threads-khrt-stress breakup/khrt-stress "e2e;breakup;khrt;omp")
 # khrt-e2e-euler: the khrt-e2e case (model 3) with the Eulerian output on (out-file ALL, mollify off, out-time):
 # its oracles, no parcel lost to a solver failure or a non-finite state, and the Eulerian mass = sum over

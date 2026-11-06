@@ -61,7 +61,7 @@ P1-P3, C, F, W1-W3 and the premise all hold, and C's window holds one value on a
 Measured at the default floor (0.1; 18 of the 25 roots below it): 37 992 markers, 31 parcels without one (all of
 them children, against 278 at `scatter-floor = 0`, 12 of them roots); P1 46 (0.0012, bound 0.0024); P2 none alike;
 P3 D = 0.0055, p = 0.21; C 726/726, 721 windows of one value (two on IDs 33, 37, 46, 50 and 77), one quantum in
-(0.585928, 0.58595] fitting every count; F `n̄/dNscat` 6.030594·10⁴ against 6.030227·10⁴ (tolerance 5.4); W1
+(0.585928, 0.58595] fitting every count; F `n̄/dNscat` 6.030593·10⁴ against 6.030227·10⁴ (tolerance 5.4); W1
 Σ n_p V = 8.6544·10⁷ in [8.4663·10⁷, 8.8425·10⁷]; W2 726/726 parcels inside, 324 of them (69.8 % of the moment)
 inside windows of ±50 %; W3 Σ w 0.32 % below the moment, bound 40.6 %.
 

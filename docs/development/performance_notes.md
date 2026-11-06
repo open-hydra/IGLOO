@@ -29,7 +29,7 @@ ulimit -s unlimited
 | **Cell-crossing search** | `searchInBlock` in `obj_particles.f90`: guided walk from the previous cell, O(1) per crossing in regular grids. Cost rises in highly distorted meshes. |
 | **Breakup child generation** | Adds outer `maxLoop` iterations over `solve`; each loop re-enters the OMP region. |
 | **Mollifier passes** | `mollify-passes` in `[IGLOO-General]`; default 8. Each pass is O(N_cells). Increase sparingly. |
-| **Scatter cloud** | `fsample-traj` in `[IGLOO-General]` sets the markers per injection stream; a breakup child writes at its lineage's rate, so the cloud grows with every parcel's residence at the injected rates, not with the children's number rates (`khrt-stress`: 37 007 markers, 4.9 MB, from 726 parcels). |
+| **Scatter cloud** | `fsample-traj` in `[IGLOO-General]` sets the markers per injection stream; a breakup child writes at its lineage's rate, so the cloud grows with every parcel's residence at the injected rates, not with the children's number rates (`khrt-stress`: 37 992 markers, 5.0 MB, from 726 parcels). |
 
 ---
 

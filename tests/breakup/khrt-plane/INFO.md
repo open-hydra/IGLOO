@@ -10,7 +10,7 @@ npdot f ID parent t dir` (see the user guide's *Plane crossings*).
 | id | gate | tolerance | measured |
 |---|---|---|---|
 | P0 | every record names a listed plane and sits at its position | exact (F12.6) | 792 of 792 |
-| P1 | every plane: Σ `mdot` of the forward records − Σ of the backward ones = the injected flow 25 × 0.34/0.66 × 1.2 × 200 × 1e-4 = 17/55 kg/s (a shed moves flow from the parent to the child, an RT shatter keeps it) | 1e-8 relative (each ES16.8 value within 5e-9 of itself) | 1.25e-9, 6.86e-10, 6.53e-10, 1.59e-10 over 119, 180, 227, 266 forward records, 0 backward |
+| P1 | every plane: Σ `mdot` of the forward records − Σ of the backward ones = the injected flow 25 × 0.34/0.66 × 1.2 × 200 × 1e-4 = 17/55 kg/s (a shed moves flow from the parent to the child, an RT shatter keeps it) | 1e-8 relative (each ES16.8 value within 5e-9 of itself) | 1.26e-9, 6.83e-10, 6.40e-10, 1.39e-10 over 119, 180, 227, 266 forward records, 0 backward |
 | P2 | each injected parcel crosses each plane once, forward, with parent 0; each child each plane downstream of its birth row once, forward, and none upstream; an ID's records in increasing `t` | exact | 1330 of 1330 |
 | P3 | a child's records name one parent: another parcel of the run, on the child's (Y, Z) line | exact | 241 of 241 |
 | P4 | each record on its ID's path: Y, Z on its line; U, T and d between two consecutive rows of the path (trajectory rows by x, closed by the exit record) that bracket the plane; m = ρπd³/6 and `mdot` = `npdot`·m | the print half-ULPs; m 2e-5 relative | 792 of 792 |
