@@ -207,6 +207,15 @@ contains
     if (allocated(ini_Lv))    then; if (size(ini_Lv)    /= nm) error stop '[ERROR] [IGLOO-Properties] Lv: size /= number of materials';    endif
     if (allocated(ini_Tboil)) then; if (size(ini_Tboil) /= nm) error stop '[ERROR] [IGLOO-Properties] boiling-temperature (alias Tboil): size /= number of materials'; endif
     if (allocated(ini_pBoil)) then; if (size(ini_pBoil) /= nm) error stop '[ERROR] [IGLOO-Properties] boiling-pressure: size /= number of materials'; endif
+    !> boiling-pressure is a pressure for every material, evaporating or not (as ICE)
+    if (allocated(ini_pBoil)) then
+      do i = 1, nm
+        if (.not. (ini_pBoil(i) > 0._R8 .and. ieee_is_finite(ini_pBoil(i)))) then
+          write(*,'(A,I0,A,ES12.5)') ' [ERROR] [IGLOO-Properties] boiling-pressure of material ', i, ' = ', ini_pBoil(i)
+          error stop 'IGLOO: [IGLOO-Properties] boiling-pressure must be positive and finite'
+        endif
+      enddo
+    endif
     if (allocated(ini_cpv))   then; if (size(ini_cpv)   /= nm) error stop '[ERROR] [IGLOO-Properties] cpv: size /= number of materials';   endif
     if (allocated(ini_Le))    then; if (size(ini_Le)    /= nm) error stop '[ERROR] [IGLOO-Properties] Le: size /= number of materials';    endif
     if (allocated(ini_Yinf))  then; if (size(ini_Yinf)  /= nm) error stop '[ERROR] [IGLOO-Properties] Yinf: size /= number of materials';  endif
@@ -377,13 +386,7 @@ contains
         else; error stop '[ERROR] Evaporation requires boiling-temperature (alias Tboil) in [IGLOO-Properties]'
         endif
         material(i)%pBoil = Patm
-        if (allocated(ini_pBoil)) then
-          if (.not. (ini_pBoil(i) > 0._R8 .and. ieee_is_finite(ini_pBoil(i)))) then
-            write(*,'(A,I0,A,ES12.5)') ' [ERROR] [IGLOO-Properties] boiling-pressure of material ', i, ' = ', ini_pBoil(i)
-            error stop 'IGLOO: [IGLOO-Properties] boiling-pressure must be positive and finite'
-          endif
-          material(i)%pBoil = ini_pBoil(i)
-        endif
+        if (allocated(ini_pBoil)) material(i)%pBoil = ini_pBoil(i)
         ! Pre-compute constants
         material(i)%LvMvOverRu = material(i)%Lv * material(i)%Mv / 8314.46_R8
         material(i)%invTboil   = 1._R8 / material(i)%Tboil
@@ -457,8 +460,10 @@ contains
         mat%invTboil = invTboil_at(mat%Tboil, mat%pBoil, mat%LvMvOverRu)
         if (.not. mat%invTboil > 0._R8) error stop &
           'IGLOO: boiling-pressure and boiling-temperature give no one-atmosphere boiling point on the Clausius-Clapeyron line'
-        write(*,'(A,I0,A,ES12.5,A,ES12.5,A,ES12.5,A)') '  >> [material ', i, '] boiling-temperature ', mat%Tboil, &
-          ' K at boiling-pressure ', mat%pBoil, ' Pa: Clausius-Clapeyron through ', 1._R8/mat%invTboil, ' K at one atmosphere'
+        !> the line is the saturation curve only without a Psat column
+        if (.not. mat%psatVariable) write(*,'(A,I0,A,ES12.5,A,ES12.5,A,ES12.5,A)') '  >> [material ', i, &
+          '] boiling-temperature ', mat%Tboil, ' K at boiling-pressure ', mat%pBoil, &
+          ' Pa: Clausius-Clapeyron through ', 1._R8/mat%invTboil, ' K at one atmosphere'
       endif
 
       end associate 
