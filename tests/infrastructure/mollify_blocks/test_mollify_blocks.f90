@@ -33,19 +33,17 @@ program test_mollify_blocks
     !   U-X7 overlapStatus: 0 valid, 1 a non-positive volume (an inverted cell), 2 a block's cells overlapping
     !   U-X8 timing only: every candidate pair of two NG^3 boxes offset by (0.3, 0.2, 0.1) cells (NG = 12,
     !        IGLOO_UX8_N sets it), the pair count and the wall time
-    !   U-T  the overlap map's tie rule at a chimera face: two blocks of a regular grid overlapping
-    !        along x, block 2 shifted by half a cell, so that a column of each block has its centroids
-    !        on the other block's chimera (102) face: neither is covered by the other block (coverage
-    !        count 1), while centroids on the other block's interior faces are (inclusive); moved inside
-    !        by a quarter of the tie tolerance tau = max(1e-12 h, 64 eps L) of the cell holding them
-    !        they are still on the face, by 2 tau they are covered
+    !   U-T' the overlap map between shifted cells: two blocks of a regular grid overlapping along x,
+    !        block 2 shifted by half a cell (less tau/4 and less 2 tau, tau = max(1e-12 h, 64 eps L)) and
+    !        by 0.3: the weights s and 1 - s (1e-12), a record on the cut columns' entries only, the
+    !        coverage count, and cov = 1 + the covered fraction (1e-14)
     !   U-M  (i) the chimera overlap mirror (IGLOO_overlap): one 3D grid of warped cells cut into two
     !        blocks that overlap by four columns (the overlap map built by buildOverlapMap from the
     !        geometry), random owner-only source and eulerian fields (each overlap cell's deposit in
     !        the block that owns it, 0 in the other); after mirrorSource each block's source equals
     !        the grid's on its range bit for bit, after mirrorEuler its eulerian densities to 1e-14 of
     !        the field scale (the two copies of a warped cell can differ in volume by an ULP, and the
-    !        amount moves as q V_source/V_target), the coverage count is 2 in the overlap and 1
+    !        amount moves as q V_source/V_target), the coverage count and cov are 2 in the overlap and 1
     !        elsewhere, the mirrored totals equal the other copy's owner deposits and their sum equals
     !        Sum (n - 1) S over the owner-only fields, to 1e-14 of Sum |S|
     !        (ii) the grid cut into two blocks that overlap by whole columns, each holding the grid's

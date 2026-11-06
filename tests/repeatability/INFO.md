@@ -63,7 +63,7 @@ would pass every gate in this directory.
 
 ## Two modes
 
-- **steady** (all fifteen) — gas held fixed; sweep 1 must reproduce sweep 0. `repeat-drag-stokes-dopri5` and
+- **steady** (all sixteen) — gas held fixed; sweep 1 must reproduce sweep 0. `repeat-drag-stokes-dopri5` and
   `repeat-tab-dopri5` are the odd ones out: they gate not a state leak but determinism on the DOPRI5 path
   (`solout` reads `x − xold` for the scatter cloud AND for the TAB/ETAB oscillator advance, and `dopri5.f`
   keeps the previous grid point in the COMMON block `/CONDO5/`). RED on a DOPRI5 whose `/CONDO5/` is shared

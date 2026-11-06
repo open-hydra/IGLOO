@@ -94,8 +94,10 @@ minus the mirrored totals is still the once-counted total. Where the overlap's c
 of weight 1 per facelet), the overlap's deposits mirrored into both blocks and the halo give each block
 the one-block smoothed field on its own cells; with misaligned cells (two donors of weight 1/2 at a
 half-cell shift) the halo is the average of the two donor cells and the result meets the one-block field
-only to the interpolation error of the halo and of the overlap map. A facelet with an empty layer 1 keeps
-zero flux.
+only to the interpolation error of the halo and of the overlap's volume split: on `chimera-2blk-shift-mollify`
+each block's smoothed fields lie within 2(max\|ΔR\|/16 + 2 max\|Δ²R\|/8) of the one-block ones, R the unsmoothed
+one-block cells around the seam (measured at 1/13 to 1/40 of that bound). A facelet with an empty layer 1
+keeps zero flux.
 
 ---
 
