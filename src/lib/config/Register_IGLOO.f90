@@ -124,9 +124,9 @@ contains
     call reg%add('IGLOO-Models','WeCrit',d_r(17),'6', &
       'TAB/ETAB: critical Weber number (doubled internally)','',.false.)
     call reg%add('IGLOO-Models','method',d_i(6),'2', &
-      'TAB: product-size selection method (2 = Rosin-Rammler sampling)','1, 2',.false.)
+      'TAB: product-size law, its radius drawn by mass (1 = chi-square, 2 = Rosin-Rammler)','1, 2',.false.)
     call reg%add('IGLOO-Models','n',d_r(18),'3.5', &
-      'TAB: Rosin-Rammler spread parameter (method 2)','',.false.)
+      'TAB: Rosin-Rammler spread parameter of method 2, its radius drawn by mass','',.false.)
     call reg%add('IGLOO-Models','k1',d_r(19),'0.2222', &
       'ETAB: bag-regime rate constant','',.false.)
     call reg%add('IGLOO-Models','k2',d_r(20),'0.2222', &

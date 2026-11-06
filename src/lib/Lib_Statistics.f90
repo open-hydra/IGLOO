@@ -7,7 +7,7 @@ module IGLOO_Lib_Statistics
     !> Bare samplers draw from the intrinsic random_number (serial pin-time path only); the *S
     !  twins take a per-particle stream state and are the only ones callable inside the OMP region.
     public :: RosinRammler, LogNormal, Normal, NormalStandard, ChiSquare
-    public :: RosinRammlerS, NormalStandardS, ChiSquareS
+    public :: NormalStandardS, ChiSquareS, GammaS
     public :: rngSeedFor, rngNext
 
     !> PDFs
@@ -144,19 +144,6 @@ contains
 
     end function NormalStandardS
 
-    !> Streamed Rosin-Rammler sample with size parameter x0 and spread parameter n.
-    function RosinRammlerS(x0, n, state) result(x)
-        implicit none
-        real(R8),    intent(in)    :: x0, n
-        integer(I8), intent(inout) :: state
-        real(R8) :: x
-
-        if (x0<=0._R8 .or. n<=0._R8) &
-            error stop ( ' [ERROR] Rosin-Rammler distribution: x0 and n must be positive.' )
-        x = x0*(-log(rngNext(state)))**(1._R8/n)
-
-    end function RosinRammlerS
-
     !> Streamed chi-squared sample with k degrees of freedom.
     function ChiSquareS(k, state) result(x)
         implicit none
@@ -173,6 +160,31 @@ contains
         enddo
 
     end function ChiSquareS
+
+    !> Streamed Gamma(alpha, 1) sample, alpha >= 1 (Marsaglia-Tsang 2000).
+    function GammaS(alpha, state) result(x)
+        implicit none
+        real(R8),    intent(in)    :: alpha
+        integer(I8), intent(inout) :: state
+        real(R8) :: x, d, c, z, v, u
+
+        if (.not.(alpha >= 1._R8 .and. alpha < huge(alpha))) &
+            error stop ( ' [ERROR] Gamma: the shape must be finite and >= 1.' )
+        d = alpha - 1._R8/3._R8
+        c = 1._R8/sqrt(9._R8*d)
+        do
+            do
+                z = NormalStandardS(state)
+                v = 1._R8 + c*z
+                if (v > 0._R8) exit
+            enddo
+            v = v*v*v
+            u = rngNext(state)
+            if (log(u) < 0.5_R8*z*z + d - d*v + d*log(v)) exit
+        enddo
+        x = d*v
+
+    end function GammaS
 
 
     !> Standard normal N(0,1), Marsaglia polar method; stateless (the second deviate is discarded).

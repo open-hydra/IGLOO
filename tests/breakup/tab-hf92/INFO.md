@@ -63,9 +63,9 @@ from `solfile.tec`, σ and μ_L from `input.ini`, ρ_L from `properties.dat`).
 | gate | condition | measured |
 |---|---|---|
 | P0 population | every class ≥ 15 exit records, one per parcel, every parcel in one class | 714 parcels, 25 to 33 per class, 0 without a class |
-| P1 every drop broke | d_exit < 0.999 d0 for every parcel (every class is above the onset We = 13) | max d_exit/d0 0.552905 |
-| P2 the cascade ended inside the box | every exit at the outlet (X ≥ Lx − 1e-6 m), d constant over x ≥ Lx/2, the last row's radius Weber number ρ_G \|u_g − u_p\|² (d/2)/σ below 6 | 0 lateral exits, 0 parcels changing d over x ≥ 0.6 m, max We_r 3.679 |
-| P3 the figure's size/velocity panel is defined | every parcel's rows bracket t_b = 5 t* of its class | 0 parcels leaving before t_b, min t_last/t_b 1.382 |
+| P1 every drop broke | d_exit < 0.999 d0 for every parcel (every class is above the onset We = 13) | max d_exit/d0 0.553539 |
+| P2 the cascade ended inside the box | every exit at the outlet (X ≥ Lx − 1e-6 m), d constant over x ≥ Lx/2, the last row's radius Weber number ρ_G \|u_g − u_p\|² (d/2)/σ below 6 | 0 lateral exits, 0 parcels changing d over x ≥ 0.6 m, max We_r 3.828 |
+| P3 the figure's size/velocity panel is defined | every parcel's rows bracket t_b = 5 t* of its class | 0 parcels leaving before t_b, min t_last/t_b 1.421 |
 
 RED (scratch copies, each exit 1):
 
@@ -84,50 +84,49 @@ changes between trajectory rows: a lower bound, the rows are 1 cm apart and none
 
 | class | We | u0 [m/s] | Re | n | SMD/d0 | [HF92] eq. [14] | MMD/SMD | events | x(5 t*) [m] | We_r, last row |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 15.00 | 30.000 | 1914 | 27 | 0.2806 | 0.1827 | 1.110 | 1 | 0.830–0.856 | 2.691 |
-| 2 | 17.49 | 32.394 | 2066 | 25 | 0.2462 | 0.1759 | 1.199 | 1 | 0.757–0.786 | 3.679 |
-| 3 | 20.40 | 34.986 | 2232 | 25 | 0.2245 | 0.1692 | 1.242 | 1 | 0.692–0.718 | 2.977 |
-| 4 | 23.79 | 37.781 | 2410 | 25 | 0.2201 | 0.1628 | 1.063 | 1 | 0.631–0.659 | 3.081 |
-| 5 | 27.74 | 40.797 | 2602 | 25 | 0.2276 | 0.1567 | 1.079 | 1 | 0.575–0.592 | 2.866 |
-| 6 | 32.35 | 44.057 | 2810 | 33 | 0.2001 | 0.1508 | 1.143 | 1 | 0.523–0.560 | 3.013 |
-| 7 | 37.72 | 47.573 | 3034 | 30 | 0.1406 | 0.1451 | 1.273 | 1 | 0.476–0.535 | 2.310 |
-| 8 | 43.99 | 51.375 | 3277 | 30 | 0.1402 | 0.1396 | 1.110 | 1 | 0.432–0.475 | 1.998 |
-| 9 | 51.30 | 55.480 | 3539 | 30 | 0.1329 | 0.1344 | 1.064 | 1–2 | 0.392–0.416 | 1.436 |
-| 10 | 59.82 | 59.910 | 3821 | 30 | 0.1179 | 0.1293 | 1.156 | 1–2 | 0.353–0.396 | 1.520 |
-| 11 | 69.76 | 64.696 | 4127 | 33 | 0.0926 | 0.1244 | 1.165 | 1 | 0.321–0.382 | 0.952 |
-| 12 | 81.35 | 69.864 | 4456 | 30 | 0.0789 | 0.1198 | 1.129 | 1–2 | 0.289–0.340 | 0.755 |
-| 13 | 94.87 | 75.447 | 4812 | 30 | 0.0713 | 0.1152 | 1.256 | 1–2 | 0.263–0.311 | 0.387 |
-| 14 | 110.63 | 81.473 | 5197 | 30 | 0.0522 | 0.1109 | 1.375 | 1–2 | 0.236–0.307 | 0.310 |
-| 15 | 129.01 | 87.981 | 5612 | 30 | 0.0611 | 0.1067 | 1.068 | 1 | 0.214–0.251 | 0.155 |
-| 16 | 150.45 | 95.011 | 6060 | 33 | 0.0462 | 0.1027 | 1.167 | 1–2 | 0.193–0.252 | 0.087 |
-| 17 | 175.44 | 102.598 | 6544 | 30 | 0.0382 | 0.0988 | 1.281 | 1 | 0.174–0.240 | 0.054 |
-| 18 | 204.59 | 110.794 | 7067 | 30 | 0.0365 | 0.0951 | 1.219 | 1 | 0.158–0.219 | 0.024 |
-| 19 | 238.58 | 119.644 | 7631 | 30 | 0.0347 | 0.0915 | 1.183 | 1 | 0.143–0.198 | 0.012 |
-| 20 | 278.22 | 129.202 | 8241 | 30 | 0.0256 | 0.0881 | 1.233 | 1 | 0.130–0.184 | 0.004 |
-| 21 | 324.45 | 139.524 | 8899 | 28 | 0.0244 | 0.0847 | 1.046 | 1 | 0.121–0.154 | 0.001 |
-| 22 | 378.35 | 150.669 | 9610 | 25 | 0.0220 | 0.0815 | 0.968 | 1 | 0.109–0.144 | 0.000 |
-| 23 | 441.21 | 162.704 | 10378 | 25 | 0.0161 | 0.0785 | 1.218 | 1 | 0.099–0.145 | 0.000 |
-| 24 | 514.52 | 175.702 | 11207 | 25 | 0.0143 | 0.0755 | 1.074 | 1 | 0.091–0.130 | 0.000 |
-| 25 | 600.00 | 189.737 | 12102 | 25 | 0.0112 | 0.0727 | 1.277 | 1 | 0.086–0.125 | 0.000 |
+| 1 | 15.00 | 30.000 | 1914 | 27 | 0.3795 | 0.1827 | 1.036 | 1 | 0.829–0.837 | 3.220 |
+| 2 | 17.49 | 32.394 | 2066 | 25 | 0.3379 | 0.1759 | 1.041 | 1 | 0.758–0.771 | 3.052 |
+| 3 | 20.40 | 34.986 | 2232 | 25 | 0.3282 | 0.1692 | 1.081 | 1 | 0.691–0.704 | 3.828 |
+| 4 | 23.79 | 37.781 | 2410 | 25 | 0.3149 | 0.1628 | 1.057 | 1 | 0.631–0.641 | 3.407 |
+| 5 | 27.74 | 40.797 | 2602 | 25 | 0.2502 | 0.1567 | 1.117 | 1 | 0.576–0.605 | 2.626 |
+| 6 | 32.35 | 44.057 | 2810 | 33 | 0.2467 | 0.1508 | 1.019 | 1 | 0.522–0.534 | 3.166 |
+| 7 | 37.72 | 47.573 | 3034 | 30 | 0.2283 | 0.1451 | 1.058 | 1–2 | 0.474–0.487 | 2.963 |
+| 8 | 43.99 | 51.375 | 3277 | 30 | 0.2017 | 0.1396 | 1.031 | 1–2 | 0.431–0.444 | 2.464 |
+| 9 | 51.30 | 55.480 | 3539 | 30 | 0.1659 | 0.1344 | 1.103 | 1–2 | 0.391–0.411 | 1.831 |
+| 10 | 59.82 | 59.910 | 3821 | 30 | 0.1491 | 0.1293 | 1.043 | 1–2 | 0.353–0.372 | 1.525 |
+| 11 | 69.76 | 64.696 | 4127 | 33 | 0.1200 | 0.1244 | 1.084 | 1–2 | 0.320–0.339 | 1.125 |
+| 12 | 81.35 | 69.864 | 4456 | 30 | 0.1018 | 0.1198 | 1.106 | 1–2 | 0.289–0.317 | 0.734 |
+| 13 | 94.87 | 75.447 | 4812 | 30 | 0.0785 | 0.1152 | 1.206 | 1–2 | 0.262–0.312 | 0.447 |
+| 14 | 110.63 | 81.473 | 5197 | 30 | 0.0738 | 0.1109 | 1.109 | 1–2 | 0.237–0.272 | 0.270 |
+| 15 | 129.01 | 87.981 | 5612 | 30 | 0.0624 | 0.1067 | 1.078 | 1 | 0.213–0.247 | 0.186 |
+| 16 | 150.45 | 95.011 | 6060 | 33 | 0.0499 | 0.1027 | 1.070 | 1–2 | 0.192–0.227 | 0.101 |
+| 17 | 175.44 | 102.598 | 6544 | 30 | 0.0433 | 0.0988 | 1.046 | 1 | 0.174–0.219 | 0.054 |
+| 18 | 204.59 | 110.794 | 7067 | 30 | 0.0389 | 0.0951 | 1.020 | 1 | 0.157–0.197 | 0.026 |
+| 19 | 238.58 | 119.644 | 7631 | 30 | 0.0354 | 0.0915 | 1.039 | 1 | 0.142–0.179 | 0.012 |
+| 20 | 278.22 | 129.202 | 8241 | 30 | 0.0295 | 0.0881 | 1.163 | 1 | 0.130–0.177 | 0.005 |
+| 21 | 324.45 | 139.524 | 8899 | 28 | 0.0263 | 0.0847 | 1.222 | 1 | 0.118–0.154 | 0.002 |
+| 22 | 378.35 | 150.669 | 9610 | 25 | 0.0188 | 0.0815 | 1.041 | 1 | 0.108–0.149 | 0.001 |
+| 23 | 441.21 | 162.704 | 10378 | 25 | 0.0172 | 0.0785 | 1.021 | 1 | 0.099–0.135 | 0.000 |
+| 24 | 514.52 | 175.702 | 11207 | 25 | 0.0152 | 0.0755 | 1.222 | 1 | 0.091–0.127 | 0.000 |
+| 25 | 600.00 | 189.737 | 12102 | 25 | 0.0134 | 0.0727 | 1.189 | 1 | 0.084–0.114 | 0.000 |
 
-- **SMD.** TAB's products are larger than eq. [14] in the bag regime (1.54× at We 15), inside its ±20 % at We
-  37.7–59.8 (4 classes) and below it from We 70, 6.5× below at We 600: over the series TAB's SMD falls about as
-  We^−0.87, eq. [14]'s as We^−1/4.
-- **TAB's population SMD is 0.736 r_s, not r_s.** A parcel draws its new radius from the Rosin–Rammler *number* pdf
-  (spread n = 3.5, truncated to [0.01 r_s, r)) whose r32 is r_s, and keeps its mass flow, so the population of a
-  class has SMD = 1/E[1/d] over the draws: Γ(1 + 2/n)/(Γ(1 + 3/n) Γ(1 − 1/n)) = 0.7364 r_s at n = 3.5, unchanged by
-  the truncation over the radii a parcel reaches. The figure shows what IGLOO represents.
-- **Distribution.** MMD/SMD is 0.968–1.375 over the classes, mean 1.164. TAB's own value after one event is
-  (ln 2)^1/n Γ(1 − 1/n) = 1.149 at n = 3.5 (MMD the median of the Rosin–Rammler draws, SMD 1/E[1/d] over them),
-  not the root-normal 1.2; with 25 to 33 draws a class falls anywhere in 1.01–1.36 and the mean of 25 classes in
-  1.11–1.18 (95 %, sampled with this case's class sizes and MMD rule).
+- **SMD.** TAB's products are larger than eq. [14] in the bag and multimode regimes (2.08× at We 15), inside its
+  ±20 % at We 59.8–81.4 (3 classes) and below it from We 95, 5.6× below at We 600: over the series TAB's SMD falls
+  about as We^−0.96, eq. [14]'s as We^−1/4.
+- **A class represents TAB's r_s.** A parcel draws its new radius from the *mass* distribution of the Rosin–Rammler
+  law (spread n = 3.5, truncated to [0.01 r_s, r)) whose r32 is r_s, and keeps its mass flow, so the drops of a
+  class have SMD = 1/E[1/d] over the draws = the law's r32 = r_s (`[KIVA2]` App. D and F draw the same way).
+- **Distribution.** MMD/SMD is 1.019–1.222 over the classes, mean 1.088. TAB's own value after one event is the
+  median of the draws over 1/E[1/d], 1.062 at n = 3.5, not the root-normal 1.2; with 25 to 33 one-event draws a class
+  falls in 0.99–1.15 and the mean of 25 classes in 1.04–1.08 (95 %, sampled with this case's class sizes and MMD
+  rule). The bag classes (We 15–32, mean 1.059) lie there; above them a product can break again (the events column,
+  a lower bound) and the classes reach 1.22.
 - **At t_b = 5 t*.** No parcel is still at d0, and no parcel has an event between the two rows bracketing t_b, so the
   interpolated d is a printed d; u_b = |u_g − u_p| is interpolated between the same rows. The ratio of IGLOO's
-  u0/u_b − 1 to eq. [13] has the median 0.30 at We 15, 1.00 at We 239 and 3.6 at We 600: in the bag regime the
+  u0/u_b − 1 to eq. [13] has the median 0.26 at We 15, 1.10 at We 239 and 2.8 at We 600: in the bag regime the
   products keep more of their relative velocity than H&F's drops (sphere drag against their deformed drops); from
-  We 324 every product is smaller than Fig. 6's smallest drop (x > 0.85). 496 of the 713 parcels with a slip at t_b
-  sit inside Fig. 6's x range; one parcel of class 25 (d = 3.24 µm) has no slip at t_b (u_p = u_g to the print's six
-  decimals).
+  We 324 every product is smaller than Fig. 6's smallest drop (x > 0.85). 500 of the 714 parcels sit inside Fig. 6's
+  x range; every parcel has a slip at t_b.
 - **Run.** 13.9 s at 5 threads on a host at load 65 (e2e timeout 300 s).
 
 ## Comparison plot (`verify.py` → `OUTPUT/tab-hf92.svg`, not gated)
@@ -143,8 +142,8 @@ Parcels are taken by ascending ID; the figure does not depend on the order of th
   [HF93] Fig. 1 are 5–15 % flatter than these. [HF93]'s text names its lines 1.0, 1.20 and 1.50 while its legend
   prints 1.5, 1.2, 1.1; the figure follows the legend.
 - (e) eq. [13] per parcel at t_b: x = (ρ_G/ρ_L)^1/2 d0/d, y = u0/u_b − 1, the correlation solid over 0.058–1.07 and
-  dotted beyond, Fig. 6's marker range shaded; the frame (x 0.01–10, y 0.01–10⁴) leaves out 2 parcels (the one
-  without a slip, and one at y = 1.4e6), the figure states the count.
+  dotted beyond, Fig. 6's marker range shaded; the frame (x 0.01–10, y 0.01–10⁴) holds every parcel (the figure
+  states the count of any parcel outside it or without a slip).
 
 Not drawn: the papers' data points (not digitized; the correlations carry the comparison) and the core drop after
 shear breakup ([HF93] §3.2–3.4: a TAB parcel stands for identical product drops and has no core).

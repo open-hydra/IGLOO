@@ -885,7 +885,7 @@ igloo_e2e_case(pe-sigma-table breakup/pe-sigma-table "e2e;breakup;pe;io")
 # a dead event-breakup path).
 igloo_e2e_case(tab-e2e breakup/tab-e2e "e2e;breakup;val;tab")
 # threads-tab-e2e: tab-e2e at 1, 2 and 5 threads -- the child sizes of the TAB resize are drawn inside the parallel
-# region, from each parcel's own stream. RED with the intrinsic random_number there (RosinRammler).
+# region, from each parcel's own stream. RED with the intrinsic random_number in GammaS's acceptance test.
 igloo_threads_case(threads-tab-e2e breakup/tab-e2e "e2e;breakup;omp")
 # tab-hf92: TAB on Hsiang & Faeth's water series (d0 = 1 mm, We 15-600, 25 classes): every drop breaks, the
 # cascade ends in the first half of the box, every parcel is in it at t_b = 5 t*; verify.py draws [HF92] eq. [14] and

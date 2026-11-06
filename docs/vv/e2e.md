@@ -1233,15 +1233,15 @@ root-normal 1.2, (d) the size distribution on `[HF93]` Fig. 1's axes with the
 root-normal lines for MMD/SMD = 1.5, 1.2 and 1.1 drawn from their definition, (e) the
 products' relative velocity $u_b$ at $t_b$ against `[HF93]` eq. [13].
 
-**Result:** 714/714 parcels break.  TAB's SMD is 1.54× eq. [14] at $We = 15$, within
-its ±20 % at $We$ 37.7–59.8 and 6.5× below it at $We = 600$: it falls about as
-$We^{-0.87}$, eq. [14] as $We^{-1/4}$.  A class's Sauter radius is 0.736 of TAB's
-$r_s$: a parcel keeps its mass flow over a draw from the Rosin–Rammler number pdf whose
-Sauter radius is $r_s$.  MMD/SMD is 0.968–1.375 (mean 1.16), the scatter of 25 to 33
-draws about TAB's own $(\ln 2)^{1/n}\,\Gamma(1-1/n) = 1.149$ ($n = 3.5$), below the
-root-normal 1.2.  At $t_b$ the ratio of $u_0/u_b - 1$ to eq. [13] has the median 0.30
-at $We = 15$, 1.00 at $We = 239$ and 3.6 at $We = 600$.  Neither TAB nor ETAB has
-`[HF93]`'s core drop, which is not drawn.
+**Result:** 714/714 parcels break.  TAB's SMD is 2.08× eq. [14] at $We = 15$, within
+its ±20 % at $We$ 59.8–81.4 and 5.6× below it at $We = 600$: it falls about as
+$We^{-0.96}$, eq. [14] as $We^{-1/4}$.  A class's Sauter radius is TAB's $r_s$: a parcel
+keeps its mass flow over a draw from the Rosin–Rammler law's mass distribution, whose
+drops have the Sauter radius $r_s$.  MMD/SMD is 1.019–1.222 (mean 1.09), about TAB's own
+1.062 after one event ($n = 3.5$; the median of the draws over their Sauter diameter),
+below the root-normal 1.2.  At $t_b$ the ratio of $u_0/u_b - 1$ to eq. [13] has the
+median 0.26 at $We = 15$, 1.10 at $We = 239$ and 2.8 at $We = 600$.  Neither TAB nor
+ETAB has `[HF93]`'s core drop, which is not drawn.
 
 <figure>
   {% include "vv/images/tab-hf92.svg" ignore missing %}

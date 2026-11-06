@@ -1,29 +1,31 @@
 program test_tab_moments
     !
-    ! D1 completion: TAB CHILD-SIZE distribution moments (the stochastic resize
-    ! path, method=2 Rosin-Rammler — the production default). Repeats N
-    ! identical from-rest breakup events through public breakupEvent
-    ! (exitLoop=.true.) and compares SAMPLE moments of the child radius against
-    ! an INDEPENDENT oracle that never calls production statistics code:
+    ! TAB PRODUCT-SIZE moments (the stochastic resize path, through public breakupEvent with
+    ! exitLoop=.true.). A parcel keeps its mass flow at a breakup, so a radius drawn from a pdf g
+    ! stands for drops of number density g(r)/r^3: the parcels represent the size law f only when
+    ! g is f's MASS distribution r^3 f(r)/E_f[r^3], and their represented Sauter radius is then
+    ! 1/E_g[1/r] = E_f[r^3]/E_f[r^2], the law's own. N identical from-rest events are repeated and
+    ! the SAMPLE moments of the product radius are compared with an INDEPENDENT oracle that never
+    ! calls production statistics code:
     !
     !   1. yDot at breakup from the undamped rest-drop closed form
     !      (mu_l -> tiny; same regime as test_breakup_tab TAB4),
     !      k = 1 + 4/3 + rho_l r^3 yDot^2/(8 sigma)  [ORA87 energy balance],
-    !      rs = r/k  (target Sauter radius of the children)
-    !   2. Children are Rosin-Rammler(rSize, n=3.5) REJECTION-truncated to
-    !      [0.01*rs, r), with rSize adjusted so the truncated D32 = rs
-    !      (production does a fixed-point on its own quadrature; the oracle
-    !      solves the same condition by BISECTION on an independent Simpson
-    !      quadrature of the RR pdf).
-    !   3. Compare sample E[r_child] and E[r_child^2] to the oracle's truncated
-    !      moments. Tolerance = 5 CLT standard errors (sd from the oracle) +
-    !      the production fixed-point's own 1e-4 rel stop (absorbed, ~50x
-    !      smaller). Also gates: every child in [2*rMin, dp), npdot scaling
-    !      npdot_new = npdot_old*(d_old/d_new)^3 per event.
-    !   TABM1 the same events with method = 1: the child radius is chi-square with n = nint(k) degrees
-    !      of freedom times rSize = rs/(n + 4) (untruncated Sauter radius rs: E[X^3]/E[X^2] = n + 4),
-    !      rejected into [0.01*rs, r); oracle the chi-square pdf on that window by the same Simpson
-    !      quadrature, n from the oracle's own k; tolerance as above.
+    !      rs = r/k  (target Sauter radius of the products)
+    !   TABM  method 2: the law is Rosin-Rammler(rSize, n=3.5) truncated to [0.01*rs, r), rSize such
+    !      that the truncated number-pdf D32 = rs (production does a fixed point on its own
+    !      quadrature; the oracle solves the same condition by BISECTION on an independent Simpson
+    !      quadrature of the RR pdf). Sample E[r], E[r^2] against the mass pdf's moments on the
+    !      window, m4/m3 and m5/m3 of the number pdf; tolerance 5 CLT standard errors + the
+    !      production fixed point's own 1e-4 relative stop (1.5e-4 / 3e-4 relative).
+    !   TABM-S  the represented Sauter radius N/sum(1/r) against the window's number-pdf D32 m3/m2
+    !      (= rs); tolerance 5 CLT standard errors (relative, sqrt(m1 m3/m2^2 - 1)/sqrt(N)) + 1.5e-4.
+    !   TABM1  method 1: the law is chi-square with nu = 2 degrees of freedom (KIVA-II's exponential)
+    !      times rSize = rs/(nu + 4) (untruncated Sauter radius rs: E[X^3]/E[X^2] = nu + 4), on the
+    !      same window; the oracle the chi-square pdf by the same Simpson quadrature; E[r], E[r^2]
+    !      against its mass pdf, tolerance as TABM.
+    !   TABM1-S  method 1's represented Sauter radius against the window's number-pdf D32, as TABM-S.
+    !   Every product lies in [0.01*rs, r) and npdot_new = npdot_old*(d_old/d_new)^3 per event.
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64, int64
     use IGLOO_Lib_Breakup, only: breakupEvent
@@ -47,17 +49,15 @@ program test_tab_moments
     real(R8), parameter :: bp_tab(4) = [8.0_R8, 5.0_R8, 12.0_R8, nSpread]
     integer,  parameter :: NEV = 20000
     integer,  parameter :: NQ = 4000                     ! Simpson panels
+    integer,  parameter :: NU1 = 2                       ! method 1's degrees of freedom
 
     real(R8) :: scaleFactor, u, wd, lam, yeq, tb, ydot_tb, kfac, rs, rMin
-    real(R8) :: rSizeO, m0o, m1o, m2o, m3o, mean_o, sd_r, sd_r2, mean2_o
-    real(R8) :: s1, s2, rch, dpn, err1, err2, tol1, tol2, npd
-    real(R8) :: rSizeC, c0, c1, c2, c4, meanC, mean2C, sdC, sd2C
-    integer  :: i, nout, exit_code, nchi
-    logical  :: ok_all, pass
+    real(R8) :: rSizeO, rSizeC, mo(0:7), mc(0:7)
+    integer  :: exit_code
+    logical  :: ok_all
 
     ok_all = .true.
     call init_report('verif_tab_moments.csv')
-    call seed_rng(42)
 
     ! ---- oracle chain (independent of production statistics) ----------------
     u    = sqrt(We_r*sigma/(rho_g*radius))
@@ -70,70 +70,22 @@ program test_tab_moments
     kfac = 1._R8 + 4._R8/3._R8 + rho_l*radius**3/(8._R8*sigma)*ydot_tb**2
     rs   = radius/kfac
     rMin = 0.01_R8*rs
-    ! solve truncated D32(rSize)=rs by bisection on the independent quadrature
+    write(*,'(a,es12.5,a,f8.5)') '   oracle: rs=', rs, '  k=', kfac
+
+    ! ---- TABM / TABM-S: method 2, Rosin-Rammler ------------------------------------
     call solve_rsize(rs, rMin, radius, nSpread, rSizeO)
-    call rr_trunc_moments(rSizeO, nSpread, rMin, radius, m0o, m1o, m2o, m3o)
-    mean_o  = m1o/m0o
-    mean2_o = m2o/m0o
-    sd_r  = sqrt(max(m2o/m0o - mean_o**2, 0._R8))
-    sd_r2 = sqrt(max(rr_mom4(rSizeO, nSpread, rMin, radius)/m0o - mean2_o**2, 0._R8))
-    write(*,'(a,es12.5,a,es12.5,a,f8.5)') '   oracle: rs=', rs, '  rSize=', rSizeO, &
-        '  k=', kfac
-    write(*,'(a,es12.5,a,es12.5)') '   oracle: E[r]=', mean_o, '  E[r2]=', mean2_o
-
-    ! ---- N production events -------------------------------------------------
+    call trunc_moments(1, rSizeO, nSpread, rMin, radius, mo)
+    write(*,'(a,es12.5,a,es12.5,a,es12.5)') '   oracle TABM: rSize=', rSizeO, '  E_m[r]=', mo(4)/mo(3), &
+        '  D32=', mo(3)/mo(2)
     scaleFactor = gamma(1._R8+2._R8/nSpread)/gamma(1._R8+3._R8/nSpread)
-    s1 = 0._R8;  s2 = 0._R8;  nout = 0
-    do i = 1, NEV
-        call tab_break(2, dpn, npd)
-        rch = 0.5_R8*dpn
-        if (rch < rMin .or. rch >= radius) nout = nout + 1
-        if (abs(npd - (dp0/dpn)**3) > 1e-9_R8*(dp0/dpn)**3) nout = nout + 1
-        s1 = s1 + rch;  s2 = s2 + rch*rch
-    end do
-    s1 = s1/NEV;  s2 = s2/NEV
+    call run_leg('TABM', 2, mo, rs, ok_all)
 
-    err1 = abs(s1 - mean_o);   tol1 = 5._R8*sd_r/sqrt(real(NEV,R8))  + 1.5e-4_R8*mean_o
-    err2 = abs(s2 - mean2_o);  tol2 = 5._R8*sd_r2/sqrt(real(NEV,R8)) + 3.0e-4_R8*mean2_o
-    ! (the additive terms bound the production fixed-point's 1e-4 rel stop:
-    !  d(mean)/d(rSize) ~ mean/rSize and d(m2) ~ 2x -> 1.5e-4/3e-4 with margin)
-
-    pass = assert_lt('TABM E[r_child] vs truncated-RR oracle',   err1, tol1) .and. &
-           assert_lt('TABM E[r_child^2] vs truncated-RR oracle', err2, tol2) .and. &
-           (nout == 0)
-    if (nout > 0) write(*,'(a,i0)') '   [TABM] bound/npdot violations: ', nout
-    ok_all = ok_all .and. pass
-    call append_row('TABM_child_moments', 'r,r2', max(err1/tol1,err2/tol2), err1, &
-                    0._R8, 0._R8, 1._R8, pass)
-
-    ! ---- TABM1: method 1, chi-square children --------------------------------------
-    nchi   = nint(kfac)
-    rSizeC = rs/real(nchi + 4, R8)
-    call chi2_trunc_moments(rSizeC, nchi, rMin, radius, c0, c1, c2, c4)
-    meanC  = c1/c0
-    mean2C = c2/c0
-    sdC    = sqrt(max(mean2C - meanC**2, 0._R8))
-    sd2C   = sqrt(max(c4/c0 - mean2C**2, 0._R8))
-    write(*,'(a,f8.5,a,i0,a,es12.5,a,es12.5,a,es12.5)') '   oracle TABM1: k=', kfac, '  n=', nchi, &
-        '  rSize=', rSizeC, '  E[r]=', meanC, '  E[r2]=', mean2C
-    s1 = 0._R8;  s2 = 0._R8;  nout = 0
-    do i = 1, NEV
-        call tab_break(1, dpn, npd)
-        rch = 0.5_R8*dpn
-        if (rch < rMin .or. rch >= radius) nout = nout + 1
-        if (abs(npd - (dp0/dpn)**3) > 1e-9_R8*(dp0/dpn)**3) nout = nout + 1
-        s1 = s1 + rch;  s2 = s2 + rch*rch
-    end do
-    s1 = s1/NEV;  s2 = s2/NEV
-    err1 = abs(s1 - meanC);   tol1 = 5._R8*sdC/sqrt(real(NEV,R8))  + 1.5e-4_R8*meanC
-    err2 = abs(s2 - mean2C);  tol2 = 5._R8*sd2C/sqrt(real(NEV,R8)) + 3.0e-4_R8*mean2C
-    pass = assert_lt('TABM1 E[r_child] vs truncated chi-square oracle',   err1, tol1) .and. &
-           assert_lt('TABM1 E[r_child^2] vs truncated chi-square oracle', err2, tol2) .and. &
-           (nout == 0)
-    if (nout > 0) write(*,'(a,i0)') '   [TABM1] bound/npdot violations: ', nout
-    ok_all = ok_all .and. pass
-    call append_row('TABM1_child_moments_chi2', 'r,r2', max(err1/tol1,err2/tol2), err1, &
-                    0._R8, 0._R8, 1._R8, pass)
+    ! ---- TABM1 / TABM1-S: method 1, chi-square with NU1 degrees of freedom ----------
+    rSizeC = rs/real(NU1 + 4, R8)
+    call trunc_moments(2, rSizeC, real(NU1, R8), rMin, radius, mc)
+    write(*,'(a,i0,a,es12.5,a,es12.5,a,es12.5)') '   oracle TABM1: nu=', NU1, '  rSize=', rSizeC, &
+        '  E_m[r]=', mc(4)/mc(3), '  D32=', mc(3)/mc(2)
+    call run_leg('TABM1', 1, mc, rs, ok_all)
 
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then
@@ -144,17 +96,54 @@ program test_tab_moments
 
 contains
 
-    subroutine seed_rng(s)
-        integer, intent(in) :: s
-        integer :: n
-        integer, allocatable :: put(:)
-        call random_seed(size=n)
-        allocate(put(n))
-        put = s
-        call random_seed(put=put)
-    end subroutine seed_rng
+    !> NEV events with the given method: E[r], E[r^2] against the mass pdf, the represented Sauter radius
+    !  against the number pdf's D32, the window and the npdot scaling; m = the number pdf's moments 0..7.
+    subroutine run_leg(label, method, m, rsT, ok)
+        character(len=*), intent(in)    :: label
+        integer,          intent(in)    :: method
+        real(R8),         intent(in)    :: m(0:7), rsT
+        logical,          intent(inout) :: ok
+        real(R8) :: s1, s2, sinv, rch, dpn, npd, mean1, mean2, sd1, sd2, err1, err2, tol1, tol2
+        real(R8) :: d32, sauter, errS, tolS
+        integer  :: i, nout
+        logical  :: pass, passS
+        s1 = 0._R8;  s2 = 0._R8;  sinv = 0._R8;  nout = 0
+        do i = 1, NEV
+            call tab_break(method, dpn, npd)
+            rch = 0.5_R8*dpn
+            if (rch < 0.01_R8*rsT .or. rch >= radius) nout = nout + 1
+            if (abs(npd - (dp0/dpn)**3) > 1e-9_R8*(dp0/dpn)**3) nout = nout + 1
+            s1 = s1 + rch;  s2 = s2 + rch*rch;  sinv = sinv + 1._R8/rch
+        end do
+        s1 = s1/NEV;  s2 = s2/NEV
+        ! mass pdf r^3 f/m3: E[r] = m4/m3, E[r^2] = m5/m3, E[r^4] = m7/m3
+        mean1 = m(4)/m(3)
+        mean2 = m(5)/m(3)
+        sd1   = sqrt(max(mean2 - mean1**2, 0._R8))
+        sd2   = sqrt(max(m(7)/m(3) - mean2**2, 0._R8))
+        err1 = abs(s1 - mean1);   tol1 = 5._R8*sd1/sqrt(real(NEV,R8)) + 1.5e-4_R8*mean1
+        err2 = abs(s2 - mean2);   tol2 = 5._R8*sd2/sqrt(real(NEV,R8)) + 3.0e-4_R8*mean2
+        write(*,'(3a,es12.5,a,es12.5,a,es12.5,a,es12.5)') '   [', label, '] E[r]=', s1, ' vs ', mean1, &
+            '  E[r2]=', s2, ' vs ', mean2
+        pass = assert_lt(label//' E[r] vs the truncated mass-pdf oracle',   err1, tol1) .and. &
+               assert_lt(label//' E[r^2] vs the truncated mass-pdf oracle', err2, tol2) .and. &
+               (nout == 0)
+        if (nout > 0) write(*,'(3a,i0)') '   [', label, '] bound/npdot violations: ', nout
+        call append_row(label//'_product_moments', 'r,r2', max(err1/tol1,err2/tol2), err1, &
+                        0._R8, 0._R8, 1._R8, pass)
+        ! represented Sauter radius: 1/E_g[1/r] = m3/m2; relative SE of mean(1/r) = sqrt(m1 m3/m2^2 - 1)/sqrt(N)
+        d32    = m(3)/m(2)
+        sauter = real(NEV,R8)/sinv
+        errS   = abs(sauter/d32 - 1._R8)
+        tolS   = 5._R8*sqrt(max(m(1)*m(3)/m(2)**2 - 1._R8, 0._R8))/sqrt(real(NEV,R8)) + 1.5e-4_R8
+        write(*,'(3a,es12.5,a,es12.5,a,f8.5,a)') '   [', label, '-S] represented Sauter radius ', sauter, &
+            ' vs D32 ', d32, ' (', sauter/rsT, ' rs)'
+        passS = assert_lt(label//'-S represented Sauter radius vs the window D32, relative', errS, tolS)
+        call append_row(label//'-S_sauter', 'r32', errS/tolS, errS, 0._R8, 0._R8, 1._R8, passS)
+        ok = ok .and. pass .and. passS
+    end subroutine run_leg
 
-    !> one from-rest TAB breakup event with the given resize method; returns child dp and npdot factor
+    !> one from-rest TAB breakup event with the given resize method; returns product dp and npdot factor
     subroutine tab_break(method, dp_new, npd_fac)
         integer,  intent(in)  :: method
         real(R8), intent(out) :: dp_new, npd_fac
@@ -170,71 +159,28 @@ contains
         npd_fac = ev(2)
     end subroutine tab_break
 
-    !> Rosin-Rammler number pdf (unnormalized on the window)
-    pure function rr_pdf(r, x0, n) result(p)
-        real(R8), intent(in) :: r, x0, n
-        real(R8) :: p
-        p = (n/x0)*(r/x0)**(n-1._R8)*exp(-(r/x0)**n)
-    end function rr_pdf
-
-    !> truncated moments m_k = int r^k pdf dr on [a,b], Simpson
-    subroutine rr_trunc_moments(x0, n, a, b, m0, m1, m2, m3)
-        real(R8), intent(in)  :: x0, n, a, b
-        real(R8), intent(out) :: m0, m1, m2, m3
-        real(R8) :: h, r, w, p
-        integer  :: j
-        m0 = 0._R8; m1 = 0._R8; m2 = 0._R8; m3 = 0._R8
-        h = (b-a)/real(NQ,R8)
-        do j = 0, NQ
-            r = a + h*real(j,R8)
-            if (j == 0 .or. j == NQ) then; w = 1._R8
-            elseif (mod(j,2) == 1) then;   w = 4._R8
-            else;                          w = 2._R8
-            end if
-            p  = w*rr_pdf(r, x0, n)
-            m0 = m0 + p
-            m1 = m1 + p*r
-            m2 = m2 + p*r*r
-            m3 = m3 + p*r*r*r
-        end do
-        m0 = m0*h/3._R8; m1 = m1*h/3._R8; m2 = m2*h/3._R8; m3 = m3*h/3._R8
-    end subroutine rr_trunc_moments
-
-    function rr_mom4(x0, n, a, b) result(m4)
-        real(R8), intent(in) :: x0, n, a, b
-        real(R8) :: m4, h, r, w
-        integer  :: j
-        m4 = 0._R8
-        h = (b-a)/real(NQ,R8)
-        do j = 0, NQ
-            r = a + h*real(j,R8)
-            if (j == 0 .or. j == NQ) then; w = 1._R8
-            elseif (mod(j,2) == 1) then;   w = 4._R8
-            else;                          w = 2._R8
-            end if
-            m4 = m4 + w*rr_pdf(r, x0, n)*r**4
-        end do
-        m4 = m4*h/3._R8
-    end function rr_mom4
-
-    !> chi-square(n) pdf of x = r/x0, as a density in r
-    pure function chi2_pdf(r, x0, n) result(p)
-        real(R8), intent(in) :: r, x0
-        integer,  intent(in) :: n
+    !> number pdf in r: law 1 Rosin-Rammler(x0, shape), law 2 chi-square(shape degrees of freedom) of r/x0
+    pure function pdf(law, r, x0, shape) result(p)
+        integer,  intent(in) :: law
+        real(R8), intent(in) :: r, x0, shape
         real(R8) :: p, x, h
-        x = r/x0
-        h = 0.5_R8*real(n, R8)
-        p = x**(h - 1._R8)*exp(-0.5_R8*x)/(2._R8**h*gamma(h))/x0
-    end function chi2_pdf
+        if (law == 1) then
+            p = (shape/x0)*(r/x0)**(shape-1._R8)*exp(-(r/x0)**shape)
+        else
+            x = r/x0
+            h = 0.5_R8*shape
+            p = x**(h - 1._R8)*exp(-0.5_R8*x)/(2._R8**h*gamma(h))/x0
+        end if
+    end function pdf
 
-    !> truncated moments m_k = int r^k pdf dr on [a,b] of the scaled chi-square, Simpson
-    subroutine chi2_trunc_moments(x0, n, a, b, m0, m1, m2, m4)
-        real(R8), intent(in)  :: x0, a, b
-        integer,  intent(in)  :: n
-        real(R8), intent(out) :: m0, m1, m2, m4
+    !> truncated moments m_k = int r^k pdf dr on [a,b], k = 0..7, Simpson
+    subroutine trunc_moments(law, x0, shape, a, b, m)
+        integer,  intent(in)  :: law
+        real(R8), intent(in)  :: x0, shape, a, b
+        real(R8), intent(out) :: m(0:7)
         real(R8) :: h, r, w, p
-        integer  :: j
-        m0 = 0._R8; m1 = 0._R8; m2 = 0._R8; m4 = 0._R8
+        integer  :: j, k
+        m = 0._R8
         h = (b-a)/real(NQ,R8)
         do j = 0, NQ
             r = a + h*real(j,R8)
@@ -242,27 +188,25 @@ contains
             elseif (mod(j,2) == 1) then;   w = 4._R8
             else;                          w = 2._R8
             end if
-            p  = w*chi2_pdf(r, x0, n)
-            m0 = m0 + p
-            m1 = m1 + p*r
-            m2 = m2 + p*r*r
-            m4 = m4 + p*r**4
+            p = w*pdf(law, r, x0, shape)
+            do k = 0, 7
+                m(k) = m(k) + p*r**k
+            end do
         end do
-        m0 = m0*h/3._R8; m1 = m1*h/3._R8; m2 = m2*h/3._R8; m4 = m4*h/3._R8
-    end subroutine chi2_trunc_moments
+        m = m*h/3._R8
+    end subroutine trunc_moments
 
-    !> bisection on rSize: truncated D32(rSize) = rs
+    !> bisection on rSize: truncated number-pdf D32(rSize) = rs
     subroutine solve_rsize(rs_t, a, b, n, x0)
         real(R8), intent(in)  :: rs_t, a, b, n
         real(R8), intent(out) :: x0
-        real(R8) :: lo, hi, mid, m0, m1, m2, m3, d32
+        real(R8) :: lo, hi, mid, m(0:7)
         integer  :: it
         lo = 0.01_R8*rs_t;  hi = 10._R8*rs_t
         do it = 1, 200
             mid = 0.5_R8*(lo+hi)
-            call rr_trunc_moments(mid, n, a, b, m0, m1, m2, m3)
-            d32 = m3/m2
-            if (d32 < rs_t) then; lo = mid; else; hi = mid; end if
+            call trunc_moments(1, mid, n, a, b, m)
+            if (m(3)/m(2) < rs_t) then; lo = mid; else; hi = mid; end if
         end do
         x0 = 0.5_R8*(lo+hi)
     end subroutine solve_rsize

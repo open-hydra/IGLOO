@@ -197,8 +197,8 @@ three regimes once the core drop is removed; the size/velocity correlation eq. [
 correlate shock-tube drops; they are not closed forms of TAB or ETAB, so they are drawn, not gated.
 [tab-hf92](tab-hf92/INFO.md) and [etab-hf92](etab-hf92/INFO.md) run `[HF93]`'s water series (d0 = 1000 µm, We 15–600,
 the air and water of its Table 1) and gate the figure's preconditions only (every drop breaks, the cascade ends inside
-the box, every parcel is in it at t_b). TAB's SMD falls about as We^−0.87 against eq. [14]'s We^−1/4: 1.54× eq. [14]
-at We 15, inside its ±20 % at We 37.7–59.8, 6.5× below it at We 600; its MMD/SMD, 0.968–1.375 (mean 1.164), is
-the scatter of 25 to 33 draws about TAB's own (ln 2)^1/n Γ(1 − 1/n) = 1.149 (n = 3.5), not 1.2.
+the box, every parcel is in it at t_b). TAB's SMD falls about as We^−0.96 against eq. [14]'s We^−1/4: 2.08× eq. [14]
+at We 15, inside its ±20 % at We 59.8–81.4, 5.6× below it at We 600; its MMD/SMD, 1.019–1.222 (mean 1.088), lies
+about TAB's own 1.062 after one event (n = 3.5; the products drawn from the size law's mass distribution), not 1.2.
 ETAB's cascade gives one size per class (two where it ends at the onset We_r = 6), 3.3× eq. [14] at We 15 and 5.1×
 below it at We 600. Neither model has `[HF93]`'s core drop.

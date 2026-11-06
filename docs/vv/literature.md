@@ -252,9 +252,9 @@ $k_1 \ne k_2$.
 
 **Gates.** `test_breakup_tab` (TAB1 oscillator vs the closed form,
 TAB2 independent RK4 of the raw `[ORA87]` ODE, TAB3 rest-drop critical Weber,
-TAB4 breakup time via bisection); `test_tab_moments` (child-size $E[r]$, $E[r^2]$
-over 20 000 sampled breakups vs a truncated Rosin–Rammler moment oracle,
-CLT-band tolerance); `test_breakup_etab` (ET1–ET4: product-size ratio
+TAB4 breakup time via bisection); `test_tab_moments` (product-size $E[r]$, $E[r^2]$
+over 20 000 sampled breakups vs the mass distribution of the truncated Rosin–Rammler and
+chi-square laws, and the Sauter radius the parcels represent, CLT-band tolerance); `test_breakup_etab` (ET1–ET4: product-size ratio
 $\ln(r_\mathrm{new}/r)$ vs the Tanner $K_\mathrm{br}$ branches, continuity across
 `WeTrans`, ET4 child $v_\perp = A\dot{x}$ magnitude, direction and the no-kick regime).
 
