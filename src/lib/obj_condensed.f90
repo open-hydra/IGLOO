@@ -47,6 +47,8 @@ module IGLOO_data_phases
     integer  :: brkupSelect=0
     logical  :: sigVariable
     logical  :: mupVariable
+    logical  :: klVariable  = .false.   !> k_l(T) from the Conductivity column (P2T)
+    logical  :: epsVariable = .false.   !> eps(T) from the Emissivity column
     real(R8) :: mup   !> liquid material viscosity (defined if mup=const)
     real(R8) :: sigma !> liquid material surface tension (defined if sigma=const)
     real(R8), allocatable :: bp(:)        !> the breakup model's constants
@@ -70,6 +72,7 @@ module IGLOO_data_phases
     !> Optional per-material properties; each is read only by the model that needs it.
     real(R8) :: alphaE = 1._R8, kLiq = 0._R8, muLiq = 0._R8
     real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8, xiOx0 = 0._R8
+    integer  :: xiLaw = 0            !> the cap's retained fraction: 0 xi-cap, 1 Gallier et al. 2021's law
     real(R8) :: Tign = 0._R8, Tmelt = 2327._R8, hFus = 0._R8, Tnuc = 0._R8, cpSol = 0._R8
     real(R8) :: qComb = 0._R8
     real(R8) :: rhoSol = 0._R8       !> solid density [kg/m3]; 0 = the liquid density
@@ -110,6 +113,8 @@ module IGLOO_data_phases
     integer  :: brkupSelect=0
     logical  :: sigVariable=.false.
     logical  :: mupVariable=.false.
+    logical  :: klVariable=.false.    !> k_l(T) from the Conductivity column (P2T)
+    logical  :: epsVariable=.false.   !> eps(T) from the Emissivity column
     real(R8) :: mup   = 0._R8 !> liquid material viscosity       (defined if mup=const)
     real(R8) :: sigma = 0._R8 !> liquid material surface tension (defined if sigma=const)
     real(R8), allocatable :: bp(:)        !> the breakup model's constants: [IGLOO-Models], then the tokens
@@ -126,6 +131,7 @@ module IGLOO_data_phases
     real(R8) :: Mv         = 0._R8
     real(R8) :: Lv         = 0._R8
     real(R8) :: Tboil      = 0._R8
+    real(R8) :: pBoil      = 101325._R8  !> pressure at which Tboil is given [Pa]
     real(R8) :: cpv        = 0._R8
     real(R8) :: Le         = 1._R8
     real(R8) :: Yinf       = 0._R8
@@ -135,6 +141,7 @@ module IGLOO_data_phases
     !> Optional per-material properties; each is read only by the model that needs it.
     real(R8) :: alphaE = 1._R8, kLiq = 0._R8, muLiq = 0._R8
     real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8, xiOx0 = 0._R8
+    integer  :: xiLaw = 0            !> the cap's retained fraction: 0 xi-cap, 1 Gallier et al. 2021's law
     real(R8) :: Tign = 0._R8, Tmelt = 2327._R8, hFus = 0._R8, Tnuc = 0._R8, cpSol = 0._R8
     real(R8) :: qComb = 0._R8
     real(R8) :: rhoSol = 0._R8       !> rho-solid [kg/m3]; 0 = the liquid density
@@ -151,7 +158,7 @@ module IGLOO_data_phases
     !> sub-objects
     type(obj_group), allocatable :: group(:)
     !> Thermodynamic tables (defined if variable properties)
-    real(R8), dimension(:), allocatable :: hTab, cpTab, rhoTab, sigTab, mupTab, psatTab, LvTab, cpvTab
+    real(R8), dimension(:), allocatable :: hTab, cpTab, rhoTab, sigTab, mupTab, psatTab, LvTab, cpvTab, klTab, epsTab
   contains
     procedure, pass(self), public :: assign_material2group
   end type obj_material
@@ -258,13 +265,14 @@ contains
       gr%hOff = self%hOff
       if (.not.self%rhoVariable) gr%rho   = self%rho
       !> Breakup properties
+      !> the liquid viscosity table of a breaking or P2T material
+      if (self%brkupSelect > 0 .or. self%liqSelect > 0) gr%mupVariable = self%mupVariable
       if (self%brkupSelect > 0) then
         gr%brkupWord   = self%brkupWord
         gr%brkupSelect   = self%brkupSelect
         gr%brkupEvent    = self%brkupEvent
         gr%brkupEqOde    = self%brkupEqOde
         gr%brkupHasChild = self%brkupHasChild
-        gr%mupVariable = self%mupVariable
         gr%sigVariable = self%sigVariable
         if (.not.self%mupVariable) gr%mup   = self%mup
         if (.not.self%sigVariable) gr%sigma = self%sigma
@@ -296,11 +304,13 @@ contains
       if (self%combSelect > 0 .or. self%solidSelect > 0) then
         gr%Kburn = self%Kburn; gr%nBurn = self%nBurn; gr%Xeff  = self%Xeff
         gr%betaPart = self%betaPart; gr%xiCap = self%xiCap; gr%xiOx0 = self%xiOx0; gr%Tign = self%Tign
+        gr%xiLaw = self%xiLaw
         gr%Tmelt = self%Tmelt; gr%hFus = self%hFus; gr%Tnuc = self%Tnuc; gr%cpSol = self%cpSol
         gr%qComb = self%qComb
       endif
       if (self%solidSelect > 0) gr%rhoSol = self%rhoSol
       gr%emissivity = self%emissivity
+      gr%klVariable = self%klVariable; gr%epsVariable = self%epsVariable
       gr%productName = self%productName; gr%prodID = self%prodID
       gr%rhoRes = self%rhoRes; gr%cpRes = self%cpRes; gr%hOffRes = self%hOffRes; gr%cStretch = self%cStretch
       gr%resOn = self%resOn; gr%dRes = self%dRes
@@ -330,7 +340,8 @@ contains
     endif
 
     mdotSwitch = (self%evapSelect > 0)
-    mdl = determineModel(mdotSwitch, self%brkupEqOde, self%combSelect, self%solidSelect, cap=self%xiCap > 0._R8)
+    mdl = determineModel(mdotSwitch, self%brkupEqOde, self%combSelect, self%solidSelect, &
+                         cap=self%xiCap > 0._R8 .or. self%xiLaw > 0)
     self%neq  = computeNeq(mdl, eulerSwitch, srcBodyForce)
     !> Build fixed-size propFlags: [varCp, varRho, varSig, varMup, varPsat, varLv, varCpv]
     propFlags = [self%cpVariable, self%rhoVariable, .false., .false., .false., .false., .false.]
@@ -338,18 +349,20 @@ contains
     if (self%brkupSelect > 0) then
       propFlags(3) = self%sigVariable
       propFlags(4) = self%mupVariable
+    elseif (self%liqSelect > 0) then
+      propFlags(4) = self%mupVariable   !> P2T's liquid viscosity table; no aux slot moves
     endif
     if (self%evapSelect > 0) propFlags(5) = self%psatVariable
     if (self%brkupSelect > 0) then
       call setupRHS(mdl, self%brkupSelect, self%evapSelect, self%liqSelect, self%intfSelect, &
                     self%boilSelect, self%combSelect, propFlags, &
-                    self%bp, self%bpMethod, self%bpScale, nAux, nAuxSt, nEvV, radiation=self%emissivity > 0._R8, &
-                    solidDensity=self%rhoSol > 0._R8)
+                    self%bp, self%bpMethod, self%bpScale, nAux, nAuxSt, nEvV, &
+                    radiation=self%emissivity > 0._R8 .or. self%epsVariable, solidDensity=self%rhoSol > 0._R8)
     else
       call setupRHS(mdl, self%brkupSelect, self%evapSelect, self%liqSelect, self%intfSelect, &
                     self%boilSelect, self%combSelect, propFlags, &
-                    bp_empty, 1, 1._R8, nAux, nAuxSt, nEvV, radiation=self%emissivity > 0._R8, &
-                    solidDensity=self%rhoSol > 0._R8)
+                    bp_empty, 1, 1._R8, nAux, nAuxSt, nEvV, &
+                    radiation=self%emissivity > 0._R8 .or. self%epsVariable, solidDensity=self%rhoSol > 0._R8)
     endif
 
     do i = start, end
@@ -460,6 +473,7 @@ contains
       if (self%combSelect > 0 .or. self%solidSelect > 0) then
         part%Kburn = self%Kburn; part%nBurn = self%nBurn; part%Xeff = self%Xeff
         part%betaPart = self%betaPart; part%xiCap = self%xiCap; part%xiOx0 = self%xiOx0; part%Tign = self%Tign
+        part%xiLaw = self%xiLaw
         part%Tmelt = self%Tmelt; part%hFus = self%hFus; part%Tnuc = self%Tnuc; part%cpSol = self%cpSol
         part%qComb = self%qComb
       endif

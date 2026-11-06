@@ -14,11 +14,17 @@ program test_properties_reader
     !                 PR15 lookupTab at a non-finite temperature: NaN, and no invalid flag
     !                 PR-V2 validate_vapour_columns: each code once
     !                 PR-S2 validate_positive_column (Sigma, Viscosity): each code once
+    !                 PR-C1 classify_table_tokens: the Conductivity and Emissivity columns
     !   two-material  PR9 nm-: zone A tabulated, zone B all zero (Clausius-Clapeyron)
     !   atlas-water   PR10 atlas-: the table ATLAS GPB writes for water with psat-vapour = H2O
     !                 PR-V1 atlas-: its Lv, Mv, Cpv columns by name, Lv(T) and cpv(T) through tableValue
     !   sigma-mu      PR-S1 sm-: zone A's Sigma and Viscosity columns tabulated, zone B all zero (the
     !                 [IGLOO-Properties] constants)
+    !   columns       PR-C2 kc-: zone A's Conductivity, Viscosity and Emissivity columns of a non-breaking P2T
+    !                 material (the Emissivity row above 1 cut to 1), zone B all zero (its [IGLOO-Properties] emissivity)
+    !   boiling-pressure  BP1 bp-: material A's boiling-temperature given at boiling-pressure 2e5 Pa, Clausius-Clapeyron:
+    !                 the anchor folded, the curve through (T_b, p_B) against the closed form p_B exp(-a (1/T - 1/T_b))
+    !                 BP2 bp-: material B's Psat column, through (T_b, 3 atm), checked against its boiling-pressure
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_IO_INI,         only: read_IGLOO_input
@@ -67,6 +73,10 @@ program test_properties_reader
         call atlas_water_legs(nbad)
     case ('sigma-mu')
         call sigma_mu_legs(nbad)
+    case ('columns')
+        call columns_legs(nbad)
+    case ('boiling-pressure')
+        call boiling_pressure_legs(nbad)
     case default
         write(*,'(a)') 'test_properties_reader: unknown mode "'//trim(mode)//'"'
         nbad = 1
@@ -313,6 +323,60 @@ contains
     end subroutine sigma_mu_legs
 
 
+    !> PR-C2: a non-breaking P2T material takes its Conductivity, Viscosity and Emissivity columns as its tables,
+    !  bitwise, the Emissivity row above 1 at exactly 1; a material whose three columns are zero allocates nothing
+    !  and keeps its [IGLOO-Properties] emissivity.
+    subroutine columns_legs(nbad)
+        integer, intent(inout) :: nbad
+        type(obj_material), allocatable :: mat(:)
+        character(len=32) :: prefix
+        real(R8) :: T(200), kl(200), mu(200), eps(200), epsCut(200), row(7)
+        integer  :: u, ios, n
+        character(len=512) :: line
+
+        prefix = 'kc-'
+        call read_cdp_properties(prefix, mat)
+        call check(nm == 2 .and. Tmin == 280 .and. Tmax == 380,   'PR-C2 kc-: two materials, Tmin = 280, Tmax = 380', nbad)
+        call check(mat(1)%klVariable .and. mat(1)%mupVariable .and. mat(1)%epsVariable, &
+                   'PR-C2 kc-: zone A k_l, mu_l and eps tabulated', nbad)
+        if (allocated(mat(1)%klTab) .and. allocated(mat(1)%mupTab) .and. allocated(mat(1)%epsTab)) then
+            open(newunit=u, file='INPUT/kc-properties.dat', status='old', action='read')
+            n = 0
+            do
+                read(u, '(a)', iostat=ios) line
+                if (ios /= 0) exit
+                read(line, *, iostat=ios) row
+                if (ios /= 0) then
+                    if (n > 0) exit
+                    cycle
+                endif
+                n = n + 1
+                T(n) = row(1); kl(n) = row(5); mu(n) = row(6); eps(n) = row(7)
+            enddo
+            close(u)
+            call check(n == 101 .and. nint(T(1)) == Tmin,         'PR-C2 kc-: zone A read here spans the table', nbad)
+            call check(lbound(mat(1)%klTab,1) == Tmin .and. ubound(mat(1)%klTab,1) == Tmax .and. &
+                       lbound(mat(1)%mupTab,1) == Tmin .and. ubound(mat(1)%mupTab,1) == Tmax .and. &
+                       lbound(mat(1)%epsTab,1) == Tmin .and. ubound(mat(1)%epsTab,1) == Tmax, &
+                       'PR-C2 kc-: k_l, mu_l and eps tables on [280, 380]', nbad)
+            call check(all(mat(1)%klTab == kl(1:n)),             'PR-C2 kc-: k_l(T) = the column, bitwise at the 101 nodes', nbad)
+            call check(all(mat(1)%mupTab == mu(1:n)),            'PR-C2 kc-: mu_l(T) = the column, bitwise at the 101 nodes', nbad)
+            call check(count(eps(1:n) > 1._R8) == 1 .and. eps(21) == 1.2_R8, &
+                       'PR-C2 kc-: the file holds one Emissivity row above 1 (1.2 at 300 K)', nbad)
+            epsCut(1:n) = min(eps(1:n), 1._R8)
+            call check(mat(1)%epsTab(300) == 1._R8,              'PR-C2 kc-: eps(300 K) = 1.2 cut to exactly 1', nbad)
+            call check(all(mat(1)%epsTab == epsCut(1:n)),        'PR-C2 kc-: every other eps row = the column, bitwise', nbad)
+        else
+            call check(.false.,                                   'PR-C2 kc-: k_l, mu_l and eps tables allocated', nbad)
+        endif
+        call check(.not. mat(2)%klVariable .and. .not. mat(2)%mupVariable .and. .not. mat(2)%epsVariable .and. &
+                   .not. allocated(mat(2)%klTab) .and. .not. allocated(mat(2)%mupTab) .and. &
+                   .not. allocated(mat(2)%epsTab), 'PR-C2 kc-: zone B all zero, no tables', nbad)
+        call check(mat(2)%emissivity == 0.5_R8 .and. mat(1)%emissivity == 0._R8, &
+                   'PR-C2 kc-: zone B emissivity = 0.5 from [IGLOO-Properties], zone A 0', nbad)
+    end subroutine columns_legs
+
+
     !> A column read from the file at T: linear between the nodes, the end value outside (tableValue's rule).
     pure function file_value(col, Tx) result(v)
         real(R8), intent(in) :: col(:), Tx
@@ -340,7 +404,7 @@ contains
         integer, intent(inout) :: nbad
         real(R8) :: tab(100:110), bad(100:110), T(11), cp(11), rho(11), h(11), nan, col(5)
         character(len=64) :: tok4(4), tok5(5), tok6(6)
-        integer :: k, icp, irho, ih, ips, code, ilv, imv, icpv, isig, imu
+        integer :: k, icp, irho, ih, ips, code, ilv, imv, icpv, isig, imu, ikl, ieps
         integer :: nzone, nsize, ndata, ntrail, badline, nannounced(nzone_max), nrows(nzone_max)
         logical :: relative
 
@@ -421,6 +485,26 @@ contains
         tok6 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'viscosity', 'Viscosity']
         call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
         call check(code == TAB_DUPLICATE,                                        'PR8 Viscosity twice: DUPLICATE', nbad)
+
+        ! PR-C1: the Conductivity and Emissivity names, their optional indices, the duplicate check without them
+        tok6 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'Emissivity', 'Conductivity']
+        call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu, ikl, ieps)
+        call check(code == TAB_OK .and. ieps == 4 .and. ikl == 5 .and. icp == 1 .and. irho == 2 .and. ih == 3 .and. &
+                   ips == 0 .and. isig == 0 .and. imu == 0, 'PR-C1 Emissivity and Conductivity: their columns, by name', nbad)
+        tok6 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'Emissivity', 'EMISSIVITY']
+        call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu, ikl, ieps)
+        call check(code == TAB_DUPLICATE,                                        'PR-C1 Emissivity twice: DUPLICATE', nbad)
+        call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
+        call check(code == TAB_DUPLICATE,                                        'PR-C1 Emissivity twice, no optionals: DUPLICATE', nbad)
+        tok6 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy', 'conductivity', 'Conductivity']
+        call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu, ikl, ieps)
+        call check(code == TAB_DUPLICATE,                                        'PR-C1 Conductivity twice: DUPLICATE', nbad)
+        call classify_table_tokens(tok6, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
+        call check(code == TAB_DUPLICATE,                                        'PR-C1 Conductivity twice, no optionals: DUPLICATE', nbad)
+        tok4 = [character(len=64) :: 'Temperature', 'Cp', 'Density', 'Enthalpy']
+        call classify_table_tokens(tok4, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu, ikl, ieps)
+        call check(code == TAB_OK .and. icp == 1 .and. irho == 2 .and. ih == 3 .and. ikl == 0 .and. ieps == 0, &
+                   'PR-C1 the 4-column header with the optionals: today''s indices, no Conductivity or Emissivity', nbad)
 
         ! PR-S2: the Sigma and Viscosity column check, in its order of precedence
         col = [0.07_R8, 0.06_R8, 0.05_R8, 0.04_R8, 0.03_R8]
@@ -630,6 +714,42 @@ contains
             endif
         enddo
     end function roundtrip
+
+
+    !> boiling-pressure: the Clausius-Clapeyron line through (boiling-temperature, boiling-pressure).
+    subroutine boiling_pressure_legs(nbad)
+        use IGLOO_Lib_Evaporation, only: psat_CC, boilingTemperatureCC
+        integer, intent(inout) :: nbad
+        type(obj_material), allocatable :: mat(:)
+        character(len=32) :: prefix
+        real(R8), parameter :: TBA = 393.15_R8, PBA = 2.0e5_R8, TBB = 406.7_R8, PBB = 303975._R8
+        real(R8), parameter :: A = 2.26e6_R8*18._R8/8314.46_R8, T2 = 350._R8
+        real(R8) :: invT, rInv, rTb, rT2, dTb, rTbB
+
+        prefix = 'bp-'
+        call read_cdp_properties(prefix, mat)
+        call check(nm == 2 .and. size(mat) == 2,                 'BP bp-: two materials', nbad)
+        if (size(mat) /= 2) return
+        ! BP1: Clausius-Clapeyron through (T_b, p_B); the closed form p_B exp(-a (1/T - 1/T_b)) is the oracle
+        call check(mat(1)%pBoil == PBA .and. .not. mat(1)%psatVariable, &
+                   'BP1 bp-: material A, boiling-pressure 2e5 Pa read, Clausius-Clapeyron', nbad)
+        invT = 1._R8/TBA + log(PBA/Patm)/A
+        rInv = abs(mat(1)%invTboil - invT)/invT
+        rTb  = psat_CC(TBA, mat(1)%LvMvOverRu, mat(1)%invTboil)/PBA - 1._R8
+        rT2  = psat_CC(T2, mat(1)%LvMvOverRu, mat(1)%invTboil)/(PBA*exp(-A*(1._R8/T2 - 1._R8/TBA))) - 1._R8
+        dTb  = boilingTemperatureCC(PBA, mat(1)%LvMvOverRu, mat(1)%invTboil) - TBA
+        write(*,'(a,es10.3,a,es10.3,a,es10.3,a,es10.3,a)') '   BP1: invTboil ', rInv, ' rel; psat(T_b)/p_B - 1 ', rTb, &
+            '; psat(350 K) ', rT2, ' rel; T_B(p_B) - T_b ', dTb, ' K'
+        call check(rInv <= 2._R8*epsilon(1._R8), 'BP1 bp-: invTboil = 1/T_b + ln(p_B/p_atm)/a to 4u', nbad)
+        call check(abs(rTb) <= 2.e-14_R8,        'BP1 bp-: psat(T_b) = p_B to 2e-14', nbad)
+        call check(abs(rT2) <= 2.e-14_R8,        'BP1 bp-: psat(350 K) = the closed form to 2e-14', nbad)
+        call check(abs(dTb) <= 1.e-12_R8,        'BP1 bp-: the boiling temperature at p_B = T_b within 1e-12 K', nbad)
+        ! BP2: the Psat column passes its check against boiling-pressure (3 atm), not one atmosphere
+        call check(mat(2)%pBoil == PBB .and. mat(2)%psatVariable .and. allocated(mat(2)%psatTab), &
+                   'BP2 bp-: material B, boiling-pressure 3 atm read, Psat column tabulated', nbad)
+        rTbB = psat_CC(TBB, mat(2)%LvMvOverRu, mat(2)%invTboil)/PBB - 1._R8
+        call check(abs(rTbB) <= 2.e-14_R8,       'BP2 bp-: its Clausius-Clapeyron anchor folded too, psat(T_b) = p_B', nbad)
+    end subroutine boiling_pressure_legs
 
 
     subroutine check(cond, name, nbad)

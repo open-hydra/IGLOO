@@ -38,7 +38,7 @@ X_OUT      = 2.0        # nozzle exit is at x ~ 2.05 (axis-200: both parcels exi
 WP         = 0.5        # [IGLOO-BC] wp of ID 1
 X_ID2      = 2.051541   # axis-200's ID 2 last x (unchanged by ID 1's wp)
 X_ID2_TOL  = 1.0e-6
-N_FOLD_MIN = 9          # measured 18 (OMP 1 and 5, 3 runs each, identical); floor = half
+N_FOLD_MIN = 5          # half the measured 10 (ifx, gfortran; OMP 1, 5; 3 runs each) less their spread 0
 Z_PRINT    = 1.0e-6     # one F12.6 print unit
 
 

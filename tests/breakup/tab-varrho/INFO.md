@@ -12,14 +12,14 @@ diameter is derived at the segment-end temperature, so the mass must be taken at
 temperature. `check.py`:
 
 - **M** between consecutive trajectory rows of a parcel the printed mass is equal to print precision, or it changes
-  by at least 10 % (a breakup; the smallest measured change is 89 %);
+  by at least 10 % (a breakup; the smallest measured change is 86 %);
 - **D** every row: the printed `d` equals `(6m/(πρ(T)))^(1/3)` at the printed `m` and `T`, to print precision;
 - **G** at least 10 parcels break; every parcel heats by at least 0.1 K and has at least 20 pairs of equal rows.
 
 The functions are reused by `tab-evap-frozen-varrho` (M, D) and `khrt-varrho` (D).
 
 ## Pass criterion
-All gates. Measured: 18 of 25 parcels break; no change between events; D worst 0.987 of its tolerance.
+All gates. Measured: 18 of 25 parcels break; no change between events; D worst 0.982 of its tolerance.
 
 ## Falsification
 - The mass taken at the injection density with the event diameter at the segment-end temperature: the mass drifts

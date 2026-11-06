@@ -31,7 +31,7 @@ module IGLOO_Lib_Properties
 
   character(len=*), parameter :: grammar = &
     'expected: VARIABLES = "Temperature", "Cp", "Density", "Enthalpy" (or "Enthalpy_abs")'// &
-    '[, "Psat"[, "Lv"][, "Mv"][, "Cpv"]][, "Sigma"][, "Viscosity"], '// &
+    '[, "Psat"[, "Lv"][, "Mv"][, "Cpv"]][, "Sigma"][, "Viscosity"][, "Conductivity"][, "Emissivity"], '// &
     'Temperature first and the others in any order, one zone per material, rows on consecutive integer kelvins'
 
 contains
@@ -135,16 +135,21 @@ contains
 
 
   !> Maps the header names to column indices of vars (column 1 is Temperature, read as the mesh).
-  pure subroutine classify_table_tokens(tokens, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
+  pure subroutine classify_table_tokens(tokens, icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu, &
+                                        ikl, ieps)
     character(len=*), intent(in)  :: tokens(:)
     integer,          intent(out) :: icp, irho, ih, ips, code
     logical,          intent(out) :: relative
     integer,          intent(out) :: ilv, imv, icpv, isig, imu
-    integer :: t
+    integer,          intent(out), optional :: ikl, ieps   !> Conductivity, Emissivity
+    integer :: t, jkl, jeps
 
     icp = 0; irho = 0; ih = 0; ips = 0; relative = .true.
     ilv = 0; imv = 0; icpv = 0; isig = 0; imu = 0
+    jkl = 0; jeps = 0
     code = TAB_NO_TEMPERATURE
+    if (present(ikl))  ikl  = 0
+    if (present(ieps)) ieps = 0
     if (size(tokens) < 1) return
     if (tokens(1) /= 'Temperature' .and. tokens(1) /= 'temperature') return
     code = TAB_OK
@@ -179,7 +184,15 @@ contains
       case ('Viscosity', 'viscosity', 'VISCOSITY')
         if (imu > 0) code = TAB_DUPLICATE
         imu = t - 1
+      case ('Conductivity', 'conductivity', 'CONDUCTIVITY')
+        if (jkl > 0) code = TAB_DUPLICATE
+        jkl = t - 1
+      case ('Emissivity', 'emissivity', 'EMISSIVITY')
+        if (jeps > 0) code = TAB_DUPLICATE
+        jeps = t - 1
       end select
+      if (present(ikl))  ikl  = jkl
+      if (present(ieps)) ieps = jeps
       if (code /= TAB_OK) return
     enddo
     if (icp == 0) code = TAB_NO_CP
@@ -258,10 +271,10 @@ contains
 
 
   !> Finite; all zero means absent; non-negative; non-decreasing; not constant; the boiling
-  !  temperature inside [Tmin, Tmax-1] and psat there within a factor 2 of one atmosphere.
-  pure function validate_psat_column(tab, lo, hi, Tboil, Patm) result(code)
+  !  temperature inside [Tmin, Tmax-1] and psat there within a factor 2 of the boiling pressure pBoil.
+  pure function validate_psat_column(tab, lo, hi, Tboil, pBoil) result(code)
     integer,  intent(in) :: lo, hi
-    real(R8), intent(in) :: tab(lo:hi), Tboil, Patm
+    real(R8), intent(in) :: tab(lo:hi), Tboil, pBoil
     integer  :: code, i
     real(R8) :: ratio
     code = PSAT_NONFINITE
@@ -277,7 +290,7 @@ contains
     code = PSAT_TBOIL_RANGE
     if (.not. (Tboil >= real(lo, R8) .and. Tboil <= real(hi-1, R8))) return
     i = int(Tboil)
-    ratio = (tab(i) + (tab(i+1) - tab(i))*(Tboil - real(i, R8)))/Patm
+    ratio = (tab(i) + (tab(i+1) - tab(i))*(Tboil - real(i, R8)))/pBoil
     code = PSAT_TBOIL_MISMATCH
     if (ratio < 0.5_R8 .or. ratio > 2._R8) return
     code = PSAT_OK
@@ -293,7 +306,7 @@ contains
     case (PSAT_NONMONOTONE);    txt = 'a pressure that decreases with T'
     case (PSAT_CONSTANT);       txt = 'a constant pressure'
     case (PSAT_TBOIL_RANGE);    txt = 'boiling-temperature outside [Tmin, Tmax-1] of the table'
-    case (PSAT_TBOIL_MISMATCH); txt = 'psat(boiling-temperature) is not within a factor 2 of one atmosphere'
+    case (PSAT_TBOIL_MISMATCH); txt = 'psat(boiling-temperature) is not within a factor 2 of boiling-pressure'
     case default;               txt = 'unknown Psat error'
     end select
   end function psat_reason

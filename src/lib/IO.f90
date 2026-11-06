@@ -14,11 +14,13 @@ contains
 
   !> Read the phase file (one line per material: "<name> <groups> [key=value ...]", the tokens being
   !  the per-material models ATLAS GPB writes from [GPB-Phase*]) and properties.dat (columns named by
-  !  its VARIABLES line: cp, rho, h, an optional Psat and its pair's Lv, Mv, Cpv, optional Sigma and
-  !  Viscosity); breakup/evaporation constants come from [IGLOO-Properties] (Lv, Mv, cpv, sigma, mu from
-  !  there or from their columns).
+  !  its VARIABLES line: cp, rho, h, an optional Psat and its pair's Lv, Mv, Cpv, optional Sigma,
+  !  Viscosity, Conductivity and Emissivity); breakup/evaporation constants come from [IGLOO-Properties]
+  !  (Lv, Mv, cpv, sigma, mu, emissivity from there or from their columns; k-liq, mu-liq from the material line
+  !  or from their columns; boiling-temperature at boiling-pressure, one atmosphere unless given).
   subroutine read_cdp_properties(prefix,material)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
+    use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
     use IGLOO_variables,       only: nm, phaseChange, breakup_word, evaporation_word, &
                                      liqSelect, intfSelect, boilSelect
     use IGLOO_data_phases,     only: obj_material
@@ -29,13 +31,13 @@ contains
                                      vapour_reason, tableValue, COL_OK, COL_ABSENT, validate_positive_column, &
                                      column_reason
     use IGLOO_IO_INI,          only: ini_Mv, ini_Lv, ini_Tboil, ini_cpv, ini_Le, ini_Yinf, &
-                                        ini_sigma, ini_mu, ini_emissivity, &
+                                        ini_sigma, ini_mu, ini_emissivity, ini_pBoil, &
                                         set_material_defaults, apply_material_key, finalize_material_models, &
                                         read_breakup_constants, apply_breakup_tokens
     use Lib_ORION_data
     use Lib_Tecplot
     use IGLOO_Lib_Breakup,     only: assign_breakup
-    use IGLOO_Lib_Evaporation, only: assign_evaporation, Patm, Ru
+    use IGLOO_Lib_Evaporation, only: assign_evaporation, Patm, Ru, invTboil_at
     implicit none
     character(len=32),  intent(in)  :: prefix
     type(obj_material), intent(out), allocatable :: material(:)
@@ -47,9 +49,9 @@ contains
     character(len=512)     :: tablefile
     character(len=tok_len) :: tokens(ntok_max)
     integer                :: ntok, icp, irho, ih, ips, code, Ni, i0
-    integer                :: ilv, imv, icpv, isig, imu
+    integer                :: ilv, imv, icpv, isig, imu, ikl, ieps, nCut
     integer                :: nzone, nsize, ndata, ntrail, badline, nannounced(nzone_max), nrows(nzone_max)
-    logical                :: relative, found, exists
+    logical                :: relative, found, exists, given
     real(R8)               :: ratio
     real(R8), allocatable  :: colLv(:), colMv(:), colCpv(:), colPs(:)   !> a material's vapour columns, 0 if absent
     character(len=16)      :: vapNames
@@ -123,13 +125,9 @@ contains
       !> interface=LK requires a vapor-fraction-driven evaporation model
       if (material(i)%intfSelect == 1 .and. material(i)%evapSelect == 1) &
         error stop '[ERROR] interface=LK needs evaporation in {CEM,CEM-B,ASM,TC}; d2-law is BT-driven, LK inert'
-      !> liquid-conduction=P2T: an evaporating material, its liquid conductivity and one liquid viscosity
+      !> liquid-conduction=P2T: an evaporating material and one liquid viscosity (k_l and mu_l after the table)
       if (material(i)%liqSelect > 0 .and. material(i)%evapSelect == 0) &
         error stop '[ERROR] liquid-conduction=P2T requires an evaporating material'
-      if (material(i)%liqSelect > 0 .and. .not. material(i)%kLiq > 0._R8) &
-        error stop '[ERROR] liquid-conduction=P2T requires k-liq > 0'
-      if (material(i)%liqSelect > 0 .and. material(i)%brkupSelect == 0 .and. .not. material(i)%muLiq > 0._R8) &
-        error stop '[ERROR] liquid-conduction=P2T requires mu-liq > 0'
       if (material(i)%liqSelect > 0 .and. material(i)%brkupSelect > 0 .and. material(i)%muLiq > 0._R8) &
         error stop '[ERROR] liquid-conduction=P2T with breakup takes the breakup viscosity: remove mu-liq'
       !> boiling=ZGR: an evaporating material
@@ -163,7 +161,8 @@ contains
     if (.not. exists) call refuse_table(tablefile, 'no such file')
     call read_variables_line(tablefile, tokens, ntok, found)
     if (.not. found) call refuse_table(tablefile, 'no VARIABLES line')
-    call classify_table_tokens(tokens(1:ntok), icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu)
+    call classify_table_tokens(tokens(1:ntok), icp, irho, ih, ips, relative, code, ilv, imv, icpv, isig, imu, &
+                               ikl, ieps)
     if (code /= TAB_OK) call refuse_table(tablefile, table_reason(code))
     !> "Enthalpy" = relative (cp*T, or the SP-database integral), "Enthalpy_abs" = formation enthalpy included
     hDatum = merge('relative', 'absolute', relative)
@@ -207,6 +206,16 @@ contains
     if (allocated(ini_Mv))    then; if (size(ini_Mv)    /= nm) error stop '[ERROR] [IGLOO-Properties] Mv: size /= number of materials';    endif
     if (allocated(ini_Lv))    then; if (size(ini_Lv)    /= nm) error stop '[ERROR] [IGLOO-Properties] Lv: size /= number of materials';    endif
     if (allocated(ini_Tboil)) then; if (size(ini_Tboil) /= nm) error stop '[ERROR] [IGLOO-Properties] boiling-temperature (alias Tboil): size /= number of materials'; endif
+    if (allocated(ini_pBoil)) then; if (size(ini_pBoil) /= nm) error stop '[ERROR] [IGLOO-Properties] boiling-pressure: size /= number of materials'; endif
+    !> boiling-pressure is a pressure for every material, evaporating or not (as ICE)
+    if (allocated(ini_pBoil)) then
+      do i = 1, nm
+        if (.not. (ini_pBoil(i) > 0._R8 .and. ieee_is_finite(ini_pBoil(i)))) then
+          write(*,'(A,I0,A,ES12.5)') ' [ERROR] [IGLOO-Properties] boiling-pressure of material ', i, ' = ', ini_pBoil(i)
+          error stop 'IGLOO: [IGLOO-Properties] boiling-pressure must be positive and finite'
+        endif
+      enddo
+    endif
     if (allocated(ini_cpv))   then; if (size(ini_cpv)   /= nm) error stop '[ERROR] [IGLOO-Properties] cpv: size /= number of materials';   endif
     if (allocated(ini_Le))    then; if (size(ini_Le)    /= nm) error stop '[ERROR] [IGLOO-Properties] Le: size /= number of materials';    endif
     if (allocated(ini_Yinf))  then; if (size(ini_Yinf)  /= nm) error stop '[ERROR] [IGLOO-Properties] Yinf: size /= number of materials';  endif
@@ -262,22 +271,13 @@ contains
       endif
       write(*,'(A,I0,A,ES12.4,A)') '  >> [material ', i, '] enthalpy datum '//trim(mat%hDatum)// &
                                    ' (hOff = ', mat%hOff, ' J/kg)'
-      !> solidification integrates T with constant cp
-      if (mat%solidSelect > 0 .and. mat%cpVariable) &
-        error stop '[ERROR] solidification=on requires a constant-cp material (temperature state)'
 
       !> sigma and mu of a breaking material: a non-zero Sigma/Viscosity column or the [IGLOO-Properties] entry
       if (mat%brkupSelect > 0) then
-        code = COL_ABSENT
-        if (isig > 0) code = validate_positive_column(blk%vars(isig,1:Ni,1,1))
-        if (code /= COL_OK .and. code /= COL_ABSENT) &
-          call refuse_table(tablefile, trim(zone_label(i, mat%matName))//'Sigma column: '//column_reason(code))
-        if (code == COL_OK) then
+        given = .false.
+        if (isig > 0) call read_positive_column(i, mat%matName, blk%vars(isig,1:Ni,1,1), 'Sigma', 'sigma', mat%sigTab, given)
+        if (given) then
           mat%sigVariable = .true.
-          allocate(mat%sigTab(Tmin:Tmax))
-          mat%sigTab(Tmin:Tmax) = blk%vars(isig,1:Ni,1,1)
-          write(*,'(A,I0,A,I0,A,I0,A)') '  >> [material ', i, '] sigma tabulated from properties.dat (', &
-                                        Tmin, '..', Tmax, ' K)'
           if (allocated(ini_sigma)) then
             if (ini_sigma(i) /= 0._R8) error stop 'IGLOO: sigma given both in [IGLOO-Properties] and as a properties.dat column'
           endif
@@ -286,16 +286,10 @@ contains
           if (.not. (mat%sigma > 0._R8)) &
             error stop 'IGLOO: Breakup requires sigma > 0: a Sigma column in properties.dat or [IGLOO-Properties] sigma'
         endif
-        code = COL_ABSENT
-        if (imu > 0) code = validate_positive_column(blk%vars(imu,1:Ni,1,1))
-        if (code /= COL_OK .and. code /= COL_ABSENT) &
-          call refuse_table(tablefile, trim(zone_label(i, mat%matName))//'Viscosity column: '//column_reason(code))
-        if (code == COL_OK) then
+        given = .false.
+        if (imu > 0) call read_positive_column(i, mat%matName, blk%vars(imu,1:Ni,1,1), 'Viscosity', 'mu', mat%mupTab, given)
+        if (given) then
           mat%mupVariable = .true.
-          allocate(mat%mupTab(Tmin:Tmax))
-          mat%mupTab(Tmin:Tmax) = blk%vars(imu,1:Ni,1,1)
-          write(*,'(A,I0,A,I0,A,I0,A)') '  >> [material ', i, '] mu tabulated from properties.dat (', &
-                                        Tmin, '..', Tmax, ' K)'
           if (allocated(ini_mu)) then
             if (ini_mu(i) /= 0._R8) error stop 'IGLOO: mu given both in [IGLOO-Properties] and as a properties.dat column'
           endif
@@ -303,6 +297,57 @@ contains
           if (allocated(ini_mu)) mat%mup = ini_mu(i)
           if (.not. (mat%mup > 0._R8)) &
             error stop 'IGLOO: Breakup requires mu > 0: a Viscosity column in properties.dat or [IGLOO-Properties] mu'
+        endif
+      endif
+
+      !> liquid-conduction=P2T: the liquid conductivity, a non-zero Conductivity column or the token k-liq
+      if (mat%liqSelect > 0) then
+        given = .false.
+        if (ikl > 0) call read_positive_column(i, mat%matName, blk%vars(ikl,1:Ni,1,1), 'Conductivity', 'k-liq', &
+                                               mat%klTab, given)
+        if (given) then
+          mat%klVariable = .true.
+          if (mat%kLiq /= 0._R8) &
+            error stop 'IGLOO: k-liq given both on the material line and as a properties.dat Conductivity column'
+        elseif (.not. mat%kLiq > 0._R8) then
+          error stop '[ERROR] liquid-conduction=P2T requires k-liq > 0 or a Conductivity column in properties.dat'
+        endif
+      elseif (ikl > 0) then
+        if (any(blk%vars(ikl,1:Ni,1,1) /= 0._R8)) write(*,'(A,I0,A)') '  >> [material ', i, &
+          '] Conductivity column not used: this material does not run liquid-conduction=P2T'
+      endif
+      !> the P2T liquid viscosity of a non-breaking material: a non-zero Viscosity column or the token mu-liq
+      if (mat%liqSelect > 0 .and. mat%brkupSelect == 0) then
+        given = .false.
+        if (imu > 0) call read_positive_column(i, mat%matName, blk%vars(imu,1:Ni,1,1), 'Viscosity', 'mu-liq', &
+                                               mat%mupTab, given)
+        if (given) then
+          mat%mupVariable = .true.
+          if (mat%muLiq /= 0._R8) &
+            error stop 'IGLOO: mu-liq given both on the material line and as a properties.dat Viscosity column'
+        elseif (.not. mat%muLiq > 0._R8) then
+          error stop '[ERROR] liquid-conduction=P2T requires mu-liq > 0 or a Viscosity column in properties.dat'
+        endif
+      elseif (mat%brkupSelect == 0 .and. imu > 0) then
+        if (any(blk%vars(imu,1:Ni,1,1) /= 0._R8)) write(*,'(A,I0,A)') '  >> [material ', i, &
+          '] Viscosity column not used: this material neither breaks nor runs liquid-conduction=P2T'
+      endif
+
+      !> the grey-body emissivity eps(T): a non-zero Emissivity column or [IGLOO-Properties] emissivity; rows above 1 cut
+      if (ieps > 0) then
+        given = .false.
+        call read_positive_column(i, mat%matName, blk%vars(ieps,1:Ni,1,1), 'Emissivity', 'emissivity', mat%epsTab, &
+                                  given, ': grey-body radiation with the gas temperature')
+        if (given) then
+          if (mat%emissivity /= 0._R8) &
+            error stop 'IGLOO: emissivity given both in [IGLOO-Properties] and as a properties.dat column'
+          nCut = count(mat%epsTab > 1._R8)
+          if (nCut > 0) then
+            write(*,'(A,I0,A,I0,A,ES10.3,A)') '[WARNING] IGLOO: properties.dat Emissivity column above 1 cut to 1.0 '// &
+              'for material ', i, ' (', nCut, ' rows, largest ', maxval(mat%epsTab), ')'
+            where (mat%epsTab > 1._R8) mat%epsTab = 1._R8
+          endif
+          mat%epsVariable = .true.
         endif
       endif
 
@@ -340,6 +385,8 @@ contains
         if (allocated(ini_Tboil)) then; material(i)%Tboil = ini_Tboil(i)
         else; error stop '[ERROR] Evaporation requires boiling-temperature (alias Tboil) in [IGLOO-Properties]'
         endif
+        material(i)%pBoil = Patm
+        if (allocated(ini_pBoil)) material(i)%pBoil = ini_pBoil(i)
         ! Pre-compute constants
         material(i)%LvMvOverRu = material(i)%Lv * material(i)%Mv / 8314.46_R8
         material(i)%invTboil   = 1._R8 / material(i)%Tboil
@@ -350,7 +397,7 @@ contains
         if (mat%evapSelect == 0) then
           write(*,'(A,I0,A)') '  >> [material ', i, '] Psat column not used: this material does not evaporate'
         else
-          code = validate_psat_column(blk%vars(ips,1:Ni,1,1), Tmin, Tmax, mat%Tboil, Patm)
+          code = validate_psat_column(blk%vars(ips,1:Ni,1,1), Tmin, Tmax, mat%Tboil, mat%pBoil)
           if (code == PSAT_ABSENT) then
             write(*,'(A,I0,A)') '  >> [material ', i, '] Psat column all zero: Clausius-Clapeyron is used'
           elseif (code /= PSAT_OK) then
@@ -360,9 +407,9 @@ contains
             allocate(mat%psatTab(Tmin:Tmax))
             mat%psatTab(Tmin:Tmax) = blk%vars(ips,:,1,1)
             i0 = int(mat%Tboil)
-            ratio = (mat%psatTab(i0) + (mat%psatTab(i0+1) - mat%psatTab(i0))*(mat%Tboil - real(i0,R8)))/Patm
+            ratio = (mat%psatTab(i0) + (mat%psatTab(i0+1) - mat%psatTab(i0))*(mat%Tboil - real(i0,R8)))/mat%pBoil
             write(*,'(A,I0,A,I0,A,I0,A,F7.4)') '  >> [material ', i, '] p_sat tabulated from properties.dat (', &
-              Tmin, '..', Tmax, ' K), psat(boiling-temperature)/Patm = ', ratio
+              Tmin, '..', Tmax, ' K), psat(boiling-temperature)/boiling-pressure = ', ratio
           endif
         endif
       endif
@@ -407,10 +454,49 @@ contains
         endif
       endif
 
+      !> boiling-temperature given at boiling-pressure: the same Clausius-Clapeyron line anchored at one atmosphere
+      if (mat%evapSelect > 0 .and. mat%pBoil /= Patm) then
+        if (.not. mat%LvMvOverRu > 0._R8) error stop 'IGLOO: boiling-pressure needs Lv > 0 and Mv > 0'
+        mat%invTboil = invTboil_at(mat%Tboil, mat%pBoil, mat%LvMvOverRu)
+        if (.not. mat%invTboil > 0._R8) error stop &
+          'IGLOO: boiling-pressure and boiling-temperature give no one-atmosphere boiling point on the Clausius-Clapeyron line'
+        !> the line is the saturation curve only without a Psat column
+        if (.not. mat%psatVariable) write(*,'(A,I0,A,ES12.5,A,ES12.5,A,ES12.5,A)') '  >> [material ', i, &
+          '] boiling-temperature ', mat%Tboil, ' K at boiling-pressure ', mat%pBoil, &
+          ' Pa: Clausius-Clapeyron through ', 1._R8/mat%invTboil, ' K at one atmosphere'
+      endif
+
       end associate 
     enddo
     close(unit)
     call resolve_products(material)
+
+  contains
+
+    !> A material's optional positive column: refused when malformed, tabulated when non-zero, absent when all zero.
+    subroutine read_positive_column(i, name, col, label, what, tab, given, tail)
+      integer,               intent(in)    :: i
+      character(len=*),      intent(in)    :: name, label, what
+      real(R8),              intent(in)    :: col(:)
+      real(R8), allocatable, intent(inout) :: tab(:)
+      logical,               intent(out)   :: given
+      character(len=*),      intent(in), optional :: tail
+      integer :: c
+      c = validate_positive_column(col)
+      if (c /= COL_OK .and. c /= COL_ABSENT) &
+        call refuse_table(tablefile, trim(zone_label(i, name))//label//' column: '//column_reason(c))
+      given = c == COL_OK
+      if (.not. given) return
+      allocate(tab(Tmin:Tmax))
+      tab(Tmin:Tmax) = col
+      if (present(tail)) then
+        write(*,'(A,I0,A,I0,A,I0,A)') '  >> [material ', i, '] '//what//' tabulated from properties.dat (', &
+                                      Tmin, '..', Tmax, ' K)'//tail
+      else
+        write(*,'(A,I0,A,I0,A,I0,A)') '  >> [material ', i, '] '//what//' tabulated from properties.dat (', &
+                                      Tmin, '..', Tmax, ' K)'
+      endif
+    end subroutine read_positive_column
 
   end subroutine read_cdp_properties
 
@@ -421,22 +507,29 @@ contains
   subroutine resolve_products(material)
     use IGLOO_variables,      only: nm
     use IGLOO_data_phases,    only: obj_material
-    use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch, capStretchX0
+    use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch, capStretchX0, buildXiLaw
     use IGLOO_Mod_MPI,        only: mpi_is_root
     implicit none
     type(obj_material), intent(inout) :: material(:)
     integer :: i, j, p
+    logical :: capOn
 
     do i = 1, nm
       associate(mat => material(i))
+      !> the cap: a constant retained fraction xi-cap, or Gallier's law alone (xi-cap beside it refused)
+      if (mat%xiLaw > 0 .and. mat%xiCap > 0._R8) &
+        error stop 'IGLOO: xi-cap beside xi-law=Gallier21: the law gives the retained fraction'
+      if (mat%xiLaw > 0 .and. mat%combSelect == 0) error stop 'IGLOO: xi-law=Gallier21 requires combustion=Beckstead'
+      capOn = mat%xiCap > 0._R8 .or. mat%xiLaw > 0
       if (mat%xiCap < 0._R8 .or. mat%xiCap > 1._R8) error stop '[ERROR] xi-cap must lie in [0, 1]'
       if (mat%xiOx0 < 0._R8 .or. mat%xiOx0 >= 1._R8) error stop '[ERROR] xi-ox0 must lie in [0, 1)'
-      if (mat%xiOx0 > 0._R8 .and. .not. (mat%combSelect > 0 .and. mat%xiCap > 0._R8)) &
-        error stop '[ERROR] xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0'
+      if (mat%xiOx0 > 0._R8 .and. .not. (mat%combSelect > 0 .and. capOn)) &
+        error stop '[ERROR] xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0 or xi-law=Gallier21'
       if ((len_trim(mat%productName) > 0 .or. mat%resOn .or. mat%dRes > 0._R8) .and. &
-          .not. (mat%combSelect > 0 .and. mat%xiCap > 0._R8)) &
-        error stop '[ERROR] product, residue and d-residue require combustion=Beckstead and xi-cap > 0'
-      if (mat%xiCap > 0._R8) then
+          .not. (mat%combSelect > 0 .and. capOn)) &
+        error stop '[ERROR] product, residue and d-residue require combustion=Beckstead and &
+                   &xi-cap > 0 or xi-law=Gallier21'
+      if (capOn) then
         p = 0
         do j = 1, nm
           if (len_trim(mat%productName) > 0 .and. trim(material(j)%matName) == trim(mat%productName)) p = j
@@ -456,7 +549,14 @@ contains
         mat%cpRes   = material(p)%cp
         mat%hOffRes = material(p)%hOff
         call buildLobeTable()
-        if (mat%xiOx0 > 0._R8) then
+        if (mat%xiLaw > 0) then
+          !> the law's stretch is the parcel's own, from its injected size (integrate)
+          call buildXiLaw()
+          mat%cStretch = 1._R8
+          if (mpi_is_root) write(*,'(a,i0,a)') '  >> [material ', i, '] oxide cap on product '//trim(mat%productName)// &
+            ': xi-law=Gallier21 (g of the current d_Al, held at its 20 and 400 um values outside them; h held past'// &
+            ' f_ox = 0.9), the stretch c per parcel'
+        elseif (mat%xiOx0 > 0._R8) then
           mat%cStretch = capStretchX0(mat%xiCap, mat%nBurn, mat%xiOx0, mat%rho, mat%rhoRes)
           write(*,'(a,i0,a,f9.6,a,f6.4)') '  >> [material ', i, '] oxide cap on product '//trim(mat%productName)// &
                                           ': stretch c = ', mat%cStretch, ' from xi-ox0 = ', mat%xiOx0

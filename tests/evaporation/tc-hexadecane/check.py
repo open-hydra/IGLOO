@@ -2,8 +2,8 @@
 """Gate: Tonini-Cossali evaporation of an n-hexadecane drop with TEMPERATURE-
 DEPENDENT liquid density (TC2012 Fig. 11 conditions).
 
-Two things are validated, both along the MEASURED Tp(x) (so the gate is on the mass-rate
-law and the variable-density diameter, not on the Tp evolution):
+Two things are validated along the MEASURED Tp(x) (so they gate the mass-rate law and the
+variable-density diameter, not the Tp evolution, which PC2 below gates):
 
   (1) VARIABLE-DENSITY MASS RATE (Tier V, tight). The oracle integrates the DROPLET MASS
       m(x) with the TC2012 PRESENT-MODEL rate -- the transcendental m_hat + (T~s-1)*Lev*
@@ -28,9 +28,12 @@ linear between the nodes). Two more gates pin that the column is what the run us
 
   (3) PC0: the solver reported the tabulation ("p_sat tabulated from properties.dat").
   (4) PC1: the plateau (max Tp over the gated drops) within 1 K of the 0-D replica of the kernel
-      (zero_d.py with this fixture: 492.63 K). psat by Clausius-Clapeyron with the same sink puts
-      it at 486.0 K. The rate gate (1) cannot tell the table from a Clausius-Clapeyron line with
-      Lv = 2.58e5: the two differ by 0.07 % at the plateau.
+      (zero_d.py with this fixture: 493.69 K). psat by Clausius-Clapeyron with the same sink puts
+      it at 487.1 K. The rate gate (1) cannot tell the table from a Clausius-Clapeyron line with
+      Lv = 2.58e5: the oracle on that line reads 3.1e-3 against the table's 3.3e-3, both under 2 %.
+  (5) PC2: the heating path. Tp on every row below the replica's plateau minus 1 K within 0.1 K of the
+      replica's Tp at the same time t = (x - x0)/u_g (the drop coasts at the gas speed). The replica
+      takes cp_l(T) from the table's Cp column; (1), (2) and PC1 do not depend on cp_l, PC2 does.
 
 The digitized TC2012 Fig. 11 present-model curves are a NON-gating overlay in verify.py.
 """
@@ -48,20 +51,27 @@ SRC    = "OUTPUT/source.tec"
 OUTLOC = "OUTPUT/outloc-A.dat"
 LOG    = "run_out.txt"
 NPART  = 25
-#> Mass-balance floor measured at 2.941e-7 and THREAD-INVARIANT (identical at OMP 1/2/5);
-#> it is the E13.6 source print, not the physics. This tolerance sits 34x above the floor. The
-#> burnout remnant (<= 1e-20 kg, 3.1e-9 of m0) lies below the floor: H3 does not see it dropped.
+#> Mass-balance floor measured at 1.022e-6 and THREAD-INVARIANT (identical at OMP 1/2/5); this
+#> tolerance sits 9.8x above it. The burnout remnant (<= 1e-20 kg, 3.1e-9 of m0) lies below the
+#> floor: H3 does not see it dropped.
 MASS_TOL = 1.0e-5
+#> PC2: the heating rows against the replica; floor 3e-4 K (250 rows), a constant cp_l of 2800 reads 12.8 K
+TOL_HEAT = 0.1
 
 # ---- known test inputs (SI); NOT read from production ----
 RU, PATM = 8314.46, 101325.0
-RHO_G, KG, U_G, T_G = 1.2, 0.026, 10.0, 600.0
-GAM, R_G = 1.4, 287.0
-MV, TBOIL, CPV, LE, YINF = 226.45, 560.0, 2300.0, 2.5, 0.0
+#> the gas-film properties of air at the film temperature 529.1 K (Incropera & DeWitt, Table A.4, linear between
+#> 500 and 550 K): KG, and GAM = c_p/(c_p - R_G) for c_p = 1035.8 J/kg/K (solfile KL, GAM)
+KG, U_G, T_G = 0.04256, 10.0, 600.0
+GAM, R_G = 1.38328, 287.0
+RHO_G = PATM / (R_G * T_G)           # TC2012's atmospheric state: p = RHO_G R_G T_G = 1 atm (solfile Roi)
+MV, TBOIL, CPV, LE, YINF = 226.45, 560.0, 2582.0, 5.625, 0.0
+#> CPV: n-hexadecane vapour at 529.1 K (Burcat's C16H34 NASA-7 fit); LE = KG/(RHO_G CP_G D_v) with
+#> D_v = 1.2415e-5 m^2/s, Fuller at 529.1 K and 1 atm
 LV_SINK = 2.2695e5                   # [IGLOO-Properties] Lv: TC2012 Table 1 latent heat at Tboil (not in the oracle)
 TMIN, TMAX, _COLS = load_properties(os.path.join(HERE, "INPUT", "properties.dat"))
 PSAT = _COLS.get("psat")             # TC2012 Table-1 curve, the column the solver reads
-T_0D = 492.63                        # zero_d.py plateau with this fixture (PC1)
+T_0D = 493.69                        # zero_d.py plateau with this fixture (PC1)
 KT, D0 = 0.5, 2.0e-5                 # bc.txt: Tp0=KT*T_G=300 K; rp=1e-5 -> d0=20 um
 CP_G = GAM * R_G / (GAM - 1.0)
 P_G  = RHO_G * R_G * T_G
@@ -188,7 +198,7 @@ def check_mass_balance():
     """H3 -- the consumption contract: a drop that burns out inside the domain hands its
     whole stream to the gas (computeSource zeroes massOut when `consumed`), so the summed
     source must equal the injected mass flow. The books, not the scrub's witness: with `consumed`
-    removed from the burnout branch it reads 2.955e-7 and passes (the remnant is <= 1e-20 kg per
+    removed from the burnout branch it reads 1.022e-6, the floor, and passes (the remnant is <= 1e-20 kg per
     drop); evaporation/evap-breakup-box's mass closure witnesses that hand-off."""
     if not (os.path.exists(SRC) and os.path.exists(OUTLOC)):
         print(f"[FAIL] H3 {SRC} or {OUTLOC} missing -- source output off?")
@@ -209,6 +219,39 @@ def check_mass_balance():
     print(f"[{'PASS' if ok else 'FAIL'}] H3 injected mass reaches the gas: "
           f"sum(wdot)={src:.6e} vs injected={inj:.6e}, resid={resid:.3e} <= {MASS_TOL:.0e}")
     return 0 if ok else 1
+
+
+def check_heating_path(parts):
+    """PC2: (rows, worst Tp - T_replica) over every heating row, the replica from zero_d.py on this table."""
+    if PSAT is None:
+        return 0, float("nan")
+    import zero_d
+    hist = zero_d.run(zero_d.psat_model("table:INPUT/properties.dat"), LV_SINK, zero_d.cp_model(), 2.0e-6)
+    tr, Tr = [r[0] for r in hist], [r[1] for r in hist]
+    plat = max(Tr)
+
+    def t_rep(t):
+        lo, hi = 0, len(tr) - 1
+        while hi - lo > 1:
+            mid = (lo + hi) // 2
+            if tr[mid] <= t:
+                lo = mid
+            else:
+                hi = mid
+        return Tr[lo] + (Tr[hi] - Tr[lo]) * (t - tr[lo]) / (tr[hi] - tr[lo])
+
+    n, worst = 0, 0.0
+    for pid in sorted(parts):
+        rows = sorted(parts[pid])
+        x0 = rows[0][0]
+        for x, _, Tp, _ in rows:
+            if Tp >= plat - 1.0:
+                break
+            n += 1
+            dT = Tp - t_rep((x - x0) / U_G)
+            if abs(dT) > abs(worst):
+                worst = dT
+    return n, worst
 
 
 def main():
@@ -264,17 +307,21 @@ def main():
           f"({max(n_tab, 0)} report(s) in {LOG})")
     pc1 = n_good > 0 and abs(max_plat - T_0D) <= 1.0
     print(f"[{'PASS' if pc1 else 'FAIL'}] PC1 plateau {max_plat:.2f} K within 1 K of the 0-D replica "
-          f"{T_0D:.2f} K (Clausius-Clapeyron with the same sink: 486.0 K)")
+          f"{T_0D:.2f} K (Clausius-Clapeyron with the same sink: 487.1 K)")
+    n_heat, worst_heat = check_heating_path(parts)
+    pc2 = n_heat >= 5 * N_GOOD and abs(worst_heat) <= TOL_HEAT
+    print(f"[{'PASS' if pc2 else 'FAIL'}] PC2 heating path: {n_heat} rows, worst Tp - T_replica "
+          f"{worst_heat:+.4f} K (tol {TOL_HEAT} K; the replica's cp_l from the Cp column)")
     print("\nexit-path and mass-balance gates:")
     extra = check_exit_paths() + check_mass_balance()
 
-    if n_good >= N_GOOD and n_viol == 0 and n_noswell == 0 and extra == 0 and pc0 and pc1:
+    if n_good >= N_GOOD and n_viol == 0 and n_noswell == 0 and extra == 0 and pc0 and pc1 and pc2:
         print("\n[PASS] IGLOO's variable-density TC evaporation reproduces the mass-rate law "
-              "with the tabulated psat and the thermal swelling, the plateau "
-              "sits on the 0-D replica, and every drop burns out cleanly.")
+              "with the tabulated psat and the thermal swelling, the heating path and the plateau "
+              "sit on the 0-D replica, and every drop burns out cleanly.")
         return 0
     print(f"\n[FAIL] {n_viol} rate deviation(s) / {n_noswell} non-swelling drop(s) / "
-          f"{extra} exit-path or mass-balance violation(s) / PC0 {pc0} / PC1 {pc1}.")
+          f"{extra} exit-path or mass-balance violation(s) / PC0 {pc0} / PC1 {pc1} / PC2 {pc2}.")
     return 1
 
 

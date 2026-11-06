@@ -103,7 +103,8 @@ Tests the evaporation closures in `Lib_Evaporation.f90` at function level.
 
 **What is tested.** The Sherwood / Nusselt prefactor structure at Re = 0 for the
 d²-law, CEM, CEM-B and ASM models; cross-model Re = 0 consistency (CEM/CEM-B/ASM
-must agree to machine precision; d²-law agrees at $\mathrm{Nu}=2$); the
+must agree to machine precision, ASM and CEM to 9 ε for $B_M \ge 10^{-2}$, where both take
+$\ln(1 + B_M)$ from the same rounded argument; d²-law agrees at $\mathrm{Nu}=2$); the
 Abramzon–Sirignano $F(B)$ correction factor `[AS89]`; Ranz–Marshall Sh coefficient
 in CEM `[RM52]`.  Value pins: XE1 the d²-law / CEM ratio at $\mathrm{Nu} = 2$ ($= 1$);
 XE2 $\dot{m} < 0$ (mass loss) from the production call sites with the gas state in
@@ -150,9 +151,8 @@ and the bracket theorem (TC1–TC7).
 MHB98 case: Fig. 4(b) spans ~200 K across
 their eight models, against 0.47 K in the Fig. 2(b) water case gated by
 [mhb98-water](e2e.md#mhb98-water).  What separates them here is *not*
-non-equilibrium — at $D_0 = 2$ mm the Langmuir–Knudsen depression is
-$L_K\beta/(D/2) = 4.9\cdot10^{-5}$ against $\chi_{s,eq}\approx0.63$, as vacuous as in
-Fig. 2 — but the **evaporative heat-transfer reduction** $f_2$ (their eq. 19):
+non-equilibrium — at $D_0 = 2$ mm the Langmuir–Knudsen depression is 0.1 to
+0.3 % of $\chi_s$ (Fig. 7(a)'s 2000 µm curve, DC4 below) — but the **evaporative heat-transfer reduction** $f_2$ (their eq. 19):
 
 $$
 f_2 = \frac{\beta}{e^{\beta}-1}, \qquad
@@ -170,11 +170,24 @@ two reductions cannot compound.
 A **unit** test, not an e2e box case: MHB98's Fig. 4 droplet is at **fixed slip**
 (suspended drop, $\mathrm{Re}\propto d$), established by measurement — free flight
 gives $\beta = 1.31$–$1.44$ for *every* $\mathrm{Sc}$ against their stated $\approx1.6$.
-Three legs: **DC1** production `evaporation` (CEM+LK) $\dot m$ vs an independently
-re-coded M7 chain ($3.5\cdot10^{-16}$); **DC2** `blowingFactor` vs eq. 19
-($9.4\cdot10^{-15}$); **DC3** the re-code at MHB98's *own* Sh/Nu coefficient 0.552 vs
+Four legs: **DC1** production `evaporation` (CEM+LK) $\dot m$ vs an independently
+re-coded M7 chain ($2.1\cdot10^{-15}$); **DC2** `blowingFactor` vs eq. 19
+($8.9\cdot10^{-15}$); **DC3** the re-code at MHB98's *own* Sh/Nu coefficient 0.552 vs
 three pixel-measured Fig. 4 quantities — $\beta$ 1.3 %, $T_d(3.5\,\mathrm{s})$ 3.3 K,
-$D^2(4.0\,\mathrm{s})$ 1.2 %.  All five checks pass.
+$D^2(4.0\,\mathrm{s})$ 1.2 %; **DC4** the Langmuir–Knudsen depression where it is large,
+MHB98 Fig. 7(a) (M7, decane at $D_0$ = 10, 50, 500 and 2000 µm, $\mathrm{Re}_{d,0}$ = 17).
+DC4 integrates *production's* kernels (CEM + LK, Ranz–Marshall, `blowingFactor`) to
+$m = 0.01\,m_0$ at $\kappa\mathrm{Re}$ with $\kappa = (0.552/0.600)^2$, which turns
+IGLOO's 0.600 into MHB98's 0.552 exactly (Re enters only Sh and Nu), recovers
+$\chi_{s,neq}$ from production's $\dot m$ by inverting CEM and compares
+$r = 100\,(\chi_{s,eq}-\chi_{s,neq})/\chi_{s,neq}$ with the figure, digitized from
+the paper's native-resolution stencil (`tests/evaporation/mhb98-fig7a/`, method in its
+`PROVENANCE.md`), on the 57 nodes of $t/\tau_{d,0} \in [0.2, 1.0]$: worst 3.2 % (10 µm),
+2.2 %, 1.3 % and 1.9 % against 6 %; $r$ spans 22–42 %, 4.4–8.6 %, 0.44–0.87 % and
+0.11–0.22 % over that window.  The figure is the oracle, so DC4 sees an error made in
+production and in the re-code alike: $L_K$ doubled in both passes DC1–DC3 and fails DC4.
+Every curve must reach all its gated nodes (17, 11, 13 and 16): a trajectory that ends early
+fails, not just skips them.  All six checks pass.
 
 **Documented deviations, quantified not hidden.** IGLOO's Ranz–Marshall carries
 $0.600$ where `[MHB98]` eq. (6) prints $0.552$ (8.7 %), so DC1/DC2 run the oracle at
@@ -195,7 +208,8 @@ their Appendix and their Fig. 4 are mutually inconsistent.
 at $\mathrm{Re} = 0$ (`[DS03]`), the uniform-temperature limit at $k_l \to \infty$, $\chi(\mathrm{Pe}_L)$
 against `[AS89]` eq. 39, the surface equation and the carry of the vapour leaving at $T_s$ under CEM
 at $\mathrm{Re} = 20$ (both state variables), model 4 and an event breakup model with the breakup
-viscosity, the conduction-fed flash in the boiling branch, radiation inside the surface balance, and
+viscosity, a `Viscosity` column at the surface temperature (`[AS89]` p. 1613) against its own bisection,
+the refusal of a liquid viscosity that is not positive, the conduction-fed flash in the boiling branch, radiation inside the surface balance, and
 a 673-state robustness grid over the gas-side models (every slope finite).
 
 ### Boiling branch — ZGR (`tests/evaporation/boiling-zgr`)
@@ -238,9 +252,9 @@ $k_1 \ne k_2$.
 
 **Gates.** `test_breakup_tab` (TAB1 oscillator vs the closed form,
 TAB2 independent RK4 of the raw `[ORA87]` ODE, TAB3 rest-drop critical Weber,
-TAB4 breakup time via bisection); `test_tab_moments` (child-size $E[r]$, $E[r^2]$
-over 20 000 sampled breakups vs a truncated Rosin–Rammler moment oracle,
-CLT-band tolerance); `test_breakup_etab` (ET1–ET4: product-size ratio
+TAB4 breakup time via bisection); `test_tab_moments` (product-size $E[r]$, $E[r^2]$
+over 20 000 sampled breakups vs the mass distribution of the truncated Rosin–Rammler and
+chi-square laws, and the Sauter radius the parcels represent, CLT-band tolerance); `test_breakup_etab` (ET1–ET4: product-size ratio
 $\ln(r_\mathrm{new}/r)$ vs the Tanner $K_\mathrm{br}$ branches, continuity across
 `WeTrans`, ET4 child $v_\perp = A\dot{x}$ magnitude, direction and the no-kick regime).
 
@@ -364,9 +378,10 @@ diameter and number rate (SB1).
 capacities quoted on the [Solidification](../theory/solidification.md) page; every gate is a
 closed form of its own inputs.
 
-**Gates.** `test_solidification` (SG0–SG12, SB1); e2e companions `solid-box`, `solid-melt`,
+**Gates.** `test_solidification` (SG0–SG14, SB1); e2e companions `solid-box`, `solid-melt`,
 `solid-box-euler`, `solid-box-2mat`, `scatter-weight-solid`, `solid-brk-tab`, `solid-brk-khrt`,
-`solid-box-rhos`, `solid-box-varrho`, `solid-brk-tab-rhos`, `burn-box-residue` — see
+`solid-box-rhos`, `solid-box-varrho`, `solid-box-varcp`, `solid-brk-khrt-varcp`, `solid-brk-tab-rhos`, `solid-remelt-khrt`,
+`burn-box-residue` — see
 [End-to-End Cases](e2e.md).
 
 <figure>
@@ -406,7 +421,9 @@ configuration contract has nothing physical to plot.
 Drives `read_cdp_properties` on tables no e2e case carries: rows from 280 K against the same
 rows from 1 K, a `Psat` column found by name in any column order, both enthalpy datums, two
 materials of which one has a column of zeros, and the table ATLAS GPB writes for water with
-`psat-vapour = H2O`, copied byte for byte (PR1–PR3, PR6, PR7, PR9, PR10).  The header, row, node,
+`psat-vapour = H2O`, copied byte for byte (PR1–PR3, PR6, PR7, PR9, PR10); a boiling point given
+at another pressure, by Clausius–Clapeyron against the closed form $p_B\,e^{-a(1/T - 1/T_b)}$ and with a
+`Psat` column checked against `boiling-pressure` (BP1, BP2).  The header, row, node,
 column and `Psat` checks behind it are ICE's, statement for statement, and are pinned on
 synthetic input, one code each (PR4, PR5, PR8, PR11–PR13); so is the enthalpy-to-temperature
 inversion of a varying $c_p$ on tables that start above 1 K, against ICE's rule for its energy

@@ -27,7 +27,9 @@ contains
     call reg%add('IGLOO-General','out-file',d_s(2),'E+S', &
       'Output field: E = equivalent eulerian, S = coupling source, E+S or ALL = both (also absent/blank); any other token is refused','E, S, E+S, ALL',.false.)
     call reg%add('IGLOO-General','fsample-traj',d_i(2),'100', &
-      'Scatter-cloud density: nominal markers per injection stream; sets the quantum dNscat = Ndot*tauRef/(fsample-traj*nStreams), a parcel writing npRef/dNscat markers per second (npRef its number rate at entry; a breakup child keeps the rate of its parent). Not a trajectory sampling frequency (trajectory rows follow print-ds, print-dtime and print-dcell)','',.false.)
+      'Scatter-cloud density: nominal markers per injection stream; sets the quantum dNscat = Ndot*tauRef/(fsample-traj*nStreams), a parcel writing npRef/dNscat markers per second (npRef its number rate at entry, raised to the scatter-floor; a breakup child keeps the rate of its parent). Not a trajectory sampling frequency (trajectory rows follow print-ds, print-dtime and print-dcell)','',.false.)
+    call reg%add('IGLOO-General','scatter-floor',d_r(40),'0.1', &
+      'Scatter-cloud floor F >= 0: a parcel whose number rate at entry is below F times the material''s mean stream rate Ndot/nStreams writes markers at that floor (at least F*fsample-traj per domain transit time tauRef), its weights scaled down to stay unbiased; a breakup child keeps its parent''s rate; 0 = off','',.false.)
     call reg%add('IGLOO-General','probe-ids',d_s(21),'-', &
       'DEBUG: integrate only the listed particle IDs, space-separated, a-b intervals allowed (e.g. 1 2 6 496-497); absent or empty = all','',.false.)
     call reg%add('IGLOO-General','print-dcell',d_s(14),'-', &
@@ -78,7 +80,7 @@ contains
     call reg%add('IGLOO-Models','evaporation',d_s(8),'NoEvaporation', &
       'Evaporation model; presence enables phase change','d2-law, CEM, CEM-B, ASM, TC',.false.)
     call reg%add('IGLOO-Models','liquid-conduction',d_s(11),'ITC', &
-      'Liquid-side conduction model, global default (per-material override: key=value on the material line of the phase file, from [GPB-Phase*]); P2T: parabolic temperature profile inside the droplet, needs k-liq and mu-liq on the material line; a breaking material takes the breakup viscosity instead of mu-liq','ITC, P2T',.false.)
+      'Liquid-side conduction model, global default (per-material override: key=value on the material line of the phase file, from [GPB-Phase*]); P2T: parabolic temperature profile inside the droplet, needs k-liq on the material line or a Conductivity column in properties.dat, and mu-liq or a Viscosity column; a breaking material takes the breakup viscosity instead of mu-liq','ITC, P2T',.false.)
     call reg%add('IGLOO-Models','interface',d_s(12),'VLE', &
       'Interface model, global default (per-material override: key=value on the material line of the phase file, from [GPB-Phase*]): VLE equilibrium or LK Langmuir-Knudsen non-equilibrium (Miller-Harstad-Bellan 1998)','VLE, LK',.false.)
     call reg%add('IGLOO-Models','blowing',d_s(20),'none', &
@@ -122,9 +124,9 @@ contains
     call reg%add('IGLOO-Models','WeCrit',d_r(17),'6', &
       'TAB/ETAB: critical Weber number (doubled internally)','',.false.)
     call reg%add('IGLOO-Models','method',d_i(6),'2', &
-      'TAB: product-size selection method (2 = Rosin-Rammler sampling)','1, 2',.false.)
+      'TAB: product-size law, its radius drawn by mass (1 = chi-square, 2 = Rosin-Rammler)','1, 2',.false.)
     call reg%add('IGLOO-Models','n',d_r(18),'3.5', &
-      'TAB: Rosin-Rammler spread parameter (method 2)','',.false.)
+      'TAB: Rosin-Rammler spread parameter of method 2, its radius drawn by mass','',.false.)
     call reg%add('IGLOO-Models','k1',d_r(19),'0.2222', &
       'ETAB: bag-regime rate constant','',.false.)
     call reg%add('IGLOO-Models','k2',d_r(20),'0.2222', &
@@ -143,9 +145,13 @@ contains
       'Latent heat of vaporization; one value per material; a material whose properties.dat carries the Lv '// &
       'column takes it from there (give 0 here)','',.false.)
     call reg%add('IGLOO-Properties','boiling-temperature',d_a(5,:),'0', &
-      'Boiling temperature [K]; one value per material, overrides properties.dat','',.false.)
+      'Boiling temperature [K] at boiling-pressure; one value per material, overrides properties.dat','',.false.)
     call reg%add('IGLOO-Properties','Tboil',d_a(5,:),'0', &
       'Alias of boiling-temperature, the name ICE also accepts; give one or the other, not both','',.false.)
+    call reg%add('IGLOO-Properties','boiling-pressure',d_a(39,:),'101325', &
+      'Pressure [Pa] at which boiling-temperature is given: the Clausius-Clapeyron line passes through '// &
+      '(boiling-temperature, boiling-pressure) and a Psat column must give boiling-pressure there within a factor 2; '// &
+      'one value per material','',.false.)
     call reg%add('IGLOO-Properties','cpv',d_a(6,:),'0', &
       'Vapour specific heat; one value per material; a material whose properties.dat carries the Cpv column '// &
       'takes it from there (give 0 here)','',.false.)
@@ -161,7 +167,8 @@ contains
       'properties.dat carries the Viscosity column takes it from there (give 0 here)','',.false.)
     call reg%add('IGLOO-Properties','emissivity',d_a(20,:),'0', &
       'Particle surface emissivity of the grey-body exchange with the gas temperature; one value per material; '// &
-      '0 = off (default)','',.false.)
+      '0 = off (default); a material whose properties.dat carries the Emissivity column takes eps(T) from there '// &
+      '(give 0 here)','',.false.)
 
     ! --- [IGLOO-BC] ---
     call reg%add('IGLOO-BC','ds',d_r(22),'0', &

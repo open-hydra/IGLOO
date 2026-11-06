@@ -16,9 +16,18 @@ program test_liquid_p2t
     !   (h)  model 2 with TAB (an event breakup model), the breakup viscosity as mu_l: F equals (d)'s
     !   (i)  boiling = ZGR at A = 0: the surface at T_B and the flash fed by the parabolic conduction 10 pi kl d dT
     !   (j)  grey-body radiation inside the surface balance, through both right-hand sides
+    !   (j') (j) with an Emissivity column eps(T) = T/3000 inside the surface balance (the aux constant 0.5 beside it)
+    !   (k)  a Conductivity column k_l = B T at Re 0: Ts = (5 Tbar + zeta Tg)/(5 + zeta), zeta = kg/k_l(Tbar), both
+    !        right-hand sides
+    !   (l)  a Viscosity column mu_l(T) = 1e-3 exp((320 - T)/20) at (d)'s state: Ts the root of the surface balance with
+    !        mu_l at the surface temperature [AS89] (U_s eqs. 30, 32 and chi eq. 39 typed here, the column interpolated
+    !        here, B_M, k_l and c_l at Tbar), by bisection; model 2 (the column as mu_l) and model 4 (as the breakup
+    !        viscosity, its breakup rate at Tbar); the root with mu_l frozen at Tbar must differ
+    !   (m)  mu_l = 0 at (d)'s state (Re 20; the inputs refuse it): p2tSurface stat 0 and Ts NaN, model 2's F the
+    !        rejected step's 1e30 and its TsOut NaN
     !
     use, intrinsic :: iso_fortran_env, only: I4 => int32, R8 => real64
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_is_nan
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
     implicit none
@@ -34,10 +43,13 @@ program test_liquid_p2t
     integer  :: cModel, cBrk, cEvap, cIntf, cBlow, cBoil
     character(len=16) :: cHeat
     logical  :: cH, cP2T
-    real(R8) :: hTab(TMIN_TAB:TMAX_TAB), dtab(1)
+    real(R8) :: hTab(TMIN_TAB:TMAX_TAB), dtab(1), klTabT(TMIN_TAB:TMAX_TAB), epsTabT(TMIN_TAB:TMAX_TAB)
+    real(R8) :: muTabT(TMIN_TAB:TMAX_TAB)
+    logical  :: cKlTab, cEpsTab, cMuTab
+    real(R8), parameter :: B_KL = 0.026_R8/450._R8   !> (k) the Conductivity column's slope [W/m/K^2]
 
     real(R8) :: F(9), Fi(9), Fd(9), Fh(9), ts, ts2, tsd, err, err2, ref, ref2, m, d, Re, zeta, K, chi, BM
-    real(R8) :: Qg, md, G, Fdrag(3), BMs, chis, F7d, F8d
+    real(R8) :: Qg, md, G, Fdrag(3), BMs, chis, F7d, F8d, F9g, tsOr, tsFrz
     real(R8) :: Tgs(3), Tbs(4), ds(2), kls(2), dTi(4)
     logical  :: ok_all, pass
     integer  :: exit_code, i, jg, jt, jd, jk, iv, nPts, nBad, nWide, nFail, stat, nZ, nReg
@@ -48,6 +60,9 @@ program test_liquid_p2t
     call init_report('verif_liquid_p2t.csv')
     do i = TMIN_TAB, TMAX_TAB
         hTab(i) = 4180._R8*real(i, R8)
+        klTabT(i) = B_KL*real(i, R8)
+        epsTabT(i) = real(i, R8)/3000._R8
+        muTabT(i) = 1.e-3_R8*exp((320._R8 - real(i, R8))/20._R8)
     enddo
     dtab = 0._R8
 
@@ -201,6 +216,7 @@ program test_liquid_p2t
            assert_lt('(g) (F(8) + Z(8) F(9)/Z(9))/model 2 F(8) - 1', err2, 1.e-13_R8) .and. &
            F(9) > 0._R8 .and. all(ieee_is_finite(F))
     write(*,'(a,es20.12,a,f14.6)') '  (g) F(7) =', F(7), '  F(9)/Z(9) =', F(9)/cNp
+    F9g = F(9)
     ok_all = ok_all .and. pass
     call append_row('g_model4_pilch_erdman', 'F7,F8', err, err2, 0._R8, 0._R8, 1.e-13_R8, pass)
 
@@ -257,6 +273,72 @@ program test_liquid_p2t
     ok_all = ok_all .and. pass
     call append_row('j_radiation_model4', 'Ts,F7', err, err2, 0._R8, 0._R8, 1.e-13_R8, pass)
 
+    ! --- (j') an Emissivity column inside the surface balance, eps at the surface temperature -----------------------
+    call case_a(); cEps = 0.5_R8; cEpsTab = .true.
+    call geom(m, d, Re)
+    ref = ts_radiation(m, d)
+    ref2 = (PI*d*kg*2._R8*(cTg - ref) + ref/3000._R8*SIGMA_SB*PI*d*d*(cTg**4 - ref**4))/(m*cCl)
+    call rhs_at(F, ts)
+    err  = abs(ts/ref - 1._R8)
+    err2 = abs(F(7)/ref2 - 1._R8)
+    pass = assert_lt("(j') model 2 TsOut/Ts(eps(Ts)) - 1", err, 1.e-13_R8) .and. &
+           assert_lt("(j') model 2 F(7)/(Q_g + Q_r)(Ts)/(m c) - 1", err2, 1.e-13_R8)
+    write(*,'(a,f18.12,a,es20.12)') "  (j') Ts =", ts, '  F(7) =', F(7)
+    ok_all = ok_all .and. pass
+    call append_row('j1_emissivity_column_model2', 'Ts,F7', err, err2, 0._R8, 0._R8, 1.e-13_R8, pass)
+    cModel = 4; cBrk = 2; cSig = 0.072_R8; cMup = 1.e-3_R8; cMul = 0._R8
+    call rhs_at(F, ts)
+    err  = abs(ts/ref - 1._R8)
+    err2 = abs(F(7)/ref2 - 1._R8)
+    pass = assert_lt("(j') model 4 TsOut/Ts(eps(Ts)) - 1", err, 1.e-13_R8) .and. &
+           assert_lt("(j') model 4 F(7)/(Q_g + Q_r)(Ts)/(m c) - 1", err2, 1.e-13_R8) .and. F(9) == 0._R8
+    ok_all = ok_all .and. pass
+    call append_row('j1_emissivity_column_model4', 'Ts,F7', err, err2, 0._R8, 0._R8, 1.e-13_R8, pass)
+
+    ! --- (k) a Conductivity column: k_l(Tbar) = B Tbar inside the surface balance ------------------------------------
+    call case_a(); cTbar = 400._R8; cKl = 0._R8; cKlTab = .true.
+    zeta = kg/(B_KL*cTbar)
+    ref = (5._R8*cTbar + zeta*cTg)/(5._R8 + zeta)
+    call rhs_at(F, ts)
+    err = abs(ts/ref - 1._R8)
+    cModel = 4; cBrk = 2; cSig = 0.072_R8; cMup = 1.e-3_R8; cMul = 0._R8
+    call rhs_at(Fi, ts2)
+    err2 = abs(ts2/ref - 1._R8)
+    pass = assert_lt('(k) model 2 TsOut/Ts(k_l(Tbar)) - 1', err, 1.e-13_R8) .and. &
+           assert_lt('(k) model 4 TsOut/Ts(k_l(Tbar)) - 1', err2, 1.e-13_R8) .and. &
+           all(ieee_is_finite(F(1:8))) .and. all(ieee_is_finite(Fi))
+    write(*,'(a,f8.5,a,f18.12,a,f18.12)') '  (k) zeta =', zeta, '  Ts =', ts, '  closed form =', ref
+    ok_all = ok_all .and. pass
+    call append_row('k_conductivity_column', 'Ts', err, err2, 0._R8, 0._R8, 1.e-13_R8, pass)
+
+    ! --- (l) a Viscosity column: mu_l at the surface temperature inside the surface balance --------------------------
+    call case_d(); cMuTab = .true.; cMul = 0.1_R8
+    tsOr  = ts_mu_column(.true.)
+    tsFrz = ts_mu_column(.false.)
+    call rhs_at(F, ts)
+    err = abs(ts/tsOr - 1._R8)
+    cModel = 4; cBrk = 1; cSig = 5.e-5_R8; cMup = 1.e-3_R8
+    call rhs_at(Fi, ts2)
+    err2 = abs(ts2/tsOr - 1._R8)
+    pass = assert_lt('(l) model 2 TsOut/Ts(mu_l(Ts)) - 1', err, 1.e-13_R8) .and. &
+           assert_lt('(l) model 4 TsOut/Ts(mu_l(Ts)) - 1', err2, 1.e-13_R8) .and. &
+           assert_lt('(l) model 4 breakup rate at mu_l(Tbar): F(9)/(g) F(9) - 1', abs(Fi(9)/F9g - 1._R8), 1.e-14_R8) .and. &
+           assert_lt('(l) guard: 1e-9/|Ts(mu_l(Ts)) - Ts(mu_l(Tbar))|', 1.e-9_R8/abs(tsOr - tsFrz), 1._R8) .and. &
+           all(ieee_is_finite(F(1:8))) .and. all(ieee_is_finite(Fi))
+    write(*,'(a,f18.12,a,f18.12,a,f18.12)') '  (l) Ts =', ts, '  oracle =', tsOr, '  mu_l frozen at Tbar =', tsFrz
+    ok_all = ok_all .and. pass
+    call append_row('l_viscosity_column', 'Ts', err, err2, 0._R8, 0._R8, 1.e-13_R8, pass)
+
+    ! --- (m) no liquid viscosity at Re > 0: no surface root, the step rejected ----------------------------------------
+    call case_d(); cMul = 0._R8
+    call p2t_direct(ts2, stat)
+    call rhs_at(F, ts)
+    pass = assert_lt('(m) p2tSurface stat with mu_l = 0 at Re 20', real(stat, R8), 0.5_R8) .and. ieee_is_nan(ts2) .and. &
+           ieee_is_nan(ts) .and. all(F(1:8) == 1.e30_R8)
+    write(*,'(a,i0,a,es12.4,a,es12.4,a,es12.4)') '  (m) stat = ', stat, '  Ts =', ts2, '  TsOut =', ts, '  F(7) =', F(7)
+    ok_all = ok_all .and. pass
+    call append_row('m_viscosity_zero', 'stat', real(stat, R8), 0._R8, 0._R8, 0._R8, 0.5_R8, pass)
+
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then
         write(*,'(a)') 'test_liquid_p2t: OVERALL PASS'; stop 0
@@ -271,7 +353,8 @@ contains
         cModel = 2; cBrk = 0; cEvap = 1; cIntf = 0; cBlow = 0; cH = .false.; cP2T = .true.
         cTg = 600._R8; cSlip = 0._R8; cTbar = 300._R8; cD = 11.89e-6_R8; cRhol = 2950._R8; cCl = 1250._R8
         cKl = 0.026_R8; cMul = 1.e-3_R8; cMup = 0._R8; cSig = 0._R8; cYinf = 1._R8; cEps = 0._R8; cNp = 1.e7_R8
-        cBoil = 0; cInvTb = 1._R8/Tboil; cHeat = 'Ranz-Marshall'
+        cBoil = 0; cInvTb = 1._R8/Tboil; cHeat = 'Ranz-Marshall'; cKlTab = .false.; cEpsTab = .false.
+        cMuTab = .false.
     end subroutine case_a
 
     !> (d)'s state: CEM, Tbar 320 K in an 800 K gas, slip 6 m/s (Re 20), d 50 um, rho 1000, c 4180, kl 0.6, mu_l 1e-3.
@@ -279,7 +362,8 @@ contains
         cModel = 2; cBrk = 0; cEvap = 2; cIntf = 0; cBlow = 0; cH = .false.; cP2T = .true.
         cTg = 800._R8; cSlip = 6._R8; cTbar = 320._R8; cD = 50.e-6_R8; cRhol = 1000._R8; cCl = 4180._R8
         cKl = 0.6_R8; cMul = 1.e-3_R8; cMup = 0._R8; cSig = 0._R8; cYinf = 0._R8; cEps = 0._R8; cNp = 1.e7_R8
-        cBoil = 0; cInvTb = 1._R8/Tboil; cHeat = 'Ranz-Marshall'
+        cBoil = 0; cInvTb = 1._R8/Tboil; cHeat = 'Ranz-Marshall'; cKlTab = .false.; cEpsTab = .false.
+        cMuTab = .false.
     end subroutine case_d
 
     !> The drop's mass, diameter (the right-hand side's formula) and Reynolds number.
@@ -313,7 +397,7 @@ contains
         Tmin = TMIN_TAB;  Tmax = TMAX_TAB
         call assign_drag('Stokes', dragSelect)
         call assign_heat(trim(cHeat), heatSelect)
-        propFlags = .false.;  propFlags(1) = cH
+        propFlags = .false.;  propFlags(1) = cH;  propFlags(4) = cMuTab
         select case (cBrk)
         case (1);    bp = [1.0_R8, 0.01_R8, 0._R8, 0._R8]           ! Pilch-Erdman [Cd, B]
         case (2);    bp = [6.0_R8, PI, 0.5_R8, 20.0_R8]             ! Reitz-Diwakar [WeBag, Cb, Cstrip, Cs]
@@ -351,17 +435,28 @@ contains
     subroutine rhs_at(Fo, tso)
         use Lib_RHS, only: rhsEvaporation, rhsEvapBreakup, nauxvar, nauxstate
         real(R8), intent(out) :: Fo(9), tso
-        real(R8), allocatable :: aux(:), auxst(:)
+        real(R8), allocatable :: aux(:), auxst(:), klA(:), epsA(:), muA(:)   !> unallocated: the optional table absent
         real(R8) :: gas(9), gasNodes(9,8), gasVert(3,8), Z(9), mm
         call prep(aux, auxst, gas, gasNodes, Z, mm)
         gasVert = 0._R8
         Fo = 0._R8
+        if (cKlTab) klA = klTabT
+        if (cEpsTab) epsA = epsTabT
+        if (cMuTab) then; muA = muTabT; else; muA = dtab; endif
         if (cModel == 2) then
-            call rhsEvaporation(8, 0._R8, Z(1:8), Fo(1:8), aux, nauxvar, auxst, max(1,nauxstate), &
-                                hTab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, TsOut=tso)
+            if (cMuTab) then
+                call rhsEvaporation(8, 0._R8, Z(1:8), Fo(1:8), aux, nauxvar, auxst, max(1,nauxstate), &
+                                    hTab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, mupTabM=muA, &
+                                    TsOut=tso, kLiqTabM=klA, epsTabM=epsA)
+            else
+                call rhsEvaporation(8, 0._R8, Z(1:8), Fo(1:8), aux, nauxvar, auxst, max(1,nauxstate), &
+                                    hTab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, TsOut=tso, &
+                                    kLiqTabM=klA, epsTabM=epsA)
+            endif
         else
             call rhsEvapBreakup(9, 0._R8, Z, Fo, aux, nauxvar, auxst, max(1,nauxstate), &
-                                hTab, dtab, dtab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, TsOut=tso)
+                                hTab, dtab, muA, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, TsOut=tso, &
+                                kLiqTabM=klA, epsTabM=epsA)
         endif
     end subroutine rhs_at
 
@@ -413,6 +508,45 @@ contains
         Ko   = 10._R8*PI*chio*cKl*dd
     end subroutine keff_of
 
+    !> (l): the root of G(T) = T - Tbar - (Q_g(T) + mdot(T) Lv)/K(T) by bisection, K = 10 pi chi(Pe_L) k_l d with
+    !  U_s = (12.69/32) slip (mu_g/mu_l) Re^(1/3)/(1 + B_M) [AS89] eqs. 30, 32, chi = 1.86 + 0.86 tanh(2.245
+    !  log10(Pe_L/30)) eq. 39, B_M at Tbar; mu_l the column interpolated here, at T (atTs) or at Tbar.
+    function ts_mu_column(atTs) result(T)
+        use IGLOO_Lib_Evaporation, only: evaporation, nep
+        logical, intent(in) :: atTs
+        real(R8) :: T, lo, hi, glo, gm, mm, dd, rr, ep(nep), mo, Qev, BMb
+        integer  :: it
+        logical  :: ovr0
+        call geom(mm, dd, rr)
+        ep = [Mv, Lv, cpv, 1._R8, cYinf, Lv*Mv/Ru, 1._R8/Tboil, 1._R8, cKl, cMul]
+        call evaporation(rho_g, cTg, gam, Rg, mu_g, kg, cTbar, dd, rr, 1._R8, cEvap, cIntf, ep, mo, Qev, ovr0, BMout=BMb)
+        lo = cTbar;  hi = cTg
+        glo = g_mu(lo, atTs, BMb, dd, rr)
+        do it = 1, 200
+            T  = 0.5_R8*(lo + hi)
+            if (T <= lo .or. T >= hi) exit
+            gm = g_mu(T, atTs, BMb, dd, rr)
+            if (gm == 0._R8) exit
+            if ((gm > 0._R8) .eqv. (glo > 0._R8)) then; lo = T; glo = gm; else; hi = T; endif
+        enddo
+    end function ts_mu_column
+
+    !> (l)'s residual at Tx [K]: mu_l at Tx (atTs) or at Tbar, the column interpolated linearly between its nodes.
+    function g_mu(Tx, atTs, BMb, dd, rr) result(g)
+        real(R8), intent(in) :: Tx, BMb, dd, rr
+        logical,  intent(in) :: atTs
+        real(R8) :: g, Qx, mx, mu, Us, PeL, chi, Tm, s
+        integer  :: i
+        Tm = cTbar;  if (atTs) Tm = Tx
+        i  = floor(Tm);  s = Tm - real(i, R8)
+        mu = muTabT(i) + (muTabT(i+1) - muTabT(i))*s
+        Us = (12.69_R8/32._R8)*cSlip*(mu_g/mu)*rr**(1._R8/3._R8)/(1._R8 + BMb)
+        PeL = Us*dd*cRhol*cCl/cKl
+        chi = 1.86_R8 + 0.86_R8*tanh(2.245_R8*log10(PeL/30._R8))
+        call gas_side(Tx, Qx, mx)
+        g = Tx - cTbar - (Qx + mx*Lv)/(10._R8*PI*chi*cKl*dd)
+    end function g_mu
+
     !> chiETC, the production function.
     function chi_of(PeL) result(c)
         use IGLOO_Lib_Evaporation, only: chiETC
@@ -428,8 +562,13 @@ contains
         integer  :: it
         T = 350._R8
         do it = 1, 50
-            f  = 10._R8*PI*cKl*dd*(T - cTbar) - PI*dd*kg*2._R8*(cTg - T) - cEps*SIGMA_SB*PI*dd*dd*(cTg**4 - T**4)
-            fp = 10._R8*PI*cKl*dd + PI*dd*kg*2._R8 + 4._R8*cEps*SIGMA_SB*PI*dd*dd*T**3
+            if (cEpsTab) then   !> eps(T) = T/3000: d/dT [eps (Tg^4 - T^4)] = (Tg^4 - 5 T^4)/3000
+                f  = 10._R8*PI*cKl*dd*(T - cTbar) - PI*dd*kg*2._R8*(cTg - T) - T/3000._R8*SIGMA_SB*PI*dd*dd*(cTg**4 - T**4)
+                fp = 10._R8*PI*cKl*dd + PI*dd*kg*2._R8 - (cTg**4 - 5._R8*T**4)/3000._R8*SIGMA_SB*PI*dd*dd
+            else
+                f  = 10._R8*PI*cKl*dd*(T - cTbar) - PI*dd*kg*2._R8*(cTg - T) - cEps*SIGMA_SB*PI*dd*dd*(cTg**4 - T**4)
+                fp = 10._R8*PI*cKl*dd + PI*dd*kg*2._R8 + 4._R8*cEps*SIGMA_SB*PI*dd*dd*T**3
+            endif
             dT = f/fp
             T  = T - dT
             if (abs(dT) <= 1.e-15_R8*T) exit

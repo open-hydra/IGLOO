@@ -12,8 +12,8 @@ before its first breakup and keeps the injected mass on every row.
 
 | id | gate | tolerance | measured |
 |---|---|---|---|
-| W1 | every row from `k` on carries the `m` of row `k`; every family-2 row the injected mass | exact (the printed value); E13.6 half-ULP | 2937 rows; family 2 at 0.850 of the half-ULP |
-| W2 | every row: `d` against `(6 m (a + b f)/π)^{1/3}` from the row's `m` and `f`; ≥ 20 rows per family on the plateau and in the solid where `rho-solid` moves `d` beyond that budget | E13.6 half-ULP of `d` plus a third of the relative half-ULP of `m` plus `\|∂ln d/∂f\|` × the F10.6 half-ULP of `f` | 3050 rows, worst 0.865 of tol; 36 + 1401 rows (family 1), 300 + 1200 (family 2) |
+| W1 | every row from `k` on carries the `m` of row `k`; every family-2 row the injected mass | exact (the printed value); E13.6 half-ULP | 2912 rows; family 2 at 0.850 of the half-ULP |
+| W2 | every row: `d` against `(6 m (a + b f)/π)^{1/3}` from the row's `m` and `f`; ≥ 20 rows per family on the plateau and in the solid where `rho-solid` moves `d` beyond that budget | E13.6 half-ULP of `d` plus a third of the relative half-ULP of `m` plus `\|∂ln d/∂f\|` × the F10.6 half-ULP of `f` | 3050 rows, worst 0.935 of tol; 49 + 1363 rows (family 1), 300 + 1200 (family 2) |
 | W3 | every family-1 parcel's `m` decreases at least once on a row up to `k` | exact | 25 of 25 |
 | T4–T6 | solid-brk-tab's exit flows, energy balance, injection state and model-6 witness | as solid-brk-tab | exit flows 1.1e-6; energy 1.6e-7; 25 + 25 parcels |
 

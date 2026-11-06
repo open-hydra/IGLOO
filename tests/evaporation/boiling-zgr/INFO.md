@@ -32,6 +32,7 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
 | (e) | p = 0.2, 1, 5 atm; a Psat table of Clausius–Clapeyron on 1-K nodes, 280–500 K | `psat_CC(boilingTemperatureCC(p)) = p` (psat typed); `tableValue(inverseTableValue(p)) = p`, the root inside its 1-K interval | 1e-14; 1e-12 rel. | 6.7e-16; 2.2e-16 | the sign of the ln term flipped: 24 |
 | (f) | T̄ = T_B (1 − 1e-12) and T̄ = T_B | below: F(8) equals the clamp run's (boiling = clamp) bitwise; at T_B: F(8) equals `zgrBoiling`'s ṁ bitwise | exact | equal | `>=` typed `>` (the evaporation path at T_B) |
 | (g) | (d)'s +30 K state through `rhsEvapBreakup` (Reitz–Diwakar at slip 0: F(9) = 0) | as (d) | 1e-13 rel. | 0 | the regime test dropped from model 4: 5.603e-2; its carry dropped: 5.557e-2 |
+| (k) | a P2T drop (`liquid-conduction = P2T`, `k-liq` 0) with a `Conductivity` table k_l = B T, B = 1e-3 W m⁻¹ K⁻², at A = 0 (T_g = T_B = 600 K), T̄ = 610 K, through `rhsEvaporation` | F(8) = −10π k_l(T̄) d (T̄ − T_B)/L_v (the P2T flash): −4.239759997e-9 kg/s; `TsOut` = T_B | 1e-13 rel. | 0 | the flash on the `k-liq` slot (0 for a tabulated material): F(8) = 0, 1.0; k_l at T_B: 1.639e-2 |
 
 `zgrBoiling` solves the defining equation by Brent's method in u = ln(G_f/G) on [−60, 60] to 4ε; a root beyond an end
 gives G = B ln(1 + A) (G_f negligible) or G = 0 (G_f dominant).

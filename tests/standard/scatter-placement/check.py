@@ -3,17 +3,21 @@
 box (KH-RT breakup with mShedLim 0.01: hundreds of children, Rayleigh-Taylor shatters that multiply a parcel's number
 rate), out-file ALL.
 
-A parcel writes markers at a constant rate r, the number rate it entered with over the material's dNscat (a breakup
-child keeps its parent's), at the instants its accumulator crosses a whole number, inside the solver's steps: the
-k-th marker at t_k = t_birth + (k - frac(ID phi))/r. Each marker carries its weight w = np(t_k)/r (column "weight"),
-the droplets it stands for, np interpolated linearly in its step.
+A parcel writes markers at a constant rate r = n_ref/dNscat, n_ref the number rate it entered with raised to the
+material's floor (a breakup child keeps its parent's), at the instants its accumulator crosses a whole number, inside
+the solver's steps: the k-th marker at t_k = t_birth + (k - frac(ID phi))/r. Each marker carries its weight
+w = np(t_k)/r (column "weight"), the droplets it stands for, np interpolated linearly in its step. The floor is
+F nbar, F the [IGLOO-General] scatter-floor (0.1 when absent) and nbar = Ndot/nStreams the mean of the 25 injected
+streams' rates; a rate below (1 - 1e-6) F nbar takes the floor.
 
   P1  markers within TOL = 1e-6 m of an x-face plane (x = i dx) are at most 3 x 2 TOL/dx of all markers: a marker
       uniform in time is near a face as often as the face's share of the cell (0.0008 here), while a marker at a
       step end crowds the faces, where the steps are cut
   P2  no two markers alike (every printed column): a marker at the solver's restart point repeats the step end
   P3  the markers' fractional x in their cells against U(0,1): Kolmogorov-Smirnov p >= 1e-3
-  C   per parcel, the marker count N = floor(frac(ID phi) + r tau), tau its exit t less its birth t
+  C   per parcel, the marker count N = floor(frac(ID phi) + r tau), tau its exit t less its birth t, r with the floor
+  F   the floor's premise: nbar/dNscat = fsample-traj V_ref/L_ref (the quantum's definition, nbar taken over the 25
+      roots), V_ref the roots' mean first-row speed and L_ref the mesh's bounding-box diagonal
   W1  the Euler moment, the sum over cells of n_p V (euler1.tec, the ODE's integral of np dt), lies in the bracket
       the parcels' printed states give [sum I_lo, sum I_hi]
   W2  per parcel, the markers' sum of w lies in [I_lo - B, I_hi + B], B = (TV + M)/r
@@ -22,8 +26,10 @@ the droplets it stands for, np interpolated linearly in its step.
 
 C: the accumulator starts at frac(ID phi) and adds r h on every step the parcel keeps, and every crossing of a whole
 number writes a marker, the exit face's included, so N = floor(frac(ID phi) + r tau) whatever the steps. r is the
-number rate of the parcel's injected ancestor at its entry, np = mdot/m from its birth flow and its first row, over
-dNscat (the children are all of the first generation, and the case has no residue). Every printed input enters with
+number rate of the parcel's injected ancestor at its entry, np = mdot/m from its birth flow and its first row, raised
+to the floor F nbar when below (1 - 1e-6) of it, over dNscat (the children are all of the first generation, and the
+case has no residue); nbar is the mean of the 25 roots' rates, an interval from theirs, and a rate whose interval
+meets the floor's accepts either branch. Every printed input enters with
 its half-ULP and a parcel whose interval of frac(ID phi) + r tau holds an integer accepts either floor (dNscat's
 ES10.3 dominates the interval); at least C_ONE of the parcels have a window of one value, where N - 1 and N + 1 both
 fail. The weight clauses gate the np factor of w, C gates r: a wrong rate leaves the sum of w a Riemann sum of the
@@ -45,7 +51,8 @@ their integral); W2 holds each parcel to its own.
 
 Non-vacuous: P1-P3 fail on markers at step ends (the solver's restart points and the steps cut at the faces); C fails
 on a child that takes its own number rate at the shed, or its parent's np at the shed, instead of its lineage's
-rate; W2 and W3 fail on weights frozen at the parcel's entry (np's growth through the shatters escapes them).
+rate, and on a root or a child whose rate misses the floor; W2 and W3 fail on weights frozen at the parcel's entry
+(np's growth through the shatters escapes them) and on weights left at the entry rate under a floored marker rate.
 """
 import math
 import os
@@ -69,6 +76,9 @@ R_I = 1.0e-4                 # the bracket's printed inputs: m, mdot (E13.6E2), 
 R_B = 2.0e-3                 # B's: dNscat (ES10.3, 5e-4), m through TV (5e-6 per shed piece)
 R_M = 1.0e-5                 # m between rows (E13.6E2)
 R_MX = 2.0e-5                # m at the exit record, from d (E13.6E2, cubed)
+FLOOR_DEFAULT = 0.1          # [IGLOO-General] scatter-floor when absent
+FLOOR_MARGIN = 1.0e-6        # a rate takes the floor only below (1 - FLOOR_MARGIN) of it
+TRAJ_SAMPLE = 100            # [IGLOO-General] fsample-traj (absent: 100)
 
 
 def fail(msg):
@@ -125,16 +135,51 @@ def cell_volumes(path):
     return total
 
 
+def scatter_floor():
+    """[IGLOO-General] scatter-floor of input.ini, the default when absent."""
+    sec = None
+    for ln in open("input.ini"):
+        s = ln.split(";")[0].strip()
+        if s.startswith("["):
+            sec = s
+        elif sec == "[IGLOO-General]" and "=" in s and s.split("=", 1)[0].strip() == "scatter-floor":
+            return float(s.split("=", 1)[1])
+    return FLOOR_DEFAULT
+
+
+def mesh_diagonal(path):
+    """Bounding-box diagonal of the nodes of every zone of a BLOCK-packed gas file (x, y, z first)."""
+    lo, hi = [math.inf] * 3, [-math.inf] * 3
+    txt = open(path).read().split("\n")
+    zones = [i for i, ln in enumerate(txt) if ln.strip().startswith("Zone")]
+    for zi, i0 in enumerate(zones):
+        m = re.search(r"I=(\d+),\s*J=(\d+),\s*K=(\d+)", txt[i0])
+        nn = int(m.group(1)) * int(m.group(2)) * int(m.group(3))
+        i1 = zones[zi + 1] if zi + 1 < len(zones) else len(txt)
+        vals = []
+        for ln in txt[i0 + 1:i1]:
+            if "=" in ln:
+                continue
+            vals.extend(float(v) for v in ln.split())
+            if len(vals) >= 3 * nn:
+                break
+        for c in range(3):
+            lo[c] = min(lo[c], min(vals[c * nn:(c + 1) * nn]))
+            hi[c] = max(hi[c], max(vals[c * nn:(c + 1) * nn]))
+    return math.sqrt(sum((h - l) ** 2 for l, h in zip(lo, hi)))
+
+
 def lineage():
     """The parcels' printed states and breakup tree: dNscat, the exit records, the trajectory knots (t, m), each
     parcel's parent, children and injected root, and its birth flow (its exit flow plus its children's) with the
     sum of the printed flows' half-ULPs; a string on a malformed tree."""
     m = re.search(r"scatter cloud \[A\]: dNscat=\s*(\S+)", open("run_out.txt").read())
     exits = {r["ID"]: r for r in datcols.rows("OUTPUT/outloc-A.dat")}
-    rows, parent = {}, {}
+    rows, parent, v0 = {}, {}, {}
     for z in datcols.parcel_zones("OUTPUT/trajectories-A.dat"):
         rows.setdefault(z["id"], []).extend((r["t"], r["m<sub>p"]) for r in z["rows"])
         parent[z["id"]] = z["parent"]
+        v0.setdefault(z["id"], tuple(z["rows"][0][c] for c in ("U", "V", "W")))
     ids = sorted(exits)
     if set(ids) != set(rows):
         return "%d exit records, %d parcels with trajectory rows" % (len(ids), len(rows))
@@ -153,7 +198,50 @@ def lineage():
         if root[i] == i and rows[i][0][0] != 0.0:
             return "ID %d has no parent and is born at t = %s, not injected" % (i, es8(rows[i][0][0]))
     return {"dn": float(m.group(1)), "dn_h": half_ulp_es(m.group(1)), "exits": exits, "rows": rows, "ids": ids,
-            "parent": parent, "kids": kids, "root": root, "mdot_b": mdot_b, "mdot_h": mdot_h}
+            "parent": parent, "kids": kids, "root": root, "mdot_b": mdot_b, "mdot_h": mdot_h, "v0": v0}
+
+
+def rates(lin, floor):
+    """Each root's marker number rate with the floor: {root: (lo, hi, central)}, and the floor's (lo, hi, central).
+    A root's own rate np = mdot/m from its birth flow and first row (each with its half-ULP); nbar the mean over the
+    roots; a rate wholly below (1 - FLOOR_MARGIN) of the floor's interval takes the floor, one wholly at or above it
+    keeps its own, one that meets it accepts either."""
+    own = {}
+    for q in lin["ids"]:
+        if lin["root"][q] != q:
+            continue
+        m0, f0, fh = lin["rows"][q][0][1], lin["mdot_b"][q], lin["mdot_h"][q]
+        own[q] = ((f0 - fh) / (m0 + half_ulp_e(m0)), (f0 + fh) / (m0 - half_ulp_e(m0)), f0 / m0)
+    n = len(own)
+    fl = tuple(floor * math.fsum(r[k] for r in own.values()) / n for k in range(3))
+    out = {}
+    for q, (lo, hi, c) in own.items():
+        if hi < (1.0 - FLOOR_MARGIN) * fl[0]:
+            out[q] = fl
+        elif lo >= (1.0 - FLOOR_MARGIN) * fl[1]:
+            out[q] = (lo, hi, c)
+        else:
+            out[q] = (min(lo, fl[0]), max(hi, fl[1]), fl[2] if c < (1.0 - FLOOR_MARGIN) * fl[2] else c)
+    return out, fl, own
+
+
+def premise(lin, own, floor):
+    """F: nbar/dNscat = fsample-traj V_ref/L_ref, nbar the roots' mean rate, V_ref their mean first-row speed."""
+    n = len(own)
+    nbar = math.fsum(r[2] for r in own.values()) / n
+    nbar_h = math.fsum((r[1] - r[0]) / 2.0 for r in own.values()) / n
+    v = [math.sqrt(sum(c * c for c in lin["v0"][q])) for q in own]
+    v_ref = math.fsum(v) / n
+    v_h = 0.5e-6 * math.sqrt(3.0)                   # F12.6 velocity components
+    l_ref = mesh_diagonal(os.path.join("INPUT", "solfile.tec"))
+    got, want = nbar / lin["dn"], TRAJ_SAMPLE * v_ref / l_ref
+    tol = got * (lin["dn_h"] / lin["dn"] + nbar_h / nbar) + want * (v_h / v_ref + 1.0e-6)
+    msg = "F nbar/dNscat %.6e against fsample-traj V_ref/L_ref %.6e (nbar %.6e 1/s over %d roots, V_ref %.6f m/s, " \
+          "L_ref %.6f m, floor %g nbar), tol %.2e" % (got, want, nbar, n, v_ref, l_ref, floor, tol)
+    if abs(got - want) <= tol:
+        print(msg + " PASS")
+        return 0
+    return fail(msg)
 
 
 def placement(scat):
@@ -186,15 +274,13 @@ def placement(scat):
     return rc
 
 
-def counts(scat, lin):
+def counts(scat, lin, rate):
     dn, dh, exits, rows, ids = lin["dn"], lin["dn_h"], lin["exits"], lin["rows"], lin["ids"]
     n = Counter(r["ID"] for r in scat)
     out, two = [], []
     d_lo, d_hi = dn - dh, dn + dh
     for i in ids:
-        q = lin["root"][i]
-        m0, f0, fh = rows[q][0][1], lin["mdot_b"][q], lin["mdot_h"][q]
-        np_lo, np_hi = (f0 - fh) / (m0 + half_ulp_e(m0)), (f0 + fh) / (m0 - half_ulp_e(m0))
+        np_lo, np_hi, _ = rate[lin["root"][i]]
         te, tb = exits[i]["t"], rows[i][0][0]
         th = half_ulp_es(es8(te)) + half_ulp_es(es8(tb))
         r_lo, r_hi = np_lo * max(te - tb - th, 0.0), np_hi * (te - tb + th)
@@ -226,7 +312,7 @@ def counts(scat, lin):
     return rc
 
 
-def weights(scat, lin):
+def weights(scat, lin, rate):
     rc = 0
     if "weight" not in scat[0]:
         return fail("W the scatter file has no weight column")
@@ -252,8 +338,7 @@ def weights(scat, lin):
             hi += fa / mb * h
             tv += fa * max(0.0, 1.0 / mb - 1.0 / ma) + math.fsum(f for ts, f in sheds if ta < ts <= tb) / mb
             mx = max(mx, fa / mb)
-        q = lin["root"][i]
-        b = dn * (tv + mx) / (mdot_b[q] / rows[q][0][1]) * (1.0 + R_B)
+        b = dn * (tv + mx) / rate[lin["root"][i]][2] * (1.0 + R_B)
         a, c = lo * (1.0 - R_I) - b - h_p[i], hi * (1.0 + R_I) + b + h_p[i]
         if not a <= s_p[i] <= c:
             out.append((i, s_p[i], lo, hi, b))
@@ -298,8 +383,13 @@ def main():
     if isinstance(lin, str):
         rc |= fail("the breakup tree: " + lin)
     else:
-        rc |= counts(scat, lin)
-        rc |= weights(scat, lin)
+        floor = scatter_floor()
+        rate, fl, own = rates(lin, floor)
+        nfl = sum(1 for q in own if own[q][1] < (1.0 - FLOOR_MARGIN) * fl[0])
+        print("   floor %g nbar = %.6e 1/s: %d of %d roots below it" % (floor, fl[2], nfl, len(own)))
+        rc |= premise(lin, own, floor)
+        rc |= counts(scat, lin, rate)
+        rc |= weights(scat, lin, rate)
     print("PASS" if rc == 0 else "FAIL")
     return rc
 

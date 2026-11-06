@@ -23,7 +23,7 @@ on row `k` itself, so T1 counts a decrease on `k` as liquid and T3 starts at `k`
 |---|---|---|---|
 | T1 | every family-1 parcel's `d` decreases at least once on a row up to `k` | exact | 25 of 25 (none on `k`); exit `d` 2.9–13.1 µm |
 | T2 | every family-2 row carries the injected `d` | exact (the printed value) | 1525 rows |
-| T3 | every row from `k` on carries the `d` of row `k`, both families | exact (the printed value) | 2937 rows |
+| T3 | every row from `k` on carries the `d` of row `k`, both families | exact (the printed value) | 2912 rows |
 | T4 | every exit record ends at the outlet (code 400) with its family's injected `ṁ = krho/(1 − Σ krho) ρ_g u_g A` (8.326531e-4, 4.163265e-4 kg/s), and each family's total is 25 of them | 1e-5 (E13.6 half-ULP ≤ 5e-6 per record) | 50 records at the outlet; worst 1.1e-6 |
 | T5 | `Σ E` of `source.tec` = `Σ ṁ_inj (c_l T_0 + v_0²/2) − Σ ṁ_exit (h_exit + \|u_exit\|²/2)`, `h` by the phase of the exit record; `ẇ = 0` | 1e-5 | 1.6e-7 |
 | T6 | ≥ 20 parcels per family with the injection row, a frozen row and one exit record; the model-6 witness | — | 25 + 25 |

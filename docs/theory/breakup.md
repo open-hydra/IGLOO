@@ -187,10 +187,13 @@ $$
 
 with the paper's constants $C_k = 8$ (`Comega`), $C_d = 5$ (`Cmu`), $C_f = 1/3$,
 $C_b = 1/2$ and $K = 10/3$.  Breakup is detected when $|y| > 1$ within the current
-step.  At breakup the child drop radius is sampled from either a chi-square distribution
-(`method = 1`, the original paper) or a Rosin-Rammler distribution (`method = 2`, the
-default) whose scale parameter is iterated to match the $D_{32}$ implied by energy
-conservation; the parcel count is rescaled to conserve mass.  Any other `method` value
+step.  At breakup the product radius is drawn from the mass distribution of a chi-square
+(`method = 1`, the exponential law of O'Rourke and Amsden's KIVA-II implementation) or a
+Rosin–Rammler (`method = 2`, the default) size law whose Sauter radius is the $r_s$ of energy
+conservation.  Both are drawn inside $[0.01\,r_s, r)$: the Rosin–Rammler scale is iterated so
+that the truncated law keeps $r_s$; the chi-square law has $r_s$ untruncated and keeps the
+Sauter radius of the window, at least $0.946\,r_s$ (at $r/r_s = 7/3$, its smallest value).  The
+parcel keeps its mass, so the drops it represents follow the size law.  Any other `method` value
 is refused at setup.
 
 ---
@@ -244,6 +247,7 @@ do not depend on thread scheduling or MPI rank count.
 
 Routine-level comparisons of all five models with their source papers, and the
 end-to-end Weber-sweep cases (`tab-e2e`, `etab-e2e`, `pilch-erdman-e2e`,
-`reitz-diwakar-e2e`, `khrt-e2e`, and `tab-hf92`/`etab-hf92`, the TAB and ETAB products
-beside Hsiang & Faeth's correlations): [../vv/literature.md](../vv/literature.md),
+`reitz-diwakar-e2e`, `khrt-e2e`, `tab-hf92`/`etab-hf92`, the TAB and ETAB products
+beside Hsiang & Faeth's correlations, and `khrt-hf93`, the KH-RT parent drop beside their
+core drop): [../vv/literature.md](../vv/literature.md),
 [../vv/e2e.md](../vv/e2e.md).

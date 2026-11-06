@@ -5,10 +5,10 @@ program test_khrt_interaction
     ! KHRT is the only breakup model that runs on BOTH integration paths at once:
     !   * ReitzKHRT      (continuous, via breakupOde)   — the KH stripping rate
     !   * ReitzKHRTevent (discrete,   via breakupEvent) — the RT shatter / KH shed
-    ! Each path carries its OWN verbatim copy of the KH block (lambdaKH/omegaKH/
-    ! tauKH/dStable), the RT block (omegaRT/lambdaRT/tauRT) and the tc/told
-    ! accumulator. Nothing else gates that the two copies agree, so they are free to
-    ! drift.
+    ! Both take the KH scales (lambdaKH/omegaKH/tauKH/dStable) and the RT scales
+    ! (omegaRT/lambdaRT/tauRT) from one routine, khrtWaves; each path keeps its OWN
+    ! copy of the tc/told accumulator and its own reading of the shared predicate.
+    ! Nothing else gates that the two paths agree.
     !
     ! The shared predicate is
     !     RT_due  ==  (tc > tauRT) .and. (lambdaRT < dp)

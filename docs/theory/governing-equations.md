@@ -12,7 +12,7 @@ depend on the active physics model (see [Model selection](index.md#model-selecti
 | :---: | :---: | :--- | :---: |
 | 1–3 | $\mathbf{x}$ | Position (m) | all |
 | 4–6 | $\mathbf{v}_p$ | Velocity (m s⁻¹) | all |
-| 7 | $T_p$ (or $h_p$) | Temperature (K), or enthalpy when the material carries a $c_p(T)$ table | all |
+| 7 | $T_p$ (or $h_p$) | Temperature (K), or enthalpy when the material carries a $c_p(T)$ table and does not solidify | all |
 | 8 | $m$ | Droplet mass (kg); its rate is $\dot{m}$ (the metal's mass $m_\mathrm{Al}$ under model 8) | 2, 4, 5, 8 |
 | 8 | $\dot{n}_p$ | Droplet-number rate of the parcel; its rate is the continuous breakup rate | 3 |
 | 8 | $f$ | Frozen mass fraction of a solidifying droplet (the temperature stays at index 7) | 6, 7 |
@@ -61,7 +61,8 @@ $$
 $$
 
 `cpFactor` is $1/c_{p,p}$ when the state variable is the temperature $T_p$ and $1$ when the
-particle carries a variable-$c_p$ table (the state variable is then the enthalpy $h_p$); it
+particle carries a variable-$c_p$ table (the state variable is then the enthalpy $h_p$; a solidifying material keeps
+$T_p$, see [Solidification](solidification.md#a-varying-liquid-heat-capacity)); it
 converts the Nusselt-based heat flux into the rate that appears in $F(7) = \dot Q / m$.
 
 With a variable-$c_p$ table the temperature is recovered from $h_p$ through the tabulated enthalpy,

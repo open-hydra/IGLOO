@@ -22,7 +22,7 @@ collapse ≥ 1.8×.
 | solver | outcome |
 |---|---|
 | the shed hand-off removed (the parent deposits its shed child's birth flow) | `Fx`, `E`: 472/1500 cells non-zero, max **2.3e-3** of the flux scale; Σ `Fx` = 11.4777 N = 100 m/s × Σ children's birth flow (0.11478 kg/s, 37 % of the injected), Σ `E` = (c_p·300 + 5000) × the same, both to 1.5e-7 (the E13.6 print of the children's flows) |
-| this solver | max \|cell\| **1.1e-16** of the flux scale on `Fx` and `E`, exactly 0 on `wdot`, `Fy`, `Fz` |
+| this solver | max \|cell\| **1.2e-16** of the flux scale on `Fx` and `E`, exactly 0 on `wdot`, `Fy`, `Fz` |
 
 ## Pass criterion
 All witnesses and all five fields PASS. The residue is roundoff of `ṁ_parent,out + ṁ_child,birth` against

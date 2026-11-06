@@ -383,7 +383,7 @@ contains
     use IGLOO_variables,  only: ode_word,iopt,rtol,atol, ord2, nm, nb,     &
                                 eulerSwitch, sourceSwitch, unitTraj, unitScat, &
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
-                                trajOn, scatOn, dNscat, trajSample, threshold, &
+                                trajOn, scatOn, dNscat, npFloor, scatterFloor, trajSample, threshold, &
                                 probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
                                 nConnHit, nSweepHit, nRimExit, nInjNoCell, nKHRTwarn, &
                                 unitSnap, snapOn, timeOn, tEnd, frozenOn, unitPlane, planeOn
@@ -399,7 +399,7 @@ contains
                                     TM_REDUCE, TM_FINALIZE, TM_SMOOTH
     use IGLOO_Mod_Footprint,  only: record_footprint
     use IGLOO_overlap,        only: mirrorSource, mirrorEuler
-    use IGLOO_Lib_Combustion, only: nuOx
+    use IGLOO_Lib_Combustion, only: nuOx, capLawPath
     use IGLOO_records,        only: rec_setup, ps_open, ps_text, ps_zone, ps_close, ps_begin, ps_end, &
                                     STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT
     use IGLOO_Lib_Erosion,    only: zeroWall
@@ -421,7 +421,7 @@ contains
     logical, allocatable :: skipIp(:)
     !> Scatter-cloud weight-quantum (dNscat) auto-sizing scratch.
     integer  :: c, nStreams, nValid
-    real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp, rRes
+    real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp, rRes, cLaw, zEnd
     type(obj_particle) :: ptmp   ! throwaway copy for the inject-only pre-pass
     character(len=4) :: fHead    !> the frozen-fraction header entry, blank for a material that does not solidify
     character(len=10) :: tsHead  !> the trajectory file's surface-temperature entry, blank for a material without P2T
@@ -521,7 +521,7 @@ contains
       endif
 
       !> Scatter cloud: one zone per material; auto-size the weight quantum dNscat to ~trajSample points per stream.
-      dNscat = 0._R8
+      dNscat = 0._R8; npFloor = 0._R8
       if (scatOn) then
         open(newunit=unitScat,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'scatter-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
              access='stream', form='unformatted', status='replace')
@@ -542,11 +542,23 @@ contains
               do ip = 1, pgr%nInjected
                 ptmp = pgr%particle(ip)
                 ptmp%d = ptmp%dInj
-                if (all(ptmp%iInj == [0,0,0,0])) ptmp%stateVar(4:6) = ptmp%vInj
+                !> a database parent at the injection state reset_state restores, then its gas fallbacks
+                if (all(ptmp%iInj == [0,0,0,0])) then
+                  ptmp%stateVar(4:6) = ptmp%vInj
+                  ptmp%tp = ptmp%tpInj; ptmp%mdot = ptmp%mdotInj
+                  call ptmp%injectionGasState(self%geoblock, self%gasblock)
+                endif
                 call ptmp%resolveInjectionRate(self%geoblock, self%gasblock, self%material(m2)%rhoTab)
                 !> residues per parent droplet: one, or the cap's mass over a residue's at d-residue
                 rRes = 1._R8
-                if (pgr%xiOx0 > 0._R8) then
+                if (pgr%xiLaw > 0) then
+                  !> the cap at burnout on the law's path, m_p0 zEnd, over a residue's
+                  if (pgr%dRes > 0._R8) then
+                    call capLawPath(ptmp%d, pgr%nBurn, pgr%xiOx0, ptmp%rho, pgr%rhoRes, cLaw, zEnd)
+                    rRes = zEnd*ptmp%d**3/ &
+                      (((1._R8 - pgr%xiOx0)/ptmp%rho + pgr%xiOx0/pgr%rhoRes)*pgr%rhoRes*pgr%dRes**3)
+                  endif
+                elseif (pgr%xiOx0 > 0._R8) then
                   !> the cap at burnout with its initial oxide, m_p0 (x0 + xi nu (1 - x0)), over a residue's
                   if (pgr%dRes > 0._R8) rRes = (pgr%xiOx0 + pgr%xiCap*nuOx*(1._R8 - pgr%xiOx0))*ptmp%d**3 / &
                     (((1._R8 - pgr%xiOx0)/ptmp%rho + pgr%xiOx0/pgr%rhoRes)*pgr%rhoRes*pgr%dRes**3)
@@ -569,8 +581,11 @@ contains
           do ip = 1, gr%nparticles
             !> Throwaway copy keeps the real particle pristine.
             ptmp = gr%particle(ip)
-            !> DB/assigned streams: seed the velocity as integrate does.
-            if (all(ptmp%iInj == [0,0,0,0])) ptmp%stateVar(4:6) = ptmp%vInj
+            !> DB/assigned streams: seed the velocity as integrate does, then the gas fallbacks at the injection cell.
+            if (all(ptmp%iInj == [0,0,0,0])) then
+              ptmp%stateVar(4:6) = ptmp%vInj
+              call ptmp%injectionGasState(self%geoblock, self%gasblock)
+            endif
             call ptmp%resolveInjectionRate(self%geoblock, self%gasblock, mat%rhoTab)
             if (ptmp%npdot > 0._R8) Ndot = Ndot + ptmp%npdot
             vsp = norm2(ptmp%stateVar(4:6))
@@ -584,6 +599,7 @@ contains
         if (Ndot>0._R8 .and. nStreams>0) &
           dNscat = Ndot*tauRef / real(max(trajSample*nStreams,1), R8)
         if (.not. (dNscat>0._R8)) dNscat = 0._R8       ! guard NaN/neg => scatter silently skipped
+        if (dNscat>0._R8) npFloor = scatterFloor*Ndot/real(nStreams,R8)   ! the floor: F times the mean stream's rate
         if (mpi_is_root) &
           write(*,'(A,A,A,ES10.3,A,I0,A)') '     >> scatter cloud [',trim(mat%matName),     &
               ']: dNscat=',dNscat,' droplets/pt (nominal ~',trajSample,                      &
@@ -592,7 +608,7 @@ contains
 
       if (mpi_is_root) then
         write(*,*)" Compute particles dynamics for material: ",trim(mat%matName)
-        if (mat%cpVariable) write(*,*) ' >> Solving enthalpy equation'
+        if (mat%cpVariable .and. mat%solidSelect == 0) write(*,*) ' >> Solving enthalpy equation'
       endif
       do g = 1, mat%ngroups
         group: associate(gr => mat%group(g))
@@ -622,8 +638,10 @@ contains
           write(*,'(A,I2,A)') '     >> ODE system (neq=', gr%neq, '):'
           if (gr%evapSelect/=0) write(*,*) '       - evaporation --> ', trim(gr%evapWord)
           if (gr%combSelect/=0 .and. gr%prodID == 0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
-          if (gr%combSelect/=0 .and. gr%prodID > 0) write(*,'(A)') '        - combustion  --> Beckstead d^n burn '// &
-            'law with an oxide cap (xi-cap, product '//trim(gr%productName)//')'
+          if (gr%combSelect/=0 .and. gr%prodID > 0 .and. gr%xiLaw == 0) write(*,'(A)') '        - combustion  --> '// &
+            'Beckstead d^n burn law with an oxide cap (xi-cap, product '//trim(gr%productName)//')'
+          if (gr%combSelect/=0 .and. gr%prodID > 0 .and. gr%xiLaw > 0) write(*,'(A)') '        - combustion  --> '// &
+            'Beckstead d^n burn law with an oxide cap (xi-law=Gallier21, product '//trim(gr%productName)//')'
           if (gr%solidSelect/=0 .and. .not.gr%brkupEqOde) &
             write(*,*) '       - solidification --> supercooling + recalescence (model 6)'
           if (gr%solidSelect/=0 .and. gr%brkupEqOde) &
@@ -678,7 +696,8 @@ contains
               call tm_parcel_begin()
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                              mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab,    &
-                             mat%LvTab,mat%cpvTab, slot=ip, shed=gr%shed(ip), noShed=(loopCounter==maxLoop), wallblock=self%wall)
+                             mat%LvTab,mat%cpvTab, slot=ip, shed=gr%shed(ip), noShed=(loopCounter==maxLoop), wallblock=self%wall, &
+                             klTab=mat%klTab, epsTab=mat%epsTab)
               call tm_parcel_end()
             enddo
             !$OMP END PARALLEL DO
@@ -781,7 +800,7 @@ contains
                 kid%n0   = kid%npdot
                 kid%mdot = kid%npdot * kid%m
                 !> ODE state: enthalpy/temperature slot, then the model-3 count slot
-                if (kid%varCp) then
+                if (kid%varCp .and. kid%solidSelect == 0) then
                   kid%stateVar(7) = lookupTab(mat%hTab, kid%tp)
                 else
                   kid%stateVar(7) = kid%tp
@@ -845,11 +864,12 @@ contains
             if (gr%resOn) then
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                               mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
-                              mat%LvTab,mat%cpvTab, slot=ip, resid=gr%resid(ip), wallblock=self%wall)
+                              mat%LvTab,mat%cpvTab, slot=ip, resid=gr%resid(ip), wallblock=self%wall, klTab=mat%klTab, &
+                              epsTab=mat%epsTab)
             else
               call integrate(gr%particle(ip),self%geoblock,self%gasblock,self%source,self%euler(:,gr%famID), &
                               mat%hTab,mat%cpTab,mat%rhoTab,mat%mupTab,mat%sigTab,mat%psatTab, &
-                              mat%LvTab,mat%cpvTab, slot=ip, wallblock=self%wall)
+                              mat%LvTab,mat%cpvTab, slot=ip, wallblock=self%wall, klTab=mat%klTab, epsTab=mat%epsTab)
             endif
             call tm_parcel_end()
           enddo
@@ -918,7 +938,8 @@ contains
           call mollifyEulerBlocks(self%euler(:, fam), self%geoblock, self%links, self%donors)
           call tm_unnest()
           do b = 1, nb
-            call self%euler(b, fam)%normalize(self%material(m)%hTab, self%material(m)%cpVariable)
+            call self%euler(b, fam)%normalize(self%material(m)%hTab, &
+                                             self%material(m)%cpVariable .and. self%material(m)%solidSelect == 0)
           enddo
         enddo
       enddo
@@ -969,7 +990,7 @@ contains
     real(R8),         intent(in) :: gas(9), vel(3), Tp, np, rhop
     real(R8) :: FdragQdot(4), vdiff(3), Fdrag(3)
     real(R8) :: rhog, Tg, gamma, mug, kg, Rg
-    real(R8) :: Re, Ma, Tr, Pr, Nu, Cd, slip, Qdot, d, rhom
+    real(R8) :: Re, Ma, Tr, Pr, Nu, Cd, slip, Qdot, d, rhom, eps
     real(R8), parameter :: oneThird =0.33333333333333333_R8, &
                            sixOverPi=1.90985931710274403_R8, &
                            piOver8  =0.39269908169872415_R8
@@ -992,8 +1013,10 @@ contains
     Nu = heat(Re,Pr,Ma,heatSelect)
     Fdrag = piOver8*Cd*d*Re*mug*vdiff
     Qdot  = Nu*kg*pi*d*(Tg-Tp)
-    if (self%material(mID)%emissivity > 0._R8) &
-      Qdot = Qdot + radiativeHeat(self%material(mID)%emissivity, d, Tg, Tp)
+    !> the emissivity at Tp: the material's column, else its constant
+    eps = self%material(mID)%emissivity
+    if (self%material(mID)%epsVariable) eps = tableValue(self%material(mID)%epsTab, Tmin, Tmax, Tp)
+    if (eps > 0._R8) Qdot = Qdot + radiativeHeat(eps, d, Tg, Tp)
     Qdot  = Qdot + Fdrag(1)*vel(1)+Fdrag(2)*vel(2)+Fdrag(3)*vel(3)
     FdragQdot = [Fdrag, Qdot]*np
 

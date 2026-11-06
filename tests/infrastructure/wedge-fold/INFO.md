@@ -35,21 +35,22 @@ looping fold, GREEN on this one):
 | G1 | none of the give-up markers in `run_out.txt` (`no net progress`, `stuck in cell`, `Inner loop`, `outer maxIter`, `non-finite state`) | `Particle 1 hit outer maxIter (500000); flagging gone` |
 | G2 | both parcels' last trajectory row has x > 2.0 (the outlet; the last row is the exit point) | ID 1 last x = −0.489651 |
 | G3 | every trajectory row is inside the sector, print-aware: \|z\| ≤ \|y\|·tan(delthe/2) + 1e-6 and y > −1e-6 (rows are F12.6 and the sector half-width in z at r = 1e-4 is 8.7e-7, below one print unit, so `atan2` on printed values is ill-conditioned there) | 500000 rows with y = −9.6e-5 |
-| G4 | vacuity: ID 1's first row has W = 0.5, and the sign of z flips between consecutive ID-1 rows ≥ 9 times | (passes on that solver too: 499999 flips) |
+| G4 | vacuity: ID 1's first row has W = 0.5, and the sign of z flips between consecutive ID-1 rows ≥ 5 times | (passes on that solver too: 499999 flips) |
 | G5 | ID 2's last x equals axis-200's (2.051541) to 1e-6 | (passes: ID 2 is byte-identical to axis-200's) |
 
 `Run_ODESolver err=`/`=> marking gone` (`Lib_Integration.f90`) are not in G1's list; a parcel
 lost that way fails G2 (never reaches the outlet).
 
-**Measured** (OMP 1 and 5, three runs each): every output identical as
-a sorted multiset (the particle files byte for byte: they are in parcel order); ID 1: 337 rows (349 without the
-sector-edge segments, 347 without them and without the meridian-frame deposits), 10 z-sign
-flips (18 without the sector-edge segments),
-min y = 4.5e-5 (its closest approach to the axis, at |p × v̂| = 1e-4·0.5/√1.25 = 4.47e-5),
+**Measured** (the ifx and the gfortran build, OMP 1 and 5, three runs each): every output file of the six
+runs of a build byte-identical (the particle files are in parcel order); on both builds ID 1: 337 rows (349
+without the sector-edge segments, 347 without them and without the meridian-frame deposits), 10 z-sign
+flips, min y = 4.5e-5 (its closest approach to the axis, at |p × v̂| = 1e-4·0.5/√1.25 = 4.47e-5),
 exits at x = 2.058712 (axis-200's swirl-free ID 1 exits at 2.058713); ID 2: 260 rows,
-byte-identical to axis-200's. `N_FOLD_MIN = 9` is half of the 18 flips without the
-sector-edge segments, one below the 10 with them; the count is deterministic per binary (one
-thread per parcel) and only 1-ULP generation drift could move a near-zero landing.
+byte-identical to axis-200's. `N_FOLD_MIN = 5` is half the count of the twelve runs less their
+spread (0): in 8 of the 10 flips one of the two rows prints |z| = 1e-6, one print unit, which a
+change of compiler or configure generation can print as 0 and so remove the flip (the two builds
+differ in 311 trajectory rows and agree on the count); the count is deterministic per binary (one
+thread per parcel).
 
 **What this case does NOT pin.** The fold's cadence is "every 1° crossing": the
 containment test carries the azimuth band (`geometry.f90::isPointInsideCell`,

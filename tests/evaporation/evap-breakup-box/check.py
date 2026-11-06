@@ -45,8 +45,8 @@ MDOT_TOTAL = NPAR * MDOT_PARCEL
 # ---- tolerances ----
 EPS_R = 0.5e-6          # E13.6 relative half-ULP on d
 EPS_T = 0.5e-6          # F12.6 absolute half-ULP on T_p, x
-TOL_MDOT_OUT = 1.0e-3   # G0: exit flows at burnout / injected flow (measured 1.9e-4)
-TOL_B1 = 1.0e-12        # B1: closure against the case-input flow (measured 5.4e-16)
+TOL_MDOT_OUT = 1.0e-3   # G0: exit flows at burnout / injected flow (measured 1.7e-9)
+TOL_B1 = 1.0e-12        # B1: closure against the case-input flow (measured 3.6e-16)
 TOL_B2 = 1.0e-6         # B2: most negative cell / largest cell
 X_BURN = (0.45, 0.65)   # B3: burnout band
 X_W1, W1_RATIO = 0.04, 0.55

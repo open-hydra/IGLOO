@@ -17,9 +17,9 @@ h-state lines; `evaporation/evap-breakup-box-varcp` covers model 4's.
 | id | gate | tolerance | measured |
 |---|---|---|---|
 | P | premises: 25 injection rows at 270 K and 100 m/s; at least 200 parcels with 5 rows; the median parcel heats by at least 1 K | exact | 25 rows; 263 parcels; median 13.707 K |
-| E | Σ E of `source.tec` = Σ_inj ṁ (h(T₀) + ½\|v₀\|²) − Σ_exit ṁ (h(T) + ½\|u\|²), h from the table | the exit records' prints (ṁ E13.6, T and \|u\| F12.6) + 1e-12 of the gross | 0.266 of 0.58 W (gross 4.86·10⁵ W) |
-| M | `khrt-e2e`'s exit mass-flow total; its mass and momentum budget of `source.tec` | 1e-5; 1e-12 and 5e-6 | 6.5e-7; 0 and 6.4e-7 |
-| K, runs | on every run of rows at one printed d (no breakup between them; 8373 rows): an RK4 of dh/dt from the run's first row, the velocity between two rows the Schiller-Naumann solution from the earlier row's U, against the measured T and U of every row | the T print at the row and at the anchor, the d, U and time prints carried through the rates (the march repeated at the prints' extremes), 5e-6 K and 5e-6 m/s for the integrator | worst 0.919 of the tolerance; no row exceeds the print terms by more than 7e-7 |
+| E | Σ E of `source.tec` = Σ_inj ṁ (h(T₀) + ½\|v₀\|²) − Σ_exit ṁ (h(T) + ½\|u\|²), h from the table | the exit records' prints (ṁ E13.6, T and \|u\| F12.6) + 1e-12 of the gross | 0.249 of 0.58 W (gross 4.86·10⁵ W) |
+| M | `khrt-e2e`'s exit mass-flow total; its mass and momentum budget of `source.tec` | 1e-5; 1e-12 and 5e-6 | 6.1e-7; 0 and 5.6e-7 |
+| K, runs | on every run of rows at one printed d (no breakup between them; 8373 rows): an RK4 of dh/dt from the run's first row, the velocity between two rows the Schiller-Naumann solution from the earlier row's U, against the measured T and U of every row | the T print at the row and at the anchor, the d, U and time prints carried through the rates (the march repeated at the prints' extremes), 5e-6 K and 5e-6 m/s for the integrator | worst 0.930 of the tolerance; no row exceeds the print terms by more than 7e-7 |
 | K, intervals | across every interval in which d changes (an RT event, a KH shed, the stripping; 1977 intervals): the measured T at its end inside the bracket of two marches from its start at constant d and slip, the larger d with the smaller slip and the smaller d with the larger slip | the prints and the integrator floor | 1977 of 1977 inside |
 
 The tight check of K lives on the runs at one d: the children and the parents between events. A parent under

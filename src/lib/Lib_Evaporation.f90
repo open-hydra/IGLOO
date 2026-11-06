@@ -6,10 +6,11 @@ module IGLOO_Lib_Evaporation
     public :: assign_evaporation
     public :: assign_liquid, assign_interface, assign_boiling
     public :: assign_blowing, blowingFactor
-    public :: assign_combustion, assign_solidification, assign_residue
+    public :: assign_combustion, assign_solidification, assign_residue, assign_xilaw
     public :: evaporation
     public :: chiETC
     public :: boilingTemperatureCC, alphaBoil, zgrBoiling
+    public :: psat_CC, invTboil_at
 
     !> Evaporation parameter array: contiguous layout (order mirrored by Lib_RHS ind_Mv..)
     integer(I4), parameter, public :: nep = 10
@@ -183,6 +184,21 @@ contains
             error stop 'IGLOO: unknown residue token'
         end select
     end subroutine assign_residue
+
+    !> The oxide cap's retained fraction: constant, xi-cap; Gallier21, Gallier et al. 2021's deposition law.
+    subroutine assign_xilaw(word, xiLaw)
+        implicit none
+        character(len=*), intent(in)  :: word
+        integer,          intent(out) :: xiLaw
+        select case (word)
+        case('constant');  xiLaw = 0
+        case('Gallier21'); xiLaw = 1
+        case default
+            write(*,*) "Wrong xi-law input ---> "//trim(word)
+            write(*,*) "Choose one of: constant, Gallier21"
+            error stop 'IGLOO: unknown xi-law token'
+        end select
+    end subroutine assign_xilaw
 
 
     !> Evaporation rate mdot (< 0) and, for the models that provide it, the gas-side heat Qdot_evap:
@@ -717,6 +733,17 @@ contains
         psat = Patm * exp(-LvMvOverRu * (1._R8/T - invTboil))
 
     end function psat_CC
+
+
+    !> 1/T of the one-atmosphere boiling point on the Clausius-Clapeyron line through (Tboil, pBoil).
+    pure function invTboil_at(Tboil, pBoil, LvMvOverRu) result(invT)
+        implicit none
+        real(R8), intent(in) :: Tboil, pBoil, LvMvOverRu
+        real(R8) :: invT
+
+        invT = 1._R8/Tboil + log(pBoil/Patm)/LvMvOverRu
+
+    end function invTboil_at
 
 
 end module IGLOO_Lib_Evaporation

@@ -3,10 +3,11 @@
 Pins the reader of `INPUT/<prefix>properties.dat` — `read_cdp_properties`, the PRODUCTION routine —
 on fixtures that no e2e case carries: a table that starts above 1 K, a `Psat` column, columns in
 another order, both enthalpy datums, two materials of which one is tabulated, the `Sigma` and
-`Viscosity` columns of a breaking material, and the file ATLAS GPB writes. `test_ini_pipeline` stops at `read_IGLOO_input`; this test drives the next reader.
+`Viscosity` columns of a breaking material, the `Conductivity`, `Viscosity` and `Emissivity` columns of a
+non-breaking P2T material, two boiling points given away from one atmosphere, and the file ATLAS GPB writes. `test_ini_pipeline` stops at `read_IGLOO_input`; this test drives the next reader.
 
-One executable, four ctest entries, one working directory each (the reader loads `input.ini` from
-the working directory, and the four fixtures need different `[IGLOO-Properties]`):
+One executable, six ctest entries, one working directory each (the reader loads `input.ini` from
+the working directory, and the six fixtures need different `[IGLOO-Properties]`):
 
 | ctest | directory | `[IGLOO-Properties]` |
 |---|---|---|
@@ -14,6 +15,8 @@ the working directory, and the four fixtures need different `[IGLOO-Properties]`
 | `test_properties_reader-two-material` | `two-material/` | the same, one value per material |
 | `test_properties_reader-atlas-water` | `atlas-water/` | mhb98-water's Tboil 373.15 K, Le, Yinf (evaporation CEM); `Lv`, `Mv`, `cpv` from the table's columns |
 | `test_properties_reader-sigma-mu` | `sigma-mu/` | two materials that break (TAB): `sigma = 0 0.05`, `mu = 0 1e-3` (0 for zone A, which has the columns) |
+| `test_properties_reader-columns` | `columns/` | two evaporating materials (TC), one value per material; `emissivity = 0 0.5` (0 for zone A, which has the column) |
+| `test_properties_reader-boiling-pressure` | `boiling-pressure/` | two evaporating materials (CEM): `Lv`, `Mv` one value each, `boiling-temperature = 393.15 406.7` at `boiling-pressure = 2.0e5 303975.0`; its output may not hold the Clausius-Clapeyron notice for material 2, which has a `Psat` column (`FAIL_REGULAR_EXPRESSION`) |
 
 ## Legs (`test_properties_reader.f90`)
 
@@ -27,7 +30,10 @@ the working directory, and the four fixtures need different `[IGLOO-Properties]`
 | PR9 | `nm-`, two zones | zone A tabulated (`psat(560 K) = 1 atm`, `psat(1 K) = 0` by underflow); zone B all zero → no table |
 | PR10 | `atlas-` | `H2O(L)` on `[280, 380]`, cp 4184, rho 997, absolute datum `hOff = -17112459.6`, psat(300 K) = `3.533623e+03` as written |
 | PR-V1 | `atlas-` | `Lv`, `Mv`, `Cpv` located by name: both tables built, `Mv = 18.015` from its column; `Lv` and `cpv` through `tableValue` at 250, 298.15, 300, 337.5, 373.15 and 400 K equal to the file's own rows read by the test (list-directed) by the same formula — exact on a node and outside the table, `4 ε` between nodes; the scalar `Lv` = `Lv(298.15 K)` |
+| PR-C2 | `kc-`, two zones, T 280..380 | zone A (`A 1 liquid-conduction=P2T`, no `k-liq`, no `mu-liq`, no breakup): its `Conductivity = 0.1 + 1e-4 T`, `Viscosity = 3e-3 exp(−(T − 280)/100)` and `Emissivity = 0.5 + 0.002 (T − 280)` columns built on `[280, 380]`, bitwise equal to the file's rows read by the test (list-directed), the `Emissivity` row of 1.2 at 300 K at exactly 1 and every other row unchanged; zone B (ITC) all zero: no tables, no flags, `emissivity = 0.5` from `[IGLOO-Properties]` |
 | PR-S1 | `sm-`, two zones, T 270..370 | zone A's `Sigma = 0.036 + 1e-3 (T − 300)` and `Viscosity = 0.05 exp(−(T − 300)/10)`: both tables built on `[270, 370]`, bitwise equal to the file's rows read by the test (list-directed) at the 101 nodes; through `tableValue` the end nodes at 200 K and 400 K, NaN at a NaN temperature; zone B all zero: no tables, `sigma = 0.05` and `mu = 1e-3` from `[IGLOO-Properties]` |
+| BP1 | `bp-` zone A (no `Psat` column), `boiling-temperature` 393.15 K at `boiling-pressure` 2e5 Pa, `Lv` 2.26e6, `Mv` 18 | the key read; `invTboil` = 1/T_b + ln(p_B/p_atm)/a to 4u; `psat_CC(T_b)` = p_B and `psat_CC(350 K)` = the closed form p_B exp(−a(1/T − 1/T_b)) to 2e-14; the boiling temperature at p_B = T_b within 1e-12 K |
+| BP2 | `bp-` zone B, a `Psat` column through (406.7 K, 3 atm), `boiling-pressure` 303975 Pa | the column tabulated (checked against `boiling-pressure`, not one atmosphere); its Clausius-Clapeyron anchor folded too, `psat_CC(T_b)` = p_B to 2e-14 |
 
 The checks behind the reader (`classify_table_tokens`, `scan_rows`, `check_table_nodes`,
 `check_table_columns`, `validate_psat_column`, `tableValue`, in `src/lib/Lib_Thermodynamics.f90`) are
@@ -43,6 +49,7 @@ synthetic input:
 | PR-V2 | `validate_vapour_columns` | every code once on columns beside PR4's Psat curve (`Lv·Mv/Ru` = its 5000 K slope): OK, all zero ABSENT, a NaN NONFINITE, `Cpv` zero on three rows PARTIAL, `Cpv` negative NONPOSITIVE, `Mv` not constant MV_VARIES, no Psat column WITHOUT_PSAT, `Lv` in kJ/kg CC_MISMATCH; with the `Mv` column absent the slope takes `MvKey` (18 accepted, 18/2.5 refused) |
 | PR-S2 | `validate_positive_column` | every code once, in precedence order: a positive column OK, all zero ABSENT, a NaN beside a zero and a negative value NONFINITE, a zero among non-zero rows beside a negative value PARTIAL, a negative value NONPOSITIVE |
 | PR5 | `check_table_nodes` | 1e-7 K off the nodes accepted; a uniform 0.4 K offset and a missing node refused; one row, a NaN, a node below 0 K |
+| PR-C1 | `classify_table_tokens` | `Emissivity` and `Conductivity` located by name through the optional indices; each named twice: a name twice, with and without the optional arguments; the 4-column header with them: 0 |
 | PR8 | `classify_table_tokens` | the 4-column header; aliases in another order (`Psat` first, `enthalpy_abs`); both enthalpy names; a name twice; `Temperature` not first; no Cp / Density / enthalpy; `VISCOSITY` and `sigma` located by name (absent: 0); `Sigma` with `SIGMA`, `viscosity` with `Viscosity`: a name twice |
 | PR11 | `check_table_columns` | `h = cp*T` relative; an offset absolute (accepted) and relative (refused); a row off `cp*T`; `h` not increasing; `rho = 0`; `cp < 0`; a NaN; a varying cp with `h` its trapezoid sum (accepted) and its right Riemann sum (refused) |
 | PR12 | `tableValue` | linear between the nodes; the end values outside; `tab(Tmax)` at `Tmax`; NaN for a NaN temperature |
@@ -77,6 +84,15 @@ PR8 and PR-S2 are RED on one mutation each: the `Sigma` names dropped from `clas
 zone A's key is 0), the sigma table stored from the `Viscosity` column (PR-S1's bitwise and
 end-value legs), and each test of `validate_positive_column` removed (its own PR-S2 leg).
 
+PR-C1 is RED with the two names dropped from `classify_table_tokens`: five of its six assertions fail (the
+indices 0, no duplicate seen). PR-C2 is RED on the reader without the three columns: the `columns` reader stops at
+setup (`liquid-conduction=P2T requires k-liq > 0`: zone A's material line carries no `k-liq`).
+
+BP1 and BP2 are RED on one mutation each: the fold removed (`invTboil` left at 1/T_b, the key read and ignored):
+`psat(T_b)/p_B − 1` = −0.493, the boiling temperature at p_B 22.7 K off, BP1's four value assertions and BP2's
+folded anchor fail; the `Psat` check made against one atmosphere: zone B is refused at setup (`psat(boiling-temperature)
+is not within a factor 2 of boiling-pressure`, ratio 3) and the leg set stops.
+
 `abs-` keeps a constant cp on purpose: the datum `hOff` and the relative-header check exist only for a
 constant-cp table, so a varying cp would let PR7 pass on any reader.
 
@@ -101,3 +117,7 @@ under `"Enthalpy_abs"`, `psat-` = `legacy-` plus the column of
 `test/GPB/CP-psat-water/reference/part-properties.dat` (md5 `f533b126d5841a0861b9e6cf148896cc`,
 `"Enthalpy_abs", "Psat", "Lv", "Mv", "Cpv"`, T 280..380), `atlas-phase.txt` its `CP-fixmat-h0/reference/part-phase.txt`
 (md5 `533dd5ae468eb8dec222018520773bc2`). Refresh both from ATLAS when its writer changes; never edit them here.
+
+`boiling-pressure/INPUT/` — two water-like zones on 250..500 K (cp 4200, ρ 958, `h = cp*T`): zone A's `Psat`
+zeros (Clausius-Clapeyron from the INI), zone B's `Psat` the Clausius-Clapeyron line of `Lv` 2.26e6, `Mv` 18
+through (406.7 K, 303975 Pa), written to seven significant digits; `bp-phase.txt` holds `A 1` and `B 1`.

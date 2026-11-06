@@ -6,12 +6,14 @@ module IGLOO_Lib_Combustion
     private
     public :: becksteadRate
     public :: buildLobeTable, lobeF, capStretch, capStretchX0
+    public :: buildXiLaw, xiGallier, capLawPath
 
     !> Metal parameter slots; the order is mirrored by Lib_RHS ind_mb../nmetal.
-    integer(I4), parameter, public :: nmp = 12
+    integer(I4), parameter, public :: nmp = 13
     integer(I4), parameter, public :: imKb=1, imN=2, imXe=3, imBeta=4, imXi=5
     integer(I4), parameter, public :: imTig=6, imHf=7, imCps=8, imQc=9
     integer(I4), parameter, public :: imRr=10, imCr=11, imCs=12   !> the cap: product density, heat capacity, stretch
+    integer(I4), parameter, public :: imXl=13                     !> the cap's retained fraction: 0 xi-cap, 1 Gallier21
 
     !> X_eff exponent of the Beckstead (2005) correlation.
     real(R8), parameter, public :: aXeff = 1.0_R8
@@ -26,6 +28,17 @@ module IGLOO_Lib_Combustion
     !> The lobe table in increasing f_ox: f_ox, (1 - f_ox)^(1/3) and F; set once by buildLobeTable.
     real(R8) :: lobeFr(NLOBE) = 0._R8, lobeUr(NLOBE) = 0._R8, lobeFv(NLOBE) = 0._R8
     logical  :: lobeBuilt = .false.
+
+    !> Gallier et al. 2021's deposition law, Figs. 11 and 7 (tests/combustion/burn-box-cap-gallier/reference/): h the
+    !  retained fraction against f_ox at 70 um, g the regression line through f_dep [%] against d_Al [um], at 70 um 1.
+    integer(I4), parameter :: NXH = 6, NXG = 6
+    real(R8), parameter :: xhF(NXH) = [0._R8, 0.1_R8, 0.3_R8, 0.5_R8, 0.7_R8, 0.9_R8]
+    real(R8), parameter :: xhV(NXH) = [0.069522_R8, 0.101342_R8, 0.150355_R8, 0.192828_R8, 0.280447_R8, 0.520769_R8]
+    real(R8), parameter :: xgD(NXG) = [20._R8, 50._R8, 70._R8, 100._R8, 220._R8, 400._R8]
+    real(R8), parameter :: xgP(NXG) = [7.8595_R8, 7.3922_R8, 6.9633_R8, 6.1459_R8, 3.2639_R8, 1.6087_R8]
+    !> g = 1 + xgS (d - 70), d in um held in [20, 400]; set once by buildXiLaw
+    real(R8) :: xgS = 0._R8
+    logical  :: xiLawBuilt = .false.
 
 contains
 
@@ -176,5 +189,87 @@ contains
         c = c*((1._R8 - x0)/rhoAl/((1._R8 - x0)/rhoAl + x0/rhoRes))**(n/3._R8)
 
     end function capStretchX0
+
+    !> g's slope from the least-squares line f = a + b d through Fig. 7's points: g = f(d)/f(70) = 1 + b (d - 70)/f(70).
+    subroutine buildXiLaw()
+        implicit none
+        real(R8) :: sx, sy, sxx, sxy, a, b, n
+
+        if (xiLawBuilt) return
+        n   = real(NXG, R8)
+        sx  = sum(xgD); sy = sum(xgP); sxx = sum(xgD*xgD); sxy = sum(xgD*xgP)
+        b   = (n*sxy - sx*sy)/(n*sxx - sx*sx)
+        a   = (sy - b*sx)/n
+        xgS = b/(a + 70._R8*b)
+        xiLawBuilt = .true.
+
+    end subroutine buildXiLaw
+
+    !> The retained fraction xi = g(d_Al) h(f_ox) in [0, 1]: g at the metal diameter dAl [m], held at its 20 and 400 um
+    !  values outside; h linear between Fig. 11's points, held past f_ox = 0.9.
+    pure function xiGallier(dAl, fox) result(xi)
+        implicit none
+        real(R8), intent(in) :: dAl, fox
+        real(R8) :: xi, d, g, h, w
+        integer  :: k
+
+        d = min(max(dAl*1.e6_R8, xgD(1)), xgD(NXG))
+        g = 1._R8 + xgS*(d - 70._R8)
+        if (fox <= xhF(1)) then
+            h = xhV(1)
+        elseif (fox >= xhF(NXH)) then
+            h = xhV(NXH)
+        else
+            k = 1
+            do while (fox > xhF(k+1))
+                k = k + 1
+            enddo
+            w = (fox - xhF(k))/(xhF(k+1) - xhF(k))
+            h = xhV(k) + w*(xhV(k+1) - xhV(k))
+        endif
+        xi = min(max(g*h, 0._R8), 1._R8)
+
+    end function xiGallier
+
+    !> The law's stretch c = (d_Al0/d_p0)^n int_0^1 ds/F and the cap at burnout zEnd = m_ox/m_p0, on the path
+    !  dy/ds = -nu xi(d_Al0 s^(1/n), y/(x + y)) dx/ds, x = s^(3/n), y = m_ox/m_Al0: RK4 half-steps, midpoint rule.
+    pure subroutine capLawPath(dp0, n, x0, rhoAl, rhoRes, c, zEnd)
+        implicit none
+        real(R8), intent(in)  :: dp0, n, x0, rhoAl, rhoRes
+        real(R8), intent(out) :: c, zEnd
+        real(R8) :: r, dAl0, h, s, y, k1, k2, k3, k4
+        integer  :: k, j
+
+        r    = (1._R8 - x0)/rhoAl/((1._R8 - x0)/rhoAl + x0/rhoRes)
+        dAl0 = dp0*r**(1._R8/3._R8)
+        h    = -0.5_R8/real(NSTRETCH, R8)
+        y    = x0/(1._R8 - x0)
+        c    = 0._R8
+        do k = 0, NSTRETCH - 1
+            do j = 1, 2
+                s  = 1._R8 + real(2*k + j - 1, R8)*h
+                k1 = lawSlope(s, y)
+                k2 = lawSlope(s + 0.5_R8*h, y + 0.5_R8*h*k1)
+                k3 = lawSlope(s + 0.5_R8*h, y + 0.5_R8*h*k2)
+                k4 = lawSlope(s + h, y + h*k3)
+                y  = y + h/6._R8*(k1 + 2._R8*k2 + 2._R8*k3 + k4)
+                if (j == 1) c = c + 1._R8/lobeF(y/((s + h)**(3._R8/n) + y))
+            enddo
+        enddo
+        c    = c/real(NSTRETCH, R8)*r**(n/3._R8)
+        zEnd = (1._R8 - x0)*y
+
+    contains
+
+        pure function lawSlope(s, y) result(dy)
+            real(R8), intent(in) :: s, y
+            real(R8) :: dy, sc
+
+            sc = max(s, 0._R8)
+            dy = -nuOx*xiGallier(dAl0*sc**(1._R8/n), y/(sc**(3._R8/n) + y))*(3._R8/n)*sc**(3._R8/n - 1._R8)
+
+        end function lawSlope
+
+    end subroutine capLawPath
 
 end module IGLOO_Lib_Combustion

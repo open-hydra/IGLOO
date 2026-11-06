@@ -238,8 +238,8 @@ the size of the cloud. The `particle files` line of the [timing report](#per-pha
 gives the budget, the most bytes held, the bytes spilled and the largest block.
 
 The writer takes its critical section once per parcel and file, not once per record: on
-`khrt-stress` the largest stream, the scatter cloud, holds 37 007 markers from 726 parcels
-(4.9 MB, 6.7 kB per parcel).
+`khrt-stress` the largest stream, the scatter cloud, holds 37 992 markers from 726 parcels
+(5.0 MB, 6.9 kB per parcel).
 
 ## Per-phase timers
 
@@ -313,7 +313,7 @@ the grid output (what `IGLOO_TEC_FAST=0` selects), the curve of `khrt-stress` IG
 
 | workload | what it loads | life at 1 × 1 |
 |---|---|---|
-| `khrt-stress` | KH-RT breakup, 726 parcels with the children, their particle files (a scatter cloud of 37 007 markers) | 6.3 s |
+| `khrt-stress` | KH-RT breakup, 726 parcels with the children, their particle files (a scatter cloud of 37 992 markers) | 6.3 s |
 | `vie-plait-dense` | 250 parcels at gas order 2 | 9.4 s, 2.0 s of it set-up |
 | `box-4fam` | 300 × 100 × 100 cells, four families, 40 000 parcels at gas order 2, source and Eulerian output, no particle output | 2269 s |
 

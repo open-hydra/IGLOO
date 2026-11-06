@@ -12,9 +12,11 @@ from Tp0 = 300 K, d0 = 20 um until d^2/d0^2 < 0.02, statement for statement as t
     m_hat from m + (Ts/Tg - 1) Lev (f(m/Lev) - 1) = (Mv/Minf) ln(1/(1 - Xs)),  f(x) = x/(1 - e^-x)
     mdot = -pi d rho_g Dv 2 m_hat
     Q = -mdot cpv (Tg - Tp)/(e^chi - 1),  chi = -mdot cpv/(pi d kg 2)   (conduction limit below 1e-9)
-    dTp/dt = (Q + mdot Lv_sink)/(m cp_l),  dm/dt = mdot
+    dTp/dt = (Q + mdot Lv_sink)/(m cp_l(Tp)),  dm/dt = mdot
 psat(Tp) is either Clausius-Clapeyron through (Tboil, 1 atm) with the given Lv, or the Psat column
 of a properties table read as the solver reads it (linear between the nodes, end values outside).
+cp_l(Tp) is the table's Cp column, linear between the nodes (the solver integrates the enthalpy
+column, its trapezoid sum, whose slope that is), or one constant given with --cp-l.
 
 Printed: the plateau (max Tp), the lifetime, and heat-frac = t_heat/t_life with t_heat the first
 time Tp reaches the plateau minus 1 K and t_life the time d^2/d0^2 reaches 0.02. --figure applies
@@ -49,6 +51,15 @@ def psat_model(spec):
     raise SystemExit(f"--psat {spec}: expected cc:<Lv> or table:<file>")
 
 
+def cp_model(cp_l=None):
+    """cp_l(T): the constant given, else the Cp column of INPUT/properties.dat as the solver reads it."""
+    if cp_l is not None:
+        return lambda T: cp_l
+    Tmin, Tmax, cols = load_properties(os.path.join(HERE, "INPUT", "properties.dat"))
+    tab = cols["cp"]
+    return lambda T: table_value(tab, Tmin, Tmax, T)
+
+
 def mhat_of(Xs, Tp):
     """The TC transcendental at surface mole fraction Xs, by bisection."""
     rhs0 = check.MV / check.MG * math.log(1.0 / (1.0 - Xs))
@@ -72,6 +83,7 @@ def mhat_of(Xs, Tp):
 
 
 def rhs(Tp, m, psat, lv_sink, cp_l):
+    """(dTp/dt, dm/dt) with cp_l a function of Tp."""
     d = (6.0 * m / (math.pi * check.rho_l(Tp))) ** (1.0 / 3.0)
     Xs = min(psat(Tp) / check.P_G, 1.0 - XS_CAP)
     mdot = -math.pi * d * check.RHO_G * check.DV * 2.0 * mhat_of(Xs, Tp)
@@ -80,7 +92,7 @@ def rhs(Tp, m, psat, lv_sink, cp_l):
         Q = -mdot * check.CPV * (check.T_G - Tp) / (math.exp(chi) - 1.0)
     else:
         Q = math.pi * d * check.KG * 2.0 * (check.T_G - Tp)
-    return (Q + mdot * lv_sink) / (m * cp_l), mdot
+    return (Q + mdot * lv_sink) / (m * cp_l(Tp)), mdot
 
 
 def run(psat, lv_sink, cp_l, dt):
@@ -125,8 +137,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--psat", default="table:INPUT/properties.dat")
     ap.add_argument("--lv-sink", type=float, default=check.LV_SINK)
-    ap.add_argument("--cp-l", type=float,
-                    default=load_properties(os.path.join(HERE, "INPUT", "properties.dat"))[2]["cp"][0])
+    ap.add_argument("--cp-l", type=float, default=None, help="one constant cp_l instead of the table's Cp column")
     ap.add_argument("--dt", type=float, default=2.0e-6)
     ap.add_argument("--figure", action="store_true")
     a = ap.parse_args()
@@ -135,10 +146,11 @@ def main():
         print(f"TC2012 Fig. 11: plateau {plat:.2f} K  heat-frac {t_heat / t_life:.3f}  "
               f"(tau_heat {t_heat:.1f}, tau_life {t_life:.1f})")
         return
-    h = run(psat_model(a.psat), a.lv_sink, a.cp_l, a.dt)
+    h = run(psat_model(a.psat), a.lv_sink, cp_model(a.cp_l), a.dt)
     t, T, d2 = ([r[i] for r in h] for i in range(3))
     plat, t_heat, t_life = metrics(t, T, t, d2)
-    print(f"psat {a.psat}  Lv_sink {a.lv_sink:.5g}  cp_l {a.cp_l:g}: plateau {plat:.2f} K  "
+    cpl = "the Cp column" if a.cp_l is None else f"{a.cp_l:g}"
+    print(f"psat {a.psat}  Lv_sink {a.lv_sink:.5g}  cp_l {cpl}: plateau {plat:.2f} K  "
           f"heat-frac {t_heat / t_life:.3f}  lifetime {t_life * 1e3:.3f} ms  swell {max(d2):.4f}")
 
 

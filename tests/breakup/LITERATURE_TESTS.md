@@ -197,8 +197,19 @@ three regimes once the core drop is removed; the size/velocity correlation eq. [
 correlate shock-tube drops; they are not closed forms of TAB or ETAB, so they are drawn, not gated.
 [tab-hf92](tab-hf92/INFO.md) and [etab-hf92](etab-hf92/INFO.md) run `[HF93]`'s water series (d0 = 1000 µm, We 15–600,
 the air and water of its Table 1) and gate the figure's preconditions only (every drop breaks, the cascade ends inside
-the box, every parcel is in it at t_b). TAB's SMD falls about as We^−0.87 against eq. [14]'s We^−1/4: 1.54× eq. [14]
-at We 15, inside its ±20 % at We 37.7–59.8, 6.5× below it at We 600; its MMD/SMD, 0.968–1.375 (mean 1.164), is
-the scatter of 25 to 33 draws about TAB's own (ln 2)^1/n Γ(1 − 1/n) = 1.149 (n = 3.5), not 1.2.
+the box, every parcel is in it at t_b). TAB's SMD falls about as We^−0.96 against eq. [14]'s We^−1/4: 2.08× eq. [14]
+at We 15, inside its ±20 % at We 59.8–81.4, 5.6× below it at We 600; its MMD/SMD, 1.019–1.222 (mean 1.088), lies
+about TAB's own 1.062 after one event (n = 3.5; the products drawn from the size law's mass distribution), not 1.2.
 ETAB's cascade gives one size per class (two where it ends at the onset We_r = 6), 3.3× eq. [14] at We 15 and 5.1×
 below it at We 600. Neither model has `[HF93]`'s core drop.
+
+## KH-RT's parent drop against Hsiang & Faeth's core drop
+
+`[HF93]` eqs. [1]-[8] give the velocity and size of the core drop that remains when shear breakup ends, at t_b = 5 t*:
+the relative velocity u_b/u0 = 1/(1 + C) and d_b/d0 = (1 + C)(4 Eo_cr/(3 C̄_D We))^1/2 with C̄_D = 5, Eo_cr = 16 and
+C = (3 C̄_D t_b/4t*)(ρ_G/ρ_L)^1/2, fitted over the shear range 100 < We < 600. Three printed forms disagree with the
+paper's own derivation and figures: [3]'s (1 + 3C) for (1 + C), [8]'s coefficient 2.3 for (4·16/(3·5))^1/2 = 2.0656,
+[6]'s exponent 2 for −2 ([khrt-hf93](khrt-hf93/INFO.md) gives the evidence). [khrt-hf93](khrt-hf93/INFO.md) runs the
+water series under Reitz KH-RT and draws its parent drop before its first RT event beside the core drop, not gated:
+1.10 times d_b at We 15, 6.5 times at We 600; its relative velocity 0.98–0.99 u0 against 0.61; its first RT at
+2.2–1.3 t*, before t_b. KH-RT has no core drop: the RT event replaces the stripped parent whole.

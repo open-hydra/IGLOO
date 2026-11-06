@@ -375,8 +375,15 @@ contains
     pure real(R8) function hexTol(vertices)
         implicit none
         real(R8), intent(in) :: vertices(3,8)
-        hexTol = max(1.e-12_R8*norm2(vertices(:,7) - vertices(:,1)), 64._R8*epsilon(1._R8)*maxval(abs(vertices)))
+        hexTol = reachTol(norm2(vertices(:,7) - vertices(:,1)), maxval(abs(vertices)))
     end function hexTol
+
+    !> max(1e-12 h, 64 eps L) [m]: relative to the length h, floored at the rounding of coordinates of magnitude L.
+    pure real(R8) function reachTol(h, L)
+        implicit none
+        real(R8), intent(in) :: h, L
+        reachTol = max(1.e-12_R8*h, 64._R8*epsilon(1._R8)*L)
+    end function reachTol
 
 
     !> Fast point-in-hexahedron test using precomputed planes; tol: precomputeHex12's (absent: 1e-15 m).

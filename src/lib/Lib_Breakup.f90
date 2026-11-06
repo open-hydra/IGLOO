@@ -195,23 +195,18 @@ contains
 
     end function ReitzDiwakar
 
-    !> Reitz KH-RT breakup rate: KH stripping toward dStable = 2 B0 lambda_KH, gated by the RT
-    !  breakup time; told/tc carry the RT timer.
-    function ReitzKHRT(dp,sigma,mup,rhop,npdot,rhog,vel,time,acc,vp,told,tc, bp) result(npdotDot)
+    !> Reitz-87 KH and Beale-Reitz RT wave scales of a drop; counts an evaluation outside the fit's hypotheses.
+    subroutine khrtWaves(dp,sigma,mup,rhop,rhog,vel,acc,vp,bp, WeGas,dStable,tauKH,lambdaRT,tauRT)
         use IGLOO_variables, only: pi, toll, nKHRTwarn
         implicit none
-        real(R8), intent(in)    :: dp, sigma, mup, rhop, npdot, rhog, vel, time, acc(3), vp(3)
-        real(R8), intent(inout) :: told, tc
-        real(R8), intent(in)    :: bp(:)   !> [B0, B1, Ctau, CRT, mShedLim, WeLimit]
-        real(R8) :: npdotDot
-        real(R8) :: radius, WeGas, WePart, Oh, Tay, omegaKH, lambdaKH, tauKH, dStable
-        real(R8) :: gt, force, omegaRT, lambdaRT, tauRT
-        logical  :: noRTbreakup
+        real(R8), intent(in)  :: dp, sigma, mup, rhop, rhog, vel, acc(3), vp(3)
+        real(R8), intent(in)  :: bp(:)   !> [B0, B1, Ctau, CRT, mShedLim, WeLimit]
+        real(R8), intent(out) :: WeGas, dStable, tauKH, lambdaRT, tauRT
+        real(R8) :: radius, Oh, Tay, omegaKH, lambdaKH, gt, force, omegaRT
 
-        npdotDot = 0._R8
-        radius  = 0.5_R8*dp
+        radius = 0.5_R8*dp
+        !> We definitions based on the RADIUS
         WeGas  = radius * rhog * vel**2 / sigma
-        WePart = WeGas/rhog * rhop
         !> Z = sqrt(We_l)/Re_l = mu_l/sqrt(rho_l sigma r); T = Z sqrt(We_g) (Reitz-87 Eqs 4-5)
         Oh  = mup/sqrt(rhop*sigma*radius)
         Tay = Oh*sqrt(WeGas)
@@ -232,6 +227,22 @@ contains
         omegaRT  = sqrt(2._R8*force**1.5_R8/(3._R8*sqrt(3._R8*sigma)*(rhop+rhog)))
         lambdaRT = 2._R8*pi*bp(4)/(sqrt(force/(3._R8*sigma))+toll)
         tauRT    = bp(3)/(omegaRT+toll)
+
+    end subroutine khrtWaves
+
+    !> Reitz KH-RT breakup rate: KH stripping toward dStable = 2 B0 lambda_KH, gated by the RT
+    !  breakup time; told/tc carry the RT timer.
+    function ReitzKHRT(dp,sigma,mup,rhop,npdot,rhog,vel,time,acc,vp,told,tc, bp) result(npdotDot)
+        implicit none
+        real(R8), intent(in)    :: dp, sigma, mup, rhop, npdot, rhog, vel, time, acc(3), vp(3)
+        real(R8), intent(inout) :: told, tc
+        real(R8), intent(in)    :: bp(:)   !> [B0, B1, Ctau, CRT, mShedLim, WeLimit]
+        real(R8) :: npdotDot
+        real(R8) :: WeGas, dStable, tauKH, lambdaRT, tauRT
+        logical  :: noRTbreakup
+
+        npdotDot = 0._R8
+        call khrtWaves(dp,sigma,mup,rhop,rhog,vel,acc,vp,bp, WeGas,dStable,tauKH,lambdaRT,tauRT)
 
         if ((tc > 0._R8) .or. (lambdaRT < dp)) then; tc = tc + time - told; told = time; endif
 
@@ -300,7 +311,7 @@ contains
     !  mass into a child parcel once it exceeds mShedLim of the parent drop mass.
     subroutine ReitzKHRTevent(dp,sigma,mup,rhop,npdot,rhog,vel,time,acc,vp,m0,told,tc,KHindex, &
                                bp, event,childState,addChild,exitLoop,childPending,n0)
-        use IGLOO_variables, only: pi, toll, nKHRTwarn
+        use IGLOO_variables, only: pi
         implicit none
         real(R8), intent(in)    :: sigma, mup, rhop, rhog, vel, time, acc(3), vp(3)
         real(R8), intent(inout) :: dp, npdot, m0, told, tc, KHindex
@@ -310,36 +321,13 @@ contains
         logical,  intent(in)    :: exitLoop
         logical,  intent(in)    :: childPending
         real(R8), intent(inout), optional :: n0   !> model 4: the number rate right after the last event
-        real(R8) :: radius, WeGas, WePart, Oh, Tay, omegaKH, lambdaKH, tauKH, dStable!, dOld
-        real(R8) :: gt, force, omegaRT, lambdaRT, tauRT, nDrops, mShed!, lengthScale
+        real(R8) :: WeGas, tauKH, dStable!, dOld
+        real(R8) :: lambdaRT, tauRT, nDrops, mShed!, lengthScale
         real(R8) :: dLast, npdotLast, nChild, mDrop
 
         event    = .false.
         addChild = .false.
-        radius   = 0.5_R8*dp
-        !> We definitions based on the RADIUS
-        WeGas  = radius * rhog * vel**2 / sigma
-        WePart = WeGas/rhog * rhop
-        !> Z/T per Reitz-87 Eqs 4-5
-        Oh  = mup/sqrt(rhop*sigma*radius)
-        Tay = Oh*sqrt(WeGas)
-        if (Oh>1 .or. rhog/rhop>0.1_R8) then
-            !$OMP ATOMIC
-            nKHRTwarn = nKHRTwarn + 1
-        endif
-
-        omegaKH  = (0.34_R8 + 0.38_R8*WeGas**1.5_R8)/((1._R8 + Oh)*(1._R8 + 1.4_R8*Tay**0.6_R8)) &
-                    *sqrt(sigma/(rhop*radius**3))   ! Reitz 1987 KH growth rate [1/s]
-        lambdaKH = radius*9.02_R8*(1._R8 + 0.45_R8*sqrt(Oh))*(1._R8 + 0.4_R8*Tay**0.7_R8)        &
-                    /(1._R8 + 0.87_R8*WeGas**1.67_R8)**0.6_R8
-        tauKH    = 3.726_R8*bp(2)*radius/(lambdaKH*omegaKH)
-        dStable  = 2._R8*bp(1)*lambdaKH
-
-        gt    = (acc(1)*vp(1)+acc(2)*vp(2)+acc(3)*vp(3))/norm2(vp)
-        force = abs(gt*(rhog - rhop))
-        omegaRT  = sqrt(2._R8*force**1.5_R8/(3._R8*sqrt(3._R8*sigma)*(rhop+rhog)))
-        lambdaRT = 2._R8*pi*bp(4)/(sqrt(force/(3._R8*sigma))+toll)
-        tauRT    = bp(3)/(omegaRT+toll)
+        call khrtWaves(dp,sigma,mup,rhop,rhog,vel,acc,vp,bp, WeGas,dStable,tauKH,lambdaRT,tauRT)
 
         if ((tc > 0._R8) .or. (lambdaRT < dp)) then; tc = tc + time - told; told = time; endif
 
@@ -413,12 +401,12 @@ contains
 
     end subroutine ReitzKHRTevent
 
-    !> TAB event (O'Rourke-Amsden): oscillator state y/yDot; on breakup the parcel diameter is
-    !  resampled from a chi-square (method 1) or Rosin-Rammler (method 2) distribution.
+    !> TAB event (O'Rourke-Amsden): oscillator state y/yDot; on breakup the parcel diameter is drawn
+    !  from the mass distribution of a chi-square (method 1) or Rosin-Rammler (method 2) size law.
     subroutine TABmodel(dp,sigma,mup,rhop,npdot,rhog,vel,dt,y,yDot, &
                          bp,method,scaleFactor, event,exitLoop,rngState)
         use IGLOO_variables,      only: pi, toll
-        use IGLOO_Lib_Statistics, only: ChiSquareS, RosinRammlerS, RonsinRammlerMoments
+        use IGLOO_Lib_Statistics, only: ChiSquareS, GammaS, RonsinRammlerMoments
         implicit none
         real(R8), intent(in)    :: sigma, mup, rhop, rhog, vel, dt
         real(R8), intent(inout) :: dp, npdot, y, yDot
@@ -430,8 +418,9 @@ contains
         integer(I8), intent(inout) :: rngState   !> parcel's own stream; see breakupEvent
         real(R8) :: twoPi, radius, rdt, omega, We, WeCr, y1, y2, a, phi, quad, tb
         real(R8) :: coste, theta, k, rs, rMin, rNew, rSize, nSpread, m3, m2, r32, dOld
-        integer  :: n, iter
+        integer  :: iter
         integer, parameter :: maxIter=20
+        integer, parameter :: nuChi=2   !> method 1's degrees of freedom: KIVA-II's exponential
 
         event  = .false.
         twoPi  = 2._R8*pi
@@ -475,11 +464,10 @@ contains
                         rNew = 0._R8
                         rMin = 0.01_R8*rs !> minimum value threshold
                         if     (method==1) then
-                            !> chi-square distribution with n degrees of freedom (original paper)
-                            n = nint(k)
-                            rSize = rs/real(n + 4)
+                            !> chi-square(nuChi) law of Sauter radius rs, drawn by mass: chi-square(nuChi + 6)
+                            rSize = rs/real(nuChi + 4, R8)
                             do while (rNew<rMin .or. rNew>=radius)
-                                rNew = ChiSquareS(n,rngState)*rSize
+                                rNew = ChiSquareS(nuChi + 6,rngState)*rSize
                             enddo
                         elseif (method==2) then
                             !> Rosin-Rammler distribution with size parameter rs and spread nSpread (default)
@@ -498,8 +486,9 @@ contains
                                 ! fixed-point update of rSize
                                 rSize = rSize * (rs / r32)
                             enddo
+                            !> drawn by mass: (r/rSize)**nSpread is Gamma(1 + 3/nSpread)
                             do while (rNew<rMin .or. rNew>=radius)
-                                rNew = RosinRammlerS(rSize,nSpread,rngState)
+                                rNew = rSize*GammaS(1._R8 + 3._R8/nSpread, rngState)**(1._R8/nSpread)
                             enddo
                         elseif (method==3) then
                             !> LogNormal/Normal distributions (to be implemented)

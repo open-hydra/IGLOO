@@ -114,14 +114,16 @@ line fails it. Removing the barrier at the top of `writeout` turns nothing red: 
 The ranks' partial grid sums are added in rank order, so at a fixed rank count the `.tec` files
 are the same bytes whatever the MPI library does. The gate runs the 1672-parcel vortex cloud
 (`standard/vortex-cloud-st1`, symlinked) at n = 1, then at n = 3 and n = 4 twice each, once with
-the library's default collectives and once with `I_MPI_ADJUST_ALLREDUCE=8` (Intel MPI's ring
-algorithm; other libraries ignore the variable and the pair is a plain rerun), all at one thread
-per rank, and asserts the pair byte-identical, every `.dat` byte-identical to n = 1's and the
+the library's default collectives and once with its ring allreduce (`I_MPI_ADJUST_ALLREDUCE=8` for
+Intel MPI, `OMPI_MCA_coll_tuned_use_dynamic_rules=1` with `OMPI_MCA_coll_tuned_allreduce_algorithm=4`
+for Open MPI; each library ignores the other's variables), all at one thread per rank, and asserts the pair byte-identical, every `.dat` byte-identical to n = 1's and the
 `.tec` within the scale-relative 1e-12 of n = 1. The fixture matters: in the box cases each cell
 row is fed by one or two parcels, so no reduction order can move a printed digit there; in the
 vortex cloud every cell on the cloud's path is fed by parcels of every rank. A library
-reduction fails it: with `MPI_Allreduce` 38 values of `source.tec` at n = 3 and 45 at n = 4
-change between the two algorithms (5.1e-20 of field scale).
+reduction fails it: with `MPI_Allreduce`, under Intel MPI 38 values of `source.tec` at n = 3 and
+45 at n = 4 change between the two algorithms (5.1e-20 of field scale); under Open MPI 4.1.3, 56
+values at n = 4 (its default there is Rabenseifner's algorithm; at n = 3 its default is the ring and
+the pair agrees), and with the Intel variable alone the Open MPI pair is a plain rerun and passes.
 
 ## Comparison rules (measured, not chosen)
 

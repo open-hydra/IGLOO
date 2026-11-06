@@ -195,7 +195,7 @@ with $d(T)$ on every row, to print precision.  The breakup counterparts `tab-var
 them: no mass to the gas, and the exit mass-flow total.
 
 **Result:** 25/25 parcels, the printed diameter within print precision of $d(T)$; the TAB masses constant
-between events, $\lvert\dot w\rvert$ 2.2e-18 of the injected flow, the KHRT exit mass flow within 6e-7.  A model-1
+between events, $\lvert\dot w\rvert$ 2.2e-18 of the injected flow, the KHRT exit mass flow within 7e-7.  A model-1
 parcel printing its injection diameter fails every heated row; a density that continues the table's end
 segments puts the 210 K and 840 K masses 0.68 % above and 0.75 % below (2370 violations); a mass resynced at a
 stale density drifts by
@@ -221,6 +221,49 @@ uniform-temperature drop's ([Heat conduction inside the droplet](../theory/evapo
 **Result:** 25/25 parcels, 1525 rows; $T$ worst at 0.016 of its tolerance, $T_s$ worst 8.3e-7 K,
 $\lvert m - m_0\rvert \le$ 2.3e-18 kg.  The gas-side terms taken at the mean temperature put $T$
 20.08 K off; the column written as the mean is off by 0.028 K to 50 K on every row.
+
+### temp-relax-p2t-kcol
+
+Verifies the liquid conductivity of `liquid-conduction = P2T` read from the property table:
+`temp-relax-p2t`'s drop with its own `INPUT/properties.dat`, the common table plus a `Conductivity`
+column $k_l(T) = BT$, $B = 0.026/450$ W m⁻¹ K⁻², and no `k-liq` on the material line.  With
+$\zeta(\bar T) = k_g/k_l(\bar T)$ the surface temperature is $T_s = (5\bar T + \zeta T_g)/(5 + \zeta)$ and
+the mean temperature relaxes as $d\bar T/dt = (T_g - \bar T)/(\tau\,(1 + \zeta(\bar T)/5))$, integrated in
+closed form ([Heat conduction inside the droplet](../theory/evaporation.md#heat-conduction-inside-the-droplet)).
+
+| Witness | Requirement |
+|---------|-------------|
+| Every row with $\lvert T_g - T\rvert > 1$ K | $T(x)$ on the closed form, within `temp-relax`'s F12.6 budget |
+| The `T<sub>s` column, every row | $(5T + \zeta(T) T_g)/(5 + \zeta(T))$ within 1e-6 K |
+| Every row | $m = m_0$ within the E13.6 half-ULP; $u = u_g$, $v = w = 0$, $d = d_0$ |
+
+**Result:** 25/25 parcels, 1525 rows; $T$ worst at 0.023 of its tolerance, $T_s$ worst 8.0e-7 K.  The
+conductivity at the surface temperature puts $T$ 1.88 K off at 17.5 mm; the constant $k_l = k_g$ of
+`temp-relax-p2t`, 2.68 K.
+
+### temp-relax-p2t-mucol
+
+Verifies the liquid viscosity of `liquid-conduction = P2T` read from the property table at the surface
+temperature, under slip: 30 µm drops enter the shared box at 1 m/s (9 m/s slip, $\mathrm{Re} = 18$, Stokes drag)
+and 300 K, with $k_l = 0.026$ W m⁻¹ K⁻¹ on the material line, no mass transfer ($Y_\infty = 1$, $B_M = 0$) and their
+own `INPUT/properties.dat` carrying $\mu_l(T) = 0.1\,e^{(300 - T)/60}$ Pa s.  On every row the surface temperature is
+the root of $T_s - \bar T = \mathrm{Nu}\,k_g (T_g - T_s)/(10\,\chi\,k_l)$ with the internal circulation's
+$U_s = (12.69/32)\,\lvert\Delta U\rvert\,(\mu_g/\mu_l(T_s))\,\mathrm{Re}^{1/3}$ and $\chi(\mathrm{Pe}_L)$ (Abramzon &
+Sirignano 1989, eqs. 30, 32 and 39), $\mu_l(T_s)$ interpolated from the table file
+([Heat conduction inside the droplet](../theory/evaporation.md#heat-conduction-inside-the-droplet));
+$\mathrm{Pe}_L$ spans 20.8 to 78.2, across $\chi$'s centre at 30.
+
+| Witness | Requirement |
+|---------|-------------|
+| The `T<sub>s` column, every row | the root at the row's $(\bar T, u)$ within the F12.6 prints of $T_s$, $\bar T$ and $u$ carried through the root's derivatives, $+\,4\varepsilon\,T_s$ |
+| Rows at $\mathrm{Re} > 1$ | $\mu_l(\bar T)$ and $\mu_l = 0$ ($\chi = 2.72$) each put $T_s$ at least 100 tolerances away, on ≥ 3 rows of ≥ 20 parcels |
+| Every row, every exit | $m = m_0$ within the E13.6 half-ULP, $d = d_0$, $v = w = 0$; 25 exits at the outlet, no solver failure |
+
+**Result:** 25/25 parcels, 1525 rows; $T_s$ worst at 0.922 of its tolerance.  With the column's flag not reaching
+the parcel group the surface solve sees $\mu_l = 0$ and refuses it: every parcel ends at its injection point.
+Without that refusal $\chi = 2.72$ puts $T_s$ 23.49 K low at injection; $\mu_l$ at the mean temperature, 19.65 K
+high.  The mean temperature's history is not gated here (`temp-relax-p2t` and `temp-relax-p2t-kcol` gate it at
+$\mathrm{Re} = 0$).
 
 ### body-force
 
@@ -468,6 +511,28 @@ diameter 2.1e-6, temperature 3.5e-5 K; 25/25 burnouts at 7.22466e-3 to 7.22467e-
 [7.22465e-3, 7.22467e-3] s; 25/25 residues, mass 1.2e-6, flows 8.6e-7; books 1.9e-6 (mass) and 2.3e-6 (energy); the
 scatter quanta 5.7e-5.
 
+### burn-box-cap-gallier
+
+Gallier's deposition law ([Gallier's deposition law](../theory/combustion.md#galliers-deposition-law)): burn-box-cap's
+parcels with `xi-law=Gallier21` in place of a constant fraction.  The oracle builds the law from the committed tables
+of Figs. 7 and 11, never from IGLOO, and integrates the metal, the cap and the temperature by RK4, the cap's mass
+being no function of the metal's alone; the stretch is the parcel's own on the law's path ($c = 1.340400$ at
+30 µm).  The gates check the log, every trajectory row's mass, diameter and temperature, and the mass source.
+
+**Result:** 1525 rows: mass within 2.3e-6, diameter 2.3e-6, temperature 2.2e-5 K; the mass source within 1.8e-6.
+
+### burn-box-residue-gallier
+
+The residue under the law: five inlet sizes (20, 70, 100, 200, 400 µm) burned out inside the box.  The cap's growth
+in the metal mass holds no time, so the residue's mass over the injected one is the law's path from the injected
+size, between its value at the burnout threshold and at zero metal; the burnout time lies between the path's time to
+the threshold and Beckstead's $d_0^n/K_\mathrm{eff}$.  With Gallier's densities the residue's size ratio is set
+beside the paper's.
+
+**Result:** 25/25 residues inside their mass window, 25/25 burnouts inside their time window; books 5.2e-7 (mass)
+and 3.2e-7 (energy); $\beta$ = 0.581, 0.565, 0.507, 0.400 at 20, 70, 200, 400 µm against Gallier's 0.57, 0.55,
+0.49, 0.40.
+
 ### solid-box
 
 Solidification (model 6): molten droplets injected at 2400 K into the 600 K box gas at
@@ -634,11 +699,12 @@ Tonini–Cossali analytical evaporation (Stefan–Fuchs); the companion unit tes
 ### tc-hexadecane
 
 The Tonini–Cossali validation case: an **n-hexadecane** drop reproducing
-TC2012 Fig. 11 ($R_{d,0}$=10 µm, $T_{d,0}$=300 K, air at 600 K).  It is the suite's
-variable-property case — the liquid density falls with temperature, so the
-drop *swells* as it heats before the $D^2$-law evaporation — and therefore the only
-one exercising the temperature-dependent property tables (`rhoTab`/`cpTab`/`hTab`)
-inside the integration.
+TC2012 Fig. 11 ($R_{d,0}$=10 µm, $T_{d,0}$=300 K, air at 600 K and one atmosphere, the gas-film
+properties at the film temperature 529.1 K: $k_g$ and $c_{p,g}$ of air, $D_v$ by Fuller, $c_{p,v}$
+of the vapour).  It is the suite's variable-property evaporation case — the liquid density falls
+with temperature, so the drop *swells* as it heats before the $D^2$-law evaporation, and the
+liquid's $c_{p,\ell}(T)$ is a column, so the drop's state is its enthalpy — exercising the
+temperature-dependent property tables (`rhoTab`/`cpTab`/`hTab`) inside the integration.
 
 IGLOO's TC kernel **is** TC2012's *present model* (eq. 16): its small-rate
 limit reduces to eq. 16's stated form $\hat m=(\hat P_{vs}-\chi_{v,\infty})/[\tfrac12(\tilde
@@ -652,18 +718,25 @@ case's `properties.dat` (piecewise Clausius-Clapeyron through the table's anchor
 energy sink is Table 1's latent heat at the boiling point, $L_v=2.2695\times10^5$ J/kg: the
 curve and the sink are decoupled, which a single scalar $L_v$ cannot do (the curve's effective
 latent heat is $\approx$258 kJ/kg over the operating range).  The gate's oracle reads the same
-column; two further gates assert that the run reported the tabulation and that its plateau
-lies within 1 K of a 0-D replica of the kernel (`zero_d.py`, 492.63 K; with psat by
-Clausius-Clapeyron at the same sink it is 486.0 K).  The rate gate alone cannot tell the table
-from a Clausius-Clapeyron fit to the same anchors ($7\times10^{-3}$ against a floor of
-$1.9\times10^{-3}$, tolerance 2 %); the two plateau gates can.  Liquid
-$c_{p,\ell}=2800$ J/(kg K) is the NIST/Chemeo value at ~490 K.  The digitized TC2012 Fig. 11
-present-model curves are a non-gating overlay (normalized lifetime, since IGLOO's $D_v$ is
-$Le$-set and differs from TC2012's, making absolute $\tau$ incomparable).
+column; three further gates assert that the run reported the tabulation, that its plateau
+lies within 1 K of a 0-D replica of the kernel (`zero_d.py`, 493.69 K; with psat by
+Clausius-Clapeyron at the same sink it is 487.13 K) and that its heating path lies within 0.1 K of
+the replica's (the replica takes $c_{p,\ell}(T)$ from the same column).  The rate gate alone cannot
+tell the table from a Clausius-Clapeyron fit to the same anchors ($3.1\times10^{-3}$ against the
+table's $3.3\times10^{-3}$, tolerance 2 %); the plateau gates can.  Neither the rate gate nor the
+plateau sees the heat capacities; the heating path does: a constant $c_{p,\ell}$ of 2800 J/(kg K)
+moves it by 12.8 K, a vapour $c_{p,v}$ of 2300 by 0.90 K.  Liquid $c_{p,\ell}(T)$ is the
+Romeo–Lemmon equation of state for n-hexadecane at one atmosphere (2216 J/(kg K) at 300 K, 2874 at
+490 K; its cp data reach 454 K).  The digitized TC2012 Fig. 11
+present-model curves are a non-gating overlay on the normalized lifetime: in the figure's time
+$\tau = t D_v/R_{d,0}^2$ the run's drop lives 2.4 times as long as the figure's, a factor no
+property of the case explains, since TC2012's eq. 1 and IGLOO both scale the rate with
+$\rho_\infty D_v$.
 
-**Result:** measured $d^2(x)$ within $0.19\,\%$ of the kernel on all 25 drops, every drop
-swells (peak 1.088); plateau 492.6 K against the digitized ~493.7 K ($0.2\,\%$), on its 0-D
-replica to the printed digit.
+**Result:** measured $d^2(x)$ within $0.33\,\%$ of the kernel on all 25 drops, every drop
+swells (peak 1.091); plateau 493.7 K against the digitized 493.7 K, on its 0-D replica to the
+printed digit, the heating path to $3\times10^{-4}$ K; heat-up fraction 0.591 against the
+figure's 0.637 (0.600 with a constant $c_{p,\ell}$ of 2800: TC2012 takes its properties constant).
 
 <figure>
   {% include "vv/images/tc-hexadecane.svg" ignore missing %}
@@ -702,8 +775,8 @@ the temperature of every row within its print budget; across every interval in w
 event, a shed, the stripping) it brackets the temperature between the marches at the interval's extreme diameters
 and slips.  The energy handed to the gas must telescope at the table's enthalpy.
 
-**Result:** 8373 rows, the worst at 0.919 of its tolerance; 1977 intervals inside their brackets; the energy within
-0.27 of its print budget.  The shed's enthalpy at $c_p T$ breaks the energy balance by $10^5$ tolerances; the heat
+**Result:** 8373 rows, the worst at 0.930 of its tolerance; 1977 intervals inside their brackets; the energy within
+0.25 of its print budget.  The shed's enthalpy at $c_p T$ breaks the energy balance by $10^5$ tolerances; the heat
 rate with a temperature-state factor leaves every row 14 K off.
 
 ### evap-breakup-box-varcp
@@ -923,7 +996,7 @@ Several members of this category have **no figure** and so no section below:
 the edges of the inlet cells), `axis-200` and `wedge-fold` (the
 axis face and the sector fold on the MOSE nozzle field), `two-mat` (two materials),
 `two-fam-bc` (one inlet table per family in `bc.txt`), `two-fam-bc-2blk` (the same on two blocks joined by
-a 101 connection), `two-fam-bc-2blk-mollify` (the same with the field mollifier on), `chimera-2blk` (two overlapping blocks joined by chimera faces), `chimera-2blk-mollify` and `chimera-2blk-shift-mollify` (the same with the field mollifier on, the second with block 2 shifted by half a cell), the three `two-fam-bc-2blk-ord2-dual*` cases and `swirl-wedge-2blk-ord2-dual` (the gas-order-2 dual across a 101 face), `periodic-2d-ord2-dual` (the same across a periodic (201) face, on a box of two periods held to itself one period away), `varcp-tmin` (a varying-$c_p$ table that ends below the parcels' temperature), `tab-wedge-slip` (the breakup event's slip at the parcel's azimuth on a gas-order-1 wedge) and the
+a 101 connection), `two-fam-bc-2blk-mollify` (the same with the field mollifier on), `chimera-2blk` (two overlapping blocks joined by chimera faces), `chimera-2blk-mollify` and `chimera-2blk-shift-mollify` (the same with the field mollifier on, the second with block 2 shifted by half a cell), the three `two-fam-bc-2blk-ord2-dual*` cases and `swirl-wedge-2blk-ord2-dual` (the gas-order-2 dual across a 101 face), `periodic-2d-ord2-dual` (the same across a periodic (201) face, on a box of two periods held to itself one period away), `varcp-tmin` (a varying-$c_p$ table that ends below the parcels' temperature) and the
 `refusals/*` gates —
 behavioral cases with no reference curve, summarised in the table on the
 [Overview](index.md).  This page is organized around comparison figures;
@@ -1052,6 +1125,22 @@ injection column off by $+33$ % / $-37$ % while the tiling total stays unchanged
 **Result:** 79 folds, no multi-sector fold; velocity residual $\le 7\cdot10^{-6}$;
 cell mass within $4\cdot10^{-3}$; tiling total 1.000044.
 
+### tab-wedge-slip
+
+The breakup event's slip on an axisymmetric wedge at gas order 1, where the gas handed to the parcel is the meridian
+frame's cell value: the ODE and the event model (TAB, ETAB, KH-RT) must both take the gas velocity rotated to the
+parcel's azimuth.  Three rotated copies of one 200 µm water drop (azimuths −0.45°, 0 and +0.45° on a 1° annular wedge
+with $U = 100$ m/s and the solid-body swirl $W = 200\,y$ m/s), each with a 67.1 m/s slip, break up once under TAB at
+$t_{ev} \approx 9.45\times10^{-5}$ s inside their first cell.  The exact dynamics is rotation-equivariant, so the three
+break up at one time; the gate is the off-centre pair's difference, within $5\times10^{-8}$ s (2.5 times the largest
+measured over solver tolerances, gas orders and compilers).  A gas-order-2 sibling, whose sampled velocity is already
+rotated, is the control.
+
+**Result:** $|t_{ev}(+0.45°) - t_{ev}(-0.45°)|$ = 3.8e-9 s at gas order 1 and 5.3e-10 s at gas order 2.  The slip
+formed from the unrotated cell value puts the pair 5.17e-7 s apart, 10 times the tolerance, and leaves the gas-order-2
+control unchanged.  The centre copy's offset from the pair's mean is printed, not gated: between −3.2e-8 and +2.1e-8 s,
+its sign changing with the solver tolerance.
+
 ### periodic-y
 
 Translational periodic BC (bcdef 201), exercising the transport
@@ -1144,15 +1233,15 @@ root-normal 1.2, (d) the size distribution on `[HF93]` Fig. 1's axes with the
 root-normal lines for MMD/SMD = 1.5, 1.2 and 1.1 drawn from their definition, (e) the
 products' relative velocity $u_b$ at $t_b$ against `[HF93]` eq. [13].
 
-**Result:** 714/714 parcels break.  TAB's SMD is 1.54× eq. [14] at $We = 15$, within
-its ±20 % at $We$ 37.7–59.8 and 6.5× below it at $We = 600$: it falls about as
-$We^{-0.87}$, eq. [14] as $We^{-1/4}$.  A class's Sauter radius is 0.736 of TAB's
-$r_s$: a parcel keeps its mass flow over a draw from the Rosin–Rammler number pdf whose
-Sauter radius is $r_s$.  MMD/SMD is 0.968–1.375 (mean 1.16), the scatter of 25 to 33
-draws about TAB's own $(\ln 2)^{1/n}\,\Gamma(1-1/n) = 1.149$ ($n = 3.5$), below the
-root-normal 1.2.  At $t_b$ the ratio of $u_0/u_b - 1$ to eq. [13] has the median 0.30
-at $We = 15$, 1.00 at $We = 239$ and 3.6 at $We = 600$.  Neither TAB nor ETAB has
-`[HF93]`'s core drop, which is not drawn.
+**Result:** 714/714 parcels break.  TAB's SMD is 2.08× eq. [14] at $We = 15$, within
+its ±20 % at $We$ 59.8–81.4 and 5.6× below it at $We = 600$: it falls about as
+$We^{-0.96}$, eq. [14] as $We^{-1/4}$.  A class's Sauter radius is TAB's $r_s$: a parcel
+keeps its mass flow over a draw from the Rosin–Rammler law's mass distribution, whose
+drops have the Sauter radius $r_s$.  MMD/SMD is 1.019–1.222 (mean 1.09), about TAB's own
+1.062 after one event ($n = 3.5$; the median of the draws over their Sauter diameter),
+below the root-normal 1.2.  At $t_b$ the ratio of $u_0/u_b - 1$ to eq. [13] has the
+median 0.26 at $We = 15$, 1.10 at $We = 239$ and 2.8 at $We = 600$.  Neither TAB nor
+ETAB has `[HF93]`'s core drop, which is not drawn.
 
 <figure>
   {% include "vv/images/tab-hf92.svg" ignore missing %}
@@ -1174,4 +1263,25 @@ $We = 600$.
 
 <figure>
   {% include "vv/images/etab-hf92.svg" ignore missing %}
+</figure>
+
+### khrt-hf93
+
+`tab-hf92`'s water series under Reitz KH-RT with no KH shed, its parent drop set beside the core
+drop Hsiang & Faeth measured at the end of shear breakup ([HF93] eqs. [1]–[8]): at $t_b = 5\,t^*$
+the relative velocity $u_b/u_0 = 1/(1 + C)$ and $d_b/d_0 = (1 + C)\,(4 Eo_{cr}/(3\bar C_D We))^{1/2}$,
+$C = (3\bar C_D t_b/4t^*)(\rho_G/\rho_L)^{1/2}$, $\bar C_D = 5$, $Eo_{cr} = 16$, fitted over
+$100 < We < 600$. The paper prints $(1 + 3C)$ in its eq. [3] and the coefficient 2.3 in its eq. [8];
+its derivation and its Figs. 2 and 4 give $(1 + C)$, and its constants give 2.0656 (both are drawn).
+The gates are the figure's preconditions: every class has a parcel, every parcel a first RT event
+on a trajectory row of its own (rows at every segment end, four planes in the first cell).
+
+**Result:** 126/126 parcels have a first RT. Before it the parent is 0.967 $d_0$ at $We = 15$ and
+0.88–0.91 $d_0$ above $We = 80$: 1.10 times the core drop at $We = 15$, 6.5 times at $We = 600$;
+its relative velocity is 0.98–0.99 $u_0$ against 0.61, and the RT comes at 2.2–1.3 $t^*$, before
+$t_b$. KH-RT has no core drop: the RT event replaces the stripped parent whole, and the cascade
+runs on past $t_b$.
+
+<figure>
+  {% include "vv/images/khrt-hf93.svg" ignore missing %}
 </figure>

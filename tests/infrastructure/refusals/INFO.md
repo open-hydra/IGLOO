@@ -2,7 +2,8 @@
 
 **Purpose.** IGLOO refuses several inputs with an `error stop` at a single choke point in
 `read_cdp_properties` (`src/lib/IO.f90`) — a model its material cannot carry (`liquid-conduction = P2T`
-on a material that does not evaporate or has no `k-liq` or `mu-liq`, `boiling = ZGR` on a material that
+on a material that does not evaporate or has neither `k-liq` nor a `Conductivity` column, or neither `mu-liq` nor a
+`Viscosity` column, `boiling = ZGR` on a material that
 does not evaporate), a misleading model combination
 (`interface = LK` with an evaporation model outside CEM, CEM-B, ASM, TC, where LK is inert), and
 a `properties.dat` that does not match `phase.txt` (zone count, temperature range). Without a
@@ -28,6 +29,8 @@ output written).
 | `refuse-p2t-muliq` | as `refuse-p2t-kliq` with its own `INPUT/phase.txt` (`A 1 k-liq=0.6`), the other three files symlinked | `liquid-conduction=P2T requires mu-liq > 0` |
 | `refuse-p2t-mu-two` | `breakup/khrt-evap-frozen` (Reitz-KHRT, `[IGLOO-Properties] mu = 1.0e-3`) + `liquid-conduction = P2T`, its own `INPUT/phase.txt` (`A 1 k-liq=0.6 mu-liq=1.0e-3`), `khrt-e2e`'s other three files symlinked: a breaking material has one liquid viscosity, the breakup one | `liquid-conduction=P2T with breakup takes the breakup viscosity` |
 | `refuse-p2t-mu-zero` | as `refuse-p2t-mu-two` with `A 1 k-liq=0.6` and `mu = 0.0` | `requires mu > 0` (`IGLOO: Breakup requires mu > 0: …`) |
+| `refuse-kliq-column-both` | `evaporation/temp-relax-p2t` (`A 1 k-liq=0.026 mu-liq=1.0e-3`) with its own `properties.dat`: the drop's range (250..700 K) and a `Conductivity` column k_l = 0.026/450 T (`bc.txt`, `solfile.tec` symlinked to `temp-relax`'s) | `IGLOO: k-liq given both on the material line and as a properties.dat Conductivity column` |
+| `refuse-muliq-column-both` | as `refuse-kliq-column-both` with a `Viscosity` column of 1.0e-3 Pa s instead | `IGLOO: mu-liq given both on the material line and as a properties.dat Viscosity column` |
 | `refuse-zgr` | `INPUT/` symlinked; `[IGLOO-Models] boiling = ZGR` on a material that does not evaporate | `boiling=ZGR requires an evaporating material` |
 | `refuse-lk-d2law` | `INPUT/` symlinked; `evaporation = d2-law` + `interface = LK` (the `interface = LK` guard fires before the `[IGLOO-Properties]` requirements) | `interface=LK needs evaporation in` |
 | `refuse-properties-zones` | own `INPUT/`: drag-stokes's `bc.txt`/`solfile.tec`, two-mat's `phase.txt` (A, B), the ONE-zone `common/properties.dat`; `input.ini` also carries two-mat's `[GPB-Phase2]` | `zone count /= number of materials` |
@@ -62,12 +65,13 @@ output written).
 | `refuse-ode-solver` | `ode-solver = H-radau5` | `IGLOO: unknown ode-solver` |
 | `refuse-max-inner-iter` | `max-inner-iter = 0` (a segment capped before its first solver call) | `IGLOO: max-inner-iter must be at least 1` |
 | `refuse-boiling-temperature-both` | tc-box (`INPUT/` symlinked) with `boiling-temperature` and `Tboil` both in `[IGLOO-Properties]` | `give boiling-temperature or its alias Tboil, not both` |
+| `refuse-boiling-pressure` | `evaporation/d2law` (`INPUT/` symlinked) with `boiling-pressure = 0.0` | `IGLOO: [IGLOO-Properties] boiling-pressure must be positive and finite` |
+| `refuse-boiling-pressure-noevap` | `standard/drag-stokes` (`INPUT/` symlinked, no evaporation) with `boiling-pressure = -1.0` | `IGLOO: [IGLOO-Properties] boiling-pressure must be positive and finite` |
 | `refuse-solid-hfus` | own `INPUT/phase.txt` `A 1 solidification=on cp-solid=600` (no `h-fus`), drag-stokes's `bc.txt`/`solfile.tec` | `solidification=on requires h-fus > 0` |
 | `refuse-solid-cpsolid` | `A 1 solidification=on h-fus=1.07e6` (no `cp-solid`) | `solidification=on requires cp-solid > 0` |
 | `refuse-solid-tnuc` | the valid solidification line plus `T-nuc=2400` (above the 2327 K default `T-melt`) | `solidification=on requires T-nuc < T-melt` |
 | `refuse-solid-evap` | the valid line plus `[IGLOO-Models] evaporation = CEM` | `solidification=on is exclusive with evaporation` |
 | `refuse-solid-comb` | the valid line plus `combustion=Beckstead K-burn=4.5e-7` | `solidification=on with combustion is not supported` |
-| `refuse-solid-varcp` | the valid line plus an own 10-row `properties.dat` whose `Cp` column varies (the enthalpy its trapezoid sum, so the table itself is valid) | `solidification=on requires a constant-cp material` |
 | `refuse-rho-solid` | the valid line plus `rho-solid=-1` | `IGLOO: rho-solid must be positive` |
 | `refuse-wedge-offcentre` | a generated wedge whose k-planes sit at 0 and +1° (`tools/make_wedge_case.py --theta0-deg 0.5 --nx 4 --nr 4`) | `IGLOO: wedge sector must be centred on the azimuth origin (k-planes at -+delthe/2)` — refused at mesh import (`allocation.f90`), not at the properties choke point |
 | `refuse-psd-missing` | own `INPUT/bc.txt` (`tools/make_box_case.py --law 0.0 tables/psd.dat`, shared by the six table cases below), no table | `IGLOO: size-distribution file not found` — after trying `tables/psd.dat` and `INPUT/psd.dat` (both printed) |
@@ -87,6 +91,9 @@ output written).
 | `refuse-cap-product` | own `INPUT/phase.txt`: `burn-box`'s line with `xi-cap=0.2` and no `product`; `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `xi-cap > 0 requires product = a 0-group material of the phase file` |
 | `refuse-cap-varcp` | `combustion/burn-box-cap`'s `phase.txt` (symlinked) and its own ten-row two-zone table, the `OX` zone's `Cp` rising 0.01 J/(kg·K) per K (the enthalpy its integral, so the table itself is valid; `burn-box-cap/make_table.py varcp`) | `xi-cap > 0 requires a constant-cp, constant-density material and product` |
 | `refuse-cap-relative` | as above with a relative ten-row table (an `Enthalpy` column, `make_table.py relative`) | `xi-cap > 0 requires the absolute enthalpy datum (an Enthalpy_abs column)` |
+| `refuse-xi-law-token` | own `INPUT/phase.txt`: `burn-box-cap`'s line with `xi-law=Gallier` (an unknown word); `burn-box`'s `bc.txt`/`solfile.tec`, `burn-box-cap`'s table | `IGLOO: unknown xi-law token` |
+| `refuse-xi-law-cap` | as above with `xi-cap=0.2` beside `xi-law=Gallier21` | `IGLOO: xi-cap beside xi-law=Gallier21` |
+| `refuse-xi-law-noburn` | as above, `A 1 xi-law=Gallier21 product=OX`: no burn law | `IGLOO: xi-law=Gallier21 requires combustion=Beckstead` |
 | `refuse-ox0-range` | own `INPUT/phase.txt`: `combustion/burn-box-ox0`'s two lines with `xi-ox0=1.0` (a particle without metal); `burn-box`'s `bc.txt`/`solfile.tec`, `burn-box-cap`'s table; `refusals/cap-product`'s settings | `xi-ox0 must lie in [0, 1)` |
 | `refuse-ox0-nocap` | own `INPUT/phase.txt`: `burn-box`'s line with `xi-ox0=0.1` (no `xi-cap`, no product line); `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `refusals/cap-product`'s settings | `xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0` |
 | `refuse-brk-sigma` | `tab-e2e` (`INPUT/` symlinked) without `[IGLOO-Properties] sigma` | `Breakup requires sigma` |
@@ -95,18 +102,22 @@ output written).
 | `refuse-sigma-nm` | `tab-e2e` with `sigma = 0.072 0.072`, `mu = 1.0e-3 1.0e-3` for its one material | `sigma: size /= number of materials` |
 | `refuse-sigma-both` | `pe-sigma-table` (`INPUT/` symlinked: its `Sigma` and `Viscosity` columns) with `[IGLOO-Properties] sigma = 0.072` | `IGLOO: sigma given both in [IGLOO-Properties] and as a properties.dat column` |
 | `refuse-sigma-column` | `pe-sigma-table`'s case with its own `properties.dat`, the `Sigma` column at −0.01 N/m on the 320 K row (`bc.txt`, `solfile.tec` symlinked to `pilch-erdman-e2e`'s) | `Sigma column: a value that is not positive` |
+| `refuse-emissivity-column-both` | `standard/rad-cool` (`[IGLOO-Properties] emissivity = 0.8`) with its own `properties.dat`: the particle's range (500..2500 K) and an `Emissivity` column ε = T/3000 (`bc.txt`, `solfile.tec` symlinked to `rad-cool`'s targets) | `IGLOO: emissivity given both in [IGLOO-Properties] and as a properties.dat column` |
+| `refuse-emissivity-column` | `standard/rad-cool` without `[IGLOO-Properties] emissivity`, its own `properties.dat` as above with the `Emissivity` column 0 at 1000 K | `Emissivity column: zero on some rows and not on others` |
 | `refuse-bc-legacy` | own `INPUT/bc.txt`: `drag-stokes`'s with every code in the legacy single-digit schema (401 → 4, 400 → 1; `python3 make_bc_refusals.py`, run from this directory) | `IGLOO: bc.txt line is not six integers with a 3-digit code` |
 | `refuse-bc-empty-payload` | own `INPUT/bc.txt`: `drag-stokes`'s with the first inlet payload line empty (`make_bc_refusals.py`) | `IGLOO: bc.txt inlet payload line is empty` |
 | `refuse-body-accel` | `body-force` (`INPUT/` symlinked) with `body-accel = 0.0 -200.0` | `body-accel: expected 3 values (gx gy gz)` |
 | `refuse-plane-x` | `INPUT/` symlinked; `plane-x = abc` | `IGLOO: [IGLOO-General] plane-x must be a list of x positions [m]` |
 | `refuse-plane-x-empty` | `INPUT/` symlinked; `plane-x =` with nothing after the `=` | `IGLOO: [IGLOO-General] plane-x is empty` |
+| `refuse-scatter-floor-sign` | `INPUT/` symlinked to `drag-stokes`'s; `scatter-floor = -1` | `IGLOO: [IGLOO-General] scatter-floor must be a number >= 0` |
+| `refuse-scatter-floor-count` | `INPUT/` symlinked to `drag-stokes`'s; `scatter-floor = 1 2` (FiNeR reads a list's first value with no error) | `IGLOO: [IGLOO-General] scatter-floor must be a number >= 0` |
 | `refuse-bc-no-g` | own `INPUT/bc.txt`: `drag-stokes`'s as written before ATLAS's mixture rule over the dispersed phases (401 lines of nine fields, field 1 `krho`, no G); drag-stokes's `solfile.tec`, `common/phase.txt` and `common/properties.dat` | `IGLOO: bc.txt 401 line without G (an ATLAS before the mixture rule): regenerate it` — refused in `read_cdp_bc_file` at the first 401 line, the file named first (a `krho` sum of 1 or more is ATLAS's to refuse) |
 | `refuse-krho-negative` | own `INPUT/bc.txt`: `drag-stokes`'s with every inlet field 1, krho/(1 − krho_tot), negated (`make_bc_refusals.py`) | `IGLOO: bc.txt 401 inlet: krho/(1 - krho_tot) and G must be finite and >= 0` — refused after the file is read, the cell, its smallest field 1 (−0.515) and its smallest G (0) printed first |
 | `refuse-gas-no-density` | own `INPUT/solfile.tec`: a 2×2×2 box (`tools/make_box_case.py --nx 2 --ny 2 --nz 2`) whose density variable `"Roi( 1 )"` is renamed `"Q( 1 )"` (`python3 make_gas_refusals.py`, run from this directory); drag-stokes's `phase.txt`, `properties.dat` and `bc.txt` symlinked (the stop comes before the boundary file is read) | `IGLOO: the gas file has no density variable (Roi(s) or rho(s))` — refused at the gas import (`allocation.f90` `import_gas`), the block named first |
 | `refuse-vapour-cc` | mhb98-water-psat's case (`bc.txt`/`phase.txt`/`solfile.tec` symlinked to mhb98-water's), its ATLAS water table with the `Lv` column divided by 1000 (kJ/kg written as J/kg; every other byte unchanged), no `Lv`/`Mv`/`cpv` keys | `Lv column: not the slope of the Psat column` |
 | `refuse-vapour-ini-both` | the same case and table (`properties.dat` symlinked to mhb98-water-psat's), `[IGLOO-Properties] Lv = 2.462478e6` kept beside the `Lv` column | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
 
-All eighty-two exit 128 at setup with nothing injected or integrated. **The two pure-2D cases are RED** on the solver without
+All ninety-two exit 128 at setup with nothing injected or integrated. **`refuse-boiling-pressure-noevap` is RED** on a reader that checks the key only for an evaporating material: the run integrates to "Stop condition" with exit 0 and writes its output. **`refuse-boiling-pressure` is RED** on a reader that ignores the key: the run integrates to "Stop condition" with exit 0 and writes its output. **The two pure-2D cases are RED** on the solver without
 their checks: the one-plane mesh runs on a block of zero cells in k and stops at the record count
 (`IGLOO: bc.txt record count is neither one copy nor one copy per family`, 880 records against 800 faces), the
 5-integer file at the legacy-schema stop (`bcdef = 1`, the first header's sixth value borrowed from the next
@@ -114,7 +125,10 @@ line) — neither is their payload. **The two vapour-column cases are RED**
 on a reader that does not know the `Lv`, `Mv`, `Cpv` columns: both stop at `Evaporation requires Mv` (exit 128,
 not their payload). **The two `Sigma` cases are RED** on a reader that does not know the `Sigma` and
 `Viscosity` columns: `refuse-sigma-both` stops at `Breakup requires mu` (its only key is `sigma`),
-`refuse-sigma-column` at `Breakup requires sigma` (exit 128, not their payload). **The ten size-distribution cases are
+`refuse-sigma-column` at `Breakup requires sigma` (exit 128, not their payload). **The four column cases
+(`refuse-kliq-column-both`, `refuse-muliq-column-both`, `refuse-emissivity-column-both`, `refuse-emissivity-column`) are
+RED** on a reader that does not know the `Conductivity` and `Emissivity` columns and reads `Viscosity` for a breaking
+material only: each runs to completion (exit 0, output written). **The ten size-distribution cases are
 RED** on a reader that splits the inlet line with a list-directed read: a path ends at its slash (`tables`,
 `INPUT`), so nine of them stop at `unsupported distribution law` with exit 1 and no payload, and the
 600-character line is cut to 512 characters and run as a Dirac (exit 0, output written). The six table
@@ -139,7 +153,7 @@ condition" with exit 0 and writes its output, and so does `refuse-ox0-range`, it
 RED** on a reader that takes three columns by position, which runs each of them to "All particles out of
 domain" with exit 0 — the two-enthalpy header as an absolute datum with `hOff = 0`, the typed row with
 its enthalpy undefined (ORION keeps only the last row's read status), and the decreasing `Psat` column
-unread. **The seven solidification cases are
+unread. **The six solidification cases are
 RED** on a solver without the solidification model, which stops each of them with `solidification=on parsed but
 not implemented yet`, not their payload. **The four INI-contract
 cases are RED** on a reader without their checks: `method = 3` runs to

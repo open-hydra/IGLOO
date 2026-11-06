@@ -6,7 +6,7 @@ module IGLOO_particles
   use IGLOO_Lib_Drag
   use IGLOO_Lib_Heat
   use IGLOO_Lib_Properties, only: tableValue, comp_TfromTab, Tmin, Tmax
-  use IGLOO_Lib_Solidification, only: hSolid, solidDiameter, solidPhaseAtInjection
+  use IGLOO_Lib_Solidification, only: hSolid, hSolidTab, solidDiameter, solidPhaseAtInjection
   use IGLOO_bcBox
   use IGLOO_data_block, only: obj_block, obj_flowblock, obj_bc_cell
   use IGLOO_RayFaceIntersection3D
@@ -116,6 +116,7 @@ module IGLOO_particles
     real(R8)     :: betaPart   = 0._R8  !> heat-partition fraction of q-comb to the particle
     real(R8)     :: xiCap      = 0._R8  !> oxide-cap fraction: the oxide formed by the burn retained on the drop
     real(R8)     :: xiOx0      = 0._R8  !> oxide mass fraction of the injected particle (model 8)
+    integer      :: xiLaw      = 0      !> the cap's retained fraction: 0 xi-cap, 1 Gallier et al. 2021's law
     real(R8)     :: Tign       = 0._R8  !> ignition temperature [K]
     real(R8)     :: Tmelt      = 2327._R8 !> melt temperature [K], default alumina (solidification)
     real(R8)     :: hFus       = 0._R8  !> heat of fusion [J/kg] (solidification)
@@ -147,6 +148,8 @@ module IGLOO_particles
     procedure, pass(self) :: capInjMass
     procedure, pass(self) :: computeSource
     procedure, pass(self) :: resolveInjectionRate
+    procedure, pass(self) :: dbInjectionFallback
+    procedure, pass(self) :: injectionGasState
   end type obj_particle
 
 contains
@@ -234,11 +237,51 @@ contains
     endif
   end subroutine resolveInjectionRate
 
+
+  !> A database stream's injection fallbacks: the gas velocity for a request >= threshold, the gas temperature for none.
+  pure subroutine dbInjectionFallback(self, gas, iu)
+    implicit none
+    class(obj_particle), intent(inout) :: self
+    real(R8),            intent(in)    :: gas(:,:)
+    integer,             intent(in)    :: iu
+
+    if (any(self%stateVar(4:6)>=threshold)) self%stateVar(4:6) = gas(iu:iu+2,1)
+    if (self%tp==0._R8) self%tp = gas(iu+3,1)
+
+  end subroutine dbInjectionFallback
+
+
+  !> A database stream's injection gas state on a throwaway copy: integrate's cell search at pInj, then the fallbacks.
+  subroutine injectionGasState(self, block, gasblock)
+    implicit none
+    class(obj_particle), intent(inout) :: self
+    type(obj_block),     intent(in)    :: block(nb)
+    type(obj_flowblock), intent(in)    :: gasblock(nb)
+    integer, parameter :: iu = 2, ng = iu + 7       !> one species: integrate's gas layout
+    real(R8), allocatable :: gas(:,:)
+
+    if (.not. (any(self%stateVar(4:6)>=threshold) .or. self%tp==0._R8)) return
+    self%stateVar(1:3) = self%pInj
+    self%i = 0
+    if (.not. self%findParticle(block)) return
+    if (ord2) then
+      call self%findDualCell(gasblock(self%i(1)))
+      if (mesh2D) then; allocate(gas(ng,4)); else; allocate(gas(ng,8)); endif
+    else
+      self%igas = self%i(2:4)
+      allocate(gas(ng,1))
+    endif
+    call gasblock(self%i(1))%gasProperties(gas, self%igas)
+    call self%dbInjectionFallback(gas, iu)
+
+  end subroutine injectionGasState
+
   !> Mass, momentum and energy flow rates of the stream at the current state.
-  pure subroutine computeSource(self, M, P, E)
+  pure subroutine computeSource(self, M, P, E, hTab)
     implicit none
     class(obj_particle), intent(in)  :: self
     real(R8),            intent(out) :: M, P(3), E
+    real(R8),            intent(in)  :: hTab(:)   !> the material's enthalpy table
     real(R8) :: v(3), normVel, enthalpy, mdot_inst
 
     v = self%stateVar(4:6); normVel = norm2(v)
@@ -247,8 +290,12 @@ contains
     enthalpy = self%stateVar(7)
     if (.not.self%varCp) enthalpy = self%cp*enthalpy + self%hOff
     !> solidification: the latent heat of fusion is part of the enthalpy
-    if (self%solidSelect > 0) enthalpy = hSolid(self%stateVar(7), self%stateVar(8), self%solidPhase, self%cp, &
-                                                self%cpSol, self%hFus, self%Tmelt, self%hOff)
+    if (self%solidSelect > 0 .and. self%varCp) then
+      enthalpy = hSolidTab(self%stateVar(7), self%stateVar(8), self%solidPhase, hTab, self%cpSol, self%hFus, self%Tmelt)
+    elseif (self%solidSelect > 0) then
+      enthalpy = hSolid(self%stateVar(7), self%stateVar(8), self%solidPhase, self%cp, &
+                        self%cpSol, self%hFus, self%Tmelt, self%hOff)
+    endif
     !> model 8: the metal and its cap, each at its own heat capacity and datum
     if (self%model == 8) enthalpy = (self%stateVar(8)*(self%cp*self%stateVar(7) + self%hOff) +      &
                                      self%stateVar(9)*(self%cpRes*self%stateVar(7) + self%hOffRes)) / &
@@ -369,7 +416,7 @@ contains
     integer :: nE
     
     ! Temperature or enthalpy
-    if (self%varCp) then; self%hp = self%stateVar(7); self%Tp = comp_TfromTab(hTab,self%hp)
+    if (self%varCp .and. self%solidSelect == 0) then; self%hp = self%stateVar(7); self%Tp = comp_TfromTab(hTab,self%hp)
     else;                 self%tp = self%stateVar(7); endif
     ! Model-dependent physics state
     select case(self%model)
@@ -489,7 +536,7 @@ contains
     !> Block bbox early-out (z ignored when mesh2D); widened, by a bound on every cell's hexTol.
     bpad = 0._R8
     if (wide .and. all(abs(blk%bbox) < 0.5_R8*huge(1._R8))) &
-      bpad = max(1.e-12_R8*norm2(blk%bbox(:,2) - blk%bbox(:,1)), 64._R8*epsilon(1._R8)*maxval(abs(blk%bbox)))
+      bpad = reachTol(norm2(blk%bbox(:,2) - blk%bbox(:,1)), maxval(abs(blk%bbox)))
     if (p(1) < blk%bbox(1,1)-bpad .or. p(1) > blk%bbox(1,2)+bpad .or. &
         p(2) < blk%bbox(2,1)-bpad .or. p(2) > blk%bbox(2,2)+bpad) return
     if (.not.mesh2D) then

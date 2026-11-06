@@ -9,8 +9,8 @@ enthalpy) at Z(7), the particle **Al mass** at Z(8).  Combustion is mutually
 exclusive per material with evaporation (a loud warning drops evaporation) and
 with breakup (setup error).
 
-With `xi-cap > 0` the burning parcel carries its **oxide cap** beside the metal: ODE
-`model = 8` (`rhsAlCap`, [The oxide cap](#the-oxide-cap-model-8)). With `residue=on` the cap
+With `xi-cap > 0`, or with Gallier's deposition law (`xi-law=Gallier21`), the burning parcel carries its
+**oxide cap** beside the metal: ODE `model = 8` (`rhsAlCap`, [The oxide cap](#the-oxide-cap-model-8)). With `residue=on` the cap
 becomes, when the metal is gone, a parcel of the **combustion product**, a material of its own
 ([The burnout residue](#the-burnout-residue)).
 
@@ -188,7 +188,9 @@ c(\xi, n) = \int_0^1 \frac{ds}{F(f_\mathrm{ox}(s))}
 $$
 
 keeps $t_b = d_0^n/K_\mathrm{eff}$ at every size: the metal burns faster than Beckstead's law while the cap
-is small and slower once it is large; the burn time and the residue's mass do not change.  `capStretch`
+is small and slower once it is large; the burn time and the residue's mass do not change.  Holding the burn
+time on Beckstead's correlation is IGLOO's rule, not Gallier's: their 0-D model has no stretch, and there the lobe
+lengthens the burn of a 70 µm drop by about 27 % (their Table 3).  `capStretch`
 evaluates $c$ at setup (midpoint rule, 4096 cells over `lobeF`) for each burning material with
 `xi-cap > 0`, and the log prints it: $c$ = 1.305, 1.398, 1.547 at
 $\xi$ = 0.1, 0.2, 0.5 ($n = 1.8$).  With no initial cap, at every state $m_\mathrm{ox} = \xi\nu(m_0 - m_\mathrm{Al})$ and
@@ -223,6 +225,46 @@ not in the burn time.  `capStretchX0` evaluates $c$ at setup in place of `capStr
 $x_0$: $c$ = 1.395, 1.388, 1.379 at $x_0$ = 0.05, 0.10, 0.15 ($\xi = 0.2$, $n = 1.8$).  The parcel's first source
 segment brings $\dot m\,(h_\mathrm{mix}(T_0) + |v|^2/2)$ to the books, $h_\mathrm{mix}$ the mixture enthalpy below.
 Absent or 0, the cap starts from zero.
+
+### Gallier's deposition law
+
+`xi-law=Gallier21` takes the retained fraction from the closure of Gallier et al.'s lobe-growth model
+[Gal21] (PDF pp. 13–14) in place of a constant, at the metal's current diameter and the cap's mass fraction:
+
+$$
+\dot m_\mathrm{ox} = -\xi(d_\mathrm{Al}, f_\mathrm{ox})\,\nu\,\dot m_\mathrm{Al}, \qquad
+\xi = g(d_\mathrm{Al})\,h(f_\mathrm{ox}) \in [0, 1].
+$$
+
+$h$ is their Fig. 11, the deposited fraction against $f_\mathrm{ox}$ at $d_\mathrm{Al}$ = 70 µm: its six computed
+points (0.0695, 0.101, 0.150, 0.193, 0.280, 0.521 at $f_\mathrm{ox}$ = 0, 0.1, 0.3, 0.5, 0.7, 0.9) joined linearly,
+held at 0.521 past 0.9 (no point beyond, while $f_\mathrm{ox}$ reaches 1 at burnout).  $g$ is the least-squares
+line through their Fig. 7 (the deposited fraction of a drop without lobe against $d_\mathrm{Al}$, thermophoresis and
+diffusiophoresis, six sizes from 20 to 400 µm) over its value at 70 µm, so that the law at 70 µm is Fig. 11:
+$g = 1 - 2.532\times10^{-3}\,(d_\mathrm{Al}/\mu\mathrm{m} - 70)$, held at its 20 and 400 µm values (1.127, 0.164)
+outside them.  Gallier states the product form and the two figures; the normalisation at 70 µm and the three
+holds (below 20 µm, above 400 µm, past $f_\mathrm{ox}$ = 0.9) are IGLOO's readings, not the paper's.  The figures'
+points, digitized by two reads, and their provenance are in
+`tests/combustion/burn-box-cap-gallier/reference/`.  Gallier's computations hold at 1 atm in a quiescent gas for
+20–400 µm; every burning drop passes below 20 µm at the end of its burn, and the log notes the held ends.
+
+Along the burn $dm_\mathrm{ox}/dm_\mathrm{Al} = -\nu\,\xi(d_\mathrm{Al0}(m_\mathrm{Al}/m_\mathrm{Al0})^{1/3}, f_\mathrm{ox})$: a
+path in the metal's mass that holds no time, so the residue's mass over the injected metal depends on the law and
+the injected size alone.  With Gallier's densities at 2570 K the residue's size ratio
+$\beta = d_\mathrm{res}/d_\mathrm{Al0}$ is 0.581, 0.565, 0.507, 0.400 at 20, 70, 200, 400 µm, against their 0.57,
+0.55, 0.49, 0.40.  The cap's mass being no function of the metal's alone, each parcel takes **its own stretch**
+at injection, on the path from its injected size and initial oxide,
+
+$$
+c = \left(\frac{d_\mathrm{Al0}}{d_{p0}}\right)^n \int_0^1 \frac{ds}{F(f_\mathrm{ox}(s))},
+\qquad \frac{dy}{ds} = -\nu\,\xi\!\left(d_\mathrm{Al0}\,s^{1/n}, \frac{y}{s^{3/n} + y}\right)\frac{d\,s^{3/n}}{ds},
+\quad y = \frac{m_\mathrm{ox}}{m_\mathrm{Al0}},
+$$
+
+so its burn time stays $d_{p0}^n/K_\mathrm{eff}$, IGLOO's rule as for a constant fraction (`capLawPath`: RK4 half-steps in $s$, the midpoint rule on 4096
+cells over `lobeF`): $c$ = 1.342, 1.329, 1.203 at 20, 70, 400 µm ($n$ = 1.8, no initial oxide).  The law alone
+selects model 8; `xi-ox0`, `product`, `residue` and `d-residue` act as with a constant fraction (the scatter quantum's
+residue estimate takes the path's cap at burnout).
 
 ### Energy: the absolute datum and the streams
 
@@ -309,19 +351,22 @@ them from `[GPB-Phase*]`; see the [registry](../user/registry.md) for the vocabu
 | `beta-part` | heat-partition fraction to the particle | 0 |
 | `q-comb` | heat of combustion (J/kg) | 0 |
 | `xi-cap` | fraction of the oxide formed retained in the cap, [0, 1]; > 0 selects model 8 | 0 |
-| `xi-ox0` | the oxide's mass fraction of the injected particle, [0, 1); > 0 needs `xi-cap > 0` | 0 |
-| `product` | the combustion product: the name of a 0-group line of the phase file; required with `xi-cap > 0` | none |
+| `xi-law` | the retained fraction: `constant` (`xi-cap`) or `Gallier21` (Gallier's deposition law, which selects model 8) | `constant` |
+| `xi-ox0` | the oxide's mass fraction of the injected particle, [0, 1); > 0 needs the cap (`xi-cap > 0` or the law) | 0 |
+| `product` | the combustion product: the name of a 0-group line of the phase file; required with the cap | none |
 | `residue` | `on`: the cap becomes a parcel of the product; `off`: it goes to the gas | `off` |
 | `d-residue` | residue diameter (m) with the mass flow kept; 0: one residue per droplet | 0 |
 
 The product's line carries no combustion, evaporation or breakup (under a global evaporation or breakup
 word it says `evaporation=NoEvaporation`, `breakup=NoBreakup`) and may carry `solidification=on` with its own
 `T-melt`, `h-fus`, `T-nuc`, `cp-solid`; every `[IGLOO-Properties]` vector holds one value for it too.
-Setup refuses `xi-cap` outside [0, 1]; `xi-ox0` outside [0, 1), or > 0 without `combustion=Beckstead` and
-`xi-cap > 0`; `product`, `residue=on` or `d-residue > 0` without
-`combustion=Beckstead` and `xi-cap > 0`; `xi-cap > 0` without a 0-group product line; a product that
+Setup refuses `xi-cap` outside [0, 1]; an `xi-law` word other than `constant` and `Gallier21`; `xi-cap > 0`
+beside `xi-law=Gallier21`, and the law without `combustion=Beckstead`; `xi-ox0` outside [0, 1), or > 0 without
+`combustion=Beckstead` and the cap; `product`, `residue=on` or `d-residue > 0` without
+`combustion=Beckstead` and the cap; the cap without a 0-group product line; a product that
 burns, evaporates or breaks up; a varying `Cp` or `Density` of the burning material or its product; a
-relative table; a negative `d-residue`, or one without `residue=on`.
+relative table; a negative `d-residue`, or one without `residue=on`.  The refusals worded for `xi-cap > 0`
+apply to the law alike.
 
 Example (the residue case of the test suite):
 
@@ -343,14 +388,17 @@ Unit family `tests/combustion/` (closed-form complex-step oracle, d^n
 regression identity, bitwise ignition gate, informational Beckstead
 correlation points; the cap's growth, its burn rate against Beckstead's times $F\,c$,
 $\nu$, the mixture enthalpy of the source, the lobe table against Gallier's factor, the
-stretch with and without an initial cap) and e2e box cases `tests/combustion/burn-box/` (exact
+stretch with and without an initial cap, the deposition law at and between its points, and its stretch and cap
+at burnout against a quadrature of the path) and e2e box cases `tests/combustion/burn-box/` (exact
 closed-form $d^n(x)$, independent RK4 of the heat-release energy balance,
 mass-telescoping audit), `burn-box-euler` (the Eulerian field of model 5),
 `burn-box-cap` (model 8 against an oracle on Gallier's exact lobe) and `burn-box-residue`
 (the residue's birth, books and freezing; `d-residue` with two groups; the residue after a solver
 failure) and `burn-box-ox0` (an oxide fraction at injection: the whole particle's mass and number rate, the
 cap from its initial oxide and the re-evaluated stretch against Gallier's exact lobe, the burnout time, the
-residue and the books) and `beckstead-air` (burnout times of 10–1000 µm particles in air against Eq. 7 of
+residue and the books), `burn-box-cap-gallier` (model 8 under the deposition law against an oracle that
+carries the cap), `burn-box-residue-gallier` (five sizes burned out under the law: each residue's mass on the law's
+path, each burnout time on Beckstead's, Gallier's residue sizes) and `beckstead-air` (burnout times of 10–1000 µm particles in air against Eq. 7 of
 `[Beck05]`, his Fig. 1 drawn beside them).  See `tests/combustion/INFO.md`.
 
 References:

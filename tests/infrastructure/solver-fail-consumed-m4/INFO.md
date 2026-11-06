@@ -16,7 +16,7 @@ zero, so nothing else of model 4 is involved.
 |---|---|
 | model 4 not a consumption model on either failure exit | S1–S3 PASS (25 `err=` lines, 25 exits), S4 **FAIL**: Σ `wdot` = 0.0, resid **1.000** |
 | model 4 a consumption model on the non-finite exit only | S4 **FAIL**, resid 1.000 |
-| this solver | S4 PASS, resid 2.941e-7 — the model-2 case's floor (the E13.6 source print) |
+| this solver | S4 PASS, resid 1.022e-6 — the model-2 case's floor (the E13.6 source print) |
 
 ## Pass criterion
 `solver-fail-consumed/check.py` unmodified: S1–S3 exact counts, S4 to 1e-5, S5 every `bc` = 0.

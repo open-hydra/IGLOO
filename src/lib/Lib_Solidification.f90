@@ -1,11 +1,14 @@
 !> Solidification and melting of a droplet with supercooling and recalescence (ODE models 6 and 7).
 module IGLOO_Lib_Solidification
     use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
+    use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_value, ieee_quiet_nan
     use IGLOO_variables, only: oneThird, sixOverPi
+    use IGLOO_Lib_Properties, only: lookupTab, comp_TfromTab, Tmin, Tmax
     implicit none
     private
     public :: solidPhaseAtInjection, nucleationJump, plateauRate, hSolid, solidDiameter
     public :: eventValue, eventFunction, eventCrossed, eventPassed, solidTransition, breakupStateAtSwitch
+    public :: nucleationJumpTab, solidTransitionTab, hSolidTab, tableSlope
 
     !> Phases: liquid, undercooled liquid, freezing plateau at T-melt, solid.
     integer(I4), parameter, public :: phLiquid=0, phUndercooled=1, phPlateau=2, phSolid=3
@@ -47,6 +50,39 @@ contains
 
     end subroutine nucleationJump
 
+    !> nucleationJump on the liquid's enthalpy table: f0 = (h_l(T-melt) - h_l(Tev))/hFus.
+    pure subroutine nucleationJumpTab(Tev, hTab, cpSol, Tmelt, hFus, Tafter, fAfter, phaseAfter)
+        implicit none
+        real(R8), intent(in)  :: Tev, hTab(Tmin:Tmax), cpSol, Tmelt, hFus
+        real(R8), intent(out) :: Tafter, fAfter
+        integer,  intent(out) :: phaseAfter
+        real(R8) :: dh
+
+        dh = lookupTab(hTab, Tmelt) - lookupTab(hTab, Tev)
+        if (dh/hFus < 1._R8) then
+            Tafter = Tmelt;                         fAfter = dh/hFus; phaseAfter = phPlateau
+        else
+            Tafter = Tmelt - (dh - hFus)/cpSol;     fAfter = 1._R8;   phaseAfter = phSolid
+        endif
+
+    end subroutine nucleationJumpTab
+
+    !> The liquid's heat capacity on the table: the chord of the kelvin cell holding T, clamped as lookupTab.
+    pure function tableSlope(hTab, T) result(c)
+        implicit none
+        real(R8), intent(in) :: hTab(Tmin:Tmax), T
+        real(R8) :: c
+        integer  :: i
+
+        if (.not. ieee_is_finite(T)) then
+            c = ieee_value(c, ieee_quiet_nan)
+            return
+        endif
+        i = min(max(idint(T), Tmin), Tmax-1)
+        c = hTab(i+1) - hTab(i)
+
+    end function tableSlope
+
     !> Frozen-fraction rate on the plateau: m*hFus*df/dt = -QdotW (QdotW [W] > 0 heats the droplet).
     pure function plateauRate(QdotW, m, hFus) result(dfdt)
         implicit none
@@ -71,6 +107,21 @@ contains
         end select
 
     end function hSolid
+
+    !> hSolid on the liquid's enthalpy table (its datum included).
+    pure function hSolidTab(T, f, phase, hTab, cpSol, hFus, Tmelt) result(h)
+        implicit none
+        real(R8), intent(in) :: T, f, hTab(Tmin:Tmax), cpSol, hFus, Tmelt
+        integer,  intent(in) :: phase
+        real(R8) :: h
+
+        select case (phase)
+        case (phPlateau); h = lookupTab(hTab, Tmelt) - f*hFus
+        case (phSolid);   h = lookupTab(hTab, Tmelt) - hFus - cpSol*(Tmelt - T)
+        case default;     h = lookupTab(hTab, T)
+        end select
+
+    end function hSolidTab
 
     !> Diameter at constant mass m: the liquid part at density rl, the frozen fraction f at rs.
     pure function solidDiameter(m, f, rl, rs) result(d)
@@ -158,6 +209,29 @@ contains
         end select
 
     end subroutine solidTransition
+
+    !> solidTransition on the liquid's enthalpy table: the nucleation and the re-melt through h_l.
+    pure subroutine solidTransitionTab(which, hTab, cpSol, Tmelt, hFus, T, f, phase)
+        implicit none
+        integer,  intent(in)    :: which
+        real(R8), intent(in)    :: hTab(Tmin:Tmax), cpSol, Tmelt, hFus
+        real(R8), intent(inout) :: T, f
+        integer,  intent(inout) :: phase
+        real(R8) :: Tev
+
+        select case (which)
+        case (1)
+            Tev = T
+            call nucleationJumpTab(Tev, hTab, cpSol, Tmelt, hFus, T, f, phase)
+        case (2)
+            T = min(Tmelt, Tmelt - (f - 1._R8)*hFus/cpSol); f = 1._R8; phase = phSolid
+        case (3)
+            T = comp_TfromTab(hTab, lookupTab(hTab, Tmelt) - f*hFus); f = 0._R8; phase = phLiquid
+        case (4)
+            f = min(1._R8, 1._R8 - cpSol*(T - Tmelt)/hFus); T = Tmelt; phase = phPlateau
+        end select
+
+    end subroutine solidTransitionTab
 
     !> Breakup state s after phase change `which`: a nucleated TAB/ETAB oscillator at rest, the KH-RT timer restarted at a re-melt.
     pure function breakupStateAtSwitch(which, brkSelect, tNow, s) result(sNew)

@@ -32,6 +32,17 @@ $$
 p_\mathrm{sat}(T_p) = p_\mathrm{atm}\,\exp\!\left(-\frac{L_v M_v}{R_u}\left(\frac{1}{T_p} - \frac{1}{T_\mathrm{boil}}\right)\right) \quad \text{[Clausius-Clapeyron]}
 $$
 
+with $T_\mathrm{boil}$ the boiling point at one atmosphere.  A material whose `boiling-temperature`
+$T_b$ is given at another pressure $p_B$ (`[IGLOO-Properties] boiling-pressure`, one atmosphere
+by default) takes the same line through $(T_b, p_B)$, its anchor moved once at setup:
+
+$$
+\frac{1}{T_\mathrm{boil}} = \frac{1}{T_b} + \frac{R_u}{L_v M_v}\,\ln\frac{p_B}{p_\mathrm{atm}},
+$$
+
+so that $p_\mathrm{sat}(T_b) = p_B$; a pair whose line has no boiling point at one atmosphere
+($1/T_\mathrm{boil} \le 0$) is refused.
+
 unless the material's `INPUT/properties.dat` carries a `Psat` column
 ([property tables](../user/input.md#property-tables-inputpropertiesdat)): then
 $p_\mathrm{sat}(T_p)$ is that column, linear in $T_p$ between its integer-kelvin nodes and
@@ -287,7 +298,10 @@ The accommodation coefficient $\alpha_e$ is the material-line token `alpha-e=`
 consumes $X_s$, `interface = LK` has **no effect** on it — that combination is
 refused at setup.  Verified by the `tests/evaporation/interface-neq/` unit
 family (chain oracle, VLE limit, exact $1/(p\,d)$ scaling invariant, convergence
-envelope) and the `tests/evaporation/lk-neq/` e2e box case.
+envelope) and the `tests/evaporation/lk-neq/` e2e box case; the magnitude of the
+depression against MHB98's own small-drop figure (Fig. 7(a): decane at $D_0$ = 10, 50,
+500 and 2000 µm, the depression from 22–42 % of $X_s^\mathrm{neq}$ at 10 µm to 0.1–0.2 % at
+2000 µm) by `test_mhb98_decane` (DC4).
 
 ---
 
@@ -326,10 +340,14 @@ liquid-conduction = P2T   ; a parabolic temperature profile inside the droplet
 ```
 
 Per-material override: the `liquid-conduction=` token on the material line of the phase file.
-`P2T` needs the liquid's conductivity `k-liq=` [W m⁻¹ K⁻¹] on that line and its viscosity: the
-`mu-liq=` token [Pa s] on a material that does not break, the breakup viscosity (the `Viscosity`
-column or `[IGLOO-Properties] mu`) on one that breaks, which then refuses `mu-liq`.  `P2T` applies to
-the evaporating models (2 and 4) and is refused on a material that does not evaporate.
+`P2T` needs the liquid's conductivity, the `k-liq=` token [W m⁻¹ K⁻¹] on that line or the
+`Conductivity` column of the property table, and its viscosity: the `mu-liq=` token [Pa s] or the
+`Viscosity` column on a material that does not break, the breakup viscosity (the `Viscosity` column
+or `[IGLOO-Properties] mu`) on one that breaks, which then refuses `mu-liq`.  The `Conductivity` column is
+read at the mean temperature $\bar T$, the `Viscosity` column at the surface temperature in the surface
+solve (below; [Input](../user/input.md#property-tables-inputpropertiesdat)); the breakup of a breaking material
+(the rate of an ODE breakup model, the events of an event model) keeps its viscosity at $\bar T$.  `P2T` applies
+to the evaporating models (2 and 4) and is refused on a material that does not evaporate.
 
 Under `ITC` (infinite thermal conductivity) the droplet temperature is uniform and every
 gas-side quantity is taken at $T_p$.  Under `P2T` the liquid temperature is parabolic in the
@@ -356,9 +374,10 @@ radiative exchange and $\dot m \le 0$ the gas-side model's rate at the surface s
 gas-side quantity takes $T_s$: $p_\mathrm{sat}$ (Clausius–Clapeyron or the `Psat` column), the
 clamp, $Y_s$ and $B_M$, the Knudsen length of LK, the $B_T$ of the d²-law, the film temperature
 of CEM-B, the heats of ASM and TC, the convective heat and the temperature ratio of the drag
-laws, $L_v$ and $c_{p,v}$ when the table carries their columns, and the radiative exchange.
-The density, the diameter, the heat capacity, the Eulerian energy moment and the trajectory's
-`T` stay at $\bar T$.
+laws, $L_v$ and $c_{p,v}$ when the table carries their columns, and the radiative exchange (with
+$\varepsilon(T_s)$ when the table carries the `Emissivity` column).  The density, the diameter, the
+heat capacity, the liquid conductivity, the Eulerian energy moment and the trajectory's `T` stay at
+$\bar T$; the liquid viscosity of a `Viscosity` column takes $T_s$ (below).
 
 The effective conductivity $k_\mathrm{eff} = \chi\,k_l$ accounts for the circulation inside a
 drop in a slip flow (Abramzon & Sirignano 1989, eqs. 30, 32, 39):
@@ -373,10 +392,14 @@ $$
 
 with $\chi = 1$ at $\mathrm{Pe}_L = 0$ (no slip: the conduction limit), $c_l$ the liquid's heat
 capacity (the slope of the enthalpy table when $c_p$ varies) and $B_M$ the gas-side model's
-Spalding number; $k_\mathrm{eff}$ is evaluated once per right-hand side, at $\bar T$.
+Spalding number.  $\mu_l$ is taken at the surface temperature, as Abramzon & Sirignano evaluate it
+(1989, p. 1613), so with a `Viscosity` column $U_s$, $\mathrm{Pe}_L$ and $k_\mathrm{eff}$ follow each trial
+$T_s$ of the surface solve; $k_l$, $c_l$ and $B_M$ stay at $\bar T$, and so does the viscosity of a breaking
+material's breakup rate or events.  For $k_l$ this is IGLOO's choice: no
+published source states the temperature of the liquid conductivity in the parabolic profile.
 
 The surface equation is solved in every right-hand-side call, by Brent's method on the bracket
-between $\bar T$ and $T_1 = \bar T + \dot Q_\mathrm{net}(\bar T)/(10\pi k_\mathrm{eff} d)$ ($T_1$
+between $\bar T$ and $T_1 = \bar T + \dot Q_\mathrm{net}(\bar T)/(10\pi k_\mathrm{eff}(\bar T)\, d)$ ($T_1$
 clipped to $[\max(1\ \mathrm{K}, T_\mathrm{min} - 1), \max(T_g, T_\mathrm{max})]$, $T_\mathrm{min}$ and
 $T_\mathrm{max}$ the property table's range).  When the
 two ends do not bracket the root, the bracket is widened to $T_g$ (a heated drop) or to the low
@@ -441,7 +464,7 @@ G_f = \frac{\alpha_s\,\Delta T_f\,\pi d^2}{L_v}, \qquad
 $$
 
 and, for a `P2T` droplet, the parabolic conduction $G_f = 10\pi\,k_l\,d\,\Delta T_f/L_v$
-($\chi = 1$).  The gas heat reaches the surface through the film blown by the vapour:
+($\chi = 1$; $k_l$ at $\bar T$ when the table carries the `Conductivity` column).  The gas heat reaches the surface through the film blown by the vapour:
 
 $$
 A = \frac{c_{p,g}(T_g - T_B)}{L_v}, \qquad
@@ -543,7 +566,12 @@ a convective Sherwood number in `tests/evaporation/cemb-box` and `asm-box` (d²,
 temperature, against the rate laws along the measured state); the blowing factor in
 `mhb98-water-blowing`; a varying $c_p$ under evaporation in `d2law-varcp`.  The parabolic profile
 in `tests/evaporation/liquid-p2t` (the right-hand sides at fixed states) and `temp-relax-p2t` (its
-closed form end to end, with the `T<sub>s` column); the boiling branch in
+closed form end to end, with the `T<sub>s` column), with a `Conductivity` column in
+`temp-relax-p2t-kcol` and under slip with a `Viscosity` column in `temp-relax-p2t-mucol` (the `T<sub>s` column
+against the surface balance with $\mu_l(T_s)$ on every row); the boiling branch in
 `tests/evaporation/boiling-zgr` and end to end in `boiling-zgr-flash` (the adiabatic flash),
 `boiling-zgr-hot` (the heat-fed boiling) and `boiling-zgr-switch` (the switch to CEM at $T_B$ and
-the burnout).  Function-level comparisons for all models: [../vv/literature.md](../vv/literature.md).
+the burnout).  The Langmuir-Knudsen depression against MHB98 Fig. 7(a) in `test_mhb98_decane`
+(DC4: production's rate along each drop's life, the depression recovered from it, within 6 % of the
+digitized curves); the boiling point given at another pressure in `test_properties_reader`
+(`boiling-pressure`) and `refuse-boiling-pressure`.  Function-level comparisons for all models: [../vv/literature.md](../vv/literature.md).

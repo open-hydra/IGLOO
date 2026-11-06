@@ -7,14 +7,18 @@ collective algorithm the MPI library picks, and stay within the tolerance of the
 The partial source/euler sums of the ranks are added in rank order, ((v0 + v1) + v2) + ..., and the
 total is broadcast, so the association never depends on the library. A library reduction does: the
 library chooses its own association per message size and rank count (Intel MPI exposes the choice as
-I_MPI_ADJUST_ALLREDUCE), and floating-point addition is not associative. The fixture is the 1672-parcel
+I_MPI_ADJUST_ALLREDUCE, Open MPI as coll_tuned_allreduce_algorithm), and floating-point addition is not
+associative. The fixture is the 1672-parcel
 vortex cloud (standard/vortex-cloud-st1): every cell of the cloud's path is fed by parcels of every
 rank, which is what lets a different association show in the printed digits (a box fixture with one
 parcel per cell row cannot see it). Every run is at one thread per rank: the !$OMP ATOMIC deposits
 inside a rank are themselves order-dependent with more than one thread.
 
-Per rank count n in (3, 4): run A with the library's default algorithms, run B with
-I_MPI_ADJUST_ALLREDUCE=8 (ring), which on the reference host associates differently from the default.
+Per rank count n in (3, 4): run A with the library's default algorithms, run B with its ring allreduce:
+I_MPI_ADJUST_ALLREDUCE=8 for Intel MPI, OMPI_MCA_coll_tuned_use_dynamic_rules=1 with
+OMPI_MCA_coll_tuned_allreduce_algorithm=4 for Open MPI (each library ignores the other's variables). The ring
+associates differently from Intel MPI's default on the reference host, and from Open MPI 4.1's at n = 4
+(Rabenseifner for this fixture's message sizes; at n = 3 Open MPI's default is the ring itself).
 Gates: rank witness; A and B .tec byte-identical; the .dat files of A, B and n = 1 byte-identical; A within
 scale-relative 1e-12 of n = 1. PASS stdout carries no residuals.
 """
@@ -30,7 +34,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from compare_tec import compare_tec, DEFAULT_TOL          # noqa: E402
 
 RANKS = (3, 4)
-VARIANT = {'I_MPI_ADJUST_ALLREDUCE': '8'}
+VARIANT = {'I_MPI_ADJUST_ALLREDUCE': '8',                     # Intel MPI: ring
+           'OMPI_MCA_coll_tuned_use_dynamic_rules': '1',      # Open MPI: obey the forced algorithm below
+           'OMPI_MCA_coll_tuned_allreduce_algorithm': '4'}    # Open MPI: ring
 
 
 def md5(path):

@@ -12,7 +12,9 @@ program test_evaporation
     !   EV4  CEM in the BOILING clamp (Tp=420 K > 404 K): mdot finite and equal to the
     !        closed form at Xs = 1-xsCap.
     !   EV5  CEM-B boiling: EV4 x the 1/3-rule film factor (Tf/Tg)^0.7.
-    !   EV6  ASM boiling: identical to CEM at Re=0 (Sh*=2), qd finite.
+    !   EV6  ASM boiling: CEM at Re=0 (Sh*=2) within 9 eps (the rounding of the two sequences), qd finite;
+    !        the bound holds for B_M >= 1e-2, where both take log(1 + B_M) (below, ASM's series log1pS).
+    !   EV6b the same at Tp = 350 K, out of the clamp (B_M = 0.1135).
     !   EV7  CEM+LK boiling: finite and negative.
     !   EV8  psatExt = the Clausius-Clapeyron value re-typed: mdot, Qdot, override as without it
     !        (CEM and TC) -- the table branch adds nothing but the pressure it is given.
@@ -212,33 +214,47 @@ contains
         call append_row('EV5_cemb_boiling', 'mdot', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_EV5
 
-    !> EV6: ASM at Re=0 reduces to CEM exactly -- Sh* = 2 + 0/F_M = 2, same Dv, same
-    !> ln(1+BM), same operation order -- so the two rates must agree BIT for bit.
+    !> EV6 (420 K, the boiling clamp) and EV6b (350 K, B_M = 0.1135): ASM at Re = 0 is CEM (Sh* = 2 + 0/F_M = 2,
+    !> the same Dv and ln(1+BM)), to the rounding of the two operation sequences: |m_ASM - m_CEM| <= 9 eps |m_CEM|
+    !> (9 roundings of u = eps/2 per routine), for B_M >= 1e-2 where both take log(1 + B_M): below it ASM's
+    !> series log1pS and CEM's log of the rounded 1 + B_M differ by up to eps/(2 B_M) relative.
+    !> Vacuous: F_M cancels at Re = 0, and Le = 1 hides a missing Le.
     !> Uncapped, ASM's F_correction(Inf) = Inf*Inf/Inf makes mdot NaN.
     subroutine run_EV6(ok)
         logical, intent(inout) :: ok
-        real(R8) :: m_asm, m_cem, qd_asm, qd_cem, err, tol
+        call asm_cem_leg('EV6 ASM boiling', 'EV6_asm_boiling', Tp_b, ok)
+        call asm_cem_leg('EV6b ASM below boiling', 'EV6b_asm_350K', Tp, ok)
+    end subroutine run_EV6
+
+    subroutine asm_cem_leg(label, rowid, TpV, ok)
+        character(len=*), intent(in) :: label, rowid
+        real(R8), intent(in) :: TpV
+        logical, intent(inout) :: ok
+        real(R8) :: m_asm, m_cem, qd_asm, qd_cem, err, tol, ulps
         logical  :: ovr_asm, ovr_cem, pass
-        call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tp_b, dp0, 0._R8, 1._R8, &
+        call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, TpV, dp0, 0._R8, 1._R8, &
                          ASM, 0, ep, m_asm, qd_asm, ovr_asm)
-        call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tp_b, dp0, 0._R8, 1._R8, &
+        call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, TpV, dp0, 0._R8, 1._R8, &
                          CEM, 0, ep, m_cem, qd_cem, ovr_cem)
         if (ieee_is_finite(m_asm) .and. ieee_is_finite(m_cem)) then
-            err = abs(m_asm-m_cem)
+            err  = abs(m_asm-m_cem)
+            ulps = err/spacing(m_cem)
         else
-            err = huge(1._R8)
+            err  = huge(1._R8)
+            ulps = huge(1._R8)
         end if
-        tol  = 0._R8                                       ! bit equality; assert_lt needs err < tol
+        tol  = 9._R8*epsilon(1._R8)*abs(m_cem)
         pass = ieee_is_finite(m_asm) .and. ieee_is_finite(qd_asm) .and. ovr_asm .and. &
-               (m_asm < 0._R8) .and. (m_asm == m_cem)
+               (m_asm < 0._R8) .and. (err <= tol)
         if (pass) then
-            write(*,'(a,es12.5,a)') '  [PASS] EV6 ASM boiling == CEM bitwise : ', m_asm, ''
+            write(*,'(a,es12.5,a,f6.2,a)') '  [PASS] '//label//' == CEM within 9 eps : ', m_asm, ' (', ulps, ' ulp)'
         else
-            write(*,'(a,es12.5,a,es12.5)') '  [FAIL] EV6 ASM boiling : mdot=', m_asm, ' vs CEM ', m_cem
+            write(*,'(a,es12.5,a,es12.5,a,es10.3,a)') '  [FAIL] '//label//' : mdot=', m_asm, ' vs CEM ', m_cem, &
+                                                      ' (', ulps, ' ulp)'
         end if
         ok = ok .and. pass
-        call append_row('EV6_asm_boiling', 'mdot', err, err, 0._R8, 0._R8, tol, pass)
-    end subroutine run_EV6
+        call append_row(rowid, 'mdot_ulp', ulps, err, 0._R8, 0._R8, tol/spacing(m_cem), pass)
+    end subroutine asm_cem_leg
 
     !> EV7: the Langmuir-Knudsen interface at boiling: capped, the Picard iteration
     !> starts from a finite rate. The converged value is reported, not pinned.

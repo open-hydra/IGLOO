@@ -1,0 +1,9 @@
+# Gallier et al. 2021, Fig. 11: f_dep [%] against the lobe's oxide mass fraction f_ox at d_Al = 70 um;
+# the mean of two reads (PROVENANCE.md)
+# f_ox f_dep_pct
+0 6.9522
+0.1 10.1342
+0.3 15.0355
+0.5 19.2828
+0.7 28.0447
+0.9 52.0769

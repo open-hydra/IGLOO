@@ -16,6 +16,7 @@ module IGLOO_IO_INI
   real(R8), allocatable, public :: ini_cpv(:),   ini_Le(:), ini_Yinf(:)
   real(R8), allocatable, public :: ini_sigma(:), ini_mu(:), ini_psat(:)
   real(R8), allocatable, public :: ini_emissivity(:)
+  real(R8), allocatable, public :: ini_pBoil(:)
 
 
 contains
@@ -110,6 +111,15 @@ contains
     !> Particles' trajectories output-printing sampling frequency
     call fini%get(section_name='IGLOO-General', option_name='fsample-traj', val=trajSample, error=error)
     if (error/=0) trajSample = 100
+    !> scatter-floor = F >= 0: no parcel's marker rate below F times the mean stream's; absent = 0.1.
+    scatterFloor = 0.1_R8
+    if (inSection('IGLOO-General','scatter-floor')) then
+      if (fini%count_values(section_name='IGLOO-General', option_name='scatter-floor') /= 1) &
+        error stop 'IGLOO: [IGLOO-General] scatter-floor must be a number >= 0'
+      call fini%get(section_name='IGLOO-General', option_name='scatter-floor', val=scatterFloor, error=error)
+      if (error/=0 .or. .not. ieee_is_finite(scatterFloor) .or. scatterFloor < 0._R8) &
+        error stop 'IGLOO: [IGLOO-General] scatter-floor must be a number >= 0'
+    endif
     !> Trajectory rows: print-dcell present = the diagnostic crossing cadence; else print-ds, then print-dtime
     dcellSet = inSection('IGLOO-General','print-dcell')
     iprint = 1
@@ -419,6 +429,7 @@ contains
     mat%betaPart = 0._R8
     mat%xiCap    = 0._R8
     mat%xiOx0    = 0._R8
+    mat%xiLaw    = 0
     mat%Tign     = 2350._R8          ! Al2O3-shell melting anchor
     mat%qComb    = 0._R8
     mat%Tmelt    = 2327._R8          ! alumina default
@@ -433,13 +444,14 @@ contains
 
 
   !> One key=value token from the material line of the phase file (written by ATLAS GPB from
-  !  [GPB-Phase*]): the eight model words call the assign_* selectors, the seventeen reals are read, the
+  !  [GPB-Phase*]): the nine model words call the assign_* selectors, the seventeen reals are read, the
   !  product name is kept, a breakup constant is kept for apply_breakup_tokens; an unknown key or a
   !  non-numeric value stops the run.
   subroutine apply_material_key(imat, mat, key, value)
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Evaporation, only: assign_evaporation, assign_liquid, assign_interface, &
-                                     assign_boiling, assign_combustion, assign_solidification, assign_residue
+                                     assign_boiling, assign_combustion, assign_solidification, assign_residue, &
+                                     assign_xilaw
     use IGLOO_Lib_Breakup,     only: assign_breakup, breakup_token, BRKTOK_SLOT
     implicit none
     integer,            intent(in)    :: imat
@@ -456,6 +468,7 @@ contains
     case ('combustion');        call assign_combustion(value, mat%combSelect)
     case ('solidification');    call assign_solidification(value, mat%solidSelect)
     case ('residue');           call assign_residue(value, mat%resOn)
+    case ('xi-law');            call assign_xilaw(value, mat%xiLaw)
     case ('breakup');           mat%brkupWord = value
       call assign_breakup(value, mat%brkupSelect, mat%brkupEqOde, mat%brkupEvent, mat%brkupHasChild)
     case ('alpha-e');   read(value,*,iostat=ios) mat%alphaE
@@ -569,16 +582,22 @@ contains
     write(*,'(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,es10.3)') '  >> [material ', imat, '] evap=', mat%evapSelect, &
       ' liq=', mat%liqSelect, ' intf=', mat%intfSelect, ' boil=', mat%boilSelect, ' comb=', mat%combSelect, &
       ' solid=', mat%solidSelect, ' alpha-e=', mat%alphaE
-    if (len_trim(mat%productName) > 0 .and. .not. mat%resOn) write(*,'(a,i0,a,es10.3)') '  >> [material ', imat, &
-      '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap
-    if (len_trim(mat%productName) > 0 .and. mat%resOn) write(*,'(a,i0,a,es10.3,a,es10.3)') '  >> [material ', imat, &
-      '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap, ' residue=on d-residue=', mat%dRes
+    if (len_trim(mat%productName) > 0 .and. .not. mat%resOn .and. mat%xiLaw == 0) write(*,'(a,i0,a,es10.3)') &
+      '  >> [material ', imat, '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap
+    if (len_trim(mat%productName) > 0 .and. mat%resOn .and. mat%xiLaw == 0) write(*,'(a,i0,a,es10.3,a,es10.3)') &
+      '  >> [material ', imat, '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap, ' residue=on d-residue=', mat%dRes
+    !> under the law the retained fraction is the law's, not xi-cap
+    if (len_trim(mat%productName) > 0 .and. .not. mat%resOn .and. mat%xiLaw > 0) write(*,'(a,i0,a)') &
+      '  >> [material ', imat, '] product='//trim(mat%productName)//' xi-law=Gallier21'
+    if (len_trim(mat%productName) > 0 .and. mat%resOn .and. mat%xiLaw > 0) write(*,'(a,i0,a,es10.3)') &
+      '  >> [material ', imat, '] product='//trim(mat%productName)//' xi-law=Gallier21 residue=on d-residue=', mat%dRes
     if (mat%xiOx0 > 0._R8) write(*,'(a,i0,a,es10.3)') '  >> [material ', imat, '] xi-ox0=', mat%xiOx0
+    if (mat%xiLaw > 0 .and. len_trim(mat%productName) == 0) write(*,'(a,i0,a)') '  >> [material ', imat, '] xi-law=Gallier21'
   end subroutine finalize_material_models
 
 
-  !> [IGLOO-Properties]: optional per-material property vectors (psat, Mv, Lv, boiling-temperature, cpv, Le,
-  !  Yinf, sigma, mu, emissivity), all of one length.
+  !> [IGLOO-Properties]: optional per-material property vectors (psat, Mv, Lv, boiling-temperature,
+  !  boiling-pressure, cpv, Le, Yinf, sigma, mu, emissivity), all of one length.
   subroutine read_properties()
     implicit none
     integer :: n, nref
@@ -619,6 +638,14 @@ contains
       if (n /= nref) error stop '[ERROR] [IGLOO-Properties] boiling-temperature (alias Tboil): size mismatch with other property vectors'
       allocate(ini_Tboil(n))
       call fini%get(section_name='IGLOO-Properties', option_name=keyTB, val=ini_Tboil, error=error)
+    endif
+    !> boiling-pressure: the pressure at which boiling-temperature is given
+    if (inSection('IGLOO-Properties','boiling-pressure')) then
+      n = fini%count_values(section_name='IGLOO-Properties', option_name='boiling-pressure')
+      if (nref < 0) nref = n
+      if (n /= nref) error stop '[ERROR] [IGLOO-Properties] boiling-pressure: size mismatch with other property vectors'
+      allocate(ini_pBoil(n))
+      call fini%get(section_name='IGLOO-Properties', option_name='boiling-pressure', val=ini_pBoil, error=error)
     endif
     if (inSection('IGLOO-Properties','cpv')) then
       n = fini%count_values(section_name='IGLOO-Properties', option_name='cpv')

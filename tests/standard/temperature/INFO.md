@@ -52,7 +52,7 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
   JAXA1 without a +2 floor, as published — Nu(Re=1e-6)=0.315. A +2 floor added
   to JAXA1 turns it red.
 - `test_radiation.f90` (ctest `test_radiation`): the grey-body exchange `Q̇_r = ε σ π d² (T_g⁴ − T_p⁴)`
-  against the form typed in the test (`σ = 5.670374419e-8`, CODATA) in quadruple precision; RU2 and RU4 at zero
+  against the form typed in the test (`σ = 5.670374419e-8`, CODATA) in quadruple precision; RU2, RU4, RU5 and RU6 at zero
   slip under `NoDrag` and `NoHeat`, so the radiative term is the only heat exchange:
 
   | id | compared | tolerance | measured | RED |
@@ -61,5 +61,7 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
   | RU3 | the auxiliary layout, models 1–8 (nine layouts): with radiation one slot after every other block (`nAux + 1`, the slot at `nAux`); a material without radiation set up after one with it gets no slot and the plain `nAux` | exact | 9 of 9 | the slot index not reset per setup: it stays at the previous layout's index |
   | RU2 | per ODE model, `F(ε = 0.8) − F(ε = 0)` = `Q̇_r cpFactor/m` in the energy equation and 0 in every other component: models 1–5, model 1 on a varying-cp table (`cpFactor = 1`), models 6 and 7 in their four phases (`Q̇_r/(m c_l)` liquid and undercooled, `−Q̇_r/(m h_fus)` in `F(8)` on the plateau, `Q̇_r/(m c_s)` solid; model 7 with Reitz-Diwakar at `Z(9) = 1.5 ṁ/m_0`, its `m` and `d` rebuilt from the stream flow), model 2 with `blowing = LK` (`f₂ = 0.9116`: the term is not multiplied by `f₂`); model 8 (the oxide cap, `m_ox = m_Al`): `Q̇_r` on the equal-volume sphere over `m_Al c_Al + m_ox c_res` | 8 ULP of the larger `F` | worst 0.34 of tol (model 7 undercooled); model 8 0.05 | model 4 without the term: its leg (0 against 513.87 K/s); the term added before the blowing factor: the LK leg (468.45 = 513.87 `f₂`); model 7 without the term, or with the injection diameter: its four legs (`dF/ref` 0 and 1.31); model 8 without the term (`dF` 0) or on the metal's diameter (`dF/ref` 0.689, the area ratio 1.4504) |
   | RU4 | `getSourceTerms` (the Eulerian source branch): the energy component against `n_p ε σ π d² (T_g⁴ − T_p⁴)`, `d = (6 ρ̂_p/(π ρ n_p))^⅓`; `ε = 0` gives exactly 0 | 1e-14 relative | 9.5e-16 | the term absent from the branch: 1.0 |
+  | RU5 | an `Emissivity` column `ε(T) = T/3000` beside the constant 0.5: per right-hand side with a radiation site outside P2T (models 1, 2 and 4 under ITC, 3, 5, 6 in its four phases, 8), `F(table) − F(constant)` = RU2's term with `Q̇_r = [ε(T_site) − 0.5] σ π d² (T_g⁴ − T_site⁴)` at the site's temperature, 0 in every other component | 8 ULP of the larger `F` | worst 0.13 of tol (model 3) | every site on the constant: `dF = 0` on all ten legs; every site at the gas temperature: all ten legs (model 1 `dF` +3.05e4 against −3.05e4 K/s) |
+  | RU6 | `getSourceTerms` of a material with the `Emissivity` column and the constant 0: the energy component against `n_p ε(T_p) σ π d² (T_g⁴ − T_p⁴)` | 1e-14 relative | 1.0e-15 | the column ignored by the branch: 1.0 (energy 0) |
 
-  The e2e twins are `rad-cool`, `emissivity-cap`, `rad-foreign-key` and `solidification/solid-box-rad`.
+  The e2e twins are `rad-cool`, `rad-cool-epscol`, `emissivity-cap`, `rad-foreign-key` and `solidification/solid-box-rad`.

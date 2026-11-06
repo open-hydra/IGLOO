@@ -96,5 +96,7 @@ module IGLOO_variables
   !> The current material's particle files end with the frozen fraction f (a group of it solidifies).
   logical  :: frozenOn=.false.
   real(R8) :: dNscat=0._R8
+  !> [IGLOO-General] scatter-floor F; npFloor = F Ndot/nStreams, the material's floor on a parcel's marker rate npRef.
+  real(R8) :: scatterFloor=0.1_R8, npFloor=0._R8
 
 end module IGLOO_variables 
