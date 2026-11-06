@@ -28,8 +28,8 @@ linear between the nodes). Two more gates pin that the column is what the run us
 
   (3) PC0: the solver reported the tabulation ("p_sat tabulated from properties.dat").
   (4) PC1: the plateau (max Tp over the gated drops) within 1 K of the 0-D replica of the kernel
-      (zero_d.py with this fixture: 472.84 K). psat by Clausius-Clapeyron with the same sink puts
-      it at 463.4 K. The rate gate (1) cannot tell the table from a Clausius-Clapeyron line with
+      (zero_d.py with this fixture: 481.88 K). psat by Clausius-Clapeyron with the same sink puts
+      it at 473.7 K. The rate gate (1) cannot tell the table from a Clausius-Clapeyron line with
       Lv = 2.58e5: the two differ by 0.07 % at the plateau.
 
 The digitized TC2012 Fig. 11 present-model curves are a NON-gating overlay in verify.py.
@@ -58,11 +58,12 @@ RU, PATM = 8314.46, 101325.0
 KG, U_G, T_G = 0.026, 10.0, 600.0
 GAM, R_G = 1.4, 287.0
 RHO_G = PATM / (R_G * T_G)           # TC2012's atmospheric state: p = RHO_G R_G T_G = 1 atm (solfile Roi)
-MV, TBOIL, CPV, LE, YINF = 226.45, 560.0, 2300.0, 2.5, 0.0
+MV, TBOIL, CPV, LE, YINF = 226.45, 560.0, 2300.0, 3.543, 0.0
+#> LE = KG/(RHO_G CP_G D_v): D_v = 1.2415e-5 m^2/s, Fuller at the film temperature 529.1 K and 1 atm
 LV_SINK = 2.2695e5                   # [IGLOO-Properties] Lv: TC2012 Table 1 latent heat at Tboil (not in the oracle)
 TMIN, TMAX, _COLS = load_properties(os.path.join(HERE, "INPUT", "properties.dat"))
 PSAT = _COLS.get("psat")             # TC2012 Table-1 curve, the column the solver reads
-T_0D = 472.84                        # zero_d.py plateau with this fixture (PC1)
+T_0D = 481.88                        # zero_d.py plateau with this fixture (PC1)
 KT, D0 = 0.5, 2.0e-5                 # bc.txt: Tp0=KT*T_G=300 K; rp=1e-5 -> d0=20 um
 CP_G = GAM * R_G / (GAM - 1.0)
 P_G  = RHO_G * R_G * T_G
@@ -265,7 +266,7 @@ def main():
           f"({max(n_tab, 0)} report(s) in {LOG})")
     pc1 = n_good > 0 and abs(max_plat - T_0D) <= 1.0
     print(f"[{'PASS' if pc1 else 'FAIL'}] PC1 plateau {max_plat:.2f} K within 1 K of the 0-D replica "
-          f"{T_0D:.2f} K (Clausius-Clapeyron with the same sink: 463.4 K)")
+          f"{T_0D:.2f} K (Clausius-Clapeyron with the same sink: 473.7 K)")
     print("\nexit-path and mass-balance gates:")
     extra = check_exit_paths() + check_mass_balance()
 
