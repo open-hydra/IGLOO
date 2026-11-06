@@ -237,7 +237,8 @@ igloo_unit_test(test_source_reduction  infrastructure/source_reduction   "unit;i
 # The field mollifier over blocks joined by 101 links (mollifyBlocks): a random grid cut into blocks
 # smooths as the uncut grid (3D and 2D cuts, three blocks, 2 x 2 blocks, above the OpenMP threshold),
 # Sum(q V) holds over the blocks, and without an aligned link each block is smoothed on its own; U1d a
-# periodic (201) pair in one block smooths as the grid with j wrapped; U-T a centroid on the other block's
+# periodic (201) pair in one block smooths as the grid with j wrapped; U-X1..U-X8 the exact intersection of two
+# hexahedra, its weights, guards and chord split; U-T a centroid on the other block's
 # chimera face is not covered by it; U-M (i) the chimera overlap mirror, (ii) two blocks overlapping across
 # chimera (102) links smooth as the grid, (iii) each block's total changes by exactly what its chimera cells
 # took from the donor halo.
