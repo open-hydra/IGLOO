@@ -36,6 +36,8 @@ Geometry / BCs:
     face 1 (x = Lx) is the outlet and its face 2 (x = Lx/2) the 101 connection, block 1's face-2 cell
     (m, n) partnering block 2's cell (Nx/2, m, Nz+1-n) and vice versa, orientation 1 0 0 -1.
   - --outlet-code C: the outlet face (x = Lx) written with code C, header only (default 400).
+  - --rho R, --kl K, --gam G: the gas density, conductivity and ratio of specific heats (defaults 1.2 kg/m^3,
+    0.026 W/m/K, 1.4).
   - --ug U: the gas x-velocity (default 10 m/s); --u2 U2: the gas x-velocity U2 in the cells whose centre
     lies beyond x = Lx/2 (the --ug value before); --ygrade G: the rows along y of geometric thickness,
     each G times the one below, Ly unchanged (row j of thickness Ly*(G-1)*G**(j-1)/(G**Ny-1)).
@@ -61,7 +63,7 @@ Usage:
                      [--stretch R] [--gradient G] [--zgradient G] [--wave-y A] [--rotate2 y]
                      [--outlet-code C] [--ug U] [--u2 U2] [--ygrade G] [--mesh-only] [--sym-face F]
                      [--no-inlet] [--family-kt KT1,KT2,...] [--family-rp RP1,RP2,...] [--periods P]
-                     [--rp-sweep R1,R2,...]
+                     [--rp-sweep R1,R2,...] [--rho R] [--kl K] [--gam G]
         writes <out_dir>/solfile.tec and <out_dir>/bc.txt (and phase.txt with --families > 1)
         --kv : inlet velocity scaling  (v0 = kv*|u_g|; 1.0 => no drag slip, Re=0)
         --kt : inlet temperature scaling (Tp0 = kt*T_g; 1.0 => no thermal slip)
@@ -73,6 +75,8 @@ Usage:
                   dir=[cos b cos a, cos b sin a, sin b]. Default: col 4 written 0.0.
         --blocks : 2 writes the box as two blocks joined at x = Lx/2 (default 1)
         --tg : gas temperature [K] (default the module's 600 K)
+        --rho, --kl, --gam : gas density [kg/m^3], conductivity [W/m/K], ratio of specific heats
+                  (defaults the module's 1.2, 0.026, 1.4)
         --nx, --ny, --nz : cells per direction over the same Lx, Ly, Lz (default 60 5 5;
                   --blocks 2 splits nx in two, so nx must be even; --nz 1 is a one-layer box)
         --overlap : with --blocks 2, each block reaches N cells past the middle (chimera, 102)
@@ -235,7 +239,7 @@ def block_nodes(b, i0, ncx, ncy, sh, nx, ny, nz, stretch, rotated, ygrade, perio
 
 def write_solfile(path, blocks=1, tg=None, nx=NX, ny=NY, nz=NZ, overlap=0, shift=0.0, rim=False,
                   stretch=1.0, gradient=None, zgradient=0.0, wave_y=0.0, rotate2=None, ug=None, ygrade=1.0, xnodes=None,
-                  u2=None, periods=1):
+                  u2=None, periods=1, rho=None, kl=None, gam=None):
     """xnodes: the x of every node along x of a one-block box (nx + 1 values), in place of the uniform ones;
     periods: the ny rows span that many periods of LY."""
     layout = block_layout(blocks, nx, ny, overlap, shift, rim)
@@ -266,7 +270,10 @@ def write_solfile(path, blocks=1, tg=None, nx=NX, ny=NY, nz=NZ, overlap=0, shift
                             buf.append(f"  {axis[(i, j, k)[comp]]:.15E}\n")
                 f.writelines(buf)
             # cell-centered gas/particle vars: ncell identical constants each (T linear in x with --gradient)
+            over = {"Roi( 1 )": rho, "KL": kl, "GAM": gam}
             for name, val in GAS_VARS:
+                if over.get(name) is not None:
+                    val = over[name]
                 if name == "T" and tg is not None:
                     val = tg
                 if name == "U" and ug is not None:
@@ -422,6 +429,9 @@ def main():
     p.add_argument("--blocks", type=int, choices=(1, 2), default=1,
                    help="2: two zones split at x = Lx/2, joined by a 101 connection")
     p.add_argument("--tg", type=float, default=None, help="gas temperature [K] (default 600)")
+    p.add_argument("--rho", type=float, default=None, help="gas density [kg/m^3] (default 1.2)")
+    p.add_argument("--kl", type=float, default=None, help="gas conductivity [W/m/K] (default 0.026)")
+    p.add_argument("--gam", type=float, default=None, help="gas ratio of specific heats (default 1.4)")
     p.add_argument("--nx", type=int, default=NX, help="cells along x (default 60)")
     p.add_argument("--ny", type=int, default=NY, help="cells along y (default 5)")
     p.add_argument("--nz", type=int, default=NZ, help="cells along z (default 5; 1 = one-layer box)")
@@ -525,7 +535,8 @@ def main():
                                           nx=a.nx, ny=nyt, nz=a.nz, overlap=a.overlap, shift=a.shift,
                                           rim=a.rim, stretch=a.stretch, gradient=a.gradient,
                                           zgradient=a.zgradient, wave_y=a.wave_y, rotate2=a.rotate2,
-                                          ug=a.ug, ygrade=a.ygrade, u2=a.u2, periods=a.periods)
+                                          ug=a.ug, ygrade=a.ygrade, u2=a.u2, periods=a.periods,
+                                          rho=a.rho, kl=a.kl, gam=a.gam)
     n_inlet = write_bc(os.path.join(a.out_dir, "bc.txt"), a.kv, a.kt, a.rp, a.alpha,
                        periodic_y=a.periodic_y, blocks=a.blocks, nx=a.nx, ny=nyt, nz=a.nz,
                        overlap=a.overlap, shift=a.shift, rim=a.rim, families=a.families,
