@@ -699,7 +699,9 @@ Tonini–Cossali analytical evaporation (Stefan–Fuchs); the companion unit tes
 ### tc-hexadecane
 
 The Tonini–Cossali validation case: an **n-hexadecane** drop reproducing
-TC2012 Fig. 11 ($R_{d,0}$=10 µm, $T_{d,0}$=300 K, air at 600 K).  It is the suite's
+TC2012 Fig. 11 ($R_{d,0}$=10 µm, $T_{d,0}$=300 K, air at 600 K and one atmosphere, the gas-film
+properties at the film temperature 529.1 K: $k_g$ and $c_{p,g}$ of air, $D_v$ by Fuller, $c_{p,v}$
+of the vapour).  It is the suite's
 variable-property case — the liquid density falls with temperature, so the
 drop *swells* as it heats before the $D^2$-law evaporation — and therefore the only
 one exercising the temperature-dependent property tables (`rhoTab`/`cpTab`/`hTab`)
@@ -718,17 +720,19 @@ energy sink is Table 1's latent heat at the boiling point, $L_v=2.2695\times10^5
 curve and the sink are decoupled, which a single scalar $L_v$ cannot do (the curve's effective
 latent heat is $\approx$258 kJ/kg over the operating range).  The gate's oracle reads the same
 column; two further gates assert that the run reported the tabulation and that its plateau
-lies within 1 K of a 0-D replica of the kernel (`zero_d.py`, 492.63 K; with psat by
-Clausius-Clapeyron at the same sink it is 486.0 K).  The rate gate alone cannot tell the table
-from a Clausius-Clapeyron fit to the same anchors ($7\times10^{-3}$ against a floor of
-$1.9\times10^{-3}$, tolerance 2 %); the two plateau gates can.  Liquid
+lies within 1 K of a 0-D replica of the kernel (`zero_d.py`, 493.69 K; with psat by
+Clausius-Clapeyron at the same sink it is 487.13 K).  The rate gate alone cannot tell the table
+from a Clausius-Clapeyron fit to the same anchors ($4.4\times10^{-3}$ against a floor of
+$3.1\times10^{-3}$, tolerance 2 %); the two plateau gates can.  Liquid
 $c_{p,\ell}=2800$ J/(kg K) is the NIST/Chemeo value at ~490 K.  The digitized TC2012 Fig. 11
-present-model curves are a non-gating overlay (normalized lifetime, since IGLOO's $D_v$ is
-$Le$-set and differs from TC2012's, making absolute $\tau$ incomparable).
+present-model curves are a non-gating overlay on the normalized lifetime: in the figure's time
+$\tau = t D_v/R_{d,0}^2$ the run's drop lives 2.5 times as long as the figure's, a factor no
+property of the case explains, since TC2012's eq. 1 and IGLOO both scale the rate with
+$\rho_\infty D_v$.
 
-**Result:** measured $d^2(x)$ within $0.19\,\%$ of the kernel on all 25 drops, every drop
-swells (peak 1.088); plateau 492.6 K against the digitized ~493.7 K ($0.2\,\%$), on its 0-D
-replica to the printed digit.
+**Result:** measured $d^2(x)$ within $0.31\,\%$ of the kernel on all 25 drops, every drop
+swells (peak 1.089); plateau 493.7 K against the digitized 493.7 K, on its 0-D replica to the
+printed digit; heat-up fraction 0.600 against the figure's 0.637.
 
 <figure>
   {% include "vv/images/tc-hexadecane.svg" ignore missing %}

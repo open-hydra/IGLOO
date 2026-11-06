@@ -32,6 +32,17 @@ $$
 p_\mathrm{sat}(T_p) = p_\mathrm{atm}\,\exp\!\left(-\frac{L_v M_v}{R_u}\left(\frac{1}{T_p} - \frac{1}{T_\mathrm{boil}}\right)\right) \quad \text{[Clausius-Clapeyron]}
 $$
 
+with $T_\mathrm{boil}$ the boiling point at one atmosphere.  A material whose `boiling-temperature`
+$T_b$ is given at another pressure $p_B$ (`[IGLOO-Properties] boiling-pressure`, one atmosphere
+by default) takes the same line through $(T_b, p_B)$, its anchor moved once at setup:
+
+$$
+\frac{1}{T_\mathrm{boil}} = \frac{1}{T_b} + \frac{R_u}{L_v M_v}\,\ln\frac{p_B}{p_\mathrm{atm}},
+$$
+
+so that $p_\mathrm{sat}(T_b) = p_B$; a pair whose line has no boiling point at one atmosphere
+($1/T_\mathrm{boil} \le 0$) is refused.
+
 unless the material's `INPUT/properties.dat` carries a `Psat` column
 ([property tables](../user/input.md#property-tables-inputpropertiesdat)): then
 $p_\mathrm{sat}(T_p)$ is that column, linear in $T_p$ between its integer-kelvin nodes and
@@ -287,7 +298,10 @@ The accommodation coefficient $\alpha_e$ is the material-line token `alpha-e=`
 consumes $X_s$, `interface = LK` has **no effect** on it — that combination is
 refused at setup.  Verified by the `tests/evaporation/interface-neq/` unit
 family (chain oracle, VLE limit, exact $1/(p\,d)$ scaling invariant, convergence
-envelope) and the `tests/evaporation/lk-neq/` e2e box case.
+envelope) and the `tests/evaporation/lk-neq/` e2e box case; the magnitude of the
+depression against MHB98's own small-drop figure (Fig. 7(a): decane at $D_0$ = 10, 50,
+500 and 2000 µm, the depression from 22–42 % of $X_s^\mathrm{neq}$ at 10 µm to 0.1–0.2 % at
+2000 µm) by `test_mhb98_decane` (DC4).
 
 ---
 
@@ -557,4 +571,7 @@ closed form end to end, with the `T<sub>s` column), with a `Conductivity` column
 against the surface balance with $\mu_l(T_s)$ on every row); the boiling branch in
 `tests/evaporation/boiling-zgr` and end to end in `boiling-zgr-flash` (the adiabatic flash),
 `boiling-zgr-hot` (the heat-fed boiling) and `boiling-zgr-switch` (the switch to CEM at $T_B$ and
-the burnout).  Function-level comparisons for all models: [../vv/literature.md](../vv/literature.md).
+the burnout).  The Langmuir-Knudsen depression against MHB98 Fig. 7(a) in `test_mhb98_decane`
+(DC4: production's rate along each drop's life, the depression recovered from it, within 6 % of the
+digitized curves); the boiling point given at another pressure in `test_properties_reader`
+(`boiling-pressure`) and `refuse-boiling-pressure`.  Function-level comparisons for all models: [../vv/literature.md](../vv/literature.md).

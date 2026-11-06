@@ -191,16 +191,19 @@ Constant evaporation and breakup properties and the emissivity of the radiative 
 
 | Key | Description |
 |-----|-------------|
-| `psat` | Legacy, accepted and ignored — the saturation pressure is computed from Clausius-Clapeyron (`Lv`, `Mv`, `boiling-temperature`) or read from the `Psat` column of `properties.dat` |
+| `psat` | Legacy, accepted and ignored — the saturation pressure is computed from Clausius-Clapeyron (`Lv`, `Mv`, `boiling-temperature`, `boiling-pressure`) or read from the `Psat` column of `properties.dat` |
 | `Mv` | Vapor molar mass [kg/kmol], or the `Mv` column of `properties.dat`; 0 for a material that has the column |
 | `Lv` | Latent heat of vaporization [J/kg], or the `Lv` column of `properties.dat`; 0 for a material that has the column |
-| `boiling-temperature` (alias `Tboil`) | Boiling temperature [K]; give one name or the other, not both |
+| `boiling-temperature` (alias `Tboil`) | Boiling temperature [K] at `boiling-pressure`; give one name or the other, not both |
+| `boiling-pressure` | Pressure [Pa] at which `boiling-temperature` is given; default 101325 (one atmosphere). The Clausius-Clapeyron line passes through (`boiling-temperature`, `boiling-pressure`), and a `Psat` column must give `boiling-pressure` there within a factor 2; refused unless positive and finite |
 | `cpv` | Vapor specific heat [J/(kg·K)], or the `Cpv` column of `properties.dat`; 0 for a material that has the column |
 | `Le` | Lewis number |
 | `Yinf` | Far-field vapor mass fraction |
 | `sigma` | Surface tension [N/m] of a breaking material, or the `Sigma` column of `properties.dat`; 0 for a material that has the column |
 | `mu` | Liquid dynamic viscosity [Pa·s] of a breaking material, or the `Viscosity` column of `properties.dat`; 0 for a material that has the column |
 | `emissivity` | Surface emissivity of the grey-body exchange with the gas temperature, $\varepsilon\,\sigma\,\pi d^2 (T_g^4 - T_p^4)$ (see [Radiation](../theory/heat.md#radiation)); default 0 = off; refused below 0, cut to 1.0 with a warning above 1; or the `Emissivity` column of `properties.dat`, ε at the particle temperature; 0 for a material that has the column |
+
+An evaporating material whose `boiling-pressure` is not one atmosphere moves its Clausius-Clapeyron anchor once at setup, to the boiling point at one atmosphere on the same line ([Shared pre-computation](../theory/evaporation.md#shared-pre-computation)), and prints `boiling-temperature ... K at boiling-pressure ... Pa: Clausius-Clapeyron through ... K at one atmosphere`; it is refused when `Lv` or `Mv` is not positive, or when the line has no boiling point at one atmosphere.
 
 IGLOO reads the emissivity from `[IGLOO-Properties]` or from the `Emissivity` column of its property table, never from `[ICE-Physics]`. ICE models the same exchange through `[ICE-Physics] emissivity`: a hydra case that runs both condensed solvers sets the two keys together, with the same value for a material both phases carry; ICE's key alone leaves IGLOO's exchange off.
 
@@ -320,9 +323,9 @@ start at any temperature (see [Governing equations](../theory/governing-equation
 
 **`Psat`.** An evaporating material takes its saturation pressure from the column, linear between
 the nodes and at its end values outside the table; a column of zeros keeps Clausius-Clapeyron
-(`Lv`, `Mv`, `boiling-temperature` of `[IGLOO-Properties]`), and a material that does not evaporate
+(`Lv`, `Mv`, `boiling-temperature`, `boiling-pressure` of `[IGLOO-Properties]`), and a material that does not evaporate
 ignores it. With the column, `Lv` is the latent-heat sink only. Setup prints
-`p_sat tabulated from properties.dat (Tmin..Tmax K), psat(boiling-temperature)/Patm = ...` per
+`p_sat tabulated from properties.dat (Tmin..Tmax K), psat(boiling-temperature)/boiling-pressure = ...` per
 material that uses it. ATLAS GPB writes the column from a liquid/vapour pair of its thermo database
 (`[GPB-Phase*] psat-vapour`), zeros for a material without a pair.
 
@@ -376,7 +379,7 @@ cp (a constant cp: `h = cp·T + hOff` on every row; a varying cp: the trapezoid 
 for a value that is not finite, a negative pressure, a pressure that decreases with T (equal
 neighbours, such as low-T values rounded to 0, are accepted), a constant pressure,
 `boiling-temperature` outside `[Tmin, Tmax−1]`, or `psat(boiling-temperature)` more than a factor 2
-away from one atmosphere (a unit slip or a wrong liquid/vapour pair; a database curve sits within
+away from `boiling-pressure` (a unit slip or a wrong liquid/vapour pair; a database curve sits within
 a few percent). The `Lv`, `Mv`, `Cpv` columns of an evaporating material are refused for a value
 that is not finite, a column zero on some rows and not on others, a negative value, an `Mv` that
 differs between rows, any of them without a valid `Psat` column, or an `Lv` whose Clausius-Clapeyron

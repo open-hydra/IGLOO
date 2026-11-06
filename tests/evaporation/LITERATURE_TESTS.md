@@ -132,7 +132,7 @@ limit checks: `B→0 ⇒ F(B)→1 ⇒ Sh*→Sh0, Nu*→Nu0`; `Re→0 ⇒ Sh0,Nu0
   `φ–B_T–F_T–Nu*` fixed-point converges; `Sh0=2+0.552 Re^0.5 Sc^⅓`.
 - **Cross-model limit:** Re=0 ⇒ Sh0=Nu0=2, and with B_M small `F→1` ⇒ ASM → stagnant
   film `mdot=−2π d ρ_g D_v ln(1+B_M)` = CEM(Re=0) = d²-law: a consistency check
-  spanning d²-law, CEM and ASM (EV6 pins ASM = CEM at Re=0 in the boiling clamp); CEM-B
+  spanning d²-law, CEM and ASM (EV6 and EV6b pin ASM = CEM at Re=0 within 9 ε, in the boiling clamp and below it); CEM-B
   sits the factor (T_f/T_g)^0.7 below CEM (EV5).
 
 **(d) ⚠ CODE-VS-PAPER (term by term).**
@@ -191,8 +191,8 @@ end).
 
 1. **Cross-model quiescent consistency (Re=0)**, unit, no integration, no mesh:
    `test_evap_probes` XE1 (d²-law against the literature rate), `test_evaporation` EV1
-   (CEM against the Spalding chain), EV3 (CEM-B's film chain), EV6 (ASM equals CEM bit for
-   bit at Re=0, in the boiling clamp). Deterministic; the oracle is the literature or the
+   (CEM against the Spalding chain), EV3 (CEM-B's film chain), EV6 and EV6b (ASM equals CEM at
+   Re=0 within 9 ε, the rounding of the two sequences, in the boiling clamp and below it). Deterministic; the oracle is the literature or the
    code's own consistency, so no citation dispute.
 2. **Analytic d²(t) linear decay, constant B_T** — [d2law-line](d2law-line/INFO.md): the
    slope `K=8(k_g/(ρ_l c_pg))ln(1+B_T)` from the case inputs alone, t=x/u_g. THE canonical
