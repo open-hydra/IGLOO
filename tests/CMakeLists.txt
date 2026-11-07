@@ -276,9 +276,13 @@ set_tests_properties(test_tec_read PROPERTIES
     LABELS "unit;infrastructure;io"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tec_read"
     TIMEOUT 900)
-# The grid files' stream writer against ORION's ASCII writer in the same executable (infrastructure/tec_write): the
-# orion_data write_outfield makes, byte for byte, at three chunk sizes, each write over a longer file.
+# The grid files' stream writer against ORION's ASCII writer in the same executable (infrastructure/tec_write): three
+# orion_data fixtures, byte for byte, at three chunk sizes, each write over a longer file; then write_outfield itself
+# and the copies it gives ORION's writer, against ORION's writer on a test-local copy of the fields. The stream writer
+# is required (a file write_outfield leaves to ORION's writer prints the FAIL line) and so is the PASS line (a STOP of
+# ORION's writer exits 0 under gfortran).
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tec_write)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tec_write/OUTPUT)
 add_executable(test_tec_write infrastructure/tec_write/test_tec_write.f90)
 target_link_libraries(test_tec_write PRIVATE verif_support)
 set_target_properties(test_tec_write PROPERTIES LINKER_LANGUAGE Fortran)
@@ -291,6 +295,9 @@ add_test(NAME test_tec_write COMMAND test_tec_write)
 set_tests_properties(test_tec_write PROPERTIES
     LABELS "unit;infrastructure;io"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tec_write"
+    ENVIRONMENT "IGLOO_TEC_FAST=1"
+    PASS_REGULAR_EXPRESSION "\\[PASS\\] the stream writer writes ORION's bytes"
+    FAIL_REGULAR_EXPRESSION "written by ORION's writer"
     TIMEOUT 900)
 # The particle files' edit descriptors without the runtime (IGLOO_fmt): every record layout the trajectories, outloc,
 # planes, snapshot and scatter files write and the zone headers' I0, each on its descriptors' constructed values (fixed)
