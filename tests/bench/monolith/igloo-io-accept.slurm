@@ -8,8 +8,9 @@
 #SBATCH --time=04:00:00
 #
 # The box's gas read and grid write at the 1x1 anchor (with check_finite.py) and at 1x80, 4x20, 40x2 and the A/A
-# twin at 4x20 (IGLOO_ACCEPT_POINTS: <R>x<T>, -aa the twin, -shm OUTPUT/ on /dev/shm), IGLOO_REPS repetitions
-# (default 3), with the file system's floors measured right before every repetition (one IFLOOR line):
+# twin at 4x20 (IGLOO_ACCEPT_POINTS: <R>x<T>, -aa the twin, -shm OUTPUT/ on /dev/shm, a trailing -base the second
+# binary below, e.g. 4x20-shm-base beside 4x20-shm), IGLOO_REPS repetitions (default 3), with the file system's
+# floors measured right before every repetition (one IFLOOR line):
 #   F  a buffer of the box's grid output size (3.19 GB) written in 64 MiB blocks into the repetition's case
 #      directory, timed to the end of close, then deleted (io-probe swrite)
 #   T  the same into /dev/shm
@@ -31,6 +32,7 @@ source "$IGLOO_PERF_ROOT/scripts/_igloo_common.sh"
 igloo_setup || exit 1
 echo "HARNESS $(basename "$0") md5=$(md5sum < "$0" | cut -d' ' -f1) _igloo_common.sh" \
      "md5=$(md5sum < "$ROOT/scripts/_igloo_common.sh" | cut -d' ' -f1)"
+echo "UPTIME $(uptime)"
 POINTS=${IGLOO_ACCEPT_POINTS:-1x1 1x80 4x20 40x2 4x20-aa}
 REPS=${IGLOO_REPS:-3}
 read -r CWL CR <<< "${IGLOO_ACCEPT_COMPARE:-box-4fam 4}"
@@ -155,15 +157,23 @@ accept_md5 () {
 
 NC=$(lscpu -p=CORE,SOCKET | grep -v '^#' | sort -u | wc -l)
 for pt in $POINTS; do
-  [[ $pt =~ ^[0-9]+x[0-9]+(-aa|-shm)?$ ]] || { echo "IFAIL point=$pt reason=not-RxT[-aa|-shm]"; continue; }
+  [[ $pt =~ ^[0-9]+x[0-9]+(-aa|-shm)?(-base)?$ ]] || { echo "IFAIL point=$pt reason=not-RxT[-aa|-shm][-base]"; continue; }
+  # a -base point runs the second binary (the twin of -aa is the job's binary: no -aa-base)
+  PB=$BIN; [[ $pt == *-aa ]] && PB=$BIN_AA
+  if [[ $pt == *-base ]]; then
+    [[ $pt == *-aa-base ]] && { echo "IFAIL point=$pt reason=aa-base"; continue; }
+    [ -n "$BASE" ] || { echo "IFAIL point=$pt reason=no-second-binary"; continue; }
+    PB=$BASE
+  fi
   RT=${pt%%-*}; R=${RT%x*}; T=${RT#*x}
   mc=NONE; [ $((R * T)) -lt "$NC" ] && mc=$(igloo_spread $((R * T)))
   chk=none; [ "$pt" = 1x1 ] && chk=finite
   echo "=== box-4fam-$pt ==="
-  case $pt in
+  echo "IBIN point=$pt md5=$(md5sum < "$PB" | cut -d' ' -f1) binary=$PB"
+  case ${pt%-base} in
     *-aa) IGLOO_PRE_REP=accept_floors IGLOO_AA=1 igloo_run "box-4fam-$pt" box-4fam "$R" "$T" "$R" "$mc" "$REPS" "$chk" ;;
-    *-shm) IGLOO_PRE_REP=accept_floors IGLOO_OUTPUT=shm igloo_run "box-4fam-$pt" box-4fam "$R" "$T" "$R" "$mc" "$REPS" "$chk" ;;
-    *) IGLOO_PRE_REP=accept_floors igloo_run "box-4fam-$pt" box-4fam "$R" "$T" "$R" "$mc" "$REPS" "$chk" ;;
+    *-shm) IGLOO_PRE_REP=accept_floors IGLOO_OUTPUT=shm BIN=$PB igloo_run "box-4fam-$pt" box-4fam "$R" "$T" "$R" "$mc" "$REPS" "$chk" ;;
+    *) IGLOO_PRE_REP=accept_floors BIN=$PB igloo_run "box-4fam-$pt" box-4fam "$R" "$T" "$R" "$mc" "$REPS" "$chk" ;;
   esac
 done
 rmdir "$TDIR" 2>/dev/null

@@ -71,7 +71,7 @@ point of the box is left out. `IGLOO_BOX_CELLS="NX NY NZ"` sizes the box otherwi
 | `IGLOO_IO_STEPS` | `igloo-io.slurm` | the steps it runs, blank-, comma- or colon-separated (default all: `facts write read threads stream bcast buffered`) |
 | `IGLOO_IO_PROBE_DIR` | `igloo-io.slurm`, `igloo-io-accept.slurm` | where the probe's executables are (default `$IGLOO_PERF_ROOT/bin`, `build-cfg.sh probe` installs them there) |
 | `IGLOO_IO_KHRT_REPS` | `igloo-io.slurm` | repetitions of the khrt-stress points of the write step (default 5) |
-| `IGLOO_ACCEPT_POINTS` | `igloo-io-accept.slurm` | its points, `<R>x<T>`, `<R>x<T>-aa` (the twin) or `<R>x<T>-shm` (`OUTPUT/` on `/dev/shm`); default `1x1 1x80 4x20 40x2 4x20-aa` |
+| `IGLOO_ACCEPT_POINTS` | `igloo-io-accept.slurm` | its points, `<R>x<T>`, `<R>x<T>-aa` (the twin) or `<R>x<T>-shm` (`OUTPUT/` on `/dev/shm`), each but `-aa` also with a trailing `-base`: the comparison's second binary (`IGLOO_ACCEPT_BASE`; not with `IGLOO_ACCEPT_COMPARE=none`) on the same node, e.g. `4x20-shm-base 4x20-shm`; one `IBIN` line per point names the binary's md5; default `1x1 1x80 4x20 40x2 4x20-aa` |
 | `IGLOO_ACCEPT_COMPARE` | `igloo-io-accept.slurm` | `"<workload> <ranks>"` of the output comparison at one thread per rank (default `box-4fam 4`; `none` skips it) |
 | `IGLOO_ACCEPT_BASE` | `igloo-io-accept.slurm` | the comparison's second binary (default `$IGLOO_PERF_ROOT/bin-base/IGLOO-hyb`, beside its `.commit` file) |
 
