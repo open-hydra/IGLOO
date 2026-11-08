@@ -217,11 +217,15 @@ contains
   end subroutine tec_grid_zone
 
   !> Field f (i fastest, at most the nmax values tec_grid_open was given) after its zone line, one FR_P value per
-  !  line; nothing after an I/O error.
+  !  line; nothing after an I/O error. A chunk larger than the record buffer is an error, never an overrun.
   subroutine tec_grid_field(g, f)
     type(tec_grid_t), intent(inout) :: g
     real(R8), intent(in) :: f(:,:,:)
     if (g%ios /= 0) return
+    if (min(g%chunk, size(f, kind=I8)) > size(g%rec, kind=I8)) then
+      g%ios = 3
+      return
+    endif
     call write_field(g%u, f, g%chunk, g%rec, g%ios)
   end subroutine tec_grid_field
 
