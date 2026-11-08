@@ -349,7 +349,7 @@ Three things separate the efficiency in seconds from the efficiency in cycles:
 - **The serial parts.** On the box, rank 0 reads the gas file (`setup:gas-read`, 177.9 s at 4 × 20) and
   writes the source and Eulerian grid fields (`writeout+merge`, 105.5 s) at every split: 283 s of the
   331 s at 4 × 20, while the parcel loop takes 1973 s on one core and 38.5 s at 4 × 20 (IGLOO's reader
-  and writer: 2.84 and 8.18 s at 4 × 20, [below](#the-gas-read-and-the-grid-write)). The rest of the sweep
+  and writer: 2.84 and 6.95 s at 4 × 20, [below](#the-gas-read-and-the-grid-write)). The rest of the sweep
   outside the loop is a few seconds (at 4 × 20: smoothing 2.2 s, finalize 1.3 s, reduction 0.8 s).
 - **Waiting.** On `vie-plait-dense` the 250 parcels run out: from 16 threads the last parcels keep a few
   threads busy while the others wait (thread busy max/mean 1.100 at 1 × 16, 1.084 at 1 × 32), and the
@@ -407,31 +407,29 @@ standard deviation of the lifetime is 0.2–0.7 % at 1 × 1 and on the box's 4 �
 ### The gas read and the grid write
 
 The box with IGLOO's reader and writer: rank 0 converts the gas file's values on its OpenMP threads; for the
-grid output it copies the mesh and the fields into ORION's data structure on one thread, formats them on its
-OpenMP threads and writes them in large blocks, and with several ranks the phase ends with the merge of the
-ranks' particle files (here the exit records) into one file. Two jobs on the same node type, three
-repetitions per point; before each repetition the job drops the gas file from the node's page cache, so
-every run reads it from the file server. Medians, the range of the grid write over the repetitions in
-brackets, beside the curves above (ORION's reader and writer, medians), in seconds:
+grid output it formats the mesh and the fields from the solver's own arrays on its OpenMP threads and writes
+them in large blocks, and with several ranks the phase ends with the merge of the ranks' particle files (here
+the exit records) into one file. One job on one node, three repetitions per point; before each repetition the
+job drops the gas file from the node's page cache, so every run reads it from the file server. Medians, the
+range of the grid write over the repetitions in brackets, beside the curves above (ORION's reader and writer,
+medians), in seconds:
 
 | split | `OUTPUT/` | particle-file merge | life (sweep) | `setup:gas-read` | `writeout+merge` | ORION's: life, `setup:gas-read`, `writeout+merge` |
 |---|---|---|---|---|---|---|
-| 1 × 1 | `/data_fast` | none | 2032.0 (2012.6) | 15.71 | 31.38 [31.29–31.65] | 2268.8, 177.3, 105.9 |
-| 1 × 80 | `/data_fast` | none | 59.5 (53.7) | 1.99 | 6.46 [6.27–6.47] | 333.0, 176.8, 105.8 |
-| 4 × 20 | `/data_fast` | 4 ranks | **59.3** (52.2) | 2.84 | 8.18 [7.66–8.44] | 331.4, 178.1, 106.0 |
-| 4 × 20, the twin | `/data_fast` | 4 ranks | 58.9 (51.7) | 2.84 | 7.55 [7.49–7.62] | 331.6, 178.1, 105.9 |
-| 40 × 2 | `/data_fast` | 40 ranks | 108.9 (89.7) | 13.05 | 20.64 [20.61–20.74] | 405.9, 210.5, 121.9 |
-| 4 × 20, second job | `/data_fast` | 4 ranks | 57.4 (50.4) | 2.81 | 7.22 [7.17–7.39] |  |
-| 4 × 20, second job | `/dev/shm` | 4 ranks | 54.7 (47.5) | 2.80 | 4.29 [4.29–4.30] |  |
+| 1 × 1 | `/data_fast` | none | 2025.2 (2005.0) | 16.60 | 31.53 [31.49–31.72] | 2268.8, 177.3, 105.9 |
+| 1 × 80 | `/data_fast` | none | 59.9 (53.7) | 2.11 | 5.75 [5.67–5.82] | 333.0, 176.8, 105.8 |
+| 4 × 20 | `/data_fast` | 4 ranks | **60.5** (53.2) | 2.84 | 6.95 [6.88–7.02] | 331.4, 178.1, 106.0 |
+| 4 × 20, the twin | `/data_fast` | 4 ranks | 58.7 (51.3) | 2.89 | 7.05 [6.84–7.12] | 331.6, 178.1, 105.9 |
+| 40 × 2 | `/data_fast` | 40 ranks | 114.5 (95.8) | 12.58 | 20.93 [20.62–21.05] | 405.9, 210.5, 121.9 |
+| 4 × 20 | `/dev/shm` | 4 ranks | 57.5 (50.1) | 2.84 | 3.82 [3.80–3.83] |  |
 
-With `OUTPUT/` on `/dev/shm` the phase holds the code's part alone (the copies, the formatting, the merge
-and a write into memory) and repeats within 0.01 s. On `/data_fast`, a file system other jobs share, the
-same phase at 4 × 20 ranges over 7.49–8.44 s in the first job's six runs (the point and its twin) and over
-7.17–7.39 s in the second job's three: the file system's part varies with its load, and the table gives it
-with its range. The twin, a second copy of the binary in the same job, has a median life 0.7 % shorter
-(sweep 0.9 %), its grid write 0.62 s shorter. At 4 × 20 the parcel loop takes 39.5 s of the 59.3 s. The
-box's six output files at 4 × 1 (one thread per rank and the cross-rank sum in rank order make them
-byte-reproducible) are identical to those of a build with ORION's reader and writer.
+With `OUTPUT/` on `/dev/shm` the phase holds the code's part alone (the formatting, the merge and a write
+into memory) and repeats within 0.04 s. On `/data_fast`, a file system other jobs share, the same phase at
+4 × 20 ranges over 6.84–7.12 s in the six runs of the point and its twin: the file system's part varies with
+its load, and the table gives it with its range. The twin, a second copy of the binary in the same job, has a
+median life 3.0 % shorter (sweep 3.5 %), its grid write 0.10 s longer. At 4 × 20 the parcel loop takes 39.4 s
+of the 60.5 s. The box's six output files at 4 × 1 (one thread per rank and the cross-rank sum in rank order
+make them byte-reproducible) are identical to those of a build with ORION's reader and writer.
 
 ## How this is verified
 
@@ -543,17 +541,17 @@ about half of it geometry.
   [the gas file](../user/input.md#the-gas-file-gas-file)), and broadcasts the field (`mpi_bcast_orion`: names, solution time, block dimensions, mesh and variables);
   every rank then builds the blocks, the geometry and the pinning itself, and the other ranks
   busy-wait while rank 0 reads. The box of [Measured performance](#measured-performance)
-  (3 M cells, ASCII) reads its gas in 15.71 s on one core, 1.99 s at 1 × 80, 2.84 s at 4 × 20 and
-  13.05 s at 40 × 2 (rank 0 on two cores), the broadcast to the other ranks included where there are
+  (3 M cells, ASCII) reads its gas in 16.60 s on one core, 2.11 s at 1 × 80, 2.84 s at 4 × 20 and
+  12.58 s at 40 × 2 (rank 0 on two cores), the broadcast to the other ranks included where there are
   several; with ORION's reader (`IGLOO_TEC_FAST=0`) in 177–178 s at up to four ranks and 210 s at
-  forty. Its parcel loop takes 39.5 s at 4 × 20.
-- **The grid output is written by rank 0 alone**, after the cross-rank sum: rank 0 copies the
-  mesh and the fields into ORION's data structure on one thread, then a stream writer formats
-  many values per internal WRITE on its OpenMP threads and writes large blocks
+  forty. Its parcel loop takes 39.4 s at 4 × 20.
+- **The grid output is written by rank 0 alone**, after the cross-rank sum: a stream writer
+  formats the mesh and the fields from the solver's arrays, many values per internal WRITE on
+  rank 0's OpenMP threads, and writes large blocks
   ([Field output](../user/using.md#field-output)); with several ranks the phase then merges the
   ranks' particle files (the box: its exit records) into one file. The box's source and Eulerian
-  fields take 31.38 s on one core and 6.46 s at 1 × 80 (one rank, no merge); at 4 × 20, the merge
-  included, 4.29 s with `OUTPUT/` on `/dev/shm` and 7.17–8.44 s on `/data_fast`, a file system
+  fields take 31.53 s on one core and 5.75 s at 1 × 80 (one rank, no merge); at 4 × 20, the merge
+  included, 3.82 s with `OUTPUT/` on `/dev/shm` and 6.84–7.12 s on `/data_fast`, a file system
   other jobs share. With ORION's writer
   (`IGLOO_TEC_FAST=0`) they take 105–106 s at up to four ranks, of a sweep of 149 s at 4 × 20;
   with ORION's reader too, the gas read and the grid write take 283 of the 331 s of its fastest
