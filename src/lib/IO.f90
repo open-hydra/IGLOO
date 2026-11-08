@@ -1048,6 +1048,7 @@ contains
       E_IO = 1
       if (tec_fast_enabled()) then
         E_IO = source_fast(geoblock, sourceblock, varnames, fname)
+        ! "written by ORION's writer" is test_tec_write's FAIL_REGULAR_EXPRESSION: keep the text
         if (E_IO /= 0) write(*,'(A)') ' [IGLOO] '//fname//' written by ORION''s writer: the stream writer failed'
       endif
       if (E_IO /= 0) then
@@ -1069,6 +1070,7 @@ contains
         E_IO = 1
         if (tec_fast_enabled()) then
           E_IO = euler_fast(geoblock, eulerblock(:,fam), varnames, fname)
+          ! "written by ORION's writer" is test_tec_write's FAIL_REGULAR_EXPRESSION: keep the text
           if (E_IO /= 0) write(*,'(A)') ' [IGLOO] '//fname//' written by ORION''s writer: the stream writer failed'
         endif
         if (E_IO /= 0) then

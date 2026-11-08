@@ -80,7 +80,10 @@ shifted one slot in `source_orion`: 1; the energy before the momentum in the dir
 23 decline lines, the test failed by its `FAIL_REGULAR_EXPRESSION`; `source_orion` without its format and solution
 time: 1 with TecIO (ORION's writer refuses the `.tec` name and writes nothing over the longer file), the test failed by
 its `PASS_REGULAR_EXPRESSION` without TecIO (ORION's writer stops, exit status 0; green without that expression). The
-copies kept in `write_outfield` write the same bytes: 0, by design; only a timing sees them.
+copies kept in `write_outfield` write the same bytes: 0, by design; only a timing sees them. The record buffer sized
+from the first block alone (the reason the smaller block comes first) overruns it on the second block: the program
+dies with a segmentation fault, at the first call under gfortran, after its compares under ifx (24 failed: the
+overrun lands in the second family's fields); no PASS line either way.
 
 ## The timed mode
 
