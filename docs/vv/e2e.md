@@ -993,7 +993,7 @@ Hsiang & Faeth's correlations beside the products, not gated.
 
 Several members of this category have **no figure** and so no section below:
 `bc-center-2grp` (multi-group `bc_center` pinning), `inner-loop-cap` (the inner loop's cap on a mesh stretch), `inj-edge` and `inj-edge-payload` (injection points on
-the edges of the inlet cells), `axis-200` and `wedge-fold` (the
+the edges of the inlet cells), `inj-pack-polar` (one injection lattice over an annular-sector inlet), `axis-200` and `wedge-fold` (the
 axis face and the sector fold on the MOSE nozzle field), `two-mat` (two materials),
 `two-fam-bc` (one inlet table per family in `bc.txt`), `two-fam-bc-2blk` (the same on two blocks joined by
 a 101 connection), `two-fam-bc-2blk-mollify` (the same with the field mollifier on), `chimera-2blk` (two overlapping blocks joined by chimera faces), `chimera-2blk-mollify` and `chimera-2blk-shift-mollify` (the same with the field mollifier on, the second with block 2 shifted by half a cell), `chimera-2blk-shift3` (block 2 shifted by 0.3 of a cell, unsmoothed, at both gas orders), the three `two-fam-bc-2blk-ord2-dual*` cases and `swirl-wedge-2blk-ord2-dual` (the gas-order-2 dual across a 101 face), `periodic-2d-ord2-dual` (the same across a periodic (201) face, on a box of two periods held to itself one period away), `varcp-tmin` (a varying-$c_p$ table that ends below the parcels' temperature) and the

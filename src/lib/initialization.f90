@@ -216,18 +216,19 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
   integer,             intent(out)   :: npart
   integer, parameter :: alloc=10000000
   integer  :: p, b, f, m, n, i, j, k, Nm, Nn
-  integer  :: mInj, nInj, head, m0, n0, mc, nc, m2, n2, ic, jc, kc, i2, j2, k2, kd
+  integer  :: mInj, nInj, head, m0, n0, mc, nc, m2, n2, i2, j2, k2, kd
   integer,      allocatable :: ind(:,:)
   real(R8),     allocatable :: Inj(:,:)
   logical,      allocatable :: singleCell(:,:)
   real(R8),     allocatable :: Rcell(:,:), Dsize(:,:)
+  real(R8),     allocatable :: Frm(:,:)   !> tangent frame each placed point is expanded with (3D)
   real(R8),     allocatable :: hexN(:,:,:,:,:), hexC(:,:,:,:,:), hexT(:,:)   !> 12-plane cache of the face's inlet cells
   logical,      allocatable :: hexD(:,:,:,:)
   logical  :: startSlot, injected, skip, retry, found, single, overflow
   real(R8) :: cA, cB, xInj, yInj, const, ratio, R, dsR, dcell, dir, orient
   real(R8) :: eps, toll, delta, array(3), pCand(3), start(3), vertices(3,8)
   real(R8) :: pt(3), Pc(3), dvec(3), tng(3), nrm(3), n2v(3), Rc
-  real(R8) :: glo(3), ghi(3), hmin
+  real(R8) :: glo(3), ghi(3), hmin, tf(3), tfn
   logical  :: packed
   integer  :: c
   type(pinGrid) :: grid
@@ -406,6 +407,7 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
     !  neighbour candidates at spacing R around the cell normal.
     write(*,*)' >> Using 3D injection algorithm'
     write(*,*) ''
+    allocate(Frm(3,alloc))
     !> The bucket grid over every injecting face cell, its edge the smallest spacing of a packed cell.
     glo = huge(1._R8); ghi = -huge(1._R8); hmin = huge(1._R8); packed = .false.
     do b = 1, nb; do f = 1, 6
@@ -466,13 +468,13 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
         if (.not.injViable(pCand,vertices,Dsize(m0,n0))) cycle
         call place(b,i,j,k,f,m0,n0, pCand)
         if (overflow) exit blockCycle3D
+        Frm(:,npart) = cellTangent(b,f,i,j,k,face%cell(m0,n0)%normal)
         do while (head < npart)
           head = head + 1
           pt = Inj(:,head)
           mc = ind(6,head); nc = ind(7,head)
-          call block(b)%fmn2ijk(f,mc,nc,ic,jc,kc)
           nrm = face%cell(mc,nc)%normal
-          tng = cellTangent(b,f,ic,jc,kc,nrm)
+          tng = Frm(:,head)
           Rc  = Rcell(mc,nc)
           do kd = 0, 5
             !> The negative angle fixes the kd <-> direction pairing (particle IDs and RNG streams).
@@ -489,6 +491,14 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
             call block(b)%fmn2ijk(f,m2,n2,i2,j2,k2)
             call place(b,i2,j2,k2,f,m2,n2, Pc)
             if (overflow) exit
+            !> the parent's frame projected onto the child's cell plane; its cell's own across a fold
+            tf  = tng - dot_product(tng,n2v)*n2v
+            tfn = norm2(tf)
+            if (tfn > toll) then
+              Frm(:,npart) = tf/tfn
+            else
+              Frm(:,npart) = cellTangent(b,f,i2,j2,k2,n2v)
+            endif
           enddo
           if (overflow) exit
         enddo

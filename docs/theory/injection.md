@@ -71,8 +71,13 @@ Used when `block(1)%Nz > 1`.  An advancing-front BFS over the injection face:
 
 1. **Pass 0**: cache per-cell `R`, `dcell` and containment planes; seed viable single cells.
 2. **Pass 1**: for each placed point, generate 6 hexagonal-neighbour candidates at
-   distance `R` by rotating the cell's local tangent about its outward normal using
-   Rodrigues' formula (steps of $\pi/3$).  Each candidate is projected onto the target
+   distance `R` by rotating the tangent frame the point carries about the normal of the
+   point's cell using Rodrigues' formula (steps of $\pi/3$): the seed's frame is its
+   cell's first $m$-edge in the cell's plane, a child's is its parent's frame projected
+   onto the child cell's plane (the child cell's own first $m$-edge where that projection
+   vanishes, a fold of 90° between two inlet cells). On a planar face the frame is the
+   same at every point, so the placed points form one hexagonal lattice over the whole
+   face, whatever the cells' edges do.  Each candidate is projected onto the target
    face plane and tested by the target cell's 12-plane containment test, its planes
    computed once per face (`precomputeHex12`, `isInsideHex12Fast`).  A candidate within
    $R/2$ of any point the call has placed is refused; the placed points are found through
