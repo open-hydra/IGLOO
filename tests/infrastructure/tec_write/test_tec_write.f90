@@ -1,6 +1,8 @@
 !> The grid files' stream writer (IGLOO_Mod_TecASCII's tec_write_ascii_fast) against ORION's ASCII writer in the same
-!  executable: the orion_data write_outfield makes, written by both and compared byte for byte at every chunk size and
-!  thread count, a longer file at the same name before every write of the stream writer.
+!  executable: orion_data shaped as the grid files, written by both and compared byte for byte at every chunk size and
+!  thread count, a longer file at the same name before every write of the stream writer (part A); then write_outfield
+!  itself and the copies it gives ORION's writer, against ORION's writer on a test-local copy of the same fields
+!  (part B).
 !    test_tec_write                                the fixtures
 !    test_tec_write [--threads n,m,...] <file> ... each file read by the one-pass reader and written by ORION's writer
 !                                                  and by the stream writer at each thread count (default: the
@@ -10,7 +12,11 @@ program test_tec_write
   use, intrinsic :: iso_c_binding, only: c_int
   use Lib_ORION_data, only: orion_data
   use Lib_Tecplot, only: tec_write_structured_multiblock
-  use IGLOO_Mod_TecASCII, only: tec_write_ascii_fast, tec_read_ascii_fast
+  use IGLOO_Mod_TecASCII, only: tec_write_ascii_fast, tec_read_ascii_fast, tec_fast_enabled
+  use IGLOO_IO, only: write_outfield, source_orion, euler_orion
+  use IGLOO_variables, only: nb, nm, nfam, IGLOO_phase_prefix
+  use IGLOO_data_block, only: obj_block, obj_sourceblock, obj_eulerblock
+  use IGLOO_data_phases, only: obj_material
   !$ use omp_lib, only: omp_get_max_threads
   implicit none
 
@@ -67,6 +73,8 @@ program test_tec_write
   vn = source_names([character(len=16) :: 'Al2O3_particles', 'H2O_droplets', 'n-decane_drops', 'n-heptane_drops', &
                      'kerosene_jp10', 'aluminium_bulk'])
   call check('f3-source-nz1', o, vn)
+  ! part B: write_outfield on two blocks, six materials, two families; the copies ORION's writer is given
+  call outfield()
   call finish()
 
 contains
@@ -119,8 +127,8 @@ contains
     v = trim(v)//trim('"rho<sub>p" "u<sub>p" "v<sub>p" "w<sub>p" "T<sub>p" "n<sub>p"')
   end function euler_names
 
-  !> An orion_data as write_outfield makes it: blocks of nx x ny x nz cells, the mesh over the nodes from index 0, nvar
-  !  cell-centred variables, the solution time; every value from val.
+  !> An orion_data as the copies for ORION's writer make it: blocks of nx x ny x nz cells, the mesh over the nodes from
+  !  index 0, nvar cell-centred variables, the solution time; every value from val.
   subroutine make(o, nx, ny, nz, nvar, time)
     type(orion_data), intent(out) :: o
     integer, intent(in) :: nx(:), ny(:), nz(:), nvar
@@ -283,7 +291,7 @@ contains
     call set_threads(1)
   end subroutine check
 
-  !> What write_outfield never makes is declined: nothing opened, the file at the name left as it was.
+  !> What the grid files never hold is declined: nothing opened, the file at the name left as it was.
   subroutine declines(o, vn)
     type(orion_data), intent(in) :: o
     character(len=*), intent(in) :: vn
@@ -314,6 +322,165 @@ contains
     got = slurp('decline.tec')
     if (len(got) /= 1000 .or. got(1:1) /= 'J') call fail(tag//': the file at the name was touched')
   end subroutine decline_case
+
+  ! ---------------------------------------------------------------- part B
+  !> write_outfield as writeout calls it, against ORION's writer on a copy of the fields made here (independent of
+  !  src/lib): two blocks, the smaller first, six materials, two families, every value from val, the tag of a later
+  !  sweep. C1: write_outfield at every thread count (20 times at 7) over longer files; C2: source_orion and
+  !  euler_orion (one orion_data reused, as write_outfield does) written by ORION's writer over longer files.
+  subroutine outfield()
+    character(len=*), parameter :: SFX = '-sweep3'
+    integer, parameter :: NXB(2) = [4, 9], NYB(2) = [6, 7], NZB(2) = [3, 5]
+    character(len=16), parameter :: MATS(6) = [character(len=16) :: 'Al2O3_particles', 'H2O_droplets', &
+                                    'n-decane_drops', 'n-heptane_drops', 'kerosene_jp10', 'aluminium_bulk']
+    type :: text_t
+      character(len=:), allocatable :: b
+    end type text_t
+    type(obj_material) :: mat(6)
+    type(obj_block) :: gb(2)
+    type(obj_sourceblock) :: sb(2)
+    type(obj_eulerblock) :: eb(2, 2)
+    type(orion_data) :: o, oc
+    type(text_t) :: ref(3)
+    character(len=LLEN) :: vs, ve
+    character(len=64) :: fout(3), forc(3), fc2(3)
+    character(len=:), allocatable :: got
+    integer :: b, i, j, k, d, m, f, kk, r, nr, rc
+    integer(I8) :: n
+    logical :: ex
+
+    nb = 2; nm = 6; nfam = 2
+    IGLOO_phase_prefix = 'part-'
+    do m = 1, nm
+      mat(m)%matName = MATS(m)
+    enddo
+    n = 0
+    do b = 1, nb
+      gb(b)%Nx = NXB(b); gb(b)%Ny = NYB(b); gb(b)%Nz = NZB(b)
+      allocate(gb(b)%node(1:3, 0:NXB(b), 0:NYB(b), 0:NZB(b)))
+      do k = 0, NZB(b); do j = 0, NYB(b); do i = 0, NXB(b); do d = 1, 3
+        n = n + 1; gb(b)%node(d, i, j, k) = val(n)
+      enddo; enddo; enddo; enddo
+      allocate(sb(b)%sourceMass(1:nm, 1:NXB(b), 1:NYB(b), 1:NZB(b)))
+      allocate(sb(b)%sourceMom(1:3, 1:NXB(b), 1:NYB(b), 1:NZB(b)))
+      allocate(sb(b)%sourceEn(1:NXB(b), 1:NYB(b), 1:NZB(b)))
+      do k = 1, NZB(b); do j = 1, NYB(b); do i = 1, NXB(b)
+        do m = 1, nm
+          n = n + 1; sb(b)%sourceMass(m, i, j, k) = val(n)
+        enddo
+        do d = 1, 3
+          n = n + 1; sb(b)%sourceMom(d, i, j, k) = val(n)
+        enddo
+        n = n + 1; sb(b)%sourceEn(i, j, k) = val(n)
+      enddo; enddo; enddo
+      do f = 1, nfam
+        allocate(eb(b, f)%density(1:NXB(b), 1:NYB(b), 1:NZB(b)))
+        allocate(eb(b, f)%velocity(1:3, 1:NXB(b), 1:NYB(b), 1:NZB(b)))
+        allocate(eb(b, f)%temperature(1:NXB(b), 1:NYB(b), 1:NZB(b)))
+        allocate(eb(b, f)%np(1:NXB(b), 1:NYB(b), 1:NZB(b)))
+        do k = 1, NZB(b); do j = 1, NYB(b); do i = 1, NXB(b)
+          n = n + 1; eb(b, f)%density(i, j, k) = val(n)
+          do d = 1, 3
+            n = n + 1; eb(b, f)%velocity(d, i, j, k) = val(n)
+          enddo
+          n = n + 1; eb(b, f)%temperature(i, j, k) = val(n)
+          n = n + 1; eb(b, f)%np(i, j, k) = val(n)
+        enddo; enddo; enddo
+      enddo
+    enddo
+    vs = source_names(MATS)
+    ve = euler_names()
+    forc = [character(len=64) :: 'orion-outfield-source.tec', 'orion-outfield-euler1.tec', 'orion-outfield-euler2.tec']
+    fout = [character(len=64) :: 'OUTPUT/part-source'//SFX//'.tec', 'OUTPUT/part-euler1'//SFX//'.tec', &
+            'OUTPUT/part-euler2'//SFX//'.tec']
+    fc2 = [character(len=64) :: 'c2-source.tec', 'c2-euler1.tec', 'c2-euler2.tec']
+    ! the oracle: the materials' sources, the momentum, the energy; the density, velocity, temperature, number
+    do f = 1, 3
+      call remove(trim(forc(f)))
+    enddo
+    call copies(gb, o, nm + 4)
+    do b = 1, nb
+      o%block(b)%vars(1:nm, :, :, :) = sb(b)%sourceMass
+      o%block(b)%vars(nm+1:nm+3, :, :, :) = sb(b)%sourceMom
+      o%block(b)%vars(nm+4, :, :, :) = sb(b)%sourceEn
+    enddo
+    rc = tec_write_structured_multiblock(orion=o, varnames=vs, filename=trim(forc(1)))
+    do f = 1, nfam
+      call copies(gb, o, 6)
+      do b = 1, nb
+        o%block(b)%vars(1, :, :, :) = eb(b, f)%density
+        o%block(b)%vars(2:4, :, :, :) = eb(b, f)%velocity
+        o%block(b)%vars(5, :, :, :) = eb(b, f)%temperature
+        o%block(b)%vars(6, :, :, :) = eb(b, f)%np
+      enddo
+      rc = tec_write_structured_multiblock(orion=o, varnames=ve, filename=trim(forc(1+f)))
+    enddo
+    do f = 1, 3
+      inquire(file=trim(forc(f)), exist=ex)
+      if (.not. ex) then
+        call fail('the oracle '//trim(forc(f))//' was not written')
+        return
+      endif
+      ref(f)%b = slurp(trim(forc(f)))
+    enddo
+    if (.not. tec_fast_enabled()) then
+      call fail('part B needs the stream writer (IGLOO_TEC_FAST=0 in the environment)')
+      return
+    endif
+    do kk = 1, nthr
+      call set_threads(THREADS(kk))
+      nr = 1
+      if (THREADS(kk) == 7) nr = REPEATS
+      do r = 1, nr
+        do f = 1, 3
+          call junk(trim(fout(f)), len(ref(f)%b, kind=I8) + EXTRA)
+        enddo
+        call write_outfield(mat, gb, sb, eb, .true., .true., tag=SFX)
+        do f = 1, 3
+          ncmp = ncmp + 1
+          got = slurp(trim(fout(f)))
+          call same_bytes('write_outfield '//trim(fout(f))//' threads '//itoa(int(THREADS(kk), I8)), ref(f)%b, got)
+        enddo
+      enddo
+    enddo
+    call set_threads(1)
+    do f = 1, 3
+      call junk(trim(fc2(f)), len(ref(f)%b, kind=I8) + EXTRA)
+    enddo
+    call source_orion(gb, sb, oc)
+    rc = tec_write_structured_multiblock(orion=oc, varnames=vs, filename=trim(fc2(1)))
+    deallocate(oc%block)
+    do f = 1, nfam
+      call euler_orion(gb, eb(:, f), oc)
+      rc = tec_write_structured_multiblock(orion=oc, varnames=ve, filename=trim(fc2(1+f)))
+    enddo
+    do f = 1, 3
+      ncmp = ncmp + 1
+      got = slurp(trim(fc2(f)))
+      call same_bytes(trim(fc2(f)), ref(f)%b, got)
+    enddo
+  end subroutine outfield
+
+  !> o before its variables as the copies make it: ASCII, steady (-10), one zone per block named Block<b>, the nodes
+  !  copied, nvar cell-centred variables over the cells.
+  subroutine copies(gb, o, nvar)
+    type(obj_block), intent(in) :: gb(:)
+    type(orion_data), intent(out) :: o
+    integer, intent(in) :: nvar
+    integer :: b
+    o%tec%node = .false.
+    o%tec%bc = .false.
+    o%tec%format = 'ascii'
+    o%solutiontime = -10._R8
+    allocate(o%block(size(gb)))
+    do b = 1, size(gb)
+      o%block(b)%name = 'Block'//itoa(int(b, I8))
+      o%block(b)%Ni = gb(b)%Nx; o%block(b)%Nj = gb(b)%Ny; o%block(b)%Nk = gb(b)%Nz
+      allocate(o%block(b)%mesh(1:3, 0:gb(b)%Nx, 0:gb(b)%Ny, 0:gb(b)%Nz))
+      o%block(b)%mesh = gb(b)%node
+      allocate(o%block(b)%vars(1:nvar, 1:gb(b)%Nx, 1:gb(b)%Ny, 1:gb(b)%Nz))
+    enddo
+  end subroutine copies
 
   ! ---------------------------------------------------------------- the timed mode
   !> n,m,... into tlist.

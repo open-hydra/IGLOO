@@ -7,6 +7,8 @@ module IGLOO_IO
   public:: read_cdp_bc_file
   public:: read_cdp_properties
   public:: write_outfield
+  public:: source_orion
+  public:: euler_orion
   public:: write_wallfield
   public:: merge_rank_particle_files
 
@@ -1006,14 +1008,15 @@ contains
   end subroutine read_TECsolfile
 
 
-  !> Write the source (source.tec) and per-family eulerian (euler<fam>.tec) grid fields (the stream writer, ORION's
-  !  writer under IGLOO_TEC_FAST=0 or when the stream writer fails); `tag` is the sweep suffix appended to the file names.
+  !> Write the source (source.tec) and per-family eulerian (euler<fam>.tec) grid fields: the stream writer from the
+  !  blocks' arrays, ORION's writer from their copies under IGLOO_TEC_FAST=0 or when the stream writer fails; `tag` is
+  !  the sweep suffix appended to the file names.
   subroutine write_outfield(material,geoblock,sourceblock,eulerblock,srcSwitch,eulSwitch,tag)
     use IR_Precision
     use Lib_Tecplot
     use Lib_ORION_data
-    use IGLOO_Mod_TecASCII, only: tec_write_ascii_fast, tec_fast_enabled
-    use IGLOO_variables, only: llen, nb, nm, nfam, IGLOO_phase_prefix
+    use IGLOO_Mod_TecASCII, only: tec_fast_enabled
+    use IGLOO_variables, only: llen, nm, nfam, IGLOO_phase_prefix
     use IGLOO_data_block, only: obj_block, obj_sourceblock, obj_eulerblock
     use IGLOO_data_phases, only: obj_material
     implicit none
@@ -1024,38 +1027,15 @@ contains
     type(obj_eulerblock) , intent(in) :: eulerblock(:,:)
     character(len=*), intent(in), optional :: tag
     type(orion_data)    :: orion
-    integer(I4P)        :: E_IO, b, i, j, k, fam
+    integer(I4P)        :: E_IO, i, fam
     character(len=llen) :: file, varnames
     character(len=:), allocatable :: sfx, fname
 
     sfx = ''
     if (present(tag)) sfx = tag
 
-    orion%tec%node = .false.
-    orion%tec%bc   = .false.
-    orion%tec%format = 'ascii'
-    ! Update for time/iter rw (to use STRANDID=0)
-    orion%solutiontime = -10.d0
-
     if (srcSwitch) then
       file = 'source'
-      allocate(orion%block(1:nb))
-      do b = 1, nb
-        associate(oBlock => orion%block(b))
-        oBlock%name = 'Block'//trim(adjustl(str(.true.,b)))
-        oBlock%Ni = geoblock(b)%Nx
-        oBlock%Nj = geoblock(b)%Ny
-        oBlock%Nk = geoblock(b)%Nz
-        allocate(oBlock%mesh(1:3,0:geoblock(b)%Nx,0:geoblock(b)%Ny,0:geoblock(b)%Nz))
-        do k = 0, geoblock(b)%Nz;  do j = 0, geoblock(b)%Ny;  do i = 0, geoblock(b)%Nx
-          oBlock%mesh(1:3,i,j,k) = geoblock(b)%node(:,i,j,k)
-        enddo;  enddo;  enddo        
-        allocate(oBlock%vars(1:nm+4,1:geoblock(b)%Nx,1:geoblock(b)%Ny,1:geoblock(b)%Nz))
-        oBlock%vars(   1:nm  ,:,:,:) = sourceblock(b)%sourceMass(1:nm,:,:,:)
-        oBlock%vars(nm+1:nm+3,:,:,:) = sourceblock(b)%sourceMom(1:3,:,:,:)
-        oBlock%vars(   nm+4  ,:,:,:) = sourceblock(b)%sourceEn(:,:,:)  
-        end associate
-      enddo
       varnames = ''
       do i = 1, nm
         varnames = trim(varnames)//'"'//trim('wdot(')//trim(material(i)%matName)//')"'
@@ -1067,10 +1047,14 @@ contains
       fname = 'OUTPUT/'//trim(IGLOO_phase_prefix)//trim(file)//sfx//'.tec'
       E_IO = 1
       if (tec_fast_enabled()) then
-        E_IO = tec_write_ascii_fast(orion, varnames, fname)
+        E_IO = source_fast(geoblock, sourceblock, varnames, fname)
+        ! "written by ORION's writer" is test_tec_write's FAIL_REGULAR_EXPRESSION: keep the text
         if (E_IO /= 0) write(*,'(A)') ' [IGLOO] '//fname//' written by ORION''s writer: the stream writer failed'
       endif
-      if (E_IO /= 0) E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename=fname)
+      if (E_IO /= 0) then
+        call source_orion(geoblock, sourceblock, orion)
+        E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename=fname)
+      endif
     endif
 
     if (allocated(orion%block)) deallocate(orion%block)
@@ -1080,37 +1064,206 @@ contains
       write(*,*)
       do fam = 1, nfam
         file = 'euler'//trim(adjustl(str(.true.,fam)))
-        if (.not.allocated(orion%block)) allocate(orion%block(1:nb))
-        do b = 1, nb
-          associate(oBlock => orion%block(b))
-          oBlock%name = 'Block'//trim(adjustl(str(.true.,b)))
-          oBlock%Ni = geoblock(b)%Nx
-          oBlock%Nj = geoblock(b)%Ny
-          oBlock%Nk = geoblock(b)%Nz
-          if (.not.allocated(oBlock%mesh)) allocate(oBlock%mesh(1:3,0:geoblock(b)%Nx,0:geoblock(b)%Ny,0:geoblock(b)%Nz))
-          do k = 0, geoblock(b)%Nz;  do j = 0, geoblock(b)%Ny;  do i = 0, geoblock(b)%Nx
-            oBlock%mesh(1:3,i,j,k) = geoblock(b)%node(:,i,j,k)
-          enddo;  enddo;  enddo        
-          if (.not.allocated(oBlock%vars)) allocate(oBlock%vars(1:6,1:geoblock(b)%Nx,1:geoblock(b)%Ny,1:geoblock(b)%Nz))
-          oBlock%vars( 1 ,:,:,:) = eulerblock(b,fam)%density(:,:,:)
-          oBlock%vars(2:4,:,:,:) = eulerblock(b,fam)%velocity(1:3,:,:,:)
-          oBlock%vars( 5 ,:,:,:) = eulerblock(b,fam)%temperature(:,:,:)
-          oBlock%vars( 6 ,:,:,:) = eulerblock(b,fam)%np(:,:,:)
-          end associate
-        enddo
         varnames = ''
         varnames = trim(varnames)//trim('"rho<sub>p" "u<sub>p" "v<sub>p" "w<sub>p" "T<sub>p" "n<sub>p"')
         fname = 'OUTPUT/'//trim(IGLOO_phase_prefix)//trim(file)//sfx//'.tec'
         E_IO = 1
         if (tec_fast_enabled()) then
-          E_IO = tec_write_ascii_fast(orion, varnames, fname)
+          E_IO = euler_fast(geoblock, eulerblock(:,fam), varnames, fname)
+          ! "written by ORION's writer" is test_tec_write's FAIL_REGULAR_EXPRESSION: keep the text
           if (E_IO /= 0) write(*,'(A)') ' [IGLOO] '//fname//' written by ORION''s writer: the stream writer failed'
         endif
-        if (E_IO /= 0) E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename=fname)
+        if (E_IO /= 0) then
+          call euler_orion(geoblock, eulerblock(:,fam), orion)
+          E_IO = tec_write_structured_multiblock(orion=orion,varnames=varnames,filename=fname)
+        endif
       enddo
     endif
 
   end subroutine write_outfield
+
+
+  !> The orion_data ORION's writer writes as source.tec: ASCII, cell-centred, steady (STRANDID = 0), the mesh and the
+  !  source fields of every block copied.
+  subroutine source_orion(geoblock, sourceblock, orion)
+    use IR_Precision
+    use Lib_ORION_data
+    use IGLOO_variables, only: nb, nm
+    use IGLOO_data_block, only: obj_block, obj_sourceblock
+    implicit none
+    class(obj_block)     , intent(in)    :: geoblock(:)
+    type(obj_sourceblock), intent(in)    :: sourceblock(:)
+    type(orion_data)     , intent(inout) :: orion
+    integer(I4P) :: b, i, j, k
+
+    orion%tec%node = .false.
+    orion%tec%bc   = .false.
+    orion%tec%format = 'ascii'
+    ! Update for time/iter rw (to use STRANDID=0)
+    orion%solutiontime = -10.d0
+    allocate(orion%block(1:nb))
+    do b = 1, nb
+      associate(oBlock => orion%block(b))
+      oBlock%name = 'Block'//trim(adjustl(str(.true.,b)))
+      oBlock%Ni = geoblock(b)%Nx
+      oBlock%Nj = geoblock(b)%Ny
+      oBlock%Nk = geoblock(b)%Nz
+      allocate(oBlock%mesh(1:3,0:geoblock(b)%Nx,0:geoblock(b)%Ny,0:geoblock(b)%Nz))
+      do k = 0, geoblock(b)%Nz;  do j = 0, geoblock(b)%Ny;  do i = 0, geoblock(b)%Nx
+        oBlock%mesh(1:3,i,j,k) = geoblock(b)%node(:,i,j,k)
+      enddo;  enddo;  enddo
+      allocate(oBlock%vars(1:nm+4,1:geoblock(b)%Nx,1:geoblock(b)%Ny,1:geoblock(b)%Nz))
+      oBlock%vars(   1:nm  ,:,:,:) = sourceblock(b)%sourceMass(1:nm,:,:,:)
+      oBlock%vars(nm+1:nm+3,:,:,:) = sourceblock(b)%sourceMom(1:3,:,:,:)
+      oBlock%vars(   nm+4  ,:,:,:) = sourceblock(b)%sourceEn(:,:,:)
+      end associate
+    enddo
+
+  end subroutine source_orion
+
+
+  !> The orion_data ORION's writer writes as euler<fam>.tec for one family's blocks (eulerblock(:,fam)): as
+  !  source_orion, its arrays allocated on the first call and refilled on the next.
+  subroutine euler_orion(geoblock, eulerblock, orion)
+    use IR_Precision
+    use Lib_ORION_data
+    use IGLOO_variables, only: nb
+    use IGLOO_data_block, only: obj_block, obj_eulerblock
+    implicit none
+    class(obj_block)    , intent(in)    :: geoblock(:)
+    type(obj_eulerblock), intent(in)    :: eulerblock(:)
+    type(orion_data)    , intent(inout) :: orion
+    integer(I4P) :: b, i, j, k
+
+    orion%tec%node = .false.
+    orion%tec%bc   = .false.
+    orion%tec%format = 'ascii'
+    ! Update for time/iter rw (to use STRANDID=0)
+    orion%solutiontime = -10.d0
+    if (.not.allocated(orion%block)) allocate(orion%block(1:nb))
+    do b = 1, nb
+      associate(oBlock => orion%block(b))
+      oBlock%name = 'Block'//trim(adjustl(str(.true.,b)))
+      oBlock%Ni = geoblock(b)%Nx
+      oBlock%Nj = geoblock(b)%Ny
+      oBlock%Nk = geoblock(b)%Nz
+      if (.not.allocated(oBlock%mesh)) allocate(oBlock%mesh(1:3,0:geoblock(b)%Nx,0:geoblock(b)%Ny,0:geoblock(b)%Nz))
+      do k = 0, geoblock(b)%Nz;  do j = 0, geoblock(b)%Ny;  do i = 0, geoblock(b)%Nx
+        oBlock%mesh(1:3,i,j,k) = geoblock(b)%node(:,i,j,k)
+      enddo;  enddo;  enddo
+      if (.not.allocated(oBlock%vars)) allocate(oBlock%vars(1:6,1:geoblock(b)%Nx,1:geoblock(b)%Ny,1:geoblock(b)%Nz))
+      oBlock%vars( 1 ,:,:,:) = eulerblock(b)%density(:,:,:)
+      oBlock%vars(2:4,:,:,:) = eulerblock(b)%velocity(1:3,:,:,:)
+      oBlock%vars( 5 ,:,:,:) = eulerblock(b)%temperature(:,:,:)
+      oBlock%vars( 6 ,:,:,:) = eulerblock(b)%np(:,:,:)
+      end associate
+    enddo
+
+  end subroutine euler_orion
+
+
+  !> source.tec by the stream writer from the blocks' own arrays: 0 written, 1 a block not shaped as the solve leaves
+  !  it (the caller writes its copy with ORION's writer), 2 an I/O error.
+  integer function source_fast(geoblock, sourceblock, varnames, fname) result(stat)
+    use, intrinsic :: iso_fortran_env, only: I8 => int64
+    use IR_Precision, only: str
+    use IGLOO_Mod_TecASCII, only: tec_grid_t, tec_grid_open, tec_grid_zone, tec_grid_field, tec_grid_close
+    use IGLOO_variables, only: nb, nm
+    use IGLOO_data_block, only: obj_block, obj_sourceblock
+    implicit none
+    class(obj_block)     , intent(in) :: geoblock(:)
+    type(obj_sourceblock), intent(in) :: sourceblock(:)
+    character(len=*)     , intent(in) :: varnames, fname
+    type(tec_grid_t) :: g
+    integer(I8) :: nmax
+    integer :: b, d, m, nx, ny, nz
+
+    stat = 1
+    if (nb < 1 .or. size(geoblock) < nb .or. size(sourceblock) < nb) return
+    nmax = 1
+    do b = 1, nb
+      nx = geoblock(b)%Nx;  ny = geoblock(b)%Ny;  nz = geoblock(b)%Nz
+      if (min(nx, ny, nz) < 1) return
+      if (.not. (allocated(geoblock(b)%node) .and. allocated(sourceblock(b)%sourceMass) .and. &
+                 allocated(sourceblock(b)%sourceMom) .and. allocated(sourceblock(b)%sourceEn))) return
+      if (any(lbound(geoblock(b)%node) /= [1, 0, 0, 0]) .or. any(ubound(geoblock(b)%node) /= [3, nx, ny, nz])) return
+      if (any(lbound(sourceblock(b)%sourceMass) /= 1) .or. &
+          any(ubound(sourceblock(b)%sourceMass) /= [nm, nx, ny, nz])) return
+      if (any(lbound(sourceblock(b)%sourceMom) /= 1) .or. &
+          any(ubound(sourceblock(b)%sourceMom) /= [3, nx, ny, nz])) return
+      if (any(lbound(sourceblock(b)%sourceEn) /= 1) .or. any(ubound(sourceblock(b)%sourceEn) /= [nx, ny, nz])) return
+      nmax = max(nmax, int(nx + 1, I8)*int(ny + 1, I8)*int(nz + 1, I8))
+    enddo
+    stat = tec_grid_open(g, fname, varnames, nm + 4, -10._R8, nmax)
+    if (stat /= 0) return
+    do b = 1, nb
+      nx = geoblock(b)%Nx;  ny = geoblock(b)%Ny;  nz = geoblock(b)%Nz
+      call tec_grid_zone(g, 'Block'//trim(adjustl(str(.true.,b))), nx + 1, ny + 1, nz + 1)
+      do d = 1, 3
+        call tec_grid_field(g, geoblock(b)%node(d, 0:nx, 0:ny, 0:nz))
+      enddo
+      do m = 1, nm
+        call tec_grid_field(g, sourceblock(b)%sourceMass(m, 1:nx, 1:ny, 1:nz))
+      enddo
+      do d = 1, 3
+        call tec_grid_field(g, sourceblock(b)%sourceMom(d, 1:nx, 1:ny, 1:nz))
+      enddo
+      call tec_grid_field(g, sourceblock(b)%sourceEn(1:nx, 1:ny, 1:nz))
+    enddo
+    stat = tec_grid_close(g)
+  end function source_fast
+
+
+  !> euler<fam>.tec of one family's blocks (eulerblock(:,fam)) by the stream writer from their own arrays: as
+  !  source_fast.
+  integer function euler_fast(geoblock, eulerblock, varnames, fname) result(stat)
+    use, intrinsic :: iso_fortran_env, only: I8 => int64
+    use IR_Precision, only: str
+    use IGLOO_Mod_TecASCII, only: tec_grid_t, tec_grid_open, tec_grid_zone, tec_grid_field, tec_grid_close
+    use IGLOO_variables, only: nb
+    use IGLOO_data_block, only: obj_block, obj_eulerblock
+    implicit none
+    class(obj_block)    , intent(in) :: geoblock(:)
+    type(obj_eulerblock), intent(in) :: eulerblock(:)
+    character(len=*)    , intent(in) :: varnames, fname
+    type(tec_grid_t) :: g
+    integer(I8) :: nmax
+    integer :: b, d, nx, ny, nz
+
+    stat = 1
+    if (nb < 1 .or. size(geoblock) < nb .or. size(eulerblock) < nb) return
+    nmax = 1
+    do b = 1, nb
+      nx = geoblock(b)%Nx;  ny = geoblock(b)%Ny;  nz = geoblock(b)%Nz
+      if (min(nx, ny, nz) < 1) return
+      if (.not. (allocated(geoblock(b)%node) .and. allocated(eulerblock(b)%density) .and. &
+                 allocated(eulerblock(b)%velocity) .and. allocated(eulerblock(b)%temperature) .and. &
+                 allocated(eulerblock(b)%np))) return
+      if (any(lbound(geoblock(b)%node) /= [1, 0, 0, 0]) .or. any(ubound(geoblock(b)%node) /= [3, nx, ny, nz])) return
+      if (any(lbound(eulerblock(b)%velocity) /= 1) .or. any(ubound(eulerblock(b)%velocity) /= [3, nx, ny, nz])) return
+      if (any(lbound(eulerblock(b)%density) /= 1) .or. any(ubound(eulerblock(b)%density) /= [nx, ny, nz])) return
+      if (any(lbound(eulerblock(b)%temperature) /= 1) .or. &
+          any(ubound(eulerblock(b)%temperature) /= [nx, ny, nz])) return
+      if (any(lbound(eulerblock(b)%np) /= 1) .or. any(ubound(eulerblock(b)%np) /= [nx, ny, nz])) return
+      nmax = max(nmax, int(nx + 1, I8)*int(ny + 1, I8)*int(nz + 1, I8))
+    enddo
+    stat = tec_grid_open(g, fname, varnames, 6, -10._R8, nmax)
+    if (stat /= 0) return
+    do b = 1, nb
+      nx = geoblock(b)%Nx;  ny = geoblock(b)%Ny;  nz = geoblock(b)%Nz
+      call tec_grid_zone(g, 'Block'//trim(adjustl(str(.true.,b))), nx + 1, ny + 1, nz + 1)
+      do d = 1, 3
+        call tec_grid_field(g, geoblock(b)%node(d, 0:nx, 0:ny, 0:nz))
+      enddo
+      call tec_grid_field(g, eulerblock(b)%density(1:nx, 1:ny, 1:nz))
+      do d = 1, 3
+        call tec_grid_field(g, eulerblock(b)%velocity(d, 1:nx, 1:ny, 1:nz))
+      enddo
+      call tec_grid_field(g, eulerblock(b)%temperature(1:nx, 1:ny, 1:nz))
+      call tec_grid_field(g, eulerblock(b)%np(1:nx, 1:ny, 1:nz))
+    enddo
+    stat = tec_grid_close(g)
+  end function euler_fast
 
 
   !> Write OUTPUT/<prefix>wall<tag>.tec in MOSE's wall-file layout: one zone per block face holding a wall cell

@@ -60,8 +60,9 @@ to overlook when counting coverage:
   `registry-docs` (the tracked parameter registry page equals DocGen's output),
   `test_tec_read` (the one-pass gas-file reader returns ORION's reader's values, bit for bit, on every tracked
   `.tec` input and on twenty synthetic files, at four buffer sizes and four thread counts),
-  `test_tec_write` (the grid files' stream writer writes ORION's writer's bytes on the fields `write_outfield`
-  makes, at three chunk sizes and four thread counts, over a longer file),
+  `test_tec_write` (the grid files' stream writer writes ORION's writer's bytes at three chunk sizes and four thread
+  counts, over a longer file; `write_outfield` against ORION's ASCII writer on a copy of the same fields, at four
+  thread counts, and its copies for ORION's writer, 72 compares),
   `test_host_assoc` (a test program's internal procedures address its arrays, not a static copy),
   the one hundred and seven `refusals/*` cases (inputs the solver must refuse at setup with exit
   128 and nothing integrated), and `self_test` (which exercises the verification
@@ -234,7 +235,7 @@ solver could only emulate with a no-drag production flag.  See
 | Gas reconstruction | `ord2` interpolation, E1–E5, E7, E8 sub-tests | `test_gas_reconstruction` |
 | INI pipeline | INI → module-variable round-trip, IP1–IP5 | `test_ini_pipeline`; `registry-docs` |
 | Gas file reader | The one-pass reader of the ASCII Tecplot gas file against ORION's reader: names, solution time, centring, blocks, bounds and every value bit for bit; the files it leaves to ORION (POINT packing, CR line ends, null values) | `test_tec_read` (67 suite files, 20 synthetic, 4 buffer sizes, 1, 2, 3 and 7 threads) |
-| Grid file writer | The stream writer of `source.tec` and `euler<fam>.tec` against ORION's ASCII writer: the same bytes, headers included, for every value class (signed zeros, subnormals, infinities, NaN); a longer file at the name truncated; what `write_outfield` never makes declined | `test_tec_write` (3 fixtures, 3 chunk sizes, 1, 2, 3 and 7 threads, 4 declines) |
+| Grid file writer | The stream writer of `source.tec` and `euler<fam>.tec` against ORION's ASCII writer: the same bytes, headers included, for every value class (signed zeros, subnormals, infinities, NaN); a longer file at the name truncated; what the grid files never hold declined; `write_outfield` itself, from the solver's arrays, and the copies it gives ORION's writer | `test_tec_write` (3 fixtures, 3 chunk sizes, 1, 2, 3 and 7 threads, 4 declines; `write_outfield` at 1, 2, 3 and 7 threads and its two copy builders, 72 compares) |
 | Property tables | `properties.dat` read by column name (PR1–PR3, PR6, PR7, PR9, PR10), its header, row, node, column and `Psat` checks (PR4, PR5, PR8, PR11–PR13), and the enthalpy-to-temperature inversion of a varying $c_p$ (PR14) | `test_properties_reader` (six working directories); five `refuse-properties-*` cases, `refuse-sigma-column` and `refuse-emissivity-column`; `temp-relax-varcp`, `varcp-tmin`, `pe-sigma-table`, `temp-relax-p2t-kcol`, `temp-relax-p2t-mucol` and `rad-cool-epscol` e2e |
 | Breakup (TAB/ETAB/RD/PE/KHRT) | All five models vs the primary papers (PE87, TAB-872089, Tanner 97/98, Reitz-87, RD-860469, Beale-Reitz-99) | 8 unit tests (including `test_tab_moments` and the ETAB child $v_\perp = A\dot{x}$ check ET4); eight Weber-sweep e2e cases (`tab-hf92`, `etab-hf92` and `khrt-hf93`, beside Hsiang & Faeth's correlations, among them) |
 | Injection size distributions | The injection laws (Dirac, truncated Normal, LogNormal, Rosin–Rammler) and size-distribution files (histogram reading), as mass-flow distributions | `test_psd_table` (T1–T5) + `psd-table`, `psd-normal`, `psd-lognormal`, `psd-rosinrammler`, `psd-bare-token` e2e + ten `refuse-psd-*` refusals |
