@@ -203,7 +203,7 @@ end subroutine pin_particles
 subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_variables, only: ds, mdotMax, nb, pi
-  use IGLOO_RayFaceIntersection3D, only: isPointInsideHexahedron12
+  use IGLOO_RayFaceIntersection3D, only: isPointInsideHexahedron12, isInsideHex12Fast, precomputeHex12
   use IGLOO_VectorModule, only: rotateVector
   use IGLOO_Lib_Statistics, only: sampleDiameter
   use IGLOO_data_phases, only: obj_group
@@ -221,10 +221,12 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
   real(R8),     allocatable :: Inj(:,:)
   logical,      allocatable :: singleCell(:,:)
   real(R8),     allocatable :: Rcell(:,:), Dsize(:,:)
+  real(R8),     allocatable :: hexN(:,:,:,:,:), hexC(:,:,:,:,:), hexT(:,:)   !> 12-plane cache of the face's inlet cells
+  logical,      allocatable :: hexD(:,:,:,:)
   logical  :: startSlot, injected, skip, retry, found, single, overflow
   real(R8) :: cA, cB, xInj, yInj, const, ratio, R, dsR, dcell, dir, orient
   real(R8) :: eps, toll, delta, array(3), pCand(3), start(3), vertices(3,8)
-  real(R8) :: pt(3), Pc(3), dvec(3), tng(3), nrm(3), n2v(3), Rc, verts2(3,8)
+  real(R8) :: pt(3), Pc(3), dvec(3), tng(3), nrm(3), n2v(3), Rc
   real(R8) :: glo(3), ghi(3), hmin
   logical  :: packed
   integer  :: c
@@ -428,6 +430,7 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
       associate(face => block(b)%face(f))
       Nm = face%Nm; Nn = face%Nn
       allocate(singleCell(Nm,Nn), Rcell(Nm,Nn), Dsize(Nm,Nn))
+      allocate(hexN(3,2,6,Nm,Nn), hexC(3,2,6,Nm,Nn), hexD(2,6,Nm,Nn), hexT(Nm,Nn))
 
       !> Pass 0 — reset tally, cache per-cell spacing & size, seed viable single cells.
       do n = 1, Nn; do m = 1, Nm
@@ -438,6 +441,7 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
         if (.not.isInj(face%cell(m,n)%bcdef)) cycle
         call block(b)%fmn2ijk(f,m,n,i,j,k)
         call block(b)%getVertices([i,j,k],vertices)
+        call precomputeHex12(vertices, hexN(:,:,:,m,n), hexC(:,:,:,m,n), hexD(:,:,m,n), hexT(m,n))
         call compute_ds(block(b),gas(b),f,m,n,i,j,k,vertices,group,ds,mdotMax,dsR,single,dcell)
         Rcell(m,n)      = dsR
         Dsize(m,n)      = dcell
@@ -474,13 +478,13 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
             !> The negative angle fixes the kd <-> direction pairing (particle IDs and RNG streams).
             dvec = rotateVector(tng, nrm, -real(kd,R8)*pi/3._R8)
             Pc   = pt + Rc*dvec
-            call locate_inj_cell(b,f,Nm,Nn,mc,nc,Pc, m2,n2,verts2,found)
+            call locate_inj_cell(b,f,Nm,Nn,mc,nc,Pc, m2,n2,found)
             if (.not.found) cycle
             if (singleCell(m2,n2)) cycle
             !> project the candidate onto the target cell plane, push just inside
             n2v = face%cell(m2,n2)%normal
             Pc  = Pc - dot_product(Pc-face%cell(m2,n2)%center, n2v)*n2v - eps*n2v
-            if (.not.isPointInsideHexahedron12(Pc,verts2)) cycle
+            if (.not.isInsideHex12Fast(Pc,hexN(:,:,:,m2,n2),hexC(:,:,:,m2,n2),hexD(:,:,m2,n2),tol=hexT(m2,n2))) cycle
             if (.not.pinGridFar(grid,Inj,Rc,Pc)) cycle
             call block(b)%fmn2ijk(f,m2,n2,i2,j2,k2)
             call place(b,i2,j2,k2,f,m2,n2, Pc)
@@ -503,12 +507,13 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
         if (overflow) exit blockCycle3D
       enddo; enddo
 
-      deallocate(singleCell, Rcell, Dsize)
+      deallocate(singleCell, Rcell, Dsize, hexN, hexC, hexD, hexT)
       end associate
     enddo; enddo blockCycle3D
     if (allocated(singleCell)) deallocate(singleCell)
     if (allocated(Rcell))      deallocate(Rcell)
     if (allocated(Dsize))      deallocate(Dsize)
+    if (allocated(hexN))       deallocate(hexN, hexC, hexD, hexT)
   endif
 
   !> Final assembly: one obj_particle per pinned point; Ninj = cell tally.
@@ -570,38 +575,32 @@ contains
 
   !> Injection cell of face (b,f) containing P: the current cell and its 8 neighbours first,
   !  then a full face scan.
-  subroutine locate_inj_cell(b,f,Nm,Nn,mc,nc,P, m2,n2,verts2,found)
-    use IGLOO_RayFaceIntersection3D, only: isPointInsideHexahedron12
+  subroutine locate_inj_cell(b,f,Nm,Nn,mc,nc,P, m2,n2,found)
     implicit none
     integer,  intent(in)  :: b,f,Nm,Nn,mc,nc
     real(R8), intent(in)  :: P(3)
     integer,  intent(out) :: m2,n2
-    real(R8), intent(out) :: verts2(3,8)
     logical,  intent(out) :: found
-    integer  :: ii,jj,kk, mm, nq, dm, dn
-    real(R8) :: vv(3,8), nr(3)
+    integer  :: mm, nq, dm, dn
+    real(R8) :: nr(3)
 
-    found = .false.; m2 = 0; n2 = 0; verts2 = 0._R8
+    found = .false.; m2 = 0; n2 = 0
     !> neighbourhood first (current cell included at dm=dn=0)
     do dn = -1, 1; do dm = -1, 1
       mm = mc+dm; nq = nc+dn
       if (mm<1 .or. mm>Nm .or. nq<1 .or. nq>Nn) cycle
       if (.not.isInj(block(b)%face(f)%cell(mm,nq)%bcdef)) cycle
-      call block(b)%fmn2ijk(f,mm,nq,ii,jj,kk)
-      call block(b)%getVertices([ii,jj,kk],vv)
       nr = block(b)%face(f)%cell(mm,nq)%normal
-      if (isPointInsideHexahedron12(P - eps*nr, vv)) then
-        m2 = mm; n2 = nq; verts2 = vv; found = .true.; return
+      if (isInsideHex12Fast(P - eps*nr, hexN(:,:,:,mm,nq), hexC(:,:,:,mm,nq), hexD(:,:,mm,nq), tol=hexT(mm,nq))) then
+        m2 = mm; n2 = nq; found = .true.; return
       endif
     enddo; enddo
     !> full face scan
     do nq = 1, Nn; do mm = 1, Nm
       if (.not.isInj(block(b)%face(f)%cell(mm,nq)%bcdef)) cycle
-      call block(b)%fmn2ijk(f,mm,nq,ii,jj,kk)
-      call block(b)%getVertices([ii,jj,kk],vv)
       nr = block(b)%face(f)%cell(mm,nq)%normal
-      if (isPointInsideHexahedron12(P - eps*nr, vv)) then
-        m2 = mm; n2 = nq; verts2 = vv; found = .true.; return
+      if (isInsideHex12Fast(P - eps*nr, hexN(:,:,:,mm,nq), hexC(:,:,:,mm,nq), hexD(:,:,mm,nq), tol=hexT(mm,nq))) then
+        m2 = mm; n2 = nq; found = .true.; return
       endif
     enddo; enddo
   end subroutine locate_inj_cell

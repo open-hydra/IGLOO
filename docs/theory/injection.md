@@ -69,13 +69,14 @@ previous point with the cell boundary.  Three passes:
 
 Used when `block(1)%Nz > 1`.  An advancing-front BFS over the injection face:
 
-1. **Pass 0**: cache per-cell `R` and `dcell`; seed viable single cells.
+1. **Pass 0**: cache per-cell `R`, `dcell` and containment planes; seed viable single cells.
 2. **Pass 1**: for each placed point, generate 6 hexagonal-neighbour candidates at
    distance `R` by rotating the cell's local tangent about its outward normal using
    Rodrigues' formula (steps of $\pi/3$).  Each candidate is projected onto the target
-   face plane and tested via `isPointInsideHexahedron12`.  A candidate within $R/2$ of any
-   point the call has placed is refused; the placed points are found through a uniform
-   bucket grid whose edge is the smallest spacing.
+   face plane and tested by the target cell's 12-plane containment test, its planes
+   computed once per face (`precomputeHex12`, `isInsideHex12Fast`).  A candidate within
+   $R/2$ of any point the call has placed is refused; the placed points are found through
+   a uniform bucket grid whose edge is the smallest spacing.
 3. **Pass 2**: back-fill as in 2D.
 
 The BFS queue is the flat `Inj(:,:)` / `ind(:,:)` arrays; `head` walks the populated
