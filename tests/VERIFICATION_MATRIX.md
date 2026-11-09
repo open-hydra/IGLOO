@@ -30,7 +30,7 @@ Columns:
 
 ---
 
-## Shared box fixture (90 of 185 e2e fixtures)
+## Shared box fixture (90 of 187 e2e fixtures)
 
 An e2e fixture is a case directory registered with `igloo_e2e_case` in `tests/CMakeLists.txt`; it is on
 the shared box when its gas file is byte-identical to what [`tools/make_box_case.py`](tools/make_box_case.py)
@@ -507,7 +507,7 @@ box/BC. Sub-test IDs in parentheses.
 | **psd-plane-tool** | — (kind 8, the planes file's size tool) | *closed form*: `tests/tools/test_psd_plane.py` runs `scripts/psd_plane.py` on a synthetic planes file (on plane 1 at r = 1 mm five forward classes d = 1…5 µm at number rates 5…1 and a forward and a backward 3 µm record of rate 3, a forward 5 µm record at r = 4 mm; a 1 µm record of rate 100 on plane 2) and holds the record counts, the number flow, D10, D32, D43, `dn50`, `dv10`, `dv50`, `dv90` (Hazen positions) and `dm` = `dv` at one density to their closed forms, within r = 2.5 mm net and forward only, and beyond r = 3 mm (1e-9 relative; 34 checks). RED: the volume weight with d² (`dv50` 3.000000 against 4.027668 µm; 24 of 34), the disc on \|Y\| alone (the r = 4 mm record enters), every plane read (the number flow 115 against 15), a sort on (d, w) (`dn50`, `dv10`; 32 of 34) |
 | **history-census** | — (kind 8, contract meta-test) | *census*: `tools/history_census.py` reads the tracked test pages (every `INFO.md`, this matrix, the comment lines of `tests/CMakeLists.txt`) and the test sources, scripts and inputs (the comments, docstrings and strings of `.py`, the comments and strings of `.f90`, the comments and quoted strings of `.sh`, the comments of `.cmake` and `.ini`, every line of the other `.md`) and fails on a line that keeps a ledger id, a plan tag, a date, a commit hash or a chronology phrase past its allowlist; first it runs its 141 plants (`tools/history_census_plants.txt`: 116 texts each caught by its class, 25 caught by none) and fails on one it misses. It lists the files with git and is skipped (exit 77) outside a git checkout. RED: a ledger id planted in a checker's comment (exit 1, the line listed) |
 
-## MPI build only (`USE_MPI=ON`, 28 entries)
+## MPI build only (`USE_MPI=ON`, 30 entries)
 
 Each directory symlinks its parent case's `INPUT/`, `input.ini` and `check.py` — the oracle is the
 same inode — and every case first asserts the solver printed `MPI ranks = <n>`: a serial binary
