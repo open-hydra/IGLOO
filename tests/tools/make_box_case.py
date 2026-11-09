@@ -52,6 +52,9 @@ Geometry / BCs:
   - --rp-sweep R1,...,RN: one radius per inlet cell of face 1, in the reader's loop order (n = 1..nz outer,
     m = 1..ny inner), N the number of inlet cells; refused with --families > 1, --blocks 2, --no-inlet and
     --family-rp.
+  - --polar R1,R2,THETA: the (y, z) of every node mapped to an annular sector, r = R1 + (R2 - R1)*y/Ly,
+    theta = THETA*z/Lz, node (x, r cos theta, r sin theta): j radial, k azimuthal, every cell face planar; refused
+    with --blocks 2, --periodic-y, --ygrade and --mesh-only.
 
 Variable header is reused VERBATIM from the working nozzle solfile so the name-based
 gas import (allocation.f90 import_gas) maps identically. Vars 4-21 are cell-centered;
@@ -63,7 +66,7 @@ Usage:
                      [--stretch R] [--gradient G] [--zgradient G] [--wave-y A] [--rotate2 y]
                      [--outlet-code C] [--ug U] [--u2 U2] [--ygrade G] [--mesh-only] [--sym-face F]
                      [--no-inlet] [--family-kt KT1,KT2,...] [--family-rp RP1,RP2,...] [--periods P]
-                     [--rp-sweep R1,R2,...] [--rho R] [--kl K] [--gam G]
+                     [--rp-sweep R1,R2,...] [--rho R] [--kl K] [--gam G] [--polar R1,R2,THETA]
         writes <out_dir>/solfile.tec and <out_dir>/bc.txt (and phase.txt with --families > 1)
         --kv : inlet velocity scaling  (v0 = kv*|u_g|; 1.0 => no drag slip, Re=0)
         --kt : inlet temperature scaling (Tp0 = kt*T_g; 1.0 => no thermal slip)
@@ -101,6 +104,8 @@ Usage:
                   --overlap, --rotate2, --ygrade and --mesh-only)
         --rp-sweep : one radius [m] per inlet cell, comma-separated, n outer and m inner (default: --rp for every
                   cell; refuses --families > 1, --blocks 2, --no-inlet and --family-rp)
+        --polar : R1,R2,THETA [m, m, rad] -- the nodes' (y, z) mapped to the annular sector R1 <= r <= R2,
+                  0 <= theta <= THETA (default: the box)
         Defaults reproduce the drag-stokes case (kv=0.1, kt=1.0, rp=5.945e-6).
 """
 import argparse
@@ -239,9 +244,10 @@ def block_nodes(b, i0, ncx, ncy, sh, nx, ny, nz, stretch, rotated, ygrade, perio
 
 def write_solfile(path, blocks=1, tg=None, nx=NX, ny=NY, nz=NZ, overlap=0, shift=0.0, rim=False,
                   stretch=1.0, gradient=None, zgradient=0.0, wave_y=0.0, rotate2=None, ug=None, ygrade=1.0, xnodes=None,
-                  u2=None, periods=1, rho=None, kl=None, gam=None):
+                  u2=None, periods=1, rho=None, kl=None, gam=None, polar=None):
     """xnodes: the x of every node along x of a one-block box (nx + 1 values), in place of the uniform ones;
-    periods: the ny rows span that many periods of LY."""
+    periods: the ny rows span that many periods of LY; polar: (R1, R2, THETA), the nodes' (y, z) mapped to
+    (r cos theta, r sin theta) with r = R1 + (R2 - R1) y/LY, theta = THETA z/LZ."""
     layout = block_layout(blocks, nx, ny, overlap, shift, rim)
     if xnodes is not None and (blocks != 1 or len(xnodes) != nx + 1 or gradient or stretch != 1.0):
         raise ValueError("xnodes: one block, nx + 1 values, no gradient or stretch")
@@ -267,7 +273,13 @@ def write_solfile(path, blocks=1, tg=None, nx=NX, ny=NY, nz=NZ, overlap=0, shift
                 for k in range(K):
                     for j in range(J):
                         for i in range(I):
-                            buf.append(f"  {axis[(i, j, k)[comp]]:.15E}\n")
+                            if polar and comp:
+                                r = polar[0] + (polar[1] - polar[0]) * ys[j] / LY
+                                th = polar[2] * zs[k] / LZ
+                                v = r * math.cos(th) if comp == 1 else r * math.sin(th)
+                            else:
+                                v = axis[(i, j, k)[comp]]
+                            buf.append(f"  {v:.15E}\n")
                 f.writelines(buf)
             # cell-centered gas/particle vars: ncell identical constants each (T linear in x with --gradient)
             over = {"Roi( 1 )": rho, "KL": kl, "GAM": gam}
@@ -467,6 +479,8 @@ def main():
                    help="with --periodic-y: the box this many periods of Ly long, --ny rows each (default 1)")
     p.add_argument("--rp-sweep", default=None,
                    help="one radius [m] per inlet cell, comma-separated, n outer and m inner (default: --rp)")
+    p.add_argument("--polar", default=None,
+                   help="R1,R2,THETA [m, m, rad]: the nodes' (y, z) mapped to an annular sector (default: the box)")
     a = p.parse_args()
     fam_kt, fam_rp = None, None
     for opt, val in (("--family-kt", a.family_kt), ("--family-rp", a.family_rp)):
@@ -511,6 +525,16 @@ def main():
     if a.periods > 1 and (not a.periodic_y or a.blocks != 1 or a.overlap or a.rotate2 or a.ygrade != 1.0
                           or a.mesh_only):
         p.error("--periods P > 1 needs --periodic-y, and no --blocks 2, --overlap, --rotate2, --ygrade or --mesh-only")
+    polar = None
+    if a.polar is not None:
+        try:
+            polar = [float(v) for v in a.polar.split(",")]
+        except ValueError:
+            p.error("--polar takes R1,R2,THETA")
+        if len(polar) != 3 or not 0.0 <= polar[0] < polar[1] or polar[2] <= 0.0:
+            p.error("--polar needs 0 <= R1 < R2 and THETA > 0")
+        if a.blocks != 1 or a.periodic_y or a.ygrade != 1.0 or a.mesh_only:
+            p.error("--polar refuses --blocks 2, --periodic-y, --ygrade and --mesh-only")
     nyt = a.ny * a.periods                   # rows along y over the whole box
     rp_sweep = None
     if a.rp_sweep is not None:
@@ -536,7 +560,7 @@ def main():
                                           rim=a.rim, stretch=a.stretch, gradient=a.gradient,
                                           zgradient=a.zgradient, wave_y=a.wave_y, rotate2=a.rotate2,
                                           ug=a.ug, ygrade=a.ygrade, u2=a.u2, periods=a.periods,
-                                          rho=a.rho, kl=a.kl, gam=a.gam)
+                                          rho=a.rho, kl=a.kl, gam=a.gam, polar=polar)
     n_inlet = write_bc(os.path.join(a.out_dir, "bc.txt"), a.kv, a.kt, a.rp, a.alpha,
                        periodic_y=a.periodic_y, blocks=a.blocks, nx=a.nx, ny=nyt, nz=a.nz,
                        overlap=a.overlap, shift=a.shift, rim=a.rim, families=a.families,
@@ -557,6 +581,8 @@ def main():
           + (f"; face {a.sym_face} symmetry (300)" if a.sym_face is not None else "")
           + ("; no inlet: face 1 wall (400)" if a.no_inlet else ""))
     ly = a.periods * LY
+    if polar:
+        print(f"     nodes (y, z) mapped to the sector r [{polar[0]},{polar[1]}] m, theta [0,{polar[2]}] rad")
     if a.stretch != 1.0:
         dx1 = node_x(1, a.nx, a.stretch, LX / a.nx)
         print(f"     domain x[0,{LX}] y[0,{ly}] z[0,{LZ}]; dx={dx1*1e3:.4f}mm then {a.stretch*dx1*1e3:.4f}mm")

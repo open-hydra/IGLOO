@@ -1,8 +1,97 @@
 !> Particle pinning (injection placement) and accumulator zeroing.
 module IGLOO_IC
+  use, intrinsic :: iso_fortran_env, only: real64
   implicit none
+  private :: real64
+
+  !> Bucket count above which pinGridInit doubles the bucket edge.
+  integer, parameter :: NBMAX = 2**24
+
+  !> Uniform bucket grid over the points one pin_particles_bc_ds call pins (the minimum-distance search set).
+  type, public :: pinGrid
+    real(real64) :: lo(3) = 0._real64, h = 0._real64, L = 0._real64  !> origin, bucket edge, largest |coordinate| [m]
+    integer      :: nb(3) = 0                                        !> buckets per direction
+    integer, allocatable :: head(:), next(:)                         !> first point of a bucket (0: none); next in it
+  end type pinGrid
 
 contains
+
+!> Sizes g over the box [lo, hi] at bucket edge h, doubled until it holds at most NBMAX buckets, for nmax points.
+subroutine pinGridInit(g, lo, hi, h, nmax)
+  implicit none
+  type(pinGrid), intent(out) :: g
+  real(real64),  intent(in)  :: lo(3), hi(3), h
+  integer,       intent(in)  :: nmax
+
+  g%lo = lo
+  g%h  = h
+  g%L  = maxval(abs([lo, hi]))
+  do
+    if (all((hi - lo)/g%h < real(NBMAX, real64))) then
+      g%nb = max(1, ceiling((hi - lo)/g%h))
+      if (product(real(g%nb, real64)) <= real(NBMAX, real64)) exit
+    endif
+    g%h = 2._real64*g%h
+  enddo
+  allocate(g%head(product(g%nb)), source=0)
+  allocate(g%next(nmax))
+end subroutine pinGridInit
+
+!> Bucket of coordinate x along direction c: floor((x - lo)/h) + 1, clamped to 1..nb.
+pure integer function pinGridBucket(g, x, c)
+  implicit none
+  type(pinGrid), intent(in) :: g
+  real(real64),  intent(in) :: x
+  integer,       intent(in) :: c
+  real(real64) :: t
+
+  t = (x - g%lo(c))/g%h
+  if (.not. (t >= 1._real64)) then
+    pinGridBucket = 1
+  elseif (t >= real(g%nb(c), real64)) then
+    pinGridBucket = g%nb(c)
+  else
+    pinGridBucket = int(t) + 1
+  endif
+end function pinGridBucket
+
+!> Files point ip, at p, in its bucket.
+subroutine pinGridAdd(g, ip, p)
+  implicit none
+  type(pinGrid), intent(inout) :: g
+  integer,       intent(in)    :: ip
+  real(real64),  intent(in)    :: p(3)
+  integer :: ib
+
+  ib = pinGridBucket(g, p(1), 1) + g%nb(1)*(pinGridBucket(g, p(2), 2) - 1 + g%nb(2)*(pinGridBucket(g, p(3), 3) - 1))
+  g%next(ip) = g%head(ib)
+  g%head(ib) = ip
+end subroutine pinGridAdd
+
+!> Whether p lies at least R/2 from every point filed in g (Inj holds their coordinates).
+logical function pinGridFar(g, Inj, R, p)
+  implicit none
+  type(pinGrid), intent(in) :: g
+  real(real64),  intent(in) :: Inj(:,:), R, p(3)
+  real(real64) :: r2, mg
+  integer :: blo(3), bhi(3), c, i1, i2, i3, q
+
+  r2 = R/2
+  mg = max(1.e-6_real64*r2, 64._real64*epsilon(1._real64)*g%L)   !> covers the rounding of the query range
+  do c = 1, 3
+    blo(c) = pinGridBucket(g, p(c) - r2 - mg, c)
+    bhi(c) = pinGridBucket(g, p(c) + r2 + mg, c)
+  enddo
+  pinGridFar = .false.
+  do i3 = blo(3), bhi(3); do i2 = blo(2), bhi(2); do i1 = blo(1), bhi(1)
+    q = g%head(i1 + g%nb(1)*(i2 - 1 + g%nb(2)*(i3 - 1)))
+    do while (q > 0)
+      if (norm2(p-Inj(:,q))<(R/2)) return
+      q = g%next(q)
+    enddo
+  enddo; enddo; enddo
+  pinGridFar = .true.
+end function pinGridFar
 
 !> Pins the group's injection particles: boundary-centred, boundary-spaced (ds / mdotMax) or
 !  at assigned positions (DB and assigned streams).
@@ -114,7 +203,7 @@ end subroutine pin_particles
 subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_variables, only: ds, mdotMax, nb, pi
-  use IGLOO_RayFaceIntersection3D, only: isPointInsideHexahedron12
+  use IGLOO_RayFaceIntersection3D, only: isPointInsideHexahedron12, isInsideHex12Fast, precomputeHex12
   use IGLOO_VectorModule, only: rotateVector
   use IGLOO_Lib_Statistics, only: sampleDiameter
   use IGLOO_data_phases, only: obj_group
@@ -127,15 +216,24 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
   integer,             intent(out)   :: npart
   integer, parameter :: alloc=10000000
   integer  :: p, b, f, m, n, i, j, k, Nm, Nn
-  integer  :: mInj, nInj, head, m0, n0, mc, nc, m2, n2, ic, jc, kc, i2, j2, k2, kd
+  integer  :: mInj, nInj, head, m0, n0, mc, nc, m2, n2, i2, j2, k2, kd
   integer,      allocatable :: ind(:,:)
   real(R8),     allocatable :: Inj(:,:)
   logical,      allocatable :: singleCell(:,:)
   real(R8),     allocatable :: Rcell(:,:), Dsize(:,:)
+  real(R8),     allocatable :: Frm(:,:)   !> tangent frame each placed point is expanded with (3D)
+  real(R8),     allocatable :: hexN(:,:,:,:,:), hexC(:,:,:,:,:), hexT(:,:)   !> 12-plane cache of the face's inlet cells
+  logical,      allocatable :: hexD(:,:,:,:)
   logical  :: startSlot, injected, skip, retry, found, single, overflow
   real(R8) :: cA, cB, xInj, yInj, const, ratio, R, dsR, dcell, dir, orient
   real(R8) :: eps, toll, delta, array(3), pCand(3), start(3), vertices(3,8)
-  real(R8) :: pt(3), Pc(3), dvec(3), tng(3), nrm(3), n2v(3), Rc, verts2(3,8)
+  real(R8) :: pt(3), Pc(3), dvec(3), tng(3), nrm(3), n2v(3), Rc
+  real(R8) :: glo(3), ghi(3), hmin, tf(3), tfn
+  logical  :: packed
+  integer  :: c
+  type(pinGrid) :: grid
+  !> getVertices columns of the four nodes of face f
+  integer, parameter :: FACEV(4,6) = reshape([1,2,3,4, 5,6,7,8, 1,2,5,6, 3,4,7,8, 1,4,5,8, 2,3,6,7], [4,6])
 
   write(*,*)
   if     ((ds/=0._R8) .and. (mdotMax==0._R8)) then
@@ -309,10 +407,32 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
     !  neighbour candidates at spacing R around the cell normal.
     write(*,*)' >> Using 3D injection algorithm'
     write(*,*) ''
+    allocate(Frm(3,alloc))
+    !> The bucket grid over every injecting face cell, its edge the smallest spacing of a packed cell.
+    glo = huge(1._R8); ghi = -huge(1._R8); hmin = huge(1._R8); packed = .false.
+    do b = 1, nb; do f = 1, 6
+      do n = 1, block(b)%face(f)%Nn; do m = 1, block(b)%face(f)%Nm
+        if (.not.isInj(block(b)%face(f)%cell(m,n)%bcdef)) cycle
+        call block(b)%fmn2ijk(f,m,n,i,j,k)
+        call block(b)%getVertices([i,j,k],vertices)
+        do c = 1, 4
+          glo = min(glo, vertices(:,FACEV(c,f))); ghi = max(ghi, vertices(:,FACEV(c,f)))
+        enddo
+        call compute_ds(block(b),gas(b),f,m,n,i,j,k,vertices,group,ds,mdotMax,dsR,single,dcell)
+        if (single) cycle
+        packed = .true.
+        if (dsR > 0._R8) hmin = min(hmin, dsR)
+      enddo; enddo
+    enddo; enddo
+    if (packed) then
+      if (hmin == huge(1._R8)) hmin = maxval(ghi - glo) + 4._R8*eps
+      call pinGridInit(grid, glo - 2._R8*eps, ghi + 2._R8*eps, hmin, alloc)
+    endif
     blockCycle3D: do b = 1, nb; do f = 1, 6
       associate(face => block(b)%face(f))
       Nm = face%Nm; Nn = face%Nn
       allocate(singleCell(Nm,Nn), Rcell(Nm,Nn), Dsize(Nm,Nn))
+      allocate(hexN(3,2,6,Nm,Nn), hexC(3,2,6,Nm,Nn), hexD(2,6,Nm,Nn), hexT(Nm,Nn))
 
       !> Pass 0 — reset tally, cache per-cell spacing & size, seed viable single cells.
       do n = 1, Nn; do m = 1, Nm
@@ -323,6 +443,7 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
         if (.not.isInj(face%cell(m,n)%bcdef)) cycle
         call block(b)%fmn2ijk(f,m,n,i,j,k)
         call block(b)%getVertices([i,j,k],vertices)
+        call precomputeHex12(vertices, hexN(:,:,:,m,n), hexC(:,:,:,m,n), hexD(:,:,m,n), hexT(m,n))
         call compute_ds(block(b),gas(b),f,m,n,i,j,k,vertices,group,ds,mdotMax,dsR,single,dcell)
         Rcell(m,n)      = dsR
         Dsize(m,n)      = dcell
@@ -347,29 +468,37 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
         if (.not.injViable(pCand,vertices,Dsize(m0,n0))) cycle
         call place(b,i,j,k,f,m0,n0, pCand)
         if (overflow) exit blockCycle3D
+        Frm(:,npart) = cellTangent(b,f,i,j,k,face%cell(m0,n0)%normal)
         do while (head < npart)
           head = head + 1
           pt = Inj(:,head)
           mc = ind(6,head); nc = ind(7,head)
-          call block(b)%fmn2ijk(f,mc,nc,ic,jc,kc)
           nrm = face%cell(mc,nc)%normal
-          tng = cellTangent(b,f,ic,jc,kc,nrm)
+          tng = Frm(:,head)
           Rc  = Rcell(mc,nc)
           do kd = 0, 5
             !> The negative angle fixes the kd <-> direction pairing (particle IDs and RNG streams).
             dvec = rotateVector(tng, nrm, -real(kd,R8)*pi/3._R8)
             Pc   = pt + Rc*dvec
-            call locate_inj_cell(b,f,Nm,Nn,mc,nc,Pc, m2,n2,verts2,found)
+            call locate_inj_cell(b,f,Nm,Nn,mc,nc,Pc, m2,n2,found)
             if (.not.found) cycle
             if (singleCell(m2,n2)) cycle
             !> project the candidate onto the target cell plane, push just inside
             n2v = face%cell(m2,n2)%normal
             Pc  = Pc - dot_product(Pc-face%cell(m2,n2)%center, n2v)*n2v - eps*n2v
-            if (.not.isPointInsideHexahedron12(Pc,verts2)) cycle
-            if (.not.check_distance(npart,Rc,Inj,Pc)) cycle
+            if (.not.isInsideHex12Fast(Pc,hexN(:,:,:,m2,n2),hexC(:,:,:,m2,n2),hexD(:,:,m2,n2),tol=hexT(m2,n2))) cycle
+            if (.not.pinGridFar(grid,Inj,Rc,Pc)) cycle
             call block(b)%fmn2ijk(f,m2,n2,i2,j2,k2)
             call place(b,i2,j2,k2,f,m2,n2, Pc)
             if (overflow) exit
+            !> the parent's frame projected onto the child's cell plane; its cell's own across a fold
+            tf  = tng - dot_product(tng,n2v)*n2v
+            tfn = norm2(tf)
+            if (tfn > toll) then
+              Frm(:,npart) = tf/tfn
+            else
+              Frm(:,npart) = cellTangent(b,f,i2,j2,k2,n2v)
+            endif
           enddo
           if (overflow) exit
         enddo
@@ -388,12 +517,13 @@ subroutine pin_particles_bc_ds(group, block, gas, fam, npart)
         if (overflow) exit blockCycle3D
       enddo; enddo
 
-      deallocate(singleCell, Rcell, Dsize)
+      deallocate(singleCell, Rcell, Dsize, hexN, hexC, hexD, hexT)
       end associate
     enddo; enddo blockCycle3D
     if (allocated(singleCell)) deallocate(singleCell)
     if (allocated(Rcell))      deallocate(Rcell)
     if (allocated(Dsize))      deallocate(Dsize)
+    if (allocated(hexN))       deallocate(hexN, hexC, hexD, hexT)
   endif
 
   !> Final assembly: one obj_particle per pinned point; Ninj = cell tally.
@@ -449,43 +579,38 @@ contains
     npart = npart + 1
     Inj(:,npart) = point
     ind(:,npart) = [b,i,j,k,f,m,n]
+    if (allocated(grid%head)) call pinGridAdd(grid, npart, point)
     block(b)%face(f)%cell(m,n)%nInj = block(b)%face(f)%cell(m,n)%nInj + 1
   end subroutine place
 
   !> Injection cell of face (b,f) containing P: the current cell and its 8 neighbours first,
   !  then a full face scan.
-  subroutine locate_inj_cell(b,f,Nm,Nn,mc,nc,P, m2,n2,verts2,found)
-    use IGLOO_RayFaceIntersection3D, only: isPointInsideHexahedron12
+  subroutine locate_inj_cell(b,f,Nm,Nn,mc,nc,P, m2,n2,found)
     implicit none
     integer,  intent(in)  :: b,f,Nm,Nn,mc,nc
     real(R8), intent(in)  :: P(3)
     integer,  intent(out) :: m2,n2
-    real(R8), intent(out) :: verts2(3,8)
     logical,  intent(out) :: found
-    integer  :: ii,jj,kk, mm, nq, dm, dn
-    real(R8) :: vv(3,8), nr(3)
+    integer  :: mm, nq, dm, dn
+    real(R8) :: nr(3)
 
-    found = .false.; m2 = 0; n2 = 0; verts2 = 0._R8
+    found = .false.; m2 = 0; n2 = 0
     !> neighbourhood first (current cell included at dm=dn=0)
     do dn = -1, 1; do dm = -1, 1
       mm = mc+dm; nq = nc+dn
       if (mm<1 .or. mm>Nm .or. nq<1 .or. nq>Nn) cycle
       if (.not.isInj(block(b)%face(f)%cell(mm,nq)%bcdef)) cycle
-      call block(b)%fmn2ijk(f,mm,nq,ii,jj,kk)
-      call block(b)%getVertices([ii,jj,kk],vv)
       nr = block(b)%face(f)%cell(mm,nq)%normal
-      if (isPointInsideHexahedron12(P - eps*nr, vv)) then
-        m2 = mm; n2 = nq; verts2 = vv; found = .true.; return
+      if (isInsideHex12Fast(P - eps*nr, hexN(:,:,:,mm,nq), hexC(:,:,:,mm,nq), hexD(:,:,mm,nq), tol=hexT(mm,nq))) then
+        m2 = mm; n2 = nq; found = .true.; return
       endif
     enddo; enddo
     !> full face scan
     do nq = 1, Nn; do mm = 1, Nm
       if (.not.isInj(block(b)%face(f)%cell(mm,nq)%bcdef)) cycle
-      call block(b)%fmn2ijk(f,mm,nq,ii,jj,kk)
-      call block(b)%getVertices([ii,jj,kk],vv)
       nr = block(b)%face(f)%cell(mm,nq)%normal
-      if (isPointInsideHexahedron12(P - eps*nr, vv)) then
-        m2 = mm; n2 = nq; verts2 = vv; found = .true.; return
+      if (isInsideHex12Fast(P - eps*nr, hexN(:,:,:,mm,nq), hexC(:,:,:,mm,nq), hexD(:,:,mm,nq), tol=hexT(mm,nq))) then
+        m2 = mm; n2 = nq; found = .true.; return
       endif
     enddo; enddo
   end subroutine locate_inj_cell
@@ -512,27 +637,6 @@ contains
 
 end subroutine pin_particles_bc_ds
 
-
-!> Whether newInj lies at least R/2 away from every point already in Inj.
-logical function check_distance(npart,R,Inj,newInj)
-  use, intrinsic :: iso_fortran_env, only : R8 => real64
-  implicit none
-  real(R8), intent(in) :: Inj(3,npart), newInj(3)
-  real(R8), intent(in) :: R
-  integer,  intent(in) :: npart
-  integer :: i
-
-  check_distance = .true.
-  if (npart>=1) then
-    do i = 1, npart
-      if (norm2(newInj-Inj(:,i))<(R/2)) then
-        check_distance = .false.
-        return
-      endif
-    enddo
-  endif
-
-end function check_distance
 
 !> Injection spacing R of one boundary cell from the per-cell/global ds or from mdotMax; flags
 !  cells that take a single centred particle and returns the cell's tangential size.

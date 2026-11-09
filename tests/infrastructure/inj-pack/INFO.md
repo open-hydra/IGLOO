@@ -3,7 +3,7 @@
 **Purpose.** With `[IGLOO-BC] ds` below the size of an inlet cell, the boundary placement (`pin_particles_bc_ds`,
 `initialization.f90`) packs each cell: on a 3D face an advancing front builds a hexagonal lattice at the spacing
 R = ds, seeded at the first inlet cell's centre, and refuses a candidate closer than R/2 to a placed point
-(`check_distance`). A cell's mass flow is shared by its N_inj parcels — for a 402 cell gp·A/N_inj. At this spacing
+(`pinGridFar`). A cell's mass flow is shared by its N_inj parcels — for a 402 cell gp·A/N_inj. At this spacing
 lattice points fall on the face-cell edges, the face's outer edges included: a point on an edge two cells share lies
 in both, is pinned by one of them and must start in that cell with that cell's payload. The 402 row borders the 401
 rows, so the payloads differ across the edge y = 4 cm.
