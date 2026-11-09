@@ -73,8 +73,9 @@ Used when `block(1)%Nz > 1`.  An advancing-front BFS over the injection face:
 2. **Pass 1**: for each placed point, generate 6 hexagonal-neighbour candidates at
    distance `R` by rotating the cell's local tangent about its outward normal using
    Rodrigues' formula (steps of $\pi/3$).  Each candidate is projected onto the target
-   face plane and tested via `isPointInsideHexahedron12`.  `check_distance` enforces the
-   minimum spacing $R/2$ against all already-placed points.
+   face plane and tested via `isPointInsideHexahedron12`.  A candidate within $R/2$ of any
+   point the call has placed is refused; the placed points are found through a uniform
+   bucket grid whose edge is the smallest spacing.
 3. **Pass 2**: back-fill as in 2D.
 
 The BFS queue is the flat `Inj(:,:)` / `ind(:,:)` arrays; `head` walks the populated
