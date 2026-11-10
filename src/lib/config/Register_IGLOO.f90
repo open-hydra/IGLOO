@@ -211,6 +211,10 @@ contains
     call reg%add('IGLOO-ODE','max-inner-iter',d_i(9),'10', &
       'Maximum ODE solver calls on one cell segment (its first call and the refinements of its crossing); a parcel '// &
       'that needs more ends at its last accepted step','',.false.)
+    call reg%add('IGLOO-ODE','mass-tol',d_s(15),'burnout', &
+      'The absolute tolerance of the mass slot of an evaporating or burning parcel (ODE models 2, 4, 5 and 8): '// &
+      'burnout = the lower of absolute-tol and 1e-3 of the group''s burnout mass min(1e-6 m0, 1e-20 kg), m0 the mass '// &
+      'of its smallest injected diameter at its lowest density; off = absolute-tol','burnout, off',.false.)
 
     ! --- [IGLOO-Erosion] ---
     call reg%add('IGLOO-Erosion','model',d_s(26),'-', &

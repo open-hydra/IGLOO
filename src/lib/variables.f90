@@ -76,6 +76,10 @@ module IGLOO_variables
   !  reaches it (the residue's failure path); 0 = off
   real(R8) :: failAfter = 0._R8
   integer  :: maxInnerIter = 10   !> [IGLOO-ODE] max-inner-iter: solver calls per cell segment
+  !> [IGLOO-ODE] mass-tol: the burnout slot's absolute tolerance tied to the group's burnout mass (burnout) or absolute-tol (off)
+  logical  :: massTolBurnout = .true.
+  !> The burnout mass min(epsBurn m0, mBurnAbs) [kg] of a consuming parcel; kMassTol of the group's: its mass slot's tolerance
+  real(R8), parameter :: epsBurn = 1.e-6_R8, mBurnAbs = 1.e-20_R8, kMassTol = 1.e-3_R8
 
   !> Parameters
   real(R8), parameter :: pi = acos(-1.0_R8)
