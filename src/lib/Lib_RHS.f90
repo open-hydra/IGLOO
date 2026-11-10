@@ -613,6 +613,18 @@ contains
   end subroutine rhsSolidification
 
 
+  !> A trial state the solver rejects: no mass left or a non-finite slot, at a gas sample whose cpg is not positive.
+  pure logical function trialGasUnphysical(gas, nsp, Z, neq) result(bad)
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    implicit none
+    integer,  intent(in) :: nsp, neq
+    real(R8), intent(in) :: gas(nsp), Z(neq)
+    bad = .false.
+    if (.not. (gas(7) * gas(8) / (gas(7) - 1._R8) <= 0._R8)) return
+    bad = Z(8) <= 0._R8 .or. any(.not. ieee_is_finite(Z))
+  end function trialGasUnphysical
+
+
   !> Model 2: variable mass via evaporation.
   subroutine rhsEvaporation(neq, time, Z, F, aux,naux, auxst,nauxst, &
                              hTabM, rhoTabM, psatTabM, LvTabM, cpvTabM, &
@@ -660,6 +672,13 @@ contains
         call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
         auxst(ind_sxi:ind_sxi+2) = xi0_loc
       endif
+    endif
+
+    !> a non-physical trial state sampling a gas of cpg <= 0: the scrub's penalty, the step is rejected (no stop)
+    if (trialGasUnphysical(gas, nsp, Z, neq)) then
+      F = 1.e30_R8
+      if (present(TsOut)) TsOut = tp
+      return
     endif
 
     Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
@@ -895,6 +914,13 @@ contains
         call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
         auxst(ind_sxi:ind_sxi+2) = xi0_loc
       endif
+    endif
+
+    !> a non-physical trial state sampling a gas of cpg <= 0: the scrub's penalty, the step is rejected (no stop)
+    if (trialGasUnphysical(gas, nsp, Z, neq)) then
+      F = 1.e30_R8
+      if (present(TsOut)) TsOut = tp
+      return
     endif
 
     Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
