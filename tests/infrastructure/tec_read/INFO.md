@@ -33,10 +33,10 @@ or more (ORION cuts a line there), no CR byte, no POINT zone.
 | `s08-plane-xyz` | K = 1 with `x`, `y`, `z` and `z` nodal: three coordinates | ORION's values |
 | `s09-point` | POINT packing | declined (ORION reads it) |
 | `s10-extra-aux` | tokens after a zone's values, a line of numbers and an auxiliary line between two zones | ORION's values |
-| `s11-long-line` | 80 values on one line of 2 026 characters | the values the test wrote, each as the runtime's list-directed READ converts it alone (ORION's reader cuts the line at 1000) |
+| `s11-long-line` | 80 values on one line of 2 026 characters | the values the test wrote, each as the runtime's list-directed READ converts it alone, and the time of a file without `SOLUTIONTIME` (−huge) |
 | `s12-long-variables` | a VARIABLES line of 1 584 characters (63 names) | ORION's values |
 | `s13-variables-lines` | the VARIABLES list over three lines | ORION's values |
-| `s14-orion-written` | two blocks written by ORION's own ASCII writer as `write_outfield` calls it (`E23.15E3`, unquoted names, `SOLUTIONTIME`, `STRANDID = 0`) | ORION's values |
+| `s14-orion-written` | two blocks written by ORION's own ASCII writer as `write_outfield` calls it (`E25.17E3`, unquoted names, a negative `SOLUTIONTIME`, no `STRANDID`) | ORION's values |
 | `s15-no-final-lf` | lower-case keywords, the last line without a line feed | ORION's values |
 | `s16-null-slash`, `s17-null-repeat` | a `/` token, a `3*` token (null values: ORION leaves the value unassigned) | declined |
 | `s18-crlf` | CR LF line ends | declined |

@@ -25,8 +25,8 @@ own expressions, in a 200-character string:
 
 | fixture | blocks (cells) | variables | `varnames` | solution time |
 |---|---|---|---|---|
-| `f1-source` | 40 × 30 × 25 (every field above 7 × 4096 values) | 5 | `source.tec`, one material | −10 (written 10, `STRANDID = 0`) |
-| `f2-euler-2blk` | 9 × 7 × 5 and 4 × 6 × 3 | 6 | `euler<fam>.tec` | 2.5 (a time-accurate run) |
+| `f1-source` | 40 × 30 × 25 (every field above 7 × 4096 values) | 5 | `source.tec`, one material | −10 (a steady run: written −10, no `STRANDID`) |
+| `f2-euler-2blk` | 9 × 7 × 5 and 4 × 6 × 3 | 6 | `euler<fam>.tec` | 2.5 (a time-accurate run: `STRANDID` 1 and 2) |
 | `f3-source-nz1` | 30 × 20 × 1 | 10 | `source.tec`, six materials: a VARIABLES line of 168 characters | −10 |
 
 Every value is the bit pattern of two 31-bit draws of its index — every exponent, both signs, NaN and infinities

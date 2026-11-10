@@ -19,7 +19,7 @@ module IGLOO_Mod_TecASCII
   integer(I8), parameter :: CHUNK_DEFAULT = 268435456_I8   !> stream buffer [bytes]
   integer, parameter :: RUN_MAX = 65536                    !> plain tokens per list-directed READ
   integer, parameter :: TOK_MAX = 100                      !> ORION's token buffer
-  integer, parameter :: HDR = 1000, VHDR = 32768           !> ORION's line buffers: zone and data lines, VARIABLES
+  integer, parameter :: VHDR = 32768                       !> ORION's line buffer of the VARIABLES text
   integer(I8), parameter :: NULL_BITS = int(z'7FF8DEAD0BEEF001', I8)   !> a NaN no text reads as: a null value
   integer(I8), parameter :: WCHUNK_DEFAULT = 4194304_I8    !> the writer's values per stream WRITE
   integer, parameter :: WSLICE = 4096                      !> the writer's values per internal WRITE
@@ -37,6 +37,7 @@ module IGLOO_Mod_TecASCII
   !> A grid file being written: its unit (open or not), the I/O status, the values per stream WRITE and the chunk's text.
   type, public :: tec_grid_t
     integer :: u = 0, ios = 0, nvar = 0
+    integer :: zone = 0                                    !> the zones written: ORION's block number of the last one
     logical :: opened = .false.
     integer(I8) :: chunk = WCHUNK_DEFAULT
     real(R8) :: time = 0
@@ -123,6 +124,8 @@ contains
     if (.not. writable(orion)) return
     ndir = 3
     nvar = size(orion%block(1)%vars, 1)
+    ! ORION's writer refuses names that are not one per variable
+    if (names_in(varnames) /= nvar) return
     nmax = 1
     do b = 1, size(orion%block)
       nmax = max(nmax, size(orion%block(b)%mesh, kind=I8)/ndir)
@@ -150,8 +153,8 @@ contains
   end function tec_write_ascii_fast
 
   !> Opens filename for a grid file of three coordinates and nvar cell-centred variables and writes ORION's VARIABLES
-  !  line; nmax is the largest field's value count, solutiontime ORION's (negative: steady, STRANDID = 0). 0 opened,
-  !  2 an I/O error (nothing left open).
+  !  line; nmax is the largest field's value count, solutiontime ORION's (negative: steady, static zones; else each zone
+  !  the strand of its block). 0 opened, 2 an I/O error (nothing left open).
   integer function tec_grid_open(g, filename, varnames, nvar, solutiontime, nmax, chunk_values) result(stat)
     type(tec_grid_t), intent(out) :: g
     character(len=*), intent(in) :: filename, varnames
@@ -166,12 +169,8 @@ contains
     ndir = 3
     g%nvar = nvar
     nvartot = ndir + nvar
-    g%time_accurate = .true.
     g%time = solutiontime
-    if (g%time < 0) then
-      g%time = abs(g%time)
-      g%time_accurate = .false.
-    endif
+    g%time_accurate = (solutiontime >= 0._R8)
     ! ORION's header text (tec_init, tec_blk_data: the ASCII branch)
     tecvarname = ' VARIABLES = x'
     tecvarname = trim(tecvarname)//' y'
@@ -199,20 +198,24 @@ contains
     stat = 0
   end function tec_grid_open
 
-  !> ORION's zone line of a block of ni x nj x nk nodes; nothing after an I/O error.
+  !> ORION's zone line of the next block, of ni x nj x nk nodes: the solution time with its sign, the block's strand
+  !  for a time-accurate one; nothing after an I/O error.
   subroutine tec_grid_zone(g, name, ni, nj, nk)
     type(tec_grid_t), intent(inout) :: g
     character(len=*), intent(in) :: name
     integer, intent(in) :: ni, nj, nk
-    character(len=500) :: teczoneheader
+    character(len=:), allocatable :: teczoneheader
+    character(len=DR_P) :: timestr
     if (g%ios /= 0) return
+    g%zone = g%zone + 1
     teczoneheader = ' ZONE  T = '//trim(name)//                     &
                     ', I='//trim(str(no_sign=.true.,n=ni))//        &
                     ', J='//trim(str(no_sign=.true.,n=nj))//        &
                     ', K='//trim(str(no_sign=.true.,n=nk))//        &
                     ', DATAPACKING=BLOCK'//adjustl(trim(g%varloc))
-    teczoneheader = trim(teczoneheader)//', SOLUTIONTIME='//trim(str(no_sign=.true.,n=g%time))
-    if (.not. g%time_accurate) teczoneheader = trim(teczoneheader)//', STRANDID = 0'
+    write(timestr, FR_P) g%time
+    teczoneheader = trim(teczoneheader)//', SOLUTIONTIME='//trim(adjustl(timestr))
+    if (g%time_accurate) teczoneheader = trim(teczoneheader)//', STRANDID='//trim(str(.true.,g%zone))
     write(g%u, iostat=g%ios) trim(teczoneheader)//LF
   end subroutine tec_grid_zone
 
@@ -333,19 +336,32 @@ contains
     enddo
   end subroutine format_slice
 
-  !> `"a""b"` -> ` a  b `: ORION's writer's quotes made blanks (Lib_Tecplot unquote).
+  !> `"a""b"` -> ` a  b `, `a,b` -> `a b`: ORION's writer's quotes, commas, tabs and line ends made blanks (Lib_Tecplot
+  !  unquote).
   pure function unquote(sin) result(sout)
     character(len=*), intent(in) :: sin
     character(len=len(sin)) :: sout
     integer :: i
     do i = 1, len(sin)
-      if (sin(i:i) == '"') then
+      if (scan(sin(i:i), '",'//achar(9)//achar(10)//achar(13)) > 0) then
         sout(i:i) = ' '
       else
         sout(i:i) = sin(i:i)
       endif
     enddo
   end function unquote
+
+  !> The number of names of a list, its words once unquote has made its separators blanks (Lib_Tecplot names_in).
+  pure integer function names_in(list)
+    character(len=*), intent(in) :: list
+    character(len=len(list)) :: l
+    integer :: i
+    l = unquote(list)
+    names_in = 0
+    do i = 1, len(l)
+      if (l(i:i) /= ' ' .and. (i == 1 .or. l(max(i-1,1):max(i-1,1)) == ' ')) names_in = names_in + 1
+    enddo
+  end function names_in
 
   !> The VARIABLES text, then every zone in file order: its header, ORION's checks, its arrays, its values.
   subroutine read_file(s, o, stat, reason)
@@ -354,10 +370,11 @@ contains
     integer, intent(out) :: stat
     character(len=*), intent(inout) :: reason
     character(len=VHDR) :: vline, variables_header
-    character(len=HDR) :: line, header
+    character(len=:), allocatable :: line, header, uheader
     integer(I8) :: a, e
-    integer :: nb, ni, nj, nk, ndir, nvar, start, strandid, sid
-    logical :: found, zone_point, zone_node, node1, z_cell, plane_xyz, have
+    integer :: nb, ni, nj, nk, ndir, nvar, start, strandid, sid, v
+    logical :: found, zone_point, zone_node, node1, have, any_k, any_j, cc_y, cc_z
+    logical, allocatable :: cc(:)
     real(R8) :: solutiontime
 
     stat = 1
@@ -401,9 +418,11 @@ contains
       reason = 'no zone record'; return
     endif
 
-    solutiontime = -10._R8
+    solutiontime = -huge(1._R8)
     strandid = -1
     nb = 0
+    any_k = .false.; any_j = .false.; cc_y = .false.; cc_z = .false.
+    allocate(cc(size(o%varnames)))
     allocate(o%block(4))
     zone: do
       ! the zone line in hand: its continuation lines up to the first line that starts with a number
@@ -423,7 +442,10 @@ contains
       enddo
       call parse_zone_header(header, ni, nj, nk, zone_point, zone_node, solutiontime, sid)
       strandid = sid
-      z_cell = var_cellcentered(upper_case(header), 3)
+      uheader = upper_case(header)
+      do v = 1, size(cc)
+        cc(v) = var_cellcentered(uheader, v)
+      enddo
       if (ni <= 0 .or. nj <= 0 .or. nk <= 0) then
         reason = 'a zone without positive dimensions'; return
       endif
@@ -431,33 +453,37 @@ contains
         reason = 'a zone without data'; return
       endif
       nb = nb + 1
+      ! ORION takes the number of coordinates from all the zones: a zone that changes the first zone's is left to ORION
+      any_k = any_k .or. nk > 1
+      any_j = any_j .or. nj > 1
+      if (size(cc) >= 2) cc_y = cc_y .or. cc(2)
+      if (size(cc) >= 3) cc_z = cc_z .or. cc(3)
       if (nb == 1) then
         node1 = zone_node
-        ndir = 3
-        if (nk == 1) ndir = 2
-        if (nj == 1 .and. nk == 1) ndir = 1
-        plane_xyz = .false.
-        if (ndir == 2 .and. size(o%varnames) >= 3) then
-          plane_xyz = is_coordinate_name(o%varnames(1), 'X') .and. is_coordinate_name(o%varnames(2), 'Y') .and. &
-                      is_coordinate_name(o%varnames(3), 'Z') .and. .not. z_cell
-          if (plane_xyz) ndir = 3
-        endif
+        ndir = coordinates(o%varnames, any_k, any_j, cc_y, cc_z)
         if (size(o%varnames) < ndir) then
           reason = 'fewer variables than coordinates'; return
+        endif
+        ! ORION's warning on a file of lines whose second variable is y
+        if (ndir == 1 .and. size(o%varnames) >= 2) then
+          if (is_coordinate_name(o%varnames(2), 'Y')) then
+            reason = 'lines with a variable y'; return
+          endif
         endif
         nvar = size(o%varnames) - ndir
         start = 0
         if (.not. zone_node) start = 1
+      elseif (coordinates(o%varnames, any_k, any_j, cc_y, cc_z) /= ndir) then
+        reason = 'a zone that changes the number of coordinates'; return
+      endif
+      if (any(cc(1:ndir))) then
+        reason = 'a coordinate at the cells'; return
+      endif
+      if (any(cc(ndir+1:)) .and. .not. all(cc(ndir+1:))) then
+        reason = 'variables at the nodes and at the cells in one zone'; return
       endif
       if (zone_node .neqv. node1) then
         reason = 'zones of different centring'; return
-      endif
-      if (plane_xyz .and. z_cell) then
-        reason = 'z cell-centred in a zone after a plane of x, y, z'; return
-      endif
-      if ((nk == 1 .and. ndir == 3 .and. .not. plane_xyz) .or. (nk > 1 .and. (ndir < 3 .or. plane_xyz)) .or. &
-          (nj == 1 .and. ndir > 1)) then
-        reason = 'a zone that does not fit the coordinates'; return
       endif
       if (zone_point) then
         reason = 'POINT packing'; return
@@ -467,6 +493,7 @@ contains
       endif
       call grow_blocks(o, nb)
       call open_zone(o, nb, ni, nj, nk, ndir, nvar, start)
+      o%block(nb)%name = zone_title(header)
       ! the first data line in hand: the zone's values from its start
       s%lo = a
       call read_zone_values(s, o, nb, stat, reason)
@@ -596,6 +623,7 @@ contains
     type(orion_data), intent(inout) :: o, t
     integer, intent(in) :: i, j
     t%block(j)%Ni = o%block(i)%Ni; t%block(j)%Nj = o%block(i)%Nj; t%block(j)%Nk = o%block(i)%Nk
+    t%block(j)%name = o%block(i)%name
     if (allocated(o%block(i)%mesh)) call move_alloc(o%block(i)%mesh, t%block(j)%mesh)
     if (allocated(o%block(i)%vars)) call move_alloc(o%block(i)%vars, t%block(j)%vars)
   end subroutine move_block
@@ -1008,7 +1036,7 @@ contains
 
   logical function line_is_numeric_start(text)
     character(len=*), intent(in) :: text
-    character(1000) :: t
+    character(len=:), allocatable :: t
     character(100) :: tok
     integer :: p, q, ios_
     real(R8) :: value
@@ -1043,7 +1071,7 @@ contains
     logical, intent(out) :: point_,node_
     real(R8), intent(inout) :: time_
     integer, intent(out) :: strand_
-    character(1000) :: work
+    character(len=:), allocatable :: work
     character(100) :: token
     integer :: ios_
     real(R8) :: t_
@@ -1057,6 +1085,7 @@ contains
 
     call get_integer_keyword(work,'I',I_)
     call get_integer_keyword(work,'J',J_)
+    if (keyword_value_pos(work,'J')==0) J_ = 1
     call get_integer_keyword(work,'K',K_,found)
     if (.not.found) K_ = 1
 
@@ -1193,6 +1222,56 @@ contains
     character(len=*), intent(in) :: text, c
     is_coordinate_name = (trim(adjustl(upper_case(text)))==c)
   end function is_coordinate_name
+
+  !> The number of coordinates of a file of these variables: 3 when a zone has more than one node plane in K, or the
+  !  first three variables are x, y, z with z at the nodes in every zone; else 2 when a zone has more than one node line
+  !  in J, or the first two are x, y with y at the nodes in every zone; else 1.
+  integer function coordinates(names, any_k, any_j, cc_y, cc_z) result(ndir)
+    character(len=*), intent(in) :: names(:)
+    logical, intent(in) :: any_k, any_j, cc_y, cc_z
+    logical :: plane_xyz, line_xy
+    plane_xyz = .false.
+    if (size(names)>=3) then
+      plane_xyz = is_coordinate_name(names(1),'X') .and. is_coordinate_name(names(2),'Y') .and. &
+                  is_coordinate_name(names(3),'Z') .and. .not.cc_z
+    endif
+    line_xy = .false.
+    if (size(names)>=2) then
+      line_xy = is_coordinate_name(names(1),'X') .and. is_coordinate_name(names(2),'Y') .and. .not.cc_y
+    endif
+    if (any_k .or. plane_xyz) then
+      ndir = 3
+    elseif (any_j .or. line_xy) then
+      ndir = 2
+    else
+      ndir = 1
+    endif
+  end function coordinates
+
+  function zone_title(text) result(title)
+    character(len=*), intent(in)  :: text
+    character(len=:), allocatable :: title
+    integer :: q, r
+
+    title = ''
+    q = keyword_value_pos(upper_case(text),'T')
+    if (q<=0) return
+    if (text(q:q)=='"') then
+      r = index(text(q+1:),'"')
+      if (r==0) then
+        title = trim(text(q+1:))
+      else
+        title = text(q+1:q+r-1)
+      endif
+    else
+      r = scan(text(q:),', )'//char(9))
+      if (r==0) then
+        title = trim(text(q:))
+      else
+        title = text(q:q+r-2)
+      endif
+    endif
+  end function zone_title
 
   logical function var_cellcentered(text,iv)
     character(len=*), intent(in) :: text

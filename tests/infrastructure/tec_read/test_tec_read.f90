@@ -478,7 +478,7 @@ contains
     call save_file('s10-extra-aux.tec')
     call check_file('s10-extra-aux.tec', 'agree')
 
-    ! a data line of about 2000 characters: ORION cuts it at 1000, the reader reads it whole (the written values)
+    ! a data line of about 2000 characters, read whole (the written values)
     call add(' VARIABLES = "x" "y" "z" "p"')
     call add(' ZONE I=4, J=4, K=5')
     s = ''
@@ -492,7 +492,7 @@ contains
     call save_file('s11-long-line.tec')
     allocate(ref%varnames(4))
     ref%varnames = [character(len=32) :: 'x', 'y', 'z', 'p']
-    ref%solutiontime = -10._R8
+    ref%solutiontime = -huge(1._R8)
     ref%strandid = -1
     ref%tec%node = .true.
     allocate(ref%block(1))
@@ -592,7 +592,7 @@ contains
     read(tok, *) as_read
   end function as_read
 
-  !> Two cell-centred blocks written by ORION's writer as write_outfield calls it (E23.15E3, STRANDID = 0).
+  !> Two cell-centred blocks written by ORION's writer as write_outfield calls it (a steady solution time).
   subroutine orion_file(f)
     character(len=*), intent(in) :: f
     type(orion_data) :: o
