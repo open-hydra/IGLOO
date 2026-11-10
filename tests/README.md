@@ -54,7 +54,7 @@ tests/
 │   ├── drag/  temperature/       #   unit families
 │   └── drag-stokes/ drag-stokes-dopri5/ drag-morsi/ drag-chang/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ scatter-placement/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ rad-cool/ rad-cool-epscol/ emissivity-cap/ rad-foreign-key/ vortex-cloud-st{0p01,0p1,1,10}/ psd-{table,normal,lognormal,rosinrammler}/   # e2e
 ├── evaporation/                  # unit families: (root)  interface-neq/  tc-analytic/  evap-breakup/  liquid-p2t/  boiling-zgr/
-│   └── d2law/ d2law-line/ burnout-threshold/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ evap-breakup-box-varcp/ d2law-brk-dormant/ temp-relax-p2t/ temp-relax-p2t-kcol/ temp-relax-p2t-mucol/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/     # e2e
+│   └── d2law/ d2law-line/ burnout-threshold/ burnout-ord2-slab/ d2law-varcp/ lk-neq/ cemb-box/ asm-box/ tc-box/ tc-box-euler/ tc-box-ord2-row/ datum-abs/ boiling-temperature-key/ no-psat/ scatter-weight-evap/ tc-hexadecane/ mhb98-water/ mhb98-water-psat/ mhb98-water-blowing/ evap-breakup-box/ evap-breakup-box-varcp/ d2law-brk-dormant/ temp-relax-p2t/ temp-relax-p2t-kcol/ temp-relax-p2t-mucol/ boiling-zgr-flash/ boiling-zgr-hot/ boiling-zgr-switch/     # e2e
 ├── combustion/                   # unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ burn-box-ox0/ beckstead-air/ (e2e)
 ├── solidification/               # unit family (root) + solid-box/ solid-melt/ solid-melt-rhos/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-box-varcp/ solid-brk-khrt-varcp/ solid-brk-tab-rhos/ solid-remelt-khrt/ (e2e)
 ├── breakup/                      # unit families: tab/ etab/ pilch-erdman/ reitz-diwakar/ reitz-khrt/
@@ -111,9 +111,9 @@ correlations at fixed inputs, green while those constants hold, RED on regressio
 
 ## Status
 
-ctest 382/382 in a serial build (320 e2e + 61 unit, `self_test`, `registry-docs`, `exe-per-tree`, `e2e-rc-gate`, `lint-test-inputs`, `psd-plane-tool` and `history-census` among the latter, and the
+ctest 383/383 in a serial build (321 e2e + 61 unit, `self_test`, `registry-docs`, `exe-per-tree`, `e2e-rc-gate`, `lint-test-inputs`, `psd-plane-tool` and `history-census` among the latter, and the
 optional `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE binary
-is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 30 more `mpi-*` cases, 412 in all (the 30 `mpi-*` pass). The e2e entries are 187 solver cases, two further
+is absent); an MPI build (`USE_MPI=ON ./test.sh mpi -- -DUSE_TECIO=OFF`, in `build/mpi/`) registers 30 more `mpi-*` cases, 413 in all (the 30 `mpi-*` pass). The e2e entries are 188 solver cases, two further
 oracles on `khrt-e2e`'s run, the five thread-count gates, the ordered-window gate, the sixteen two-sweep gates, the one hundred and seven setup refusals, `vv-order` (fourteen V&V
 figures independent of the record and zone order; skipped without matplotlib) and `check-order` (nine gate printouts independent of it); the unit entries are 48
 compiled unit tests, the property-table reader on six fixtures, `self_test`, `registry-docs`, `exe-per-tree`, `e2e-rc-gate`, `lint-test-inputs`, `psd-plane-tool` and `history-census`. Evaporation with
