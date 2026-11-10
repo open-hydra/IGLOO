@@ -23,9 +23,10 @@ Global Options:
 
 Commands:
   build                     Perform a full build
-    --include-orion=<path>  Set external ORION path
+    --include-orion=<path>  Build a local ORION checkout instead of a release
     --include-finer=<path>  Set external FiNeR path
-    --include-oslo=<path>   Set external OSLO path
+    --include-oslo=<path>   Build a local OSLO checkout instead of a release
+    --update-deps           Select again the newest releases of ORION and OSLO (deps.lock)
     --compilers=<name>      Set compilers (intel, gnu)
     --use-openmp            Use OpenMP
     --use-tecio             Use TecIO
@@ -59,6 +60,14 @@ task() {
 function write_presets() {
   FC=$(grep '^CMAKE_Fortran_COMPILER:FILEPATH=' "$BUILD_DIR/CMakeCache.txt" | cut -d= -f2-)
   CXX=$(grep '^CMAKE_CXX_COMPILER:FILEPATH=' "$BUILD_DIR/CMakeCache.txt" | cut -d= -f2-)
+  # the local ORION and OSLO checkouts, when given
+  local sources=""
+  if [[ -n $ORION_PATH ]]; then
+    sources+="        \"FETCHCONTENT_SOURCE_DIR_ORION\": \"${ORION_PATH}\","$'\n'
+  fi
+  if [[ -n $OSLO_PATH ]]; then
+    sources+="        \"FETCHCONTENT_SOURCE_DIR_OSLO\": \"${OSLO_PATH}\","$'\n'
+  fi
 
   cat <<EOF > CMakePresets.json
 {
@@ -73,9 +82,7 @@ function write_presets() {
       "description": "Default preset",
       "binaryDir": "\${sourceDir}/build",
       "cacheVariables": {
-        "ORION_PATH": "${ORION_PATH}",
-        "FINER_PATH": "${FINER_PATH}",
-        "OSLO_PATH": "${OSLO_PATH}",
+${sources}        "FINER_PATH": "${FINER_PATH}",
         "CMAKE_BUILD_TYPE": "${BUILD_TYPE}",
         "CMAKE_Fortran_COMPILER": "${FC}",
         "CMAKE_CXX_COMPILER": "${CXX}",
@@ -94,9 +101,11 @@ EOF
 # Default global values
 COMMAND=""
 COMPILERS=""
-ORION_PATH=$(pwd)'/lib/ORION/'
+# ORION and OSLO: the releases of deps.lock, or the newest ones that IGLOO accepts (see CMakeLists.txt)
+ORION_PATH=""
+OSLO_PATH=""
+UPDATE_DEPS="false"
 FINER_PATH=$(pwd)'/lib/third_party/FiNeR/'
-OSLO_PATH=$(pwd)'/lib/OSLO/'
 USE_OPENMP="false"
 USE_TECIO="false"
 USE_MPI="false"
@@ -106,7 +115,7 @@ BUILD_TYPE="RELEASE"
 
 # Define allowed options for each command using regular arrays
 CMD=("build" "compile")
-CMD_OPTIONS_build=("--include-orion --include-finer --include-oslo --compilers --use-openmp --use-tecio --use-mpi")
+CMD_OPTIONS_build=("--include-orion --include-finer --include-oslo --update-deps --compilers --use-openmp --use-tecio --use-mpi")
 
 # Parse global options
 while getopts "hv-:" opt; do
@@ -144,7 +153,8 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --include-orion=*)
             [[ "$COMMAND" == "build" ]] || { error " --include-orion is only valid for 'build' command"; exit 1; }
-            ORION_PATH="${1#*=}"
+            # absolute: CMake takes the folder from the build directory
+            ORION_PATH=$(cd "${1#*=}" && pwd) || { error "No folder ${1#*=}"; exit 1; }
             ;;
         --include-finer=*)
             [[ "$COMMAND" == "build" ]] || { error " --include-finer is only valid for 'build' command"; exit 1; }
@@ -152,7 +162,12 @@ while [[ $# -gt 0 ]]; do
             ;;
         --include-oslo=*)
             [[ "$COMMAND" == "build" ]] || { error " --include-oslo is only valid for 'build' command"; exit 1; }
-            OSLO_PATH="${1#*=}"
+            # absolute: CMake takes the folder from the build directory
+            OSLO_PATH=$(cd "${1#*=}" && pwd) || { error "No folder ${1#*=}"; exit 1; }
+            ;;
+        --update-deps)
+            [[ "$COMMAND" == "build" ]] || { error " --update-deps is only valid for 'build' command"; exit 1; }
+            UPDATE_DEPS="true"
             ;;
         --compilers=*)
             [[ "$COMMAND" == "build" ]] || { error " --compilers is only valid for 'build' command"; exit 1; }
@@ -191,8 +206,6 @@ case "$COMMAND" in
         task "Building $project"
 
         task "Cloning submodules"
-        [[ $ORION_PATH == $(pwd)'/lib/ORION/' ]] && git submodule update --init lib/ORION
-        [[ $OSLO_PATH == $(pwd)'/lib/OSLO/' ]] && git submodule update --init lib/OSLO
         [[ $FINER_PATH == $(pwd)'/lib/third_party/FiNeR/' ]] && git submodule update --init lib/third_party/FiNeR
         # FiNeR's own dependencies are cloned by CMake at configure time (ensure_finer_dependencies).
 
@@ -206,8 +219,9 @@ case "$COMMAND" in
         fi
         log "Build dir: $BUILD_DIR"
         log "Build type: $BUILD_TYPE"
-        log "ORION path: $ORION_PATH"
-        log "OSLO path: $OSLO_PATH"
+        log "ORION: ${ORION_PATH:-release}"
+        log "OSLO: ${OSLO_PATH:-release}"
+        log "Update ORION and OSLO: $UPDATE_DEPS"
         log "FINER path: $FINER_PATH"
         log "Use OpenMP: $USE_OPENMP"
         log "Use TecIO: $USE_TECIO"
@@ -218,8 +232,18 @@ case "$COMMAND" in
         else
           log "Compilers: FC=$FC, CXX=$CXX"
         fi
+        CMAKE_ARGS=(-DFINER_PATH="$FINER_PATH" -DUSE_TECIO=$USE_TECIO -DUSE_OPENMP=$USE_OPENMP -DUSE_MPI=$USE_MPI -DUSE_SUNDIALS=$USE_SUNDIALS -DCMAKE_BUILD_TYPE=$BUILD_TYPE)
+        if [[ -n $ORION_PATH ]]; then
+          CMAKE_ARGS+=(-DFETCHCONTENT_SOURCE_DIR_ORION="$ORION_PATH")
+        fi
+        if [[ -n $OSLO_PATH ]]; then
+          CMAKE_ARGS+=(-DFETCHCONTENT_SOURCE_DIR_OSLO="$OSLO_PATH")
+        fi
+        if [[ $UPDATE_DEPS == "true" ]]; then
+          CMAKE_ARGS+=(-DSEMVER_UPDATE=ALL)
+        fi
         rm -rf "$BUILD_DIR"
-        cmake -B "$BUILD_DIR" -DORION_PATH="$ORION_PATH" -DFINER_PATH="$FINER_PATH" -DOSLO_PATH="$OSLO_PATH" -DUSE_TECIO=$USE_TECIO -DUSE_OPENMP=$USE_OPENMP -DUSE_MPI=$USE_MPI -DUSE_SUNDIALS=$USE_SUNDIALS -DCMAKE_BUILD_TYPE=$BUILD_TYPE || exit 1
+        cmake -B "$BUILD_DIR" "${CMAKE_ARGS[@]}" || exit 1
         cmake --build "$BUILD_DIR" || exit 1
         log "[OK] Compilation successful"
 

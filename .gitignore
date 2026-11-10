@@ -2,6 +2,11 @@
 CMakePresets.json
 build
 
+# The releases of OSLO and ORION the configure selects, and their checkouts (cmake/SemVerDeps.cmake)
+deps.lock
+lib/OSLO
+lib/ORION
+
 # Fortran module files
 mod
 *.mod

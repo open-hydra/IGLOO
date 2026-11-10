@@ -173,7 +173,7 @@ contains
     if (badline > 0) call refuse_table(tablefile, 'unreadable rows: line '//trim(itoa(badline))//' does not hold '// &
                                        trim(itoa(ntok))//' numbers')
 
-    ios = tec_read_points_multivars(orion,ntok-1,trim(tablefile))
+    ios = read_points_table(orion,ntok-1,trim(tablefile))
     if (ios/=0) error stop ( "Error reading ideal-gas thermo file" )
     !> One zone per material, in phase order, all spanning the same T range (sets Tmin/Tmax).
     if (size(orion%block) /= nm) then
@@ -501,6 +501,43 @@ contains
     end subroutine read_positive_column
 
   end subroutine read_cdp_properties
+
+  !> properties.dat through ORION's structured reader, in the layout of its former points reader: per zone Ni = N rows,
+  !  Nj = Nk = 1, mesh(1,1:N,1,1), vars(1:nvars,1:N,1,1). Non-zero when ORION refuses the file or a zone is not one
+  !  coordinate and nvars variables at its points.
+  integer function read_points_table(orion, nvars, filename) result(ios)
+    use Lib_ORION_data, only: orion_data
+    use Lib_Tecplot,    only: tec_read_structured_multiblock
+    implicit none
+    type(orion_data), intent(inout) :: orion
+    integer,          intent(in)    :: nvars
+    character(len=*), intent(in)    :: filename
+    real(R8), allocatable :: mesh(:,:,:,:), vars(:,:,:,:)
+    integer :: b, n
+
+    ios = tec_read_structured_multiblock(orion=orion, filename=filename)
+    if (ios /= 0) return
+    ios = 1
+    if (.not. allocated(orion%block)) return
+    do b = 1, size(orion%block)
+      if (.not. (allocated(orion%block(b)%mesh) .and. allocated(orion%block(b)%vars))) return
+      n = size(orion%block(b)%mesh, 2)
+      if (any(shape(orion%block(b)%mesh) /= [1, n, 1, 1])) return
+      if (any(shape(orion%block(b)%vars) /= [nvars, n, 1, 1])) return
+    enddo
+    do b = 1, size(orion%block)
+      n = size(orion%block(b)%mesh, 2)
+      allocate(mesh(1, n, 1, 1), vars(nvars, n, 1, 1))
+      mesh = reshape(orion%block(b)%mesh, [1, n, 1, 1])
+      vars = reshape(orion%block(b)%vars, [nvars, n, 1, 1])
+      call move_alloc(mesh, orion%block(b)%mesh)
+      call move_alloc(vars, orion%block(b)%vars)
+      orion%block(b)%Ni = n
+      orion%block(b)%Nj = 1
+      orion%block(b)%Nk = 1
+    enddo
+    ios = 0
+  end function read_points_table
 
 
   !> The combustion products: each capped material (xi-cap > 0) finds its product, a 0-group line of the phase

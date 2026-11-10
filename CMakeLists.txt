@@ -50,21 +50,13 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   include(GNUInstallDirs)
   set (CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules")
 
-  # -------- Path fallbacks (standalone builds) --------
-  if (NOT DEFINED OSLO_PATH)
-    set(OSLO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/OSLO/")
-  endif()
-  if (NOT DEFINED ORION_PATH)
-    set(ORION_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/ORION/")
-  endif()
+  # -------- Path fallback (standalone builds) --------
   if (NOT DEFINED FINER_PATH)
     set(FINER_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/third_party/FiNeR/")
   endif()
-  # A relative path (e.g. --include-oslo=lib/OSLO/) is taken from the source dir: the helpers
+  # A relative path (e.g. --include-finer=lib/third_party/FiNeR/) is taken from the source dir: the helpers
   # below need an absolute one, file(RELATIVE_PATH) refuses anything else.
-  foreach(_path_var OSLO_PATH ORION_PATH FINER_PATH)
-    get_filename_component(${_path_var} "${${_path_var}}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
-  endforeach()
+  get_filename_component(FINER_PATH "${FINER_PATH}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
   # -------- Helper: initialize a git submodule from the correct git root --------
   macro(ensure_submodule_initialized SUBMOD_PATH)
@@ -139,19 +131,16 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     endforeach()
   endmacro()
 
-  # OSLO
-  if (NOT TARGET OSLO)
-    ensure_submodule_initialized("${OSLO_PATH}")
-    set(osloD "${OSLO_PATH}" "${CMAKE_BINARY_DIR}/lib/OSLO")
-    add_subdirectory(${osloD})
-  endif()
-
-  # ORION
-  if (NOT TARGET ORION)
-    ensure_submodule_initialized("${ORION_PATH}")
-    set(orionD "${ORION_PATH}" "${CMAKE_BINARY_DIR}/lib/ORION")
-    add_subdirectory(${orionD})
-  endif()
+  # OSLO and ORION: the newest releases that satisfy the requirements below, checked out in lib/OSLO and lib/ORION
+  # (cmake/SemVerDeps.cmake). The releases stay those of the lock file deps.lock (not tracked), -DSEMVER_UPDATE=ALL
+  # selects the newest ones again, -DFETCHCONTENT_SOURCE_DIR_<NAME>=<path> builds a local checkout instead. A project
+  # that adds IGLOO (hydra) chooses the releases of its build tree
+  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/SemVerDeps.cmake)
+  # Without the submodule lib/sundials, which OSLO clones only if it has to build SUNDIALS
+  semver_dependency(OSLO GIT_REPOSITORY https://github.com/MarcoGrossi92/OSLO.git VERSION 1.1 GIT_SUBMODULES ""
+                    SOURCE_DIR lib/OSLO)
+  semver_dependency(ORION GIT_REPOSITORY https://github.com/MarcoGrossi92/ORION.git VERSION 2.1 SOURCE_DIR lib/ORION)
+  FetchContent_MakeAvailable(OSLO ORION)
 
   # FiNeR
   if (NOT TARGET FiNeR)
