@@ -81,6 +81,8 @@ ref-g
 ref-consumed
 # tab-wedge-slip runs its gas-order-2 control into ref-ord2/ (tests/breakup/tab-wedge-slip/check.py)
 ref-ord2
+# burnout-ord2-slab runs its default mass-tol sibling into ref-burnout/ (tests/evaporation/burnout-ord2-slab/check.py)
+ref-burnout
 # Verification build tree lives INSIDE build/ (build/verif), so the `build` rule above
 # already covers it; build_*/ stays as a guard against stray out-of-tree variants.
 build_*/

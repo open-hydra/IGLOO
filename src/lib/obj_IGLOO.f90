@@ -388,7 +388,8 @@ contains
                                 trajOn, scatOn, dNscat, npFloor, scatterFloor, trajSample, threshold, &
                                 probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
                                 nConnHit, nSweepHit, nRimExit, nInjNoCell, nKHRTwarn, &
-                                unitSnap, snapOn, timeOn, tEnd, frozenOn, unitPlane, planeOn
+                                unitSnap, snapOn, timeOn, tEnd, frozenOn, unitPlane, planeOn, &
+                                massTolBurnout, kMassTol
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
     use IGLOO_Lib_Properties, only: lookupTab   !> child hand-off (enthalpy slot)
@@ -419,6 +420,9 @@ contains
     integer, allocatable :: nShedAll(:), shedOff(:)
     ! logical, allocatable :: famDone(:)
     real(R8), allocatable :: relTol(:), absTol(:), exch(:,:)
+    !> A consuming group's burnout slot: its burnout mass [kg] (mass-tol = burnout), 0 otherwise
+    real(R8) :: mbGrp
+    logical  :: consumeGrp
     !> The slots of a parcel loop whose parcel is not integrated here (probe filter, MPI ownership)
     logical, allocatable :: skipIp(:)
     !> Scatter-cloud weight-quantum (dNscat) auto-sizing scratch.
@@ -626,6 +630,13 @@ contains
             relTol(gr%neq-1:gr%neq) = 1.e30_R8; absTol(gr%neq-1:gr%neq) = 1.e30_R8
           endif
         endif
+        !> The burnout slot of a consuming model: an absolute tolerance below the group's burnout mass.
+        consumeGrp = .false.; mbGrp = 0._R8
+        if (gr%nparticles > 0) consumeGrp = any(gr%particle(1)%model == [2, 4, 5, 8])
+        if (consumeGrp .and. massTolBurnout) then
+          mbGrp = groupBurnoutMass(mat, g)
+          absTol(8) = min(atol, kMassTol*mbGrp)
+        endif
         call setup_odesolver(N=gr%neq,solver=ode_word,RT=relTol,AT=absTol,iopt=iopt)
 
         !> A product's residues live on the ranks of their parents: the banner counts them over every rank.
@@ -639,6 +650,10 @@ contains
           write(*,'(A,I3,A,I6)')"     Group",g," => number of particles = ", nShow
           if (mat%isProduct) write(*,'(A,I0,A)') '        - combustion product (residues: ', nShow, ')'
           write(*,'(A,I2,A)') '     >> ODE system (neq=', gr%neq, '):'
+          if (consumeGrp .and. massTolBurnout) write(*,'(A,ES10.3,A,ES10.3,A)') &
+            '        - mass slot absolute-tol = ', absTol(8), ' kg (mass-tol = burnout, burnout mass ', mbGrp, ' kg)'
+          if (consumeGrp .and. .not.massTolBurnout) write(*,'(A,ES10.3,A)') &
+            '        - mass slot absolute-tol = ', absTol(8), ' kg (mass-tol = off)'
           if (gr%evapSelect/=0) write(*,*) '       - evaporation --> ', trim(gr%evapWord)
           if (gr%combSelect/=0 .and. gr%prodID == 0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
           if (gr%combSelect/=0 .and. gr%prodID > 0 .and. gr%xiLaw == 0) write(*,'(A)') '        - combustion  --> '// &
@@ -998,6 +1013,35 @@ contains
     call tm_phase(TM_IDLE)
 
   end subroutine solve
+
+
+  !> The lowest burnout mass min(epsBurn m0, mBurnAbs) [kg] of group g's injected parcels: m0 = pi/6 rho d^3 at each
+  !  injected diameter and the material's lowest density (its table, rho-solid, the initial cap's residue).
+  pure function groupBurnoutMass(mat, g) result(mb)
+    use IGLOO_variables, only: pi, epsBurn, mBurnAbs
+    implicit none
+    type(obj_material), intent(in) :: mat
+    integer,            intent(in) :: g
+    real(R8) :: mb, rhoLo, d
+    integer  :: ip
+
+    mb = mBurnAbs
+    associate(gr => mat%group(g))
+    if (gr%rhoVariable) then
+      rhoLo = minval(mat%rhoTab, mask=mat%rhoTab > 0._R8)
+    else
+      rhoLo = gr%rho
+    endif
+    if (gr%rhoSol > 0._R8) rhoLo = min(rhoLo, gr%rhoSol)
+    if (gr%xiOx0 > 0._R8 .and. gr%rhoRes > 0._R8) rhoLo = min(rhoLo, gr%rhoRes)
+    if (rhoLo > 0._R8 .and. rhoLo < huge(rhoLo)) then
+      do ip = 1, gr%nparticles
+        d = gr%particle(ip)%dInj
+        if (d > 0._R8) mb = min(mb, epsBurn*pi/6._R8*rhoLo*d**3)
+      enddo
+    endif
+    end associate
+  end function groupBurnoutMass
 
 
   !> Drag force and heat rate exerted on the gas by np particles of material mID at the given state.
