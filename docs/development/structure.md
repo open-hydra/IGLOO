@@ -129,7 +129,7 @@ vector, mollification flags, and more. Populated once at startup by
 
 | Mode | Dependency source | Switch |
 |------|-------------------|--------|
-| Standalone | In-tree `lib/{ORION,OSLO,third_party/FiNeR}` | default |
+| Standalone | `lib/ORION` and `lib/OSLO`, the releases of `deps.lock` checked out by the configure; the submodule `lib/third_party/FiNeR` | default |
 | Submodule of hydra | `$HYDRADIR/lib/{ORION,OSLO,third_party/FiNeR}` | `--include-orion=`, `--include-oslo=`, `--include-finer=` |
 
 When IGLOO is configured *by* hydra, only `src/lib/CMakeLists.txt` runs — the
@@ -138,7 +138,7 @@ skipped and `src/app/CMakeLists.txt` (which adds the `DocGen` target) is not
 included. DocGen is therefore a **standalone-only** tool.
 
 !!! warning "`compile` keeps the dependency paths of the last `build`"
-    `./install.sh build` records the three paths in `CMakePresets.json`, and
+    `./install.sh build` records the paths given in `CMakePresets.json`, and
     `compile` reuses them. Always run `build`, not `compile`, when changing a
     dependency path.
 
