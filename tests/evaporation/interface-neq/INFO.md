@@ -4,7 +4,8 @@ Verifies the `interface = LK` selector (`Lib_Evaporation.f90::lkCorrection`): th
 `[MHB98]` model-M2 surface-mole-fraction depression
 `Xs = Xs_eq − (2·L_K/d)·β`, `L_K = μ_g·√(2π·Tp·Ru/Mv)/(α_e·Sc·p)`,
 `β = −ṁ·Pr/(2π·μ_g·d)` (implicit in ṁ; production solves by bounded Picard,
-plain while contracting / damped on expansion, tol 1e-12, ≤30 passes).
+plain while contracting / damped on expansion, tol 1e-12, ≤30 passes, and
+bisects the fixed point on −ṁ ∈ [0, −ṁ_VLE] when the passes end unconverged).
 Wrapped around the CEM gas-side rate — d²-law is BT-driven and blind to the
 interface axis (production warns on that combination).
 

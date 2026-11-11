@@ -286,18 +286,20 @@ contains
         end subroutine gasSideRate
 
         !> Langmuir-Knudsen non-equilibrium interface (Miller-Harstad-Bellan 1998, model M2):
-        !  Xs_neq = Xs_eq - (2 L_K/d)·beta, beta = -mdot·Pr/(2π·mu_g·d) — implicit, bounded Picard.
+        !  Xs_neq = Xs_eq - (2 L_K/d)·beta, beta = -mdot·Pr/(2π·mu_g·d) — implicit: bounded Picard, and where it
+        !  does not converge (small drops) bisection of the fixed point on -mdot in [0, -mdot_eq].
         pure subroutine lkCorrection(XsEq, md, Qd, ovr)
             real(R8), intent(in)    :: XsEq
             real(R8), intent(inout) :: md, Qd
             logical,  intent(inout) :: ovr
-            integer,  parameter :: maxPicard = 30
+            integer,  parameter :: maxPicard = 30, maxBisect = 200
             real(R8), parameter :: tolPicard = 1.e-12_R8
-            real(R8) :: LKd2, beta, XsN, YsN, BMN, mdNew, QdNew, diff, diffPrev
+            real(R8) :: LKd2, beta, XsN, YsN, BMN, mdNew, QdNew, diff, diffPrev, mdEq, lo, hi, x
             logical  :: ovrNew
             integer  :: it
 
             LKd2 = 2._R8 * mug * sqrt(2._R8*pi*Tp*Ru/ep(iMv)) / (ep(ialphaE) * Sc * p) / dp
+            mdEq = md
             diffPrev = huge(1._R8)
             do it = 1, maxPicard
                 beta = -md * Pr / (2._R8 * pi * mug * dp)
@@ -317,8 +319,41 @@ contains
                 if (diff < diffPrev) then; md = mdNew; else; md = 0.5_R8*(md + mdNew); endif
                 diffPrev = diff
             enddo
-            md = mdNew; Qd = QdNew; ovr = ovrNew  ! unconverged: last full evaluation (bounded, no NaN)
+            md = mdNew; Qd = QdNew; ovr = ovrNew
+            !> a non-finite equilibrium rate (a solver trial state): the last evaluation, scrubbed by the caller
+            if (.not. (abs(mdEq) <= huge(1._R8))) return
+            !> h(x) = -rate(Xs(x)) - x falls in x = -mdot (Xs falls, every gas-side rate with it): h(0) >= 0
+            lo = 0._R8; hi = -mdEq
+            call rateAt(XsEq, LKd2, -hi, mdNew, QdNew, ovrNew)
+            if (-mdNew - hi > 0._R8) then
+                x = hi                          ! no sign change: the bracket's best estimate
+            else
+                do it = 1, maxBisect
+                    x = 0.5_R8*(lo + hi)
+                    if (x <= lo .or. x >= hi .or. hi - lo <= tolPicard*lo) exit
+                    call rateAt(XsEq, LKd2, -x, mdNew, QdNew, ovrNew)
+                    if (-mdNew - x > 0._R8) then; lo = x; else; hi = x; endif
+                enddo
+                x = 0.5_R8*(lo + hi)
+            endif
+            call rateAt(XsEq, LKd2, -x, md, Qd, ovr)
         end subroutine lkCorrection
+
+        !> The gas-side rate at the surface fraction the LK depression gives for the rate mdIn.
+        pure subroutine rateAt(XsEq, LKd2, mdIn, mdOut, QdOut, ovrOut)
+            real(R8), intent(in)  :: XsEq, LKd2, mdIn
+            real(R8), intent(out) :: mdOut, QdOut
+            logical,  intent(out) :: ovrOut
+            real(R8) :: beta, XsN, YsN, BMN
+            beta = -mdIn * Pr / (2._R8 * pi * mug * dp)
+            XsN  = max(XsEq - LKd2*beta, 0._R8)
+            YsN  = molar2mass(XsN, ep(iMv), Mg)
+            mdOut = 0._R8; QdOut = 0._R8; ovrOut = .false.
+            if (YsN > ep(iYinf)) then
+                BMN = (YsN - ep(iYinf)) / (1._R8 - YsN)
+                if (BMN > 0._R8) call gasSideRate(YsN, BMN, mdOut, QdOut, ovrOut)
+            endif
+        end subroutine rateAt
 
     end subroutine evaporation
 
