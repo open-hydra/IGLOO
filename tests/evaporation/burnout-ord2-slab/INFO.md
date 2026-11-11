@@ -44,6 +44,7 @@ the sibling deck, the same lines without the `[IGLOO-ODE]` section, into `ref-bu
 | P4 | the mass reaches the gas: Σ `wdot` over `source.tec` against Σ `mdot` of the exit records | 1e-5 (`tc-hexadecane`'s closure) |
 | P0–P4 (ref-burnout) | the same five gates on the sibling run (default `mass-tol`) | as above |
 | P5 | the mass slot's tolerance the solver prints: 1e-10 with `mass-tol = off` (this run); `min(1e-10, 1e-3 m_b)` = 1e-23 kg and its burnout mass `m_b` = 1e-20 kg in `ref-burnout/` (exit 0) | 5e-4 (the ES10.3 print) |
+| P6 | the exit temperature against the quasi-steady one at the exit diameter less its first-order lag, in both runs: `F(T, d) = 2π d k_g (T_g − T) + ṁ(T, d) L_v = 0` gives T_qs (Nu = Sh = 2 at rest), ṁ the CEM rate at the Langmuir-Knudsen surface fraction (the fixed point by bisection), `Xs_eq` from Clausius-Clapeyron through (T_boil, 1 atm), T_qs by bisection; the lag `m c_p (dT_qs/dd)(dd/dt)/(−∂F/∂T)` by central differences, 0.05 K at 27 nm (thermal time 4.6e-9 s) | 2e-3 K: the second-order remainder lag·τ/(d/\|ḋ\|) is 3e-4 K, the prints of T and d_p below 1e-5 K; measured residual ≤ 3.7e-5 K |
 
 Measured: P2 `X − x₀` 5.40e-4 m on every drop; P3 `d_p/d(m_b)` 0.86055, 0.90273, 0.95179, 0.92817 (this run) and
 0.87803, 0.79840, 0.87774, 0.87733 (`ref-burnout`); P4 residual 0 in both; the outputs are the same bytes at 1 and
@@ -56,6 +57,7 @@ Measured: P2 `X − x₀` 5.40e-4 m on every drop; P3 `d_p/d(m_b)` 0.86055, 0.90
 | the bilinear sample unclamped, no reject of a trial state | the run stops in the first parcel's tail: `evaporation: cpg<=0 (gas args scrambled?)` on stderr, exit 128, no exit record (P0, P1, P2, P3 and P4 fail on the partial output) |
 | the same with the mass slot at `min(atol, 1e-3 m_b)` | the same stop with `mass-tol = off`; `ref-burnout/` passes P0–P4 |
 | the mass slot at `absolute-tol` whatever `mass-tol` says (no `mass-slot` line) | P5 |
+| a Langmuir-Knudsen solve that stops unconverged (30 damped Picard passes) | P6 in both runs: every drop exits at 300.618832 K against the quasi-steady 332.26–333.82 K (worst residual 32.50 K, 33.16 K in `ref-burnout`): below 100 nm the unconverged rate is 3–14 times the fixed point's |
 
 Either defence alone passes P0–P4: the clamp alone (P3 0.86055–0.95179, the numbers above) and the penalty alone
 (P3 0.63133, 0.81721, 0.80986, 0.88800). The same case at gas order 1 or with `absolute-tol = 1e-25` passes P0–P4 on
