@@ -22,7 +22,7 @@ program test_tec_read
     end subroutine set_num_threads_c
   end interface
 
-  integer, parameter :: SUITE_FILES = 75      !> the tracked .tec inputs of tests/: a new one moves this number
+  integer, parameter :: SUITE_FILES = 76      !> the tracked .tec inputs of tests/: a new one moves this number
   integer(I8), parameter :: CHUNKS(4) = [64_I8, 4096_I8, 1048576_I8, 0_I8]   !> 0: the reader's default
   integer, parameter :: THREADS(4) = [1, 2, 3, 7]
   integer, parameter :: REPEATS = 5           !> the synthetic set's reads at 7 threads, per chunk size

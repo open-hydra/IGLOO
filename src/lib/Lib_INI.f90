@@ -851,8 +851,9 @@ contains
 
   !> [IGLOO-ODE]: solver name, maximum steps, tolerances, the forced failure of the oxide-cap model.
   subroutine read_ode()
-    use IGLOO_variables, only: ode_word, iopt, rtol, atol, failAfter, maxInnerIter
+    use IGLOO_variables, only: ode_word, iopt, rtol, atol, failAfter, maxInnerIter, massTolBurnout
     implicit none
+    character(len=100) :: massWord
 
     iopt = 0
 
@@ -888,6 +889,16 @@ contains
     call fini%get(section_name='IGLOO-ODE', option_name='max-inner-iter', val=maxInnerIter, error=error)
     if (error/=0) maxInnerIter = 10
     if (maxInnerIter < 1) error stop 'IGLOO: max-inner-iter must be at least 1'
+
+    call fini%get(section_name='IGLOO-ODE', option_name='mass-tol', val=massWord, error=error)
+    if (error/=0) massWord = 'burnout'
+    select case (trim(massWord))
+      case ('burnout'); massTolBurnout = .true.
+      case ('off');     massTolBurnout = .false.
+      case default
+        write(*,*) "Wrong mass-tol input ---> "//trim(massWord)//" (burnout or off)"
+        error stop 'IGLOO: unknown mass-tol'
+    end select
 
   end subroutine read_ode
 

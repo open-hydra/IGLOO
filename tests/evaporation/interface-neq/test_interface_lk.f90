@@ -21,6 +21,10 @@ program test_interface_lk
     !   LK6  Miller-Bellan heptane regime rows (1 atm, 300 K): LK rate deficit > 0
     !        and grows as d shrinks (M1-vs-M2 divergence direction); magnitudes
     !        reported INFORMATIONAL (no digitized figure)
+    !   LK7  small drops, where a fixed-point iteration does not contract: d in
+    !        {27, 50, 100} nm x Tp in {300, 350} K, code vs the bracketed root of
+    !        the transcribed chain (bisection on -mdot in [0, -mdot_VLE], to the
+    !        last bit), 1e-11 (ten times the solve's 1e-12 stop); the solve reports no unbracketed point
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_Lib_Evaporation, only: evaporation, nep
@@ -58,6 +62,7 @@ program test_interface_lk
     call run_LK4(ok_all)
     call run_LK5(ok_all)
     call run_LK6(ok_all)
+    call run_LK7(ok_all)
 
     call dump_LK2()
 
@@ -116,6 +121,30 @@ contains
             md   = ora_cem(rho, dv, Xs)
         enddo
     end subroutine ora_lk
+
+    !> the LK fixed point by bisection on x = -mdot in [0, -mdot_VLE]: h(x) = -cem(Xs(x)) - x falls from
+    !> h(0) >= 0 (Xs falls as x grows, the rate with it); stops when the midpoint is an endpoint
+    pure subroutine ora_lk_root(rho, Tpv, dv, alphaE, md)
+        real(R8), intent(in)  :: rho, Tpv, dv, alphaE
+        real(R8), intent(out) :: md
+        real(R8) :: p, XsEq, LKn, x, lo, hi, Xs
+        integer  :: it
+        p    = rho*Rg*Tg
+        XsEq = ora_xs_eq(rho, Tpv)
+        LKn  = mu_g*sqrt(2._R8*PI*Tpv*Ru/Mv)/(alphaE*Scn*p)
+        lo = 0._R8; hi = -ora_cem(rho, dv, XsEq)
+        do it = 1, 2000
+            x = 0.5_R8*(lo + hi)
+            if (x <= lo .or. x >= hi) exit
+            Xs = max(XsEq - 2._R8*LKn/dv*(x*Prn/(2._R8*PI*mu_g*dv)), 0._R8)
+            if (-ora_cem(rho, dv, Xs) - x > 0._R8) then
+                lo = x
+            else
+                hi = x
+            endif
+        enddo
+        md = -0.5_R8*(lo + hi)
+    end subroutine ora_lk_root
 
     !> production call at (rho, Tpv, dv) with given interface selector
     subroutine code_mdot(rho, Tpv, dv, alphaE, intf, md)
@@ -263,6 +292,34 @@ contains
         call append_row('LK6_heptane_d10um_info', 'deficit', r10, r10, 0._R8, 0._R8, 1._R8, .true.)
         call append_row('LK6_heptane_d50um_info', 'deficit', r50, r50, 0._R8, 0._R8, 1._R8, .true.)
     end subroutine run_LK6
+
+    subroutine run_LK7(ok)
+        logical, intent(inout) :: ok
+        real(R8), parameter :: Tps(2) = [300._R8, 350._R8]
+        real(R8), parameter :: dds(3) = [27.e-9_R8, 50.e-9_R8, 100.e-9_R8]
+        real(R8) :: md, md_ref, err, w, tol, qd
+        integer  :: i, j, nFail
+        logical  :: pass, ovr, fail
+        tol = 1.0e-11_R8
+        w = 0._R8
+        nFail = 0
+        do i = 1, 2; do j = 1, 3
+            call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tps(i), dds(j), 0._R8, 1._R8, &
+                             CEM, LK, make_ep(1._R8), md, qd, ovr, lkFail=fail)
+            if (fail) nFail = nFail + 1
+            call ora_lk_root(rho_g, Tps(i), dds(j), 1._R8, md_ref)
+            err = abs(md-md_ref)/abs(md_ref)
+            w = max(w, err)
+            write(*,'(a,f6.1,a,es9.2,a,es14.7,a,es14.7,a,f9.4)') '    LK7 Tp ', Tps(i), ' d ', dds(j), &
+                ': code ', md, '  root ', md_ref, '  ratio ', md/md_ref
+        enddo; enddo
+        pass = assert_lt('LK7 small drops: code vs bracketed root (6 pts)', w, tol)
+        ok = ok .and. pass
+        call append_row('LK7_small_drops', 'mdot', w, w, 0._R8, 0._R8, tol, pass)
+        pass = assert_lt('LK7 small drops: points reported not bracketed', real(nFail, R8), 0.5_R8)
+        ok = ok .and. pass
+        call append_row('LK7_bracket_flag', 'count', real(nFail, R8), real(nFail, R8), 0._R8, 0._R8, 0.5_R8, pass)
+    end subroutine run_LK7
 
     subroutine heptane_pair(epH, rho, dv, r)
         real(R8), intent(in)  :: epH(nep), rho, dv

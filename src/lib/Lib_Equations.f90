@@ -230,8 +230,8 @@ contains
     dN(3,:) = [-(1-u)*(1-v), (1-u)*(1-v), (1-u)*v, -(1-u)*v, -u*(1-v), u*(1-v), u*v, -u*v]
   end subroutine hex
 
-  !> Bilinear interpolation of the gas at p0 in a quadrilateral: analytic inverse map, then
-  !  shape-function weighting.
+  !> Bilinear interpolation of the gas at p0 in a quadrilateral: analytic inverse map, (u, v) clamped to the cell,
+  !  then shape-function weighting.
   subroutine interp2ndOrder2D(vertices,gasNodes,p0,nsp,gas)
     implicit none
     integer,  intent(in)  :: nsp
@@ -284,6 +284,9 @@ contains
         u = 0.5_R8
       endif
     endif
+    !> A point outside the dual cell takes the value at the nearest (u, v) of the cell: never an extrapolation.
+    u = max(0._R8, min(1._R8, u))
+    v = max(0._R8, min(1._R8, v))
 
     N(1)  = (1._R8 - u) * (1._R8 - v)
     N(2)  = u * (1._R8 - v)

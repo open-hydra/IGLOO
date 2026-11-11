@@ -613,10 +613,22 @@ contains
   end subroutine rhsSolidification
 
 
+  !> A trial state the solver rejects: no mass left or a non-finite slot, at a gas sample whose cpg is not positive.
+  pure logical function trialGasUnphysical(gas, nsp, Z, neq) result(bad)
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    implicit none
+    integer,  intent(in) :: nsp, neq
+    real(R8), intent(in) :: gas(nsp), Z(neq)
+    bad = .false.
+    if (.not. (gas(7) * gas(8) / (gas(7) - 1._R8) <= 0._R8)) return
+    bad = Z(8) <= 0._R8 .or. any(.not. ieee_is_finite(Z))
+  end function trialGasUnphysical
+
+
   !> Model 2: variable mass via evaporation.
   subroutine rhsEvaporation(neq, time, Z, F, aux,naux, auxst,nauxst, &
                              hTabM, rhoTabM, psatTabM, LvTabM, cpvTabM, &
-                             gasNodes, gasVert,gas,nsp,nNodes, mupTabM, TsOut, kLiqTabM, epsTabM)
+                             gasNodes, gasVert,gas,nsp,nNodes, mupTabM, TsOut, kLiqTabM, epsTabM, lkFail)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
@@ -637,12 +649,13 @@ contains
     real(R8), intent(in),  optional :: mupTabM(:)   !> the liquid viscosity table (P2T)
     real(R8), intent(out), optional :: TsOut        !> the surface temperature (the mean temperature under ITC)
     real(R8), intent(in),  optional :: kLiqTabM(:)  !> the liquid conductivity table (P2T)
+    logical, intent(inout), optional :: lkFail   !> set when an LK fixed point was not bracketed
     ! locals
     real(R8) :: normVel, slip, mdot, Vdif(3), Re, cpFactor, tp, d, rho, m, psat, xi0_loc(3)
     real(R8) :: Fdrag(3), Qdot, Qdot_evap
     real(R8) :: ep(nep)
     real(R8) :: ts, cl, mul, carry, TB, Nu, kl
-    logical  :: override, boiling
+    logical  :: override, boiling, lkF
     integer  :: p2tStat
 
     F = 0._R8
@@ -660,6 +673,13 @@ contains
         call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
         auxst(ind_sxi:ind_sxi+2) = xi0_loc
       endif
+    endif
+
+    !> a non-physical trial state sampling a gas of cpg <= 0: the scrub's penalty, the step is rejected (no stop)
+    if (trialGasUnphysical(gas, nsp, Z, neq)) then
+      F = 1.e30_R8
+      if (present(TsOut)) TsOut = tp
+      return
     endif
 
     Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
@@ -691,7 +711,7 @@ contains
         mul = aux(ind_e5)
       endif
       call p2tSurface(tp, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mul, &
-                      psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl, epsTabM=epsTabM, mulTabM=mupTabM)
+                      psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl, epsTabM=epsTabM, mulTabM=mupTabM, lkFail=lkFail)
       !> no surface root: the scrub's penalty, the step is rejected
       if (p2tStat == 0) then
         F = 1.e30_R8
@@ -709,6 +729,7 @@ contains
     if (mod_propFlags(6)) ep(iLv)  = tableValue(LvTabM, Tmin, Tmax, ts)
     if (mod_propFlags(7)) ep(icpv) = tableValue(cpvTabM, Tmin, Tmax, ts)
     !> gas packs (5)=T,(6)=mu,(7)=gamma,(8)=R,(9)=k; signature is (rhog,Tg,gamma,Rg,mug,kg)
+    lkF = .false.
     if (boiling) then
       call zgrAt(tp, TB, d, gas, nsp, Nu, ep(iLv), cpFactor, kl, mdot, Qdot_evap)
       override = .true.
@@ -716,12 +737,13 @@ contains
       psat = tableValue(psatTabM, Tmin, Tmax, ts)
       call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
                        ts, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
-                       mdot, Qdot_evap, override, psatExt=psat)
+                       mdot, Qdot_evap, override, psatExt=psat, lkFail=lkF)
     else
       call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
                        ts, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
-                       mdot, Qdot_evap, override)
+                       mdot, Qdot_evap, override, lkFail=lkF)
     endif
+    if (present(lkFail)) lkFail = lkFail .or. lkF
     if (override) Qdot = Qdot_evap
     !> Stefan-blowing reduction of the convective heat (MHB98 eq.19); skipped when the model returned its own Qdot
     if (blowSelect == 1 .and. .not.override) &
@@ -847,7 +869,7 @@ contains
   !  State: Z(1:3)=pos, Z(4:6)=vel, Z(7)=T/h, Z(8)=mass, Z(9)=npdot.
   subroutine rhsEvapBreakup(neq, time, Z, F, aux,naux, auxst,nauxst,     &
                              hTabM, rhoTabM, mupTabM, sigTabM, psatTabM, LvTabM, cpvTabM, &
-                             gasNodes, gasVert,gas,nsp,nNodes, TsOut, kLiqTabM, epsTabM)
+                             gasNodes, gasVert,gas,nsp,nNodes, TsOut, kLiqTabM, epsTabM, lkFail)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce, blowSelect
@@ -869,13 +891,14 @@ contains
     real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
     real(R8), intent(out), optional :: TsOut   !> the surface temperature (the mean temperature under ITC)
     real(R8), intent(in),  optional :: kLiqTabM(:)  !> the liquid conductivity table (P2T)
+    logical, intent(inout), optional :: lkFail   !> set when an LK fixed point was not bracketed
     ! locals
     real(R8) :: normVel, slip, mdot, mdot_evap, Vdif(3), Re, mTraj, cpFactor, sigma, mup, psat
     real(R8) :: tp, d, rho, m, xi0_loc(3)
     real(R8) :: Fdrag(3), Qdot, Qdot_evap, acc(3), brkupVar(2)
     real(R8) :: ep(nep)
     real(R8) :: ts, cl, carry, TB, Nu, kl
-    logical  :: override, boiling
+    logical  :: override, boiling, lkF
     integer  :: p2tStat
 
     F = 0._R8
@@ -895,6 +918,13 @@ contains
         call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
         auxst(ind_sxi:ind_sxi+2) = xi0_loc
       endif
+    endif
+
+    !> a non-physical trial state sampling a gas of cpg <= 0: the scrub's penalty, the step is rejected (no stop)
+    if (trialGasUnphysical(gas, nsp, Z, neq)) then
+      F = 1.e30_R8
+      if (present(TsOut)) TsOut = tp
+      return
     endif
 
     Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
@@ -918,7 +948,7 @@ contains
       if (mod_propFlags(1)) then; cl = lookupTab(hTabM, tp + 0.5_R8) - lookupTab(hTabM, tp - 0.5_R8)
       else;                       cl = aux(ind_cp); endif
       call p2tSurface(tp, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mup, &
-                      psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl, epsTabM=epsTabM, mulTabM=mupTabM)
+                      psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl, epsTabM=epsTabM, mulTabM=mupTabM, lkFail=lkFail)
       !> no surface root: the scrub's penalty, the step is rejected
       if (p2tStat == 0) then
         F = 1.e30_R8
@@ -946,6 +976,7 @@ contains
     if (mod_propFlags(6)) ep(iLv)  = tableValue(LvTabM, Tmin, Tmax, ts)
     if (mod_propFlags(7)) ep(icpv) = tableValue(cpvTabM, Tmin, Tmax, ts)
     !> gas packs (5)=T,(6)=mu,(7)=gamma,(8)=R,(9)=k; signature is (rhog,Tg,gamma,Rg,mug,kg)
+    lkF = .false.
     if (boiling) then
       call zgrAt(tp, TB, d, gas, nsp, Nu, ep(iLv), cpFactor, kl, mdot_evap, Qdot_evap)
       override = .true.
@@ -953,12 +984,13 @@ contains
       psat = tableValue(psatTabM, Tmin, Tmax, ts)
       call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
                        ts, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
-                       mdot_evap, Qdot_evap, override, psatExt=psat)
+                       mdot_evap, Qdot_evap, override, psatExt=psat, lkFail=lkF)
     else
       call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), &
                        ts, d, Re, cpFactor, mod_evapSelect, mod_intfSelect, ep, &
-                       mdot_evap, Qdot_evap, override)
+                       mdot_evap, Qdot_evap, override, lkFail=lkF)
     endif
+    if (present(lkFail)) lkFail = lkFail .or. lkF
     if (override) Qdot = Qdot_evap
     !> Stefan-blowing reduction of the convective heat (MHB98 eq.19); skipped when the model returned its own Qdot
     if (blowSelect == 1 .and. .not.override) &
@@ -1011,7 +1043,7 @@ contains
   !  bracket. stat: 1 the root bracketed by tbar and the first estimate, 2 after widening, 0 no bracket, no
   !  convergence or mu_l not positive (ts NaN).
   subroutine p2tSurface(tbar, rho, d, m, gas, nsp, Vdif, slip, Re, aux, naux, cl, mul, &
-                        psatTabM, LvTabM, cpvTabM, ts, stat, klIn, epsTabM, mulTabM)
+                        psatTabM, LvTabM, cpvTabM, ts, stat, klIn, epsTabM, mulTabM, lkFail)
     use Lib_Equations,         only: interphase
     use IGLOO_variables,       only: pi, blowSelect
     use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor, iLv, icpv, chiETC
@@ -1026,6 +1058,7 @@ contains
     real(R8), intent(in), optional :: klIn   !> the liquid conductivity (else k-liq)
     real(R8), intent(in), optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
     real(R8), intent(in), optional :: mulTabM(:)   !> the liquid viscosity table (a Viscosity column)
+    logical, intent(inout), optional :: lkFail   !> set when an LK fixed point was not bracketed
     integer,  parameter :: maxEval = 100
     real(R8), parameter :: tol4 = 4._R8*epsilon(1._R8)
     real(R8) :: kl, BM, K, q0, tLo, t1, g0, g1
@@ -1137,7 +1170,7 @@ contains
       real(R8), intent(in) :: T
       real(R8), intent(out), optional :: BMo
       real(R8) :: qn, Fd(3), Qg, md, Qe, ps, epT(nep)
-      logical  :: ovr
+      logical  :: ovr, lkF
       call interphase(gas, nsp, Vdif, slip, T, d, Re, 1._R8, Fd, Qg)
       epT = aux(ind_Mv:ind_Mv+nep-1)
       if (mod_propFlags(6)) epT(iLv)  = tableValue(LvTabM, Tmin, Tmax, T)
@@ -1145,11 +1178,12 @@ contains
       if (mod_propFlags(5)) then
         ps = tableValue(psatTabM, Tmin, Tmax, T)
         call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), T, d, Re, 1._R8, &
-                         mod_evapSelect, mod_intfSelect, epT, md, Qe, ovr, psatExt=ps, BMout=BMo)
+                         mod_evapSelect, mod_intfSelect, epT, md, Qe, ovr, psatExt=ps, BMout=BMo, lkFail=lkF)
       else
         call evaporation(gas(1), gas(5), gas(7), gas(8), gas(6), gas(9), T, d, Re, 1._R8, &
-                         mod_evapSelect, mod_intfSelect, epT, md, Qe, ovr, BMout=BMo)
+                         mod_evapSelect, mod_intfSelect, epT, md, Qe, ovr, BMout=BMo, lkFail=lkF)
       endif
+      if (present(lkFail)) lkFail = lkFail .or. lkF
       if (ovr) Qg = Qe
       if (blowSelect == 1 .and. .not.ovr) Qg = Qg*blowingFactor(gas(7), gas(8), gas(6), gas(9), rho, d, m, md)
       if (ind_eps > 0) Qg = Qg + radiativeHeat(emissivityAt(aux(ind_eps), T, epsTabM), d, gas(5), T)

@@ -97,7 +97,7 @@ tests/
 ├── standard/                     # drag + heat
 │   ├── drag/  temperature/       #   unit families
 │   └── drag-stokes/ drag-stokes-dopri5/ temp-relax/ temp-relax-varcp/ temp-relax-varcp-euler/ temp-relax-varrho/ body-force/ body-force-z/ conv-nu/ conv-nu-{jaxa2,jaxa3,jaxa4,kd}/ vie-plait/ vie-plait-dense/ swirl-wedge/ swirl-wedge-deposit/ swirl-wedge-spin/ swirl-wedge-ord1/ no-exchange/ scatter-weight/ scatter-placement/ out-dcell3/ out-dtime/ out-off/ out-exit-row/ rad-cool/ rad-cool-epscol/ emissivity-cap/ rad-foreign-key/ vortex-cloud-st{0p01,0p1,1,10}/   # e2e cases
-├── evaporation/                  # unit families (root C, interface-neq, tc-analytic, evap-breakup, liquid-p2t, boiling-zgr) + d2law/d2law-line/burnout-threshold/d2law-varcp/lk-neq/cemb-box/asm-box/tc-box/tc-box-euler/tc-box-ord2-row/datum-abs/boiling-temperature-key/no-psat/scatter-weight-evap/tc-hexadecane/mhb98-water/mhb98-water-psat/mhb98-water-blowing/evap-breakup-box/evap-breakup-box-varcp/d2law-brk-dormant/temp-relax-p2t/temp-relax-p2t-kcol/temp-relax-p2t-mucol/boiling-zgr-flash/boiling-zgr-hot/boiling-zgr-switch e2e
+├── evaporation/                  # unit families (root C, interface-neq, tc-analytic, evap-breakup, liquid-p2t, boiling-zgr) + d2law/d2law-line/burnout-threshold/burnout-ord2-slab/d2law-varcp/lk-neq/cemb-box/asm-box/tc-box/tc-box-euler/tc-box-ord2-row/datum-abs/boiling-temperature-key/no-psat/scatter-weight-evap/tc-hexadecane/mhb98-water/mhb98-water-psat/mhb98-water-blowing/evap-breakup-box/evap-breakup-box-varcp/d2law-brk-dormant/temp-relax-p2t/temp-relax-p2t-kcol/temp-relax-p2t-mucol/boiling-zgr-flash/boiling-zgr-hot/boiling-zgr-switch e2e
 ├── breakup/                      # TAB, Pilch-Erdman, Reitz-Diwakar, ETAB, Reitz-KHRT unit families + tab/etab/pilch-erdman/reitz-diwakar/khrt e2e, etab-e2e-dopri5, tab-hf92, etab-hf92, khrt-e2e-euler, khrt-stress, rd/tab/etab/khrt-evap-frozen, khrt-evap-frozen-euler, khrt-evap-live, khrt-shed-noexchange, tab/tab-evap-frozen/khrt-varrho, khrt-varcp, breakup-per-material, khrt-plane, khrt-exit-children, khrt-hf93, pe-sigma-table, tab-wedge-slip
 ├── combustion/                   # Beckstead unit family + burn-box/burn-box-euler/burn-box-cap/burn-box-residue/burn-box-ox0/beckstead-air e2e
 ├── solidification/               # solidification unit family + solid-box/solid-melt/solid-melt-rhos/solid-box-euler/solid-box-2mat/solid-box-rad/scatter-weight-solid/solid-brk-tab/solid-brk-khrt/solid-box-rhos/solid-box-varrho/solid-box-varcp/solid-brk-khrt-varcp/solid-brk-tab-rhos/solid-remelt-khrt e2e
@@ -129,7 +129,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **382 tests** in a serial build (320 e2e + 61 unit, `self_test`,
+Current gate: **383 tests** in a serial build (321 e2e + 61 unit, `self_test`,
 `registry-docs`, `exe-per-tree`, `e2e-rc-gate`, `lint-test-inputs`, `psd-plane-tool` and `history-census` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 30 more
 `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.

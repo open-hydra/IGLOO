@@ -39,12 +39,21 @@ ode-solver   = H-sdirk4    ; default; or H-dopri5
 max-steps-ode = 100000     ; iopt(1); default 100000
 relative-tol  = 1e-10      ; rtol; default 1e-10
 absolute-tol  = 1e-10      ; atol; default 1e-10
+mass-tol      = burnout    ; the mass slot's atol; default burnout, or off
 ```
 
 `H-sdirk4` (L-stable, stiffly accurate, 4th-order DIRK) is the default because the
 Stokes drag relaxation $\tau_p = \rho_p d^2/(18\mu_g)$ can be very short relative to
 the cell-transit time, making the ODE stiff.  `H-dopri5` (explicit Dormand-Prince 5th
 order) is appropriate for low-Re/large-particle problems where stiffness is absent.
+
+The tolerances apply slot by slot. The mass slot of a consuming parcel (models 2, 4, 5 and 8) takes
+$\min(\mathrm{atol}, 10^{-3} m_b)$ by default (`mass-tol = burnout`), $m_b = \min(10^{-6} m_0, 10^{-20}\,\mathrm{kg})$
+the burnout mass: with one absolute tolerance over states in kg, m, s and K, a drop lighter than `atol` has no
+absolute control on its mass, and in the last part of its life the solver's Newton trial states may leave the domain
+with a negative mass. OSLO takes one tolerance vector per group, so $m_b$ is the group's: $m_0$ the mass of its
+smallest injected diameter at the material's lowest density; a breakup child lighter than every injected parcel of
+its group keeps the group's value. `mass-tol = off` gives the mass slot `atol` like every other slot.
 
 ---
 
@@ -168,5 +177,6 @@ The OSlo solver calls `solout` at every accepted step.  It performs:
 | `max-steps-ode` | 100000 | `iopt(1)`; internal step limit per `Run_ODESolver` call |
 | `relative-tol` | 1e-10 | `rtol` |
 | `absolute-tol` | 1e-10 | `atol` |
+| `mass-tol` | `burnout` | the mass slot of models 2, 4, 5, 8: $\min(\mathrm{atol}, 10^{-3} m_b)$, $m_b$ the group's burnout mass; `off`: `atol` |
 
 Full registry: [../user/registry.md](../user/registry.md).

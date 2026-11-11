@@ -238,6 +238,7 @@ Selects and tunes the ODE integrator.
 | `ode-solver` | string | `H-sdirk4` | Integrator: `H-sdirk4` (implicit SDIRK4) or `H-dopri5` (explicit Dormand–Prince 5(4)); any other token is refused |
 | `relative-tol` | real | `1e-10` | Relative ODE tolerance |
 | `absolute-tol` | real | `1e-10` | Absolute ODE tolerance |
+| `mass-tol` | string | `burnout` | The absolute tolerance of the mass slot of an evaporating or burning parcel (ODE models 2, 4, 5 and 8): `burnout` = the lower of `absolute-tol` and $10^{-3}$ of the group's burnout mass $\min(10^{-6} m_0, 10^{-20}\,\mathrm{kg})$, $m_0$ the mass of its smallest injected diameter at the material's lowest density; `off` = `absolute-tol`; any other token is refused |
 | `max-steps-ode` | integer | `100000` | Maximum internal steps per integrator call (`iopt(1)`) |
 | `fail-after` | real | `0` | Forces the solver failure of the oxide-cap model (ODE model 8) once a parcel's last accepted time reaches this value [s]: the failure path of the [burnout residue](../theory/combustion.md#the-burnout-residue); 0 = off |
 | `max-inner-iter` | integer | `10` | Maximum ODE solver calls on one cell segment (its first call and the refinements of its crossing); a parcel that needs more ends at its last accepted step, as on a solver failure; below 1 is refused |

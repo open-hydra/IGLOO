@@ -128,8 +128,8 @@ d²-law case (`evaporation/d2law`) is described in [Evaporation](evaporation.md)
 
 Langmuir–Knudsen interface depression (MHB98 model M2) around the CEM gas-side
 rate: fixed-point self-consistency, deep-Picard oracle agreement, VLE limit,
-the exact $1/(p\,d)$ scaling inversion, and a 27-point convergence envelope
-(LK1–LK6).
+the exact $1/(p\,d)$ scaling inversion, a 27-point convergence envelope, and drops
+of 27–100 nm against the bracketed root of the transcribed chain (LK1–LK7).
 
 <figure>
   {% include "vv/images/unit-evaporation-lk.svg" ignore missing %}

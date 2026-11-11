@@ -388,7 +388,8 @@ contains
                                 trajOn, scatOn, dNscat, npFloor, scatterFloor, trajSample, threshold, &
                                 probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
                                 nConnHit, nSweepHit, nRimExit, nInjNoCell, nKHRTwarn, &
-                                unitSnap, snapOn, timeOn, tEnd, frozenOn, unitPlane, planeOn
+                                unitSnap, snapOn, timeOn, tEnd, frozenOn, unitPlane, planeOn, &
+                                massTolBurnout, kMassTol
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
     use IGLOO_Lib_Properties, only: lookupTab   !> child hand-off (enthalpy slot)
@@ -416,9 +417,14 @@ contains
     !> Child-ID band of the current generation. No initializer here: it would imply SAVE.
     integer :: curBase, curCount, newBase, childLocal, childGlobal, pidx, idBase
     integer :: foldStat(2), noCell(1), khrtWarn(1)
+    !> Per material: the parcels whose LK fixed point was not bracketed in a right-hand side
+    integer, allocatable :: nLKfail(:)
     integer, allocatable :: nShedAll(:), shedOff(:)
     ! logical, allocatable :: famDone(:)
     real(R8), allocatable :: relTol(:), absTol(:), exch(:,:)
+    !> A consuming group's burnout slot: its burnout mass [kg] (mass-tol = burnout), 0 otherwise
+    real(R8) :: mbGrp
+    logical  :: consumeGrp
     !> The slots of a parcel loop whose parcel is not integrated here (probe filter, MPI ownership)
     logical, allocatable :: skipIp(:)
     !> Scatter-cloud weight-quantum (dNscat) auto-sizing scratch.
@@ -439,6 +445,7 @@ contains
     self%stateIsFresh = .false.
     nSectorFold = 0; nMultiFold = 0; nStencilRefresh = 0; nConnHit = 0; nSweepHit = 0; nRimExit = 0
     nInjNoCell = 0; nKHRTwarn = 0
+    allocate(nLKfail(nm)); nLKfail = 0
 
     sourceSwitch = self%srcSwitch
     eulerSwitch  = self%eulSwitch
@@ -626,6 +633,13 @@ contains
             relTol(gr%neq-1:gr%neq) = 1.e30_R8; absTol(gr%neq-1:gr%neq) = 1.e30_R8
           endif
         endif
+        !> The burnout slot of a consuming model: an absolute tolerance below the group's burnout mass.
+        consumeGrp = .false.; mbGrp = 0._R8
+        if (gr%nparticles > 0) consumeGrp = any(gr%particle(1)%model == [2, 4, 5, 8])
+        if (consumeGrp .and. massTolBurnout) then
+          mbGrp = groupBurnoutMass(mat, g)
+          absTol(8) = min(atol, kMassTol*mbGrp)
+        endif
         call setup_odesolver(N=gr%neq,solver=ode_word,RT=relTol,AT=absTol,iopt=iopt)
 
         !> A product's residues live on the ranks of their parents: the banner counts them over every rank.
@@ -639,6 +653,10 @@ contains
           write(*,'(A,I3,A,I6)')"     Group",g," => number of particles = ", nShow
           if (mat%isProduct) write(*,'(A,I0,A)') '        - combustion product (residues: ', nShow, ')'
           write(*,'(A,I2,A)') '     >> ODE system (neq=', gr%neq, '):'
+          if (consumeGrp .and. massTolBurnout) write(*,'(A,ES10.3,A,ES10.3,A)') &
+            '        - mass slot absolute-tol = ', absTol(8), ' kg (mass-tol = burnout, burnout mass ', mbGrp, ' kg)'
+          if (consumeGrp .and. .not.massTolBurnout) write(*,'(A,ES10.3,A)') &
+            '        - mass slot absolute-tol = ', absTol(8), ' kg (mass-tol = off)'
           if (gr%evapSelect/=0) write(*,*) '       - evaporation --> ', trim(gr%evapWord)
           if (gr%combSelect/=0 .and. gr%prodID == 0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
           if (gr%combSelect/=0 .and. gr%prodID > 0 .and. gr%xiLaw == 0) write(*,'(A)') '        - combustion  --> '// &
@@ -705,6 +723,7 @@ contains
             enddo
             !$OMP END PARALLEL DO
             call region_fail_check()
+            call countLKFail(gr%particle(start:nEnd), nLKfail(m))
             call ps_end()
             call tm_phase(TM_CENSUS)
 
@@ -879,6 +898,7 @@ contains
           enddo
           !$OMP END PARALLEL DO
           call region_fail_check()
+          call countLKFail(gr%particle(1:gr%nparticles), nLKfail(m))
           call ps_end()
           !> The residues of this group's parcels join its product's group, on this rank.
           if (gr%resOn) call drainResidues(self%material(gr%prodID)%group(1), gr)
@@ -988,6 +1008,14 @@ contains
         ' [WARNING] Reitz-KHRT outside its hypotheses (Oh > 1 or rho_g/rho_p > 0.1) in ', khrtWarn(1), &
         ' model evaluations'
     endif
+    call mpi_allreduce_sum_i4_array(nLKfail, nm)
+    if (mpi_is_root) then
+      do m = 1, nm
+        if (nLKfail(m) > 0) write(*,'(A,A,A,I0,A)') ' [WARNING] LK-interface: material ', &
+          trim(self%material(m)%matName), ': the Langmuir-Knudsen fixed point not bracketed in ', nLKfail(m), &
+          ' parcel(s); their rate is the bracket''s best estimate'
+      enddo
+    endif
     if (mpi_is_root) then
       if (snapOn) then
         write(*,'(A,ES16.8E2,A)') '  Stop condition : time-end = ', tEnd, ' s reached, or the particle left the domain'
@@ -998,6 +1026,35 @@ contains
     call tm_phase(TM_IDLE)
 
   end subroutine solve
+
+
+  !> The lowest burnout mass min(epsBurn m0, mBurnAbs) [kg] of group g's injected parcels: m0 = pi/6 rho d^3 at each
+  !  injected diameter and the material's lowest density (its table, rho-solid, the initial cap's residue).
+  pure function groupBurnoutMass(mat, g) result(mb)
+    use IGLOO_variables, only: pi, epsBurn, mBurnAbs
+    implicit none
+    type(obj_material), intent(in) :: mat
+    integer,            intent(in) :: g
+    real(R8) :: mb, rhoLo, d
+    integer  :: ip
+
+    mb = mBurnAbs
+    associate(gr => mat%group(g))
+    if (gr%rhoVariable) then
+      rhoLo = minval(mat%rhoTab, mask=mat%rhoTab > 0._R8)
+    else
+      rhoLo = gr%rho
+    endif
+    if (gr%rhoSol > 0._R8) rhoLo = min(rhoLo, gr%rhoSol)
+    if (gr%xiOx0 > 0._R8 .and. gr%rhoRes > 0._R8) rhoLo = min(rhoLo, gr%rhoRes)
+    if (rhoLo > 0._R8 .and. rhoLo < huge(rhoLo)) then
+      do ip = 1, gr%nparticles
+        d = gr%particle(ip)%dInj
+        if (d > 0._R8) mb = min(mb, epsBurn*pi/6._R8*rhoLo*d**3)
+      enddo
+    endif
+    end associate
+  end function groupBurnoutMass
 
 
   !> Drag force and heat rate exerted on the gas by np particles of material mID at the given state.
@@ -1073,6 +1130,17 @@ contains
     call tm_report(self%sweep)
 
   end subroutine writeout
+
+
+  !> After a parcel loop: count the parcels whose LK fixed point was not bracketed, and clear their flags.
+  subroutine countLKFail(parts, n)
+    use IGLOO_particles, only: obj_particle
+    implicit none
+    type(obj_particle), intent(inout) :: parts(:)
+    integer,            intent(inout) :: n
+    n = n + count(parts(:)%lkFail)
+    parts(:)%lkFail = .false.
+  end subroutine countLKFail
 
 
   !> The sweep's block changes, summed over the ranks and printed by the root rank.
