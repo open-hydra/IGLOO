@@ -289,8 +289,13 @@ $$
 $\beta$ is implicit in $\dot{m}$: `lkCorrection` solves the fixed point by
 bounded Picard iteration seeded with the equilibrium rate (plain update while
 contracting, damped $\tfrac{1}{2}$-averaging on expansion; relative tolerance
-$10^{-12}$, at most 30 passes, unconverged exit returns the last full — always
-finite — evaluation).  The correction vanishes as $p\,d \to \infty$ or
+$10^{-12}$, at most 30 passes).  On small drops (below about 100 nm for water at
+one atmosphere) the map stops contracting and the passes can end unconverged;
+the fixed point is then bisected on $x = -\dot{m} \in [0, -\dot{m}_{eq}]$:
+$h(x) = -\dot{m}(X_s(x)) - x$ decreases in $x$ ($X_s$ falls as $x$ grows and
+every gas-side rate rises with $X_s$), from $h(0) \ge 0$ to
+$h(-\dot{m}_{eq}) \le 0$, and the bisection stops at a relative $10^{-12}$ of
+the root.  The correction vanishes as $p\,d \to \infty$ or
 $\alpha_e \to \infty$ and recovers VLE exactly.
 
 The accommodation coefficient $\alpha_e$ is the material-line token `alpha-e=`
