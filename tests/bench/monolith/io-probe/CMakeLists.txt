@@ -24,7 +24,7 @@ set_target_properties(io-probe PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINAR
 
 if(CMAKE_Fortran_COMPILER_ID MATCHES "^Intel")
   # ORION's Lib_Tecplot copied under another module name, so that the flag reaches only the copy's OPEN
-  file(READ "${ORION_PATH}/src/fortran/lib/Lib_Tecplot.f90" _tec)
+  file(READ "${orion_SOURCE_DIR}/src/fortran/lib/Lib_Tecplot.f90" _tec)
   string(REPLACE "module Lib_Tecplot" "module Lib_Tecplot_bufio" _tec "${_tec}")
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/Lib_Tecplot_bufio.f90" "${_tec}")
   add_library(io_probe_tec_bufio STATIC "${CMAKE_CURRENT_BINARY_DIR}/Lib_Tecplot_bufio.f90")

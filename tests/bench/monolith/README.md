@@ -208,7 +208,8 @@ start-up either way.
   placement goes through `I_MPI_PIN_DOMAIN` masks (`igloo_domains`); `IGLOO_WRAP` wraps the binary, not `mpirun`.
 - FiNeR's five dependencies travel as git checkouts at the pins of `CMakeLists.txt`: IGLOO's configure stops on a
   dependency directory without `.git` and fetches from GitHub when one is off its pin. `sync-src-monolith.sh`
-  checks both sides before it submits the build. OSLO's tracked `libiode_intel64.a` travels too (OSLO links it).
+  checks both sides before it submits the build. ORION and OSLO travel as checkouts at the releases of `deps.lock`,
+  which travels with them: the configure there takes them as they are, with no network.
 - `make-workloads.sh` replaces a workload whose recipe or files changed: never run it while a job reads them.
 - The campaign's numbers: `results/measured-performance.tsv` (`results.py`), each point with its job, node label,
   commit and binary md5; `docs/development/parallelization.md` ("Measured performance") quotes them without these.

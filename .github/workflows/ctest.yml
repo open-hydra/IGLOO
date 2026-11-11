@@ -20,8 +20,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          # Not recursive: OSLO's one nested submodule is SUNDIALS, which only
-          # USE_SUNDIALS needs.
+          # FiNeR, the one submodule (its five libraries are cloned by the configure). OSLO and ORION are not
+          # submodules: the configure checks out the newest releases it accepts, over https (cmake/SemVerDeps.cmake).
           submodules: true
 
       - name: Install system dependencies

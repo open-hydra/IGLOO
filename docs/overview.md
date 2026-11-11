@@ -50,7 +50,7 @@ IGLOO can also run standalone — without MOSE — when the gas field is provide
 
 ## Dependencies
 
-IGLOO is built on three companion libraries, included as Git submodules in a standalone build or shared with the hydra suite when built as a submodule.
+IGLOO is built on three companion libraries, in a standalone build FiNeR as a Git submodule and ORION and OSlo as releases checked out by the configure, or shared with the hydra suite when built as a submodule.
 
 | Library | Role |
 |---------|------|

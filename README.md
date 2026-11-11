@@ -41,7 +41,7 @@ IGLOO is an open-source Lagrangian particle solver written in modern Fortran. It
 
 ```bash
 git clone https://github.com/open-hydra/IGLOO.git
-cd IGLOO                         # install.sh build fetches the lib/ submodules it needs
+cd IGLOO                         # install.sh build fetches FiNeR's submodule, the configure ORION's and OSLO's releases
 
 # Standalone build with GNU compilers and OpenMP
 ./install.sh build --compilers=gnu --use-openmp
@@ -73,7 +73,7 @@ See the [Installation Guide](https://open-hydra.github.io/IGLOO/getting-started/
 
 ## Dependencies
 
-IGLOO is built on top of companion libraries, included as Git submodules (standalone build) or shared with the hydra suite (the `--include-*` options):
+IGLOO is built on top of companion libraries, in a standalone build FiNeR as a Git submodule and ORION (2.2 or a later 2.x) and OSlo (1.1 or a later 1.x) as the releases the configure checks out in `lib/` and records in `deps.lock`, or shared with the hydra suite (the `--include-*` options):
 
 | Library | Role |
 |---|---|
@@ -90,7 +90,7 @@ IGLOO/
 ├── src/
 │   ├── app/           # IGLOO executable (driver) + DocGen
 │   └── lib/           # Solver library (IGLOOL)
-├── lib/               # Git submodule dependencies (standalone build)
+├── lib/               # Dependencies of a standalone build: FiNeR's submodule, ORION's and OSLO's releases
 ├── tests/             # Verification & validation suite (ctest, model-first)
 │   ├── standard/      # Drag + heat: unit families & e2e cases
 │   ├── evaporation/   # Evaporation unit families + d²-law, LK, TC and MHB98 e2e

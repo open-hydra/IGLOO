@@ -19,8 +19,9 @@ the repository root for the authoritative list.
 
 ## Dependencies
 
-IGLOO builds on three companion libraries, included as Git submodules in standalone
-mode and shared with the hydra suite when built as a submodule:
+IGLOO builds on three companion libraries, in standalone mode FiNeR as a Git submodule and
+ORION and OSlo as releases checked out by the configure, and shared with the hydra suite when
+built as a submodule:
 
 | Library | Authors / maintainers | Role |
 |---------|-----------------------|------|
