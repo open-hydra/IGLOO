@@ -295,7 +295,15 @@ the fixed point is then bisected on $x = -\dot{m} \in [0, -\dot{m}_{eq}]$:
 $h(x) = -\dot{m}(X_s(x)) - x$ decreases in $x$ ($X_s$ falls as $x$ grows and
 every gas-side rate rises with $X_s$), from $h(0) \ge 0$ to
 $h(-\dot{m}_{eq}) \le 0$, and the bisection stops at a relative $10^{-12}$ of
-the root.  The correction vanishes as $p\,d \to \infty$ or
+the root.  Should no sign change hold or the bisection reach its cap (200
+passes), the rate is the bracket's best estimate and the sweep prints, once per
+material,
+
+```
+ [WARNING] LK-interface: material <name>: the Langmuir-Knudsen fixed point not bracketed in N parcel(s); their rate is the bracket's best estimate
+```
+
+The correction vanishes as $p\,d \to \infty$ or
 $\alpha_e \to \infty$ and recovers VLE exactly.
 
 The accommodation coefficient $\alpha_e$ is the material-line token `alpha-e=`

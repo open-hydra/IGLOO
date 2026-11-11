@@ -37,7 +37,7 @@ the sibling deck, the same lines without the `[IGLOO-ODE]` section, into `ref-bu
 
 | id | gate | tolerance |
 |---|---|---|
-| P0 | no line of `run_out.txt` or `run_err.txt` carries an error stop, an `ERROR`, a non-finite state, a solver failure or the inner-loop cap (the endings that are not a burnout) | exact |
+| P0 | no line of `run_out.txt` or `run_err.txt` carries an error stop, an `ERROR`, a non-finite state, a solver failure, the inner-loop cap (the endings that are not a burnout) or `LK-interface:` (an LK fixed point not bracketed) | exact |
 | P1 | every stop leaves an exit record: one per parcel ID 1–4, `bc` 0 (consumed), `t > 0` | exact |
 | P2 | the drop stops where drag stops it: `0 < X − x₀ ≤ u₀ τ₀ + 5e-7 m`, Y and Z at the injection point (the drop shrinks, so its relaxation time only falls); a trial state accepted outside the box fails it | half the F12.6 print |
 | P3 | the burnout state: `d_p ≤ d(m_b)(1 + 1e-5)`, `d(m) = (6m/(π ρ_p))^{1/3}`; a drop removed before burnout fails it | twice the E13.6 print of `d_p` |
@@ -58,6 +58,7 @@ Measured: P2 `X − x₀` 5.40e-4 m on every drop; P3 `d_p/d(m_b)` 0.86055, 0.90
 | the same with the mass slot at `min(atol, 1e-3 m_b)` | the same stop with `mass-tol = off`; `ref-burnout/` passes P0–P4 |
 | the mass slot at `absolute-tol` whatever `mass-tol` says (no `mass-slot` line) | P5 |
 | a Langmuir-Knudsen solve that stops unconverged (30 damped Picard passes) | P6 in both runs: every drop exits at 300.618832 K against the quasi-steady 332.26–333.82 K (worst residual 32.50 K, 33.16 K in `ref-burnout`): below 100 nm the unconverged rate is 3–14 times the fixed point's |
+| an LK solve whose bracket fails (scratch: the bisection capped at one pass) | P0 in both runs on one line per run, `[WARNING] LK-interface: material A: the Langmuir-Knudsen fixed point not bracketed in 4 parcel(s); their rate is the bracket's best estimate`, beside the step failures the cruder rate causes; P3 and P6 (31.2 K) |
 
 Either defence alone passes P0–P4: the clamp alone (P3 0.86055–0.95179, the numbers above) and the penalty alone
 (P3 0.63133, 0.81721, 0.80986, 0.88800). The same case at gas order 1 or with `absolute-tol = 1e-25` passes P0–P4 on

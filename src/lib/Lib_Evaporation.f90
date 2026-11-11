@@ -206,7 +206,7 @@ contains
     !  model, optional LK interface.
     pure subroutine evaporation(rhog, Tg, gamma, Rg, mug, kg, &
                                  Tp, dp, Re, cpFactor, evapSelect, intfSelect, ep, &
-                                 mdot, Qdot_evap, override_Qdot, psatExt, BMout)
+                                 mdot, Qdot_evap, override_Qdot, psatExt, BMout, lkFail)
         implicit none
         real(R8), intent(in)  :: rhog, Tg, gamma, Rg, mug, kg
         real(R8), intent(in)  :: Tp, dp, Re
@@ -217,12 +217,14 @@ contains
         logical,  intent(out) :: override_Qdot
         real(R8), intent(in), optional :: psatExt   !> psat(Tp) from the properties table
         real(R8), intent(out), optional :: BMout    !> the Spalding number of the surface state (before LK), 0 if none
+        logical,  intent(out), optional :: lkFail   !> the LK fixed point was not bracketed: the bracket's best estimate
         real(R8) :: cpg, p, Mg, Pr, Sc, Re05, psat, Xs, Ys, BM
 
         mdot = 0._R8
         Qdot_evap = 0._R8
         override_Qdot = .false.
         if (present(BMout)) BMout = 0._R8
+        if (present(lkFail)) lkFail = .false.
 
         !> Common gas properties (computed once)
         cpg  = gamma * Rg / (gamma - 1._R8)
@@ -327,6 +329,7 @@ contains
             call rateAt(XsEq, LKd2, -hi, mdNew, QdNew, ovrNew)
             if (-mdNew - hi > 0._R8) then
                 x = hi                          ! no sign change: the bracket's best estimate
+                if (present(lkFail)) lkFail = .true.
             else
                 do it = 1, maxBisect
                     x = 0.5_R8*(lo + hi)
@@ -334,6 +337,7 @@ contains
                     call rateAt(XsEq, LKd2, -x, mdNew, QdNew, ovrNew)
                     if (-mdNew - x > 0._R8) then; lo = x; else; hi = x; endif
                 enddo
+                if (it > maxBisect .and. present(lkFail)) lkFail = .true.
                 x = 0.5_R8*(lo + hi)
             endif
             call rateAt(XsEq, LKd2, -x, md, Qd, ovr)
