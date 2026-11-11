@@ -9,7 +9,8 @@ A sibling run of the same case without the key (the default mass-tol = burnout) 
 read from the code under test: the inputs below, the logs and the printed records.
 
   P0  the run is clean: no line of run_out.txt or run_err.txt carries an error stop, an ERROR, a non-finite state,
-      a solver failure or the inner-loop cap (the endings that are not a burnout)
+      a solver failure, the inner-loop cap (the endings that are not a burnout) or the warning of an LK fixed point
+      not bracketed
   P1  every stop leaves an exit record: one record per parcel ID 1-4, bc 0 (consumed), t > 0
   P2  the drop stops where Stokes drag stops it: 0 < X - x0 <= u0 tau0 + 5e-7 m, tau0 = rho_p d0^2/(18 mu_g)
       (the drop shrinks, so its relaxation time only falls), Y and Z at the injection point within 5e-7 m (the
@@ -34,7 +35,8 @@ Measured: P2 X - x0 = 5.40e-4 m against 5.539e-4 m; P3 d_p/d(m_b) printed per pa
 RED: the solver stops on the first such trial state (`evaporation: cpg<=0 (gas args scrambled?)`, exit 128) and
 writes no exit record (P1, P3 and P4 fail on the partial output); a solver without the mass-slot tolerance fails P5;
 a Langmuir-Knudsen solve that stops unconverged (30 damped Picard passes) fails P6: its rate, 3-14 times the fixed
-point's below 100 nm, keeps the drop near 300.6 K.
+point's below 100 nm, keeps the drop near 300.6 K; a solve whose bracket fails prints its warning once per run and
+fails P0.
 """
 import math
 import os
@@ -62,7 +64,8 @@ LV, MV, TBOIL, LE, ALPHA_E = 2.462478e6, 18.015, 373.15, 1.0, 1.0   # input.ini 
 RU, PATM = 8314.46, 101325.0
 ATOL = 1.0e-10                    # [IGLOO-ODE] absolute-tol, the default
 K_MASS = 1.0e-3                   # mass-tol = burnout: the mass slot at this fraction of the burnout mass
-BAD = ("cpg<=0", "error stop", "ERROR", "non-finite state", "Run_ODESolver err=", "Inner loop >", "EXIT OF SDIRK4")
+BAD = ("cpg<=0", "error stop", "ERROR", "non-finite state", "Run_ODESolver err=", "Inner loop >", "EXIT OF SDIRK4",
+       "LK-interface:")
 BANNER = re.compile(r"mass slot absolute-tol =\s*(\S+) kg \(mass-tol = (\w+)(?:, burnout mass\s*(\S+) kg)?\)")
 
 # ---- tolerances ----

@@ -38,6 +38,7 @@ module IGLOO_particles
     real(R8)     :: Af    = 0._R8 !> exit face area (bcDef out)
     integer      :: exitCode = 0  !> boundary code of the exit face; 0 when the parcel ended inside the domain
     integer      :: exitCell(4) = 0 !> exit face cell [block,face,m,n] (bcDef exit branch); 0 with exitCode 0
+    logical      :: lkFail = .false. !> an LK fixed point of this parcel's right-hand side was not bracketed
     real(R8)     :: vImp(3) = 0._R8 !> velocity at the exit crossing point (bcDef exit branch)
     real(R8)     :: xi0(3)      !> cartesian coordinates xi-eta-zeta
     integer      :: i(4)        !> index-based position (b,i,j,k)

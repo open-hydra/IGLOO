@@ -24,7 +24,7 @@ program test_interface_lk
     !   LK7  small drops, where a fixed-point iteration does not contract: d in
     !        {27, 50, 100} nm x Tp in {300, 350} K, code vs the bracketed root of
     !        the transcribed chain (bisection on -mdot in [0, -mdot_VLE], to the
-    !        last bit), 1e-11 (ten times the solve's 1e-12 stop)
+    !        last bit), 1e-11 (ten times the solve's 1e-12 stop); the solve reports no unbracketed point
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_Lib_Evaporation, only: evaporation, nep
@@ -297,13 +297,16 @@ contains
         logical, intent(inout) :: ok
         real(R8), parameter :: Tps(2) = [300._R8, 350._R8]
         real(R8), parameter :: dds(3) = [27.e-9_R8, 50.e-9_R8, 100.e-9_R8]
-        real(R8) :: md, md_ref, err, w, tol
-        integer  :: i, j
-        logical  :: pass
+        real(R8) :: md, md_ref, err, w, tol, qd
+        integer  :: i, j, nFail
+        logical  :: pass, ovr, fail
         tol = 1.0e-11_R8
         w = 0._R8
+        nFail = 0
         do i = 1, 2; do j = 1, 3
-            call code_mdot(rho_g, Tps(i), dds(j), 1._R8, LK, md)
+            call evaporation(rho_g, Tg, gam, Rg, mu_g, kg, Tps(i), dds(j), 0._R8, 1._R8, &
+                             CEM, LK, make_ep(1._R8), md, qd, ovr, lkFail=fail)
+            if (fail) nFail = nFail + 1
             call ora_lk_root(rho_g, Tps(i), dds(j), 1._R8, md_ref)
             err = abs(md-md_ref)/abs(md_ref)
             w = max(w, err)
@@ -313,6 +316,9 @@ contains
         pass = assert_lt('LK7 small drops: code vs bracketed root (6 pts)', w, tol)
         ok = ok .and. pass
         call append_row('LK7_small_drops', 'mdot', w, w, 0._R8, 0._R8, tol, pass)
+        pass = assert_lt('LK7 small drops: points reported not bracketed', real(nFail, R8), 0.5_R8)
+        ok = ok .and. pass
+        call append_row('LK7_bracket_flag', 'count', real(nFail, R8), real(nFail, R8), 0._R8, 0._R8, 0.5_R8, pass)
     end subroutine run_LK7
 
     subroutine heptane_pair(epH, rho, dv, r)

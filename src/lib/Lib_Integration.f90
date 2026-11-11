@@ -658,11 +658,11 @@ contains
       case (2)
         call rhsEvaporation(neq, part%time, part%stateVar, Fs, auxLocal,nauxvar, stS,nauxstate, &
                             hTab,rhoTab,psatTab,LvTab,cpvTab, gas,gasVert,gasS, ng,ngVert, mupTabM=mupTab, TsOut=tsurf, &
-                            kLiqTabM=klTab, epsTabM=epsTab)
+                            kLiqTabM=klTab, epsTabM=epsTab, lkFail=part%lkFail)
       case (4)
         call rhsEvapBreakup(neq, part%time, part%stateVar, Fs, auxLocal,nauxvar, stS,nauxstate, &
                             hTab,rhoTab,mupTab,sigTab,psatTab,LvTab,cpvTab, gas,gasVert,gasS, ng,ngVert, TsOut=tsurf, &
-                            kLiqTabM=klTab, epsTabM=epsTab)
+                            kLiqTabM=klTab, epsTabM=epsTab, lkFail=part%lkFail)
       case default
         tsurf = part%tp
       end select
@@ -1090,7 +1090,8 @@ contains
     subroutine rhs2(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
       call rhsEvaporation(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,psatTab,LvTab,cpvTab, &
-                          gas,gasVert,gasState, ng,ngVert, mupTabM=mupTab, kLiqTabM=klTab, epsTabM=epsTab)
+                          gas,gasVert,gasState, ng,ngVert, mupTabM=mupTab, kLiqTabM=klTab, epsTabM=epsTab, &
+                          lkFail=part%lkFail)
     end subroutine rhs2
     subroutine rhs3(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
@@ -1100,7 +1101,8 @@ contains
     subroutine rhs4(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
       call rhsEvapBreakup(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab,mupTab,sigTab,psatTab, &
-                          LvTab,cpvTab, gas,gasVert,gasState, ng,ngVert, kLiqTabM=klTab, epsTabM=epsTab)
+                          LvTab,cpvTab, gas,gasVert,gasState, ng,ngVert, kLiqTabM=klTab, epsTabM=epsTab, &
+                          lkFail=part%lkFail)
     end subroutine rhs4
     subroutine rhs5(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)

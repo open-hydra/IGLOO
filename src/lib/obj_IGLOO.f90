@@ -417,6 +417,8 @@ contains
     !> Child-ID band of the current generation. No initializer here: it would imply SAVE.
     integer :: curBase, curCount, newBase, childLocal, childGlobal, pidx, idBase
     integer :: foldStat(2), noCell(1), khrtWarn(1)
+    !> Per material: the parcels whose LK fixed point was not bracketed in a right-hand side
+    integer, allocatable :: nLKfail(:)
     integer, allocatable :: nShedAll(:), shedOff(:)
     ! logical, allocatable :: famDone(:)
     real(R8), allocatable :: relTol(:), absTol(:), exch(:,:)
@@ -443,6 +445,7 @@ contains
     self%stateIsFresh = .false.
     nSectorFold = 0; nMultiFold = 0; nStencilRefresh = 0; nConnHit = 0; nSweepHit = 0; nRimExit = 0
     nInjNoCell = 0; nKHRTwarn = 0
+    allocate(nLKfail(nm)); nLKfail = 0
 
     sourceSwitch = self%srcSwitch
     eulerSwitch  = self%eulSwitch
@@ -720,6 +723,7 @@ contains
             enddo
             !$OMP END PARALLEL DO
             call region_fail_check()
+            call countLKFail(gr%particle(start:nEnd), nLKfail(m))
             call ps_end()
             call tm_phase(TM_CENSUS)
 
@@ -894,6 +898,7 @@ contains
           enddo
           !$OMP END PARALLEL DO
           call region_fail_check()
+          call countLKFail(gr%particle(1:gr%nparticles), nLKfail(m))
           call ps_end()
           !> The residues of this group's parcels join its product's group, on this rank.
           if (gr%resOn) call drainResidues(self%material(gr%prodID)%group(1), gr)
@@ -1002,6 +1007,14 @@ contains
       if (mpi_is_root .and. khrtWarn(1) > 0) write(*,'(A,I0,A)') &
         ' [WARNING] Reitz-KHRT outside its hypotheses (Oh > 1 or rho_g/rho_p > 0.1) in ', khrtWarn(1), &
         ' model evaluations'
+    endif
+    call mpi_allreduce_sum_i4_array(nLKfail, nm)
+    if (mpi_is_root) then
+      do m = 1, nm
+        if (nLKfail(m) > 0) write(*,'(A,A,A,I0,A)') ' [WARNING] LK-interface: material ', &
+          trim(self%material(m)%matName), ': the Langmuir-Knudsen fixed point not bracketed in ', nLKfail(m), &
+          ' parcel(s); their rate is the bracket''s best estimate'
+      enddo
     endif
     if (mpi_is_root) then
       if (snapOn) then
@@ -1117,6 +1130,17 @@ contains
     call tm_report(self%sweep)
 
   end subroutine writeout
+
+
+  !> After a parcel loop: count the parcels whose LK fixed point was not bracketed, and clear their flags.
+  subroutine countLKFail(parts, n)
+    use IGLOO_particles, only: obj_particle
+    implicit none
+    type(obj_particle), intent(inout) :: parts(:)
+    integer,            intent(inout) :: n
+    n = n + count(parts(:)%lkFail)
+    parts(:)%lkFail = .false.
+  end subroutine countLKFail
 
 
   !> The sweep's block changes, summed over the ranks and printed by the root rank.
