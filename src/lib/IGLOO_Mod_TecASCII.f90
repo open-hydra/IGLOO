@@ -25,6 +25,8 @@ module IGLOO_Mod_TecASCII
   integer, parameter :: WSLICE = 4096                      !> the writer's values per internal WRITE
   integer, parameter :: WREC = DR_P + 1                    !> the writer's bytes per value: ORION's FR_P field, a line feed
   character, parameter :: LF = achar(10)
+  character(len=*), parameter :: SEPS = ' ,'//achar(9)//achar(13)   !> what may follow a zone's values on their line
+  character(len=*), parameter :: UNANNOUNCED = 'data that the zone header does not announce'
 
   !> The file seen through a buffer: b(lo:hi) unread, next the file position of the byte after hi.
   type :: stream_t
@@ -499,13 +501,16 @@ contains
       call read_zone_values(s, o, nb, stat, reason)
       if (stat /= 0) return
       stat = 1
-      ! the lines after the zone's values, up to the next zone line, are ignored
+      ! up to the next zone line, blank lines and DATASETAUXDATA records only (ORION's end_of_zone_data)
       have = .false.
       do while (next_line(s, a, e))
         line = s%b(a:e)
         if (is_zone_header(line)) then
           have = .true.
           exit
+        endif
+        if (verify(line, SEPS) > 0 .and. .not. is_aux_record(line)) then
+          reason = UNANNOUNCED; return
         endif
       enddo
       if (.not. have) exit zone
@@ -639,7 +644,7 @@ contains
   end subroutine open_zone
 
   !> Block b's values: the first need tokens from the stream's position, across every line, as ORION's next_value
-  !  takes them; the stream stops after the line of the last one.
+  !  takes them; the rest of the last one's line holds separators only, and the stream stops after that line.
   subroutine read_zone_values(s, o, b, stat, reason)
     type(stream_t), intent(inout) :: s
     type(orion_data), target, intent(inout) :: o
@@ -695,6 +700,9 @@ contains
           if (iachar(s%b(q:q)) == 10) exit
           q = q + 1
         enddo
+        if (verify(s%b(pend+1:q-1), SEPS) > 0) then
+          reason = UNANNOUNCED; return
+        endif
         s%lo = q + 1
       else
         s%lo = re + 1
@@ -1033,6 +1041,18 @@ contains
     if (is_zone_header .and. len(u)>4) &
       is_zone_header = .not.(scan(u(5:5),'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_')>0)
   end function is_zone_header
+
+  ! A data set auxiliary data record: a line whose first word is DATASETAUXDATA (any case)
+  logical function is_aux_record(text)
+    character(len=*), intent(in) :: text
+    character(len=:), allocatable :: u
+    u = adjustl(upper_case(text))
+    is_aux_record = .false.
+    if (len(u) < 14) return
+    if (u(1:14) /= 'DATASETAUXDATA') return
+    if (len(u) > 14) is_aux_record = .not.is_word_char(u(15:15))
+    if (len(u) == 14) is_aux_record = .true.
+  end function is_aux_record
 
   logical function line_is_numeric_start(text)
     character(len=*), intent(in) :: text

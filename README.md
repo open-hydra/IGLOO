@@ -73,7 +73,7 @@ See the [Installation Guide](https://open-hydra.github.io/IGLOO/getting-started/
 
 ## Dependencies
 
-IGLOO is built on top of companion libraries, in a standalone build FiNeR as a Git submodule and ORION (2.1 or a later 2.x) and OSlo (1.1 or a later 1.x) as the releases the configure checks out in `lib/` and records in `deps.lock`, or shared with the hydra suite (the `--include-*` options):
+IGLOO is built on top of companion libraries, in a standalone build FiNeR as a Git submodule and ORION (2.2 or a later 2.x) and OSlo (1.1 or a later 1.x) as the releases the configure checks out in `lib/` and records in `deps.lock`, or shared with the hydra suite (the `--include-*` options):
 
 | Library | Role |
 |---|---|

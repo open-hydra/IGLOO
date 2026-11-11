@@ -17,7 +17,7 @@ interface that passes the count by value, and asserts it (`omp_get_max_threads`)
 write `.tec` outputs into — `OUTPUT/`, `ref-*/`, `tec_n*/`, `_run-*/`, `threads-omp*/` — symlinks resolved, duplicates
 dropped). The test fails unless the list holds `SUITE_FILES` = 75 files, the number of tracked inputs: adding a
 tracked `.tec` input moves that constant. Each file must also be one ORION reads right: no line of 1000 characters
-or more (ORION cuts a line there), no CR byte, no POINT zone.
+or more (ORION 2.0 cut a line there), no CR byte, no POINT zone.
 
 **The synthetic set**, written by the test in its working directory:
 
@@ -32,7 +32,7 @@ or more (ORION cuts a line there), no CR byte, no POINT zone.
 | `s07-2d` | K = 1: two coordinates, cell-centred variables | ORION's values |
 | `s08-plane-xyz` | K = 1 with `x`, `y`, `z` and `z` nodal: three coordinates | ORION's values |
 | `s09-point` | POINT packing | declined (ORION reads it) |
-| `s10-extra-aux` | tokens after a zone's values, a line of numbers and an auxiliary line between two zones | ORION's values |
+| `s10-extra-aux` | tokens after a zone's values, a line of numbers and an auxiliary line between two zones | refused by both |
 | `s11-long-line` | 80 values on one line of 2 026 characters | the values the test wrote, each as the runtime's list-directed READ converts it alone, and the time of a file without `SOLUTIONTIME` (−huge) |
 | `s12-long-variables` | a VARIABLES line of 1 584 characters (63 names) | ORION's values |
 | `s13-variables-lines` | the VARIABLES list over three lines | ORION's values |
