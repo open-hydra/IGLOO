@@ -219,6 +219,7 @@ contains
         real(R8), intent(out), optional :: BMout    !> the Spalding number of the surface state (before LK), 0 if none
         logical,  intent(out), optional :: lkFail   !> the LK fixed point was not bracketed: the bracket's best estimate
         real(R8) :: cpg, p, Mg, Pr, Sc, Re05, psat, Xs, Ys, BM
+        logical  :: lkf
 
         mdot = 0._R8
         Qdot_evap = 0._R8
@@ -261,7 +262,11 @@ contains
         call gasSideRate(Ys, BM, mdot, Qdot_evap, override_Qdot)
 
         !> Non-equilibrium interface: depress Xs per Langmuir-Knudsen, Picard on mdot
-        if (intfSelect == 1) call lkCorrection(Xs, mdot, Qdot_evap, override_Qdot)
+        if (intfSelect == 1) then
+            lkf = .false.
+            call lkCorrection(Xs, mdot, Qdot_evap, override_Qdot, lkf)
+            if (present(lkFail)) lkFail = lkf
+        endif
 
     contains
 
@@ -290,10 +295,11 @@ contains
         !> Langmuir-Knudsen non-equilibrium interface (Miller-Harstad-Bellan 1998, model M2):
         !  Xs_neq = Xs_eq - (2 L_K/d)·beta, beta = -mdot·Pr/(2π·mu_g·d) — implicit: bounded Picard, and where it
         !  does not converge (small drops) bisection of the fixed point on -mdot in [0, -mdot_eq].
-        pure subroutine lkCorrection(XsEq, md, Qd, ovr)
+        pure subroutine lkCorrection(XsEq, md, Qd, ovr, fail)
             real(R8), intent(in)    :: XsEq
             real(R8), intent(inout) :: md, Qd
             logical,  intent(inout) :: ovr
+            logical,  intent(inout) :: fail   !> set when the fixed point is not bracketed
             integer,  parameter :: maxPicard = 30, maxBisect = 200
             real(R8), parameter :: tolPicard = 1.e-12_R8
             real(R8) :: LKd2, beta, XsN, YsN, BMN, mdNew, QdNew, diff, diffPrev, mdEq, lo, hi, x
@@ -329,7 +335,7 @@ contains
             call rateAt(XsEq, LKd2, -hi, mdNew, QdNew, ovrNew)
             if (-mdNew - hi > 0._R8) then
                 x = hi                          ! no sign change: the bracket's best estimate
-                if (present(lkFail)) lkFail = .true.
+                fail = .true.
             else
                 do it = 1, maxBisect
                     x = 0.5_R8*(lo + hi)
@@ -337,7 +343,7 @@ contains
                     call rateAt(XsEq, LKd2, -x, mdNew, QdNew, ovrNew)
                     if (-mdNew - x > 0._R8) then; lo = x; else; hi = x; endif
                 enddo
-                if (it > maxBisect .and. present(lkFail)) lkFail = .true.
+                if (it > maxBisect) fail = .true.
                 x = 0.5_R8*(lo + hi)
             endif
             call rateAt(XsEq, LKd2, -x, md, Qd, ovr)
