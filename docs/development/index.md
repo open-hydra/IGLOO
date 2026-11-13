@@ -11,6 +11,7 @@ Resources for contributors and integrators working on IGLOO's source code.
 | [Code Structure](structure.md) | Library/executable split, top-level object, hot path, module naming, CMake layout, DocGen |
 | [Testing](testing.md) | `tests/` V&V suite, categories, how to add a test |
 | [Parallelization](parallelization.md) | MPI over ranks + OpenMP over threads, rank-count invariance, embedding contract |
+| [Versioning](versioning.md) | The releases of ORION, OSLO and FiNeR that IGLOO requires, and how the configure checks them |
 | [Contributing](contributing.md) | Build checklist, comment style, key registration, OpenMP rules, trajectory ordering |
 | [Performance Notes](performance_notes.md) | OMP design, cell-search cost, SDIRK4 vs DOPRI5, stack requirements |
 

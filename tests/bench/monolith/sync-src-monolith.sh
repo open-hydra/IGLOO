@@ -6,8 +6,8 @@
 # Optional: IGLOO_PERF_PARTITION (default free) for the build job.
 #
 # The tree travels without .git, except FiNeR's five dependencies, ORION and OSLO: IGLOO's configure refuses a
-# dependency directory that is not a git checkout and fetches from GitHub when its HEAD is off the pin
-# (ensure_finer_dependencies in CMakeLists.txt), so they travel as checkouts at their pins; it takes lib/ORION and
+# dependency directory that is not a git checkout and leaves a checkout on its branch as it is
+# (cmake/FiNeRDependencies.cmake), so they travel as checkouts at the commits the local configure left; it takes lib/ORION and
 # lib/OSLO as they are only as checkouts at the releases of deps.lock (cmake/SemVerDeps.cmake), so these travel as
 # checkouts at those releases, with deps.lock. The FiNeR submodule travels as plain files (its CMakeLists.txt is all
 # the configure asks), checked first to be a checkout of its own at its gitlink.
@@ -16,12 +16,13 @@ set -eu
 HERE=$(cd "$(dirname "$0")" && pwd -P)
 SRC=$(cd "$HERE/../../.." && pwd -P)
 DEPS="BeFoR64 FACE FLAP PENF StringiFor"
-LIBS="lib/third_party/FiNeR"
+LIBS="lib/FiNeR"
+FDEPS=lib/FiNeR/src/third_party
 RELS="ORION OSLO"
 die () { echo "sync: $*" >&2; exit 1; }
 
 cd "$SRC"
-pin_of () { sed -n "s/^ *set(_FINER_DEP_PIN_$1  *\([0-9a-f]\{40\}\))$/\1/p" "$SRC/CMakeLists.txt"; }
+pin_of () { git -C "$SRC/$FDEPS/$1" rev-parse HEAD 2>/dev/null; }
 release_of () { awk -v n="$1" '$1 == n {print $2}' "$SRC/deps.lock"; }
 [ -f "$SRC/deps.lock" ] || die "no deps.lock: configure the tree once locally"
 for r in $RELS; do
@@ -41,11 +42,9 @@ for L in $LIBS; do
   [ "$head" = "$link" ] || die "$L is at $head, its gitlink is $link"
 done
 for d in $DEPS; do
-  pin=$(pin_of "$d"); dir=$SRC/lib/third_party/FiNeR/src/third_party/$d
-  [ -n "$pin" ] || die "no _FINER_DEP_PIN_$d in CMakeLists.txt"
-  [ -e "$dir/.git" ] || die "FiNeR dependency $d is not a git checkout: configure the tree once locally"
-  head=$(git -C "$dir" rev-parse HEAD)
-  [ "$head" = "$pin" ] || die "FiNeR dependency $d is at $head, the pin is $pin: configure the tree once locally"
+  dir=$SRC/$FDEPS/$d
+  [ -d "$dir/.git" ] || die "FiNeR dependency $d is not a git checkout: configure the tree once locally"
+  [ -z "$(git -C "$dir" status --porcelain)" ] || die "FiNeR dependency $d has local changes"
 done
 
 {
@@ -58,7 +57,7 @@ done
     echo "lib/$r release=$(release_of "$r") head=$(git -C "$SRC/lib/$r" rev-parse HEAD)" \
          "dirty=$(git -C "$SRC/lib/$r" status --porcelain | wc -l)"
   done
-  for d in $DEPS; do echo "FiNeR-dependency $d head=$(git -C "$SRC/lib/third_party/FiNeR/src/third_party/$d" rev-parse HEAD)"; done
+  for d in $DEPS; do echo "FiNeR-dependency $d head=$(pin_of "$d")"; done
   echo "synced $(date -u +%Y-%m-%dT%H:%M:%SZ) from $(hostname):$SRC"
 } > "$SRC/IGLOO-commit.txt"
 cat "$SRC/IGLOO-commit.txt"
@@ -66,7 +65,7 @@ cat "$SRC/IGLOO-commit.txt"
 # rsync takes the first matching rule: the includes come before the excludes they override.
 FILTERS=(
   --include='/lib/ORION/.git/***' --include='/lib/OSLO/.git/***'
-  --include='/lib/third_party/FiNeR/src/third_party/*/.git/***'
+  --include='/lib/FiNeR/src/third_party/*/.git/***'
   --exclude='.git' --exclude='.claude' --exclude='.claude-context' --exclude='/plan-bucket' --exclude='/site'
   --exclude='__pycache__' --exclude='/build*' --exclude='build/' --exclude='bin' --exclude='bin-*' --exclude='modules'
   --exclude='*.o' --exclude='*.mod' --exclude='*.a'
@@ -84,8 +83,8 @@ if [ "${1:-}" = --local ]; then
       || die "lib/$r did not arrive at its release"
   done
   for d in $DEPS; do
-    [ "$(git -C "$D/src/lib/third_party/FiNeR/src/third_party/$d" rev-parse HEAD)" = "$(pin_of "$d")" ] \
-      || die "FiNeR dependency $d did not arrive at its pin"
+    [ "$(git -C "$D/src/$FDEPS/$d" rev-parse HEAD)" = "$(pin_of "$d")" ] \
+      || die "FiNeR dependency $d did not arrive at its local commit"
   done
   echo "rehearsal copy in $D: nothing submitted"
   exit 0
@@ -99,12 +98,12 @@ ssh "$REMOTE" "mkdir -p $ROOT/src $ROOT/scripts $ROOT/bin $ROOT/logs $ROOT/case"
 rsync -a --delete "${FILTERS[@]}" "$SRC/" "$REMOTE:$ROOT/src/"
 rsync -a --delete "$HERE/" "$REMOTE:$ROOT/scripts/"
 
-# What the configure there needs arrived: ORION and OSLO at their releases, the dependencies at their pins.
+# What the configure there needs arrived: ORION and OSLO at their releases, the dependencies at their local commits.
 heads=""; for r in $RELS; do heads="$heads $r=$(git -C "$SRC/lib/$r" rev-parse HEAD)"; done
 ssh "$REMOTE" "bash -lc 'for p in $heads; do r=\${p%%=*}; h=\$(git -C $ROOT/src/lib/\$r rev-parse HEAD); [ \"\$h\" = \"\${p#*=}\" ] && echo \"\$r at its release\" || { echo \"\$r at \$h, not at its release\"; exit 1; }; done'" \
   || die "ORION and OSLO did not arrive at their releases"
 pins=""; for d in $DEPS; do pins="$pins $d=$(pin_of "$d")"; done
-ssh "$REMOTE" "bash -lc 'for p in $pins; do d=\${p%%=*}; h=\$(git -C $ROOT/src/lib/third_party/FiNeR/src/third_party/\$d rev-parse HEAD); [ \"\$h\" = \"\${p#*=}\" ] && echo \"dependency \$d at its pin\" || { echo \"dependency \$d at \$h, not at its pin\"; exit 1; }; done'" \
+ssh "$REMOTE" "bash -lc 'for p in $pins; do d=\${p%%=*}; h=\$(git -C $ROOT/src/$FDEPS/\$d rev-parse HEAD); [ \"\$h\" = \"\${p#*=}\" ] && echo \"dependency \$d at its pin\" || { echo \"dependency \$d at \$h, not at its pin\"; exit 1; }; done'" \
   || die "FiNeR's dependencies did not arrive at their pins"
 
 # The build runs in a job on the timing partition, never on the login node; its log is logs/igloo-build-<cfg>-<id>.out.
