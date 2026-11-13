@@ -32,5 +32,5 @@ built as a submodule:
 Optional dependency: **TecIO** (Tecplot binary output), pulled in transitively by
 ORION when `--use-tecio` is set.
 
-Documentation is built with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/)
-by Martin Donath.
+Documentation is built with [Zensical](https://zensical.org) (MIT), by the team of Material for MkDocs. It reads
+the configuration of MkDocs (`mkdocs.yml`), with which the documentation was first written.

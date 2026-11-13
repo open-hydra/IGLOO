@@ -99,7 +99,7 @@ IGLOO/
 │   ├── infrastructure/# Gas reconstruction, INI pipeline, injection/BC/wedge cases, refusals
 │   ├── repeatability/ # Two-sweep state-leak gates
 │   └── mpi/           # Rank-count gates (USE_MPI builds)
-├── docs/              # MkDocs documentation source
+├── docs/              # documentation source (Zensical, mkdocs.yml)
 ├── install.sh         # Build helper script
 └── CMakeLists.txt
 ```
