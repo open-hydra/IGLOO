@@ -8,6 +8,30 @@ set(lib IGLOOL)
 
 project (${solver} LANGUAGES Fortran CXX)
 
+# -------- Libraries and the releases IGLOO is tested with --------
+# - ORION and OSLO. Required by a range of releases with semver_dependency of cmake/SemVerDeps.cmake. Standalone,
+# each release is checked out in lib/<NAME>, out of the build folder, and kept in deps.lock (both git ignored);
+# -DSEMVER_UPDATE=ALL selects the newest ones again.
+set(IGLOO_ORION_VERSION 2.2)
+set(IGLOO_OSLO_VERSION 1.1)
+set(IGLOO_ORION_URL https://github.com/MarcoGrossi92/ORION.git)
+set(IGLOO_OSLO_URL  https://github.com/MarcoGrossi92/OSLO.git)
+# - FiNeR. Directly pinned at one release, the submodule lib/FiNeR (bump the gitlink and the tag together).
+set(IGLOO_FINER_TAG v2.3.0)
+# FiNeR's own dependencies (cmake/FiNeRDependencies.cmake). FREE fetches them as FiNeR's author does
+# (`fobis fetch`: the default branch of each); BACKUP checks out the releases below, which IGLOO builds and passes its
+# tests with. When an upstream change breaks IGLOO, set BACKUP here and commit it, or configure one build with
+# -DIGLOO_FINER_DEPS=BACKUP (kept in its cache until -UIGLOO_FINER_DEPS).
+if (NOT DEFINED IGLOO_FINER_DEPS)
+  set(IGLOO_FINER_DEPS "FREE")
+endif()
+set(IGLOO_FINER_BACKUP_PINS   # the releases ATLAS, MOSE and ICE share
+  "PENF=v2.0.1"
+  "StringiFor=v1.8.0"
+  "FACE=v1.1.17"
+  "FLAP=v2.5.3"
+  "BeFoR64=v1.2.4")
+
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   set(CMAKE_VERBOSE_MAKEFILE FALSE)
@@ -50,105 +74,33 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   include(GNUInstallDirs)
   set (CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules")
 
-  # -------- Path fallback (standalone builds) --------
-  if (NOT DEFINED FINER_PATH)
-    set(FINER_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/third_party/FiNeR/")
-  endif()
-  # A relative path (e.g. --include-finer=lib/third_party/FiNeR/) is taken from the source dir: the helpers
-  # below need an absolute one, file(RELATIVE_PATH) refuses anything else.
-  get_filename_component(FINER_PATH "${FINER_PATH}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
-
-  # -------- Helper: initialize a git submodule from the correct git root --------
-  macro(ensure_submodule_initialized SUBMOD_PATH)
-    if (NOT EXISTS "${SUBMOD_PATH}/CMakeLists.txt")
-      message(STATUS "Submodule at ${SUBMOD_PATH} not initialized. Attempting git submodule update --init...")
-      get_filename_component(_sm_parent "${SUBMOD_PATH}" DIRECTORY)
-      execute_process(
-        COMMAND git rev-parse --show-toplevel
-        WORKING_DIRECTORY "${_sm_parent}"
-        OUTPUT_VARIABLE _sm_git_root
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE _sm_git_result)
-      if(_sm_git_result EQUAL 0)
-        file(RELATIVE_PATH _sm_rel "${_sm_git_root}" "${SUBMOD_PATH}")
-        execute_process(
-          COMMAND git submodule update --init "${_sm_rel}"
-          WORKING_DIRECTORY "${_sm_git_root}"
-          RESULT_VARIABLE _sm_init_result)
-        if(NOT _sm_init_result EQUAL 0)
-          message(FATAL_ERROR "Failed to initialize submodule: ${SUBMOD_PATH}")
-        endif()
-      else()
-        message(FATAL_ERROR "Could not find git root for submodule: ${SUBMOD_PATH}")
-      endif()
+  # Libraries building
+  # An external clone given by a relative path is taken from the source folder
+  foreach(_name ORION OSLO FINER)
+    if (FETCHCONTENT_SOURCE_DIR_${_name})
+      get_filename_component(FETCHCONTENT_SOURCE_DIR_${_name} "${FETCHCONTENT_SOURCE_DIR_${_name}}" ABSOLUTE
+                             BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
     endif()
-  endmacro()
-
-  # -------- Helper: fetch FiNeR's own dependencies --------
-  # FiNeR no longer tracks them as gitlinks (its src/third_party/.gitignore is `*`), yet its
-  # CMakeLists still add_subdirectory's all five; its own CI fetches them with `FoBiS.py fetch` at
-  # each repository's HEAD. Clone the same set at the commits below (the set FiNeR v2.2.0 was
-  # verified with), so a bare `cmake -B build` configures and every build compiles the same sources.
-  set(_FINER_DEP_PIN_BeFoR64    40d19c5f6127088126606b90448e99e02d8b641c)
-  set(_FINER_DEP_PIN_FACE       95226cd6135b9daeb8ff2c748d2065deee230358)
-  set(_FINER_DEP_PIN_FLAP       7f5ec8e1f26be5e2a263fdd2118501b340c0d461)
-  set(_FINER_DEP_PIN_PENF       34e10af852f81822bac0df7c5f73936e0655f54f)
-  set(_FINER_DEP_PIN_StringiFor 77b75b1d7f7012d2984135b231008f751ab32dda)
-  macro(ensure_finer_dependencies FINER_ROOT)
-    foreach(_dep BeFoR64 FACE FLAP PENF StringiFor)
-      set(_dep_dir "${FINER_ROOT}/src/third_party/${_dep}")
-      set(_dep_url "https://github.com/szaghi/${_dep}")
-      set(_dep_pin "${_FINER_DEP_PIN_${_dep}}")
-      if (NOT EXISTS "${_dep_dir}")
-        message(STATUS "FiNeR dependency ${_dep} missing. Cloning ${_dep_url}...")
-        execute_process(
-          COMMAND git clone ${_dep_url} "${_dep_dir}"
-          RESULT_VARIABLE _dep_result)
-        if(NOT _dep_result EQUAL 0)
-          message(FATAL_ERROR "Failed to clone FiNeR dependency ${_dep} into ${_dep_dir}")
-        endif()
-      elseif (NOT EXISTS "${_dep_dir}/.git")
-        message(FATAL_ERROR "FiNeR dependency ${_dep_dir} exists but is not a git checkout: "
-                            "cannot pin it to ${_dep_pin}; remove it and configure again")
-      endif()
-      execute_process(
-        COMMAND git -C "${_dep_dir}" rev-parse HEAD
-        OUTPUT_VARIABLE _dep_head OUTPUT_STRIP_TRAILING_WHITESPACE)
-      if (NOT _dep_head STREQUAL _dep_pin)
-        message(STATUS "FiNeR dependency ${_dep} at '${_dep_head}'. Checking out ${_dep_pin}...")
-        execute_process(
-          COMMAND git -C "${_dep_dir}" fetch ${_dep_url} ${_dep_pin}
-          RESULT_VARIABLE _dep_result)
-        if(_dep_result EQUAL 0)
-          execute_process(
-            COMMAND git -C "${_dep_dir}" -c advice.detachedHead=false checkout ${_dep_pin}
-            RESULT_VARIABLE _dep_result)
-        endif()
-        if(NOT _dep_result EQUAL 0)
-          message(FATAL_ERROR "Failed to check out FiNeR dependency ${_dep} at ${_dep_pin}")
-        endif()
-      endif()
-    endforeach()
-  endmacro()
-
-  # OSLO and ORION: the newest releases that satisfy the requirements below, checked out in lib/OSLO and lib/ORION
-  # (cmake/SemVerDeps.cmake). The releases stay those of the lock file deps.lock (not tracked), -DSEMVER_UPDATE=ALL
-  # selects the newest ones again, -DFETCHCONTENT_SOURCE_DIR_<NAME>=<path> builds a local checkout instead. A project
-  # that adds IGLOO (hydra) chooses the releases of its build tree
+  endforeach()
   include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/SemVerDeps.cmake)
-  # Without the submodule lib/sundials, which OSLO clones only if it has to build SUNDIALS
-  semver_dependency(OSLO GIT_REPOSITORY https://github.com/MarcoGrossi92/OSLO.git VERSION 1.1 GIT_SUBMODULES ""
+  # OSLO without its submodule lib/sundials, which OSLO clones only if it has to build SUNDIALS
+  semver_dependency(OSLO GIT_REPOSITORY ${IGLOO_OSLO_URL} VERSION ${IGLOO_OSLO_VERSION} GIT_SUBMODULES ""
                     SOURCE_DIR lib/OSLO)
-  semver_dependency(ORION GIT_REPOSITORY https://github.com/MarcoGrossi92/ORION.git VERSION 2.2 SOURCE_DIR lib/ORION)
-  FetchContent_MakeAvailable(OSLO ORION)
+  semver_dependency(ORION GIT_REPOSITORY ${IGLOO_ORION_URL} VERSION ${IGLOO_ORION_VERSION} SOURCE_DIR lib/ORION)
+  # The two libraries and FiNeR with its dependencies, the checks of all, and FetchContent_MakeAvailable
+  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddLibraries.cmake)
 
-  # FiNeR
-  if (NOT TARGET FiNeR)
-    ensure_submodule_initialized("${FINER_PATH}")
-    ensure_finer_dependencies("${FINER_PATH}")
-    set(finerD "${FINER_PATH}" "${CMAKE_BINARY_DIR}/lib/third_party/FiNeR")
-    add_subdirectory(${finerD})
-  endif()
+else()
+
+  # Part of a larger project (hydra), which gives IGLOO its libraries. When that project selected ORION or OSLO with
+  # SemVerDeps, its release is checked against IGLOO's requirement; nothing is added here.
+  foreach(_lib ORION OSLO)
+    get_property(_igloo_selected GLOBAL PROPERTY SEMVER_${_lib}_SOURCE SET)
+    if (_igloo_selected)
+      include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/SemVerDeps.cmake)
+      semver_dependency(${_lib} GIT_REPOSITORY ${IGLOO_${_lib}_URL} VERSION ${IGLOO_${_lib}_VERSION})
+    endif()
+  endforeach()
 
 endif()
 
