@@ -59,6 +59,21 @@ bin/DocGen       # writes docs/user/registry.md
 
 ---
 
+## Documentation
+
+The site is built with [Zensical](https://zensical.org) from `docs/` and `mkdocs.yml`:
+
+```bash
+pip install -r requirements-docs.txt
+zensical serve            # preview at http://localhost:8000
+zensical build --strict   # what CI checks: fails on a broken link or anchor
+```
+
+Write links relative to the page: a link that starts with `/` would leave the published
+site, and CI refuses it. The V&V figures are drawn by the suite (`tests/vv_style.py`).
+
+---
+
 ## OpenMP rules
 
 The integration hot path runs under `!$OMP PARALLEL DO`. Two rules are mandatory:
