@@ -200,7 +200,7 @@ Constant evaporation and breakup properties and the emissivity of the radiative 
 |-----|-------------|
 | `psat` | Legacy, accepted and ignored — the saturation pressure is computed from Clausius-Clapeyron (`Lv`, `Mv`, `boiling-temperature`, `boiling-pressure`) or read from the `Psat` column of `properties.dat` |
 | `Mv` | Vapor molar mass [kg/kmol], or the `Mv` column of `properties.dat`; 0 for a material that has the column |
-| `Lv` | Latent heat of vaporization [J/kg], or the `Lv` column of `properties.dat`; 0 for a material that has the column |
+| `Lv` | Latent heat of vaporization [J/kg], or the `Lv` column of `properties.dat`; 0 for a material that has the column. Also the latent heat of a material that burns with `combustion=direct`, which reads the column at its burning temperature |
 | `boiling-temperature` (alias `Tboil`) | Boiling temperature [K] at `boiling-pressure`; give one name or the other, not both |
 | `boiling-pressure` | Pressure [Pa] at which `boiling-temperature` is given; default 101325 (one atmosphere). The Clausius-Clapeyron line passes through (`boiling-temperature`, `boiling-pressure`), and a `Psat` column must give `boiling-pressure` there within a factor 2; refused unless positive and finite |
 | `cpv` | Vapor specific heat [J/(kg·K)], or the `Cpv` column of `properties.dat`; 0 for a material that has the column |
@@ -313,7 +313,7 @@ VARIABLES = "Temperature", "Cp", "Density", "Enthalpy", "Psat", "Lv", "Mv", "Cpv
 | `Density` | kg/m³ | required; the liquid's for a solidifying material (the solid's is its `rho-solid` token, when given) |
 | `Enthalpy` or `Enthalpy_abs` | J/kg | required, exactly one: `Enthalpy` is relative (`cp·T`, or the integral of cp), `Enthalpy_abs` includes the formation enthalpy (the datum, see below) |
 | `Psat` | Pa, absolute | optional: the saturation pressure of an evaporating material |
-| `Lv` | J/kg | optional, with `Psat`: the latent heat of vaporization |
+| `Lv` | J/kg | optional, with `Psat`: the latent heat of vaporization; alone, for a material that burns with `combustion=direct` |
 | `Mv` | kg/kmol | optional, with `Psat`: the vapour molar mass, the same on every row |
 | `Cpv` | J/(kg K) | optional, with `Psat`: the vapour specific heat |
 | `Sigma` | N/m | optional: the surface tension of a breaking material |

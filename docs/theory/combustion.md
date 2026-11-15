@@ -368,6 +368,9 @@ and kind, `<material> <kind> <model> key=value ...`, the keys in any order, a li
 A row names the model its material line names; a `combustion` row may name `-` instead, the model of the line or of
 `[IGLOO-Models] combustion`.
 
+The latent heat of `combustion=direct` is no constant of the row: it is the material's, the `Lv` column of
+`properties.dat` read at the burning temperature, else `Lv` of `[IGLOO-Properties]`; given both ways it is refused.
+
 The product's line carries no combustion, evaporation or breakup (under a global evaporation or breakup
 word it says `evaporation=NoEvaporation`, `breakup=NoBreakup`) and may carry `solidification=on` with its own
 `T-melt`, `h-fus`, `T-nuc`, `cp-solid`; every `[IGLOO-Properties]` vector holds one value for it too.

@@ -415,7 +415,8 @@ contains
         material(i)%invTboil   = 1._R8 / material(i)%Tboil
       endif
       !> direct combustion: it burns at T-burn of the models file, else at boiling-temperature of [IGLOO-Properties];
-      !  the latent heat of its transfer number is Lv of [IGLOO-Properties]
+      !  the latent heat of its transfer number is the material's Lv column at that temperature, else Lv of
+      !  [IGLOO-Properties]; given both ways it is refused
       if (material(i)%combSelect == 2) then
         if (material(i)%Tburn /= 0._R8) then
           material(i)%Tboil = material(i)%Tburn
@@ -424,11 +425,24 @@ contains
             '[ERROR] combustion=direct requires T-burn in the models file, or boiling-temperature in [IGLOO-Properties]'
           material(i)%Tboil = ini_Tboil(i)
         endif
-        if (.not. allocated(ini_Lv)) error stop '[ERROR] combustion=direct requires Lv in [IGLOO-Properties]'
-        material(i)%Lv = ini_Lv(i)
-        if (.not. material(i)%Lv > 0._R8) error stop '[ERROR] combustion=direct requires a latent heat > 0 (Lv)'
         if (.not. material(i)%Tboil > 0._R8) &
           error stop '[ERROR] combustion=direct requires a burning temperature > 0 (T-burn, or boiling-temperature)'
+        given = .false.
+        if (ilv > 0) call read_positive_column(i, mat%matName, colLv, 'Lv', 'Lv', mat%LvTab, given, &
+                                               ': the latent heat of combustion=direct, taken at its burning temperature')
+        if (given) then
+          if (allocated(ini_Lv)) then
+            if (ini_Lv(i) /= 0._R8) error stop 'IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column'
+          endif
+          material(i)%Lv = tableValue(mat%LvTab, Tmin, Tmax, material(i)%Tboil)
+          write(*,'(A,I0,A,ES12.5,A,ES12.5,A)') '  >> [material ', i, '] combustion=direct: Lv(', material(i)%Tboil, &
+                                                ' K) = ', material(i)%Lv, ' J/kg'
+        else
+          if (.not. allocated(ini_Lv)) error stop &
+            '[ERROR] combustion=direct requires its latent heat: the Lv column of properties.dat, or Lv in [IGLOO-Properties]'
+          material(i)%Lv = ini_Lv(i)
+        endif
+        if (.not. material(i)%Lv > 0._R8) error stop '[ERROR] combustion=direct requires a latent heat > 0 (Lv)'
       endif
 
       !> Psat column: tabulated for an evaporating material, all zero keeps Clausius-Clapeyron
@@ -455,7 +469,10 @@ contains
 
       !> Lv, Mv, Cpv columns (the pair that gives Psat): Lv(T) and cpv(T) tabulated, Mv the column's constant
       if (ilv > 0 .or. imv > 0 .or. icpv > 0) then
-        if (mat%evapSelect == 0) then
+        if (mat%evapSelect == 0 .and. mat%combSelect == 2) then
+          if (imv > 0 .or. icpv > 0) write(*,'(A,I0,A)') '  >> [material ', i, &
+            '] Mv, Cpv columns not used: combustion=direct reads the Lv column alone'
+        elseif (mat%evapSelect == 0) then
           write(*,'(A,I0,A)') '  >> [material ', i, '] Lv, Mv, Cpv columns not used: this material does not evaporate'
         else
           code = validate_vapour_columns(colLv, colMv, colCpv, colPs, mat%psatVariable, Tmin, Tmax, mat%Tboil, Ru, mat%Mv)
