@@ -129,7 +129,7 @@ vector, mollification flags, and more. Populated once at startup by
 
 | Mode | Dependency source | Switch |
 |------|-------------------|--------|
-| Standalone | `lib/ORION` and `lib/OSLO`, the releases of `deps.lock` checked out by the configure; the submodule `lib/third_party/FiNeR` | default |
+| Standalone | `lib/ORION` and `lib/OSLO`, the releases of `deps.lock` checked out by the configure; the submodule `lib/FiNeR` (see [Versioning](versioning.md)) | default |
 | Submodule of hydra | `$HYDRADIR/lib/{ORION,OSLO,third_party/FiNeR}` | `--include-orion=`, `--include-oslo=`, `--include-finer=` |
 
 When IGLOO is configured *by* hydra, only `src/lib/CMakeLists.txt` runs — the

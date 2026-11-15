@@ -24,7 +24,7 @@ This page describes how to build IGLOO. Two build modes exist: **standalone** (I
 
 IGLOO is built against the in-tree copies of ORION, OSlo, and FiNeR under `lib/`. This is the standard mode for users who do not have the hydra suite installed.
 
-A plain `git clone https://github.com/open-hydra/IGLOO.git` is enough: `install.sh build` initialises the `lib/third_party/FiNeR` submodule, and the CMake configure checks out the newest releases of ORION (2.2 or a later 2.x) and OSLO (1.1 or a later 1.x) in `lib/ORION` and `lib/OSLO` (`cmake/SemVerDeps.cmake`) and clones FiNeR's own dependencies, all over https (a bare `cmake -B build` does the same). The configure records the two releases in `deps.lock` (not tracked) and uses them, with no network, until `--update-deps` selects the newest ones again. OSLO's nested SUNDIALS submodule is not fetched, since `install.sh` and the CI build OSLO without SUNDIALS (`-DUSE_SUNDIALS=OFF`); a bare `cmake -B build` keeps OSLO's default, `USE_SUNDIALS=ON`, and fetches and builds SUNDIALS.
+A plain `git clone https://github.com/open-hydra/IGLOO.git` is enough: `install.sh build` initialises the `lib/FiNeR` submodule (FiNeR v2.3.0), and the CMake configure checks out the newest releases of ORION (2.2 or a later 2.x) and OSLO (1.1 or a later 1.x) in `lib/ORION` and `lib/OSLO` (`cmake/SemVerDeps.cmake`) and clones FiNeR's own dependencies (their default branches), all over https (a bare `cmake -B build` does the same). The configure records the two releases in `deps.lock` (not tracked) and uses them, with no network, until `--update-deps` selects the newest ones again. OSLO's nested SUNDIALS submodule is not fetched, since `install.sh` and the CI build OSLO without SUNDIALS (`-DUSE_SUNDIALS=OFF`); a bare `cmake -B build` keeps OSLO's default, `USE_SUNDIALS=ON`, and fetches and builds SUNDIALS.
 
 ```bash
 # Intel compilers with OpenMP (recommended for production)
@@ -39,7 +39,7 @@ A plain `git clone https://github.com/open-hydra/IGLOO.git` is enough: `install.
 
 ### Hydra-submodule (`--include-*`)
 
-When IGLOO is a submodule of hydra, point the build at `$HYDRADIR/lib/{ORION,OSLO,third_party/FiNeR}` instead of the in-tree copies:
+When IGLOO is a submodule of hydra, point the build at `$HYDRADIR/lib/{ORION,OSLO,third_party/FiNeR}` instead of the releases and the submodule:
 
 ```bash
 ./install.sh build --compilers=intel --use-openmp \
@@ -48,7 +48,7 @@ When IGLOO is a submodule of hydra, point the build at `$HYDRADIR/lib/{ORION,OSL
   --include-finer=$HYDRADIR/lib/third_party/FiNeR
 ```
 
-The three options are independent: ORION or OSLO left out is the release of `deps.lock`, FiNeR the in-tree copy. A relative path is taken from the repository root.
+The three options are independent: ORION or OSLO left out is the release of `deps.lock`, FiNeR the submodule `lib/FiNeR`. A relative path is taken from the repository root. Each clone is checked against IGLOO's requirement (see [Versioning](../development/versioning.md)); `-DIGLOO_PIN_CHECK=WARNING` builds another one on purpose.
 
 !!! warning "`compile` keeps the dependency paths of the last `build`"
     `./install.sh build` records the paths given in `CMakePresets.json`, and `compile` reuses them. Always run `./install.sh build` (not `compile`) when changing a dependency path.
@@ -62,7 +62,7 @@ The three options are independent: ORION or OSLO left out is the release of `dep
 | `--include-orion=<path>` | ORION checkout to build against. Default: the release of `deps.lock`, checked out in `lib/ORION`. |
 | `--include-oslo=<path>` | OSLO checkout to build against. Default: the release of `deps.lock`, checked out in `lib/OSLO`. |
 | `--update-deps` | Selects again the newest releases of ORION and OSLO that IGLOO accepts (`-DSEMVER_UPDATE=ALL`). |
-| `--include-finer=<path>` | FiNeR checkout to build against. Default: the in-tree `lib/third_party/FiNeR`. |
+| `--include-finer=<path>` | FiNeR clone to build against, checked against `IGLOO_FINER_TAG`. Default: the submodule `lib/FiNeR`. |
 | `--compilers=intel` or `--compilers=gnu` | Selects the compiler family. When omitted, CMake decides. |
 | `--use-openmp` | Enables OpenMP parallelization. |
 | `--use-tecio` | Enables Tecplot binary I/O (requires C++ compiler). |
