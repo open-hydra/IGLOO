@@ -21,12 +21,17 @@ so the particle burns out in `t_b = d_p0^n/K_eff` whatever `x0`, and the residue
 `h_mix = (1 − x0)(c_Al T + hOff_Al) + x0 (c_res T + hOff_res)`.
 
 ## Fixture
-`burn-box-residue`'s case with `xi-ox0=0.1` on the burning line and an inert product (no model on its line, so the
+`burn-box-residue`'s case with `xi-ox0=0.1` in the burning material's cap row and an inert product (no model on its line, so the
 files carry no `f` column): `burn-box`'s `bc.txt` and `solfile.tec` and `burn-box-cap`'s absolute two-zone table
 (symlinked); `out-file = S`, `out-time = on`, `mollify = off`. Its own `INPUT/phase.txt`:
 
-    A 1 combustion=Beckstead K-burn=2.0e-6 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000 xi-cap=0.2 product=OX residue=on xi-ox0=0.1
+    A 1 combustion=Beckstead cap=constant
     OX 0
+
+and `INPUT/models.txt`:
+
+    A combustion Beckstead K-burn=2.0e-6 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000
+    A cap constant xi-cap=0.2 product=OX residue=on xi-ox0=0.1
 
 `m_p0 = 4.278788e-11 kg` (`ρ_mix` 3026.62 kg/m³), `m_Al0 = 3.850909e-11 kg`, `d_Al0 = 2.921332e-5 m`. The 25
 parcels burn out near x = 0.072 m at 764.84 K; each residue (`m = 1.883092e-11 kg`, `d = 2.0881e-5 m`, 0.696 of

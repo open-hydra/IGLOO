@@ -228,21 +228,21 @@ contains
   !  to geoblock cells by the assembled octant weights (conservative). The caller mollifies
   !  (mollifySourceBlocks).
   subroutine finalizeSRC(self, geoblock)
-    use IGLOO_variables, only: toll, ord2, mesh2D, nm
+    use IGLOO_variables, only: toll, ord2, mesh2D, nsm
     implicit none
     class(obj_sourceblock), intent(inout) :: self
     type(obj_block),        intent(in)    :: geoblock
     integer  :: i, j, k, gi, gj, gk, da, db, dc, oct, gNx, gNy, gNz
     integer  :: lo_i, hi_i, lo_j, hi_j, lo_k, hi_k
     real(R8) :: w
-    real(R8) :: accMass(nm), accMom(3), accEn
+    real(R8) :: accMass(nsm()), accMom(3), accEn
     real(R8), allocatable :: sourceMass_geo(:,:,:,:)
     real(R8), allocatable :: sourceMom_geo(:,:,:,:)
     real(R8), allocatable :: sourceEn_geo(:,:,:)
 
     if (ord2) then
       gNx = geoblock%Nx;  gNy = geoblock%Ny;  gNz = geoblock%Nz
-      allocate(sourceMass_geo(1:nm, 1:gNx, 1:gNy, 1:gNz))
+      allocate(sourceMass_geo(1:nsm(), 1:gNx, 1:gNy, 1:gNz))
       allocate(sourceMom_geo (1:3,  1:gNx, 1:gNy, 1:gNz))
       allocate(sourceEn_geo        (1:gNx, 1:gNy, 1:gNz))
 
@@ -464,7 +464,7 @@ contains
   !> Mollify the extensive source totals {mass, mom, en}: converted to densities (/V),
   !  smoothed, converted back (*V).
   subroutine mollifySource(self, geoblock)
-    use IGLOO_variables, only: mesh2D, mollifyPasses, nm
+    use IGLOO_variables, only: mesh2D, mollifyPasses, nsm
     class(obj_sourceblock), intent(inout) :: self
     type(obj_block),        intent(in)    :: geoblock
     integer  :: ndim, s, c, Nx, Ny, Nz
@@ -475,7 +475,7 @@ contains
     Nx = geoblock%Nx; Ny = geoblock%Ny; Nz = geoblock%Nz
     allocate(tmp(Nx,Ny,Nz), qold(Nx,Ny,Nz))
     associate(V => geoblock%cellVol)
-      do s = 1, nm
+      do s = 1, nsm()
         tmp = self%sourceMass(s,:,:,:) / V
         call binomial_smooth(tmp, V, mollifyPasses, ndim, work=qold)
         self%sourceMass(s,:,:,:) = tmp * V
@@ -545,7 +545,7 @@ contains
   !  what block b's 102 face cells took from the donor halo, per field (mass of each material, the
   !  three momentum components, energy), in source units.
   subroutine mollifySourceBlocks(src, geo, links, donors, exchanged)
-    use IGLOO_variables, only: mesh2D, mollifyPasses, nm
+    use IGLOO_variables, only: mesh2D, mollifyPasses, nsm
     implicit none
     type(obj_sourceblock), intent(inout) :: src(:)
     type(obj_block),       intent(in)    :: geo(:)
@@ -569,13 +569,13 @@ contains
       vol(b)%q = geo(b)%cellVol
     enddo
     !> mass of each material, the three momentum components, energy: the order of mollifySource
-    do iv = 1, nm + 4
+    do iv = 1, nsm() + 4
       do b = 1, size(src)
         associate(V => geo(b)%cellVol)
-        if (iv <= nm) then
+        if (iv <= nsm()) then
           fld(b)%q = src(b)%sourceMass(iv,:,:,:) / V
-        elseif (iv <= nm + 3) then
-          fld(b)%q = src(b)%sourceMom(iv-nm,:,:,:) / V
+        elseif (iv <= nsm() + 3) then
+          fld(b)%q = src(b)%sourceMom(iv-nsm(),:,:,:) / V
         else
           fld(b)%q = src(b)%sourceEn / V
         endif
@@ -584,10 +584,10 @@ contains
       call mollifyBlocks(fld, vol, links, mollifyPasses, ndim, donors, exchanged(iv,:))
       do b = 1, size(src)
         associate(V => geo(b)%cellVol)
-        if (iv <= nm) then
+        if (iv <= nsm()) then
           src(b)%sourceMass(iv,:,:,:) = fld(b)%q * V
-        elseif (iv <= nm + 3) then
-          src(b)%sourceMom(iv-nm,:,:,:) = fld(b)%q * V
+        elseif (iv <= nsm() + 3) then
+          src(b)%sourceMom(iv-nsm(),:,:,:) = fld(b)%q * V
         else
           src(b)%sourceEn = fld(b)%q * V
         endif

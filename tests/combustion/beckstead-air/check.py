@@ -16,7 +16,7 @@ d_floor = (6 m_b/(pi rho_p))^(1/3), rho_p from INPUT/properties.dat at 300 K. It
 carries that state's time and diameter. A parcel at zero slip moves along x only, so its exit (Y, Z) names its inlet
 cell (m, n), and the cell's bc.txt record (the reader's order: n outer, m inner) its D0 = 2 rp.
 
-  B0  the input: phase.txt's K-burn x X-eff equals K_eff within 1e-6 (relative), n-burn = 1.8, X-eff = 0.21
+  B0  the input: models.txt's K-burn x X-eff equals K_eff within 1e-6 (relative), n-burn = 1.8, X-eff = 0.21
   B1  every parcel burns out inside: 25 exit records, one per inlet cell, every bc = 0, every d_p <= d_floor
       (1 + 1e-5) and t > 0 -- the burnout witness no other bc-0 ending meets; a parcel's first trajectory row (where
       it has rows) at d = D0 within half an E13.6 print unit, and every row in its inlet cell's (Y, Z)
@@ -52,7 +52,7 @@ from burnout import burn_diam  # noqa: E402
 TRAJ = os.path.join(HERE, "OUTPUT", "trajectories-A.dat")
 OUTLOC = os.path.join(HERE, "OUTPUT", "outloc-A.dat")
 BC = os.path.join(HERE, "INPUT", "bc.txt")
-PHASE = os.path.join(HERE, "INPUT", "phase.txt")
+MODELS = os.path.join(HERE, "INPUT", "models.txt")
 PROPS = os.path.join(HERE, "INPUT", "properties.dat")
 
 # ---- Eq. 7 at the stated condition ([Beck05] p. 543) ----
@@ -84,10 +84,12 @@ def half_es16(v):
     return 0.0 if v == 0.0 else 0.5e-8 * 10.0 ** math.floor(math.log10(abs(v)))
 
 
-def phase_tokens(path):
-    """The key=value tokens of the material line of phase.txt."""
+def model_constants(path):
+    """The key=value constants of the rows of models.txt."""
     toks = {}
-    for line in open(path).read().split("\n")[1:]:
+    for line in open(path).read().split("\n"):
+        if line.startswith("#"):
+            continue
         for t in line.split():
             if "=" in t:
                 k, v = t.split("=", 1)
@@ -132,11 +134,11 @@ def main():
     print("Eq. 7 at air, 1 atm, 300 K: K_eff = %.9e m^1.8/s; rho_p %.1f kg/m^3" % (KEFF, rho_p))
 
     # ---- B0 ----
-    tok = phase_tokens(PHASE)
+    tok = model_constants(MODELS)
     kb, nb, xe = float(tok["K-burn"]), float(tok["n-burn"]), float(tok["X-eff"])
     rel = abs(kb * xe - KEFF) / KEFF
     verdict(rel <= TOL_B0 and nb == NB and xe == X_EFF,
-            "B0 phase.txt: K-burn x X-eff = %.9e against K_eff, relative %.2e (tol %.0e); n-burn %g, X-eff %g" % (
+            "B0 models.txt: K-burn x X-eff = %.9e against K_eff, relative %.2e (tol %.0e); n-burn %g, X-eff %g" % (
                 kb * xe, rel, TOL_B0, nb, xe))
 
     d0 = inlet_d0(BC)

@@ -30,7 +30,7 @@ The uniform-gas box of `tools/make_box_case.py` (60×5×5 cells over 0.15 × 0.0
 
     python3 tests/tools/make_box_case.py INPUT --kv 1.0 --kt 1.0 --tg 300 --ug 0.04 --rp-sweep 5.00000e-06,6.05764e-06,7.33900e-06,8.89140e-06,1.07722e-05,1.30508e-05,1.58114e-05,1.91559e-05,2.32079e-05,2.81171e-05,3.40646e-05,4.12702e-05,5.00000e-05,6.05764e-05,7.33900e-05,8.89140e-05,1.07722e-04,1.30508e-04,1.58114e-04,1.91559e-04,2.32079e-04,2.81171e-04,3.40646e-04,4.12702e-04,5.00000e-04
 
-- `phase.txt`: `A 1 combustion=Beckstead K-burn=6.74740707e-06 n-burn=1.8 X-eff=0.21 T-ign=250`. No heat release
+- `phase.txt`: `A 1 combustion=Beckstead`; `models.txt`: `A combustion Beckstead K-burn=6.74740707e-06 n-burn=1.8 X-eff=0.21 T-ign=250`. No heat release
   (`beta-part`, `q-comb` at their 0 defaults), no oxide cap or residue (`xi-cap` 0, no `residue` key): ODE model 5.
   **`T-ign = 250 K` is a switch, not a physical claim**: Eq. 7's rate does not depend on the particle temperature
   above ignition, so the gate sits below the injection temperature and every particle burns from injection.
@@ -63,7 +63,7 @@ about 0.6 s; the log carries no revert, stuck, no-progress, outer-maxIter or sol
 
 | id | gate | tolerance | measured |
 |---|---|---|---|
-| B0 | `phase.txt`: K-burn × X-eff = `K_eff` of Eq. 7; n-burn = 1.8, X-eff = 0.21 | 1e-6 relative | 7.5e-12 |
+| B0 | `models.txt`: K-burn × X-eff = `K_eff` of Eq. 7; n-burn = 1.8, X-eff = 0.21 | 1e-6 relative | 7.5e-12 |
 | B1 | 25 exit records, one per inlet cell (the exit (Y, Z) names the cell, its `bc.txt` record D0 = 2 rp), every `bc` = 0, `d_p ≤ d_floor`(1 + 1e-5), `t > 0` — the burnout witness no other bc-0 ending meets; each parcel's first row at d = D0, every row in its cell's (Y, Z) | half an E13.6 unit; F12.6 | `d_p` ≤ 18.613 nm; 0.40 of the unit |
 | B2 | `\|t_exit − (D0^n − d_p^n)/K_eff\| ≤ EPS t_exit`; the floor, one-sided: `t_exit ≥ t_floor (1 − EPS)`; the overshoot printed, not gated | EPS = 1e-5 (5 × measured, floored) | 3.9e-9; 25/25 |
 | B3 | every row: `\|d^n − (D0^n − K_eff t)\|` within the row's print budget, `n d^{n−1}` × half an E13.6 unit of d + `K_eff` × half an ES16.8 unit of t | 1 | 0.9984 (170 rows) |
@@ -73,7 +73,7 @@ about 0.6 s; the log carries no revert, stuck, no-progress, outer-maxIter or sol
 
 | mutation | what fails |
 |---|---|
-| K-burn × 1.01 in `phase.txt` | B0 1.0e-2; B2 1.0e-2, the floor on 25 of 25 parcels; B3 (9.8e-3 of D0^n) |
+| K-burn × 1.01 in `models.txt` | B0 1.0e-2; B2 1.0e-2, the floor on 25 of 25 parcels; B3 (9.8e-3 of D0^n) |
 | the X_eff exponent 1.1 in the solver (`aXeff`) | B2 0.14; B3 |
 | `T-ign = 350` (above the injection temperature) | B1: nothing burns, 25 exits at the outlet (bc 400) |
 | `beta-part=0.3 q-comb=1000000` (a heat release) | B4: T_p 882 K above 300 K |

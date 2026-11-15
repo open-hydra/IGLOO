@@ -56,8 +56,8 @@ cap = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(cap)                     # Gallier's lobe (exact F), burn-box's inputs (cap.bb), xi, nu
 bb = cap.bb
 
-# ---- inputs: phase.txt (both lines), the table's zones, bc.txt, the box ----
-X0 = 0.1                                          # xi-ox0 on the burning line
+# ---- inputs: phase.txt (both lines), models.txt, the table's zones, bc.txt, the box ----
+X0 = 0.1                                          # xi-ox0 of the burning material's cap row
 STRETCH = {0.0: 1.397686, 0.1: 1.388383}          # (d_Al0/d_p0)^n int_0^1 ds/F(f_ox(s; x0)): exact F, 20000 cells
 KEFF = 2.0e-6 * bb.XEFF
 XI, NU = cap.XI, cap.NU

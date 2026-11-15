@@ -85,17 +85,25 @@ output written).
 | `refuse-psd-radius-zero` | a first radius of 0 | `IGLOO: size-distribution file: a radius is not positive` |
 | `refuse-psd-mass-zero` | every mass fraction 0 | `IGLOO: size-distribution file: the mass fractions sum to zero` |
 | `refuse-comb-brk` | `burn-box` (`INPUT/` symlinked) with `[IGLOO-Models] breakup = TAB` | `combustion=Beckstead with breakup is not supported` |
-| `refuse-comb-kburn` | own `INPUT/phase.txt` `A 1 combustion=Beckstead n-burn=1.8` (no `K-burn`, so 0), `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `combustion=Beckstead requires K-burn > 0` |
-| `refuse-comb-nburn` | as above with `K-burn=4.5e-07 n-burn=3.0` | `combustion=Beckstead requires 0 < n-burn < 3` |
-| `refuse-comb-xeff` | as above with `K-burn=4.5e-07 X-eff=1.5` | `combustion=Beckstead requires 0 < X-eff <= 1` |
-| `refuse-cap-product` | own `INPUT/phase.txt`: `burn-box`'s line with `xi-cap=0.2` and no `product`; `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `xi-cap > 0 requires product = a 0-group material of the phase file` |
-| `refuse-cap-varcp` | `combustion/burn-box-cap`'s `phase.txt` (symlinked) and its own ten-row two-zone table, the `OX` zone's `Cp` rising 0.01 J/(kg·K) per K (the enthalpy its integral, so the table itself is valid; `burn-box-cap/make_table.py varcp`) | `xi-cap > 0 requires a constant-cp, constant-density material and product` |
+| `refuse-comb-kburn` | own `INPUT/phase.txt` `A 1 combustion=Beckstead` and `INPUT/models.txt` `A combustion Beckstead n-burn=1.8` (no `K-burn`, so 0), `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `combustion=Beckstead requires K-burn > 0` |
+| `refuse-comb-nburn` | as above with the row's `K-burn=4.5e-07 n-burn=3.0` | `combustion=Beckstead requires 0 < n-burn < 3` |
+| `refuse-comb-xeff` | as above with the row's `K-burn=4.5e-07 X-eff=1.5` | `combustion=Beckstead requires 0 < X-eff <= 1` |
+| `refuse-cap-product` | own `INPUT/phase.txt` and `INPUT/models.txt`: `burn-box`'s line with `cap=constant`, its cap row `xi-cap=0.2` and no `product`; `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `xi-cap > 0 requires product = a 0-group material of the phase file` |
+| `refuse-cap-varcp` | `combustion/burn-box-cap`'s `phase.txt` and `models.txt` (symlinked) and its own ten-row two-zone table, the `OX` zone's `Cp` rising 0.01 J/(kg·K) per K (the enthalpy its integral, so the table itself is valid; `burn-box-cap/make_table.py varcp`) | `xi-cap > 0 requires a constant-cp, constant-density material and product` |
 | `refuse-cap-relative` | as above with a relative ten-row table (an `Enthalpy` column, `make_table.py relative`) | `xi-cap > 0 requires the absolute enthalpy datum (an Enthalpy_abs column)` |
-| `refuse-xi-law-token` | own `INPUT/phase.txt`: `burn-box-cap`'s line with `xi-law=Gallier` (an unknown word); `burn-box`'s `bc.txt`/`solfile.tec`, `burn-box-cap`'s table | `IGLOO: unknown xi-law token` |
-| `refuse-xi-law-cap` | as above with `xi-cap=0.2` beside `xi-law=Gallier21` | `IGLOO: xi-cap beside xi-law=Gallier21` |
-| `refuse-xi-law-noburn` | as above, `A 1 xi-law=Gallier21 product=OX`: no burn law | `IGLOO: xi-law=Gallier21 requires combustion=Beckstead` |
-| `refuse-ox0-range` | own `INPUT/phase.txt`: `combustion/burn-box-ox0`'s two lines with `xi-ox0=1.0` (a particle without metal); `burn-box`'s `bc.txt`/`solfile.tec`, `burn-box-cap`'s table; `refusals/cap-product`'s settings | `xi-ox0 must lie in [0, 1)` |
-| `refuse-ox0-nocap` | own `INPUT/phase.txt`: `burn-box`'s line with `xi-ox0=0.1` (no `xi-cap`, no product line); `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `refusals/cap-product`'s settings | `xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0` |
+| `refuse-xi-law-token` | own `INPUT/phase.txt` and `INPUT/models.txt`: `burn-box-cap`'s line with `cap=Gallier` (an unknown word); `burn-box`'s `bc.txt`/`solfile.tec`, `burn-box-cap`'s table | `IGLOO: unknown cap law` |
+| `refuse-xi-law-cap` | as above with `cap=Gallier21` and `xi-cap=0.2` in its cap row (a constant the law does not read) | `IGLOO: a constant the model does not read in the models file` |
+| `refuse-xi-law-noburn` | as above, `A 1 cap=Gallier21` with the row `A cap Gallier21 product=OX`: no burn law | `IGLOO: cap=Gallier21 requires combustion=Beckstead` |
+| `refuse-models-line` | own `INPUT/phase.txt` `A 1 combustion=Beckstead K-burn=4.5e-07` (a constant left on the material line), no `models.txt`; `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `IGLOO: a constant of a burning model on the material line of the phase file` |
+| `refuse-models-kind` | as above with `A 1 combustion=Beckstead` and `burn-box`'s combustion row; a second row `A breakup Reitz-KHRT B1=40` | `IGLOO: unknown kind in the models file` |
+| `refuse-models-model` | as above, the combustion row naming `direct` | `IGLOO: the models file names another model than the material` |
+| `refuse-models-material` | as above with a second row for `B`, no material of the phase file | `IGLOO: a row of the models file names no material of the phase file` |
+| `refuse-models-twice` | as above with a second combustion row for `A` | `IGLOO: two rows of one kind for a material in the models file` |
+| `refuse-models-noburn` | `A 1` (no burning model on the line, none in `[IGLOO-Models]`) with a combustion row under the model `-` | `IGLOO: constants of a burning model for a material that names none` |
+| `refuse-models-real` | `burn-box`'s row with `K-burn=fast` | `IGLOO: non-numeric constant in the models file` |
+| `refuse-models-short` | the row `A combustion` (no model) | `IGLOO: malformed row in the models file` |
+| `refuse-ox0-range` | own `INPUT/phase.txt` and `INPUT/models.txt`: `combustion/burn-box-ox0`'s two lines and rows with `xi-ox0=1.0` (a particle without metal); `burn-box`'s `bc.txt`/`solfile.tec`, `burn-box-cap`'s table; `refusals/cap-product`'s settings | `xi-ox0 must lie in [0, 1)` |
+| `refuse-ox0-nocap` | own `INPUT/phase.txt` and `INPUT/models.txt`: `burn-box`'s line with `cap=constant` and the cap row `xi-ox0=0.1` (no `xi-cap`, no product line); `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `refusals/cap-product`'s settings | `xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0` |
 | `refuse-brk-sigma` | `tab-e2e` (`INPUT/` symlinked) without `[IGLOO-Properties] sigma` | `Breakup requires sigma` |
 | `refuse-brk-mu` | `tab-e2e` without `mu` | `Breakup requires mu` |
 | `refuse-sigma-size` | `tab-e2e` with `Le = 1.0` added and `sigma = 0.072 0.072`, `mu = 1.0e-3 1.0e-3`: the vectors are read in the order psat, Mv, Lv, Tboil, cpv, Le, Yinf, sigma, mu and the first present (`Le`, one value) sets the length | `sigma: size mismatch with other property vectors` |

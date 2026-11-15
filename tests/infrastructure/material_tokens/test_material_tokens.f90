@@ -1,7 +1,9 @@
 program test_material_tokens
     !
     ! The material-line tokens of the phase file (key=value after "<name> <groups>", read by
-    ! IGLOO_IO_INI::apply_material_key): six model words, the breakup word, fourteen reals and the
+    ! IGLOO_IO_INI::apply_material_key) and the rows of the models file (IGLOO_IO_INI::apply_model_row):
+    ! six model words, the breakup word, fourteen reals (seven tokens of the line; seven constants of the
+    ! burning models, each in a row of the models file) and the
     ! twenty-three breakup constants; their defaults (set_material_defaults), the finalize rules
     ! (finalize_material_models) and the breakup constants' resolution (apply_breakup_tokens), driven on
     ! an obj_material built here: no input file.
@@ -19,6 +21,8 @@ program test_material_tokens
     !        doubled, TAB-method sets bpMethod), on the four others nothing moves; the 14 reals and the
     !        selectors keep theirs. The token table is this test's own, never Lib_Breakup's
     !   MT7  TAB's product-size scale: TAB-n=4 gives Gamma(1.5)/Gamma(1.75), with TAB-method=1 it is 1
+    !   MT8  the rows of the models file: a combustion row of direct with its keys in any order; a combustion
+    !        row under the model '-' and a cap row of Gallier21, each field its literal, both kinds seen
     !
     ! Equality is exact: the reader's list-directed read and the compiler's literal both round the same
     ! decimal string correctly.
@@ -26,7 +30,7 @@ program test_material_tokens
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_data_phases, only: obj_material
     use IGLOO_IO_INI,      only: set_material_defaults, apply_material_key, finalize_material_models, &
-                                 apply_breakup_tokens
+                                 apply_breakup_tokens, apply_model_row
     implicit none
 
     integer,  parameter :: NR = 14
@@ -77,7 +81,7 @@ program test_material_tokens
     real(R8) :: v(NR), ex(NR), tmelt, tnuc
     real(R8), allocatable :: bpex(:)
     integer  :: nbad, i, k, s, mex
-    logical  :: ok, okAll
+    logical  :: ok, okAll, seen(2)
 
     nbad = 0
 
@@ -94,7 +98,7 @@ program test_material_tokens
     ! ---- MT2: each real token alone -------------------------------------------------------------
     do i = 1, NR
         call fresh(mat)
-        call apply_material_key(1, mat, trim(RKEY(i)), trim(RVAL(i)))
+        call put(mat, trim(RKEY(i)), trim(RVAL(i)))
         v  = reals(mat)
         ex = DEF0;  ex(i) = RLIT(i)
         call check(all(v == ex), 'MT2 '//trim(RKEY(i))//'='//trim(RVAL(i))// &
@@ -208,6 +212,25 @@ program test_material_tokens
     call apply_breakup_tokens(1, mat)
     call check(mat%bpScale == 1._R8 .and. mat%bpMethod == 1, 'MT7 TAB-n=4 with TAB-method=1: bpScale = 1', nbad)
 
+    ! ---- MT8: the rows of the models file ---------------------------------------------------------
+    call fresh(mat)
+    call apply_material_key(1, mat, 'combustion', 'direct')
+    seen = .false.
+    call apply_model_row(1, mat, 'A combustion direct d-burnout=1e-07 T-burn=1363 q-comb=9530000', seen)
+    call check(mat%Tburn == 1363._R8 .and. mat%qComb == 9530000._R8 .and. mat%dBurn == 1e-07_R8 .and. &
+               mat%dStop == 0._R8 .and. seen(1) .and. .not. seen(2) .and. mat%combSelect == 2, &
+               'MT8 a combustion row of direct, its keys in any order: T-burn, q-comb, d-burnout', nbad)
+    call fresh(mat)
+    call apply_material_key(1, mat, 'combustion', 'Beckstead')
+    call apply_material_key(1, mat, 'cap', 'Gallier21')
+    seen = .false.
+    call apply_model_row(1, mat, 'A combustion - K-burn=4.5e-07 d-stop=6e-05', seen)
+    call apply_model_row(1, mat, 'A cap Gallier21 residue=on product=OX d-residue=5e-06 xi-ox0=0.125', seen)
+    call check(mat%Kburn == 4.5e-07_R8 .and. mat%dStop == 6e-05_R8 .and. mat%xiLaw == 1 .and. mat%resOn .and. &
+               trim(mat%productName) == 'OX' .and. mat%dRes == 5e-06_R8 .and. mat%xiOx0 == 0.125_R8 .and. &
+               all(seen) .and. mat%xiCap == 0._R8, &
+               'MT8 a combustion row under the model - and a cap row of Gallier21: each field its literal', nbad)
+
     write(*,*)
     if (nbad == 0) then
         write(*,'(a)') '[PASS] test_material_tokens: every token sets its own field, defaults and finalize as pinned'
@@ -243,6 +266,25 @@ contains
         m%bp = POISON
         m%bpMethod = 2
     end subroutine breaking
+
+    !> One real of the tables: its token of the material line, or, for a constant of a burning model, a row of
+    !  the models file on a material that names the model.
+    subroutine put(m, key, value)
+        type(obj_material), intent(inout) :: m
+        character(len=*),   intent(in)    :: key, value
+        logical :: took(2)
+        took = .false.
+        select case (key)
+        case ('K-burn', 'n-burn', 'X-eff', 'beta-part', 'T-ign', 'q-comb')
+            call apply_material_key(1, m, 'combustion', 'Beckstead')
+            call apply_model_row(1, m, 'A combustion Beckstead '//key//'='//value, took)
+        case ('xi-cap')
+            call apply_material_key(1, m, 'cap', 'constant')
+            call apply_model_row(1, m, 'A cap constant '//key//'='//value, took)
+        case default
+            call apply_material_key(1, m, key, value)
+        end select
+    end subroutine put
 
     !> The 14 reals in the reader's token order.
     function reals(m) result(r)

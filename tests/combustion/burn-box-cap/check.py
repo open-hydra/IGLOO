@@ -45,7 +45,7 @@ TRAJ, OUTLOC, SRC, EUL, LOG = ("OUTPUT/trajectories-A.dat", "OUTPUT/outloc-A.dat
                                "OUTPUT/euler1.tec", "run_out.txt")
 TRAJ_OX, OUTLOC_OX = "OUTPUT/trajectories-OX.dat", "OUTPUT/outloc-OX.dat"
 
-# ---- the cap's inputs (phase.txt, the OX zone of properties.dat) ----
+# ---- the cap's inputs (models.txt, the OX zone of properties.dat) ----
 XI = 0.2
 RHO_RES, CP_RES = 3950.0, 1887.6
 NU = (2.0 * 26.9815385 + 3.0 * 15.999) / (2.0 * 26.9815385)

@@ -514,7 +514,7 @@ scatter quanta 5.7e-5.
 ### burn-box-cap-gallier
 
 Gallier's deposition law ([Gallier's deposition law](../theory/combustion.md#galliers-deposition-law)): burn-box-cap's
-parcels with `xi-law=Gallier21` in place of a constant fraction.  The oracle builds the law from the committed tables
+parcels with `cap=Gallier21` in place of a constant fraction.  The oracle builds the law from the committed tables
 of Figs. 7 and 11, never from IGLOO, and integrates the metal, the cap and the temperature by RK4, the cap's mass
 being no function of the metal's alone; the stretch is the parcel's own on the law's path ($c = 1.340400$ at
 30 µm).  The gates check the log, every trajectory row's mass, diameter and temperature, and the mass source.

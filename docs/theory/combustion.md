@@ -9,7 +9,7 @@ enthalpy) at Z(7), the particle **Al mass** at Z(8).  Combustion is mutually
 exclusive per material with evaporation (a loud warning drops evaporation) and
 with breakup (setup error).
 
-With `xi-cap > 0`, or with Gallier's deposition law (`xi-law=Gallier21`), the burning parcel carries its
+With `xi-cap > 0`, or with Gallier's deposition law (`cap=Gallier21`), the burning parcel carries its
 **oxide cap** beside the metal: ODE `model = 8` (`rhsAlCap`, [The oxide cap](#the-oxide-cap-model-8)). With `residue=on` the cap
 becomes, when the metal is gone, a parcel of the **combustion product**, a material of its own
 ([The burnout residue](#the-burnout-residue)).
@@ -228,7 +228,7 @@ Absent or 0, the cap starts from zero.
 
 ### Gallier's deposition law
 
-`xi-law=Gallier21` takes the retained fraction from the closure of Gallier et al.'s lobe-growth model
+`cap=Gallier21` takes the retained fraction from the closure of Gallier et al.'s lobe-growth model
 [Gal21] (PDF pp. 13–14) in place of a constant, at the metal's current diameter and the cap's mass fraction:
 
 $$
@@ -338,42 +338,61 @@ reaches it (0, the default, is off): the failure path of the residue, run by its
 
 ## Inputs
 
-All per material, as `key=value` tokens on the material line of the phase file (ATLAS GPB writes
-them from `[GPB-Phase*]`; see the [registry](../user/registry.md) for the vocabulary):
+All per material, from `[GPB-Phase*]` of the ATLAS input (see the [registry](../user/registry.md) for the
+vocabulary). ATLAS GPB writes the model WORDS as `key=value` tokens on the material line of the phase file, and the
+CONSTANTS of the models as rows of the models file (`models.txt`, with the phase file's prefix): one row per material
+and kind, `<material> <kind> <model> key=value ...`, the keys in any order, a line that starts with `#` a comment.
 
-| Key | Meaning | Default |
+| On the material line | Meaning | Default |
 | :--- | :--- | :---: |
-| `combustion` | `Beckstead` switches the material to the metal track | absent = off |
-| `K-burn` | burn-rate coefficient $K$ at $X_\mathrm{eff}=1$ (m^`n-burn`/s) | required > 0 |
-| `n-burn` | diameter exponent $n$ | 1.8 |
-| `X-eff` | effective oxidizer mole fraction (0, 1] | 1.0 |
-| `T-ign` | ignition temperature (K) | 2350 |
-| `beta-part` | heat-partition fraction to the particle | 0 |
-| `q-comb` | heat of combustion (J/kg) | 0 |
-| `xi-cap` | fraction of the oxide formed retained in the cap, [0, 1]; > 0 selects model 8 | 0 |
-| `xi-law` | the retained fraction: `constant` (`xi-cap`) or `Gallier21` (Gallier's deposition law, which selects model 8) | `constant` |
-| `xi-ox0` | the oxide's mass fraction of the injected particle, [0, 1); > 0 needs the cap (`xi-cap > 0` or the law) | 0 |
-| `product` | the combustion product: the name of a 0-group line of the phase file; required with the cap | none |
-| `residue` | `on`: the cap becomes a parcel of the product; `off`: it goes to the gas | `off` |
-| `d-residue` | residue diameter (m) with the mass flow kept; 0: one residue per droplet | 0 |
+| `combustion` | the burning model: `Beckstead` (the $d^n$ law of this page, the metal track), `direct` (the $d^2$ law of a drop held at its burning temperature) or `none` | `[IGLOO-Models] combustion`, else off |
+| `cap` | the oxide cap of a `Beckstead` material and its retained fraction: `constant` (`xi-cap`) or `Gallier21` (Gallier's deposition law); the cap selects model 8 | absent = no cap |
+
+| Row (`<kind> <model>`) | Key | Meaning | Default |
+| :--- | :--- | :--- | :---: |
+| `combustion Beckstead` | `K-burn` | burn-rate coefficient $K$ at $X_\mathrm{eff}=1$ (m^`n-burn`/s) | required > 0 |
+| | `n-burn` | diameter exponent $n$ | 1.8 |
+| | `X-eff` | effective oxidizer mole fraction (0, 1] | 1.0 |
+| | `T-ign` | ignition temperature (K) | 2350 |
+| | `beta-part` | heat-partition fraction to the particle | 0 |
+| `combustion direct` | `T-burn` | burning temperature (K) | `[IGLOO-Properties] boiling-temperature` |
+| either `combustion` row | `q-comb` | heat of combustion (J/kg) | 0 |
+| | `d-stop` | diameter (m) of the residue: the burning stops there and the drop stays | 0 = no residue |
+| | `d-burnout` | diameter (m) at which a burning drop is handed whole to the gas; to compare a material with its run in ICE, give it in both decks, at about 0.1 of the injected diameter | 0 = the built-in burnout mass |
+| `cap constant` | `xi-cap` | fraction of the oxide formed retained in the cap, [0, 1] | 0 |
+| either `cap` row | `xi-ox0` | the oxide's mass fraction of the injected particle, [0, 1) | 0 |
+| | `product` | the combustion product: the name of a 0-group line of the phase file; required with the cap | none |
+| | `residue` | `on`: the cap becomes a parcel of the product; `off`: it goes to the gas | `off` |
+| | `d-residue` | residue diameter (m) with the mass flow kept; 0: one residue per droplet | 0 |
+
+A row names the model its material line names; a `combustion` row may name `-` instead, the model of the line or of
+`[IGLOO-Models] combustion`.
 
 The product's line carries no combustion, evaporation or breakup (under a global evaporation or breakup
 word it says `evaporation=NoEvaporation`, `breakup=NoBreakup`) and may carry `solidification=on` with its own
 `T-melt`, `h-fus`, `T-nuc`, `cp-solid`; every `[IGLOO-Properties]` vector holds one value for it too.
-Setup refuses `xi-cap` outside [0, 1]; an `xi-law` word other than `constant` and `Gallier21`; `xi-cap > 0`
-beside `xi-law=Gallier21`, and the law without `combustion=Beckstead`; `xi-ox0` outside [0, 1), or > 0 without
+Setup refuses a constant of a burning model on the material line; a row of an unknown kind, a second row of one
+kind for a material, a row of another model than the line's, a key the row's model does not read (`xi-cap` in a
+`cap Gallier21` row, `K-burn` in a `combustion direct` row), a row for no material of the phase file; `xi-cap`
+outside [0, 1]; a `cap` word other than `constant` and `Gallier21`; the law without `combustion=Beckstead`, and any
+cap under `combustion=direct`; `xi-ox0` outside [0, 1), or > 0 without
 `combustion=Beckstead` and the cap; `product`, `residue=on` or `d-residue > 0` without
 `combustion=Beckstead` and the cap; the cap without a 0-group product line; a product that
 burns, evaporates or breaks up; a varying `Cp` or `Density` of the burning material or its product; a
 relative table; a negative `d-residue`, or one without `residue=on`.  The refusals worded for `xi-cap > 0`
 apply to the law alike.
 
-Example (the residue case of the test suite):
+Example (the residue case of the test suite), the phase file and the models file:
 
 ```text
 condensed-dispersed
-A  1 combustion=Beckstead K-burn=2.0e-6 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000 xi-cap=0.2 product=OX residue=on
+A  1 combustion=Beckstead cap=constant
 OX 0 solidification=on T-melt=2327 h-fus=1.08949e6 cp-solid=1360
+```
+
+```text
+A combustion Beckstead K-burn=2.0e-6 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000
+A cap constant xi-cap=0.2 product=OX residue=on
 ```
 
 Euler feedback and the mass source follow the model-2 rules: the instantaneous
