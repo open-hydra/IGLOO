@@ -7,7 +7,7 @@ threads and MPI ranks.
 | Group | What it pins | Gates |
 |---|---|---|
 | [Value pins](#value-pins) | published correlation values at fixed inputs | 3 unit tests |
-| [Refusals](#refusals) | inputs the solver must refuse at setup | 107 cases |
+| [Refusals](#refusals) | inputs the solver must refuse at setup | 115 cases |
 | [Solver failures](#solver-failures) | a parcel the ODE solver gives up on | 6 cases |
 | [Input and files](#input-and-files) | the input reader, the property table, the gas and grid files | unit tests + e2e |
 | [Repeatability](#repeatability) | two sweeps, thread counts | 16 two-sweep + 5 thread gates |
@@ -33,7 +33,7 @@ change of any constant turns them red. They verify no model; they pin the transc
 
 An invalid input must stop the solver at setup with exit code 128, the `error stop` message on
 standard error, nothing injected and no output. The checker is shown to catch a healthy case, so it
-cannot pass vacuously. All 107 are refused.
+cannot pass vacuously. All 115 are refused.
 
 | Area | Refused inputs |
 |---|---|
@@ -42,7 +42,8 @@ cannot pass vacuously. All 107 are refused.
 | Property table | wrong zone count or temperature range; an ambiguous enthalpy datum; a malformed row; a decreasing `Psat` |
 | Breakup | no surface tension or viscosity; vectors of the wrong size; $\sigma$ as key and column; a non-positive `Sigma` |
 | Solidification | no `h-fus` or `cp-solid`; `T-nuc` above `T-melt`; evaporation or combustion on the material; a negative `rho-solid` |
-| Combustion | Beckstead with breakup; no `K-burn`; `n-burn` or `X-eff` out of range; oxide-cap and oxide-fraction inconsistencies; an unknown `xi-law` |
+| Combustion | Beckstead with breakup; no `K-burn`; `n-burn` or `X-eff` out of range; oxide-cap and oxide-fraction inconsistencies; an unknown `cap` law, or one beside `xi-cap` or on a line that does not burn |
+| Models file | a burning model's constant left on the material line; a `models.txt` row of the wrong kind, model or material, given twice, too short, not a number, or for a material that does not burn |
 | Boundary file | record counts that are neither one copy nor one per family; copies that disagree; five spoiled chimera payloads; a periodic face without a periodic partner; an off-centre wedge; a pure 2D gas file; legacy headers; an empty payload; $\sum k_\rho \ge 1$ or a negative $k_\rho$; a gas file without density |
 | Gas order 2 | 101 and 201 faces whose orientation integers disagree with the partner cells |
 | Injection | ten defective size distributions (missing, unsorted, negative, zero radius, …) |

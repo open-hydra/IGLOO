@@ -814,7 +814,7 @@ igloo_e2e_case(burn-box-residue combustion/burn-box-residue "e2e;combustion;soli
 # with the cap grown from its initial oxide and the stretch re-evaluated from it; the burnout inside Beckstead's time
 # of the injected diameter; the residue's mass and flow, the mass and energy books, the scatter quanta.
 igloo_e2e_case(burn-box-ox0 combustion/burn-box-ox0 "e2e;combustion")
-# burn-box-cap-gallier: burn-box-cap with Gallier et al. 2021's deposition law (xi-law=Gallier21) for the retained
+# burn-box-cap-gallier: burn-box-cap with Gallier et al. 2021's deposition law (cap=Gallier21) for the retained
 # fraction: every trajectory row against an oracle carrying the cap (the law built from the committed tables, the
 # stretch on the law's path), the mass books. RED on the stretch left at 1, on g read at the injected diameter and
 # on the law read at the drop's diameter.
@@ -1407,12 +1407,31 @@ igloo_refusal_case(refuse-cap-product      infrastructure/refusals/cap-product
                    "xi-cap > 0 requires product = a 0-group material of the phase file" "e2e;refusal;combustion")
 # An unknown word for the cap's retained-fraction law.
 igloo_refusal_case(refuse-xi-law-token    infrastructure/refusals/xi-law-token
-                   "IGLOO: unknown xi-law token" "e2e;refusal;combustion")
-# xi-cap beside the Gallier21 law, and the law on a line that does not burn.
+                   "IGLOO: unknown cap law" "e2e;refusal;combustion")
+# xi-cap in the cap row of the Gallier21 law (a constant the law does not read), and the law on a line that does not burn.
 igloo_refusal_case(refuse-xi-law-cap      infrastructure/refusals/xi-law-cap
-                   "IGLOO: xi-cap beside xi-law=Gallier21" "e2e;refusal;combustion")
+                   "IGLOO: a constant the model does not read in the models file" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-xi-law-noburn   infrastructure/refusals/xi-law-noburn
-                   "IGLOO: xi-law=Gallier21 requires combustion=Beckstead" "e2e;refusal;combustion")
+                   "IGLOO: cap=Gallier21 requires combustion=Beckstead" "e2e;refusal;combustion")
+# The models file (the constants of the burning models, a row per material and kind): a constant left on the material
+# line, a kind that is not known, a row of another model than the material's, a row for no material of the phase
+# file, two rows of one kind, a row for a material that does not burn, a value that is not a number, a row cut short.
+igloo_refusal_case(refuse-models-line      infrastructure/refusals/models-line
+                   "IGLOO: a constant of a burning model on the material line of the phase file" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-models-kind      infrastructure/refusals/models-kind
+                   "IGLOO: unknown kind in the models file" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-models-model     infrastructure/refusals/models-model
+                   "IGLOO: the models file names another model than the material" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-models-material  infrastructure/refusals/models-material
+                   "IGLOO: a row of the models file names no material of the phase file" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-models-twice     infrastructure/refusals/models-twice
+                   "IGLOO: two rows of one kind for a material in the models file" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-models-noburn    infrastructure/refusals/models-noburn
+                   "IGLOO: constants of a burning model for a material that names none" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-models-real      infrastructure/refusals/models-real
+                   "IGLOO: non-numeric constant in the models file" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-models-short     infrastructure/refusals/models-short
+                   "IGLOO: malformed row in the models file" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-cap-varcp        infrastructure/refusals/cap-varcp
                    "xi-cap > 0 requires a constant-cp, constant-density material and product" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-cap-relative     infrastructure/refusals/cap-relative

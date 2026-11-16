@@ -8,8 +8,14 @@ registered in CTest and gated by an independent oracle.
 ## `tests/` — the reference suite
 
 A single model-first tree, MOSE-style, categorized by physics. All tests are
-registered in CTest. Authoritative layout: `tests/README.md`; one row per gate with its
-reference source and oracle: `tests/VERIFICATION_MATRIX.md`.
+registered in CTest. One row per gate with its reference source and oracle:
+`tests/VERIFICATION_MATRIX.md`.
+
+!!! tip "How to run the tests"
+    The full guide to building, running, selecting and debugging the tests is
+    [`tests/README.md`](https://github.com/open-hydra/IGLOO/blob/main/tests/README.md); each category
+    folder has its own `README.md`. What the tests verify, and their results, is on
+    [Verification & Validation](../vv/index.md).
 
 ### Running
 
@@ -129,7 +135,7 @@ so PASS means PASS and RED means a regression. Three unit tests
 specific correlations at fixed inputs (including deliberately source-faithful
 transcriptions with documented limitations) so that a change to any of them turns red.
 
-Current gate: **383 tests** in a serial build (321 e2e + 61 unit, `self_test`,
+Current gate: **391 tests** in a serial build (329 e2e + 61 unit, `self_test`,
 `registry-docs`, `exe-per-tree`, `e2e-rc-gate`, `lint-test-inputs`, `psd-plane-tool` and `history-census` among the latter, plus the optional `vortex-cloud-3way`); `USE_MPI=ON` registers 30 more
 `mpi-*` cases.
 One row per entry in `tests/VERIFICATION_MATRIX.md`.

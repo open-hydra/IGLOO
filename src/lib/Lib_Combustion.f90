@@ -4,16 +4,17 @@ module IGLOO_Lib_Combustion
     use IGLOO_variables, only : pi
     implicit none
     private
-    public :: becksteadRate
+    public :: becksteadRate, directRate
     public :: buildLobeTable, lobeF, capStretch, capStretchX0
     public :: buildXiLaw, xiGallier, capLawPath
 
     !> Metal parameter slots; the order is mirrored by Lib_RHS ind_mb../nmetal.
-    integer(I4), parameter, public :: nmp = 13
+    integer(I4), parameter, public :: nmp = 16
     integer(I4), parameter, public :: imKb=1, imN=2, imXe=3, imBeta=4, imXi=5
     integer(I4), parameter, public :: imTig=6, imHf=7, imCps=8, imQc=9
     integer(I4), parameter, public :: imRr=10, imCr=11, imCs=12   !> the cap: product density, heat capacity, stretch
     integer(I4), parameter, public :: imXl=13                     !> the cap's retained fraction: 0 xi-cap, 1 Gallier21
+    integer(I4), parameter, public :: imLv=14, imDr=15, imDir=16  !> direct's latent heat; the stop diameter; 1 = direct
 
     !> X_eff exponent of the Beckstead (2005) correlation.
     real(R8), parameter, public :: aXeff = 1.0_R8
@@ -54,11 +55,26 @@ contains
         qrel = 0._R8
         if (Tp < mp(imTig)) return   ! ignition gate
         if (dp <= 0._R8) return      ! burnout/degenerate guard
+        if (dp <= mp(imDr)) return   ! the residue (d-stop): the burning stops, the drop stays
         mdot = -(rhop * pi * mp(imKb) * mp(imXe)**aXeff / (2._R8 * mp(imN))) &
                * dp**(3._R8 - mp(imN))
         qrel = -mp(imBeta) * mp(imQc) * mdot   ! heat release to the particle [W]
 
     end subroutine becksteadRate
+
+    !> The mass a burning drop loses [kg/s], >= 0: pi d (kg/cpg) Nu ln(1 + B), B = (cpg (Tg - Tp) + Q)/Lv; 0 when
+    !  B <= 0. The d2-law of a drop whose vapour burns in the gas (Gallier and Godfroy 2009, eqs. 4-5; ICE's burnRate).
+    pure function directRate(Tg, kg, cpg, Tp, dp, Nu, Lv, Q) result(mdot)
+        implicit none
+        real(R8), intent(in) :: Tg, kg, cpg, Tp, dp, Nu, Lv, Q
+        real(R8) :: mdot, B
+
+        mdot = 0._R8
+        B = (cpg*(Tg - Tp) + Q)/Lv
+        if (.not. B > 0._R8) return
+        mdot = pi*dp*kg/cpg*Nu*log(1._R8 + B)
+
+    end function directRate
 
     !> The exposed-surface factor F(f_ox) of a drop carrying its oxide as one lobe, at TLobe with Gallier's
     !  property laws: NLOBE nodes uniform in the lobe angle alpha, stored in increasing f_ox; once per run.

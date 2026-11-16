@@ -25,7 +25,7 @@ contains
                                 nInjNoCell,                                &
                                 trajOn, scatOn, dNscat, npFloor, sixOverPi, pi, &
                                 epsBurn, mBurnAbs,                         &
-                                planeOn, planeX, failAfter, maxInnerIter, nm
+                                planeOn, planeX, failAfter, maxInnerIter, nm, nsm
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs, grazeStandoff
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock, obj_wallblock
@@ -89,6 +89,8 @@ contains
     real(R8) :: entryPos(3)   ! cell-entry position, for the closed-form body-force work (models 1,3)
     real(R8) :: pMid(3)       ! segment mid position: azimuth of the meridian-frame source deposit
     real(R8) :: dSrc(5), dEul(6)  ! the segment's source and eulerian deposits, for a cut cell's records
+    real(R8) :: oxIn, dCap(2)     ! a capped parcel: its cap's flux at cell entry; the oxide the cap gained, the cap handed to the gas
+    integer  :: ic, jc, kc
     real(R8) :: wAcc          ! scatter-cloud accumulator: npRef*h per step, a marker per dNscat (host-associated)
     real(R8) :: wAccOld       ! wAcc at the last latched state, restored when a cut step is integrated again
     !> The parcel's rows per particle file, written at its end by emitParcel
@@ -272,6 +274,8 @@ contains
       part%deltaL = 0._R8; part%Tstay = 0._R8
       if (eulerSwitch) part%intE = 0._R8
       if (sourceSwitch) call part%computeSource(massIn,Pin,Ein,hTab)
+      oxIn = 0._R8
+      if (part%model == 8) oxIn = part%npdot*part%stateVar(9)
       entryPos = part%stateVar(1:3)   ! cell-entry position (for the closed-form body-force work)
       i = part%i(2); j = part%i(3); k = part%i(4);
       if (ord2) then; deltat = part%computeDeltat(gasVert)
@@ -359,6 +363,19 @@ contains
                                massIn, massOut, Pin, Pout, Ein, Eout, dSrc)
         else
           call computeSrcField(part, srcblock(b), i, j, k, massIn, massOut, Pin, Pout, Ein, Eout, dSrc)
+        endif
+        !> A capped parcel: the oxide its cap gained over the segment, and the cap a consumed parcel hands the gas
+        !  (residue = off), in the two columns of its material after the nm net ones
+        dCap = 0._R8
+        if (part%model == 8 .and. nsm() > nm) then
+          dCap(1) = part%npdot*part%stateVar(9) - oxIn
+          if (consumed .and. .not. resBorn) dCap(2) = part%npdot*part%stateVar(9)
+          ic = i; jc = j; kc = k
+          if (ord2) then; ic = part%igas(1); jc = part%igas(2); kc = part%igas(3); endif
+          !$OMP ATOMIC UPDATE
+          srcblock(b)%sourceMass(nm+2*part%mID-1,ic,jc,kc) = srcblock(b)%sourceMass(nm+2*part%mID-1,ic,jc,kc) + dCap(1)
+          !$OMP ATOMIC UPDATE
+          srcblock(b)%sourceMass(nm+2*part%mID,ic,jc,kc)   = srcblock(b)%sourceMass(nm+2*part%mID,ic,jc,kc)   + dCap(2)
         endif
       endif
 
@@ -819,6 +836,15 @@ contains
     end subroutine emitParcel
 
 
+    !> The mass [kg] at which a consuming parcel is handed whole to the gas: that of a drop of diameter d-burnout
+    !  when its material gives one, else min(epsBurn m0, mBurnAbs)
+    pure function burnoutMass() result(mb)
+      real(R8) :: mb
+      mb = min(epsBurn*part%m0, mBurnAbs)
+      if (part%dBurn > 0._R8) mb = pi/6._R8*part%rho*part%dBurn**3
+    end function burnoutMass
+
+
     !> Back to the last accepted step, marked gone; a consuming parcel hands its remnant to the gas.
     subroutine revertToLastAccepted()
       doLoop    = .false.
@@ -899,7 +925,7 @@ contains
         !> Report the remaining mass fraction for mass-evolving models.
         if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8)           &
           write(*,'(A,ES10.3,A,ES10.3,A)') '          last good m/m0 =',                   &
-                oldLocal(8)/part%m0, '  (burnout fires at m =', min(epsBurn*part%m0, mBurnAbs), ' kg)'
+                oldLocal(8)/part%m0, '  (burnout fires at m =', burnoutMass(), ' kg)'
         call revertToLastAccepted()
         return
       endif
@@ -1161,7 +1187,7 @@ contains
 
       !> Burnout test on the droplet mass (model 8: the metal's), consumption models only.
       if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) then
-        if (y(8) <= min(epsBurn*part%m0, mBurnAbs)) burnedOut = .true.   ! y(8) IS the droplet mass [kg]
+        if (y(8) <= burnoutMass()) burnedOut = .true.   ! y(8) IS the droplet mass [kg]
       endif
 
       !> Solidification: the step ends strictly past the phase's threshold from a start at or before it.
@@ -1429,13 +1455,19 @@ contains
           !$OMP ATOMIC UPDATE
           cuts%acc(nmat, r)    = cuts%acc(nmat, r)    + lam*dSrc(1)
           !$OMP ATOMIC UPDATE
-          cuts%acc(nm + 1, r)  = cuts%acc(nm + 1, r)  + lam*dSrc(2)
+          cuts%acc(nsm() + 1, r) = cuts%acc(nsm() + 1, r) + lam*dSrc(2)
           !$OMP ATOMIC UPDATE
-          cuts%acc(nm + 2, r)  = cuts%acc(nm + 2, r)  + lam*dSrc(3)
+          cuts%acc(nsm() + 2, r) = cuts%acc(nsm() + 2, r) + lam*dSrc(3)
           !$OMP ATOMIC UPDATE
-          cuts%acc(nm + 3, r)  = cuts%acc(nm + 3, r)  + lam*dSrc(4)
+          cuts%acc(nsm() + 3, r) = cuts%acc(nsm() + 3, r) + lam*dSrc(4)
           !$OMP ATOMIC UPDATE
-          cuts%acc(nm + 4, r)  = cuts%acc(nm + 4, r)  + lam*dSrc(5)
+          cuts%acc(nsm() + 4, r) = cuts%acc(nsm() + 4, r) + lam*dSrc(5)
+          if (part%model == 8 .and. nsm() > nm) then
+            !$OMP ATOMIC UPDATE
+            cuts%acc(nm+2*nmat-1, r) = cuts%acc(nm+2*nmat-1, r) + lam*dCap(1)
+            !$OMP ATOMIC UPDATE
+            cuts%acc(nm+2*nmat, r)   = cuts%acc(nm+2*nmat, r)   + lam*dCap(2)
+          endif
         endif
         if (eulerSwitch) then
           !$OMP ATOMIC UPDATE

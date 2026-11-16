@@ -21,8 +21,13 @@ The gas receives `(1 − ξν)` of the metal burned.
 `../../burn-box/INPUT/`) with `burn-box-euler`'s output settings (`out-file = ALL`, `mollify = off`, one
 trajectory row per cell entry). Its own `INPUT/phase.txt`:
 
-    A 1 combustion=Beckstead K-burn=4.5e-07 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000 xi-cap=0.2 product=OX
+    A 1 combustion=Beckstead cap=constant
     OX 0
+
+and `INPUT/models.txt`:
+
+    A combustion Beckstead K-burn=4.5e-07 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000
+    A cap constant xi-cap=0.2 product=OX
 
 and a two-zone absolute table (`make_table.py`, committed): zone A the metal (Cp 1250, Density 2950,
 `Enthalpy_abs` 1250 T − 372687.5, zero at 298.15 K), zone OX the product, liquid alumina (Cp 1887.6, Density

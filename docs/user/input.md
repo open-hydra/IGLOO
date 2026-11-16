@@ -39,14 +39,21 @@ Parameters not specified take their default values. Unknown sections are silentl
 ## ATLAS-Generated Sections (not parsed by IGLOO)
 
 IGLOO reads only the `[IGLOO-*]` sections above. The sections below are the *preprocessor's* input:
-whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase.txt`,
+whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase.txt`, `models.txt`,
 `properties.dat`, `bc.txt`). The per-material model keys (`evaporation`, `combustion`, `solidification`,
 `breakup`, `alpha-e`, ...), the solidification constants (`h-fus`, `cp-solid`, `T-melt`, `T-nuc`, `rho-solid`; see
-[Solidification](../theory/solidification.md#inputs)), the breakup constants (`<tag>-<key>`, as `KHRT-B1`; table under
-[`[IGLOO-Models]`](#igloo-models)) and the combustion constants (`K-burn`, `n-burn`, `X-eff`, `T-ign`, `beta-part`,
-`q-comb`, `xi-cap`, `xi-law`, `xi-ox0`, `product`, `residue`, `d-residue`; see [Metal Combustion](../theory/combustion.md#inputs)) are
+[Solidification](../theory/solidification.md#inputs)) and the breakup constants (`<tag>-<key>`, as `KHRT-B1`; table under
+[`[IGLOO-Models]`](#igloo-models)) are
 `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after
 `<name> <groups>` on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
+The constants of the burning models (`K-burn`, `n-burn`, `X-eff`, `T-ign`, `beta-part`, `T-burn`, `q-comb`, `d-stop`,
+`d-burnout`, and the oxide cap's `xi-cap`, `xi-ox0`, `product`, `residue`, `d-residue`; see
+[Metal Combustion](../theory/combustion.md#inputs)) are `[GPB-Phase*]` input as well, and ATLAS GPB writes them to a
+second file, `models.txt` (with the phase file's prefix): one row per material and kind,
+`<material> <kind> <model> key=value ...`, the kinds `combustion` and `cap`; the material line keeps the words
+`combustion=<model>` and `cap=<law>`. A constant of a burning model on the material line stops the run, and so does a
+row of an unknown kind, of another model than the line names, with a key its model does not read, or for no material
+of the phase file.
 The `<groups>` summed over the material lines is the family count, and therefore the number of table
 copies `bc.txt` may carry (one copy feeds every family; see [Several families](boundary-conditions.md#several-families)).
 A line with 0 groups injects nothing and `bc.txt` carries no copy for it; named by `product=` on a burning line, it
@@ -193,7 +200,7 @@ Constant evaporation and breakup properties and the emissivity of the radiative 
 |-----|-------------|
 | `psat` | Legacy, accepted and ignored — the saturation pressure is computed from Clausius-Clapeyron (`Lv`, `Mv`, `boiling-temperature`, `boiling-pressure`) or read from the `Psat` column of `properties.dat` |
 | `Mv` | Vapor molar mass [kg/kmol], or the `Mv` column of `properties.dat`; 0 for a material that has the column |
-| `Lv` | Latent heat of vaporization [J/kg], or the `Lv` column of `properties.dat`; 0 for a material that has the column |
+| `Lv` | Latent heat of vaporization [J/kg], or the `Lv` column of `properties.dat`; 0 for a material that has the column. Also the latent heat of a material that burns with `combustion=direct`, which reads the column at its burning temperature |
 | `boiling-temperature` (alias `Tboil`) | Boiling temperature [K] at `boiling-pressure`; give one name or the other, not both |
 | `boiling-pressure` | Pressure [Pa] at which `boiling-temperature` is given; default 101325 (one atmosphere). The Clausius-Clapeyron line passes through (`boiling-temperature`, `boiling-pressure`), and a `Psat` column must give `boiling-pressure` there within a factor 2; refused unless positive and finite |
 | `cpv` | Vapor specific heat [J/(kg·K)], or the `Cpv` column of `properties.dat`; 0 for a material that has the column |
@@ -306,7 +313,7 @@ VARIABLES = "Temperature", "Cp", "Density", "Enthalpy", "Psat", "Lv", "Mv", "Cpv
 | `Density` | kg/m³ | required; the liquid's for a solidifying material (the solid's is its `rho-solid` token, when given) |
 | `Enthalpy` or `Enthalpy_abs` | J/kg | required, exactly one: `Enthalpy` is relative (`cp·T`, or the integral of cp), `Enthalpy_abs` includes the formation enthalpy (the datum, see below) |
 | `Psat` | Pa, absolute | optional: the saturation pressure of an evaporating material |
-| `Lv` | J/kg | optional, with `Psat`: the latent heat of vaporization |
+| `Lv` | J/kg | optional, with `Psat`: the latent heat of vaporization; alone, for a material that burns with `combustion=direct` |
 | `Mv` | kg/kmol | optional, with `Psat`: the vapour molar mass, the same on every row |
 | `Cpv` | J/(kg K) | optional, with `Psat`: the vapour specific heat |
 | `Sigma` | N/m | optional: the surface tension of a breaking material |

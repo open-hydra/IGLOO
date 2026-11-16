@@ -125,6 +125,8 @@ module IGLOO_particles
     real(R8)     :: cpSol      = 0._R8  !> solid specific heat [J/kg/K] (solidification)
     real(R8)     :: rhoSol     = 0._R8  !> solid density [kg/m3]; 0 => the liquid density (solidification)
     real(R8)     :: qComb      = 0._R8  !> heat of combustion [J/kg]
+    real(R8)     :: dStop      = 0._R8  !> d-stop [m]: burning stops at this diameter; 0 = none
+    real(R8)     :: dBurn      = 0._R8  !> d-burnout [m]: handed whole to the gas at this diameter; 0 = built-in
     real(R8)     :: emissivity = 0._R8  !> grey-body surface emissivity; 0 = no radiation
     !> The oxide cap (model 8): the combustion product's density, heat capacity and enthalpy datum, the stretch c
     real(R8)     :: rhoRes     = 0._R8

@@ -121,7 +121,7 @@ Aluminium combustion: Beckstead's $d^n$ burn law (model 5), the oxide cap on a b
 
 `tests/combustion/burn-box-cap-gallier`, `burn-box-residue-gallier` · independent integration
 
-- **Setup** — `xi-law = Gallier21` in place of a constant fraction
+- **Setup** — `cap = Gallier21` in place of a constant fraction
   ([theory](../theory/combustion.md#galliers-deposition-law)); for the residue, five sizes from 20 to
   400 µm burned out.
 - **Reference** — the law built from the paper's Figs. 7 and 11, never from IGLOO, integrated by RK4
