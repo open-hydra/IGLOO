@@ -1,10 +1,34 @@
-cff-version: 0.1.0-alpha
-title: "IGLOO"
-authors:
-  - family-names: "Passarani"
-    given-names: "Giacomo"
-  - family-names: "Grossi"
-    given-names: "Marco"
-license: GPL-3.0
-url: "https://github.com/open-hydra/IGLOO"
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "IGLOO: Integration of a General Lagrangian One-way ODE set"
+abstract: >-
+  IGLOO is an open-source Lagrangian particle solver written in modern Fortran. It integrates each particle's ODE state — position, velocity, temperature, diameter — through a steady background gas field. Drag and heat transfer are always integrated; evaporation, secondary breakup.
 type: software
+version: 1.0.0
+date-released: 2026-11-16
+authors:
+  - family-names: Passarani
+    given-names: Giacomo
+    affiliation: Sapienza University of Rome
+  - family-names: Grossi
+    given-names: Marco
+    affiliation: Sapienza University of Rome
+    orcid: https://orcid.org/0000-0002-8487-1932
+contact:
+  - family-names: Passarani
+    given-names: Giacomo
+license: GPL-3.0-only
+repository-code: https://github.com/open-hydra/IGLOO/
+url: https://open-hydra.github.io/IGLOO/
+keywords:
+  - Lagrangian particle tracking
+  - Lagrangian particle solver
+  - Computational fluid dynamics
+  - Multiphase flow
+  - Heat transfer
+  - Droplet evaporation
+  - Droplet combustion
+  - Secondary breakup
+  - Spray modelling
+  - Numerical simulation
+  - Fortran
