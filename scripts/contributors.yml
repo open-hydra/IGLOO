@@ -9,4 +9,4 @@ present_maintainers:
 exclude:
   - dependabot[bot]
   - github-actions[bot]
-  - Paolo
+  - Claude
