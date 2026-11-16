@@ -53,7 +53,10 @@ second file, `models.txt` (with the phase file's prefix): one row per material a
 `<material> <kind> <model> key=value ...`, the kinds `combustion` and `cap`; the material line keeps the words
 `combustion=<model>` and `cap=<law>`. A constant of a burning model on the material line stops the run, and so does a
 row of an unknown kind, of another model than the line names, with a key its model does not read, or for no material
-of the phase file.
+of the phase file. So do a value that is not one finite real number (`NaN`, `Inf`, a value holding `,` or `/`), a
+burning material whose `combustion` row does not write `q-comb` (`q-comb=0` is allowed), and a `cap=<law>` word on
+the line without its `cap` row. The constants are never keys of `[IGLOO-Models]`: `q-comb`, `d-stop` or `d-burnout`
+there stops the run by name.
 The `<groups>` summed over the material lines is the family count, and therefore the number of table
 copies `bc.txt` may carry (one copy feeds every family; see [Several families](boundary-conditions.md#several-families)).
 A line with 0 groups injects nothing and `bc.txt` carries no copy for it; named by `product=` on a burning line, it
@@ -201,7 +204,7 @@ Constant evaporation and breakup properties and the emissivity of the radiative 
 | `psat` | Legacy, accepted and ignored — the saturation pressure is computed from Clausius-Clapeyron (`Lv`, `Mv`, `boiling-temperature`, `boiling-pressure`) or read from the `Psat` column of `properties.dat` |
 | `Mv` | Vapor molar mass [kg/kmol], or the `Mv` column of `properties.dat`; 0 for a material that has the column |
 | `Lv` | Latent heat of vaporization [J/kg], or the `Lv` column of `properties.dat`; 0 for a material that has the column. Also the latent heat of a material that burns with `combustion=direct`, which reads the column at its burning temperature |
-| `boiling-temperature` (alias `Tboil`) | Boiling temperature [K] at `boiling-pressure`; give one name or the other, not both |
+| `boiling-temperature` (alias `Tboil`) | Boiling temperature [K] at `boiling-pressure`; give one name or the other, not both. Also the burning temperature of a `combustion=direct` material whose row has no `T-burn`, then only at one atmosphere: with another `boiling-pressure` the run stops and asks for `T-burn` |
 | `boiling-pressure` | Pressure [Pa] at which `boiling-temperature` is given; default 101325 (one atmosphere). The Clausius-Clapeyron line passes through (`boiling-temperature`, `boiling-pressure`), and a `Psat` column must give `boiling-pressure` there within a factor 2; refused unless positive and finite |
 | `cpv` | Vapor specific heat [J/(kg·K)], or the `Cpv` column of `properties.dat`; 0 for a material that has the column |
 | `Le` | Lewis number |

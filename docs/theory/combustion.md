@@ -89,7 +89,7 @@ so all three live in consistent units.
     flame) is **weakly constrained in the literature**.  It is therefore an
     explicit input with default **0** (no heat-back unless configured) rather
     than a buried constant, and `q-comb` (heat of combustion per unit Al mass,
-    J/kg; ≈31 MJ/kg for Al) also defaults to 0.  Results in hot-particle
+    J/kg; ≈31 MJ/kg for Al) has no default: the row writes it, 0 included.  Results in hot-particle
     regimes can be sensitive to $\beta_\mathrm{part}\,q_\mathrm{comb}$;
     sweep it before trusting particle-temperature predictions.
 
@@ -105,6 +105,11 @@ solver failure.  Under model 8 the test is on the metal's mass $m_\mathrm{Al}$; 
 `residue=on` the cap is not handed to the gas but becomes a parcel of the product
 ([The burnout residue](#the-burnout-residue)), which may freeze
 ([Solidification](solidification.md)).
+
+A burning parcel (models 5 and 8) is removed at that mass only while it burns: its temperature must be at or above
+`T-ign` under `Beckstead`, `T-burn` under `direct`. A parcel at the removal mass that does not burn — one injected
+at or below `d-burnout` into a gas that never ignites it — is not removed and goes on as an inert parcel. The
+evaporating models 2 and 4 remove at the mass alone.
 
 ### Robustness
 
@@ -355,8 +360,8 @@ and kind, `<material> <kind> <model> key=value ...`, the keys in any order, a li
 | | `X-eff` | effective oxidizer mole fraction (0, 1] | 1.0 |
 | | `T-ign` | ignition temperature (K) | 2350 |
 | | `beta-part` | heat-partition fraction to the particle | 0 |
-| `combustion direct` | `T-burn` | burning temperature (K) | `[IGLOO-Properties] boiling-temperature` |
-| either `combustion` row | `q-comb` | heat of combustion (J/kg) | 0 |
+| `combustion direct` | `T-burn` | burning temperature (K) | `[IGLOO-Properties] boiling-temperature`, given at one atmosphere (`boiling-pressure` absent or 101325 Pa) |
+| either `combustion` row | `q-comb` | heat of combustion (J/kg) | required (0 allowed) |
 | | `d-stop` | diameter (m) of the residue: the burning stops there and the drop stays | 0 = no residue |
 | | `d-burnout` | diameter (m) at which a burning drop is handed whole to the gas; to compare a material with its run in ICE, give it in both decks, at about 0.1 of the injected diameter | 0 = the built-in burnout mass |
 | `cap constant` | `xi-cap` | fraction of the oxide formed retained in the cap, [0, 1] | 0 |
@@ -366,7 +371,9 @@ and kind, `<material> <kind> <model> key=value ...`, the keys in any order, a li
 | | `d-residue` | residue diameter (m) with the mass flow kept; 0: one residue per droplet | 0 |
 
 A row names the model its material line names; a `combustion` row may name `-` instead, the model of the line or of
-`[IGLOO-Models] combustion`.
+`[IGLOO-Models] combustion`. A value of a row is one finite real number (the words of `product` and `residue`
+aside). The constants are keys of the rows only: `q-comb`, `d-stop` or `d-burnout` in `[IGLOO-Models]` stops the
+run by name.
 
 The latent heat of `combustion=direct` is no constant of the row: it is the material's, the `Lv` column of
 `properties.dat` read at the burning temperature, else `Lv` of `[IGLOO-Properties]`; given both ways it is refused.
@@ -376,7 +383,10 @@ word it says `evaporation=NoEvaporation`, `breakup=NoBreakup`) and may carry `so
 `T-melt`, `h-fus`, `T-nuc`, `cp-solid`; every `[IGLOO-Properties]` vector holds one value for it too.
 Setup refuses a constant of a burning model on the material line; a row of an unknown kind, a second row of one
 kind for a material, a row of another model than the line's, a key the row's model does not read (`xi-cap` in a
-`cap Gallier21` row, `K-burn` in a `combustion direct` row), a row for no material of the phase file; `xi-cap`
+`cap Gallier21` row, `K-burn` in a `combustion direct` row), a row for no material of the phase file; a value that is
+not one finite real number (`NaN`, `Inf`, a value holding `,` or `/`); a burning material whose `combustion` row
+has no `q-comb`; a `cap` word on the material line without its `cap` row; `q-comb`, `d-stop` or `d-burnout` in
+`[IGLOO-Models]`; `combustion=direct` without `T-burn` when `boiling-pressure` is not 101325 Pa; `xi-cap`
 outside [0, 1]; a `cap` word other than `constant` and `Gallier21`; the law without `combustion=Beckstead`, and any
 cap under `combustion=direct`; `xi-ox0` outside [0, 1), or > 0 without
 `combustion=Beckstead` and the cap; `product`, `residue=on` or `d-residue > 0` without
@@ -420,8 +430,9 @@ failure) and `burn-box-ox0` (an oxide fraction at injection: the whole particle'
 cap from its initial oxide and the re-evaluated stretch against Gallier's exact lobe, the burnout time, the
 residue and the books), `burn-box-cap-gallier` (model 8 under the deposition law against an oracle that
 carries the cap), `burn-box-residue-gallier` (five sizes burned out under the law: each residue's mass on the law's
-path, each burnout time on Beckstead's, Gallier's residue sizes) and `beckstead-air` (burnout times of 10–1000 µm particles in air against Eq. 7 of
-`[Beck05]`, his Fig. 1 drawn beside them).  See `tests/combustion/INFO.md`.
+path, each burnout time on Beckstead's, Gallier's residue sizes), `beckstead-air` (burnout times of 10–1000 µm particles in air against Eq. 7 of
+`[Beck05]`, his Fig. 1 drawn beside them) and `burnout-cold` (parcels at the removal size that never ignite: none is
+removed).  See `tests/combustion/INFO.md`.
 
 References:
 
