@@ -19,14 +19,19 @@ group's offset (the parcels of the earlier groups naming the same product) plus 
 `burn-box`'s case (`bc.txt`, `solfile.tec` symlinked) and `burn-box-cap`'s absolute two-zone table (symlinked);
 `out-file = S`, `out-time = on`, `mollify = off`. Its own `INPUT/phase.txt`:
 
-    A 1 combustion=Beckstead K-burn=2.0e-6 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000 xi-cap=0.2 product=OX residue=on
+    A 1 combustion=Beckstead cap=constant
     OX 0 solidification=on T-melt=2327 h-fus=1.08949e6 cp-solid=1360
+
+and `INPUT/models.txt`:
+
+    A combustion Beckstead K-burn=2.0e-6 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000
+    A cap constant xi-cap=0.2 product=OX residue=on
 
 (`T-nuc` 0.8 T-melt = 1861.6 K.) The 25 parcels burn out near x = 0.072 m at 792.32 K; each residue
 (`d = 1.9678e-5 m`) is born undercooled, freezes whole (the jump to 998.1 K) and relaxes to the 600 K gas with
 `τ = ρ_res c_s d²/(12 k_g) = 6.667e-3 s`. `check.py` runs two siblings with the same executable (`IGLOO_EXE`):
 
-- `ref-dres/`: `d-residue=5.0e-6` and the burning line in two groups (`A 2 …`, `bc.txt`'s face table written twice:
+- `ref-dres/`: `d-residue=5.0e-6` (in the cap row of its `models.txt`) and the burning line in two groups (`A 2 …`, `bc.txt`'s face table written twice:
   one copy per family, each with the case's field 1, krho/(1 − krho) of one family: D's checks are ratios to the
   parent, which the loading leaves alone);
 - `ref-fail/`: `[IGLOO-ODE] fail-after = 3.6e-3` — the solver failure of the cap model forced once a parcel's last

@@ -111,9 +111,9 @@ def main():
     log = open(LOG, errors="replace").read()
     checks = [
         ("W1 the burning group runs the oxide cap under the law (banner)",
-         "law with an oxide cap (xi-law=Gallier21, product OX)" in log),
+         "law with an oxide cap (cap=Gallier21, product OX)" in log),
         ("W2 the notice of the cap names the law and the stretch per parcel",
-         "oxide cap on product OX: xi-law=Gallier21" in log and "the stretch c per parcel" in log),
+         "oxide cap on product OX: cap=Gallier21" in log and "the stretch c per parcel" in log),
     ]
 
     rows = [r for z in zones(TRAJ) for r in z["rows"]]

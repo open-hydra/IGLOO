@@ -5,6 +5,7 @@ module IGLOO_variables
 
   character(len=32)  :: IGLOO_phase_prefix=''
   character(len=128) :: drag_word, heat_word, breakup_word, evaporation_word
+  character(len=128) :: combustion_word = 'none'   !> [IGLOO-Models] combustion: the default of every injected material
   !> [IGLOO-Models] composable phase-change axes: global defaults, per-material override by the
   !  key=value tokens on the material line of the phase file; combustion/solidification are per-material only.
   character(len=128) :: liquid_word='ITC', interface_word='VLE', boiling_word='clamp'
@@ -37,6 +38,9 @@ module IGLOO_variables
   integer  :: nInjNoCell = 0  !> per-sweep: parcels whose injection point no cell holds (not integrated)
   integer  :: nKHRTwarn = 0   !> per-sweep: KH-RT evaluations outside the model's hypotheses
   integer  :: fsample, nb, nm, nfam, iprint, trajSample
+  !> A material burns with an oxide cap: the mass source then carries, after its nm net columns, two per material
+  !  (nm+2m-1 the oxide the caps of material m gained, nm+2m the cap oxide handed to the gas)
+  logical  :: capColumns = .false.
   integer, allocatable :: nspecies(:)
   real(R8) :: ds, mdotMax, dtprint
   !> [IGLOO-General] print-ds [m] (<= 0 = off); dcellSet: print-dcell is present (the diagnostic crossing cadence)
@@ -102,5 +106,13 @@ module IGLOO_variables
   real(R8) :: dNscat=0._R8
   !> [IGLOO-General] scatter-floor F; npFloor = F Ndot/nStreams, the material's floor on a parcel's marker rate npRef.
   real(R8) :: scatterFloor=0.1_R8, npFloor=0._R8
+
+contains
+
+  !> Columns of the mass source: nm, or 3 nm with the cap's columns
+  pure integer function nsm()
+    nsm = nm
+    if (capColumns) nsm = 3*nm
+  end function nsm
 
 end module IGLOO_variables 

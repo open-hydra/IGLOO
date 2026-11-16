@@ -16,8 +16,13 @@ time on it).
 ## Fixture
 `burn-box-residue`'s case with the law and a faster burn. Its own `INPUT/phase.txt`:
 
-    A 1 combustion=Beckstead K-burn=1.5e-4 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000 xi-law=Gallier21 product=OX residue=on
+    A 1 combustion=Beckstead cap=Gallier21
     OX 0 solidification=on T-melt=2327 h-fus=1.08949e6 cp-solid=1360
+
+and `INPUT/models.txt`:
+
+    A combustion Beckstead K-burn=1.5e-4 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000
+    A cap Gallier21 product=OX residue=on
 
 and its own `INPUT/bc.txt`: `burn-box`'s with the inlet radius set by the inlet row `j` (10, 35, 100, 200 and 50 µm:
 diameters 20, 70, 200, 400 and 100 µm, five parcels each); `burn-box`'s `solfile.tec` and `burn-box-cap`'s table

@@ -382,7 +382,7 @@ contains
   subroutine solve(self)
     use Lib_Integration,  only: integrate
     use IGLOO_particles,  only: obj_particle
-    use IGLOO_variables,  only: ode_word,iopt,rtol,atol, ord2, nm, nb,     &
+    use IGLOO_variables,  only: ode_word,iopt,rtol,atol, ord2, nm, nsm, nb, &
                                 eulerSwitch, sourceSwitch, unitTraj, unitScat, &
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
                                 trajOn, scatOn, dNscat, npFloor, scatterFloor, trajSample, threshold, &
@@ -453,7 +453,7 @@ contains
     call tm_phase(TM_ACCUM)
     call allocateAccumulators(self%source, self%euler, sourceSwitch, eulerSwitch)
     call initialize_fields(self%source,self%euler,sourceSwitch,eulerSwitch)
-    if (allocated(self%ovl%cuts)) call resetCuts(self%ovl%cuts, nm, size(self%euler, 2), sourceSwitch, eulerSwitch)
+    if (allocated(self%ovl%cuts)) call resetCuts(self%ovl%cuts, nsm(), size(self%euler, 2), sourceSwitch, eulerSwitch)
     call zeroWall(self%wall)
     call record_footprint(self%geoblock, self%gasblock, self%source, self%euler)
     call tm_phase(TM_GHOST)
@@ -658,11 +658,12 @@ contains
           if (consumeGrp .and. .not.massTolBurnout) write(*,'(A,ES10.3,A)') &
             '        - mass slot absolute-tol = ', absTol(8), ' kg (mass-tol = off)'
           if (gr%evapSelect/=0) write(*,*) '       - evaporation --> ', trim(gr%evapWord)
-          if (gr%combSelect/=0 .and. gr%prodID == 0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
+          if (gr%combSelect==1 .and. gr%prodID == 0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
+          if (gr%combSelect==2) write(*,*) '       - combustion  --> direct d2 burn law'
           if (gr%combSelect/=0 .and. gr%prodID > 0 .and. gr%xiLaw == 0) write(*,'(A)') '        - combustion  --> '// &
             'Beckstead d^n burn law with an oxide cap (xi-cap, product '//trim(gr%productName)//')'
           if (gr%combSelect/=0 .and. gr%prodID > 0 .and. gr%xiLaw > 0) write(*,'(A)') '        - combustion  --> '// &
-            'Beckstead d^n burn law with an oxide cap (xi-law=Gallier21, product '//trim(gr%productName)//')'
+            'Beckstead d^n burn law with an oxide cap (cap=Gallier21, product '//trim(gr%productName)//')'
           if (gr%solidSelect/=0 .and. .not.gr%brkupEqOde) &
             write(*,*) '       - solidification --> supercooling + recalescence (model 6)'
           if (gr%solidSelect/=0 .and. gr%brkupEqOde) &
@@ -951,15 +952,15 @@ contains
         call self%source(b)%finalize(self%geoblock(b))
       enddo
       call tm_nest(TM_SMOOTH)
-      allocate(exch(nm + 4, nb))
+      allocate(exch(nsm() + 4, nb))
       call mollifySourceBlocks(self%source, self%geoblock, self%links, self%donors, exch)
       call tm_unnest()
       !> the chimera halo's exchange joins the mirrored totals: Sum over blocks - mirrored = once-counted
       if (allocated(self%mirrored)) then
         do b = 1, nb
-          self%mirrored(b)%mass = self%mirrored(b)%mass + exch(1:nm, b)
-          self%mirrored(b)%mom  = self%mirrored(b)%mom  + exch(nm+1:nm+3, b)
-          self%mirrored(b)%en   = self%mirrored(b)%en   + exch(nm+4, b)
+          self%mirrored(b)%mass = self%mirrored(b)%mass + exch(1:nsm(), b)
+          self%mirrored(b)%mom  = self%mirrored(b)%mom  + exch(nsm()+1:nsm()+3, b)
+          self%mirrored(b)%en   = self%mirrored(b)%en   + exch(nsm()+4, b)
         enddo
         if (mpi_is_root) then
           do b = 1, nb

@@ -15,7 +15,8 @@ module IGLOO_IO
 contains
 
   !> Read the phase file (one line per material: "<name> <groups> [key=value ...]", the tokens being
-  !  the per-material models ATLAS GPB writes from [GPB-Phase*]) and properties.dat (columns named by
+  !  the per-material models ATLAS GPB writes from [GPB-Phase*]), the models file (the constants of the
+  !  burning models, one row per material and kind) and properties.dat (columns named by
   !  its VARIABLES line: cp, rho, h, an optional Psat and its pair's Lv, Mv, Cpv, optional Sigma,
   !  Viscosity, Conductivity and Emissivity); breakup/evaporation constants come from [IGLOO-Properties]
   !  (Lv, Mv, cpv, sigma, mu, emissivity from there or from their columns; k-liq, mu-liq from the material line
@@ -23,7 +24,7 @@ contains
   subroutine read_cdp_properties(prefix,material)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
-    use IGLOO_variables,       only: nm, phaseChange, breakup_word, evaporation_word, &
+    use IGLOO_variables,       only: nm, phaseChange, breakup_word, evaporation_word, combustion_word, &
                                      liqSelect, intfSelect, boilSelect
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Properties,  only: Tmin, Tmax, ntok_max, tok_len, nzone_max, TAB_OK, PSAT_OK, PSAT_ABSENT, &
@@ -35,11 +36,12 @@ contains
     use IGLOO_IO_INI,          only: ini_Mv, ini_Lv, ini_Tboil, ini_cpv, ini_Le, ini_Yinf, &
                                         ini_sigma, ini_mu, ini_emissivity, ini_pBoil, &
                                         set_material_defaults, apply_material_key, finalize_material_models, &
-                                        read_breakup_constants, apply_breakup_tokens
+                                        read_breakup_constants, apply_breakup_tokens, &
+                                        load_models_file, apply_models_rows, check_models_rows
     use Lib_ORION_data
     use Lib_Tecplot
     use IGLOO_Lib_Breakup,     only: assign_breakup
-    use IGLOO_Lib_Evaporation, only: assign_evaporation, Patm, Ru, invTboil_at
+    use IGLOO_Lib_Evaporation, only: assign_evaporation, assign_combustion, Patm, Ru, invTboil_at
     implicit none
     character(len=32),  intent(in)  :: prefix
     type(obj_material), intent(out), allocatable :: material(:)
@@ -71,6 +73,7 @@ contains
       error stop ( "No particles material found!" )
     endif
     allocate(material(1:nm))
+    call load_models_file(prefix)
     
     rewind(unit)
     read(unit,*)!skip first line
@@ -100,6 +103,8 @@ contains
                           material(i)%brkupHasChild)
       material(i)%evapWord = evaporation_word
       call assign_evaporation(evaporation_word,material(i)%evapSelect)
+      !> a line of 0 groups is a combustion product, never injected: the section's burning model is not its own
+      if (material(i)%ngroups > 0) call assign_combustion(combustion_word, material(i)%combSelect)
       material(i)%liqSelect  = liqSelect
       material(i)%intfSelect = intfSelect
       material(i)%boilSelect = boilSelect
@@ -116,6 +121,8 @@ contains
         endif
         call apply_material_key(i, material(i), tok(1:e-1), tok(e+1:len_trim(tok)))
       enddo
+      !> ... then the constants of its burning models, the rows of the models file that name it
+      call apply_models_rows(i, material(i))
       call finalize_material_models(i, material(i))
       !> a breaking material's constants: [IGLOO-Models] (the reader's defaults), then its own tokens
       if (material(i)%brkupSelect > 0) then
@@ -146,7 +153,20 @@ contains
         if (material(i)%combSelect  > 0) error stop '[ERROR] solidification=on with combustion is not supported'
       endif
       !> Combustion validation: no breakup coupling, sane burn-law inputs
-      if (material(i)%combSelect > 0) then
+      if (material(i)%combSelect == 2) then
+        if (material(i)%brkupSelect > 0) error stop '[ERROR] combustion=direct with breakup is not supported'
+        if (material(i)%qComb < 0._R8) error stop '[ERROR] combustion=direct requires q-comb >= 0'
+        if (material(i)%capAsked) &
+          error stop '[ERROR] combustion=direct has no oxide cap: cap=<law> belongs to combustion=Beckstead'
+      endif
+      !> The end of the burn, either model: a residue (d-stop) that stays, or the removal at d-burnout
+      if (material(i)%dStop < 0._R8) error stop '[ERROR] d-stop must be >= 0'
+      if (material(i)%dBurn < 0._R8) error stop '[ERROR] d-burnout must be >= 0'
+      if (material(i)%dStop > 0._R8 .and. material(i)%dBurn > 0._R8) &
+        error stop '[ERROR] d-stop beside d-burnout: a drop that stops at its residue is never removed; give one'
+      if (material(i)%combSelect == 1) then
+        if (material(i)%dStop > 0._R8 .and. (material(i)%xiCap > 0._R8 .or. material(i)%xiLaw > 0)) &
+          error stop '[ERROR] d-stop beside an oxide cap: the cap gives its own residue (residue, d-residue)'
         if (material(i)%brkupSelect > 0) error stop '[ERROR] combustion=Beckstead with breakup is not supported (deferred)'
         if (material(i)%Kburn <= 0._R8) error stop '[ERROR] combustion=Beckstead requires K-burn > 0 in [GPB-PhaseX]'
         if (material(i)%nBurn <= 0._R8 .or. material(i)%nBurn >= 3._R8) &
@@ -156,6 +176,7 @@ contains
       endif
     end do
     close(unit)
+    call check_models_rows()
 
     !> properties.dat: the VARIABLES line names the columns; the row scan guards what ORION does not check
     tablefile = 'INPUT/'//trim(prefix)//'properties.dat'
@@ -393,6 +414,36 @@ contains
         material(i)%LvMvOverRu = material(i)%Lv * material(i)%Mv / 8314.46_R8
         material(i)%invTboil   = 1._R8 / material(i)%Tboil
       endif
+      !> direct combustion: it burns at T-burn of the models file, else at boiling-temperature of [IGLOO-Properties];
+      !  the latent heat of its transfer number is the material's Lv column at that temperature, else Lv of
+      !  [IGLOO-Properties]; given both ways it is refused
+      if (material(i)%combSelect == 2) then
+        if (material(i)%Tburn /= 0._R8) then
+          material(i)%Tboil = material(i)%Tburn
+        else
+          if (.not. allocated(ini_Tboil)) error stop &
+            '[ERROR] combustion=direct requires T-burn in the models file, or boiling-temperature in [IGLOO-Properties]'
+          material(i)%Tboil = ini_Tboil(i)
+        endif
+        if (.not. material(i)%Tboil > 0._R8) &
+          error stop '[ERROR] combustion=direct requires a burning temperature > 0 (T-burn, or boiling-temperature)'
+        given = .false.
+        if (ilv > 0) call read_positive_column(i, mat%matName, colLv, 'Lv', 'Lv', mat%LvTab, given, &
+                                               ': the latent heat of combustion=direct, taken at its burning temperature')
+        if (given) then
+          if (allocated(ini_Lv)) then
+            if (ini_Lv(i) /= 0._R8) error stop 'IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column'
+          endif
+          material(i)%Lv = tableValue(mat%LvTab, Tmin, Tmax, material(i)%Tboil)
+          write(*,'(A,I0,A,ES12.5,A,ES12.5,A)') '  >> [material ', i, '] combustion=direct: Lv(', material(i)%Tboil, &
+                                                ' K) = ', material(i)%Lv, ' J/kg'
+        else
+          if (.not. allocated(ini_Lv)) error stop &
+            '[ERROR] combustion=direct requires its latent heat: the Lv column of properties.dat, or Lv in [IGLOO-Properties]'
+          material(i)%Lv = ini_Lv(i)
+        endif
+        if (.not. material(i)%Lv > 0._R8) error stop '[ERROR] combustion=direct requires a latent heat > 0 (Lv)'
+      endif
 
       !> Psat column: tabulated for an evaporating material, all zero keeps Clausius-Clapeyron
       if (ips > 0) then
@@ -418,7 +469,10 @@ contains
 
       !> Lv, Mv, Cpv columns (the pair that gives Psat): Lv(T) and cpv(T) tabulated, Mv the column's constant
       if (ilv > 0 .or. imv > 0 .or. icpv > 0) then
-        if (mat%evapSelect == 0) then
+        if (mat%evapSelect == 0 .and. mat%combSelect == 2) then
+          if (imv > 0 .or. icpv > 0) write(*,'(A,I0,A)') '  >> [material ', i, &
+            '] Mv, Cpv columns not used: combustion=direct reads the Lv column alone'
+        elseif (mat%evapSelect == 0) then
           write(*,'(A,I0,A)') '  >> [material ', i, '] Lv, Mv, Cpv columns not used: this material does not evaporate'
         else
           code = validate_vapour_columns(colLv, colMv, colCpv, colPs, mat%psatVariable, Tmin, Tmax, mat%Tboil, Ru, mat%Mv)
@@ -544,7 +598,7 @@ contains
   !  file, by name; the refusals; the cap takes the product's density, heat capacity and enthalpy datum, and the
   !  stretch c of its xi-cap and n-burn on the lobe table.
   subroutine resolve_products(material)
-    use IGLOO_variables,      only: nm
+    use IGLOO_variables,      only: nm, capColumns
     use IGLOO_data_phases,    only: obj_material
     use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch, capStretchX0, buildXiLaw
     use IGLOO_Mod_MPI,        only: mpi_is_root
@@ -553,21 +607,20 @@ contains
     integer :: i, j, p
     logical :: capOn
 
+    capColumns = .false.
     do i = 1, nm
       associate(mat => material(i))
-      !> the cap: a constant retained fraction xi-cap, or Gallier's law alone (xi-cap beside it refused)
-      if (mat%xiLaw > 0 .and. mat%xiCap > 0._R8) &
-        error stop 'IGLOO: xi-cap beside xi-law=Gallier21: the law gives the retained fraction'
-      if (mat%xiLaw > 0 .and. mat%combSelect == 0) error stop 'IGLOO: xi-law=Gallier21 requires combustion=Beckstead'
+      !> the cap: a constant retained fraction xi-cap, or Gallier's law alone (the models file's reader refuses both)
+      if (mat%xiLaw > 0 .and. mat%combSelect == 0) error stop 'IGLOO: cap=Gallier21 requires combustion=Beckstead'
       capOn = mat%xiCap > 0._R8 .or. mat%xiLaw > 0
       if (mat%xiCap < 0._R8 .or. mat%xiCap > 1._R8) error stop '[ERROR] xi-cap must lie in [0, 1]'
       if (mat%xiOx0 < 0._R8 .or. mat%xiOx0 >= 1._R8) error stop '[ERROR] xi-ox0 must lie in [0, 1)'
       if (mat%xiOx0 > 0._R8 .and. .not. (mat%combSelect > 0 .and. capOn)) &
-        error stop '[ERROR] xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0 or xi-law=Gallier21'
+        error stop '[ERROR] xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0 or cap=Gallier21'
       if ((len_trim(mat%productName) > 0 .or. mat%resOn .or. mat%dRes > 0._R8) .and. &
           .not. (mat%combSelect > 0 .and. capOn)) &
         error stop '[ERROR] product, residue and d-residue require combustion=Beckstead and &
-                   &xi-cap > 0 or xi-law=Gallier21'
+                   &xi-cap > 0 or cap=Gallier21'
       if (capOn) then
         p = 0
         do j = 1, nm
@@ -584,6 +637,7 @@ contains
           error stop '[ERROR] xi-cap > 0 requires the absolute enthalpy datum (an Enthalpy_abs column)'
         mat%prodID = p
         material(p)%isProduct = .true.
+        capColumns = .true.
         mat%rhoRes  = material(p)%rho
         mat%cpRes   = material(p)%cp
         mat%hOffRes = material(p)%hOff
@@ -593,7 +647,7 @@ contains
           call buildXiLaw()
           mat%cStretch = 1._R8
           if (mpi_is_root) write(*,'(a,i0,a)') '  >> [material ', i, '] oxide cap on product '//trim(mat%productName)// &
-            ': xi-law=Gallier21 (g of the current d_Al, held at its 20 and 400 um values outside them; h held past'// &
+            ': cap=Gallier21 (g of the current d_Al, held at its 20 and 400 um values outside them; h held past'// &
             ' f_ox = 0.9), the stretch c per parcel'
         elseif (mat%xiOx0 > 0._R8) then
           mat%cStretch = capStretchX0(mat%xiCap, mat%nBurn, mat%xiOx0, mat%rho, mat%rhoRes)
@@ -1205,7 +1259,7 @@ contains
     use, intrinsic :: iso_fortran_env, only: I8 => int64
     use IR_Precision, only: str
     use IGLOO_Mod_TecASCII, only: tec_grid_t, tec_grid_open, tec_grid_zone, tec_grid_field, tec_grid_close
-    use IGLOO_variables, only: nb, nm
+    use IGLOO_variables, only: nb, nm, nsm
     use IGLOO_data_block, only: obj_block, obj_sourceblock
     implicit none
     class(obj_block)     , intent(in) :: geoblock(:)
@@ -1225,7 +1279,7 @@ contains
                  allocated(sourceblock(b)%sourceMom) .and. allocated(sourceblock(b)%sourceEn))) return
       if (any(lbound(geoblock(b)%node) /= [1, 0, 0, 0]) .or. any(ubound(geoblock(b)%node) /= [3, nx, ny, nz])) return
       if (any(lbound(sourceblock(b)%sourceMass) /= 1) .or. &
-          any(ubound(sourceblock(b)%sourceMass) /= [nm, nx, ny, nz])) return
+          any(ubound(sourceblock(b)%sourceMass) /= [nsm(), nx, ny, nz])) return
       if (any(lbound(sourceblock(b)%sourceMom) /= 1) .or. &
           any(ubound(sourceblock(b)%sourceMom) /= [3, nx, ny, nz])) return
       if (any(lbound(sourceblock(b)%sourceEn) /= 1) .or. any(ubound(sourceblock(b)%sourceEn) /= [nx, ny, nz])) return

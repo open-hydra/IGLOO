@@ -75,6 +75,8 @@ module IGLOO_data_phases
     integer  :: xiLaw = 0            !> the cap's retained fraction: 0 xi-cap, 1 Gallier et al. 2021's law
     real(R8) :: Tign = 0._R8, Tmelt = 2327._R8, hFus = 0._R8, Tnuc = 0._R8, cpSol = 0._R8
     real(R8) :: qComb = 0._R8
+    real(R8) :: dStop = 0._R8        !> d-stop [m]: the residue, where a burning drop stops burning and stays; 0 = none
+    real(R8) :: dBurn = 0._R8        !> d-burnout [m]: a burning drop this small is handed whole to the gas; 0 = built-in
     real(R8) :: rhoSol = 0._R8       !> solid density [kg/m3]; 0 = the liquid density
     real(R8) :: emissivity = 0._R8   !> grey-body surface emissivity; 0 = no radiation
     !> The oxide cap: the combustion product (its material line, 0 = none), its density, heat capacity and datum,
@@ -144,6 +146,10 @@ module IGLOO_data_phases
     integer  :: xiLaw = 0            !> the cap's retained fraction: 0 xi-cap, 1 Gallier et al. 2021's law
     real(R8) :: Tign = 0._R8, Tmelt = 2327._R8, hFus = 0._R8, Tnuc = 0._R8, cpSol = 0._R8
     real(R8) :: qComb = 0._R8
+    real(R8) :: dStop = 0._R8        !> d-stop [m]: the residue, where a burning drop stops burning and stays; 0 = none
+    real(R8) :: dBurn = 0._R8        !> d-burnout [m]: a burning drop this small is handed whole to the gas; 0 = built-in
+    real(R8) :: Tburn = 0._R8        !> T-burn [K] of the models file (direct); 0 = not given: the boiling temperature
+    logical  :: capAsked = .false.   !> the material line names an oxide cap (cap=<law>)
     real(R8) :: rhoSol = 0._R8       !> rho-solid [kg/m3]; 0 = the liquid density
     real(R8) :: emissivity = 0._R8   !> [IGLOO-Properties] emissivity; 0 = no radiation
     !> The oxide cap: the product's name and line (0 = none), its density, heat capacity and datum, the stretch c;
@@ -307,6 +313,10 @@ contains
         gr%xiLaw = self%xiLaw
         gr%Tmelt = self%Tmelt; gr%hFus = self%hFus; gr%Tnuc = self%Tnuc; gr%cpSol = self%cpSol
         gr%qComb = self%qComb
+        gr%dStop = self%dStop; gr%dBurn = self%dBurn
+      endif
+      if (self%combSelect == 2) then
+        gr%Lv = self%Lv; gr%Tboil = self%Tboil
       endif
       if (self%solidSelect > 0) gr%rhoSol = self%rhoSol
       gr%emissivity = self%emissivity
@@ -476,6 +486,10 @@ contains
         part%xiLaw = self%xiLaw
         part%Tmelt = self%Tmelt; part%hFus = self%hFus; part%Tnuc = self%Tnuc; part%cpSol = self%cpSol
         part%qComb = self%qComb
+        part%dStop = self%dStop; part%dBurn = self%dBurn
+      endif
+      if (self%combSelect == 2) then
+        part%Lv = self%Lv; part%Tboil = self%Tboil
       endif
       if (self%solidSelect > 0) part%rhoSol = self%rhoSol
       part%emissivity = self%emissivity

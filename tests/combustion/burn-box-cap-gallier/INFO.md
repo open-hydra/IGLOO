@@ -6,7 +6,7 @@
 the exposed-surface factor of the lobe (eqs. 9–14) as in `burn-box-cap`; `[Beck05]` (the burn law).
 
 ## Model
-`burn-box-cap`'s parcels with `xi-law=Gallier21`: the cap retains `ξ(d_Al, f_ox) = g(d_Al) h(f_ox)` (clamped to
+`burn-box-cap`'s parcels with `cap=Gallier21`: the cap retains `ξ(d_Al, f_ox) = g(d_Al) h(f_ox)` (clamped to
 [0, 1]) of the oxide the burn forms, at the metal's current diameter and the cap's mass fraction; `h` Fig. 11's
 points over 100, linear, held past `f_ox = 0.9`; `g` the least-squares line through Fig. 7's points over its value at
 70 µm, held at its 20 and 400 µm values outside. The cap's mass is no function of the metal's alone, so the state
@@ -22,8 +22,13 @@ stays `d₀ⁿ/K_eff`.
 `burn-box-cap`'s case (`burn-box`'s `bc.txt` and `solfile.tec`, `burn-box-cap`'s absolute two-zone table, all
 symlinked), `out-file = S`, `mollify = off`. Its own `INPUT/phase.txt`:
 
-    A 1 combustion=Beckstead K-burn=4.5e-07 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000 xi-law=Gallier21 product=OX
+    A 1 combustion=Beckstead cap=Gallier21
     OX 0
+
+and `INPUT/models.txt`:
+
+    A combustion Beckstead K-burn=4.5e-07 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000
+    A cap Gallier21 product=OX
 
 25 parcels of 30 µm; the 15 ms residence is 0.467 of Beckstead's time: no parcel burns out. Over it `d_Al` falls to
 18.8 µm (`g` from 1.101 to its held 20 µm value) and `f_ox` rises to 0.407 (`ξ` 0.195 at the outlet).

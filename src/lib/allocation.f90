@@ -204,7 +204,7 @@ contains
   !> Allocates the source/euler accumulators per block at the start of solve: gasblock shape
   !  (1..Nx+1) under ord2, geoblock shape otherwise. Existing allocations are kept.
   subroutine allocateAccumulators(srcblock, eulblock, srcSwitch, eulSwitch)
-    use IGLOO_variables,  only: nb, nm, ord2, mesh2D
+    use IGLOO_variables,  only: nb, nsm, ord2, mesh2D
     use IGLOO_data_block, only: obj_sourceblock, obj_eulerblock
     implicit none
     type(obj_sourceblock), intent(inout) :: srcblock(:)
@@ -226,7 +226,7 @@ contains
 
       if (srcSwitch) then
         if (.not. allocated(srcblock(b)%sourceMass)) then
-          call srcblock(b)%allocate(nm, ni, nj, nk)
+          call srcblock(b)%allocate(nsm(), ni, nj, nk)
         endif
       endif
       if (eulSwitch) then

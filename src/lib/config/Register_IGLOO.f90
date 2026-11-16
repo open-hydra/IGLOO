@@ -79,6 +79,10 @@ contains
       'JAXA1, JAXA2, JAXA3, JAXA4, Ranz-Marshall, Kavanau-Drake, NoHeat',.true.)
     call reg%add('IGLOO-Models','evaporation',d_s(8),'NoEvaporation', &
       'Evaporation model; presence enables phase change','d2-law, CEM, CEM-B, ASM, TC',.false.)
+    call reg%add('IGLOO-Models','combustion',d_s(27),'none', &
+      'Burning model, the default of every injected material (per-material override: combustion=<model> on the '// &
+      'material line of the phase file, from [GPB-Phase*]; a combustion product, a line of 0 groups, never takes it)', &
+      'none, Beckstead, direct',.false.)
     call reg%add('IGLOO-Models','liquid-conduction',d_s(11),'ITC', &
       'Liquid-side conduction model, global default (per-material override: key=value on the material line of the phase file, from [GPB-Phase*]); P2T: parabolic temperature profile inside the droplet, needs k-liq on the material line or a Conductivity column in properties.dat, and mu-liq or a Viscosity column; a breaking material takes the breakup viscosity instead of mu-liq','ITC, P2T',.false.)
     call reg%add('IGLOO-Models','interface',d_s(12),'VLE', &

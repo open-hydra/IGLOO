@@ -45,7 +45,7 @@ module Lib_RHS
   integer :: ind_Le  = 0, ind_Yi  = 0, ind_e1 = 0, ind_e2  = 0
   integer :: ind_e3  = 0, ind_e4  = 0, ind_e5 = 0  !> alpha_e (LK interface); k_liq / mu_liq (P2T)
   integer :: ind_mb  = 0                            !> metal-block start (combustion), 0 = absent
-  integer, parameter :: nmetal = 13                 !> metal parameter block, order = IGLOO_Lib_Combustion imKb..imXl
+  integer, parameter :: nmetal = 16                 !> metal parameter block, order = IGLOO_Lib_Combustion imKb..imDir
   integer :: ind_rs  = 0                            !> rho-solid (solid density), 0 = absent
   integer :: ind_eps = 0                            !> emissivity (radiation), 0 = absent
   integer :: nauxvar = 0
@@ -331,8 +331,9 @@ contains
     !> metal (contiguous nmetal slice)
     if (ind_mb > 0) aux(ind_mb:ind_mb+nmetal-1) =                        &
       [particle%Kburn, particle%nBurn, particle%Xeff, particle%betaPart, &
-       particle%xiCap, particle%Tign,  particle%hFus,  particle%cpSol,   &
-       particle%qComb, particle%rhoRes, particle%cpRes, particle%cStretch, real(particle%xiLaw, R8)]
+       particle%xiCap, merge(particle%Tboil, particle%Tign, particle%combSelect == 2), particle%hFus, particle%cpSol, &
+       particle%qComb, particle%rhoRes, particle%cpRes, particle%cStretch, real(particle%xiLaw, R8), &
+       particle%Lv, particle%dStop, merge(1._R8, 0._R8, particle%combSelect == 2)]
     !> solid density
     if (ind_rs > 0) aux(ind_rs) = particle%rhoSol
     !> radiation
@@ -1248,7 +1249,7 @@ contains
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
-    use IGLOO_Lib_Combustion,  only: becksteadRate, nmp
+    use IGLOO_Lib_Combustion,  only: becksteadRate, directRate, nmp, imTig, imQc, imLv, imDr, imDir
     use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
@@ -1264,7 +1265,7 @@ contains
     real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
     ! locals
     real(R8) :: normVel, slip, mdot, qrel, Vdif(3), Re, cpFactor, tp, d, rho, m, xi0_loc(3)
-    real(R8) :: Fdrag(3), Qdot
+    real(R8) :: Fdrag(3), Qdot, Nu, cpg
 
     F = 0._R8
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
@@ -1287,10 +1288,20 @@ contains
     slip = norm2(Vdif)
     Re   = gas(1) * slip * d / gas(6)
 
-    call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot)
+    call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot, Nu)
     if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), tp, epsTabM), d, gas(5), tp)*cpFactor
-    !> Burn rate + heat release from the metal aux block (inert below T-ign)
-    call becksteadRate(tp, d, rho, aux(ind_mb:ind_mb+nmp-1), mdot, qrel)
+    if (aux(ind_mb+imDir-1) > 0.5_R8) then
+      !> direct: at its burning temperature and above its residue the drop burns on the d2-law and keeps its temperature
+      mdot = 0._R8; qrel = 0._R8
+      if (tp >= aux(ind_mb+imTig-1)*(1._R8 - 1.e-10_R8) .and. d > aux(ind_mb+imDr-1)) then
+        cpg  = gas(7)*gas(8)/(gas(7) - 1._R8)
+        mdot = -directRate(gas(5), gas(9), cpg, tp, d, Nu, aux(ind_mb+imLv-1), aux(ind_mb+imQc-1))
+        if (mdot < 0._R8) Qdot = 0._R8
+      endif
+    else
+      !> Burn rate + heat release from the metal aux block (inert below T-ign)
+      call becksteadRate(tp, d, rho, aux(ind_mb:ind_mb+nmp-1), mdot, qrel)
+    endif
     F(1:3) = Z(4:6)
     F(4:6) = Fdrag / m
     if (bodyForce) F(4:6) = F(4:6) + bodyAccel

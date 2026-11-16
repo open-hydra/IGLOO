@@ -62,7 +62,7 @@ _spec.loader.exec_module(cap)                     # Gallier's lobe (exact F), bu
 bb = cap.bb
 IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
 
-# ---- inputs: phase.txt (both lines) and the table's zones ----
+# ---- inputs: phase.txt (both lines), models.txt and the table's zones ----
 KEFF = 2.0e-6 * bb.XEFF
 XI, NU, C_STRETCH = cap.XI, cap.NU, cap.C_STRETCH
 RHO_RES, CL, CS, HF, TM = 3950.0, 1887.6, 1360.0, 1.08949e6, 2327.0
@@ -313,8 +313,9 @@ def check_main(checks):
     checks.append(("R5 residue mdot = (m_res/m0) x parent mdot: worst %.2e <= %.0e" % (w5, TOL_R5), w5 <= TOL_R5))
 
 
-def sibling(name, phase_text, bc_copies, ode_extra):
-    """A sibling run of this case's input into HERE/<name>/ with its own phase file, bc.txt copies, [IGLOO-ODE] lines."""
+def sibling(name, phase_text, models_text, bc_copies, ode_extra):
+    """A sibling run of this case's input into HERE/<name>/ with its own phase and models files, bc.txt copies,
+    [IGLOO-ODE] lines."""
     d = os.path.join(HERE, name)
     shutil.rmtree(d, ignore_errors=True)
     os.makedirs(os.path.join(d, "OUTPUT"))
@@ -324,6 +325,7 @@ def sibling(name, phase_text, bc_copies, ode_extra):
     bc = open(os.path.join(HERE, "INPUT", "bc.txt")).read()
     open(os.path.join(d, "INPUT", "bc.txt"), "w").write(bc * bc_copies)
     open(os.path.join(d, "INPUT", "phase.txt"), "w").write(phase_text)
+    open(os.path.join(d, "INPUT", "models.txt"), "w").write(models_text)
     ini = open(os.path.join(HERE, "input.ini")).read()
     if ode_extra:
         ini = ini.replace("[IGLOO-ODE]\n", "[IGLOO-ODE]\n" + ode_extra + "\n", 1)
@@ -334,9 +336,10 @@ def sibling(name, phase_text, bc_copies, ode_extra):
 
 
 def check_d(checks):
-    phase = open(os.path.join(HERE, "INPUT", "phase.txt")).read()
-    phase = phase.replace("\nA 1 ", "\nA 2 ", 1).replace("residue=on", "residue=on d-residue=5.0e-6", 1)
-    d, rc = sibling("ref-dres", phase, 2, None)
+    phase = open(os.path.join(HERE, "INPUT", "phase.txt")).read().replace("\nA 1 ", "\nA 2 ", 1)
+    models = open(os.path.join(HERE, "INPUT", "models.txt")).read()
+    models = models.replace("residue=on", "residue=on d-residue=5.0e-6", 1)
+    d, rc = sibling("ref-dres", phase, models, 2, None)
     if rc != 0:
         checks.append(("D sibling run (ref-dres) exit %d" % rc, False))
         return
@@ -367,7 +370,8 @@ def check_d(checks):
 
 
 def check_f(checks):
-    d, rc = sibling("ref-fail", open(os.path.join(HERE, "INPUT", "phase.txt")).read(), 1,
+    d, rc = sibling("ref-fail", open(os.path.join(HERE, "INPUT", "phase.txt")).read(),
+                    open(os.path.join(HERE, "INPUT", "models.txt")).read(), 1,
                     "fail-after   = %.1e" % FAIL_AFTER)
     if rc != 0:
         checks.append(("F sibling run (ref-fail) exit %d" % rc, False))

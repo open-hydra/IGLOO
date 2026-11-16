@@ -147,10 +147,12 @@ contains
         character(len=*), intent(in)  :: word
         integer,          intent(out) :: combSelect
         select case (word)
+        case('none');      combSelect = 0
         case('Beckstead'); combSelect = 1
+        case('direct');    combSelect = 2
         case default
             write(*,*) "Wrong combustion model input ---> "//trim(word)
-            write(*,*) "Choose one of: Beckstead"
+            write(*,*) "Choose one of: none, Beckstead, direct"
             error stop 'IGLOO: unknown combustion model'
         end select
     end subroutine assign_combustion
@@ -194,9 +196,9 @@ contains
         case('constant');  xiLaw = 0
         case('Gallier21'); xiLaw = 1
         case default
-            write(*,*) "Wrong xi-law input ---> "//trim(word)
+            write(*,*) "Wrong cap law input ---> "//trim(word)
             write(*,*) "Choose one of: constant, Gallier21"
-            error stop 'IGLOO: unknown xi-law token'
+            error stop 'IGLOO: unknown cap law'
         end select
     end subroutine assign_xilaw
 
