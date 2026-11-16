@@ -25,7 +25,7 @@ set(IGLOO_FINER_TAG v2.3.0)
 if (NOT DEFINED IGLOO_FINER_DEPS)
   set(IGLOO_FINER_DEPS "FREE")
 endif()
-set(IGLOO_FINER_BACKUP_PINS   # the releases ATLAS, MOSE and ICE share
+set(IGLOO_FINER_BACKUP_PINS
   "PENF=v2.0.1"
   "StringiFor=v1.8.0"
   "FACE=v1.1.17"

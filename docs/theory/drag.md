@@ -312,6 +312,6 @@ Kelvin–Helmholtz branch depends on the slip Weber number only.
 ## V&V
 
 Routine-level comparison of every correlation against its source expression, and the
-end-to-end Stokes relaxation case: [Literature tests](../vv/literature.md),
-[Stokes drag](../vv/drag-stokes.md).  `NoDrag` is gated end to end by
-[`no-exchange`](../vv/e2e.md#no-exchange).
+end-to-end Stokes relaxation case: [Drag laws](../vv/drag.md#drag-laws),
+[Stokes drag](../vv/drag.md#drag-stokes).  `NoDrag` is gated end to end by
+[`no-exchange`](../vv/drag.md#no-exchange).

@@ -574,7 +574,7 @@ Full registry: [../user/registry.md](../user/registry.md).
 ## V&V
 
 d²-law, LK and TC evaporation rates against independent kernels, and the
-paper-reproduction cases: [../vv/e2e.md](../vv/e2e.md).  CEM-B and ASM run end to end with
+paper-reproduction cases: [Evaporation & Boiling](../vv/evaporation.md).  CEM-B and ASM run end to end with
 a convective Sherwood number in `tests/evaporation/cemb-box` and `asm-box` (d², and for ASM the
 temperature, against the rate laws along the measured state); the blowing factor in
 `mhb98-water-blowing`; a varying $c_p$ under evaporation in `d2law-varcp`.  The parabolic profile
@@ -587,4 +587,4 @@ against the surface balance with $\mu_l(T_s)$ on every row); the boiling branch 
 the burnout).  The Langmuir-Knudsen depression against MHB98 Fig. 7(a) in `test_mhb98_decane`
 (DC4: production's rate along each drop's life, the depression recovered from it, within 6 % of the
 digitized curves); the boiling point given at another pressure in `test_properties_reader`
-(`boiling-pressure`) and `refuse-boiling-pressure`.  Function-level comparisons for all models: [../vv/literature.md](../vv/literature.md).
+(`boiling-pressure`) and `refuse-boiling-pressure`.  Function-level comparisons for all models: [Evaporation closures](../vv/evaporation.md#evaporation-closures).
