@@ -25,7 +25,7 @@ def main():
     total, peak = sum(w), max(abs(x) for x in w)
     print("burnout-cold: cells %d, sum of wdot(A) %.6e kg/s, largest |wdot(A)| %.6e kg/s" % (len(w), total, peak))
     if peak != 0.0:
-        print("[FAIL] a cold parcel was removed: the stream lost mass")
+        print("[FAIL] a cold parcel is removed: the stream loses mass")
         return 1
     print("[PASS] no cold parcel removed: the mass source is zero in every cell")
     return 0

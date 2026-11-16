@@ -1435,7 +1435,7 @@ igloo_refusal_case(refuse-models-real      infrastructure/refusals/models-real
                    "IGLOO: non-numeric constant in the models file" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-models-short     infrastructure/refusals/models-short
                    "IGLOO: malformed row in the models file" "e2e;refusal;combustion")
-# The seventh issue's readers: a value that is not one finite real, a burning row without q-comb, a cap word without its
+# The burning models' refusals: a value that is not one finite real, a burning row without q-comb, a cap word without its
 # row (the material would burn uncapped), the constants of a burning model in [IGLOO-Models], direct falling back on a
 # boiling temperature that is not the one at one atmosphere.
 igloo_refusal_case(refuse-models-nan       infrastructure/refusals/models-nan
