@@ -238,12 +238,12 @@ IGLOO's exchange off.
 
 ## V&V
 
-Literature comparison for heat-transfer correlations: [../vv/literature.md](../vv/literature.md).
+Literature comparison for heat-transfer correlations: [Nusselt laws](../vv/heat.md#nusselt-laws).
 The end-to-end conduction-limit and convective cases are
-[Temperature relaxation](../vv/temp-relax.md) and [`conv-nu`](../vv/e2e.md#conv-nu); JAXA2, JAXA3,
+[Temperature relaxation](../vv/heat.md#temp-relax) and [`conv-nu`](../vv/heat.md#conv-nu); JAXA2, JAXA3,
 JAXA4 and Kavanau–Drake run end to end at a slip Mach number of $5.2\times10^{-4}$ in `conv-nu-jaxa2`,
 `conv-nu-jaxa3`, `conv-nu-jaxa4` and `conv-nu-kd` (`tests/standard/`);
-`NoHeat` is gated by [`no-exchange`](../vv/e2e.md#no-exchange).  The radiative exchange is gated by
+`NoHeat` is gated by [`no-exchange`](../vv/drag.md#no-exchange).  The radiative exchange is gated by
 `test_radiation` (the term, the right-hand side of every ODE model, the Eulerian source branch),
 `rad-cool` (a hot particle cooled by radiation alone, against the closed form in $x$),
 `rad-cool-epscol` (the same with $\varepsilon(T) = T/3000$ from the property table),

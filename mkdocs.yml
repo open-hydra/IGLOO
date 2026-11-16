@@ -127,13 +127,19 @@ nav:
 
   - Verification & Validation:
     - vv/index.md
-    - Using the Suite: vv/guide.md
-    - End-to-End Cases: vv/e2e.md
-    - Drag (Stokes): vv/drag-stokes.md
-    - Temperature Relaxation: vv/temp-relax.md
-    - Body Force: vv/body-force.md
-    - Evaporation: vv/evaporation.md
-    - Literature Tests: vv/literature.md
+    - Methodology: vv/methodology.md
+    - Physics:
+      - Drag & Momentum: vv/drag.md
+      - Heat Transfer: vv/heat.md
+      - Evaporation & Boiling: vv/evaporation.md
+      - Breakup: vv/breakup.md
+      - Combustion: vv/combustion.md
+      - Solidification: vv/solidification.md
+    - Solver Features:
+      - Injection: vv/injection.md
+      - Geometry & Boundaries: vv/geometry.md
+      - Coupling & Outputs: vv/coupling.md
+      - Contracts & Robustness: vv/contracts.md
 
   - Developer Guide:
     - development/index.md

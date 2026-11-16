@@ -1,6 +1,6 @@
 # Versioning
 
-IGLOO requires its libraries as MOSE and ICE do: ORION and OSLO by a range of releases, FiNeR at
+IGLOO requires its libraries, ORION and OSLO, by a range of releases, FiNeR at
 one release, and every one is checked at configure time, so that a library IGLOO was not tested
 with stops the configure before anything is built.
 
@@ -26,7 +26,7 @@ Jacobian arguments IGLOO passes.
 
 FiNeR's own dependencies are fetched as FiNeR's author does (`fobis fetch`: their default
 branches, `IGLOO_FINER_DEPS=FREE`). If an upstream change breaks IGLOO, `IGLOO_FINER_DEPS=BACKUP`
-checks out the releases of `IGLOO_FINER_BACKUP_PINS`, the ones ATLAS, MOSE and ICE share.
+checks out the releases of `IGLOO_FINER_BACKUP_PINS`.
 
 ## The checks
 

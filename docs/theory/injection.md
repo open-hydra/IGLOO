@@ -102,7 +102,7 @@ the run log counts such parcels once per sweep:
  [WARNING] N parcel(s) whose injection point no cell holds: not integrated
 ```
 
-Verified by the `inj-edge` and `inj-edge-payload` cases (see the [V&V overview](../vv/index.md)).
+Verified by the `inj-edge` and `inj-edge-payload` cases (see [Injection](../vv/injection.md#inlet-lattices)).
 
 ---
 

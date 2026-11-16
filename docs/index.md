@@ -105,6 +105,7 @@ simulation. IGLOO is its Lagrangian particle solver.</p>
 <p class="hydra__label">Built on</p>
 
 [<b>ORION</b> Tecplot, VTK and PLOT3D I/O](https://MarcoGrossi92.github.io/ORION/){ .hydra__lib }
+[<b>FLINT</b> thermochemistry](https://MarcoGrossi92.github.io/FLINT/){ .hydra__lib }
 [<b>OSLO</b> ODE integrators](https://github.com/MarcoGrossi92/OSLO){ .hydra__lib }
 [<b>FiNeR</b> INI file parser](https://github.com/szaghi/FiNeR){ .hydra__lib }
 

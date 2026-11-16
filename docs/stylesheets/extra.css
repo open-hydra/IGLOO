@@ -29,11 +29,11 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 :root {
-  --igloo-ink: #070b1f;
-  --igloo-deep: #1e1b4b;
-  --igloo-sky: #22d3ee;
-  --igloo-mist: #c7d2fe;
-  --igloo-dim: #94a3c8;
+  --igloo-ink: #04130d;
+  --igloo-deep: #0b3a2a;
+  --igloo-sky: #34d399;
+  --igloo-mist: #c6e6d9;
+  --igloo-dim: #8fb5a6;
 }
 /* In the Hydra scheme (hydra.css) IGLOO is a particle solver: its accent is the particle colour, IGLOO's own cyan */
 .hydra { --hydra-accent: var(--hydra-particle); }
