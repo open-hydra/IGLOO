@@ -32,7 +32,7 @@ module Lib_RHS
   integer :: mod_liqSelect  = 0         !> liquid-side: 0 ITC, 1 P2T (parabolic profile)
   integer :: mod_intfSelect = 0         !> interface:   0 VLE, 1 Langmuir-Knudsen
   integer :: mod_boilSelect = 0         !> boiling:     0 clamp, 1 ZGR (Zuo-Gomes-Rutland above the boiling point)
-  integer :: mod_combSelect = 0         !> metal combustion: 0 off, 1 Beckstead
+  integer :: mod_combSelect = 0         !> metal combustion: 0 off, 1 Beckstead, 2 direct
   logical :: mod_propFlags(7) = .false. !> [varCp, varRho, varSig, varMup, varPsat, varLv, varCpv]
   real(R8), allocatable :: mod_bp(:)    !> breakup params (copy of bp from IGLOO_Lib_Breakup)
   integer  :: mod_bpMethod  = 1         !> TAB sub-method selector
@@ -1249,7 +1249,7 @@ contains
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
-    use IGLOO_Lib_Combustion,  only: becksteadRate, directRate, nmp, imTig, imQc, imLv, imDr, imDir
+    use IGLOO_Lib_Combustion,  only: becksteadRate, directRate, nmp, imTig, imQc, imLv, imDr, imDir, directOnset
     use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
@@ -1293,7 +1293,7 @@ contains
     if (aux(ind_mb+imDir-1) > 0.5_R8) then
       !> direct: at its burning temperature and above its residue the drop burns on the d2-law and keeps its temperature
       mdot = 0._R8; qrel = 0._R8
-      if (tp >= aux(ind_mb+imTig-1)*(1._R8 - 1.e-10_R8) .and. d > aux(ind_mb+imDr-1)) then
+      if (tp >= aux(ind_mb+imTig-1)*directOnset .and. d > aux(ind_mb+imDr-1)) then
         cpg  = gas(7)*gas(8)/(gas(7) - 1._R8)
         mdot = -directRate(gas(5), gas(9), cpg, tp, d, Nu, aux(ind_mb+imLv-1), aux(ind_mb+imQc-1))
         if (mdot < 0._R8) Qdot = 0._R8

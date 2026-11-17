@@ -16,6 +16,10 @@ module IGLOO_Lib_Combustion
     integer(I4), parameter, public :: imXl=13                     !> the cap's retained fraction: 0 xi-cap, 1 Gallier21
     integer(I4), parameter, public :: imLv=14, imDr=15, imDir=16  !> direct's latent heat; the stop diameter; 1 = direct
 
+    !> A direct drop burns from directOnset x T-burn: the round-off of a temperature held at T-burn does not switch it off.
+    !  The burning branch and the burn-out removal both test it.
+    real(R8), parameter, public :: directOnset = 1._R8 - 1.e-10_R8
+
     !> X_eff exponent of the Beckstead (2005) correlation.
     real(R8), parameter, public :: aXeff = 1.0_R8
 
