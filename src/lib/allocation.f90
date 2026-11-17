@@ -676,6 +676,66 @@ contains
   end subroutine assembleInterfaceDual
 
 
+  !> Census of the gas-order-2 dual cells of every block (3D), once at setup: per block the cells with coincident
+  !  nodes (collapsed: the dual of a grid edge that three cells share is a prism) and the cells folded over
+  !  themselves (a corner Jacobian of the sign opposite to the block's, between distinct nodes), which the
+  !  containment test of a valid cell does not tile. worst: the smallest scaled corner Jacobian among a block's
+  !  folded cells, in the block's handedness; first: its first folded dual cell.
+  subroutine scanDualCells(gas, nColl, nFold, worst, first)
+    use IGLOO_variables,    only: mesh2D
+    use IGLOO_VectorModule, only: cross
+    use IGLOO_data_block,   only: obj_flowblock
+    implicit none
+    type(obj_flowblock), intent(in)  :: gas(:)
+    integer,             intent(out) :: nColl(size(gas)), nFold(size(gas)), first(3, size(gas))
+    real(R8),            intent(out) :: worst(size(gas))
+    real(R8) :: x(3,0:1,0:1,0:1), e(3,3), l(3), jac, sref, cmin, diag
+    integer  :: b, i, j, k, a, bb, c, pass, st
+    logical  :: coll
+
+    nColl = 0; nFold = 0; first = 0; worst = 0._R8
+    if (mesh2D) return
+    do b = 1, size(gas)
+      associate(g => gas(b))
+      sref = 0._R8
+      !> pass 1: the block's handedness, from one dual cell in 64; pass 2: every dual cell
+      do pass = 1, 2
+        st = merge(4, 1, pass == 1)
+        do k = 1, g%Nz + 1, st; do j = 1, g%Ny + 1, st; do i = 1, g%Nx + 1, st
+          x = g%node(:, i-1:i, j-1:j, k-1:k)
+          diag = norm2(x(:,1,1,1) - x(:,0,0,0))
+          coll = .false.; cmin = huge(1._R8)
+          do c = 0, 1; do bb = 0, 1; do a = 0, 1
+            e(:,1) = (x(:,1-a,bb,c) - x(:,a,bb,c))*(1 - 2*a)
+            e(:,2) = (x(:,a,1-bb,c) - x(:,a,bb,c))*(1 - 2*bb)
+            e(:,3) = (x(:,a,bb,1-c) - x(:,a,bb,c))*(1 - 2*c)
+            l = [norm2(e(:,1)), norm2(e(:,2)), norm2(e(:,3))]
+            if (any(l <= 1.e-12_R8*diag)) then
+              coll = .true.
+              cycle
+            endif
+            jac = dot_product(cross(e(:,1), e(:,2)), e(:,3))
+            if (pass == 1) then
+              sref = sref + jac
+            else
+              cmin = min(cmin, sign(1._R8, sref)*jac/product(l))
+            endif
+          enddo; enddo; enddo
+          if (pass == 1) cycle
+          if (coll) nColl(b) = nColl(b) + 1
+          if (cmin <= 0._R8) then
+            nFold(b) = nFold(b) + 1
+            if (nFold(b) == 1) first(:, b) = [i, j, k]
+            if (nFold(b) == 1 .or. cmin < worst(b)) worst(b) = cmin
+          endif
+        enddo; enddo; enddo
+      enddo
+      end associate
+    enddo
+
+  end subroutine scanDualCells
+
+
   !> Geometric vertex at corner (a, b) (along the face's m, n) of face cell (i,j,k) on face f.
   pure function faceVertex(f, i, j, k, a, b) result(v)
     integer, intent(in) :: f, i, j, k, a, b

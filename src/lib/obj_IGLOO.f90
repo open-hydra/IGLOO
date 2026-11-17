@@ -90,6 +90,8 @@ contains
     character(len=llen)  :: gasfile
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
     integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar, b, b2, nMoved, nWallFace, nDrop
+    integer,  allocatable :: nDualColl(:), nDualFold(:), firstFold(:,:)
+    real(R8), allocatable :: worstFold(:)
     character(len=16)    :: dualCodes
     integer, allocatable :: npair(:,:), ncut(:,:), resCount(:)
     character(len=2)     :: method
@@ -183,6 +185,19 @@ contains
         ' [IGLOO] ghost nodes at connected faces: ', nGhostIn, ' interpolated, ', nGhostMiss, ' not covered'
       if (mpi_is_root .and. nGhostFar > 0) write(*,'(A,I0)') &
         ' [IGLOO] chimera ghost nodes located away from their ATLAS donors: ', nGhostFar
+      !> the dual cells no point-in-cell test tiles, counted once: a search that none of them accepts takes the
+      !  nearest candidate (findDualCell)
+      allocate(nDualColl(nb), nDualFold(nb), firstFold(3, nb), worstFold(nb))
+      call scanDualCells(self%gasblock, nDualColl, nDualFold, worstFold, firstFold)
+      if (mpi_is_root .and. sum(nDualColl) + sum(nDualFold) > 0) then
+        write(*,'(A,2(I0,A))') ' [IGLOO] gas-order-2 dual cells: ', sum(nDualColl), ' collapsed (coincident nodes), ', &
+          sum(nDualFold), ' folded (a corner Jacobian not positive)'
+        do b = 1, nb
+          if (nDualFold(b) > 0) write(*,'(A,I0,A,I0,A,F7.3,A,3(1X,I0))') ' [WARNING] block ', b, ': ', nDualFold(b), &
+            ' folded dual cell(s), worst scaled Jacobian ', worstFold(b), ', first at dual cell', firstFold(:, b)
+        enddo
+      endif
+      deallocate(nDualColl, nDualFold, firstFold, worstFold)
     endif
     call tm_phase(TM_PIN)
     call initRandomSeed(rng_seed)   ! before pinning: stochastic injection diameters
