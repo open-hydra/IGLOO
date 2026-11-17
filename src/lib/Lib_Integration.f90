@@ -45,7 +45,7 @@ contains
                        mod_bp, mod_bpMethod, mod_bpScale
     use oslo,              only: Run_ODESolver, no_jacobian
     use IGLOO_Lib_Breakup, only: nchild
-    use IGLOO_Lib_Combustion, only: imRr, capLawPath
+    use IGLOO_Lib_Combustion, only: imRr, capLawPath, directOnset
     use IGLOO_Lib_Evaporation, only: COMB_DIRECT
     use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, eventCrossed, &
                                         eventPassed, solidTransition, solidTransitionTab, solidDiameter, &
@@ -1240,13 +1240,13 @@ contains
       endif
 
       !> Burnout test on the droplet mass (model 8: the metal's), consumption models only. A burning model removes a
-      !  parcel only while it burns (from its ignition test's temperature): a cold one at that mass stays inert.
+      !  parcel only while it burns (its burning test's temperature: T-ign, directOnset x T-burn): a cold one stays inert.
       if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8) then
         if (y(8) <= burnoutMass()) then                 ! y(8) IS the droplet mass [kg]
           burnedOut = .true.
           if (mod_model==5 .or. mod_model==8) then
             if (mod_propFlags(1) .and. .not. mod_isSolid) then; tp = comp_TfromTab(hTab,y(7)); else; tp = y(7); endif
-            burnedOut = tp >= merge(part%Tboil, part%Tign, part%combSelect == COMB_DIRECT)
+            burnedOut = tp >= merge(part%Tboil*directOnset, part%Tign, part%combSelect == COMB_DIRECT)
           endif
         endif
       endif

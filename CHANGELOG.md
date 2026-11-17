@@ -29,6 +29,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Combustion: the burnout removal of a burning parcel (ODE models 5 and 8) requires the parcel to burn, at or above
   `T-ign` under `Beckstead` and `T-burn` under `direct`; a parcel at the removal mass that does not burn stays an
   inert parcel instead of being handed to the gas. The evaporating models 2 and 4 are unchanged.
+- Combustion: a `combustion=direct` drop at its removal mass is removed from the temperature its burning branch
+  burns from, `T-burn` within 1e-10 (`directOnset`, shared by both tests). A drop whose step into `T-burn` ended in
+  that margin burned on past `d-burnout` to a solver failure instead of being removed (18 of the 25 drops of
+  `tests/combustion/burnout-direct`).
 
 ## [1.0.0] - 2026-11-16
 
