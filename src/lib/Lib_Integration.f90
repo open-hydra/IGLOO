@@ -394,10 +394,10 @@ contains
           !$OMP ATOMIC UPDATE
           srcblock(b)%sourceMass(nm+2*part%mID,ic,jc,kc)   = srcblock(b)%sourceMass(nm+2*part%mID,ic,jc,kc)   + dCap(2)
         endif
-        !> A burning parcel of a material with a smoke: W, the metal the segment consumed and the oxide its cap gained
-        !  (net + O), and W times the parcel's velocity and temperature weighted by the metal burnt over the residence,
-        !  in its five columns: the latched steps' sums, then the last piece (a consumed remnant burns at once) at its
-        !  mean state
+        !> A burning parcel of a material with a smoke: W = net + O, the metal the segment burnt (consumed in the cell: all
+        !  its metal and, with residue = off, its whole cap, which leaves it here), and W times the parcel's velocity and
+        !  temperature weighted by the metal burnt over the residence, in its five columns: the latched steps' sums, then
+        !  the last piece (a consumed remnant burns at once) at its mean state
         dSm = 0._R8
         if (smokeColumns .and. (part%model == 5 .or. part%model == 8) .and. part%dSmoke > 0._R8) then
           dSm(1) = max(0._R8, massIn - massOut + dCap(1))

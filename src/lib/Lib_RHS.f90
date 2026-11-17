@@ -32,7 +32,7 @@ module Lib_RHS
   integer :: mod_liqSelect  = 0         !> liquid-side: 0 ITC, 1 P2T (parabolic profile)
   integer :: mod_intfSelect = 0         !> interface:   0 VLE, 1 Langmuir-Knudsen
   integer :: mod_boilSelect = 0         !> boiling:     0 clamp, 1 ZGR (Zuo-Gomes-Rutland above the boiling point)
-  integer :: mod_combSelect = 0         !> metal combustion: 0 off, 1 Beckstead
+  integer :: mod_combSelect = 0         !> metal combustion: 0 off, 1 Beckstead, 2 direct
   logical :: mod_propFlags(7) = .false. !> [varCp, varRho, varSig, varMup, varPsat, varLv, varCpv]
   real(R8), allocatable :: mod_bp(:)    !> breakup params (copy of bp from IGLOO_Lib_Breakup)
   integer  :: mod_bpMethod  = 1         !> TAB sub-method selector
