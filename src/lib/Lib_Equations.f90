@@ -67,8 +67,10 @@ contains
 
 
   !> Trilinear interpolation of the gas at p0 in a hexahedron: Newton from xi to the local coordinates,
-  !  stopped once |x(xi) - p0| < hexTol(vertices), at most 10 steps (nIt), then shape-function weighting;
-  !  xi returned clamped.
+  !  stopped once |x(xi) - p0| < hexTol(vertices), at most 10 steps (nIt), then shape-function weighting
+  !  (an extrapolation when p0 lies outside the cell); xi returned clamped. A failed inverse -- a weight
+  !  that is not finite or exceeds wMax, as from a seed on the collapsed face of a degenerate dual cell --
+  !  is sampled at the cell centre instead, the mean of the 8 nodes, and returns that centre as the next seed.
   pure subroutine interp2ndOrder(vertices,gasNodes,p0,nsp,xi,gas,nIt)
     use IGLOO_RayFaceIntersection3D, only: hexTol
     implicit none
@@ -78,13 +80,19 @@ contains
     real(R8), intent(inout) :: xi(3)
     real(R8), intent(out)   :: gas(nsp)
     integer,  intent(out), optional :: nIt
-    real(R8) :: N(8), tol
+    real(R8), parameter :: wMax = 10._R8
+    real(R8) :: N(8), dN(3,8), tol
     integer  :: it
 
     tol = hexTol(vertices)
     call hexInverse(vertices, p0, xi, tol, 10, N, it)
     if (present(nIt)) nIt = it
-    xi = max(0._R8, min(1._R8, xi))
+    if (all(abs(N) <= wMax) .and. .not. any(xi /= xi)) then
+      xi = max(0._R8, min(1._R8, xi))
+    else
+      xi = 0.5_R8
+      call hex(xi, N, dN)
+    endif
 
     gas = N(1)*gasNodes(:,1) + N(2)*gasNodes(:,2) + N(3)*gasNodes(:,3) + N(4)*gasNodes(:,4) +  &
           N(5)*gasNodes(:,5) + N(6)*gasNodes(:,6) + N(7)*gasNodes(:,7) + N(8)*gasNodes(:,8)

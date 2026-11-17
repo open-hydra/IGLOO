@@ -22,7 +22,7 @@ contains
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
-                                nInjNoCell,                                &
+                                nInjNoCell, nInjMoved,                     &
                                 trajOn, scatOn, dNscat, npFloor, sixOverPi, pi, &
                                 epsBurn, mBurnAbs,                         &
                                 planeOn, planeX, failAfter, maxInnerIter, nm, nsm, &
@@ -184,10 +184,16 @@ contains
       part%angle = 0._R8
       part%i     = part%iInj
       part%stateVar(1:3) = part%pInj
-      if (.not. injCellHolds()) call part%updateCell(geoblock)
+      if (.not. injCellHolds()) then
+        if (all(part%iInj > 0)) then
+          !$OMP ATOMIC
+          nInjMoved = nInjMoved + 1
+        endif
+        call part%updateCell(geoblock)
+      endif
 
       if (part%gone) then
-        write(*,'(A,I4,A)')                                                         &
+        write(*,'(A,I0,A)')                                                         &
                 '[WARNING] Particle ',part%ID,' has been initialized out of domain!'
         call writeStartRecord()
         call emitParcel()
@@ -522,7 +528,7 @@ contains
       endif
 
       if (part%Ncell-nRefl>nMaxCell) then
-        write(*,'(A,I4,A,4I4,A)') '       ==> Particle ',part%ID,' stuck in cell:',part%iold
+        write(*,'(A,I0,A,4(1X,I0),A)') '       ==> Particle ',part%ID,' stuck in cell:',part%iold
         part%gone=.true.
       endif
 
@@ -531,7 +537,7 @@ contains
         nReflW = nReflW + 1
         if (nReflW == nMaxStall) then
           if (norm2(part%stateVar(1:3) - posReflW) < nMaxStall*grazeStandoff) then
-            write(*,'(A,I4,A,4I4,A)') '       ==> Particle ',part%ID,' stuck in cell:',part%iold
+            write(*,'(A,I0,A,4(1X,I0),A)') '       ==> Particle ',part%ID,' stuck in cell:',part%iold
             part%gone = .true.
           endif
           nReflW = 0; posReflW = part%stateVar(1:3)
@@ -543,7 +549,7 @@ contains
       else;                                              nStall = nStall + 1; endif
       posPrev = part%stateVar(1:3)
       if (nStall > nMaxStall) then
-        write(*,'(A,I4,A)') '       ==> Particle ',part%ID,' no net progress ==> marking gone'
+        write(*,'(A,I0,A)') '       ==> Particle ',part%ID,' no net progress ==> marking gone'
         part%gone = .true.
       endif
 
@@ -603,7 +609,7 @@ contains
 
     !> Outer-loop maxIter exit: flag the particle gone and write its exit record.
     if (iter >= maxIter .and. .not. part%gone) then
-      write(*,'(A,I4,A,I0,A)') '       ==> Particle ',part%ID,' hit outer maxIter (',maxIter,'); flagging gone'
+      write(*,'(A,I0,A,I0,A)') '       ==> Particle ',part%ID,' hit outer maxIter (',maxIter,'); flagging gone'
       part%gone = .true.
       if (rowsNew) call writeLastRow()
       call writeExitRow()
@@ -961,7 +967,7 @@ contains
 
       !> Non-finite state: revert to the last good accepted step and mark the particle gone.
       if (any(y/=y)) then
-        write(*,'(A,I4,A)') '[WARNING] Particle ',part%ID,                                &
+        write(*,'(A,I0,A)') '[WARNING] Particle ',part%ID,                                &
                             ' non-finite state ==> reverting to last good step, marking gone'
         !> Report the remaining mass fraction for mass-evolving models.
         if (mod_model==2 .or. mod_model==4 .or. mod_model==5 .or. mod_model==8)           &
@@ -1376,11 +1382,19 @@ contains
 
     !> After a geo crossing: refresh the geo cell and, if the particle stayed in, re-resolve the gas cell.
     subroutine handleGeoEvent()
+      integer :: bPrev
+      bPrev = b
       b = part%i(1)
       call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen, tol=geoHexTol)
       if (.not.part%gone) then
         part%gasExitFace = 0
-        call part%advanceGasCell(gasblock(b))
+        if (b /= bPrev) then
+          !> a new block: the dual indices of the old one mean nothing in it, the geometry cell's neighbourhood is searched
+          call part%findDualCell(gasblock(b))
+          part%igasOld = part%igas
+        else
+          call part%advanceGasCell(gasblock(b))
+        endif
         call gasblock(b)%getVertices(part%igas,gasVert,mesh2D, gasHexNorms, gasHexCentroids, gasHexDegen, gasHexTol)
         call gasblock(b)%gasProperties(gas,part%igas)
         call setAtGasBoundary()

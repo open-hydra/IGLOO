@@ -471,7 +471,9 @@ contains
 
 
   !> The gas-order-2 dual across 101 or 201 faces, built once after the bc read; classes unallocated without such a link.
-  subroutine assembleInterfaceDual(geo, gas, links, classes, nmoved, label)
+  !  nedge: the edge ghost nodes next to 101 faces placed from the partner blocks, nfixed: those completed as
+  !  parallelograms (moveEdgeGhosts).
+  subroutine assembleInterfaceDual(geo, gas, links, classes, nmoved, label, nedge, nfixed)
     use IGLOO_variables,   only: mesh2D
     use IGLOO_data_block,  only: obj_block, obj_flowblock, vertexClass, faceFlags
     use IGLOO_Lib_Mollify, only: cellLink
@@ -482,15 +484,18 @@ contains
     type(vertexClass), allocatable, intent(out) :: classes(:)
     integer,             intent(out)   :: nmoved
     character(*),        intent(out), optional :: label  !> the codes joined: 101, 201 or 101 and 201
+    integer,             intent(out), optional :: nedge, nfixed
     type(idMap),  allocatable :: id(:)
     type(faceFlags) :: flags(6)
     logical,  allocatable :: isDual(:)
     integer,  allocatable :: parent(:), nmem(:), cls(:), fill(:), gidx(:,:), lcode(:)
     real(R8), allocatable :: gpos(:,:), tr(:,:)
-    integer  :: l, c, a, bb, ap, bp, nc, nn, ncls, b, f, m, n, i, j, k, r, ng, pm, pn, v(3,4), vp(3,4)
+    integer  :: l, c, a, bb, ap, bp, nc, nn, ncls, b, f, m, n, i, j, k, r, ng, pm, pn, v(3,4), vp(3,4), ne, nf
     real(R8) :: h, x(3,4), xp(3,4), w
 
     nmoved = 0
+    if (present(nedge)) nedge = 0
+    if (present(nfixed)) nfixed = 0
     if (present(label)) label = ''
     allocate(isDual(size(links)), lcode(size(links)), tr(3, size(links)))
     do l = 1, size(links)
@@ -616,6 +621,9 @@ contains
         flags(f)%f(m, n) = .true.
       enddo
       call fill_dual_nodes(gas(b), geo(b), mesh2D, gidx, gpos)
+      call moveEdgeGhosts(b, ne, nf)
+      if (present(nedge)) nedge = nedge + ne
+      if (present(nfixed)) nfixed = nfixed + nf
       call computeSkewFlag(gas(b), mesh2D)
       call gas(b)%precomputeDualMetric(mesh2D, geo(b), flags)
       call gas(b)%computeBBox
@@ -643,6 +651,191 @@ contains
     enddo
 
   contains
+
+    !> The edge ghosts of block bk's dual ring. Next to a 101 face they are placed as MOSE takes the tangential
+    !  neighbours of a connection ghost (Fill_BC_Ghost_Connection): in the partner block, one step from the partner
+    !  cell along the image of the edge's direction through the link's orientation (partnerNode); an edge between two
+    !  101 faces takes the mean of its two images, one point on a regular edge. Elsewhere the index extrapolation of
+    !  fill_dual_nodes stays (also next to a 201 or 102 cell and on the symmetry axis). Every edge ghost E is then
+    !  checked against the interior node c and the two face ghosts gA, gB next to it: the corner quad (c, gA, E, gB)
+    !  is a valid bilinear cell when E = c + al (gA - c) + be (gB - c) has al, be > 0 and al + be > 1; otherwise --
+    !  the two images of a grid edge that three cells share are gA and gB themselves, and an extrapolation along a
+    !  curved boundary can miss the reflected ghosts by more than the thickness of a wall cell -- E completes the
+    !  parallelogram, gA + gB - c. Interior nodes next to each other along the edge that share both face ghosts (a
+    !  grid vertex with four cells around it: both faces wrap the same edge of the partner block) complete one point,
+    !  from their mean, so the edge ghosts collapse as the face ghosts do. A true corner next to a moved or completed
+    !  edge ghost is the eighth vertex of its dual cell. nMove: the nodes taken from the partner blocks; nFix: the
+    !  nodes completed.
+    subroutine moveEdgeGhosts(bk, nMove, nFix)
+      integer, intent(in)  :: bk
+      integer, intent(out) :: nMove, nFix
+      real(R8), parameter :: tolq = 1.e-3_R8
+      real(R8), allocatable :: acc(:,:,:,:)
+      integer,  allocatable :: cnt(:,:,:)
+      integer  :: lq, fq, mq, nq, nmq, nnq, dm, dn, e(3), s(2), kmin, kmax, iq, jq, kq, ci, cj, ck, di, dj, dk
+      integer  :: inn(3), ia(3), ib(3), d1, d2, q, q0, sg, t, ja(3), jb(3), jn(3), nrun, nmax(3)
+      real(R8) :: xn(3), va(3), vb(3), vd(3), aa, bb2, ab, ad, bd, det, al, be, cm(3), tolc
+      logical  :: ok, out(3)
+
+      nMove = 0; nFix = 0
+      associate(g => gas(bk))
+      kmin = merge(1, 0, mesh2D); kmax = merge(1, g%Nz + 1, mesh2D)
+      allocate(acc(3, 0:g%Nx+1, 0:g%Ny+1, kmin:kmax), cnt(0:g%Nx+1, 0:g%Ny+1, kmin:kmax))
+      acc = 0._R8; cnt = 0
+      do lq = 1, size(links)
+        if (.not. isDual(lq) .or. links(lq)%b /= bk .or. lcode(lq) /= 101) cycle
+        associate(lk => links(lq))
+        fq = lk%f
+        call geo(bk)%ijk2fmn(lk%i, lk%j, lk%k, fq, mq, nq)
+        nmq = size(geo(bk)%face(fq)%cell, 1); nnq = size(geo(bk)%face(fq)%cell, 2)
+        associate(o => geo(bk)%face(fq)%cell(mq,nq)%orient)
+        do dn = -1, 1; do dm = -1, 1
+          if (abs(dm) + abs(dn) /= 1) cycle
+          if (mesh2D .and. dn /= 0) cycle
+          !> the rim of the face only: its neighbour (mq+dm, nq+dn) is off the face
+          if (mq + dm >= 1 .and. mq + dm <= nmq .and. nq + dn >= 1 .and. nq + dn <= nnq) cycle
+          e = faceGhost(fq, lk%i, lk%j, lk%k, g%Nx, g%Ny, g%Nz)
+          select case (fq)
+          case (1, 2);  e(2) = e(2) + dm; e(3) = e(3) + dn
+          case (3, 4);  e(1) = e(1) + dm; e(3) = e(3) + dn
+          case default; e(1) = e(1) + dm; e(2) = e(2) + dn
+          end select
+          s = [o(1)*dm + o(3)*dn, o(2)*dm + o(4)*dn]
+          call partnerNode(lk%pb, lk%pf, lk%pi, lk%pj, lk%pk, s, xn, ok)
+          if (.not. ok) cycle
+          acc(:, e(1), e(2), e(3)) = acc(:, e(1), e(2), e(3)) + xn
+          cnt(e(1), e(2), e(3)) = cnt(e(1), e(2), e(3)) + 1
+        enddo; enddo
+        end associate
+        end associate
+      enddo
+      do kq = kmin, kmax; do jq = 0, g%Ny + 1; do iq = 0, g%Nx + 1
+        out = [iq == 0 .or. iq == g%Nx + 1, jq == 0 .or. jq == g%Ny + 1, &
+               (.not. mesh2D) .and. (kq == 0 .or. kq == g%Nz + 1)]
+        if (count(out) /= 2) then
+          cnt(iq,jq,kq) = 0
+          cycle
+        endif
+        if (allocated(g%nodeOnAxis)) then
+          if (g%nodeOnAxis(iq,jq,kq)) then
+            cnt(iq,jq,kq) = 0
+            cycle
+          endif
+        endif
+        if (cnt(iq,jq,kq) > 0) then
+          g%node(:, iq, jq, kq) = acc(:, iq, jq, kq)/cnt(iq,jq,kq)
+          nMove = nMove + 1
+        endif
+        !> the corner quad of the edge ghost: the interior node inn, the face ghosts ia and ib
+        inn = [merge(1, g%Nx, iq == 0), merge(1, g%Ny, jq == 0), merge(1, g%Nz, kq == 0)]
+        d1 = 0; d2 = 0; q0 = 0
+        do q = 1, 3
+          if (.not. out(q)) then
+            inn(q) = merge(iq, merge(jq, kq, q == 2), q == 1)
+            q0 = q
+          elseif (d1 == 0) then
+            d1 = q
+          else
+            d2 = q
+          endif
+        enddo
+        ia = [iq, jq, kq]; ia(d1) = inn(d1)
+        ib = [iq, jq, kq]; ib(d2) = inn(d2)
+        va = g%node(:, ia(1), ia(2), ia(3)) - g%node(:, inn(1), inn(2), inn(3))
+        vb = g%node(:, ib(1), ib(2), ib(3)) - g%node(:, inn(1), inn(2), inn(3))
+        vd = g%node(:, iq, jq, kq)          - g%node(:, inn(1), inn(2), inn(3))
+        aa = dot_product(va, va); bb2 = dot_product(vb, vb); ab = dot_product(va, vb)
+        ad = dot_product(va, vd); bd = dot_product(vb, vd)
+        det = aa*bb2 - ab*ab
+        if (det <= 1.e-12_R8*aa*bb2) cycle
+        al = (ad*bb2 - bd*ab)/det; be = (bd*aa - ad*ab)/det
+        !> the run of interior nodes along the edge that share both face ghosts with this one
+        cm = g%node(:, inn(1), inn(2), inn(3)); nrun = 1
+        tolc = 1.e-10_R8*sqrt(max(aa, bb2))
+        nmax = [g%Nx, g%Ny, g%Nz]
+        if (q0 > 0) then
+          do sg = -1, 1, 2
+            t = 0
+            do
+              t = t + sg
+              ja = ia; jb = ib; jn = inn
+              ja(q0) = ja(q0) + t; jb(q0) = jb(q0) + t; jn(q0) = jn(q0) + t
+              if (jn(q0) < 1 .or. jn(q0) > nmax(q0)) exit
+              if (norm2(g%node(:, ja(1), ja(2), ja(3)) - g%node(:, ia(1), ia(2), ia(3))) > tolc .or. &
+                  norm2(g%node(:, jb(1), jb(2), jb(3)) - g%node(:, ib(1), ib(2), ib(3))) > tolc) exit
+              cm = cm + g%node(:, jn(1), jn(2), jn(3)); nrun = nrun + 1
+            enddo
+          enddo
+        endif
+        if (nrun == 1 .and. al > tolq .and. be > tolq .and. al + be > 1._R8 + tolq) cycle
+        g%node(:, iq, jq, kq) = g%node(:, ia(1), ia(2), ia(3)) + g%node(:, ib(1), ib(2), ib(3)) - cm/nrun
+        nFix = nFix + 1
+        cnt(iq,jq,kq) = max(cnt(iq,jq,kq), 1)
+      enddo; enddo; enddo
+      if (.not. mesh2D) then
+        do ck = 0, g%Nz + 1, g%Nz + 1; do cj = 0, g%Ny + 1, g%Ny + 1; do ci = 0, g%Nx + 1, g%Nx + 1
+          di = merge(1, g%Nx, ci == 0); dj = merge(1, g%Ny, cj == 0); dk = merge(1, g%Nz, ck == 0)
+          if (cnt(di,cj,ck) + cnt(ci,dj,ck) + cnt(ci,cj,dk) == 0) cycle
+          if (allocated(g%nodeOnAxis)) then
+            if (g%nodeOnAxis(ci,cj,ck)) cycle
+          endif
+          g%node(:,ci,cj,ck) = g%node(:,di,cj,ck) + g%node(:,ci,dj,ck) + g%node(:,ci,cj,dk)   &
+                             - g%node(:,di,dj,ck) - g%node(:,di,cj,dk) - g%node(:,ci,dj,dk)   &
+                             + g%node(:,di,dj,dk)
+        enddo; enddo; enddo
+      endif
+      deallocate(acc, cnt)
+      end associate
+    end subroutine moveEdgeGhosts
+
+    !> The dual node of block pb one step s, in the two tangential index directions of its face pf, from its cell
+    !  (pi,pj,pk): the centre of the cell there, or beyond the block the ghost of the boundary face the step crosses
+    !  -- the centre of the cell a 101 link joins it to, else the reflection of the centre of (pi,pj,pk) through the
+    !  face centre. ok false where that face cell carries a 201 or 102 link.
+    subroutine partnerNode(pb, pf, pi, pj, pk, s, xn, ok)
+      integer,  intent(in)  :: pb, pf, pi, pj, pk, s(2)
+      real(R8), intent(out) :: xn(3)
+      logical,  intent(out) :: ok
+      integer :: t(3), fx, mm, nq
+
+      ok = .false.; xn = 0._R8
+      t = [pi, pj, pk]
+      select case (pf)
+      case (1, 2);  t(2) = t(2) + s(1); t(3) = t(3) + s(2)
+      case (3, 4);  t(1) = t(1) + s(1); t(3) = t(3) + s(2)
+      case default; t(1) = t(1) + s(1); t(2) = t(2) + s(2)
+      end select
+      associate(pg => geo(pb))
+      fx = 0
+      if (t(1) < 1) fx = 1
+      if (t(1) > pg%Nx) fx = 2
+      if (t(2) < 1) fx = 3
+      if (t(2) > pg%Ny) fx = 4
+      if (.not. mesh2D) then
+        if (t(3) < 1) fx = 5
+        if (t(3) > pg%Nz) fx = 6
+      endif
+      if (fx == 0) then
+        xn = pg%center(:, t(1), t(2), t(3))
+        ok = .true.
+        return
+      endif
+      call pg%ijk2fmn(pi, pj, pk, fx, mm, nq)
+      if (mm <= 0) return
+      associate(cell => pg%face(fx)%cell(mm, nq))
+      select case (cell%bcdef)
+      case (101)
+        if (cell%connection(1) < 1) return
+        xn = geo(cell%connection(1))%center(:, cell%connection(2), cell%connection(3), cell%connection(4))
+      case (201, 102)
+        return
+      case default
+        xn = 2._R8*cell%center - pg%center(:, pi, pj, pk)
+      end select
+      ok = .true.
+      end associate
+      end associate
+    end subroutine partnerNode
 
     !> Union-find node of dual cell (vertex vt + 1) of block bk, created on first use.
     integer function nodeId(bk, vt)
@@ -674,6 +867,66 @@ contains
     end subroutine join
 
   end subroutine assembleInterfaceDual
+
+
+  !> Census of the gas-order-2 dual cells of every block (3D), once at setup: per block the cells with coincident
+  !  nodes (collapsed: the dual of a grid edge that three cells share is a prism) and the cells folded over
+  !  themselves (a corner Jacobian of the sign opposite to the block's, between distinct nodes), which the
+  !  containment test of a valid cell does not tile. worst: the smallest scaled corner Jacobian among a block's
+  !  folded cells, in the block's handedness; first: its first folded dual cell.
+  subroutine scanDualCells(gas, nColl, nFold, worst, first)
+    use IGLOO_variables,    only: mesh2D
+    use IGLOO_VectorModule, only: cross
+    use IGLOO_data_block,   only: obj_flowblock
+    implicit none
+    type(obj_flowblock), intent(in)  :: gas(:)
+    integer,             intent(out) :: nColl(size(gas)), nFold(size(gas)), first(3, size(gas))
+    real(R8),            intent(out) :: worst(size(gas))
+    real(R8) :: x(3,0:1,0:1,0:1), e(3,3), l(3), jac, sref, cmin, diag
+    integer  :: b, i, j, k, a, bb, c, pass, st
+    logical  :: coll
+
+    nColl = 0; nFold = 0; first = 0; worst = 0._R8
+    if (mesh2D) return
+    do b = 1, size(gas)
+      associate(g => gas(b))
+      sref = 0._R8
+      !> pass 1: the block's handedness, from one dual cell in 64; pass 2: every dual cell
+      do pass = 1, 2
+        st = merge(4, 1, pass == 1)
+        do k = 1, g%Nz + 1, st; do j = 1, g%Ny + 1, st; do i = 1, g%Nx + 1, st
+          x = g%node(:, i-1:i, j-1:j, k-1:k)
+          diag = norm2(x(:,1,1,1) - x(:,0,0,0))
+          coll = .false.; cmin = huge(1._R8)
+          do c = 0, 1; do bb = 0, 1; do a = 0, 1
+            e(:,1) = (x(:,1-a,bb,c) - x(:,a,bb,c))*(1 - 2*a)
+            e(:,2) = (x(:,a,1-bb,c) - x(:,a,bb,c))*(1 - 2*bb)
+            e(:,3) = (x(:,a,bb,1-c) - x(:,a,bb,c))*(1 - 2*c)
+            l = [norm2(e(:,1)), norm2(e(:,2)), norm2(e(:,3))]
+            if (any(l <= 1.e-12_R8*diag)) then
+              coll = .true.
+              cycle
+            endif
+            jac = dot_product(cross(e(:,1), e(:,2)), e(:,3))
+            if (pass == 1) then
+              sref = sref + jac
+            else
+              cmin = min(cmin, sign(1._R8, sref)*jac/product(l))
+            endif
+          enddo; enddo; enddo
+          if (pass == 1) cycle
+          if (coll) nColl(b) = nColl(b) + 1
+          if (cmin <= 0._R8) then
+            nFold(b) = nFold(b) + 1
+            if (nFold(b) == 1) first(:, b) = [i, j, k]
+            if (nFold(b) == 1 .or. cmin < worst(b)) worst(b) = cmin
+          endif
+        enddo; enddo; enddo
+      enddo
+      end associate
+    enddo
+
+  end subroutine scanDualCells
 
 
   !> Geometric vertex at corner (a, b) (along the face's m, n) of face cell (i,j,k) on face f.

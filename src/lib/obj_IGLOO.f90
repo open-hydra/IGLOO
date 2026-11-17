@@ -90,6 +90,9 @@ contains
     character(len=llen)  :: gasfile
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
     integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar, b, b2, nMoved, nWallFace, nDrop
+    integer,  allocatable :: nDualColl(:), nDualFold(:), firstFold(:,:)
+    integer               :: nEdgeMoved, nEdgeFixed
+    real(R8), allocatable :: worstFold(:)
     character(len=16)    :: dualCodes
     integer, allocatable :: npair(:,:), ncut(:,:), resCount(:)
     character(len=2)     :: method
@@ -175,14 +178,30 @@ contains
       endif
     endif
     if (ord2) then
-      call assembleInterfaceDual(self%geoblock, self%gasblock, self%links, self%classes, nMoved, dualCodes)
+      call assembleInterfaceDual(self%geoblock, self%gasblock, self%links, self%classes, nMoved, dualCodes, &
+                                 nEdgeMoved, nEdgeFixed)
       if (mpi_is_root .and. nMoved > 0) write(*,'(A,2(I0,A))') ' [IGLOO] gas-order-2 dual across ' &
         //trim(dualCodes)//' faces: ', size(self%classes), ' vertex classes, ', nMoved, ' ghost nodes at partner centres'
+      if (mpi_is_root .and. nEdgeMoved + nEdgeFixed > 0) write(*,'(A,2(I0,A))') ' [IGLOO] gas-order-2 dual ring: ', &
+        nEdgeMoved, ' edge ghost nodes from the partner blocks, ', nEdgeFixed, ' completed as parallelograms'
       call buildGhostLinks(self%gasblock, self%geoblock, nGhostIn, nGhostMiss, nGhostFar)
       if (mpi_is_root .and. nGhostIn + nGhostMiss > 0) write(*,'(A,2(I0,A))') &
         ' [IGLOO] ghost nodes at connected faces: ', nGhostIn, ' interpolated, ', nGhostMiss, ' not covered'
       if (mpi_is_root .and. nGhostFar > 0) write(*,'(A,I0)') &
         ' [IGLOO] chimera ghost nodes located away from their ATLAS donors: ', nGhostFar
+      !> the dual cells no point-in-cell test tiles, counted once: a search that none of them accepts takes the
+      !  nearest candidate (findDualCell)
+      allocate(nDualColl(nb), nDualFold(nb), firstFold(3, nb), worstFold(nb))
+      call scanDualCells(self%gasblock, nDualColl, nDualFold, worstFold, firstFold)
+      if (mpi_is_root .and. sum(nDualColl) + sum(nDualFold) > 0) then
+        write(*,'(A,2(I0,A))') ' [IGLOO] gas-order-2 dual cells: ', sum(nDualColl), ' collapsed (coincident nodes), ', &
+          sum(nDualFold), ' folded (a corner Jacobian not positive)'
+        do b = 1, nb
+          if (nDualFold(b) > 0) write(*,'(A,I0,A,I0,A,F7.3,A,3(1X,I0))') ' [WARNING] block ', b, ': ', nDualFold(b), &
+            ' folded dual cell(s), worst scaled Jacobian ', worstFold(b), ', first at dual cell', firstFold(:, b)
+        enddo
+      endif
+      deallocate(nDualColl, nDualFold, firstFold, worstFold)
     endif
     call tm_phase(TM_PIN)
     call initRandomSeed(rng_seed)   ! before pinning: stochastic injection diameters
@@ -387,7 +406,7 @@ contains
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
                                 trajOn, scatOn, dNscat, npFloor, scatterFloor, trajSample, threshold, &
                                 probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
-                                nConnHit, nSweepHit, nRimExit, nInjNoCell, nKHRTwarn, &
+                                nConnHit, nSweepHit, nRimExit, nInjNoCell, nDualMiss, nInjMoved, nKHRTwarn, &
                                 unitSnap, snapOn, timeOn, tEnd, frozenOn, unitPlane, planeOn, &
                                 massTolBurnout, kMassTol
     use IGLOO_IC,         only: initialize_fields
@@ -444,7 +463,7 @@ contains
     endif
     self%stateIsFresh = .false.
     nSectorFold = 0; nMultiFold = 0; nStencilRefresh = 0; nConnHit = 0; nSweepHit = 0; nRimExit = 0
-    nInjNoCell = 0; nKHRTwarn = 0
+    nInjNoCell = 0; nDualMiss = 0; nInjMoved = 0; nKHRTwarn = 0
     allocate(nLKfail(nm)); nLKfail = 0
 
     sourceSwitch = self%srcSwitch
@@ -1002,6 +1021,14 @@ contains
     call mpi_allreduce_sum_i4_array(noCell, 1)
     if (mpi_is_root .and. noCell(1) > 0) write(*,'(A,I0,A)') ' [WARNING] ', noCell(1), &
       ' parcel(s) whose injection point no cell holds: not integrated'
+    noCell = [nDualMiss]
+    call mpi_allreduce_sum_i4_array(noCell, 1)
+    if (mpi_is_root .and. noCell(1) > 0) write(*,'(A,I0,A)') ' [WARNING] ', noCell(1), &
+      ' gas dual-cell search(es) that no dual cell of the block accepted: the nearest candidate taken'
+    noCell = [nInjMoved]
+    call mpi_allreduce_sum_i4_array(noCell, 1)
+    if (mpi_is_root .and. noCell(1) > 0) write(*,'(A,I0,A)') ' [IGLOO] ', noCell(1), &
+      ' parcel(s) whose injection point lies outside its injection cell: given to the cell that holds it'
     if (any(self%material(:)%brkupSelect == 3)) then
       khrtWarn = [nKHRTwarn]
       call mpi_allreduce_sum_i4_array(khrtWarn, 1)
