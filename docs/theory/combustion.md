@@ -394,11 +394,13 @@ at $h_\mathrm{Al}$, the oxygen the cap draws comes from the gas at $h_{\mathrm{O
 the cap's oxide, $\xi\,q_r$ with $q_r = h_\mathrm{Al} + (\nu - 1)h_{\mathrm{O_2}} - \nu\,h_\mathrm{ox}$, is in the
 source.  Model 5 releases no reaction heat of its own: $\beta_\mathrm{part}\,q_\mathrm{comb}|\dot m|$ heats the
 particle and is paid from the gas's books, and the rest of the heat of combustion is the gas's to release
-when it burns the vapour.  A gas solver that reads the mass source of a capped material (one column per
-material, $\dot w = -(1 - \xi\nu)\dot m_\mathrm{Al}$) recovers the burn rate
+when it burns the vapour.  A gas solver that reads the net row of a capped material in the mass source
+($\dot w = -(1 - \xi\nu)\dot m_\mathrm{Al}$) recovers the burn rate
 $|\dot m_\mathrm{Al}| = \dot w/(1 - \xi\nu)$, burns $(1 - \xi)|\dot m_\mathrm{Al}|$ of metal vapour, debits
-$\xi(\nu - 1)|\dot m_\mathrm{Al}|$ of oxygen, and does not release $\xi\,q_r$ again; the column cannot tell
-the rate at $\xi = 1/\nu = 0.5293$, where it is zero.
+$\xi(\nu - 1)|\dot m_\mathrm{Al}|$ of oxygen, and does not release $\xi\,q_r$ again; the net row alone cannot
+tell the rate at $\xi = 1/\nu = 0.5293$, where it is zero. The cap's two rows, after the net ones, tell it at every
+$\xi$ and under Gallier's law: the oxide the caps gained and the cap a consumed parcel hands the gas
+([Rows of the mass source](eulerian-feedback.md#rows-of-the-mass-source)).
 
 The product's datum in the test cases is anchored on JANAF's liquid alumina at its melting point
 [JANAF98]: $h_\mathrm{res} = 1887.6\,T - 1.723894\times10^{7}$ J/kg, the slope JANAF's constant liquid heat
@@ -451,7 +453,7 @@ reaches it (0, the default, is off): the failure path of the residue, run by its
 
 A burning material with `d-smoke > 0` hands a coupled solver what its burning feeds to a smoke. When a material of
 the run has one, the mass source gains five rows per material after the net rows (and after the cap's two per
-material when a material has a cap): row `smokeRow(m, s) = nm + 5(m - 1) + s` (`+ 2 nm` with the cap's rows), $s = 1$
+material when a material has a cap, [Rows of the mass source](eulerian-feedback.md#rows-of-the-mass-source)): row `smokeRow(m, s) = nm + 5(m - 1) + s` (`+ 2 nm` with the cap's rows), $s = 1$
 the weight $W$, $s = 2$–$4$ $W\mathbf{u}$, $s = 5$ $WT$. For each residence of a burning parcel (model 5 or 8) in a
 cell,
 
