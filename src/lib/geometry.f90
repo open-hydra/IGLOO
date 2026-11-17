@@ -149,6 +149,60 @@ contains
 
     end function isPointInsideHexahedron12
 
+    !> How far pt lies outside a cell by its containment test [m]: in 3D the largest, over the six faces, of the
+    !  smaller of the two triangle distances of isPointInsideHexahedron12 (which rejects through a face when both
+    !  exceed hexTol); in 2D the largest distance beyond an edge of isPointInsideQuadrilateral. Not positive (3D:
+    !  not above hexTol) for a point the test accepts. Ranks the candidates of a search that no cell accepts.
+    real(R8) function cellOutDistance(pt, vertices, is2D)
+      use IGLOO_VectorModule, only: normal2D
+      implicit none
+      real(R8), intent(in) :: pt(3)
+      real(R8), intent(in) :: vertices(:,:)  !> (3,4) or (3,8)
+      logical,  intent(in) :: is2D
+      real(R8) :: v(3,3), facePlane(3,2), vert(3,4), edge(3), normal(3), distance(2), len
+      real(R8), parameter :: toll=1e-20
+      integer :: f, t, vertstart
+      logical :: isDegenerate
+
+      cellOutDistance = -huge(1._R8)
+      if (is2D) then
+        do f = 1, 4
+          edge   = vertices(:,mod(f,4)+1) - vertices(:,f)
+          normal = normal2D(edge)
+          len    = norm2(normal)
+          if (len < toll) cycle
+          cellOutDistance = max(cellOutDistance, -dot_product(pt - vertices(:,f), normal)/len)
+        end do
+        return
+      endif
+      do f = 1, 6
+        vert(:,1) = vertices(:,guide(f,1))
+        vert(:,2) = vertices(:,guide(f,2))
+        vert(:,3) = vertices(:,guide(f,3))
+        vert(:,4) = vertices(:,guide(f,4))
+        vertstart = chooseVector(vert)
+        isDegenerate = .false.
+        do t = 1, 2
+          v(:,1) = vertices(:,guide(f,vertstart))
+          v(:,2) = vertices(:,guide(f,1+mod(vertstart+t-1,4)))
+          v(:,3) = vertices(:,guide(f,1+mod(vertstart+t,4)))
+          facePlane = computeTrianglePlanes(v)
+          if (norm2(facePlane(:,1))<toll) then
+            distance(t) = 1.0_R8
+            if (t==1) then
+                isDegenerate = .true.
+            else
+                if (isDegenerate) distance(t) = -1.0_R8
+            endif
+          else
+            distance(t) = dot_product(facePlane(:,1), pt - facePlane(:,2))
+          endif
+        enddo
+        cellOutDistance = max(cellOutDistance, min(distance(1), distance(2)))
+      end do
+
+    end function cellOutDistance
+
     !> Point-in-cell dispatcher: 2D quadrilateral or 3D hexahedron (precomputed planes when given, with
     !  their tolerance tol); on a wedge also reports whether the azimuth left the sector.
     logical function isPointInsideCell(pt, vertices, is2D, norms, centroids, is_degen, crossedFace, sectorOut, tol)

@@ -36,6 +36,7 @@ module IGLOO_variables
   !> per-sweep block changes: through the connected cell of a connected face, through the block sweep, rim exits
   integer  :: nConnHit = 0, nSweepHit = 0, nRimExit = 0
   integer  :: nInjNoCell = 0  !> per-sweep: parcels whose injection point no cell holds (not integrated)
+  integer  :: nDualMiss = 0   !> per-sweep: gas dual-cell searches no candidate accepted (the nearest one taken)
   integer  :: nKHRTwarn = 0   !> per-sweep: KH-RT evaluations outside the model's hypotheses
   integer  :: fsample, nb, nm, nfam, iprint, trajSample
   !> A material burns with an oxide cap: the mass source then carries, after its nm net columns, two per material

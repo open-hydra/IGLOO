@@ -43,8 +43,8 @@ module IGLOO_particles
     real(R8)     :: xi0(3)      !> cartesian coordinates xi-eta-zeta
     integer      :: i(4)        !> index-based position (b,i,j,k)
     integer      :: iold(4)     !> old index-based position (b,i,j,k)
-    integer      :: igas(3)     !> index-based position in gas block (i,j,k)
-    integer      :: igasOld(3)  !> old index-based position in gas block (i,j,k)
+    integer      :: igas(3) = 0    !> index-based position in gas block (i,j,k); 0 = not located yet
+    integer      :: igasOld(3) = 0 !> old index-based position in gas block (i,j,k)
     integer      :: exitFace = 0    !> geo cell exit face from solout; 0 if inside. Seeds findParticle tier-0
     integer      :: gasExitFace = 0 !> gas dual cell exit face from solout; 0 if inside. Seeds advanceGasCell tier-0
     logical      :: lost = .false.  !> locator lost (no cell owns p); cleared on findParticle success
@@ -494,7 +494,9 @@ contains
   end function findParticle
 
   
-  !> Advances self%igas to the gas dual cell containing the particle after a gas-cell crossing.
+  !> Advances self%igas to the gas dual cell containing the particle after a gas-cell crossing. When no dual cell
+  !  of the block holds the point the indices stay, unless they are not indices of this block (never set, or those
+  !  of another block): then the neighbourhood of the geometry cell is searched (findDualCell).
   subroutine advanceGasCell(self, gasblock)
     use IGLOO_data_block, only: obj_flowblock
     implicit none
@@ -506,8 +508,12 @@ contains
     self%igasOld = self%igas
     p = self%stateVar(1:3)
     if (searchInBlock(gasblock, p, self%igasOld, self%gasExitFace, .true., &
-                      self%oldstate(1:3), self%oldstate(4:6), found)) &
+                      self%oldstate(1:3), self%oldstate(4:6), found)) then
       self%igas = found
+    elseif (any(self%igas < 1) .or. self%igas(1) > gasblock%Nx + 1 .or. self%igas(2) > gasblock%Ny + 1 .or. &
+            self%igas(3) > merge(1, gasblock%Nz + 1, mesh2D)) then
+      call self%findDualCell(gasblock)
+    endif
 
   end subroutine advanceGasCell
 
@@ -832,15 +838,19 @@ contains
   end function connectedExit
 
 
-  !> Locates the gas dual cell containing the particle in the one-cell neighbourhood of its geometry indices.
-  subroutine findDualCell(self, gasblock)
+  !> Locates the gas dual cell containing the particle in the one-cell neighbourhood of its geometry indices. When
+  !  no candidate holds the point (next to an irregular edge of the block topology the dual cells of one block do not
+  !  tile its cells), a second pass gives it to the candidate it lies least outside (cellOutDistance), so that igas
+  !  always names a dual cell of this block; counted per sweep in nDualMiss.
+  subroutine findDualCell(self, gasblock, found)
     use IGLOO_variables,  only: mesh2D
     use IGLOO_data_block, only: obj_block, obj_flowblock
     implicit none
     class(obj_particle), intent(inout) :: self
     type(obj_flowblock), intent(in)    :: gasblock
-    integer  :: b, i, j, k, imax, jmax, kmax, dkMax, di, dj, dk, ci, cj, ck
-    real(R8) :: p(3)
+    logical, optional,   intent(out)   :: found   !> a candidate holds the point
+    integer  :: b, i, j, k, imax, jmax, kmax, dkMax, di, dj, dk, ci, cj, ck, pass, best(3)
+    real(R8) :: p(3), d, dBest
     real(R8), allocatable :: verts(:,:)
 
     b = self%i(1); i = self%i(2); j = self%i(3); k = self%i(4)
@@ -850,28 +860,50 @@ contains
     if (mesh2D) then; dkMax = 0; allocate(verts(3,4))
     else;             dkMax = 1; allocate(verts(3,8)); endif
 
-    do dk = 0, dkMax
-      if (mesh2D) then; ck = 1
-      else;             ck = k + dk
-        if (ck < 1 .or. ck > kmax) cycle 
-      endif
+    if (present(found)) found = .true.
+    dBest = huge(1._R8); best = 0
+    do pass = 1, 2
+      do dk = 0, dkMax
+        if (mesh2D) then; ck = 1
+        else;             ck = k + dk
+          if (ck < 1 .or. ck > kmax) cycle 
+        endif
 
-      do dj = -1, 1
-        cj = j + dj
-        if (cj < 1 .or. cj > jmax) cycle 
+        do dj = -1, 1
+          cj = j + dj
+          if (cj < 1 .or. cj > jmax) cycle 
 
-        do di = -1, 1
-          ci = i + di
-          if (ci < 1 .or. ci > imax) cycle 
+          do di = -1, 1
+            ci = i + di
+            if (ci < 1 .or. ci > imax) cycle 
 
-          call gasblock%getVertices([ci, cj, ck], verts, mesh2D)
-          if (isPointInsideCell(p, verts, mesh2D)) then
-            self%igas(1) = ci; self%igas(2) = cj; self%igas(3) = ck
-            return
-          endif
+            call gasblock%getVertices([ci, cj, ck], verts, mesh2D)
+            if (pass == 1) then
+              if (isPointInsideCell(p, verts, mesh2D)) then
+                self%igas(1) = ci; self%igas(2) = cj; self%igas(3) = ck
+                return
+              endif
+            else
+              d = cellOutDistance(p, verts, mesh2D)
+              if (d < dBest) then
+                dBest = d; best = [ci, cj, ck]
+              endif
+            endif
+          enddo
         enddo
       enddo
     enddo
+
+    !> no candidate holds the point: the nearest one (the geometry cell's own indices for a point that is not finite)
+    if (present(found)) found = .false.
+    if (all(best > 0)) then
+      self%igas = best
+    else
+      self%igas = [min(max(i, 1), imax), min(max(j, 1), jmax), merge(1, min(max(k, 1), kmax), mesh2D)]
+    endif
+    !$OMP ATOMIC
+    nDualMiss = nDualMiss + 1
+
   end subroutine findDualCell
 
 

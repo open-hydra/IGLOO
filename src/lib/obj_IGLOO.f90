@@ -387,7 +387,7 @@ contains
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
                                 trajOn, scatOn, dNscat, npFloor, scatterFloor, trajSample, threshold, &
                                 probeOn, probeIDs, axisym, nSectorFold, nMultiFold, nStencilRefresh, &
-                                nConnHit, nSweepHit, nRimExit, nInjNoCell, nKHRTwarn, &
+                                nConnHit, nSweepHit, nRimExit, nInjNoCell, nDualMiss, nKHRTwarn, &
                                 unitSnap, snapOn, timeOn, tEnd, frozenOn, unitPlane, planeOn, &
                                 massTolBurnout, kMassTol
     use IGLOO_IC,         only: initialize_fields
@@ -444,7 +444,7 @@ contains
     endif
     self%stateIsFresh = .false.
     nSectorFold = 0; nMultiFold = 0; nStencilRefresh = 0; nConnHit = 0; nSweepHit = 0; nRimExit = 0
-    nInjNoCell = 0; nKHRTwarn = 0
+    nInjNoCell = 0; nDualMiss = 0; nKHRTwarn = 0
     allocate(nLKfail(nm)); nLKfail = 0
 
     sourceSwitch = self%srcSwitch
@@ -1002,6 +1002,10 @@ contains
     call mpi_allreduce_sum_i4_array(noCell, 1)
     if (mpi_is_root .and. noCell(1) > 0) write(*,'(A,I0,A)') ' [WARNING] ', noCell(1), &
       ' parcel(s) whose injection point no cell holds: not integrated'
+    noCell = [nDualMiss]
+    call mpi_allreduce_sum_i4_array(noCell, 1)
+    if (mpi_is_root .and. noCell(1) > 0) write(*,'(A,I0,A)') ' [WARNING] ', noCell(1), &
+      ' gas dual-cell search(es) that no dual cell of the block accepted: the nearest candidate taken'
     if (any(self%material(:)%brkupSelect == 3)) then
       khrtWarn = [nKHRTwarn]
       call mpi_allreduce_sum_i4_array(khrtWarn, 1)

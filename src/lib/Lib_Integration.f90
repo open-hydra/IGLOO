@@ -1376,11 +1376,19 @@ contains
 
     !> After a geo crossing: refresh the geo cell and, if the particle stayed in, re-resolve the gas cell.
     subroutine handleGeoEvent()
+      integer :: bPrev
+      bPrev = b
       b = part%i(1)
       call geoblock(b)%getVertices(part%i(2:4),vert, norms=geoHexNorms, centroids=geoHexCentroids, degen=geoHexDegen, tol=geoHexTol)
       if (.not.part%gone) then
         part%gasExitFace = 0
-        call part%advanceGasCell(gasblock(b))
+        if (b /= bPrev) then
+          !> a new block: the dual indices of the old one mean nothing in it, the geometry cell's neighbourhood is searched
+          call part%findDualCell(gasblock(b))
+          part%igasOld = part%igas
+        else
+          call part%advanceGasCell(gasblock(b))
+        endif
         call gasblock(b)%getVertices(part%igas,gasVert,mesh2D, gasHexNorms, gasHexCentroids, gasHexDegen, gasHexTol)
         call gasblock(b)%gasProperties(gas,part%igas)
         call setAtGasBoundary()
