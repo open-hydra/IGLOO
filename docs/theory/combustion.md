@@ -166,8 +166,8 @@ above it. No share of the heat of reaction goes to the drop (`direct` has no `be
 Below $T_\mathrm{burn}$, at or below `d-stop`, or at $B \le 0$, $\dot m = 0$ and the drop exchanges drag,
 convective heat and radiation as an inert one; it ignites when it reaches $T_\mathrm{burn}$. A drop that reaches
 `d-stop` stays at that diameter, inert: its residue (no parcel of a product is born; the oxide cap and its residue
-belong to `Beckstead`). Without `d-stop` a burning drop goes down to the removal mass and is handed to the gas
-([Burnout](#burnout)).
+belong to `Beckstead`). Without `d-stop` the burning goes on down to the removal mass: a drop at that mass and at
+its burning temperature is removed and handed to the gas ([Burnout](#burnout)).
 
 $Q$ enters $B$ alone: none of IGLOO's sources carries the heat of reaction. The mass the drop loses goes to the
 gas in the material's net row of the mass source, at the drop's enthalpy and kinetic energy, as an evaporating
@@ -195,7 +195,7 @@ The setup stops the run on:
 | :--- | :--- |
 | breakup on the material | `[ERROR] combustion=direct with breakup is not supported` |
 | solidification on the material | `[ERROR] solidification=on with combustion is not supported` |
-| a `cap=<law>` word on the line | `[ERROR] combustion=direct has no oxide cap: cap=<law> belongs to combustion=Beckstead` |
+| a `cap=<law>` word on the line, with its `cap` row in the models file (without the row: `IGLOO: a cap word on the material line without its row in the models file`) | `[ERROR] combustion=direct has no oxide cap: cap=<law> belongs to combustion=Beckstead` |
 | a key the row does not read (`K-burn`, `T-ign`, `beta-part`, ...) | `IGLOO: a constant the model does not read in the models file` |
 | a row without `q-comb` | `IGLOO: combustion without q-comb in its row of the models file` |
 | `q-comb` < 0 | `[ERROR] combustion=direct requires q-comb >= 0` |
@@ -461,7 +461,8 @@ $$
 W = \max\left(0,\ \dot m_\mathrm{in} - \dot m_\mathrm{out} + \dot m_\mathrm{ox,cap}\right),
 $$
 
-the metal the residence consumed and the oxide its cap gained there, and $\mathbf{u}$, $T$ are the parcel's
+the net row plus the oxide the cap gained: the metal the residence burnt; for a parcel consumed in the cell, all
+its metal, and with `residue=off` also its whole cap, which leaves the parcel there. $\mathbf{u}$, $T$ are the parcel's
 velocity and temperature weighted by the metal burnt over the residence: over each accepted step of the integrator
 the metal it burnt times the step's mean velocity and temperature (the means of its two ends), then the residence's
 last piece and a consumed parcel's remnant at their means. A smoke is thus born at the state of the burning, not at
