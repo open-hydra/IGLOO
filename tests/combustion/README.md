@@ -43,4 +43,5 @@ adding a test) are in [`../README.md`](../README.md).
 | [`burn-box-residue/`](burn-box-residue/INFO.md) | The burnout residue: a parcel of the combustion product |
 | [`burn-box-residue-gallier/`](burn-box-residue-gallier/INFO.md) | The burnout residue under Gallier's deposition law |
 | [`burnout-cold/`](burnout-cold/INFO.md) | A parcel at its removal size that does not burn is not removed |
+| [`burnout-direct/`](burnout-direct/INFO.md) | Drops of `combustion=direct` burn on the d²-law and are removed at `d-burnout` |
 | [`smoke-columns/`](smoke-columns/INFO.md) | `burn-box` with `d-smoke`: the smoke rows of the mass source, burn-box's gates unchanged |

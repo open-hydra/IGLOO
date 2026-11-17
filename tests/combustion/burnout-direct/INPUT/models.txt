@@ -1,0 +1,4 @@
+# models.txt: the constants of each material's models
+# <material> <kind> <model> key=value ...
+
+A combustion direct T-burn=302 q-comb=3.1e7 d-burnout=3.0e-6
