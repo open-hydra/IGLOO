@@ -46,7 +46,7 @@ Aluminium combustion: Beckstead's $d^n$ burn law (model 5), the oxide cap on a b
   not depend on $T_p$ above ignition); an independent RK4 of the heat-release energy balance; the
   mass telescoping of the source.
 - **Result** — all three gates pass.
-- **Variant** — the Eulerian field of model 5 (`burn-box-euler`).
+- **Variants** — the Eulerian field of model 5 (`burn-box-euler`); the five smoke rows of the mass source with `d-smoke` in the row (`smoke-columns`: the same gates pass).
 
 <figure>
   --8<-- "docs/vv/images/burn-box.svg"

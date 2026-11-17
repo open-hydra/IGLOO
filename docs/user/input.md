@@ -47,7 +47,7 @@ whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase
 `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after
 `<name> <groups>` on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
 The constants of the burning models (`K-burn`, `n-burn`, `X-eff`, `T-ign`, `beta-part`, `T-burn`, `q-comb`, `d-stop`,
-`d-burnout`, and the oxide cap's `xi-cap`, `xi-ox0`, `product`, `residue`, `d-residue`; see
+`d-burnout`, `d-smoke`, and the oxide cap's `xi-cap`, `xi-ox0`, `product`, `residue`, `d-residue`; see
 [Metal Combustion](../theory/combustion.md#inputs)) are `[GPB-Phase*]` input as well, and ATLAS GPB writes them to a
 second file, `models.txt` (with the phase file's prefix): one row per material and kind,
 `<material> <kind> <model> key=value ...`, the kinds `combustion` and `cap`; the material line keeps the words
@@ -55,7 +55,7 @@ second file, `models.txt` (with the phase file's prefix): one row per material a
 row of an unknown kind, of another model than the line names, with a key its model does not read, or for no material
 of the phase file. So do a value that is not one finite real number (`NaN`, `Inf`, a value holding `,` or `/`), a
 burning material whose `combustion` row does not write `q-comb` (`q-comb=0` is allowed), and a `cap=<law>` word on
-the line without its `cap` row. The constants are never keys of `[IGLOO-Models]`: `q-comb`, `d-stop` or `d-burnout`
+the line without its `cap` row. The constants are never keys of `[IGLOO-Models]`: `q-comb`, `d-stop`, `d-burnout` or `d-smoke`
 there stops the run by name.
 The `<groups>` summed over the material lines is the family count, and therefore the number of table
 copies `bc.txt` may carry (one copy feeds every family; see [Several families](boundary-conditions.md#several-families)).
