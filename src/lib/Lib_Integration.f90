@@ -22,7 +22,7 @@ contains
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
                                 nSectorFold, nMultiFold, nStencilRefresh,  &
-                                nInjNoCell,                                &
+                                nInjNoCell, nInjMoved,                     &
                                 trajOn, scatOn, dNscat, npFloor, sixOverPi, pi, &
                                 epsBurn, mBurnAbs,                         &
                                 planeOn, planeX, failAfter, maxInnerIter, nm, nsm, &
@@ -184,7 +184,13 @@ contains
       part%angle = 0._R8
       part%i     = part%iInj
       part%stateVar(1:3) = part%pInj
-      if (.not. injCellHolds()) call part%updateCell(geoblock)
+      if (.not. injCellHolds()) then
+        if (all(part%iInj > 0)) then
+          !$OMP ATOMIC
+          nInjMoved = nInjMoved + 1
+        endif
+        call part%updateCell(geoblock)
+      endif
 
       if (part%gone) then
         write(*,'(A,I0,A)')                                                         &

@@ -314,7 +314,9 @@ contains
 
   end subroutine computeSource
 
-  !> Injection velocity, temperature and mdot of a boundary-injected particle from its BC cell.
+  !> Injection velocity, temperature and mdot of a boundary-injected particle from its BC cell: the injection cell
+  !  iInj on face fInj, whichever cell the search gave the injection point to (self%i is that cell when the point
+  !  lies outside the injection cell by the containment test, and need not be on the face).
   subroutine initializePart(self,block,gasblock)
     use IGLOO_data_block, only: obj_flowblock
     use IGLOO_Mod_MPI,    only: mpi_size_, region_fail
@@ -327,8 +329,9 @@ contains
     integer  :: b, i, j, k, f, m, n
     logical  :: dirIsNormal
 
-    b = self%i(1); i = self%i(2); j = self%i(3); k = self%i(4); f = self%fInj
+    b = self%iInj(1); i = self%iInj(2); j = self%iInj(3); k = self%iInj(4); f = self%fInj
     call block(b)%ijk2fmn(i,j,k,f,m,n)
+    if (m < 1 .or. n < 1) return
 
     associate(cell => block(b)%face(f)%cell(m,n), &
               prop => block(b)%face(f)%cell(m,n)%properties(self%famID,1:7))
