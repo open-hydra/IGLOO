@@ -91,6 +91,7 @@ contains
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
     integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar, b, b2, nMoved, nWallFace, nDrop
     integer,  allocatable :: nDualColl(:), nDualFold(:), firstFold(:,:)
+    integer               :: nEdgeMoved, nEdgeFixed
     real(R8), allocatable :: worstFold(:)
     character(len=16)    :: dualCodes
     integer, allocatable :: npair(:,:), ncut(:,:), resCount(:)
@@ -177,9 +178,12 @@ contains
       endif
     endif
     if (ord2) then
-      call assembleInterfaceDual(self%geoblock, self%gasblock, self%links, self%classes, nMoved, dualCodes)
+      call assembleInterfaceDual(self%geoblock, self%gasblock, self%links, self%classes, nMoved, dualCodes, &
+                                 nEdgeMoved, nEdgeFixed)
       if (mpi_is_root .and. nMoved > 0) write(*,'(A,2(I0,A))') ' [IGLOO] gas-order-2 dual across ' &
         //trim(dualCodes)//' faces: ', size(self%classes), ' vertex classes, ', nMoved, ' ghost nodes at partner centres'
+      if (mpi_is_root .and. nEdgeMoved + nEdgeFixed > 0) write(*,'(A,2(I0,A))') ' [IGLOO] gas-order-2 dual ring: ', &
+        nEdgeMoved, ' edge ghost nodes from the partner blocks, ', nEdgeFixed, ' completed as parallelograms'
       call buildGhostLinks(self%gasblock, self%geoblock, nGhostIn, nGhostMiss, nGhostFar)
       if (mpi_is_root .and. nGhostIn + nGhostMiss > 0) write(*,'(A,2(I0,A))') &
         ' [IGLOO] ghost nodes at connected faces: ', nGhostIn, ' interpolated, ', nGhostMiss, ' not covered'
