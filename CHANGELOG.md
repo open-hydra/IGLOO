@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- Combustion: `d-smoke`, a constant of both burning models in the models file (refused in `[IGLOO-Models]`, on the
+  material line and below 0). A material with `d-smoke > 0` gets five rows of the mass source for its smoke: the
+  weight W of what a burning parcel burns in a cell (the metal consumed and the oxide its cap gained), W u and W T,
+  u and T weighted by the metal burnt over the cell residence. A coupler reads them to give the smoke its birth
+  state; `source.tec` keeps the net rows only.
+
 ### Changed
 - Combustion: the `combustion` row of a burning material in the models file must write `q-comb`, the heat of
   reaction per kg burnt (`q-comb=0` is allowed); a row without it stops the run.

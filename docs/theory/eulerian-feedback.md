@@ -20,7 +20,7 @@ only, `E+S`/`ALL` or absent = both).  The accumulation routines are `computeSrcF
 
 The source block type `obj_sourceblock` stores:
 
-- `sourceMass(nm, Nx, Ny, Nz)` — mass source per material per cell [kg/s]
+- `sourceMass(nsm(), Nx, Ny, Nz)` — mass source per material per cell [kg/s] in its first `nm` rows; with a capped material two more per material (the cap's oxide), with a material of `d-smoke > 0` five more per material (its smoke: [The smoke columns](combustion.md#the-smoke-columns))
 - `sourceMom(3, Nx, Ny, Nz)` — momentum source [N]
 - `sourceEn(Nx, Ny, Nz)` — energy source [W]
 

@@ -300,7 +300,7 @@ contains
     if (error/=0) combustion_word = 'none'
     !> the constants of a burning model are rows of the models file, never keys of this section
     block
-      character(len=9), parameter :: rowKeys(3) = ['q-comb   ', 'd-stop   ', 'd-burnout']
+      character(len=9), parameter :: rowKeys(4) = ['q-comb   ', 'd-stop   ', 'd-burnout', 'd-smoke  ']
       integer :: r
       do r = 1, size(rowKeys)
         if (.not. inSection('IGLOO-Models', trim(rowKeys(r)))) cycle
@@ -460,6 +460,7 @@ contains
     mat%dRes     = 0._R8
     mat%dStop    = 0._R8
     mat%dBurn    = 0._R8
+    mat%dSmoke   = 0._R8
     mat%Tburn    = 0._R8
     mat%capAsked = .false.
     mat%qcombSet = .false.
@@ -501,7 +502,7 @@ contains
     case ('T-nuc');     read(value,*,iostat=ios) mat%Tnuc
     case ('cp-solid');  read(value,*,iostat=ios) mat%cpSol
     case ('rho-solid'); read(value,*,iostat=ios) mat%rhoSol
-    case ('K-burn', 'n-burn', 'X-eff', 'beta-part', 'T-ign', 'T-burn', 'q-comb', 'd-stop', 'd-burnout', &
+    case ('K-burn', 'n-burn', 'X-eff', 'beta-part', 'T-ign', 'T-burn', 'q-comb', 'd-stop', 'd-burnout', 'd-smoke', &
           'xi-law', 'xi-cap', 'xi-ox0', 'product', 'residue', 'd-residue')
       write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': '//trim(key)//'='//trim(value)// &
         ' on the material line: the constants of the burning models are rows of the models file, '// &
@@ -702,9 +703,9 @@ contains
       k = 1
       select case (mat%combSelect)
       case (COMB_BECKSTEAD)
-        word = 'Beckstead'; reads = ' K-burn n-burn X-eff beta-part T-ign q-comb d-stop d-burnout '
+        word = 'Beckstead'; reads = ' K-burn n-burn X-eff beta-part T-ign q-comb d-stop d-burnout d-smoke '
       case (COMB_DIRECT)
-        word = 'direct';    reads = ' T-burn q-comb d-stop d-burnout '
+        word = 'direct';    reads = ' T-burn q-comb d-stop d-burnout d-smoke '
       case default
         call refuse_row('the material names no burning model (no combustion= on its line, none in [IGLOO-Models])', &
                         'IGLOO: constants of a burning model for a material that names none')
@@ -757,6 +758,7 @@ contains
       case ('q-comb');    read(value,*,iostat=ios) mat%qComb; mat%qcombSet = .true.
       case ('d-stop');    read(value,*,iostat=ios) mat%dStop
       case ('d-burnout'); read(value,*,iostat=ios) mat%dBurn
+      case ('d-smoke');   read(value,*,iostat=ios) mat%dSmoke
       case ('xi-cap');    read(value,*,iostat=ios) mat%xiCap
       case ('xi-ox0');    read(value,*,iostat=ios) mat%xiOx0
       case ('d-residue'); read(value,*,iostat=ios) mat%dRes

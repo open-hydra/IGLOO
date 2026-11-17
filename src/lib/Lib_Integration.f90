@@ -25,7 +25,8 @@ contains
                                 nInjNoCell,                                &
                                 trajOn, scatOn, dNscat, npFloor, sixOverPi, pi, &
                                 epsBurn, mBurnAbs,                         &
-                                planeOn, planeX, failAfter, maxInnerIter, nm, nsm
+                                planeOn, planeX, failAfter, maxInnerIter, nm, nsm, &
+                                capColumns, smokeColumns, smokeRow
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs, grazeStandoff
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock, obj_wallblock
@@ -91,6 +92,12 @@ contains
     real(R8) :: pMid(3)       ! segment mid position: azimuth of the meridian-frame source deposit
     real(R8) :: dSrc(5), dEul(6)  ! the segment's source and eulerian deposits, for a cut cell's records
     real(R8) :: oxIn, dCap(2)     ! a capped parcel: its cap's flux at cell entry; the oxide the cap gained, the cap handed to the gas
+    real(R8) :: dSm(5)            ! a burning parcel with a smoke: the segment's W, W u, W T
+    integer  :: kSm
+    real(R8) :: bwSum(5)          ! a burning parcel with a smoke, over the residence's latched steps: SUM w, w u, w T
+    real(R8) :: bwT               !   (w the metal a step burnt, u and T its means over the step); T at the last latch
+    real(R8) :: bwF               !   the metal of the residence's last, unlatched piece (and of a consumed remnant)
+    logical  :: bwOn              !   this residence accumulates them
     integer  :: ic, jc, kc
     real(R8) :: wAcc          ! scatter-cloud accumulator: npRef*h per step, a marker per dNscat (host-associated)
     real(R8) :: wAccOld       ! wAcc at the last latched state, restored when a cut step is integrated again
@@ -275,6 +282,9 @@ contains
       part%deltaL = 0._R8; part%Tstay = 0._R8
       if (eulerSwitch) part%intE = 0._R8
       if (sourceSwitch) call part%computeSource(massIn,Pin,Ein,hTab)
+      !> A burning parcel with a smoke: its birth state over this residence, from zero at cell entry
+      bwOn = sourceSwitch .and. smokeColumns .and. (part%model == 5 .or. part%model == 8) .and. part%dSmoke > 0._R8
+      bwSum = 0._R8; bwT = 0._R8
       oxIn = 0._R8
       if (part%model == 8) oxIn = part%npdot*part%stateVar(9)
       entryPos = part%stateVar(1:3)   ! cell-entry position (for the closed-form body-force work)
@@ -368,7 +378,7 @@ contains
         !> A capped parcel: the oxide its cap gained over the segment, and the cap a consumed parcel hands the gas
         !  (residue = off), in the two columns of its material after the nm net ones
         dCap = 0._R8
-        if (part%model == 8 .and. nsm() > nm) then
+        if (part%model == 8 .and. capColumns) then
           dCap(1) = part%npdot*part%stateVar(9) - oxIn
           if (consumed .and. .not. resBorn) dCap(2) = part%npdot*part%stateVar(9)
           ic = i; jc = j; kc = k
@@ -377,6 +387,36 @@ contains
           srcblock(b)%sourceMass(nm+2*part%mID-1,ic,jc,kc) = srcblock(b)%sourceMass(nm+2*part%mID-1,ic,jc,kc) + dCap(1)
           !$OMP ATOMIC UPDATE
           srcblock(b)%sourceMass(nm+2*part%mID,ic,jc,kc)   = srcblock(b)%sourceMass(nm+2*part%mID,ic,jc,kc)   + dCap(2)
+        endif
+        !> A burning parcel of a material with a smoke: W, the metal the segment consumed and the oxide its cap gained
+        !  (net + O), and W times the parcel's velocity and temperature weighted by the metal burnt over the residence,
+        !  in its five columns: the latched steps' sums, then the last piece (a consumed remnant burns at once) at its
+        !  mean state
+        dSm = 0._R8
+        if (smokeColumns .and. (part%model == 5 .or. part%model == 8) .and. part%dSmoke > 0._R8) then
+          dSm(1) = max(0._R8, massIn - massOut + dCap(1))
+          bwF = max(0._R8, part%oldState(8) - part%stateVar(8))
+          if (consumed) bwF = bwF + max(0._R8, part%stateVar(8))
+          bwSum(1)   = bwSum(1)   + bwF
+          bwSum(2:4) = bwSum(2:4) + bwF*0.5_R8*(part%oldState(4:6) + part%stateVar(4:6))
+          bwSum(5)   = bwSum(5)   + bwF*0.5_R8*(bwT + part%tp)
+          if (bwSum(1) > 0._R8) then
+            dSm(2:4) = dSm(1)*bwSum(2:4)/bwSum(1)
+            dSm(5)   = dSm(1)*bwSum(5)/bwSum(1)
+          else
+            dSm(2:4) = dSm(1)*part%stateVar(4:6)
+            dSm(5)   = dSm(1)*part%tp
+          endif
+          if (axisym) dSm(2:4) = toMeridian(dSm(2:4), pMid)
+          if (dSm(1) > 0._R8) then
+            ic = i; jc = j; kc = k
+            if (ord2) then; ic = part%igas(1); jc = part%igas(2); kc = part%igas(3); endif
+            do kSm = 1, 5
+              !$OMP ATOMIC UPDATE
+              srcblock(b)%sourceMass(smokeRow(part%mID,kSm),ic,jc,kc) = srcblock(b)%sourceMass(smokeRow(part%mID,kSm),ic,jc,kc) &
+                                                                       + dSm(kSm)
+            enddo
+          endif
         endif
       endif
 
@@ -1162,10 +1202,17 @@ contains
       real(R8) :: brkupState(max(nbrkst,1))
       real(R8) :: gOld, gEnd
       real(R8) :: vEvt(3)   !> the velocity breakupEvent works on (Y stays the solver's)
+      real(R8) :: tBw       !> a burning parcel with a smoke: its temperature at this step's end
       logical  :: brkOn     !> the breakup event acts on this step
       real(R8), parameter :: oneThird=0.3333333333333333_R8, sixOverPi=1.90985931710274403_R8
 
       IRTRN = 1
+
+      !> A burning parcel with a smoke: the temperature at this step's end (the first point is the latched start)
+      if (bwOn) then
+        if (mod_propFlags(1) .and. .not. mod_isSolid) then; tBw = comp_TfromTab(hTab,y(7)); else; tBw = y(7); endif
+        if (NR == 1) bwT = tBw
+      endif
 
       !> Scatter cloud: accumulate this step's marker weight at the parcel's constant rate.
       if (scatOn .and. dNscat>0._R8) wAcc = wAcc + part%npRef*(x - xold)
@@ -1269,6 +1316,16 @@ contains
 
       !> Never latch a non-finite state as the last good one.
       if (any(y/=y)) return
+
+      !> A burning parcel with a smoke: the metal this latched step burnt, at its mean velocity and temperature
+      if (bwOn .and. NR > 1) then
+        if (oldLocal(8) > y(8)) then
+          bwSum(1)   = bwSum(1)   + (oldLocal(8) - y(8))
+          bwSum(2:4) = bwSum(2:4) + (oldLocal(8) - y(8))*0.5_R8*(oldLocal(4:6) + y(4:6))
+          bwSum(5)   = bwSum(5)   + (oldLocal(8) - y(8))*0.5_R8*(bwT + tBw)
+        endif
+        bwT = tBw
+      endif
 
       !> Planes and scatter markers the accepted step crosses, emitted once as it is latched.
       if (planeOn) call emitPlanes(timeLocal, oldLocal, x, y)
@@ -1470,11 +1527,17 @@ contains
           cuts%acc(nsm() + 3, r) = cuts%acc(nsm() + 3, r) + lam*dSrc(4)
           !$OMP ATOMIC UPDATE
           cuts%acc(nsm() + 4, r) = cuts%acc(nsm() + 4, r) + lam*dSrc(5)
-          if (part%model == 8 .and. nsm() > nm) then
+          if (part%model == 8 .and. capColumns) then
             !$OMP ATOMIC UPDATE
             cuts%acc(nm+2*nmat-1, r) = cuts%acc(nm+2*nmat-1, r) + lam*dCap(1)
             !$OMP ATOMIC UPDATE
             cuts%acc(nm+2*nmat, r)   = cuts%acc(nm+2*nmat, r)   + lam*dCap(2)
+          endif
+          if (dSm(1) > 0._R8) then
+            do kSm = 1, 5
+              !$OMP ATOMIC UPDATE
+              cuts%acc(smokeRow(nmat,kSm), r) = cuts%acc(smokeRow(nmat,kSm), r) + lam*dSm(kSm)
+            enddo
           endif
         endif
         if (eulerSwitch) then

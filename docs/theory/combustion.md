@@ -339,6 +339,29 @@ order; a product's parcels live on the rank of their parent, and its banner coun
 `[IGLOO-ODE] fail-after` forces the solver failure of the cap model once a parcel's last accepted time
 reaches it (0, the default, is off): the failure path of the residue, run by its test.
 
+## The smoke columns
+
+A burning material with `d-smoke > 0` hands a coupled solver what its burning feeds to a smoke. When a material of
+the run has one, the mass source gains five rows per material after the net rows (and after the cap's two per
+material when a material has a cap): row `smokeRow(m, s) = nm + 5(m - 1) + s` (`+ 2 nm` with the cap's rows), $s = 1$
+the weight $W$, $s = 2$–$4$ $W\mathbf{u}$, $s = 5$ $WT$. For each residence of a burning parcel (model 5 or 8) in a
+cell,
+
+$$
+W = \max\left(0,\ \dot m_\mathrm{in} - \dot m_\mathrm{out} + \dot m_\mathrm{ox,cap}\right),
+$$
+
+the metal the residence consumed and the oxide its cap gained there, and $\mathbf{u}$, $T$ are the parcel's
+velocity and temperature weighted by the metal burnt over the residence: over each accepted step of the integrator
+the metal it burnt times the step's mean velocity and temperature (the means of its two ends), then the residence's
+last piece and a consumed parcel's remnant at their means. A smoke is thus born at the state of the burning, not at
+the residence's end. On a wedge $W\mathbf{u}$ is turned to the meridian frame; with `gas-order = 2` the rows go to
+the dual cell, and a cut record takes them with the weight of the other rows. They are extensive sums like the net
+rows (the mollifier, the multi-block exchanges and the MPI sums carry them); `source.tec` writes the net rows only. A
+coupler takes $\mathbf{u} = W\mathbf{u}/W$ and $T = WT/W$ as the smoke's birth state and gives its drops the
+diameter `d-smoke`; IGLOO's suite checks the key and the run with the rows, the values are checked through the
+coupled cases.
+
 ---
 
 ## Inputs
@@ -364,6 +387,7 @@ and kind, `<material> <kind> <model> key=value ...`, the keys in any order, a li
 | either `combustion` row | `q-comb` | heat of combustion (J/kg) | required (0 allowed) |
 | | `d-stop` | diameter (m) of the residue: the burning stops there and the drop stays | 0 = no residue |
 | | `d-burnout` | diameter (m) at which a burning drop is handed whole to the gas; to compare a material with its run in ICE, give it in both decks, at about 0.1 of the injected diameter | 0 = the built-in burnout mass |
+| | `d-smoke` | diameter (m) a coupler gives the drops of the material's smoke; > 0 opens its five smoke rows of the mass source ([The smoke columns](#the-smoke-columns)) | 0 = no smoke rows |
 | `cap constant` | `xi-cap` | fraction of the oxide formed retained in the cap, [0, 1] | 0 |
 | either `cap` row | `xi-ox0` | the oxide's mass fraction of the injected particle, [0, 1) | 0 |
 | | `product` | the combustion product: the name of a 0-group line of the phase file; required with the cap | none |
@@ -372,7 +396,7 @@ and kind, `<material> <kind> <model> key=value ...`, the keys in any order, a li
 
 A row names the model its material line names; a `combustion` row may name `-` instead, the model of the line or of
 `[IGLOO-Models] combustion`. A value of a row is one finite real number (the words of `product` and `residue`
-aside). The constants are keys of the rows only: `q-comb`, `d-stop` or `d-burnout` in `[IGLOO-Models]` stops the
+aside). The constants are keys of the rows only: `q-comb`, `d-stop`, `d-burnout` or `d-smoke` in `[IGLOO-Models]` stops the
 run by name.
 
 The latent heat of `combustion=direct` is no constant of the row: it is the material's, the `Lv` column of
@@ -385,8 +409,8 @@ Setup refuses a constant of a burning model on the material line; a row of an un
 kind for a material, a row of another model than the line's, a key the row's model does not read (`xi-cap` in a
 `cap Gallier21` row, `K-burn` in a `combustion direct` row), a row for no material of the phase file; a value that is
 not one finite real number (`NaN`, `Inf`, a value holding `,` or `/`); a burning material whose `combustion` row
-has no `q-comb`; a `cap` word on the material line without its `cap` row; `q-comb`, `d-stop` or `d-burnout` in
-`[IGLOO-Models]`; `combustion=direct` without `T-burn` when `boiling-pressure` is not 101325 Pa; `xi-cap`
+has no `q-comb`; a `cap` word on the material line without its `cap` row; `q-comb`, `d-stop`, `d-burnout` or `d-smoke` in
+`[IGLOO-Models]`; a negative `d-smoke`; `combustion=direct` without `T-burn` when `boiling-pressure` is not 101325 Pa; `xi-cap`
 outside [0, 1]; a `cap` word other than `constant` and `Gallier21`; the law without `combustion=Beckstead`, and any
 cap under `combustion=direct`; `xi-ox0` outside [0, 1), or > 0 without
 `combustion=Beckstead` and the cap; `product`, `residue=on` or `d-residue > 0` without

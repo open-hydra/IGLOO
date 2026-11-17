@@ -162,6 +162,7 @@ contains
       !> The end of the burn, either model: a residue (d-stop) that stays, or the removal at d-burnout
       if (material(i)%dStop < 0._R8) error stop '[ERROR] d-stop must be >= 0'
       if (material(i)%dBurn < 0._R8) error stop '[ERROR] d-burnout must be >= 0'
+      if (material(i)%dSmoke < 0._R8) error stop '[ERROR] d-smoke must be >= 0'
       if (material(i)%dStop > 0._R8 .and. material(i)%dBurn > 0._R8) &
         error stop '[ERROR] d-stop beside d-burnout: a drop that stops at its residue is never removed; give one'
       if (material(i)%combSelect == 1) then
@@ -613,7 +614,7 @@ contains
   !  file, by name; the refusals; the cap takes the product's density, heat capacity and enthalpy datum, and the
   !  stretch c of its xi-cap and n-burn on the lobe table.
   subroutine resolve_products(material)
-    use IGLOO_variables,      only: nm, capColumns
+    use IGLOO_variables,      only: nm, capColumns, smokeColumns
     use IGLOO_data_phases,    only: obj_material
     use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch, capStretchX0, buildXiLaw
     use IGLOO_Mod_MPI,        only: mpi_is_root
@@ -677,6 +678,13 @@ contains
       if (mat%dRes < 0._R8 .or. (mat%dRes > 0._R8 .and. .not. mat%resOn)) &
         error stop '[ERROR] d-residue must be >= 0, and > 0 only with residue=on'
       end associate
+    enddo
+    !> A material with d-smoke: its smoke's five columns of the mass source (the coupler's birth state)
+    smokeColumns = any(material(:)%dSmoke > 0._R8)
+    do i = 1, nm
+      if (material(i)%dSmoke > 0._R8 .and. mpi_is_root) &
+        write(*,'(a,i0,a,es10.3,a)') '  >> [material ', i, '] '//trim(material(i)%matName)//': d-smoke ', &
+          material(i)%dSmoke, ' m: the weight, velocity and temperature of what it burns, in five source columns'
     enddo
     !> A 0-group line that no product= names is inert: the log names it (root rank).
     do i = 1, nm
