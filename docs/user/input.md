@@ -179,6 +179,7 @@ Selects physical model closures.
 | `liquid-conduction` | string | `ITC` | Heat conduction inside an evaporating droplet: `ITC` (a uniform temperature) or `P2T` (a parabolic profile; the liquid conductivity is the `k-liq` token of the material line or the `Conductivity` column of `properties.dat`, and on a material that does not break the liquid viscosity is the `mu-liq` token or the `Viscosity` column); see [Evaporation](../theory/evaporation.md#heat-conduction-inside-the-droplet) |
 | `boiling` | string | `clamp` | An evaporating droplet at or above its boiling point at the gas pressure: `clamp` (the gas-side model with its surface fraction capped) or `ZGR` (the Zuo–Gomes–Rutland boiling branch); see [Evaporation](../theory/evaporation.md#boiling-of-a-superheated-droplet) |
 | `breakup` | string | absent | Breakup model (`Pilch-Erdman`, `Reitz-Diawakar`, `Reitz-KHRT`, `TAB`, `ETAB`); when present, enables secondary breakup. The default of every material: a material's `breakup=<model>` token on its phase-file line overrides it |
+| `combustion` | string | `none` | Burning model: `none`, `Beckstead` (the $d^n$ law of a metal drop) or `direct` (the $d^2$ law of a drop whose vapour burns in the gas); see [Metal Combustion](../theory/combustion.md). The default of every injected material: a material's `combustion=<model>` token on its phase-file line overrides it; a combustion product (a line of 0 groups) never takes it. Another word stops the run (`IGLOO: unknown combustion model`) |
 
 Each breaking material reads the constants of its own model: its `<tag>-<key>` token on the phase-file line, else
 the `[IGLOO-Models]` key of that name, else the default (see the [Parameter Registry](registry.md)). TAB and ETAB
@@ -194,6 +195,11 @@ each take their own `Comega`, `Cmu` and `WeCrit` tokens:
 
 A token of a model the material does not run is accepted and unused; a material that carries a constant token
 logs its resolved set at setup. Unknown model tokens are refused at setup.
+
+The constants of a burning model are not keys of this section: they are the material's rows of the models file
+(`<material> combustion <model> key=value ...`, see [Metal Combustion](../theory/combustion.md#inputs)), and a
+`combustion` row may name its model `-`, the one of the material line or of this section. `q-comb`, `d-stop`, `d-burnout` or
+`d-smoke` here stops the run by name (`IGLOO: a constant of a burning model in [IGLOO-Models]`).
 
 ### `[IGLOO-Properties]`
 
