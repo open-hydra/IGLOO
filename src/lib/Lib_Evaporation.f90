@@ -143,7 +143,7 @@ contains
         end select
     end subroutine assign_boiling
 
-    !> Metal combustion: 0 off, 1 Beckstead d^n burn law (exclusive with evaporation per material).
+    !> Metal combustion: 0 off, 1 Beckstead d^n burn law, 2 direct d2 burn law (exclusive with evaporation per material).
     subroutine assign_combustion(word, combSelect)
         implicit none
         character(len=*), intent(in)  :: word
