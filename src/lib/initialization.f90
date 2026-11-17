@@ -138,9 +138,14 @@ subroutine pin_particles(group, block, gas, method, pos0,vel,temp,mdot,diam,fam,
 
 contains
 
-  !> One particle every fsample injection cells, at the cell centre.
+  !> One particle every fsample injection cells, at the centre of the injection face, eps inside it along the
+  !  normal. The centre of a warped face (the mean of its four vertices) lies off the two triangle planes of the
+  !  containment test: where the face bulges outwards the point so placed is outside its injection cell, and no
+  !  cell holds it. It is then moved further in along the normal, past the nearer triangle plane, until the
+  !  injection cell's test accepts it (3D; a plane face keeps its point, and so does a point that the move does
+  !  not bring in: the cell rejects it through another face, and integrate's search places it).
   subroutine pin_particles_bc_center(group, block, fam, npart)
-    use IGLOO_variables, only: fsample
+    use IGLOO_variables, only: fsample, mesh2D
     use IGLOO_Lib_Statistics, only: sampleDiameter
     implicit none
     type(obj_block),  intent(in)    :: block(:)
@@ -148,8 +153,10 @@ contains
     integer, intent(in)  :: fam
     integer, intent(out) :: npart
     integer  :: nn, p
-    integer  :: nb, b, f, m, n, i, j, k
+    integer  :: nb, b, f, m, n, i, j, k, it, nWarp
     real(8), parameter :: eps=1.0e-8_R8
+    real(8) :: vert(3,8), q(3)
+    logical :: held
 
     write(*,*)
     write(*,'(A,I3,A)')'  Placing particles at the bounday every', fsample ,' cells...'
@@ -170,7 +177,7 @@ contains
     enddo; enddo
     allocate(group%particle(1:npart))
     associate(particle => group%particle)
-    nn = 0
+    nn = 0; nWarp = 0
     do b = 1, nb; do f = 1, 6
       associate(face => block(b)%face(f))
       do m = 1, face%Nm; do n = 1, face%Nn
@@ -181,6 +188,21 @@ contains
             call block(b)%fmn2ijk(f,m,n,i,j,k)
             particle(p)%ID = p
             particle(p)%pInj = face%cell(m,n)%center - eps*face%cell(m,n)%normal
+            if (.not. mesh2D) then
+              call block(b)%getVertices([i,j,k], vert)
+              if (.not. isPointInsideHexahedron12(particle(p)%pInj, vert)) then
+                q = particle(p)%pInj; held = .false.
+                do it = 1, 8
+                  q = q - (1.05_R8*cellOutDistance(q, vert, .false.) + eps)*face%cell(m,n)%normal
+                  held = isPointInsideHexahedron12(q, vert)
+                  if (held) exit
+                enddo
+                if (held) then
+                  particle(p)%pInj = q
+                  nWarp = nWarp + 1
+                endif
+              endif
+            endif
             particle(p)%iInj = [b, i, j, k]
             particle(p)%fInj = f
             particle(p)%Ninj = 1
@@ -193,6 +215,8 @@ contains
       end associate
     enddo; enddo
     end associate
+    if (nWarp > 0) write(*,'(A,I0,A)') '  ', nWarp, &
+      ' injection point(s) behind a warped face: moved in along the normal until the injection cell holds them'
   end subroutine pin_particles_bc_center
 
 end subroutine pin_particles
