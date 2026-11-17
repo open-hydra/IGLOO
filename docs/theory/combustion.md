@@ -9,6 +9,9 @@ enthalpy) at Z(7), the particle **Al mass** at Z(8).  Combustion is mutually
 exclusive per material with evaporation (a loud warning drops evaporation) and
 with breakup (setup error).
 
+A material carrying `combustion=direct` takes the same ODE family and state, with the $d^2$ law of a drop whose
+vapour burns in the gas in place of Beckstead's ([Direct combustion](#direct-combustion)).
+
 With `xi-cap > 0`, or with Gallier's deposition law (`cap=Gallier21`), the burning parcel carries its
 **oxide cap** beside the metal: ODE `model = 8` (`rhsAlCap`, [The oxide cap](#the-oxide-cap-model-8)). With `residue=on` the cap
 becomes, when the metal is gone, a parcel of the **combustion product**, a material of its own
@@ -117,6 +120,111 @@ Near burnout an implicit-solver trial step can drive $m \le 0$, making
 $d = (6m/\rho\pi)^{1/3}$ NaN; like models 3/4, any non-finite RHS entry is
 scrubbed to the `1e30` penalty so SDIRK4 rejects the trial instead of
 poisoning the integration.
+
+---
+
+## Direct combustion
+
+`combustion=direct` burns a drop as Gallier and Godfroy burn their aluminium drops [GG09]: the drop vaporises at
+its burning temperature and its vapour burns in the gas around it, a diffusion-limited burning that holds for any
+drop whose vapour burns in the gas. It shares the ODE family and the state of model 5 (`rhsAlCombustion`): Z(7) the
+temperature (or enthalpy), Z(8) the drop's mass $m$, $d = (6m/\pi\rho_p)^{1/3}$.
+
+### The $d^2$ burn rate
+
+`directRate` (`src/lib/Lib_Combustion.f90`) gives the mass a drop loses:
+
+$$
+\dot m = \pi\,d\,\frac{k_g}{c_{p,g}}\,Nu\,\ln(1 + B), \qquad
+B = \frac{c_{p,g}\,(T_g - T_p) + Q}{L_v},
+$$
+
+with $T_g$ and $k_g$ the gas temperature and conductivity at the parcel, $c_{p,g} = \gamma R/(\gamma - 1)$ from the
+gas's $\gamma$ and $R$ there (not an input), $Nu$ the Nusselt number of `[IGLOO-Models] heat` at the parcel's
+Reynolds, Prandtl and Mach numbers (the one the convective heat uses, see [Heat Transfer](heat.md)), $Q$ = `q-comb`
+and $L_v$ the material's latent heat at its burning temperature ([Inputs of direct](#inputs-of-direct)).
+$\dot m = 0$ when $B \le 0$, and when $B$ is not a number. These are eqs. 4 and 5 of [GG09] under their unit Lewis
+number ($\mu/Pr = k_g/c_{p,g}$), with $Nu$ in place of their Ranz–Marshall bracket $2\,(1 + 0.3\,Re^{1/2}Pr^{1/3})$:
+`heat = Ranz-Marshall` gives their eq. 4, and under `heat = NoHeat` ($Nu = 0$) no drop burns.
+
+### When a drop burns, and its temperature
+
+At every evaluation of the right-hand side the drop burns when
+
+$$
+T_p \ge T_\mathrm{burn}\,(1 - 10^{-10}) \quad\text{and}\quad d > d_\mathrm{stop},
+$$
+
+$T_\mathrm{burn}$ the burning temperature and $d_\mathrm{stop}$ = `d-stop` (0 = none); the factor
+$1 - 10^{-10}$ keeps a drop held at $T_\mathrm{burn}$ burning through the round-off of its state. While
+$\dot m > 0$ the convective and radiative heat are left out of the energy equation and $dT_p/dt = 0$
+($dh_p/dt = 0$ for the enthalpy state): every heat the drop receives feeds its vaporisation, as in [GG09]
+($\dot Q = \dot m\,L_v$, $T_p$ held at the saturation temperature). The drop keeps the temperature at which it
+starts burning: about $T_\mathrm{burn}$ for a drop that heats up to it, its injection temperature for one injected
+above it. No share of the heat of reaction goes to the drop (`direct` has no `beta-part`).
+
+Below $T_\mathrm{burn}$, at or below `d-stop`, or at $B \le 0$, $\dot m = 0$ and the drop exchanges drag,
+convective heat and radiation as an inert one; it ignites when it reaches $T_\mathrm{burn}$. A drop that reaches
+`d-stop` stays at that diameter, inert: its residue (no parcel of a product is born; the oxide cap and its residue
+belong to `Beckstead`). Without `d-stop` a burning drop goes down to the removal mass and is handed to the gas
+([Burnout](#burnout)).
+
+$Q$ enters $B$ alone: none of IGLOO's sources carries the heat of reaction. The mass the drop loses goes to the
+gas in the material's net row of the mass source, at the drop's enthalpy and kinetic energy, as an evaporating
+drop's ([Eulerian Feedback](eulerian-feedback.md#source-fields)); the heat of reaction is the gas solver's to
+release when it burns the vapour.
+
+### Inputs of direct
+
+The constants are those of the material's `combustion direct` row of the models file (table under
+[Inputs](#inputs)): `T-burn`, `q-comb`, `d-stop`, `d-burnout`, `d-smoke`.
+
+- **Burning temperature.** `T-burn`, else `[IGLOO-Properties] boiling-temperature` — accepted only when
+  `boiling-pressure` is absent or 101325 Pa: [GG09] hold their drops at the saturation temperature of aluminium
+  (2791 K, their Table 1), which IGLOO reads as the boiling temperature at one atmosphere.
+- **Latent heat $L_v$.** The `Lv` column of the material's zone of `properties.dat`, read once at setup at the
+  burning temperature (the log prints `>> [material <i>] combustion=direct: Lv(<T> K) = <Lv> J/kg`), else
+  `[IGLOO-Properties] Lv`. Beside the column the `Lv` entry of the material must be 0. The `Mv` and `Cpv` columns
+  are not read.
+- **$Q$.** `q-comb` [J/kg], required in the row, $\ge 0$; `q-comb=0` burns the drop as one that only vaporises at
+  $T_\mathrm{burn}$.
+
+The setup stops the run on:
+
+| Input | Message |
+| :--- | :--- |
+| breakup on the material | `[ERROR] combustion=direct with breakup is not supported` |
+| solidification on the material | `[ERROR] solidification=on with combustion is not supported` |
+| a `cap=<law>` word on the line | `[ERROR] combustion=direct has no oxide cap: cap=<law> belongs to combustion=Beckstead` |
+| a key the row does not read (`K-burn`, `T-ign`, `beta-part`, ...) | `IGLOO: a constant the model does not read in the models file` |
+| a row without `q-comb` | `IGLOO: combustion without q-comb in its row of the models file` |
+| `q-comb` < 0 | `[ERROR] combustion=direct requires q-comb >= 0` |
+| `d-stop` and `d-burnout` both > 0 | `[ERROR] d-stop beside d-burnout: a drop that stops at its residue is never removed; give one` |
+| no `T-burn` and no `boiling-temperature` | `[ERROR] combustion=direct requires T-burn in the models file, or boiling-temperature in [IGLOO-Properties]` |
+| no `T-burn`, `boiling-pressure` other than 101325 Pa | `IGLOO: combustion=direct without T-burn, and boiling-temperature not at one atmosphere` (after a line naming the pressure) |
+| a burning temperature $\le 0$ | `[ERROR] combustion=direct requires a burning temperature > 0 (T-burn, or boiling-temperature)` |
+| an `Lv` column zero on some rows only, not positive or not finite | `IGLOO: <file>: ...Lv column: <reason>` |
+| the `Lv` column and a non-zero `[IGLOO-Properties] Lv` | `IGLOO: Lv given both in [IGLOO-Properties] and as a properties.dat column` |
+| neither the column nor `[IGLOO-Properties] Lv` | `[ERROR] combustion=direct requires its latent heat: the Lv column of properties.dat, or Lv in [IGLOO-Properties]` |
+| $L_v \le 0$ | `[ERROR] combustion=direct requires a latent heat > 0 (Lv)` |
+
+Example (the reader's unit test, `tests/infrastructure/material_tokens`, MT8), the material line and its row:
+
+```text
+A 1 combustion=direct
+```
+
+```text
+A combustion direct d-burnout=1e-07 T-burn=1363 q-comb=9530000
+```
+
+### Direct combustion in ICE
+
+ICE's `combustion = direct` evaluates the same expression with the same gate: the same $B$ and its zero for
+$B \le 0$, $c_{p,g} = \gamma R/(\gamma - 1)$, $Nu$ of its heat-transfer law, $L_v$ at the burning temperature,
+$T_p \ge T_\mathrm{burn}(1 - 10^{-10})$ and $d > d_\mathrm{stop}$, the temperature held while the drop burns. ICE
+evaluates $\ln(1 + B)$ by a series below $|B| = 10^{-2}$, IGLOO by `log(1 + B)`: the two rates may differ in their
+last bits at small $B$. ICE stores $\dot m\,Q$ per cell in a heat field; IGLOO deposits no heat of reaction.
 
 ---
 
@@ -456,12 +564,16 @@ residue and the books), `burn-box-cap-gallier` (model 8 under the deposition law
 carries the cap), `burn-box-residue-gallier` (five sizes burned out under the law: each residue's mass on the law's
 path, each burnout time on Beckstead's, Gallier's residue sizes), `beckstead-air` (burnout times of 10–1000 µm particles in air against Eq. 7 of
 `[Beck05]`, his Fig. 1 drawn beside them) and `burnout-cold` (parcels at the removal size that never ignite: none is
-removed).  See `tests/combustion/INFO.md`.
+removed).  See `tests/combustion/INFO.md`.  Of `combustion=direct` the suite checks the reading of its row
+(`material_tokens`, MT8) and the refusal of a burning temperature off one atmosphere (`refuse-direct-pressure`);
+no test evaluates its rate or burns a `direct` drop.
 
 References:
 
 - [Beck05] Beckstead, M. W., "Correlating Aluminum Burning Times,"
   *Combust. Explos. Shock Waves* 41(5):533–546, 2005.
+- [GG09] Gallier, S., Godfroy, F., "Aluminum Combustion Driven Instabilities in Solid Rocket Motors,"
+  *J. Propuls. Power* 25(2):509–521, 2009 (eqs. 4 and 5 p. 510, the burning drop's temperature p. 511).
 - [Gal21] Gallier, S., Braconnier, A., Godfroy, F., Halter, F., Chauveau, C., "The role of thermophoresis
   on aluminum oxide lobe formation," *Combust. Flame* 228:142–153, 2021.
 - [Liu21] Liu, J., Chu, Q., Chen, D., "On Modeling the Combustion of a Single Micron-Sized Aluminum
