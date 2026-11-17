@@ -20,9 +20,40 @@ only, `E+S`/`ALL` or absent = both).  The accumulation routines are `computeSrcF
 
 The source block type `obj_sourceblock` stores:
 
-- `sourceMass(nsm(), Nx, Ny, Nz)` — mass source per material per cell [kg/s] in its first `nm` rows; with a capped material two more per material (the cap's oxide), with a material of `d-smoke > 0` five more per material (its smoke: [The smoke columns](combustion.md#the-smoke-columns))
+- `sourceMass(nsm(), Nx, Ny, Nz)` — mass source per material per cell [kg/s] in its first `nm` rows; with a capped material two more per material (the cap's oxide), with a material of `d-smoke > 0` five more per material (its smoke: [The smoke columns](combustion.md#the-smoke-columns)); the rows are listed [below](#rows-of-the-mass-source)
 - `sourceMom(3, Nx, Ny, Nz)` — momentum source [N]
 - `sourceEn(Nx, Ny, Nz)` — energy source [W]
+
+### Rows of the mass source
+
+`nsm()` (`src/lib/variables.f90`) counts the rows: `nm`, `3 nm` when a material of the run burns with an oxide cap
+(`xi-cap > 0` or `cap=Gallier21`, [The oxide cap](combustion.md#the-oxide-cap-model-8)), and `5 nm` more when a
+material has `d-smoke > 0`. With $m$ a material's index in the phase file and $\dot n$ a parcel's number rate:
+
+| Row | Present | Holds, per cell [kg/s] |
+| :--- | :--- | :--- |
+| $m$ | always | the net mass the parcels of material $m$ hand the gas, $\dot m_\mathrm{in} - \dot m_\mathrm{out}$ (below) |
+| $n_m + 2m - 1$ | a capped material in the run | the oxide the caps of material $m$ gained in the cell, $\dot n\,(m_\mathrm{ox,out} - m_\mathrm{ox,in})$ per residence, $m_\mathrm{ox,out}$ the cap at the residence's end |
+| $n_m + 2m$ | a capped material in the run | the cap a parcel of material $m$ consumed in the cell hands the gas when `residue=off`, $\dot n\,m_\mathrm{ox}$ at its end; 0 for a parcel that goes on or whose cap becomes a residue |
+| `smokeRow(m, s)` $= n_m + 5(m - 1) + s$, $+ 2n_m$ with the cap's rows | a material with `d-smoke > 0` | its smoke, $s = 1$ the weight $W$, $s = 2$–$4$ $W\mathbf{u}$, $s = 5$ $WT$ ([The smoke columns](combustion.md#the-smoke-columns)) |
+
+Only parcels of the capped model (model 8) fill the cap's rows (`Lib_Integration.f90`, beside the net row's
+deposit), so they stay 0 for a material without a cap. The net row of a capped material counts the metal and the cap
+together: the metal the parcel burned less the oxide its cap gained; for a parcel consumed in the cell, all it
+carried at cell entry, less its cap at the end when that becomes a residue (the residue's birth flux leaves with
+$\dot m_\mathrm{out}$, see [The burnout residue](combustion.md#the-burnout-residue)). In every case
+
+$$
+S_\mathrm{mass}(m) + S_\mathrm{mass}(n_m + 2m - 1) - S_\mathrm{mass}(n_m + 2m)
+= \sum_\mathrm{residences} \dot n\,(m_\mathrm{Al,in} - m_\mathrm{Al,out}),
+$$
+
+the metal that left material $m$'s parcels in the cell ($m_\mathrm{Al,out} = 0$ for a consumed parcel, whose
+remnant goes to the gas), whatever the retained fraction: a coupler reads the burn rate from the three rows (from
+the net row alone only through a constant `xi-cap`, see [Energy](combustion.md#energy-the-absolute-datum-and-the-streams)).
+The extra rows take the cut records' weights as the net rows do, are summed over the MPI ranks and across block
+interfaces and chimera overlaps, and are reduced with them to the geometry cells at `gas-order = 2`; `source.tec`
+writes the `nm` net rows only, and a coupler reads the others from the source blocks.
 
 For each cell transit, `computeSrcField` accumulates the difference between cell-entry
 and cell-exit values of mass, momentum, and energy carried by the parcel:
