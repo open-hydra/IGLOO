@@ -92,7 +92,7 @@ contains
     real(R8) :: pMid(3)       ! segment mid position: azimuth of the meridian-frame source deposit
     real(R8) :: dSrc(5), dEul(6)  ! the segment's source and eulerian deposits, for a cut cell's records
     real(R8) :: oxIn, dCap(2)     ! a capped parcel: its cap's flux at cell entry; the oxide the cap gained, the cap handed to the gas
-    real(R8) :: dSm(5)            ! a burning parcel with a smoke: the segment's W, W u, W T (C-IGLOO9)
+    real(R8) :: dSm(5)            ! a burning parcel with a smoke: the segment's W, W u, W T
     integer  :: kSm
     real(R8) :: bwSum(5)          ! a burning parcel with a smoke, over the residence's latched steps: SUM w, w u, w T
     real(R8) :: bwT               !   (w the metal a step burnt, u and T its means over the step); T at the last latch

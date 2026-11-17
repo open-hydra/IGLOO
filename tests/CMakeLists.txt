@@ -830,7 +830,7 @@ igloo_e2e_case(beckstead-air combustion/beckstead-air "e2e;combustion;val")
 # burnout-cold: burn-box's stream, T-ign 2000 K, d-burnout 60 um (twice the injected diameter): the parcels never
 # ignite in the 600 K gas, so none is removed and the stream hands the gas no mass (the removal tests burning first).
 igloo_e2e_case(burnout-cold combustion/burnout-cold "e2e;combustion;burnout")
-# smoke-columns: burn-box with d-smoke in its row: the five smoke columns are written beside the net ones, and burn-box's
+# smoke-columns: burn-box with d-smoke in its row: the five smoke columns are filled beside the net ones, and burn-box's
 # own check of the stream (mass, momentum, energy handed) passes unchanged.
 igloo_e2e_case(smoke-columns combustion/smoke-columns "e2e;combustion;smoke")
 
@@ -1459,7 +1459,7 @@ igloo_refusal_case(refuse-section-d-burnout infrastructure/refusals/section-d-bu
                    "IGLOO: a constant of a burning model in [IGLOO-Models]" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-direct-pressure  infrastructure/refusals/direct-pressure
                    "IGLOO: combustion=direct without T-burn, and boiling-temperature not at one atmosphere" "e2e;refusal;combustion")
-# The eighth issue's d-smoke: a constant of the burning models, in the row only, >= 0.
+# d-smoke: a constant of the burning models, in the row only, >= 0.
 igloo_refusal_case(refuse-section-d-smoke  infrastructure/refusals/section-d-smoke
                    "IGLOO: a constant of a burning model in [IGLOO-Models]" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-line-d-smoke     infrastructure/refusals/line-d-smoke

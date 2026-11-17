@@ -41,7 +41,7 @@ module IGLOO_variables
   !> A material burns with an oxide cap: the mass source then carries, after its nm net columns, two per material
   !  (nm+2m-1 the oxide the caps of material m gained, nm+2m the cap oxide handed to the gas)
   logical  :: capColumns = .false.
-  !> A material with d-smoke: after the net and the cap columns, five per material for its smoke (C-IGLOO9): W, W u (3),
+  !> A material with d-smoke: after the net and the cap columns, five per material for its smoke: W, W u (3),
   !  W T over the segments of a cell, W the metal a burning segment consumed and the oxide its cap gained
   logical  :: smokeColumns = .false.
   integer, allocatable :: nspecies(:)
