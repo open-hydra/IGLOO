@@ -827,6 +827,9 @@ igloo_e2e_case(burn-box-residue-gallier combustion/burn-box-residue-gallier "e2e
 # Eq. 7 (K_eff coded from the paper); the 183 markers of his Fig. 1 drawn beside them, not gated. RED on K-burn x 1.01,
 # on the X_eff exponent 1.1, on T-ign above the injection temperature, on a heat release and on a slip.
 igloo_e2e_case(beckstead-air combustion/beckstead-air "e2e;combustion;val")
+# burnout-cold: burn-box's stream, T-ign 2000 K, d-burnout 60 um (twice the injected diameter): the parcels never
+# ignite in the 600 K gas, so none is removed and the stream hands the gas no mass (the removal tests burning first).
+igloo_e2e_case(burnout-cold combustion/burnout-cold "e2e;combustion;burnout")
 
 # ---------- solidification (ODE models 6 and 7: supercooling, recalescence, plateau, melting; breakup on the liquid) --------
 igloo_unit_test(test_solidification solidification "unit;solidification")
@@ -1432,6 +1435,27 @@ igloo_refusal_case(refuse-models-real      infrastructure/refusals/models-real
                    "IGLOO: non-numeric constant in the models file" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-models-short     infrastructure/refusals/models-short
                    "IGLOO: malformed row in the models file" "e2e;refusal;combustion")
+# The burning models' refusals: a value that is not one finite real, a burning row without q-comb, a cap word without its
+# row (the material would burn uncapped), the constants of a burning model in [IGLOO-Models], direct falling back on a
+# boiling temperature that is not the one at one atmosphere.
+igloo_refusal_case(refuse-models-nan       infrastructure/refusals/models-nan
+                   "IGLOO: a constant of the models file that is not one finite real number" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-models-inf       infrastructure/refusals/models-inf
+                   "IGLOO: a constant of the models file that is not one finite real number" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-models-comma     infrastructure/refusals/models-comma
+                   "IGLOO: a constant of the models file that is not one finite real number" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-models-no-qcomb  infrastructure/refusals/models-no-qcomb
+                   "IGLOO: combustion without q-comb in its row of the models file" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-cap-word-no-row  infrastructure/refusals/cap-word-no-row
+                   "IGLOO: a cap word on the material line without its row in the models file" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-section-q-comb   infrastructure/refusals/section-q-comb
+                   "IGLOO: a constant of a burning model in [IGLOO-Models]" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-section-d-stop   infrastructure/refusals/section-d-stop
+                   "IGLOO: a constant of a burning model in [IGLOO-Models]" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-section-d-burnout infrastructure/refusals/section-d-burnout
+                   "IGLOO: a constant of a burning model in [IGLOO-Models]" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-direct-pressure  infrastructure/refusals/direct-pressure
+                   "IGLOO: combustion=direct without T-burn, and boiling-temperature not at one atmosphere" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-cap-varcp        infrastructure/refusals/cap-varcp
                    "xi-cap > 0 requires a constant-cp, constant-density material and product" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-cap-relative     infrastructure/refusals/cap-relative

@@ -11,6 +11,7 @@ Aluminium combustion: Beckstead's $d^n$ burn law (model 5), the oxide cap on a b
 | [`burn-box-cap`](#burn-box-cap) | the oxide cap | independent integration | mass $2.1\cdot10^{-6}$ |
 | [`burn-box-residue`](#burn-box-residue) | the burnout residue | closed form + audit | 25/25 residues |
 | [`burn-box-ox0`](#burn-box-ox0) | an oxide fraction at injection | independent integration | 725/725 rows |
+| [`burnout-cold`](#burnout-cold) | no removal of a parcel that does not burn | closed form | no parcel removed |
 | [Gallier's law](#gallier) | the deposition law and the residue size | independent integration | $\beta$ within 0.017 of Gallier's |
 
 ---
@@ -69,6 +70,20 @@ Aluminium combustion: Beckstead's $d^n$ burn law (model 5), the oxide cap on a b
 <figure>
   --8<-- "docs/vv/images/beckstead-air.svg"
 </figure>
+
+---
+
+## A parcel that does not burn {#burnout-cold}
+
+`tests/combustion/burnout-cold` · closed form
+
+- **Setup** — `burn-box`'s stream of 30 µm aluminium parcels in the 600 K gas, with `T-ign` 2000 K and
+  `d-burnout` 60 µm: every parcel is at its removal size from injection and none ignites.
+- **Reference** — a burning model removes a parcel only while it burns
+  ([theory](../theory/combustion.md#burnout)): no parcel is removed, each segment's mass in equals its mass out,
+  and the material's mass source `wdot(A)` is 0 in every cell.
+- **Result** — `wdot(A)` is exactly 0 in all 1500 cells. A removal at the mass alone hands every parcel to the
+  gas at its first step: `wdot(A)` sums to 1.545455e-02 kg/s over the 1500 cells, largest 2.293091e-04 kg/s.
 
 ---
 

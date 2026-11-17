@@ -150,6 +150,7 @@ module IGLOO_data_phases
     real(R8) :: dBurn = 0._R8        !> d-burnout [m]: a burning drop this small is handed whole to the gas; 0 = built-in
     real(R8) :: Tburn = 0._R8        !> T-burn [K] of the models file (direct); 0 = not given: the boiling temperature
     logical  :: capAsked = .false.   !> the material line names an oxide cap (cap=<law>)
+    logical  :: qcombSet = .false.   !> q-comb was given in the material's combustion row (0 included)
     real(R8) :: rhoSol = 0._R8       !> rho-solid [kg/m3]; 0 = the liquid density
     real(R8) :: emissivity = 0._R8   !> [IGLOO-Properties] emissivity; 0 = no radiation
     !> The oxide cap: the product's name and line (0 = none), its density, heat capacity and datum, the stretch c;

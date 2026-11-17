@@ -51,6 +51,7 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
 | E-CAPG | e2e box | `[Beck05]`, `[Gal21]` | — | `combustion/burn-box-cap-gallier/`: burn-box-cap with `cap=Gallier21`; every trajectory row against an oracle carrying the cap (RK4 of s, m_ox/m₀ and T, the law from the committed tables, c on the law's path = 1.340400), the mass books | m, d 4e-6 rel.; T 0.1 K; books 1e-5 | as burn-box-cap, `out-file = S` | GREEN (2.3e-6, 2.3e-6, 2.2e-5 K; 1.8e-6) |
 | E-RESG | e2e box | `[Gal21]` | — | `combustion/burn-box-residue-gallier/`: five inlet sizes 20–400 µm burned out under the law; each residue's mass inside [z(m_B), z(0)] of the law's path, each burnout time inside [t(m_B), d₀ⁿ/K_eff], the books, Gallier's residue sizes β at 20, 70, 200, 400 µm | 5e-6 rel.; 1e-5 rel.; 1e-5; β 0.03 abs. | own bc.txt (radius by inlet row), K-burn 1.5e-4 | GREEN (0/25, 0/25 outside; β worst 0.017) |
 | E-OX0 | e2e box | `[Beck05]`, `[Gal21]` | — | `combustion/burn-box-ox0/`: burn-box-residue's capped line with `xi-ox0=0.1` and an inert product; the whole particle's mass and number rate at injection, every trajectory row against an oracle on Gallier's exact lobe with the cap from its initial oxide and the re-evaluated stretch, the burnout inside Beckstead's time for the injected diameter, the residue's mass and flow, the mass and energy books, the scatter quanta | m, d 4e-6 rel.; T 0.1 K; injection m 2e-6; residue m 3e-5; books 1e-5; scatter 1e-3 | burn-box's `bc.txt`/`solfile.tec`, burn-box-cap's table; `out-file = S`, `out-time = on`, `mollify = off` | GREEN |
+| E-COLD | e2e box | — (definitions) | — | `combustion/burnout-cold/`: burn-box's stream with T-ign 2000 K and d-burnout 60 µm (twice the injected diameter): no parcel ignites and none is removed; `wdot(A)` of `OUTPUT/source.tec` in every cell | exact 0; RED a removal at the mass alone: sum 1.545455e-02 kg/s, largest 2.293091e-04 kg/s | burn-box's `INPUT/`, own `models.txt` | GREEN (0 in 1500 cells) |
 
 ## Notes
 
@@ -59,7 +60,8 @@ Citation tags resolve in [../REFERENCES.md](../REFERENCES.md).
 - **Burnout** fires at `m ≤ min(1e-6 m₀, 1e-20 kg)`, m₀ the parcel's reference mass (the metal's mass under model
   8, against the whole particle's m₀): `burn-box` and `burn-box-cap` are sized
   so that the parcels exit at ~50 % d^n loss; `burn-box-residue` burns them out inside the box, as `beckstead-air`
-  does at 10–1000 µm. Near burnout,
+  does at 10–1000 µm. A burning parcel is removed only at or above its burning temperature (`T-ign`, `T-burn`):
+  `burnout-cold` holds parcels below `d-burnout` that never ignite. Near burnout,
   unphysical trial states (m ≤ 0 ⇒ d = NaN) are scrubbed to the 1e30 penalty like models 3/4.
 - **The burnout residue** (`residue=on`): the cap becomes a parcel of the product at burnout, at a solver failure
   (the parcel reverts to its last accepted step) or at a non-finite state; with `residue=off` the cap goes to the

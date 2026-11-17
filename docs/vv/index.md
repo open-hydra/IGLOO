@@ -1,6 +1,6 @@
 # Verification & Validation
 
-IGLOO is checked by **391 tests**, every one a real gate: no test is expected to fail, and a green
+IGLOO is checked by **401 tests**, every one a real gate: no test is expected to fail, and a green
 run means every model and feature below matched its reference. An MPI build adds 30 rank-count
 gates.
 

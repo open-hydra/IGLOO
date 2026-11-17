@@ -102,6 +102,15 @@ output written).
 | `refuse-models-noburn` | `A 1` (no burning model on the line, none in `[IGLOO-Models]`) with a combustion row under the model `-` | `IGLOO: constants of a burning model for a material that names none` |
 | `refuse-models-real` | `burn-box`'s row with `K-burn=fast` | `IGLOO: non-numeric constant in the models file` |
 | `refuse-models-short` | the row `A combustion` (no model) | `IGLOO: malformed row in the models file` |
+| `refuse-models-nan` | `models-real`'s `phase.txt` (symlinked) and its own `models.txt`: `burn-box`'s row with `K-burn=NaN`; `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `IGLOO: a constant of the models file that is not one finite real number` |
+| `refuse-models-inf` | as above with `q-comb=Inf` | `IGLOO: a constant of the models file that is not one finite real number` |
+| `refuse-models-comma` | as above with `K-burn=4.5e-07,5` (a list-directed read takes 4.5e-07 and stops at the comma) | `IGLOO: a constant of the models file that is not one finite real number` |
+| `refuse-models-no-qcomb` | as above, the row without `q-comb` (`q-comb=0` written is allowed) | `IGLOO: combustion without q-comb in its row of the models file` |
+| `refuse-cap-word-no-row` | own `INPUT/phase.txt` `A 1 combustion=Beckstead cap=constant` and the combustion row alone, no `cap` row | `IGLOO: a cap word on the material line without its row in the models file` |
+| `refuse-section-q-comb` | `models-real`'s `phase.txt`, a valid row; `q-comb = 1.0e-5` in `[IGLOO-Models]` | `IGLOO: a constant of a burning model in [IGLOO-Models]` |
+| `refuse-section-d-stop` | as above with `d-stop = 1.0e-5` | `IGLOO: a constant of a burning model in [IGLOO-Models]` |
+| `refuse-section-d-burnout` | as above with `d-burnout = 1.0e-5` | `IGLOO: a constant of a burning model in [IGLOO-Models]` |
+| `refuse-direct-pressure` | own `INPUT/phase.txt` `A 1 combustion=direct`, the row `A combustion direct q-comb=1000000` (no `T-burn`); `[IGLOO-Properties] boiling-temperature = 900`, `boiling-pressure = 2.0e5`, `Lv = 1.0e6` | `IGLOO: combustion=direct without T-burn, and boiling-temperature not at one atmosphere` |
 | `refuse-ox0-range` | own `INPUT/phase.txt` and `INPUT/models.txt`: `combustion/burn-box-ox0`'s two lines and rows with `xi-ox0=1.0` (a particle without metal); `burn-box`'s `bc.txt`/`solfile.tec`, `burn-box-cap`'s table; `refusals/cap-product`'s settings | `xi-ox0 must lie in [0, 1)` |
 | `refuse-ox0-nocap` | own `INPUT/phase.txt` and `INPUT/models.txt`: `burn-box`'s line with `cap=constant` and the cap row `xi-ox0=0.1` (no `xi-cap`, no product line); `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `refusals/cap-product`'s settings | `xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0` |
 | `refuse-brk-sigma` | `tab-e2e` (`INPUT/` symlinked) without `[IGLOO-Properties] sigma` | `Breakup requires sigma` |
@@ -195,6 +204,8 @@ at `IGLOO: unknown per-material key in the phase file`, not its payload. **`refu
 does not read `plane-x` (an unknown `[IGLOO-General]` key is ignored): it runs to "Stop condition" with exit 0, no
 payload, and writes three `.dat` files. **`refuse-plane-x-empty` is RED** on a reader that skips a `plane-x` of no
 value: it runs to "Stop condition" with exit 0 and writes three `.dat` files and no planes file.
+
+**The nine refusals of the models file's values, its `q-comb`, the cap word's row, the three section keys and the burning temperature of `direct` are RED** on a reader without their checks: each runs to "Stop condition : All particles out of domain!" with exit 0 and writes its four output files. `K-burn=NaN` and `q-comb=Inf` are taken as numbers, `K-burn=4.5e-07,5` as 4.5e-07, the row without `q-comb` burns at `q-comb` 0, the capped material burns uncapped, the three `[IGLOO-Models]` keys are ignored, and `direct` burns at the boiling temperature given at 2e5 Pa.
 
 **Not here.** The mixed-Nk refusal (`allocation.f90`, `IGLOO: mixed 2D/3D blocks are not supported`)
 needs a two-zone `solfile.tec`; it is verified on a scratch fixture only and has no case.

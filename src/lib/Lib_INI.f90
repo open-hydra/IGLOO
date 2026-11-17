@@ -298,6 +298,17 @@ contains
     !> Combustion model: the default of every injected material (its own word on the material line overrides)
     call fini%get(section_name='IGLOO-Models', option_name='combustion', val=combustion_word, error=error)
     if (error/=0) combustion_word = 'none'
+    !> the constants of a burning model are rows of the models file, never keys of this section
+    block
+      character(len=9), parameter :: rowKeys(3) = ['q-comb   ', 'd-stop   ', 'd-burnout']
+      integer :: r
+      do r = 1, size(rowKeys)
+        if (.not. inSection('IGLOO-Models', trim(rowKeys(r)))) cycle
+        write(*,'(a)') ' [ERROR] [IGLOO-Models] '//trim(rowKeys(r))//': a constant of the burning model, in the '// &
+          'material''s row of the models file (<material> combustion <model> '//trim(rowKeys(r))//'=...)'
+        error stop 'IGLOO: a constant of a burning model in [IGLOO-Models]'
+      enddo
+    end block
     !> Composable phase-change axes: global defaults (per-material override: key=value on the material
     !  line of the phase file, written by ATLAS GPB from [GPB-Phase*]).
     call fini%get(section_name='IGLOO-Models', option_name='liquid-conduction', val=liquid_word, error=error)
@@ -451,6 +462,7 @@ contains
     mat%dBurn    = 0._R8
     mat%Tburn    = 0._R8
     mat%capAsked = .false.
+    mat%qcombSet = .false.
   end subroutine set_material_defaults
 
 
@@ -651,6 +663,12 @@ contains
       modelsUsed(r) = .true.
       call apply_model_row(imat, mat, modelsRow(r), seen)
     enddo
+    !> a cap word on the line holds only with its row: without it the material would burn uncapped
+    if (mat%capAsked .and. .not. seen(2)) then
+      write(*,'(a,i0,a)') ' [ERROR] material ', imat, ' ('//trim(mat%matName)//'): its line names an oxide cap '// &
+        '(cap=<law>) and the models file has no cap row for it, "'//trim(mat%matName)//' cap <law> key=value ..."'
+      error stop 'IGLOO: a cap word on the material line without its row in the models file'
+    endif
   end subroutine apply_models_rows
 
 
@@ -659,8 +677,9 @@ contains
   !  one of [IGLOO-Models]; '-' stands for it). A kind that is not known, a second row of a kind, another model
   !  than the material's, a key the model does not read or a value that is not a number stop the run.
   subroutine apply_model_row(imat, mat, row, seen)
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use IGLOO_data_phases,     only: obj_material
-    use IGLOO_Lib_Evaporation, only: assign_residue
+    use IGLOO_Lib_Evaporation, only: assign_residue, COMB_BECKSTEAD, COMB_DIRECT
     implicit none
     integer,            intent(in)    :: imat
     type(obj_material), intent(inout) :: mat
@@ -670,6 +689,7 @@ contains
     character(len=80)  :: reads
     character(len=16)  :: word
     integer :: p, e, ios, k
+    real(R8) :: x
 
     p = 1
     call next_word(row, p, name)
@@ -681,9 +701,9 @@ contains
     case ('combustion')
       k = 1
       select case (mat%combSelect)
-      case (1)
+      case (COMB_BECKSTEAD)
         word = 'Beckstead'; reads = ' K-burn n-burn X-eff beta-part T-ign q-comb d-stop d-burnout '
-      case (2)
+      case (COMB_DIRECT)
         word = 'direct';    reads = ' T-burn q-comb d-stop d-burnout '
       case default
         call refuse_row('the material names no burning model (no combustion= on its line, none in [IGLOO-Models])', &
@@ -720,6 +740,13 @@ contains
         call refuse_row(trim(key)//' is not a constant of '//trim(kind)//'='//trim(word)//' (it reads'//trim(reads)//')', &
                         'IGLOO: a constant the model does not read in the models file')
       ios = 0
+      !> a real is one finite number: a list-directed read takes 'NaN' and 'Inf', and stops at ',' or '/'
+      if (trim(key) /= 'residue' .and. trim(key) /= 'product') then
+        read(value,*,iostat=ios) x
+        if (ios == 0 .and. (scan(value, ',/') > 0 .or. .not. ieee_is_finite(x))) &
+          call refuse_row(trim(key)//'='//trim(value)//' is not one finite real number', &
+                          'IGLOO: a constant of the models file that is not one finite real number')
+      endif
       select case (trim(key))
       case ('K-burn');    read(value,*,iostat=ios) mat%Kburn
       case ('n-burn');    read(value,*,iostat=ios) mat%nBurn
@@ -727,7 +754,7 @@ contains
       case ('beta-part'); read(value,*,iostat=ios) mat%betaPart
       case ('T-ign');     read(value,*,iostat=ios) mat%Tign
       case ('T-burn');    read(value,*,iostat=ios) mat%Tburn
-      case ('q-comb');    read(value,*,iostat=ios) mat%qComb
+      case ('q-comb');    read(value,*,iostat=ios) mat%qComb; mat%qcombSet = .true.
       case ('d-stop');    read(value,*,iostat=ios) mat%dStop
       case ('d-burnout'); read(value,*,iostat=ios) mat%dBurn
       case ('xi-cap');    read(value,*,iostat=ios) mat%xiCap

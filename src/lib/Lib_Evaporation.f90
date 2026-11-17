@@ -21,6 +21,8 @@ module IGLOO_Lib_Evaporation
 
     real(R8), parameter, public :: Ru   = 8314.46_R8  ! universal gas constant [J/(kmol·K)]
     real(R8), parameter, public :: Patm = 101325._R8  ! atmospheric pressure [Pa]
+    !> The combustion models of a material (obj_material%combSelect; 0 = none)
+    integer(I4), parameter, public :: COMB_BECKSTEAD = 1, COMB_DIRECT = 2
     !> Cap on the surface vapour mole fraction: keeps 1 - Ys finite in the boiling clamp (all gas-side models).
     real(R8), parameter, public :: xsCap = 1.e-12_R8
 
@@ -148,8 +150,8 @@ contains
         integer,          intent(out) :: combSelect
         select case (word)
         case('none');      combSelect = 0
-        case('Beckstead'); combSelect = 1
-        case('direct');    combSelect = 2
+        case('Beckstead'); combSelect = COMB_BECKSTEAD
+        case('direct');    combSelect = COMB_DIRECT
         case default
             write(*,*) "Wrong combustion model input ---> "//trim(word)
             write(*,*) "Choose one of: none, Beckstead, direct"

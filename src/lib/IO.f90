@@ -174,6 +174,12 @@ contains
         if (material(i)%Xeff <= 0._R8 .or. material(i)%Xeff > 1._R8) &
           error stop '[ERROR] combustion=Beckstead requires 0 < X-eff <= 1'
       endif
+      !> either model: q-comb written in the row (0 allowed)
+      if (material(i)%combSelect > 0 .and. .not. material(i)%qcombSet) then
+        write(*,'(a,i0,a)') ' [ERROR] material ', i, ' ('//trim(material(i)%matName)//'): a burning material requires '// &
+          'q-comb, the heat of reaction per kg burnt, in its row of the models file (q-comb=0 written is allowed)'
+        error stop 'IGLOO: combustion without q-comb in its row of the models file'
+      endif
     end do
     close(unit)
     call check_models_rows()
@@ -423,6 +429,15 @@ contains
         else
           if (.not. allocated(ini_Tboil)) error stop &
             '[ERROR] combustion=direct requires T-burn in the models file, or boiling-temperature in [IGLOO-Properties]'
+          !> the reference burns at the boiling temperature at one atmosphere (Gallier et al. 2009, p. 3)
+          if (allocated(ini_pBoil)) then
+            if (ini_pBoil(i) /= Patm) then
+              write(*,'(a,i0,a,es12.5,a)') ' [ERROR] material ', i, ': combustion=direct requires T-burn in the '// &
+                'models file: boiling-temperature is given at boiling-pressure ', ini_pBoil(i), ' Pa, and the '// &
+                'burning temperature it stands for is the one at 101325 Pa'
+              error stop 'IGLOO: combustion=direct without T-burn, and boiling-temperature not at one atmosphere'
+            endif
+          endif
           material(i)%Tboil = ini_Tboil(i)
         endif
         if (.not. material(i)%Tboil > 0._R8) &
