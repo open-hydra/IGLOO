@@ -77,6 +77,7 @@ module IGLOO_data_phases
     real(R8) :: qComb = 0._R8
     real(R8) :: dStop = 0._R8        !> d-stop [m]: the residue, where a burning drop stops burning and stays; 0 = none
     real(R8) :: dBurn = 0._R8        !> d-burnout [m]: a burning drop this small is handed whole to the gas; 0 = built-in
+    real(R8) :: dSmoke = 0._R8       !> d-smoke [m]: the diameter the smoke's drops are born at; 0 = no smoke columns
     real(R8) :: rhoSol = 0._R8       !> solid density [kg/m3]; 0 = the liquid density
     real(R8) :: emissivity = 0._R8   !> grey-body surface emissivity; 0 = no radiation
     !> The oxide cap: the combustion product (its material line, 0 = none), its density, heat capacity and datum,
@@ -148,6 +149,7 @@ module IGLOO_data_phases
     real(R8) :: qComb = 0._R8
     real(R8) :: dStop = 0._R8        !> d-stop [m]: the residue, where a burning drop stops burning and stays; 0 = none
     real(R8) :: dBurn = 0._R8        !> d-burnout [m]: a burning drop this small is handed whole to the gas; 0 = built-in
+    real(R8) :: dSmoke = 0._R8       !> d-smoke [m]: the diameter the smoke's drops are born at; 0 = no smoke columns
     real(R8) :: Tburn = 0._R8        !> T-burn [K] of the models file (direct); 0 = not given: the boiling temperature
     logical  :: capAsked = .false.   !> the material line names an oxide cap (cap=<law>)
     logical  :: qcombSet = .false.   !> q-comb was given in the material's combustion row (0 included)
@@ -314,7 +316,7 @@ contains
         gr%xiLaw = self%xiLaw
         gr%Tmelt = self%Tmelt; gr%hFus = self%hFus; gr%Tnuc = self%Tnuc; gr%cpSol = self%cpSol
         gr%qComb = self%qComb
-        gr%dStop = self%dStop; gr%dBurn = self%dBurn
+        gr%dStop = self%dStop; gr%dBurn = self%dBurn; gr%dSmoke = self%dSmoke
       endif
       if (self%combSelect == 2) then
         gr%Lv = self%Lv; gr%Tboil = self%Tboil
@@ -487,7 +489,7 @@ contains
         part%xiLaw = self%xiLaw
         part%Tmelt = self%Tmelt; part%hFus = self%hFus; part%Tnuc = self%Tnuc; part%cpSol = self%cpSol
         part%qComb = self%qComb
-        part%dStop = self%dStop; part%dBurn = self%dBurn
+        part%dStop = self%dStop; part%dBurn = self%dBurn; part%dSmoke = self%dSmoke
       endif
       if (self%combSelect == 2) then
         part%Lv = self%Lv; part%Tboil = self%Tboil

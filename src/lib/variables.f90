@@ -41,6 +41,9 @@ module IGLOO_variables
   !> A material burns with an oxide cap: the mass source then carries, after its nm net columns, two per material
   !  (nm+2m-1 the oxide the caps of material m gained, nm+2m the cap oxide handed to the gas)
   logical  :: capColumns = .false.
+  !> A material with d-smoke: after the net and the cap columns, five per material for its smoke (C-IGLOO9): W, W u (3),
+  !  W T over the segments of a cell, W the metal a burning segment consumed and the oxide its cap gained
+  logical  :: smokeColumns = .false.
   integer, allocatable :: nspecies(:)
   real(R8) :: ds, mdotMax, dtprint
   !> [IGLOO-General] print-ds [m] (<= 0 = off); dcellSet: print-dcell is present (the diagnostic crossing cadence)
@@ -109,10 +112,18 @@ module IGLOO_variables
 
 contains
 
-  !> Columns of the mass source: nm, or 3 nm with the cap's columns
+  !> Columns of the mass source: nm, 2 nm more with the cap's columns, 5 nm more with the smoke's
   pure integer function nsm()
     nsm = nm
     if (capColumns) nsm = 3*nm
+    if (smokeColumns) nsm = nsm + 5*nm
   end function nsm
+
+  !> The row of column s (1 W, 2-4 W u, 5 W T) of material m's smoke in the mass source
+  pure integer function smokeRow(m, s)
+    integer, intent(in) :: m, s
+    smokeRow = nm + 5*(m-1) + s
+    if (capColumns) smokeRow = smokeRow + 2*nm
+  end function smokeRow
 
 end module IGLOO_variables 
