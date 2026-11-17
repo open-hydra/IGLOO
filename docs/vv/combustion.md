@@ -1,7 +1,8 @@
 # Combustion
 
 Aluminium combustion: Beckstead's $d^n$ burn law (model 5), the oxide cap on a burning drop
-(model 8), the burnout residue, an oxide fraction at injection, and Gallier's deposition law.
+(model 8), the burnout residue, an oxide fraction at injection, Gallier's deposition law, and the $d^2$ burn of
+`combustion=direct` to its removal.
 
 | Case | What it pins | Kind | Result |
 |---|---|---|---|
@@ -12,6 +13,7 @@ Aluminium combustion: Beckstead's $d^n$ burn law (model 5), the oxide cap on a b
 | [`burn-box-residue`](#burn-box-residue) | the burnout residue | closed form + audit | 25/25 residues |
 | [`burn-box-ox0`](#burn-box-ox0) | an oxide fraction at injection | independent integration | 725/725 rows |
 | [`burnout-cold`](#burnout-cold) | no removal of a parcel that does not burn | closed form | no parcel removed |
+| [`burnout-direct`](#burnout-direct) | the $d^2$ burn of `direct` drops and their removal | closed form | 25/25 removed, rows within 0.966 of the print |
 | [Gallier's law](#gallier) | the deposition law and the residue size | independent integration | $\beta$ within 0.017 of Gallier's |
 
 ---
@@ -84,6 +86,27 @@ Aluminium combustion: Beckstead's $d^n$ burn law (model 5), the oxide cap on a b
   and the material's mass source `wdot(A)` is 0 in every cell.
 - **Result** — `wdot(A)` is exactly 0 in all 1500 cells. A removal at the mass alone hands every parcel to the
   gas at its first step: `wdot(A)` sums to 1.545455e-02 kg/s over the 1500 cells, largest 2.293091e-04 kg/s.
+
+---
+
+## Direct drops burned out {#burnout-direct}
+
+`tests/combustion/burnout-direct` · closed form
+
+- **Setup** — 25 drops of `combustion=direct`, 10 to 29.2 µm (one per inlet cell), injected at 300 K with the gas
+  velocity into `burn-box`'s 600 K gas: `T-burn` 302 K, `q-comb` 3.1e7 J/kg, `Lv` 1.08e7 J/kg, `d-burnout` 3 µm. The
+  case runs twice: with `common/properties.dat` (the temperature is the state) and, into `ref-varcp/`, with
+  `temp-relax-varcp`'s table, $c_p = 1000 + (T - 250)$ J/(kg K) (the enthalpy is the state).
+- **Reference** — each drop heats to `T-burn` and burns there at a constant temperature
+  ([theory](../theory/combustion.md#direct-combustion)): $d^2 = d_a^2 - K\,(t - t_a)$ from its first burning row,
+  $K = 4\,k_g\,Nu\,\ln(1 + B)/(\rho_p\,c_{p,g})$, $Nu = 2$ (no slip), $B$ from the inputs (eqs. 4 and 5 of
+  `[GG09]`); it is removed at `d-burnout` inside the box and its remnant handed to the gas, so the material's mass
+  source sums to the injected flow.
+- **Result** — in both runs no solver failure; the 25 drops removed at 0.9927–0.99998 of `d-burnout`; one
+  temperature from `T-burn` on, at most $1.96\cdot10^{-2}$ K above it; 417 rows on the $d^2$-law within the print
+  of $d$ and $t$ (at most 0.966 of it; $K$ off by $2\cdot10^{-5}$ fails every drop); the mass source equal to the
+  injected flow to $9.0\cdot10^{-16}$. A removal tested at `T-burn` itself, without the burning test's margin,
+  leaves 18 and 24 of the 25 drops burning past `d-burnout` to a solver failure.
 
 ---
 

@@ -110,9 +110,10 @@ solver failure.  Under model 8 the test is on the metal's mass $m_\mathrm{Al}$; 
 ([Solidification](solidification.md)).
 
 A burning parcel (models 5 and 8) is removed at that mass only while it burns: its temperature must be at or above
-`T-ign` under `Beckstead`, `T-burn` under `direct`. A parcel at the removal mass that does not burn — one injected
-at or below `d-burnout` into a gas that never ignites it — is not removed and goes on as an inert parcel. The
-evaporating models 2 and 4 remove at the mass alone.
+`T-ign` under `Beckstead`, and under `direct` at or above $T_\mathrm{burn}\,(1 - 10^{-10})$, the temperature from
+which the drop burns ([When a drop burns](#when-a-drop-burns-and-its-temperature)). A parcel at the removal mass
+that does not burn — one injected at or below `d-burnout` into a gas that never ignites it — is not removed and goes
+on as an inert parcel. The evaporating models 2 and 4 remove at the mass alone.
 
 ### Robustness
 
@@ -156,7 +157,8 @@ T_p \ge T_\mathrm{burn}\,(1 - 10^{-10}) \quad\text{and}\quad d > d_\mathrm{stop}
 $$
 
 $T_\mathrm{burn}$ the burning temperature and $d_\mathrm{stop}$ = `d-stop` (0 = none); the factor
-$1 - 10^{-10}$ keeps a drop held at $T_\mathrm{burn}$ burning through the round-off of its state. While
+$1 - 10^{-10}$ keeps a drop held at $T_\mathrm{burn}$ burning through the round-off of its state, and the removal
+at the burnout mass ([Burnout](#burnout)) tests the same temperature (one constant, `directOnset`). While
 $\dot m > 0$ the convective and radiative heat are left out of the energy equation and $dT_p/dt = 0$
 ($dh_p/dt = 0$ for the enthalpy state): every heat the drop receives feeds its vaporisation, as in [GG09]
 ($\dot Q = \dot m\,L_v$, $T_p$ held at the saturation temperature). The drop keeps the temperature at which it
@@ -568,8 +570,11 @@ carries the cap), `burn-box-residue-gallier` (five sizes burned out under the la
 path, each burnout time on Beckstead's, Gallier's residue sizes), `beckstead-air` (burnout times of 10–1000 µm particles in air against Eq. 7 of
 `[Beck05]`, his Fig. 1 drawn beside them) and `burnout-cold` (parcels at the removal size that never ignite: none is
 removed).  See `tests/combustion/INFO.md`.  Of `combustion=direct` the suite checks the reading of its row
-(`material_tokens`, MT8) and the refusal of a burning temperature off one atmosphere (`refuse-direct-pressure`);
-no test evaluates its rate or burns a `direct` drop.
+(`material_tokens`, MT8), the refusal of a burning temperature off one atmosphere (`refuse-direct-pressure`) and,
+in `burnout-direct`, 25 drops heated into `T-burn`, with the temperature and with the enthalpy as the state: each
+burns at a constant temperature on the $d^2$-law of eqs. 4 and 5 of [GG09] at $Nu = 2$ (every trajectory row within
+the print of $d$ and $t$) and is removed at `d-burnout` inside the box, its remnant handed to the gas (the mass
+source equals the injected flow).
 
 References:
 

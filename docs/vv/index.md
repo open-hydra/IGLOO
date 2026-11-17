@@ -1,6 +1,6 @@
 # Verification & Validation
 
-IGLOO is checked by **405 tests**, every one a real gate: no test is expected to fail, and a green
+IGLOO is checked by **406 tests**, every one a real gate: no test is expected to fail, and a green
 run means every model and feature below matched its reference. An MPI build adds 30 rank-count
 gates.
 
@@ -24,7 +24,7 @@ Tolerances are derived from the output precision and the integrator, never tuned
 | [Heat Transfer](heat.md) | 6 Nusselt laws, conduction and convection, varying $c_p$ and density, radiation | closed forms |
 | [Evaporation & Boiling](evaporation.md) | d²-law, CEM, Langmuir–Knudsen, Tonini–Cossali, conduction inside the drop, boiling | MHB98 and TC2012 figures |
 | [Breakup](breakup.md) | TAB, ETAB, Pilch–Erdman, Reitz–Diwakar, KH-RT; breakup with evaporation | the papers' correlations; Hsiang & Faeth drawn |
-| [Combustion](combustion.md) | Beckstead $d^n$ law, oxide cap, burnout residue, Gallier's deposition law | Beckstead Eq. 7; Gallier's residue sizes |
+| [Combustion](combustion.md) | Beckstead $d^n$ law, oxide cap, burnout residue, Gallier's deposition law, `direct`'s $d^2$ burn to its removal | Beckstead Eq. 7; Gallier's residue sizes |
 | [Solidification](solidification.md) | supercooling, recalescence, freezing and melting plateaus, density change | closed forms of every regime |
 | [Injection](injection.md) | assigned positions, size distributions, inlet lattices, materials and families | KS and AD tests on 20 000 parcels |
 | [Geometry & Boundaries](geometry.md) | gas interpolation, periodic faces, axisymmetric wedges, symmetry planes, multi-block and chimera grids | exact ODE oracles; the one-block run |
