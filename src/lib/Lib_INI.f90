@@ -275,12 +275,12 @@ contains
   end subroutine read_general
 
 
-  !> [IGLOO-Models]: drag, heat, evaporation, phase-change axes, blowing, breakup and its constants.
+  !> [IGLOO-Models]: drag, heat, evaporation, phase-change axes, blowing, breakup (its constants: the models file).
   subroutine read_models()
     use IGLOO_variables
     use IGLOO_Lib_Drag,        only: assign_drag
     use IGLOO_Lib_Heat,        only: assign_heat
-    use IGLOO_Lib_Breakup,     only: assign_breakup, bp, bpMethod, bpScale
+    use IGLOO_Lib_Breakup,     only: assign_breakup, bp, bpMethod, bpScale, NBRKTOK, BRKTOK
     use IGLOO_Lib_Evaporation, only: assign_evaporation, assign_liquid, assign_interface, &
                                      assign_boiling, assign_blowing
     implicit none
@@ -323,18 +323,31 @@ contains
     call fini%get(section_name='IGLOO-Models', option_name='blowing', val=blowing_word, error=error)
     if (error/=0) blowing_word = 'none'
     call assign_blowing(blowing_word, blowSelect)
-    !> Breakup model definition and its constants
+    !> Breakup model: the default of every material (its own word on the material line overrides); the constants of
+    !  its model are the published defaults (read_breakup_constants), else the material's row of the models file
     call fini%get(section_name='IGLOO-Models', option_name='breakup', val=breakup_word, error=error)
     if (error==0) then
       call assign_breakup(breakup_word,brkupSelect,brkupEqOde,brkupEvent,brkupHasChild)
-      call read_breakup_constants(brkupSelect, bp, bpMethod, bpScale, .false.)
+      call read_breakup_constants(brkupSelect, bp, bpMethod, bpScale)
     endif
+    !> the constants of a breakup model are rows of the models file, never keys of this section
+    block
+      character(len=13) :: key
+      integer :: r
+      do r = 1, NBRKTOK
+        key = BRKTOK(r)(index(BRKTOK(r), '-')+1:)
+        if (.not. inSection('IGLOO-Models', trim(key))) cycle
+        write(*,'(a)') ' [ERROR] [IGLOO-Models] '//trim(key)//': a constant of the breakup model, in the '// &
+          'material''s row of the models file (<material> breakup <model> '//trim(key)//'=...)'
+        error stop 'IGLOO: a constant of a breakup model in [IGLOO-Models]'
+      enddo
+    end block
   end subroutine read_models
 
 
-  !> [IGLOO-Models] constants of breakup model sel, the reader's default for an absent key; quiet skips
-  !  the Reitz Cs note and the TAB method-default note.
-  subroutine read_breakup_constants(sel, bpOut, methodOut, scaleOut, quiet)
+  !> The constants of breakup model sel at their published defaults (bpOut by slot, the TAB product-size method and
+  !  its scale); a material's row of the models file overrides them (apply_breakup_tokens).
+  subroutine read_breakup_constants(sel, bpOut, methodOut, scaleOut)
     use IGLOO_variables,   only: pi
     use IGLOO_Lib_Breakup, only: tabScale
     implicit none
@@ -342,91 +355,26 @@ contains
     real(R8), allocatable, intent(out) :: bpOut(:)
     integer,               intent(out) :: methodOut
     real(R8),              intent(out) :: scaleOut
-    logical,               intent(in)  :: quiet
-    integer :: ierr, ierrN
 
     methodOut = 1;  scaleOut = 1._R8
     select case (sel)
-    case (1)
+    case (1)            !> Pilch-Erdman: Cd, B
       allocate(bpOut(2))
-      call fini%get(section_name='IGLOO-Models', option_name='Cd', val=bpOut(1), error=ierr)
-      if (ierr/=0) bpOut(1) = 1._R8
-      call fini%get(section_name='IGLOO-Models', option_name='B' , val=bpOut(2), error=ierr)
-      if (ierr/=0) bpOut(2) = 0.116_R8
-    case (2)
+      bpOut = [1._R8, 0.116_R8]
+    case (2)            !> Reitz-Diawakar: WeBag, Cb, Cstrip, Cs (Reitz and Diwakar 1987: Cb = pi, Cs = 20)
       allocate(bpOut(4))
-      call fini%get(section_name='IGLOO-Models', option_name='WeBag' , val=bpOut(1), error=ierr)
-      if (ierr/=0) bpOut(1) = 6._R8
-      call fini%get(section_name='IGLOO-Models', option_name='Cb'    , val=bpOut(2), error=ierr)
-      if (ierr/=0) bpOut(2) = pi
-      call fini%get(section_name='IGLOO-Models', option_name='Cstrip', val=bpOut(3), error=ierr)
-      if (ierr/=0) bpOut(3) = 0.5_R8
-      call fini%get(section_name='IGLOO-Models', option_name='Cs'    , val=bpOut(4), error=ierr)
-      if (.not. quiet) then
-        write(*,*) ' >> Reitz models Cs constant can be chosen among the following values:'
-        write(*,*) '     Cs=20.0   Reitz,Diawakar  - Structure of High-Pressure Fuel Sprays  (1987)'
-        write(*,*) '     Cs=8.0    Ranger,Nicholls - Aerodinamic Shattering of Liquid Drops  (1969)'
-        write(*,*) '     Cs=3^0.5  O''Rourke,Amsden - The TAB method for Numerical Calculation     '
-        write(*,*) '                                  of Spray Droplet Breakup               (1987)'
-      endif
-      if (ierr/=0) then
-        if (.not. quiet) write(*,*) '    ... Assigning the default value: Cs = 20.0 ...'
-        bpOut(4) = 20._R8
-      endif
-    case (3)
+      bpOut = [6._R8, pi, 0.5_R8, 20._R8]
+    case (3)            !> Reitz-KHRT: B0, B1, Ctau, CRT, mShedLim, WeLimit
       allocate(bpOut(6))
-      call fini%get(section_name='IGLOO-Models', option_name='B0'      , val=bpOut(1), error=ierr)
-      if (ierr/=0) bpOut(1) = 0.61_R8
-      call fini%get(section_name='IGLOO-Models', option_name='B1'      , val=bpOut(2), error=ierr)
-      if (ierr/=0) bpOut(2) = 20._R8
-      call fini%get(section_name='IGLOO-Models', option_name='Ctau'    , val=bpOut(3), error=ierr)
-      if (ierr/=0) bpOut(3) = 1._R8
-      call fini%get(section_name='IGLOO-Models', option_name='CRT'     , val=bpOut(4), error=ierr)
-      if (ierr/=0) bpOut(4) = 0.1_R8
-      call fini%get(section_name='IGLOO-Models', option_name='mShedLim', val=bpOut(5), error=ierr)
-      if (ierr/=0) bpOut(5) = 0.03_R8
-      call fini%get(section_name='IGLOO-Models', option_name='WeLimit' , val=bpOut(6), error=ierr)
-      if (ierr/=0) bpOut(6) = 6._R8
-    case (4)
+      bpOut = [0.61_R8, 20._R8, 1._R8, 0.1_R8, 0.03_R8, 6._R8]
+    case (4)            !> TAB: Comega, Cmu, WeCrit (stored doubled), n; Rosin-Rammler product sizes
       allocate(bpOut(4))
-      call fini%get(section_name='IGLOO-Models', option_name='Comega', val=bpOut(1), error=ierr)
-      if (ierr/=0) bpOut(1) = 8._R8
-      call fini%get(section_name='IGLOO-Models', option_name='Cmu'   , val=bpOut(2), error=ierr)
-      if (ierr/=0) bpOut(2) = 5._R8
-      call fini%get(section_name='IGLOO-Models', option_name='WeCrit', val=bpOut(3), error=ierr)
-      if (ierr/=0) bpOut(3) = 6._R8; bpOut(3) = 2_R8*bpOut(3)
-      !> the spread whatever the method, so a TAB-method=2 token over method = 1 finds it
-      call fini%get(section_name='IGLOO-Models', option_name='n'     , val=bpOut(4), error=ierrN)
-      if (ierrN/=0) bpOut(4) = 3.5_R8
-      call fini%get(section_name='IGLOO-Models', option_name='method', val=methodOut, error=ierr)
-      if (ierr==0) then
-        if (methodOut/=1 .and. methodOut/=2) then
-          write(*,'(A,I0,A)') ' [ERROR] [IGLOO-Models] method = ', methodOut, ' is not a TAB product-size method (1 or 2)'
-          error stop 'IGLOO: TAB method must be 1 or 2'
-        endif
-      else
-        methodOut = 2
-        if (.not. quiet .and. ierrN/=0) then
-          write(*,*) ' >> TAB breakup model: defaulting to Rosin-Rammler distribution to choose the'
-          write(*,*) '                        product droplets sizes (spread parameter n = 3.5)'
-        endif
-      endif
-      scaleOut = tabScale(methodOut, bpOut(4))
-    case (5)
+      bpOut = [8._R8, 5._R8, 2._R8*6._R8, 3.5_R8]
+      methodOut = 2
+      scaleOut  = tabScale(methodOut, bpOut(4))
+    case (5)            !> ETAB (Tanner 1998): k1, k2, WeCrit (stored doubled), WeTrans, Comega, Cmu
       allocate(bpOut(6))
-      !> defaults per Tanner (1998)
-      call fini%get(section_name='IGLOO-Models', option_name='k1'     , val=bpOut(1), error=ierr)
-      if (ierr/=0) bpOut(1) = 0.2222_R8
-      call fini%get(section_name='IGLOO-Models', option_name='k2'     , val=bpOut(2), error=ierr)
-      if (ierr/=0) bpOut(2) = 0.2222_R8
-      call fini%get(section_name='IGLOO-Models', option_name='WeCrit' , val=bpOut(3), error=ierr)
-      if (ierr/=0) bpOut(3) = 6._R8; bpOut(3) = 2_R8*bpOut(3)
-      call fini%get(section_name='IGLOO-Models', option_name='WeTrans', val=bpOut(4), error=ierr)
-      if (ierr/=0) bpOut(4) = 80._R8
-      call fini%get(section_name='IGLOO-Models', option_name='Comega' , val=bpOut(5), error=ierr)
-      if (ierr/=0) bpOut(5) = 8._R8
-      call fini%get(section_name='IGLOO-Models', option_name='Cmu'    , val=bpOut(6), error=ierr)
-      if (ierr/=0) bpOut(6) = 5._R8
+      bpOut = [0.2222_R8, 0.2222_R8, 2._R8*6._R8, 80._R8, 8._R8, 5._R8]
     end select
   end subroutine read_breakup_constants
 
@@ -469,19 +417,18 @@ contains
 
   !> One key=value token from the material line of the phase file (written by ATLAS GPB from
   !  [GPB-Phase*]): the model words call the assign_* selectors (cap=<law> names the oxide cap), the reals of
-  !  the evaporation and solidification models are read, a breakup constant is kept for apply_breakup_tokens.
-  !  A constant of a burning model stops the run (its place is the models file), as an unknown key or a
-  !  non-numeric value does.
+  !  the evaporation and solidification models are read. A constant of a burning or of a breakup model stops the
+  !  run (its place is the models file), as an unknown key or a non-numeric value does.
   subroutine apply_material_key(imat, mat, key, value)
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Evaporation, only: assign_evaporation, assign_liquid, assign_interface, &
                                      assign_boiling, assign_combustion, assign_solidification, assign_xilaw
-    use IGLOO_Lib_Breakup,     only: assign_breakup, breakup_token, BRKTOK_SLOT
+    use IGLOO_Lib_Breakup,     only: assign_breakup, breakup_token
     implicit none
     integer,            intent(in)    :: imat
     type(obj_material), intent(inout) :: mat
     character(len=*),   intent(in)    :: key, value
-    integer :: ios, k
+    integer :: ios
 
     ios = 0
     select case (trim(key))
@@ -509,21 +456,15 @@ contains
         '"<material> combustion|cap <model> key=value ..." (ATLAS GPB writes it; the line keeps combustion=<model>, cap=<law>)'
       error stop 'IGLOO: a constant of a burning model on the material line of the phase file'
     case default
-      k = breakup_token(key)
-      if (k == 0) then
-        write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': unknown key "'//trim(key)// &
-                            '" (value "'//trim(value)//'") on the material line'
-        error stop 'IGLOO: unknown per-material key in the phase file'
+      if (breakup_token(key) > 0) then
+        write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': '//trim(key)//'='//trim(value)// &
+          ' on the material line: the constants of the breakup models are rows of the models file, '// &
+          '"<material> breakup <model> '//key(index(key, '-')+1:)//'=..." (ATLAS GPB writes it; the line keeps breakup=<model>)'
+        error stop 'IGLOO: a breakup constant on the material line of the phase file'
       endif
-      read(value,*,iostat=ios) mat%bpTok(k)
-      if (ios == 0) then
-        mat%bpGiven(k) = .true.
-        if (BRKTOK_SLOT(k) == 0 .and. mat%bpTok(k) /= 1._R8 .and. mat%bpTok(k) /= 2._R8) then
-          write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': '//trim(key)//'='//trim(value)// &
-                              ' is not a TAB product-size method (1 or 2)'
-          error stop 'IGLOO: TAB method must be 1 or 2'
-        endif
-      endif
+      write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': unknown key "'//trim(key)// &
+                          '" (value "'//trim(value)//'") on the material line'
+      error stop 'IGLOO: unknown per-material key in the phase file'
     end select
     if (ios /= 0) then
       write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': '//trim(key)//'='//trim(value)// &
@@ -533,9 +474,9 @@ contains
   end subroutine apply_material_key
 
 
-  !> The material's breakup constant tokens of its own model over its constants (read_breakup_constants):
-  !  the two WeCrit doubled as their keys are, TAB-method into bpMethod, TAB's scale recomputed; a material
-  !  carrying a constant token logs its resolved set.
+  !> The constants of the material's breakup row (kept by apply_model_row) over the defaults
+  !  (read_breakup_constants): WeCrit doubled, method into bpMethod, TAB's scale recomputed; a material whose row
+  !  gives a constant logs its resolved set.
   subroutine apply_breakup_tokens(imat, mat)
     use IGLOO_data_phases, only: obj_material
     use IGLOO_Lib_Breakup, only: NBRKTOK, BRKTOK, BRKTOK_MODEL, BRKTOK_SLOT, tabScale
@@ -610,7 +551,7 @@ contains
   end subroutine finalize_material_models
 
 
-  !> The rows of INPUT/<prefix>models.txt (ATLAS GPB writes it when a material has constants of a burning model):
+  !> The rows of INPUT/<prefix>models.txt (ATLAS GPB writes it when a material has constants of a burning or breakup model):
   !  '<material> <kind> <model> key=value ...', one per material and kind, '#' starting a comment line.
   subroutine load_models_file(prefix)
     implicit none
@@ -653,7 +594,7 @@ contains
     integer,            intent(in)    :: imat
     type(obj_material), intent(inout) :: mat
     character(len=128) :: name
-    logical :: seen(2)
+    logical :: seen(3)
     integer :: r, p
 
     seen = .false.
@@ -674,22 +615,24 @@ contains
 
 
   !> One row of the models file, dispatched on its kind: combustion (the constants of the material's burning
-  !  model) or cap (those of its oxide cap). The row names the model the material line names (combustion: or the
-  !  one of [IGLOO-Models]; '-' stands for it). A kind that is not known, a second row of a kind, another model
-  !  than the material's, a key the model does not read or a value that is not a number stop the run.
+  !  model), cap (those of its oxide cap) or breakup (those of its breakup model, kept in bpTok for
+  !  apply_breakup_tokens). The row names the model the material line names (combustion, breakup: or the one of
+  !  [IGLOO-Models]; '-' stands for it). A kind that is not known, a second row of a kind, another model than the
+  !  material's, a key the model does not read or a value that is not a number stop the run.
   subroutine apply_model_row(imat, mat, row, seen)
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Evaporation, only: assign_residue, COMB_BECKSTEAD, COMB_DIRECT
+    use IGLOO_Lib_Breakup,     only: breakup_row_key, breakup_reads, BRKTOK_SLOT
     implicit none
     integer,            intent(in)    :: imat
     type(obj_material), intent(inout) :: mat
     character(len=*),   intent(in)    :: row
-    logical,            intent(inout) :: seen(2)   !> a combustion row, a cap row already applied to this material
+    logical,            intent(inout) :: seen(3)   !> a combustion, a cap, a breakup row already applied to this material
     character(len=128) :: name, kind, model, tok, key, value
     character(len=80)  :: reads
     character(len=16)  :: word
-    integer :: p, e, ios, k
+    integer :: p, e, ios, k, j
     real(R8) :: x
 
     p = 1
@@ -724,8 +667,17 @@ contains
       endif
       if (trim(model) /= trim(word)) call refuse_row('the material line says cap='//trim(word), &
                                                      'IGLOO: the models file names another model than the material')
+    case ('breakup')
+      k = 3
+      if (mat%brkupSelect == 0) &
+        call refuse_row('the material names no breakup model (none, or NoBreakup, on its line and in [IGLOO-Models])', &
+                        'IGLOO: constants of a breakup model for a material that names none')
+      word = mat%brkupWord;  reads = breakup_reads(mat%brkupSelect)
+      if (trim(model) /= '-' .and. trim(model) /= trim(word)) &
+        call refuse_row('the material breaks up with breakup='//trim(word), &
+                        'IGLOO: the models file names another model than the material')
     case default
-      call refuse_row('the kinds are combustion and cap', 'IGLOO: unknown kind in the models file')
+      call refuse_row('the kinds are combustion, cap and breakup', 'IGLOO: unknown kind in the models file')
     end select
     if (seen(k)) call refuse_row('a second row of kind '//trim(kind)//' for this material', &
                                  'IGLOO: two rows of one kind for a material in the models file')
@@ -747,6 +699,14 @@ contains
         if (ios == 0 .and. (scan(value, ',/') > 0 .or. .not. ieee_is_finite(x))) &
           call refuse_row(trim(key)//'='//trim(value)//' is not one finite real number', &
                           'IGLOO: a constant of the models file that is not one finite real number')
+      endif
+      if (k == 3) then
+        j = breakup_row_key(mat%brkupSelect, key)
+        read(value,*,iostat=ios) mat%bpTok(j)
+        if (ios == 0) mat%bpGiven(j) = .true.
+        if (ios == 0 .and. BRKTOK_SLOT(j) == 0 .and. mat%bpTok(j) /= 1._R8 .and. mat%bpTok(j) /= 2._R8) &
+          call refuse_row(trim(key)//'='//trim(value)//' is not a TAB product-size method (1 or 2)', &
+                          'IGLOO: TAB method must be 1 or 2')
       endif
       select case (trim(key))
       case ('K-burn');    read(value,*,iostat=ios) mat%Kburn

@@ -59,7 +59,9 @@ output written).
 | `refuse-phase-token` | own `INPUT/phase.txt` (`A 1 no-such-key=1`), drag-token's `bc.txt`/`solfile.tec` symlinked | `IGLOO: unknown per-material key in the phase file` |
 | `refuse-phase-token-real` | own `INPUT/phase.txt` (`A 1 alpha-e=one`) | `IGLOO: non-numeric per-material value in the phase file` |
 | `refuse-breakup-token-material` | own `INPUT/phase.txt` (`A 1 breakup=Foo`), drag-stokes's `bc.txt`/`solfile.tec` symlinked, no `breakup` key in `[IGLOO-Models]` | `IGLOO: unknown breakup model` |
-| `refuse-tab-method` | tab-e2e (`INPUT/` symlinked) with `method = 3` | `IGLOO: TAB method must be 1 or 2` |
+| `refuse-tab-method` | tab-e2e's `INPUT/` files symlinked, its own `INPUT/models.txt` with the row `A breakup TAB method=3 n=3.5` | `IGLOO: TAB method must be 1 or 2` |
+| `refuse-breakup-section-key` | `breakup-token-material`'s fixture, `A 1`, and `method = 2` in `[IGLOO-Models]` | `IGLOO: a constant of a breakup model in [IGLOO-Models]` |
+| `refuse-breakup-line-token` | as above, no section key, the line `A 1 breakup=TAB TAB-Comega=10` | `IGLOO: a breakup constant on the material line of the phase file` |
 | `refuse-gas-order` | `gas-order = 3` | `IGLOO: gas-order must be 1 or 2` |
 | `refuse-out-file` | `out-file = nonsense` | `IGLOO: unknown out-file token` (accepted: E, S, E+S, ALL -- `ALL` is what hydra's MI2 cases write; `two-mat` runs it) |
 | `refuse-ode-solver` | `ode-solver = H-radau5` | `IGLOO: unknown ode-solver` |
@@ -95,13 +97,17 @@ output written).
 | `refuse-xi-law-cap` | as above with `cap=Gallier21` and `xi-cap=0.2` in its cap row (a constant the law does not read) | `IGLOO: a constant the model does not read in the models file` |
 | `refuse-xi-law-noburn` | as above, `A 1 cap=Gallier21` with the row `A cap Gallier21 product=OX`: no burn law | `IGLOO: cap=Gallier21 requires combustion=Beckstead` |
 | `refuse-models-line` | own `INPUT/phase.txt` `A 1 combustion=Beckstead K-burn=4.5e-07` (a constant left on the material line), no `models.txt`; `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `IGLOO: a constant of a burning model on the material line of the phase file` |
-| `refuse-models-kind` | as above with `A 1 combustion=Beckstead` and `burn-box`'s combustion row; a second row `A breakup Reitz-KHRT B1=40` | `IGLOO: unknown kind in the models file` |
+| `refuse-models-kind` | as above with `A 1 combustion=Beckstead` and `burn-box`'s combustion row; a second row `A Foo Reitz-KHRT B1=40` | `IGLOO: unknown kind in the models file` |
 | `refuse-models-model` | as above, the combustion row naming `direct` | `IGLOO: the models file names another model than the material` |
 | `refuse-models-material` | as above with a second row for `B`, no material of the phase file | `IGLOO: a row of the models file names no material of the phase file` |
 | `refuse-models-twice` | as above with a second combustion row for `A` | `IGLOO: two rows of one kind for a material in the models file` |
 | `refuse-models-noburn` | `A 1` (no burning model on the line, none in `[IGLOO-Models]`) with a combustion row under the model `-` | `IGLOO: constants of a burning model for a material that names none` |
 | `refuse-models-real` | `burn-box`'s row with `K-burn=fast` | `IGLOO: non-numeric constant in the models file` |
 | `refuse-models-short` | the row `A combustion` (no model) | `IGLOO: malformed row in the models file` |
+| `refuse-models-breakup-none` | `breakup-token-material`'s fixture, `A 1` (no breakup model on the line, none in `[IGLOO-Models]`), the row `A breakup TAB Comega=10` | `IGLOO: constants of a breakup model for a material that names none` |
+| `refuse-models-breakup-model` | as above, `A 1 breakup=TAB` and the row `A breakup ETAB Comega=10` | `IGLOO: the models file names another model than the material` |
+| `refuse-models-breakup-key` | as above, `A 1 breakup=Reitz-KHRT` and the row `A breakup Reitz-KHRT Comega=10` | `IGLOO: a constant the model does not read in the models file` |
+| `refuse-models-breakup-twice` | as above, `A 1 breakup=TAB` and two rows `A breakup TAB ...` | `IGLOO: two rows of one kind for a material in the models file` |
 | `refuse-models-nan` | `models-real`'s `phase.txt` (symlinked) and its own `models.txt`: `burn-box`'s row with `K-burn=NaN`; `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `IGLOO: a constant of the models file that is not one finite real number` |
 | `refuse-models-inf` | as above with `q-comb=Inf` | `IGLOO: a constant of the models file that is not one finite real number` |
 | `refuse-models-comma` | as above with `K-burn=4.5e-07,5` (a list-directed read takes 4.5e-07 and stops at the comma) | `IGLOO: a constant of the models file that is not one finite real number` |
@@ -176,7 +182,7 @@ its enthalpy undefined (ORION keeps only the last row's read status), and the de
 unread. **The six solidification cases are
 RED** on a solver without the solidification model, which stops each of them with `solidification=on parsed but
 not implemented yet`, not their payload. **The four INI-contract
-cases are RED** on a reader without their checks: `method = 3` runs to
+cases are RED** on a reader without their checks: `method=3` in its breakup row runs to
 non-finite states with exit 0 and three output files; `gas-order = 3` silently runs as 2 (a warning that
 cannot fire, the value being reassigned before the test); `out-file = nonsense` runs as both with a warning (and
 the registry default `E+S` parses as `E`); `ode-solver = H-radau5` is a plain `stop`. **The five token cases are RED** too on selectors that print their menu and execute a plain `stop` (every model selector in `Lib_Drag`, `Lib_Heat`, `Lib_Breakup` and

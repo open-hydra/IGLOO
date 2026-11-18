@@ -1,6 +1,6 @@
 # scatter-placement — where the scatter cloud's markers fall, how many there are and what they weigh
 
-`khrt-stress`'s case: the `khrt-e2e` box, gas and inlet (`INPUT/` symlinked; 25 injected parcels whose diameters
+`khrt-stress`'s case: the `khrt-e2e` box, gas and inlet (`INPUT/`'s files symlinked, its own `models.txt`; 25 injected parcels whose diameters
 sweep 0.36 to 12 mm over the inlet cells) under KH-RT breakup with `mShedLim = 0.01`, which sheds 701 children, and
 Rayleigh-Taylor shatters that multiply a parcel's number rate in place. `out-file = ALL` writes the Eulerian number
 moment (`euler1.tec`) and `out-time = on` stamps the trajectory rows with the parcel time.

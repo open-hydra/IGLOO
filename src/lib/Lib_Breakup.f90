@@ -2,7 +2,7 @@ module IGLOO_Lib_Breakup
     use, intrinsic :: iso_fortran_env, only : I4 => int32, I8 => int64, R8 => real64
     implicit none
     private
-    public :: assign_breakup, tabScale, breakup_token
+    public :: assign_breakup, tabScale, breakup_token, breakup_row_key, breakup_reads
     public :: breakupOde
     public :: breakupEvent
 
@@ -15,7 +15,8 @@ module IGLOO_Lib_Breakup
     !> childState layout (fixed): [vel(3), diam, npdot]
     integer(I4), parameter, public :: nchild = 5
 
-    !> Breakup constant tokens of a phase-file material line (<tag>-<key>): model (brkupSelect), bp slot (0: bpMethod)
+    !> The breakup constants, <tag>-<key>: model (brkupSelect), bp slot (0: bpMethod). The <key> is the constant's
+    !  name in a breakup row of the models file; the whole <tag>-<key> on a material line is refused by name.
     integer, parameter, public :: NBRKTOK = 23
     character(len=13), parameter, public :: BRKTOK(NBRKTOK) = [character(len=13) :: 'PE-Cd', 'PE-B', &
         'RD-WeBag', 'RD-Cb', 'RD-Cstrip', 'RD-Cs', 'KHRT-B0', 'KHRT-B1', 'KHRT-Ctau', 'KHRT-CRT', &
@@ -53,6 +54,36 @@ contains
             endif
         enddo
     end function breakup_token
+
+    !> Index in BRKTOK of the constant key of breakup model sel (the part after the dash), 0 when the model does not
+    !  read it.
+    pure integer function breakup_row_key(sel, key)
+        implicit none
+        integer,          intent(in) :: sel
+        character(len=*), intent(in) :: key
+        integer :: k
+        breakup_row_key = 0
+        do k = 1, NBRKTOK
+            if (BRKTOK_MODEL(k) /= sel) cycle
+            if (trim(key) == BRKTOK(k)(index(BRKTOK(k), '-')+1:len_trim(BRKTOK(k)))) then
+                breakup_row_key = k
+                return
+            endif
+        enddo
+    end function breakup_row_key
+
+    !> The constant keys breakup model sel reads, blank-separated, a blank before each (' Cd B').
+    pure function breakup_reads(sel) result(reads)
+        implicit none
+        integer, intent(in) :: sel
+        character(len=80)   :: reads
+        integer :: k
+        reads = ''
+        do k = 1, NBRKTOK
+            if (BRKTOK_MODEL(k) == sel) &
+                reads = trim(reads)//' '//BRKTOK(k)(index(BRKTOK(k), '-')+1:len_trim(BRKTOK(k)))
+        enddo
+    end function breakup_reads
 
     !> Map the breakup model word to brkupSelect and the ODE/event/child flags.
     subroutine assign_breakup(breakup_word,brkupSelect,brkupEqOde,brkupEvent,brkupHasChild)

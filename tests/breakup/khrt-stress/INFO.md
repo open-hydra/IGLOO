@@ -10,13 +10,14 @@ survives heavy KH shedding with mass intact. Physics validation of KHRT lives in
 
 ## Case construction
 
-Same fixture as `breakup/khrt-e2e` — `INPUT/` is a **symlink** to `../khrt-e2e/INPUT`, so the
-1 MB `solfile.tec`/`bc.txt`/`properties.dat` set is not duplicated. ⚠ That symlink is relative:
-moving *either* case directory breaks it, and the failure looks like a missing gas file.
+Same fixture as `breakup/khrt-e2e` — each file of `INPUT/` but `models.txt` is a **symlink** to
+`../../khrt-e2e/INPUT/<file>`, so the 1 MB `solfile.tec`/`bc.txt`/`properties.dat` set is not duplicated.
+⚠ Those symlinks are relative: moving *either* case directory breaks them, and the failure looks like a
+missing gas file.
 
-The single difference from khrt-e2e is `[IGLOO-Models] mShedLim = 0.01` against the production
-default of `0.03` (`Lib_INI.f90`): a parent sheds once it has accumulated a 1 % per-drop mass
-loss instead of 3 %.
+The single difference from khrt-e2e is the row `A breakup Reitz-KHRT mShedLim=0.01` of its own
+`INPUT/models.txt`, against the default of `0.03` (`read_breakup_constants`, `Lib_INI.f90`): a parent
+sheds once it has accumulated a 1 % per-drop mass loss instead of 3 %.
 
 ## Why it exists
 

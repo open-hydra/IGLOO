@@ -120,10 +120,10 @@ module IGLOO_data_phases
     logical  :: epsVariable=.false.   !> eps(T) from the Emissivity column
     real(R8) :: mup   = 0._R8 !> liquid material viscosity       (defined if mup=const)
     real(R8) :: sigma = 0._R8 !> liquid material surface tension (defined if sigma=const)
-    real(R8), allocatable :: bp(:)        !> the breakup model's constants: [IGLOO-Models], then the tokens
+    real(R8), allocatable :: bp(:)        !> the breakup model's constants: the defaults, then the material's row
     integer  :: bpMethod = 1              !> TAB product-size method
     real(R8) :: bpScale  = 1._R8          !> TAB product-size scale factor
-    real(R8) :: bpTok(NBRKTOK) = 0._R8    !> breakup constant tokens of the material line
+    real(R8) :: bpTok(NBRKTOK) = 0._R8    !> the constants of the material's breakup row of the models file
     logical  :: bpGiven(NBRKTOK) = .false.
     !> Evaporation properties (per-material, constant)
     character(len=50) :: evapWord

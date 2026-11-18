@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""Gate for the breakup model and its constants per material: phase-file tokens over [IGLOO-Models].
+"""Gate for the breakup model and its constants per material: the word of the material line, the row of the models file.
 
-Four water materials share tab-e2e's box and one boundary table (INPUT/phase.txt):
-  A  breakup=TAB, its token TAB-Comega=10 written before the model word
-  B  breakup=Reitz-KHRT, its token KHRT-B1=40 over [IGLOO-Models] B1 = 30
-  C  no breakup (sigma and mu entries 0)
-  D  breakup=Reitz-KHRT with [IGLOO-Models] B1 = 30; its TAB-Comega=10 belongs to another model, unused
+Four water materials share tab-e2e's box and one boundary table (INPUT/phase.txt, INPUT/models.txt):
+  A  breakup=TAB, its row A breakup TAB Comega=10
+  B  breakup=Reitz-KHRT, its row B breakup Reitz-KHRT B1=40
+  C  no breakup (sigma and mu entries 0), no row
+  D  breakup=Reitz-KHRT, its row D breakup Reitz-KHRT B1=30
 The gate reruns the case once per material X as a sibling ref-X: the same four materials, the same box, table and
-properties, a phase file without tokens, and X's model and constants given to every material in [IGLOO-Models]
-(ref-A: TAB with Comega = 10; ref-B: Reitz-KHRT with B1 = 40; ref-C: no breakup, no sigma or mu; ref-D:
-Reitz-KHRT with B1 = 30). Per material X: trajectories-X.dat and outloc-X.dat equal ref-X's as sorted multisets,
-the children lines of B's and D's group blocks in run_out.txt equal the siblings', and every C row keeps its
-parcel's injected diameter. Exact: the two runs differ only in where X's model and constants come from (the
-inlet's mass-flow split over the families, the family numbers and the random streams are the same).
+properties, a phase file without words, X's model in [IGLOO-Models] and X's constants in a row under the model '-'
+for every material (ref-A: TAB with Comega=10; ref-B: Reitz-KHRT with B1=40; ref-C: no breakup, no sigma or mu, no
+row; ref-D: Reitz-KHRT with B1=30). Per material X: trajectories-X.dat and outloc-X.dat equal ref-X's as sorted
+multisets, the children lines of B's and D's group blocks in run_out.txt equal the siblings', and every C row keeps
+its parcel's injected diameter. Exact: the two runs differ only in where X's model and constants come from (the
+inlet's mass-flow split over the families, the family numbers and the random streams are the same). A row lost in
+both runs would agree with itself, so two checks read the case alone: the setup log of A, B and D lists its row's
+constant among its resolved breakup constants, and B's children lines differ from D's (B1 40 against 30).
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,13 +26,18 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
 MATS = ("A", "B", "C", "D")
 SIGMA_MU = ("sigma = 0.072 0.072 0.072 0.072", "mu = 1.0e-3 1.0e-3 1.0e-3 1.0e-3")
-# per sibling: the [IGLOO-Models] lines replacing this case's B1, and its [IGLOO-Properties] lines
+# per sibling: its [IGLOO-Models] lines, the constants of the row every material gets (model '-'), its
+# [IGLOO-Properties] lines
 SIBLINGS = {
-    "A": (("breakup = TAB", "Comega = 10"), SIGMA_MU),
-    "B": (("breakup = Reitz-KHRT", "B1 = 40"), SIGMA_MU),
-    "C": ((), ()),
-    "D": (("breakup = Reitz-KHRT", "B1 = 30"), SIGMA_MU),
+    "A": (("breakup = TAB",), "Comega=10", SIGMA_MU),
+    "B": (("breakup = Reitz-KHRT",), "B1=40", SIGMA_MU),
+    "C": ((), "", ()),
+    "D": (("breakup = Reitz-KHRT",), "B1=30", SIGMA_MU),
 }
+# per material of this case: its index in the phase file, its model, the constant its row gives as the setup log
+# prints it (es10.3)
+LOGGED = (("A", 1, "TAB", "Comega=1.000E+01"), ("B", 2, "Reitz-KHRT", "B1=4.000E+01"),
+          ("D", 4, "Reitz-KHRT", "B1=3.000E+01"))
 ID_COL, D_COL = 9, 7  # trajectories-X.dat: X Y Z U V W T d m ID
 
 
@@ -48,14 +56,14 @@ def sibling_ini(models, props):
             out.extend({"[IGLOO-Models]": models, "[IGLOO-Properties]": props}.get(sec, ()))
             continue
         key = s.split("=", 1)[0].strip() if "=" in s and s[0] not in ";#!" else None
-        if (sec, key) in (("[IGLOO-Models]", "B1"), ("[IGLOO-Properties]", "sigma"), ("[IGLOO-Properties]", "mu")):
+        if (sec, key) in (("[IGLOO-Properties]", "sigma"), ("[IGLOO-Properties]", "mu")):
             continue
         out.append(line)
     return "\n".join(out) + "\n"
 
 
 def run_sibling(m):
-    models, props = SIBLINGS[m]
+    models, consts, props = SIBLINGS[m]
     ref = os.path.join(HERE, "ref-" + m)
     shutil.rmtree(ref, ignore_errors=True)
     os.makedirs(os.path.join(ref, "OUTPUT"))
@@ -64,6 +72,9 @@ def run_sibling(m):
         os.symlink(os.path.join(HERE, "INPUT", f), os.path.join(ref, "INPUT", f))
     with open(os.path.join(ref, "INPUT", "phase.txt"), "w") as fh:
         fh.write("condensed-dispersed phase\n" + "".join(f"{x} 1\n" for x in MATS))
+    if consts:
+        with open(os.path.join(ref, "INPUT", "models.txt"), "w") as fh:
+            fh.write("".join(f"{x} breakup - {consts}\n" for x in MATS))
     with open(os.path.join(ref, "input.ini"), "w") as fh:
         fh.write(sibling_ini(models, props))
     with open(os.path.join(ref, "run_out.txt"), "w") as out, open(os.path.join(ref, "run_err.txt"), "w") as err:
@@ -136,8 +147,18 @@ def main():
         for m in ("A", "B", "D"):
             mm, nn = moved_d(os.path.join("OUTPUT", f"trajectories-{m}.dat"))
             print(f"  {m}: {mm} of {nn} trajectory rows off their injected diameter (breakup acts)")
-        a, d = lines(os.path.join("OUTPUT", "trajectories-B.dat")), lines(os.path.join("OUTPUT", "trajectories-D.dat"))
-        print(f"  B (B1 = 40) against D (B1 = 30): {len(set(a) ^ set(d))} unshared trajectory lines")
+        log = open("run_out.txt").read()
+        for m, i, word, const in LOGGED:
+            pat = r">> \[material %d\] breakup=%s constants:.* %s(?: |$)" % (i, re.escape(word), re.escape(const))
+            if not re.search(pat, log, re.M):
+                rc |= fail(f"{m}: the setup log does not list {const} among its breakup constants")
+            else:
+                print(f"[PASS] {m}: the setup log lists its row's {const}")
+        cb, cd = group_lines("run_out.txt", "B"), group_lines("run_out.txt", "D")
+        if cb == cd:
+            rc |= fail(f"B (B1 = 40) and D (B1 = 30) shed the same children ({cb}): a row did not reach its model")
+        else:
+            print(f"[PASS] B (B1 = 40) against D (B1 = 30): children {' / '.join(cb)} against {' / '.join(cd)}")
     except FileNotFoundError as e:
         return fail(str(e))
     return rc

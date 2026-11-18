@@ -121,13 +121,13 @@ contains
         endif
         call apply_material_key(i, material(i), tok(1:e-1), tok(e+1:len_trim(tok)))
       enddo
-      !> ... then the constants of its burning models, the rows of the models file that name it
+      !> ... then the constants of its burning and breakup models, the rows of the models file that name it
       call apply_models_rows(i, material(i))
       call finalize_material_models(i, material(i))
-      !> a breaking material's constants: [IGLOO-Models] (the reader's defaults), then its own tokens
+      !> a breaking material's constants: the published defaults, then those its row of the models file gives
       if (material(i)%brkupSelect > 0) then
         call read_breakup_constants(material(i)%brkupSelect, material(i)%bp, material(i)%bpMethod, &
-                                    material(i)%bpScale, .true.)
+                                    material(i)%bpScale)
         call apply_breakup_tokens(i, material(i))
       endif
       if (material(i)%evapSelect > 0) phaseChange = .true.

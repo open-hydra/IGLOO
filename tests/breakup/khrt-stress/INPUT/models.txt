@@ -1,0 +1,5 @@
+# models.txt: the constants of each material's models
+# <material> <kind> <model> key=value ...
+
+# 0.03 is the production default; 0.01 makes the parent shed after a 1% accumulated loss.
+A breakup Reitz-KHRT mShedLim=0.01

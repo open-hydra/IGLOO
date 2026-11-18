@@ -1,0 +1,6 @@
+# models.txt: the constants of each material's models
+# <material> <kind> <model> key=value ...
+
+A breakup TAB Comega=10
+B breakup Reitz-KHRT B1=40
+D breakup Reitz-KHRT B1=30

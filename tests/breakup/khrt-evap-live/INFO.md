@@ -2,7 +2,8 @@
 
 ## Reference
 `[Reitz87]` p. 322 (the product-parcel rule of the KH shed) on the `khrt-e2e` case's sweep: 25 water drops,
-0.36–12 mm, injected at 100 m/s into air at 200 m/s and 300 K. `INPUT/` is `../khrt-e2e`'s (symlink); `check.py`
+0.36–12 mm, injected at 100 m/s into air at 200 m/s and 300 K. `INPUT/` holds `../khrt-e2e`'s files (symlinks) and
+its own `models.txt` (the row `A breakup Reitz-KHRT B1=1.0e8 CRT=1.0e3 mShedLim=1.0e-5`); `check.py`
 loads `../khrt-e2e/check.py` for the injected flow and the source reader.
 
 ## What it isolates
