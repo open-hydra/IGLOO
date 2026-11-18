@@ -46,7 +46,7 @@ my_case/
 │   ├── solfile.tec       ← frozen gas field (Tecplot ASCII; name set by gas-file in input.ini)
 │   ├── bc.txt            ← boundary condition table (numeric codes, ATLAS-generated)
 │   ├── phase.txt         ← material name and group count per material
-│   ├── models.txt        ← constants of the burning models, a row per material and kind (when a material has any)
+│   ├── models.txt        ← constants of the burning and breakup models, a row per material and kind (when a material has any)
 │   └── properties.dat    ← thermodynamic property tables (Tecplot format: cp, rho, h vs T)
 └── OUTPUT/               ← created at run time
     ├── trajectories-<mat>.dat   ← one zone per parcel trajectory (X Y Z U V W T d_p m_p ID)

@@ -33,17 +33,17 @@ change of any constant turns them red. They verify no model; they pin the transc
 
 An invalid input must stop the solver at setup with exit code 128, the `error stop` message on
 standard error, nothing injected and no output. The checker is shown to catch a healthy case, so it
-cannot pass vacuously. All 127 are refused.
+cannot pass vacuously. All 133 are refused.
 
 | Area | Refused inputs |
 |---|---|
-| Models | unknown drag, heat, breakup or evaporation tokens; TAB `method = 3`; `gas-order = 3`; an unknown `out-file` or `ode-solver`; `max-inner-iter < 1` |
+| Models | unknown drag, heat, breakup or evaporation tokens; TAB `method=3` in a material's breakup row; `gas-order = 3`; an unknown `out-file` or `ode-solver`; `max-inner-iter < 1` |
 | Evaporation | `liquid-conduction = P2T` on a non-evaporating material, without `k-liq` or `mu-liq`, or with both a key and a column; `boiling = ZGR` without evaporation; `interface = LK` with the d²-law; the boiling temperature under both names; a non-positive `boiling-pressure`; an `Lv` column off the `Psat` slope or given twice |
 | Property table | wrong zone count or temperature range; an ambiguous enthalpy datum; a malformed row; a decreasing `Psat` |
 | Breakup | no surface tension or viscosity; vectors of the wrong size; $\sigma$ as key and column; a non-positive `Sigma` |
 | Solidification | no `h-fus` or `cp-solid`; `T-nuc` above `T-melt`; evaporation or combustion on the material; a negative `rho-solid` |
 | Combustion | Beckstead with breakup; no `K-burn`; `n-burn` or `X-eff` out of range; oxide-cap and oxide-fraction inconsistencies; an unknown `cap` law, or one beside `xi-cap` or on a line that does not burn; `direct` without `T-burn` when `boiling-pressure` is not one atmosphere |
-| Models file | a burning model's constant left on the material line; a `models.txt` row of the wrong kind, model or material, given twice, too short, not a number, or for a material that does not burn; a value that is not one finite real (`NaN`, `Inf`, `4.5e-07,5`); a burning row without `q-comb`; a `cap` word without its row; `q-comb`, `d-stop`, `d-burnout` or `d-smoke` in `[IGLOO-Models]`; `d-smoke` on the material line or below 0 |
+| Models file | a burning model's constant left on the material line; a `models.txt` row of the wrong kind, model or material, given twice, too short, not a number, or for a material that does not burn; a value that is not one finite real (`NaN`, `Inf`, `4.5e-07,5`); a burning row without `q-comb`; a `cap` word without its row; `q-comb`, `d-stop`, `d-burnout` or `d-smoke` in `[IGLOO-Models]`; `d-smoke` on the material line or below 0; a breakup constant in `[IGLOO-Models]` or as a token of the material line; a breakup row for a material that does not break, of another model, with a key its model does not read, or given twice |
 | Boundary file | record counts that are neither one copy nor one per family; copies that disagree; five spoiled chimera payloads; a periodic face without a periodic partner; an off-centre wedge; a pure 2D gas file; legacy headers; an empty payload; $\sum k_\rho \ge 1$ or a negative $k_\rho$; a gas file without density |
 | Gas order 2 | 101 and 201 faces whose orientation integers disagree with the partner cells |
 | Injection | ten defective size distributions (missing, unsorted, negative, zero radius, …) |
