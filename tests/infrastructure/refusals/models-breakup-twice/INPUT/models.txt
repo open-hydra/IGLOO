@@ -1,0 +1,5 @@
+# models.txt: the constants of each material's models
+# <material> <kind> <model> key=value ...
+
+A breakup TAB Comega=10
+A breakup TAB Cmu=4

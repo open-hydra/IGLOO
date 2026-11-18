@@ -95,48 +95,9 @@ contains
       'Boiling branch, global default (per-material override: key=value on the material line of the phase file, from [GPB-Phase*]); ZGR: Zuo-Gomes-Rutland boiling of a droplet above its boiling point at the local pressure (replaces the clamp there)','clamp, ZGR',.false.)
     call reg%add('IGLOO-Models','breakup',d_s(9),'NoBreakup', &
       'Breakup model, global default; a material overrides it with the `breakup=<model>` token of its '// &
-      'phase-file line, and each constant below with its `<tag>-<key>` token', &
+      'phase-file line. The constants of its model are its row of the models file, `<material> breakup <model> '// &
+      'key=value ...`, each optional (the published default when absent); in this section they stop the run', &
       'Pilch-Erdman, Reitz-Diawakar, Reitz-KHRT, TAB, ETAB',.false.)
-    call reg%add('IGLOO-Models','Cd',d_r(3),'1.0', &
-      'Pilch-Erdman: drag constant','',.false.)
-    call reg%add('IGLOO-Models','B',d_r(4),'0.116', &
-      'Pilch-Erdman: breakup constant','',.false.)
-    call reg%add('IGLOO-Models','WeBag',d_r(5),'6', &
-      'Reitz-Diawakar: bag-breakup Weber threshold','',.false.)
-    call reg%add('IGLOO-Models','Cb',d_r(6),'3.141593', &
-      'Reitz-Diawakar: bag time constant (default pi)','',.false.)
-    call reg%add('IGLOO-Models','Cstrip',d_r(7),'0.5', &
-      'Reitz-Diawakar: stripping Weber threshold constant','',.false.)
-    call reg%add('IGLOO-Models','Cs',d_r(8),'20', &
-      'Reitz-Diawakar: stripping time constant (20 Reitz-Diwakar, 8 Ranger-Nicholls, sqrt(3) O''Rourke-Amsden)','',.false.)
-    call reg%add('IGLOO-Models','B0',d_r(9),'0.61', &
-      'Reitz-KHRT: KH child-size constant','',.false.)
-    call reg%add('IGLOO-Models','B1',d_r(10),'20', &
-      'Reitz-KHRT: KH breakup-time constant','',.false.)
-    call reg%add('IGLOO-Models','Ctau',d_r(11),'1', &
-      'Reitz-KHRT: RT time constant','',.false.)
-    call reg%add('IGLOO-Models','CRT',d_r(12),'0.1', &
-      'Reitz-KHRT: RT wavelength constant','',.false.)
-    call reg%add('IGLOO-Models','mShedLim',d_r(13),'0.03', &
-      'Reitz-KHRT: shed-mass fraction limit','',.false.)
-    call reg%add('IGLOO-Models','WeLimit',d_r(14),'6', &
-      'Reitz-KHRT: Weber limit','',.false.)
-    call reg%add('IGLOO-Models','Comega',d_r(15),'8', &
-      'TAB/ETAB: droplet oscillation frequency constant','',.false.)
-    call reg%add('IGLOO-Models','Cmu',d_r(16),'5', &
-      'TAB/ETAB: oscillation damping constant','',.false.)
-    call reg%add('IGLOO-Models','WeCrit',d_r(17),'6', &
-      'TAB/ETAB: critical Weber number (doubled internally)','',.false.)
-    call reg%add('IGLOO-Models','method',d_i(6),'2', &
-      'TAB: product-size law, its radius drawn by mass (1 = chi-square, 2 = Rosin-Rammler)','1, 2',.false.)
-    call reg%add('IGLOO-Models','n',d_r(18),'3.5', &
-      'TAB: Rosin-Rammler spread parameter of method 2, its radius drawn by mass','',.false.)
-    call reg%add('IGLOO-Models','k1',d_r(19),'0.2222', &
-      'ETAB: bag-regime rate constant','',.false.)
-    call reg%add('IGLOO-Models','k2',d_r(20),'0.2222', &
-      'ETAB: stripping-regime rate constant','',.false.)
-    call reg%add('IGLOO-Models','WeTrans',d_r(21),'80', &
-      'ETAB: bag-to-stripping transition Weber number','',.false.)
 
     ! --- [IGLOO-Properties] --- one value per material; overrides properties.dat
     call reg%add('IGLOO-Properties','psat',d_a(2,:),'0', &

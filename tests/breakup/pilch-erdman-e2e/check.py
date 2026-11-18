@@ -21,7 +21,7 @@ diameter relaxation  d(d)/dt = (dStable - d)/tau,  tau = T* d/(slip sqrt(rho_g/r
 dStable = Wec sigma/(rho_g slip^2 (1-VdV)^2),  VdV = sqrt(rho_g/rho_p)(0.75 Cd T*+3 B T*^2),
 Wec = 12(1+1.077 Oh^1.6),  Oh = mu_p/sqrt(rho_p d sigma).
 
-The [IGLOO-Models] Cd/B reach the kernel through the material's breakup constants
+The Cd/B of the material's row in INPUT/models.txt reach the kernel through its breakup constants
 (assign_breakup sets the model flags only); with Cd=B=0 (VdV=0) the plateau below fails.
 All 25 drops match the paper kernel to ~1e-4, so the gate covers We >= 45 with a
 tight 1% tolerance (same-window LSQ on both sides cancels the finite-window bias of
@@ -44,7 +44,7 @@ TRAJ = "OUTPUT/trajectories-A.dat"
 # ---- known case inputs (NOT read from production) ----
 RHOG, SIGMA, U_GAS = 1.2, 0.072, 200.0
 MUP, RHOP = 1.0e-3, 1000.0
-CD, BB = 0.5, 0.0758                       # [IGLOO-Models] Cd, B (PE87 eq.23 incompressible)
+CD, BB = 0.5, 0.0758                       # Cd, B of the row in INPUT/models.txt (PE87 eq.23 incompressible)
 SQEPS = math.sqrt(RHOG / RHOP)             # sqrt(rho_g/rho_p)
 WE_SWEEP = [20, 30, 40, 50, 60, 75, 90, 110, 130, 150, 175, 200, 230, 260,
             290, 320, 351, 380, 420, 470, 530, 600, 700, 850, 1000]

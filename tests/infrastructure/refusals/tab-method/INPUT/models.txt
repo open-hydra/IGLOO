@@ -1,0 +1,4 @@
+# models.txt: the constants of each material's models
+# <material> <kind> <model> key=value ...
+
+A breakup TAB method=3 n=3.5

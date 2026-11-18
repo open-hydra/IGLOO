@@ -41,22 +41,23 @@ Parameters not specified take their default values. Unknown sections are silentl
 IGLOO reads only the `[IGLOO-*]` sections above. The sections below are the *preprocessor's* input:
 whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase.txt`, `models.txt`,
 `properties.dat`, `bc.txt`). The per-material model keys (`evaporation`, `combustion`, `solidification`,
-`breakup`, `alpha-e`, ...), the solidification constants (`h-fus`, `cp-solid`, `T-melt`, `T-nuc`, `rho-solid`; see
-[Solidification](../theory/solidification.md#inputs)) and the breakup constants (`<tag>-<key>`, as `KHRT-B1`; table under
-[`[IGLOO-Models]`](#igloo-models)) are
+`breakup`, `alpha-e`, ...) and the solidification constants (`h-fus`, `cp-solid`, `T-melt`, `T-nuc`, `rho-solid`; see
+[Solidification](../theory/solidification.md#inputs)) are
 `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after
 `<name> <groups>` on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
 The constants of the burning models (`K-burn`, `n-burn`, `X-eff`, `T-ign`, `beta-part`, `T-burn`, `q-comb`, `d-stop`,
 `d-burnout`, `d-smoke`, and the oxide cap's `xi-cap`, `xi-ox0`, `product`, `residue`, `d-residue`; see
-[Metal Combustion](../theory/combustion.md#inputs)) are `[GPB-Phase*]` input as well, and ATLAS GPB writes them to a
+[Metal Combustion](../theory/combustion.md#inputs)) and of the breakup models (table under
+[`[IGLOO-Models]`](#igloo-models)) are `[GPB-Phase*]` input as well, and ATLAS GPB writes them to a
 second file, `models.txt` (with the phase file's prefix): one row per material and kind,
-`<material> <kind> <model> key=value ...`, the kinds `combustion` and `cap`; the material line keeps the words
-`combustion=<model>` and `cap=<law>`. A constant of a burning model on the material line stops the run, and so does a
+`<material> <kind> <model> key=value ...`, the kinds `combustion`, `cap` and `breakup`; the material line keeps the
+words `combustion=<model>`, `cap=<law>` and `breakup=<model>`. A constant of a burning or breakup model on the
+material line stops the run, and so does a
 row of an unknown kind, of another model than the line names, with a key its model does not read, or for no material
 of the phase file. So do a value that is not one finite real number (`NaN`, `Inf`, a value holding `,` or `/`), a
 burning material whose `combustion` row does not write `q-comb` (`q-comb=0` is allowed), and a `cap=<law>` word on
 the line without its `cap` row. The constants are never keys of `[IGLOO-Models]`: `q-comb`, `d-stop`, `d-burnout` or `d-smoke`
-there stops the run by name.
+there stops the run by name, and so does any breakup constant.
 The `<groups>` summed over the material lines is the family count, and therefore the number of table
 copies `bc.txt` may carry (one copy feeds every family; see [Several families](boundary-conditions.md#several-families)).
 A line with 0 groups injects nothing and `bc.txt` carries no copy for it; named by `product=` on a burning line, it
@@ -178,23 +179,28 @@ Selects physical model closures.
 | `blowing` | string | `none` | Stefan-blowing reduction of the convective heat: `none` or `LK` |
 | `liquid-conduction` | string | `ITC` | Heat conduction inside an evaporating droplet: `ITC` (a uniform temperature) or `P2T` (a parabolic profile; the liquid conductivity is the `k-liq` token of the material line or the `Conductivity` column of `properties.dat`, and on a material that does not break the liquid viscosity is the `mu-liq` token or the `Viscosity` column); see [Evaporation](../theory/evaporation.md#heat-conduction-inside-the-droplet) |
 | `boiling` | string | `clamp` | An evaporating droplet at or above its boiling point at the gas pressure: `clamp` (the gas-side model with its surface fraction capped) or `ZGR` (the Zuo–Gomes–Rutland boiling branch); see [Evaporation](../theory/evaporation.md#boiling-of-a-superheated-droplet) |
-| `breakup` | string | absent | Breakup model (`Pilch-Erdman`, `Reitz-Diawakar`, `Reitz-KHRT`, `TAB`, `ETAB`); when present, enables secondary breakup. The default of every material: a material's `breakup=<model>` token on its phase-file line overrides it |
+| `breakup` | string | absent | Breakup model (`Pilch-Erdman`, `Reitz-Diawakar`, `Reitz-KHRT`, `TAB`, `ETAB`); when present, enables secondary breakup. The default of every material: a material's `breakup=<model>` token on its phase-file line overrides it. Its constants are not keys of this section (below) |
 | `combustion` | string | `none` | Burning model: `none`, `Beckstead` (the $d^n$ law of a metal drop) or `direct` (the $d^2$ law of a drop whose vapour burns in the gas); see [Metal Combustion](../theory/combustion.md). The default of every injected material: a material's `combustion=<model>` token on its phase-file line overrides it; a combustion product (a line of 0 groups) never takes it. Another word stops the run (`IGLOO: unknown combustion model`) |
 
-Each breaking material reads the constants of its own model: its `<tag>-<key>` token on the phase-file line, else
-the `[IGLOO-Models]` key of that name, else the default (see the [Parameter Registry](registry.md)). TAB and ETAB
-each take their own `Comega`, `Cmu` and `WeCrit` tokens:
+Each breaking material reads the constants of its own model from its row of the models file,
+`<material> breakup <model> key=value ...` (the model of its line, or `-` for this section's), and takes the default of
+every constant the row does not give: a row is optional, and `<material> breakup <model>` alone is valid. `WeCrit` is
+the critical Weber number as written (IGLOO stores it doubled). TAB and ETAB each read their own `Comega`, `Cmu` and
+`WeCrit`:
 
-| `breakup=` | constant tokens |
+| `breakup=` | row keys (default) |
 |---|---|
-| `Pilch-Erdman` | `PE-Cd`, `PE-B` |
-| `Reitz-Diawakar` | `RD-WeBag`, `RD-Cb`, `RD-Cstrip`, `RD-Cs` |
-| `Reitz-KHRT` | `KHRT-B0`, `KHRT-B1`, `KHRT-Ctau`, `KHRT-CRT`, `KHRT-mShedLim`, `KHRT-WeLimit` |
-| `TAB` | `TAB-Comega`, `TAB-Cmu`, `TAB-WeCrit`, `TAB-method` (1 or 2), `TAB-n` |
-| `ETAB` | `ETAB-k1`, `ETAB-k2`, `ETAB-WeCrit`, `ETAB-WeTrans`, `ETAB-Comega`, `ETAB-Cmu` |
+| `Pilch-Erdman` | `Cd` (1.0), `B` (0.116) |
+| `Reitz-Diawakar` | `WeBag` (6), `Cb` (π), `Cstrip` (0.5), `Cs` (20) |
+| `Reitz-KHRT` | `B0` (0.61), `B1` (20), `Ctau` (1), `CRT` (0.1), `mShedLim` (0.03), `WeLimit` (6) |
+| `TAB` | `Comega` (8), `Cmu` (5), `WeCrit` (6), `method` (1 or 2; 2), `n` (3.5) |
+| `ETAB` | `k1` (0.2222), `k2` (0.2222), `WeCrit` (6), `WeTrans` (80), `Comega` (8), `Cmu` (5) |
 
-A token of a model the material does not run is accepted and unused; a material that carries a constant token
-logs its resolved set at setup. Unknown model tokens are refused at setup.
+A material whose row gives a constant logs its resolved set at setup
+(`>> [material <i>] breakup=<model> constants: ...`). A key its model does not read, a breakup row for a material
+that names no breakup model, a second breakup row, any of these keys in `[IGLOO-Models]`
+(`IGLOO: a constant of a breakup model in [IGLOO-Models]`) and a `<tag>-<key>` token on the material line
+(`IGLOO: a breakup constant on the material line of the phase file`) stop the run; so does an unknown model word.
 
 The constants of a burning model are not keys of this section: they are the material's rows of the models file
 (`<material> combustion <model> key=value ...`, see [Metal Combustion](../theory/combustion.md#inputs)), and a

@@ -14,8 +14,8 @@ continuous-rate breakup model. The physics is `pilch-erdman-e2e`'s; only the rou
 - `INPUT/phase.txt`: one material `A`. `INPUT/properties.dat`: water, ρ_p = 1000, c_p = 4182,
   `h = c_p T`, 101 rows on 270..370 K, with `Sigma = 0.036 + 1e-3 (T − 300)` N/m (six decimals)
   and `Viscosity = 0.05 exp(−(T − 300)/10)` Pa s (ten significant digits).
-- `input.ini`: `pilch-erdman-e2e`'s models (`Schiller-Naumann`, `Pilch-Erdman`, `Cd = 0.5`,
-  `B = 0.0758`) with `heat = NoHeat`, so every drop stays at its injection temperature,
+- `input.ini` and `INPUT/models.txt`: `pilch-erdman-e2e`'s models (`Schiller-Naumann`, `Pilch-Erdman`, the row's
+  `Cd=0.5`, `B=0.0758`) with `heat = NoHeat`, so every drop stays at its injection temperature,
   T0 = 300 K, and the solver's σ and μ_p are the columns at 300 K: 0.036 N/m (half
   `pilch-erdman-e2e`'s constant, so every Weber number doubles: We 40…2000) and 0.05 Pa s
   (fifty times its constant).

@@ -29,12 +29,11 @@ the nucleation to a complete re-melt; a KH child is born in its parent's phase (
 | TAB | `TAB` | no | yes | no |
 | ETAB | `ETAB` | no | yes | no |
 
-Each constant of a material's model is, in order of precedence, the material's own
-`<tag>-<key>` token on its phase-file line (tags `PE`, `RD`, `KHRT`, `TAB`, `ETAB`; the key is
-the name listed per model below, as in `TAB-Comega=10` or `KHRT-B1=40`), the `[IGLOO-Models]`
-key of that name, or its default (in the [registry](../user/registry.md)). TAB and ETAB each
-take their own `Comega`, `Cmu` and `WeCrit` tokens; a token of a model the material does not
-run is accepted and unused. The liquid properties the models need — surface tension
+Each constant of a material's model is the value of its row of the models file,
+`<material> breakup <model> key=value ...` (the key is the name listed per model below, as in
+`A breakup TAB Comega=10` or `A breakup Reitz-KHRT B1=40`), or its default (in the
+[input reference](../user/input.md#igloo-models)); TAB and ETAB each read their own `Comega`, `Cmu`
+and `WeCrit`, and a key of another model stops the run. The liquid properties the models need — surface tension
 $\sigma$ and viscosity $\mu_p$ — are, per material, either the `Sigma` / `Viscosity` columns of
 `INPUT/properties.dat` at the droplet temperature (linear between the nodes, the end values
 outside the table) or the `[IGLOO-Properties] sigma` / `mu` constants, not both, and are

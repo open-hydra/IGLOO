@@ -1,0 +1,4 @@
+# models.txt: the constants of each material's models
+# <material> <kind> <model> key=value ...
+
+A breakup Reitz-KHRT mShedLim=0.01

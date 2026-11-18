@@ -8,7 +8,7 @@ stripping ends, at `t_b = 5 t*`. The comparison is drawn, never gated: a correla
 form of the model. `check.py` gates what the figure needs.
 
 ## The case
-[tab-hf92](../tab-hf92/INFO.md)'s input (`INPUT` symlinked): d0 = 1000 µm water (ρ_L 997, σ 0.0708, μ_L 8.94e-4) in
+[tab-hf92](../tab-hf92/INFO.md)'s input (`INPUT`'s files symlinked, its own `models.txt`: `A breakup Reitz-KHRT mShedLim=1`): d0 = 1000 µm water (ρ_L 997, σ 0.0708, μ_L 8.94e-4) in
 air (ρ_G 1.18, 1.85e-5 Pa s, U = 200 m/s), 25 inlet cells, one diameter-based Weber number each, We 15 to 600; a 1.2 m
 box of 480 cells whose lateral faces reflect. `breakup = Reitz-KHRT` at its defaults (B0 0.61, B1 20, Ctau 1, CRT 0.1,
 WeLimit 6) with `mShedLim = 1`: no KH shed (a shed keeps the parent's d, so the parent's d(t) does not depend on it).

@@ -16,8 +16,8 @@ ODE solution across the regimes. The gate compares IGLOO's *integrated* output a
 the **paper's published correlation** — not our re-coding of production (a lockstep oracle
 shares production's misreadings) and not experiment. The gates fail on a solver that codes
 the `45<We≤351` branch `+0.25` instead of PE87's `-0.25` (breakup ~10× too slow); gate 2 also
-fails on one whose per-material `assign_breakup` re-allocation zeroes every `[IGLOO-Models]`
-numeric breakup parameter at runtime (`bp` is allocated and filled once, in `read_models()`).
+fails on one whose per-material `assign_breakup` re-allocation zeroes the material's breakup
+constants at runtime (`Cd`, `B` of its row in `INPUT/models.txt`, applied over the defaults at setup).
 
 ## Case construction
 - `tools/make_pe_case.py` writes `INPUT/solfile.tec` (uniform gas box 0.15×0.05×0.05 m,

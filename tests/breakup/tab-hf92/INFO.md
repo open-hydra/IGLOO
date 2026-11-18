@@ -14,7 +14,7 @@
   Fig. 1); the size/velocity correlation eq. [13] (p. 732), **u0/u_b − 1 = 2.7 [(ρ_G/ρ_L)^1/2 d0/d]^2/3**, u_b the
   relative velocity of a drop of diameter d at the end of breakup, Fig. 6's markers at (ρ_G/ρ_L)^1/2 d0/d ≈
   0.067–0.85 (its correlation line 0.058–1.07).
-- `[ORA87]` the TAB model, as `tab-e2e` runs it (`breakup = TAB`, `method = 2`, `n = 3.5`).
+- `[ORA87]` the TAB model, as `tab-e2e` runs it (`breakup = TAB`, the row `A breakup TAB method=2 n=3.5`).
 
 ## The case
 One run, 25 classes: each inlet cell injects water drops of d0 = 1000 µm at its own slip, one diameter-based Weber
@@ -30,7 +30,7 @@ number per cell, so a class is an inlet cell and the series is the papers' (d0 f
 | t*, t_b = 5 t* | 0.153 … 0.969 ms; 0.77 … 4.85 ms | [HF93] p. 726 |
 | box | 1.2 × 0.05 × 0.05 m, 480 × 5 × 5 cells; faces 3–6 reflecting (code 300), outlet face 2 | every parcel is in the box at t_b |
 | parcels | `[IGLOO-BC] ds = 0.2` (cm) in the 1-cm inlet cells: 714, 25 to 33 per class | |
-| models | `breakup = TAB`, `method = 2`, `n = 3.5`; `drag = Schiller-Naumann`, `heat = Ranz-Marshall` (kt = 1: no thermal slip); `gas-order = 1`; H-sdirk4 at 1e-9 | `[ORA87]`, `[SN33]`, `[RM52]` |
+| models | `breakup = TAB` (its row `method=2 n=3.5` in `INPUT/models.txt`); `drag = Schiller-Naumann`, `heat = Ranz-Marshall` (kt = 1: no thermal slip); `gas-order = 1`; H-sdirk4 at 1e-9 | `[ORA87]`, `[SN33]`, `[RM52]` |
 | output | `print-dcell = 4` (a trajectory row per cm), `out-time = on` (the time column), `out-scatter = off`, `out-file = S`: `trajectories-A.dat` 11.7 MB | |
 
 `INPUT/` (shared: `etab-hf92/INPUT` links it), from this directory:

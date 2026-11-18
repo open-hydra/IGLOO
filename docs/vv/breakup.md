@@ -245,7 +245,7 @@ gates are the figures' preconditions; the correlations are **drawn, not gated**.
 
 | Case | What it pins |
 |---|---|
-| `breakup-per-material` | the breakup model and its constants set per material in the phase file |
+| `breakup-per-material` | the breakup model of each material on its phase-file line, its constants in its row of the models file |
 | `tab-varrho`, `tab-evap-frozen-varrho`, `khrt-varrho` | a density that varies with temperature: mass kept between events, conserved across them |
 | `khrt-plane`, `khrt-exit-children` | plane records of breakup children; see [Coupling & Outputs](coupling.md#plane-crossings) |
 | `solid-brk-tab`, `solid-brk-khrt`, `solid-remelt-khrt` | breakup on a solidifying material; see [Solidification](solidification.md#breakup-while-freezing) |

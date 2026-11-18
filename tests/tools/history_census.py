@@ -31,7 +31,7 @@ also matches the present passive ("is used to"): reword such a hit or justify it
 The allowlist keeps by rule the tokens the drop patterns also match. What each rule admits:
   numeral            any number; it also admits a hash made of digits only or of digits around one 'e'
   citation locator   App./Appendix/Eq./Fig./Table/§ followed by an id
-  input key B0, B1   the Reitz KH constants of [IGLOO-Models] (Register_IGLOO.f90), written as a key
+  input key B0, B1   the Reitz KH constants (row keys of the models file, BRKTOK in Lib_Breakup.f90), written as a key
                      (in backticks or followed by '=') or on a line that names the KH model
   species O2         O2 inside a list of two or more formulas joined by ',', '/' or '+'
   check-id families  the A/B/O-letter ids of one checker, on the pages and matrix rows of the cases that
@@ -120,9 +120,9 @@ ALLOW = [
     ("citation locator", {"ledger"}, r"(?:App\.|Appendix|[Ee]q\.|Fig\.|Table|§)\s*[A-Z]?\d+[a-z]?", ALL, ALL, None,
      "kept: citation tags and their locators"),
     ("input key B0, B1 (as a key)", {"ledger"}, r"`B[01]`|(?<![A-Za-z0-9_-])B[01](?=\s*=)", ALL, ALL, None,
-     "src/lib/config/Register_IGLOO.f90: [IGLOO-Models] B0, B1 (the Reitz KH constants)"),
+     "src/lib/Lib_Breakup.f90: BRKTOK, the Reitz-KHRT row keys B0, B1 of the models file"),
     ("input key B0, B1 (on a KH line)", {"ledger"}, r"(?<![A-Za-z0-9_-])B[01](?![A-Za-z0-9_])", ALL, ALL, KH_LINE,
-     "src/lib/config/Register_IGLOO.f90: [IGLOO-Models] B0, B1 (the Reitz KH constants)"),
+     "src/lib/Lib_Breakup.f90: BRKTOK, the Reitz-KHRT row keys B0, B1 of the models file"),
     ("species O2 (in a species list)", {"ledger"}, _SPECIES + r"(?:\s*[,/+]\s*" + _SPECIES + r")+", ALL, ALL, None,
      "kept: a chemical formula"),
     ("drag unit checks A1-A4", {"ledger"}, r"A[1-4]′?", ("tests/standard/drag/INFO.md",), ("test_drag",), None,
@@ -164,7 +164,7 @@ SOURCE_ALLOW = [
      "tests/tools/body_source_check.py"),
     ("KH constants B0, B1 (the KH tests)", {"ledger"}, r"(?<![A-Za-z0-9_-])B[01](?![A-Za-z0-9_])",
      ("tests/breakup/reitz-khrt/*", "tests/breakup/khrt-*/*", "tests/breakup/breakup-per-material/*"),
-     "src/lib/config/Register_IGLOO.f90: [IGLOO-Models] B0, B1 (the Reitz KH constants)"),
+     "src/lib/Lib_Breakup.f90: BRKTOK, the Reitz-KHRT row keys B0, B1 of the models file"),
     ("DOI", {"hash", "ledger"}, r"(?:DOI:?|doi:?|doi\.org/)\s*10\.\d{4,9}/[^\s|)]+", ALL,
      "kept: a citation identifier"),
     ("RT-path quadrants Q1-Q4", {"plantag"}, r"\bQ[1-4]\b", ("tests/breakup/reitz-khrt/test_khrt_interaction.f90",),

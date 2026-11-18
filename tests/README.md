@@ -45,7 +45,7 @@ No prior build is needed. The script
 A healthy run ends with
 
 ```
-100% tests passed, 0 tests failed out of 406
+100% tests passed, 0 tests failed out of 412
 [report] .../build/verif/tests/verification_report.md: N/N rows PASS, M csv files
 ```
 
@@ -210,8 +210,8 @@ tolerance).
 
 ## Counts
 
-406 tests in a serial build: 344 end-to-end entries (191 solver cases, two more oracles on
-`khrt-e2e`'s run, 127 setup refusals, 16 two-sweep gates, 5 thread-count gates and three order gates)
+412 tests in a serial build: 350 end-to-end entries (191 solver cases, two more oracles on
+`khrt-e2e`'s run, 133 setup refusals, 16 two-sweep gates, 5 thread-count gates and three order gates)
 and 61 unit entries, plus the optional
 `vortex-cloud-3way`, which runs hydra's three-way comparison and is skipped where hydra or an ICE
-binary is absent. An MPI build registers 30 more `mpi-*` cases, 435 in all.
+binary is absent. An MPI build registers 30 more `mpi-*` cases, 442 in all.

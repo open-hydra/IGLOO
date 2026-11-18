@@ -24,6 +24,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Combustion: a `cap=<law>` word on a material line needs its `cap` row in the models file; without it the run stops.
 - Combustion: `q-comb`, `d-stop` and `d-burnout` given in `[IGLOO-Models]` stop the run by name; they are constants of
   the material's row in the models file.
+- Breakup: the constants of a material's breakup model are its row of the models file,
+  `<material> breakup <model> key=value ...`, plain keys (`Comega`, `B1`, ...), each optional (absent: the published
+  default; `WeCrit` as written, stored doubled). The 20 `[IGLOO-Models]` constants (`Cd` ... `WeTrans`) and the 23
+  `<tag>-<key>` tokens of the material line (`TAB-Comega`, ...) stop the run by name; a row key its model does not
+  read stops it too. `[IGLOO-Models] breakup` and the line's `breakup=<model>` are unchanged.
 
 ### Fixed
 - Combustion: the burnout removal of a burning parcel (ODE models 5 and 8) requires the parcel to burn, at or above

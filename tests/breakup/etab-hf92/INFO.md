@@ -8,7 +8,7 @@
   random azimuth.
 
 ## The case
-`tab-hf92`'s case with `breakup = ETAB`: the same `INPUT/` (a link to `../tab-hf92/INPUT`, whose `INFO.md` gives
+`tab-hf92`'s case with `breakup = ETAB`: the same `INPUT/` files (links into `../tab-hf92/INPUT`, without its TAB `models.txt`; its `INFO.md` gives
 the generating command), 25 classes of d0 = 1000 µm water drops at We 15–600 (one inlet cell each, the slip set per
 cell), air at 297 K, U = 200 m/s, the 1.2 m box with reflecting lateral faces, `ds = 0.2` (714 parcels, 25 to 33 per
 class), `print-dcell = 4`, `out-time = on`, `out-scatter = off`. `check.py` runs `tab-hf92`'s oracle (P0–P3) on this
