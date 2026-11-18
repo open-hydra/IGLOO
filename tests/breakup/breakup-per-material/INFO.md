@@ -40,8 +40,12 @@ same list-directed read of the same string in both rows.
 - Every group given material 1's breakup fields: B, C and D break as TAB.
 - A row's constant looked up by its key alone, whatever the model: not seen here (A's `Comega` is TAB's, the first
   match); `test_material_tokens` MT6 fails on `ETAB`'s `Comega`, which lands in TAB's slot 1.
-- The rows read before the defaults are set (`read_breakup_constants` after `apply_breakup_tokens` in `IO.f90`):
-  A, B and D run the defaults; the siblings too, so the sibling equality holds, and the log checks (A, B, D) and
-  B ≠ D fail.
+- The defaults laid over the rows (`read_breakup_constants` called again after `apply_breakup_tokens` in `IO.f90`):
+  A, B and D log their rows and run the defaults, the siblings too, so the sibling equality and the log checks hold
+  (B and D shed 138 children each) and B ≠ D fails.
+- The rows never laid on their slots (`apply_breakup_tokens` without its first loop): the sibling equality holds,
+  the log checks of A, B and D and B ≠ D fail.
+- The rows applied before the defaults are allocated (`apply_breakup_tokens` before `read_breakup_constants` in
+  `IO.f90`): the run dies on a segmentation fault.
 - The model `-` of a sibling's rows not resolved to the section's: the siblings stop
   (`the models file names another model than the material`).
