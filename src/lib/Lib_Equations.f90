@@ -68,7 +68,14 @@ contains
 
   !> Trilinear interpolation of the gas at p0 in a hexahedron: Newton from xi to the local coordinates,
   !  stopped once |x(xi) - p0| < hexTol(vertices), at most 10 steps (nIt), then shape-function weighting
-  !  (an extrapolation when p0 lies outside the cell); xi returned clamped. A failed inverse -- a weight
+  !  (an extrapolation when p0 lies outside the cell); xi returned clamped. The trilinear map of a cell far from a
+  !  parallelepiped (the dual cell in the corner of two symmetry planes is nearly a triangle) folds outside the
+  !  cell, where the determinant of its Jacobian vanishes, and a point of the cell near that fold has a second
+  !  preimage across it, where Newton can end. So a solution outside the cell is kept when the determinant there
+  !  has the sign it has at the cell centre -- p0 is then outside the cell, on the cell's own sheet --; with the
+  !  other sign, or with no solution in 10 steps, the inverse is sought once more from the cell centre and
+  !  replaced by the solution found there when that lies in the cell. A failed
+  !  inverse -- a weight
   !  that is not finite or exceeds wMax, as from a seed on the collapsed face of a degenerate dual cell --
   !  is sampled at the cell centre instead, the mean of the 8 nodes, and returns that centre as the next seed.
   pure subroutine interp2ndOrder(vertices,gasNodes,p0,nsp,xi,gas,nIt)
@@ -81,11 +88,25 @@ contains
     real(R8), intent(out)   :: gas(nsp)
     integer,  intent(out), optional :: nIt
     real(R8), parameter :: wMax = 10._R8
-    real(R8) :: N(8), dN(3,8), tol
-    integer  :: it
+    real(R8), parameter :: xiOut = 1.e-9_R8   !> local coordinates this far outside [0,1] are outside the cell
+    real(R8) :: N(8), dN(3,8), tol, xiC(3), NC(8)
+    integer  :: it, itC
+    logical  :: again
 
     tol = hexTol(vertices)
     call hexInverse(vertices, p0, xi, tol, 10, N, it)
+    if (it >= 10 .or. any(xi /= xi) .or. any(xi < -xiOut) .or. any(xi > 1._R8 + xiOut)) then
+      !> a further attempt only where there is something to find: no solution, or one on the other sheet
+      again = it >= 10 .or. any(xi /= xi)
+      if (.not. again) again = hexDet(vertices, xi)*hexDet(vertices, [0.5_R8, 0.5_R8, 0.5_R8]) <= 0._R8
+      if (again) then
+        xiC = 0.5_R8
+        call hexInverse(vertices, p0, xiC, tol, 10, NC, itC)
+        if (itC < 10 .and. all(xiC >= -xiOut) .and. all(xiC <= 1._R8 + xiOut)) then
+          xi = xiC; N = NC; it = itC
+        endif
+      endif
+    endif
     if (present(nIt)) nIt = it
     if (all(abs(N) <= wMax) .and. .not. any(xi /= xi)) then
       xi = max(0._R8, min(1._R8, xi))
@@ -98,6 +119,23 @@ contains
           N(5)*gasNodes(:,5) + N(6)*gasNodes(:,6) + N(7)*gasNodes(:,7) + N(8)*gasNodes(:,8)
 
   end subroutine interp2ndOrder
+
+  !> Determinant of the Jacobian of the trilinear map of a hexahedron (getVertices order) at xi.
+  pure function hexDet(vertices, xi) result(d)
+    implicit none
+    real(R8), intent(in) :: vertices(3,8), xi(3)
+    real(R8) :: d, N(8), dN(3,8), J(3,3)
+    integer  :: i
+    call hex(xi, N, dN)
+    J = 0._R8
+    do i = 1, 8
+      J(:,1) = J(:,1) + dN(1,i)*vertices(:,i)
+      J(:,2) = J(:,2) + dN(2,i)*vertices(:,i)
+      J(:,3) = J(:,3) + dN(3,i)*vertices(:,i)
+    enddo
+    d = J(1,1)*(J(2,2)*J(3,3) - J(2,3)*J(3,2)) - J(1,2)*(J(2,1)*J(3,3) - J(2,3)*J(3,1)) + &
+        J(1,3)*(J(2,1)*J(3,2) - J(2,2)*J(3,1))
+  end function hexDet
 
   !> Weights of the nodes of a dual cell at p, in getVertices order (8 in 3D, 4 in a planar 2D cell):
   !  a node within 1e-12 of the cell diagonal of p takes the whole weight; in a cell aligned with the
