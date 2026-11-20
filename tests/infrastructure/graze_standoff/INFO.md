@@ -1,11 +1,11 @@
 # INFO — graze_standoff (reflection standoff ≤ cell)
 
-Pins that the grazing-reflection standoff never exceeds the cell it places a particle into.
-`grazeStandoff` is an absolute 1e-6 m whose contract is "≫ roundoff, ≪ cell size". The second
+Pins that the reflection standoff never exceeds the cell it places a particle into. The standoff
+(`[IGLOO-General] reflect-standoff`, default 1e-6 m = `grazeStandoff`) is an absolute length whose contract is "≫ roundoff, ≪ cell size". The second
 half is load-bearing on the axisymmetric AXIS face, which takes the reflection path: the axis
 is precisely where a mesh is radially thin, and on a block whose first radial cell is thinner
 than 1e-6 m an uncapped standoff pushes the particle through cell j=1 into j=2 — a silent
-teleport with no error and no give-up message. Production `grazeOffset(vertices, nn)` caps
+teleport with no error and no give-up message. Production `reflOffset(vertices, f, nn)` caps
 the standoff at `grazeCellFrac` of the cell's own extent along the face normal.
 
 ## Tests (`test_graze_standoff.f90`, ctest `test_graze_standoff`, labels `unit;infrastructure;bc;t1`)

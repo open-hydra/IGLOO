@@ -12,9 +12,10 @@ Gates
       'EXIT OF SDIRK4', 'Inner loop >', 'hit outer maxIter', 'non-finite' or 'initialized out of domain' line;
       the run ends normally ('Stop condition', nothing in run_err.txt)
   C2  twelve exit records, IDs 1-12 once each, every one at the outlet (x = 0.15 m)
-  C3  the plane was reached: IDs 7-9 (50 m/s, 1 degree: a grazing impact) leave sliding on it, z <= 1e-5 m;
-      IDs 10-12 (50 m/s, 10 degrees) leave reflected, above their start height; IDs 1-6 (0.1 m/s) leave
-      between the plane and their start height (drag stops them before the plane)
+  C3  the plane was reached: IDs 7-12 (50 m/s) leave reflected, above their start height, the 1-degree streams
+      (IDs 7-9, |v_n|/|v| = 0.016 at the impact) below the 10-degree ones (IDs 10-12): the reflection is specular
+      at every incidence; IDs 1-6 (0.1 m/s) leave between the plane and their start height (drag stops them
+      before the plane)
 """
 import os
 import re
@@ -27,8 +28,7 @@ import datcols  # noqa: E402
 N_STREAMS = 12
 X_OUT, HALF = 0.15, 0.5e-6          # the outlet plane; half the F12.6 quantum
 Z0 = 1.0e-4                         # the start height
-Z_SLIDE = 1.0e-5                    # a parcel sliding on the plane sits at the grazing standoff (1e-6 m here)
-SLOW, GRAZE, REFLECT = range(1, 7), range(7, 10), range(10, 13)
+SLOW, SHALLOW, STEEP = range(1, 7), range(7, 10), range(10, 13)
 GUARDS = ["stuck in cell", "no net progress", "Run_ODESolver err=", "EXIT OF SDIRK4", "Inner loop >",
           "hit outer maxIter", "non-finite", "initialized out of domain"]
 
@@ -59,14 +59,15 @@ def main():
     else:
         print(f"C2 {N_STREAMS} exit records, IDs 1-{N_STREAMS} once each, all at the outlet x = {X_OUT} PASS")
     z = {r["ID"]: r["Z"] for r in ex}
-    bad = [i for i in GRAZE if not z.get(i, 1.0) <= Z_SLIDE] + [i for i in REFLECT if not z.get(i, 0.0) > Z0] + \
+    z_steep = min(z.get(i, 0.0) for i in STEEP)
+    bad = [i for i in SHALLOW if not Z0 < z.get(i, 0.0) < z_steep] + [i for i in STEEP if not z.get(i, 0.0) > Z0] + \
           [i for i in SLOW if not 0.0 < z.get(i, -1.0) < Z0]
     print("   exit z: " + ", ".join(f"{i}: {z.get(i, float('nan')):.6f}" for i in range(1, N_STREAMS + 1)))
     if bad:
         rc |= fail(f"C3 streams off their expected band: {bad}")
     else:
-        print(f"C3 the 1-degree fast streams slide on the plane (z <= {Z_SLIDE:g}), the 10-degree ones leave "
-              f"reflected (z > {Z0:g}), the slow ones stop short of it PASS")
+        print(f"C3 the fast streams leave reflected (z > {Z0:g}), the 1-degree ones below the 10-degree ones, "
+              f"the slow ones stop short of the plane PASS")
     print("\n[PASS] sym-plane-skate: every parcel launched along the symmetry plane reaches the outlet" if rc == 0
           else "\n[FAIL] sym-plane-skate violation(s) -- see above.")
     return rc

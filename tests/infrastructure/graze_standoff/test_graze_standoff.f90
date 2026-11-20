@@ -1,15 +1,16 @@
 program test_graze_standoff
     !
-    ! The grazing-reflection standoff must never exceed the cell it is placing a particle into.
+    ! The reflection standoff must never exceed the cell it is placing a particle into.
     !
-    ! `grazeStandoff` is an absolute 1e-6 m whose stated contract is ">> roundoff, << cell
+    ! The standoff ([IGLOO-General] reflect-standoff; its default is `grazeStandoff`) is an absolute 1e-6 m whose
+    ! stated contract is ">> roundoff, << cell
     ! size"; the second half is load-bearing on the axisymmetric AXIS face, which takes the
     ! reflection path: the axis is precisely where a mesh is radially thin. On a block whose
     ! first radial cell is thinner than 1e-6 m a bare standoff pushes the particle clean
     ! through cell j=1 into j=2 -- a silent teleport
     ! across a cell boundary, with no error and no give-up message.
     !
-    ! Production `grazeOffset(vertices, nn)` caps the standoff at grazeCellFrac of the cell's
+    ! Production `reflOffset(vertices, f, nn)` caps the standoff at grazeCellFrac of the cell's
     ! own extent along the face normal. Assertions:
     !
     !   G1  thick cell (JPL's first radial cell, 5.7e-4 m)  -> exactly grazeStandoff, i.e. the
@@ -24,7 +25,7 @@ program test_graze_standoff
     ! than a single coordinate difference.
     !
     use, intrinsic :: iso_fortran_env, only: real64
-    use IGLOO_bcBox, only: grazeOffset, grazeStandoff, grazeCellFrac   ! PRODUCTION under test
+    use IGLOO_bcBox, only: reflOffset, grazeStandoff, grazeCellFrac    ! PRODUCTION under test
     implicit none
 
     real(real64), parameter :: EPS = epsilon(1.0_real64)
@@ -36,14 +37,14 @@ program test_graze_standoff
     ! ---- G1: thick cell -> unchanged --------------------------------------------------------
     nn = [0.0_real64, 1.0_real64, 0.0_real64]
     call slab(5.7e-4_real64, nn, vert)
-    off = grazeOffset(vert, nn)
+    off = reflOffset(vert, 1, nn)
     call expect('G1 thick cell returns grazeStandoff unchanged',                             &
                 off - grazeStandoff, 8.0_real64*EPS*grazeStandoff)
 
     ! ---- G2: thin cell -> capped and strictly inside -----------------------------------------
     t = 1.0e-7_real64
     call slab(t, nn, vert)
-    off = grazeOffset(vert, nn)
+    off = reflOffset(vert, 1, nn)
     call expect('G2 thin cell is capped at grazeCellFrac*thickness',                          &
                 off - grazeCellFrac*t, 8.0_real64*EPS*grazeCellFrac*t)
     if (off >= t) then
@@ -57,7 +58,7 @@ program test_graze_standoff
     do kdec = -10, 1
         t = 10.0_real64**kdec
         call slab(t, nn, vert)
-        off = grazeOffset(vert, nn)
+        off = reflOffset(vert, 1, nn)
         if (.not. (off > 0.0_real64)) then
             write(*,'(a,i0,a)') '[FAIL] G3 t=1e', kdec, ': offset is not positive'
             nfail = nfail + 1
@@ -77,7 +78,7 @@ program test_graze_standoff
     ! ---- G4: degenerate cell -----------------------------------------------------------------
     vert = 0.0_real64
     nn   = [0.0_real64, 1.0_real64, 0.0_real64]
-    off  = grazeOffset(vert, nn)
+    off  = reflOffset(vert, 1, nn)
     if (.not. (off > 0.0_real64 .and. off <= grazeStandoff)) then
         write(*,'(a,es12.5)') '[FAIL] G4 degenerate cell gave a non-usable offset ', off
         nfail = nfail + 1
@@ -94,13 +95,13 @@ program test_graze_standoff
 contains
 
     !> A hex slab of the given thickness along `nn`, wider across than through, so the ONLY
-    !  small dimension is the one grazeOffset must find.
+    !  small dimension is the one reflOffset must find.
     !
     !  The width is scaled WITH the thickness (100x) rather than fixed. A fixed 1 m width on a
     !  1e-10 m slab is ill-conditioned for this measurement: e1/e2 are orthogonal to nn only to
     !  roundoff, so the transverse terms contribute ~eps*width to the projection, which at that
     !  aspect ratio is 1e-6 OF THE THICKNESS and swamps what is being measured. That is an
-    !  artefact of the fixture, not of grazeOffset, and a 1e10 aspect ratio is not a cell any
+    !  artefact of the fixture, not of reflOffset, and a 1e10 aspect ratio is not a cell any
     !  mesh generator emits. Keeping the ratio fixed leaves the roundoff at ~1e-14 relative.
     subroutine slab(thickness, nn, vert)
         real(real64), intent(in)  :: thickness, nn(3)
