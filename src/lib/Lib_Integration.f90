@@ -1232,6 +1232,7 @@ contains
       if     ( ord2 ) then; newGas = .not.isPointInsideCell(y(1:3),gasVert,mesh2D,gasHexNorms,gasHexCentroids,gasHexDegen,part%gasExitFace, &
                                                          sectorOut,gasHexTol)
       elseif (IamOut) then; newGas = .true.; endif
+      if (ord2 .and. newGas .and. .not.mesh2D) call outerFacesOnly(y(1:3))
 
       !> Locator-lost start: suppress containment interrupts until the particle has moved escapeDist.
       if (NR == 1) startedOut = (IamOut .or. newGas) .and. part%lost
@@ -1371,6 +1372,36 @@ contains
       part%i = part%iInj; part%wasin = .true.; part%lost = .false.
       injCellHolds = .true.
     end function injCellHolds
+
+    !> A point outside the gas dual cell (newGas) through outer faces only -- faces with no dual cell beyond, the cell
+    !  being an outermost one -- is no gas-cell change: there is no cell to go to. The geometry test, on in these
+    !  cells, ends the block; until then the gas is the cell's interpolation continued past the face. Outside
+    !  through a face that has a cell beyond: that face is the exit face. The two-triangle rule of isInsideHex12Fast.
+    subroutine outerFacesOnly(p)
+      real(R8), intent(in) :: p(3)
+      integer  :: f, q, hi(3)
+      real(R8) :: d1, d2
+
+      hi = [gasblock(b)%Nx, gasblock(b)%Ny, gasblock(b)%Nz] + 1
+      do f = 1, 6
+        if (gasHexDegen(1,f)) then
+          d1 = 1._R8
+          if (gasHexDegen(2,f)) then; d2 = -1._R8
+          else; d2 = dot_product(gasHexNorms(:,2,f), p - gasHexCentroids(:,2,f)); endif
+        else
+          d1 = dot_product(gasHexNorms(:,1,f), p - gasHexCentroids(:,1,f))
+          if (gasHexDegen(2,f)) then; d2 = 1._R8
+          else; d2 = dot_product(gasHexNorms(:,2,f), p - gasHexCentroids(:,2,f)); endif
+        endif
+        if (.not. (d1 > gasHexTol .and. d2 > gasHexTol)) cycle
+        q = (f + 1)/2
+        if (mod(f,2) == 1 .and. part%igas(q) <= 1) cycle
+        if (mod(f,2) == 0 .and. part%igas(q) >= hi(q)) cycle
+        part%gasExitFace = f
+        return
+      enddo
+      newGas = .false.; part%gasExitFace = 0
+    end subroutine outerFacesOnly
 
     !> True when the gas dual cell sits on a block boundary
     subroutine setAtGasBoundary()
