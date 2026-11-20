@@ -216,7 +216,7 @@ Newton-Raphson iteration (max 10 steps from the particle's previous local coordi
 $\lVert \mathbf{x}(\boldsymbol{\xi}) - \mathbf{p} \rVert < \max(10^{-12} h,\ 64\,\varepsilon L)$, with $h$
 the cell diagonal, $L$ the largest coordinate magnitude of the cell's nodes and $\varepsilon$ the machine
 epsilon — relative to the cell and reachable in floating point —, $\boldsymbol{\xi}$ clamped to
-$[0,1]^3$), or bilinear with an analytic inverse.
+$[0,1]^3$), or bilinear with an analytic inverse. The trilinear map of a cell far from a parallelepiped folds outside the cell, where the determinant of its Jacobian vanishes, and a point of the cell near the fold has a second preimage across it: when the iteration does not converge, or ends outside the cell at a point where the determinant has not the sign it has at the cell centre, the inverse is sought once more from the cell centre and that solution is taken when it lies in the cell.
 On an axisymmetric wedge the meridian field is sampled at the particle's $(x, r)$ and its
 velocity rotated to the particle's azimuth before it enters the ODE.  When
 `gas-order = 1`, the cell-centre values are used directly, the velocity rotated to the particle's azimuth
@@ -224,7 +224,7 @@ as well.  At both gas orders the rotated velocity enters the ODE and the slip a 
 ETAB, KH-RT) evaluates at a step end.
 
 The dual mesh of a block reaches one node past each boundary face, a ring of ghost nodes
-filled once per sweep: by linear extrapolation from the interior, mirrored at a solid face,
+filled once per sweep: by linear extrapolation from the interior, mirrored at a solid face, as the mirror image of the interior behind a symmetry plane,
 and — at a face connected to another block (101, 201, 102) — with that block's gas
 interpolated at the node by the same trilinear (bilinear) weights. A linear field is then
 continuous across a block interface whatever the cells on either side
