@@ -29,12 +29,13 @@ contains
   !> The parcel guards of [IGLOO-General], read again from input.ini at the start of every sweep: max-reflections
   !  (> 0) and, when time-end was set at start-up, its value. A missing or invalid key keeps the value in force.
   subroutine reread_guards()
-    use IGLOO_variables, only: nMaxRefl, tEnd, snapOn, reflStandoff
+    use IGLOO_variables, only: nMaxRefl, tEnd, snapOn, reflStandoff, cornerOn
     use IGLOO_Mod_MPI,   only: mpi_is_root
     implicit none
     type(file_ini) :: f
     integer  :: e, n
     real(R8) :: t
+    character(len=16) :: word
     call f%load(filename='input.ini', error=e)
     if (e /= 0) return
     call f%get(section_name='IGLOO-General', option_name='max-reflections', val=n, error=e)
@@ -46,6 +47,12 @@ contains
     elseif (e == 0) then
       if (mpi_is_root) write(*,'(A,ES10.3,A)') ' [IGLOO] reflect-standoff must be > 0: ignored, in force ', &
                                                reflStandoff, ' m'
+    endif
+    word = ''
+    call f%get(section_name='IGLOO-General', option_name='corner-clear', val=word, error=e)
+    if (e == 0 .and. (trim(adjustl(word)) == 'on' .or. trim(adjustl(word)) == 'off')) then
+      cornerOn = trim(adjustl(word)) == 'on'
+      if (mpi_is_root) write(*,'(A)') ' [IGLOO] corner-clear of this sweep: '//trim(adjustl(word))
     endif
     if (snapOn) then
       call f%get(section_name='IGLOO-General', option_name='time-end', val=t, error=e)

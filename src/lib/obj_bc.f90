@@ -18,7 +18,7 @@ module IGLOO_bcBox
   public :: sectorDs
   public :: periodicTransport
   public :: faceAzimuth, wedgeAzimTol
-  public :: grazeOffset, grazeStandoff, grazeCellFrac, reflOffset
+  public :: grazeOffset, grazeStandoff, grazeCellFrac, reflOffset, cornerClear
   public :: hopCrossing
 
 contains
@@ -57,6 +57,46 @@ contains
     thickness = maxval(proj) - minval(proj)
     if (thickness > toll) offset = min(offset, grazeCellFrac*thickness)
   end function reflOffset
+
+  !> After a specular reflection on face f of cell ic of the block: the parcel p, set back along the normal of f, is
+  !  moved along f, away from any other reflecting face of the cell (code 300) it is nearer to than that face's
+  !  standoff (reflOffset) -- or beyond --, until it stands off both. In the corner of two reflecting planes the
+  !  set-back along one normal alone leaves the parcel outside the other: found outside at once, it is set back
+  !  along the other normal, outside the first, with no time passing. Two rounds: a third plane at the same corner.
+  subroutine cornerClear(blk, ic, f, vertices, p)
+    implicit none
+    class(obj_block), intent(in)    :: blk
+    integer,          intent(in)    :: ic(3), f
+    real(R8),         intent(in)    :: vertices(3,8)
+    real(R8),         intent(inout) :: p(3)
+    integer  :: f2, m1, n1, m2, n2, round
+    real(R8) :: cen(3), na(3), nb(3), g, s2, d2, off
+
+    call blk%ijk2fmn(ic(1), ic(2), ic(3), f, m1, n1)
+    if (m1 <= 0) return
+    na = blk%face(f)%cell(m1,n1)%normal
+    if (abs(norm2(na) - 1._R8) > 1.e-6_R8) return
+    cen = sum(vertices, 2)/8._R8
+    na = sign(1._R8, dot_product(cen - blk%face(f)%cell(m1,n1)%center, na))*na          !> into the cell
+    do round = 1, 2
+      do f2 = 1, 6
+        if ((f2 + 1)/2 == (f + 1)/2) cycle                                                !> f and the face opposite
+        call blk%ijk2fmn(ic(1), ic(2), ic(3), f2, m2, n2)
+        if (m2 <= 0) cycle
+        if (blk%face(f2)%cell(m2,n2)%bcdef /= 300) cycle
+        nb = blk%face(f2)%cell(m2,n2)%normal
+        if (abs(norm2(nb) - 1._R8) > 1.e-6_R8) cycle
+        nb = sign(1._R8, dot_product(cen - blk%face(f2)%cell(m2,n2)%center, nb))*nb
+        g = dot_product(na, nb); s2 = 1._R8 - g*g
+        if (s2 <= 1.e-12_R8) cycle
+        off = reflOffset(vertices, f2, nb)
+        d2 = dot_product(p - blk%face(f2)%cell(m2,n2)%center, nb)
+        if (d2 >= off) cycle
+        !> along f (no change of the distance from it), away from the other plane
+        p = p + (off - d2)/s2*(nb - g*na)
+      enddo
+    enddo
+  end subroutine cornerClear
 
   !> First outward crossing of the plane (pI, nn) on the cubic Hermite of a step's end states over h: s the bracket's
   !  non-negative side, xc and vc the path's state there; found = .false. for h <= 0, a chord parallel to the plane

@@ -59,6 +59,9 @@ module IGLOO_variables
   !> [IGLOO-General] reflect-standoff [m], > 0: how far inside the cell a parcel is set after a specular reflection
   !  (reflOffset). Read again at every sweep.
   real(R8) :: reflStandoff = 1.e-6_R8
+  !> [IGLOO-General] corner-clear: after a reflection the parcel stands off every reflecting face of its cell
+  !  (cornerClear), not only the one it was reflected on. Read again at every sweep.
+  logical  :: cornerOn = .true.
   logical  :: timeOn = .false.
   real(R8) :: dsDegen=0._R8           !> [IGLOO-BC] ds-degen [m]: no injection in boundary cells thinner than this
   integer  :: rng_seed=42             !> seed for stochastic injection-diameter sampling
