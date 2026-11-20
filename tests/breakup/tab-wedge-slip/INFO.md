@@ -22,7 +22,8 @@ the time of its first trajectory row with d_p < d0 (1 − 1e-6).
   t_ev < 2e-4 s.
 - E1 gas order 1 (this run): |t_ev(+0.45°) − t_ev(−0.45°)| ≤ 5e-8 s. Measured +3.77e-9 s.
 - E2 gas order 2 (`ref-ord2/`, a sibling `check.py` runs with the `IGLOO_EXE` executable, the control): the same
-  bound. Measured +5.3e-10 s.
+  bound. Measured +5.3e-10 s. The sibling runs with `MALLOC_PERTURB_=1` (glibc fills every allocation with a byte
+  pattern), so that a value the solver reads before setting it is a huge number and not the zero of a fresh page.
 
 **Tolerance.** With the slip rotated, |t_ev(+) − t_ev(−)| is the event time's dependence on the accepted-step sequence.
 Measured over 23 runs (one thread): gas orders 1 and 2; ifx and gfortran (the CI's configuration); the committed
@@ -34,6 +35,10 @@ injection and x shifted by ±1e-5 m; rtol = atol from 1e-9 to 1e-13 (ifx). At th
 ±0.31 m/s to the radial slip of the two off-centre copies. E1 +5.17e-7 s (ifx 5.1735e-7, gfortran 5.1713e-7), 10 times
 TOL; over rtol 1e-10 to 1e-13 it stays 5.12e-7 to 5.35e-7 s. E2 is unchanged by the mutation: the case measures the
 rotation at gas order 1 and nothing else.
+The gas of the breakup event left unset at the start of a parcel's first segment at gas order 2 (H-sdirk4 calls the
+event at the start point, ahead of its first right-hand side): the first parcel of every thread but the first reads
+the fill, its Weber number is infinite and it never breaks up. E0 on the sibling: parcels 2 and 3 with the suite's
+five threads.
 
 **Observed, not gated: the centre copy.** The offset t_ev(0) − (t_ev(+) + t_ev(−))/2 is printed for both runs. At the
 committed tolerance it is −5.9e-9 s at gas order 1 and +1.94e-8 s at gas order 2 (ifx; +1.86e-8 s gfortran); over the

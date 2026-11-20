@@ -144,6 +144,7 @@ contains
     real(R8) :: sEv
     integer  :: whichEv
     real(R8) :: timeLocal, din, dout, deltaS(3), dir(3), taup, tEvt, rhoEvt
+    real(R8) :: xiEntry(3)    ! gas order 2, 3D: the local-coordinate seed of the entry sample (part%xi0 is left as it is)
     real(R8) :: zEnd          ! the law's cap at burnout over m_p0 (unused here)
     integer  :: err, nDL, innerIter, jSlot
     integer,  parameter :: nStep=10
@@ -255,6 +256,12 @@ contains
     !> Block index and cell-entry state for every entry (children enter with time /= 0).
     b = part%i(1)
     call refreshCellEntry()
+    !> Gas order 2: gasState is the right-hand side's sample, and the solver's first solout call (the start point of
+    !  the first segment) precedes every right-hand side: the breakup event of that call takes the gas at the entry state.
+    if (ord2) then
+      if (mesh2D) then; call sampleGas2D(gasVert, gas, part%stateVar(1:3), ng, gasState)
+      else; xiEntry = part%xi0; call interp2ndOrder(gasVert, gas, part%stateVar(1:3), ng, xiEntry, gasState); endif
+    endif
     !> Pack auxiliary variables once (constant throughout integration)
     call packAuxVars(part, nauxvar, auxLocal)
     !> The injection row, then a breakup child's first row (its birth state, before its first step), on the
