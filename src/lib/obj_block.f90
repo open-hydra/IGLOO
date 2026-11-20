@@ -1480,24 +1480,59 @@ contains
   end subroutine applyGhostData
 
 
-  !> Ghost values for a node on the symmetry axis (g*): scalars copied from the interior
-  !  partner (i*), velocity reduced to its axis-parallel component.
+  !> Ghost values for a node on the symmetry axis (g*). The scalars and the axis-parallel velocity are even in
+  !  the radius: on the axis they take the value of the fit a + b r^2 through the interior partner (i*, radius r1)
+  !  and the cell behind it on the same index line (radius r2), phi1 + w (phi1 - phi2), w = r1^2/(r2^2 - r1^2),
+  !  which has no radial slope there. The velocity normal to the axis is zero. The partner's values are kept
+  !  (w = 0) where there is no second cell, where the radius does not grow along the line, or where a fitted
+  !  scalar is not positive.
   subroutine axisGhost(self, gi, gj, gk, ii, ij, ik)
     use IGLOO_variables, only: axisDir
     implicit none
     class(obj_flowblock), intent(inout) :: self
     integer,              intent(in)    :: gi, gj, gk, ii, ij, ik
-    real(R8) :: v(3)
+    integer  :: ji, jj, jk
+    real(R8) :: w, r1, r2, u1, u2
 
-    self%density    (:, gi,gj,gk) = self%density    (:, ii,ij,ik)
-    self%temperature(   gi,gj,gk) = self%temperature(   ii,ij,ik)
-    self%mil        (   gi,gj,gk) = self%mil        (   ii,ij,ik)
-    self%kl         (   gi,gj,gk) = self%kl         (   ii,ij,ik)
-    self%gam        (   gi,gj,gk) = self%gam        (   ii,ij,ik)
-    self%R          (   gi,gj,gk) = self%R          (   ii,ij,ik)
+    w = 0._R8
+    ji = 2*ii - gi; jj = 2*ij - gj; jk = 2*ik - gk
+    if (ji >= 1 .and. ji <= self%Nx .and. jj >= 1 .and. jj <= self%Ny .and. jk >= 1 .and. jk <= self%Nz) then
+      r1 = axisRadius(self%node(:, ii,ij,ik)); r2 = axisRadius(self%node(:, ji,jj,jk))
+      if (r1 > 0._R8 .and. r2 > r1) w = r1*r1/(r2*r2 - r1*r1)
+    else
+      ji = ii; jj = ij; jk = ik
+    endif
 
-    v = self%velocity(:, ii,ij,ik)
-    self%velocity(:, gi,gj,gk) = dot_product(v, axisDir)*axisDir
+    call evenFit()
+    if (w > 0._R8) then
+      if (any(self%density(:, gi,gj,gk) <= 0._R8) .or. self%temperature(gi,gj,gk) <= 0._R8 .or. &
+          self%mil(gi,gj,gk) <= 0._R8 .or. self%kl(gi,gj,gk) <= 0._R8 .or.                      &
+          self%gam(gi,gj,gk) <= 0._R8 .or. self%R(gi,gj,gk) <= 0._R8) then
+        w = 0._R8
+        call evenFit()
+      endif
+    endif
+
+    u1 = dot_product(self%velocity(:, ii,ij,ik), axisDir); u2 = dot_product(self%velocity(:, ji,jj,jk), axisDir)
+    self%velocity(:, gi,gj,gk) = (u1 + w*(u1 - u2))*axisDir
+
+  contains
+
+    !> a1 + w (a1 - a2): the fit's value on the axis from the partner's value a1 and the second cell's a2
+    elemental function onAxis(a1, a2) result(a)
+      real(R8), intent(in) :: a1, a2
+      real(R8) :: a
+      a = a1 + w*(a1 - a2)
+    end function onAxis
+
+    subroutine evenFit()
+      self%density    (:, gi,gj,gk) = onAxis(self%density    (:, ii,ij,ik), self%density    (:, ji,jj,jk))
+      self%temperature(   gi,gj,gk) = onAxis(self%temperature(   ii,ij,ik), self%temperature(   ji,jj,jk))
+      self%mil        (   gi,gj,gk) = onAxis(self%mil        (   ii,ij,ik), self%mil        (   ji,jj,jk))
+      self%kl         (   gi,gj,gk) = onAxis(self%kl         (   ii,ij,ik), self%kl         (   ji,jj,jk))
+      self%gam        (   gi,gj,gk) = onAxis(self%gam        (   ii,ij,ik), self%gam        (   ji,jj,jk))
+      self%R          (   gi,gj,gk) = onAxis(self%R          (   ii,ij,ik), self%R          (   ji,jj,jk))
+    end subroutine evenFit
 
   end subroutine axisGhost
 
