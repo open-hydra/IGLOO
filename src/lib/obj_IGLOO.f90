@@ -406,6 +406,7 @@ contains
   !  output files, sizes the scatter quantum, runs the OpenMP particle loop (with the child
   !  generation loop for shedding models), then reduces and finalizes the source/euler fields.
   subroutine solve(self)
+    use IGLOO_IO_INI, only: reread_guards
     use Lib_Integration,  only: integrate
     use IGLOO_particles,  only: obj_particle
     use IGLOO_variables,  only: ode_word,iopt,rtol,atol, ord2, nm, nsm, nb, &
@@ -642,6 +643,7 @@ contains
               '/stream; realized varies with residence — raise fsample-traj for a denser cloud)'
       endif
 
+      call reread_guards()
       if (mpi_is_root) then
         write(*,*)" Compute particles dynamics for material: ",trim(mat%matName)
         if (mat%cpVariable .and. mat%solidSelect == 0) write(*,*) ' >> Solving enthalpy equation'

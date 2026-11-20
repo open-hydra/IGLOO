@@ -54,6 +54,8 @@ module IGLOO_variables
   !> [IGLOO-General] time-end [s]: every parcel stops there (huge = off); out-time appends the
   !  parcel time to every trajectory and exit row.
   real(R8) :: tEnd = huge(1._R8)
+  !> [IGLOO-General] max-reflections: a parcel is dropped after this many reflections (read again at every sweep).
+  integer  :: nMaxRefl = 5000
   logical  :: timeOn = .false.
   real(R8) :: dsDegen=0._R8           !> [IGLOO-BC] ds-degen [m]: no injection in boundary cells thinner than this
   integer  :: rng_seed=42             !> seed for stochastic injection-diameter sampling

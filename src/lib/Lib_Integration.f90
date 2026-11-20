@@ -17,7 +17,7 @@ contains
                         epsTab,cuts)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
-    use IGLOO_variables,  only: iprint,dtprint,dsprint,dcellSet,tEnd,timeOn,snapOn,frozenOn, &
+    use IGLOO_variables,  only: iprint,dtprint,dsprint,dcellSet,tEnd,timeOn,snapOn,frozenOn,nMaxRefl, &
                                 nb,toll,ord2,mesh2D,                      &
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
@@ -128,6 +128,7 @@ contains
     logical  :: geoHexDegen(2,6), gasHexDegen(2,6)
     real(R8) :: geoHexTol, gasHexTol   !> the cached cells' containment tolerances
     integer,  parameter :: maxIter=500000, nMaxCell=10, nMaxStall=100
+    integer  :: nReflTot
     !> accessed by ODEsystem, rhs1-4, solout via host association
     real(R8) :: y(part%neq), oldLocal(part%neq)
     real(R8) :: auxLocal(nauxvar), childState(nchild)
@@ -272,6 +273,7 @@ contains
     iter = 0; nCross=0; tprint = part%time + dtprint
     nStall = 0; posPrev = part%stateVar(1:3) - 1._R8
     nRefl = 0
+    nReflTot = 0
     nReflW = 0; posReflW = part%stateVar(1:3)
     !> Scatter cloud: the marker rate npRef/dNscat, fixed at entry (a breakup child's is its parent's); the accumulator
     !  seeded with the golden-ratio phase of the parcel's own ID.
@@ -533,6 +535,13 @@ contains
       endif
 
       !> A bounce that makes no progress: nMaxStall reflections within nMaxStall standoffs.
+      if (reflSeg .and. .not.part%gone) then
+        nReflTot = nReflTot + 1
+        if (nReflTot > nMaxRefl) then
+          write(*,'(A,I0,A,I0,A)') '       ==> Particle ',part%ID,' more than ',nMaxRefl,' reflections ==> marking gone'
+          part%gone = .true.
+        endif
+      endif
       if (reflSeg .and. .not.part%gone) then
         nReflW = nReflW + 1
         if (nReflW == nMaxStall) then
