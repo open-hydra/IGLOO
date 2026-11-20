@@ -35,8 +35,11 @@ program test_ghost_bc
     !   G3  3D k-plane          f5=300      v=(1,0,-0.1)     RED v_z = -0.1        GREEN 0
     !   G4  2D corner           f1=f3=300   v=(1,-0.1,0)     RED (1,-0.1)          GREEN (0,0)
     !   G5  partner copy        f3/f4=201   T linear         RED T_g = 287.5       GREEN 362.5
-    !   G6  positivity guard    f3=300      rho 0.4 / 1.0    RED 0.1               GREEN 0.4
+    !   G6  even fit, guard     f3=300      rho 0.4 / 1.0    RED 0.4               GREEN 0.325
+    !                                       rho 0.1 / 1.0    0.1 in both states (the guard)
     !   G7  3D corner           f1=f3=f5=300 v=(-.2,-.1,-.1) RED (-.2,-.1,-.1)     GREEN (0,0,0)
+    !   G8  300 beside 201      f1=300, f3/f4=201  u(y)      the edge node mirrors the 201 ghost (a control:
+    !                                                        green with the linear fill too)
     !
     ! Connected faces (two blocks; the ghost IS the observable, compared with the field at the node):
     !
@@ -55,10 +58,11 @@ program test_ghost_bc
     !       (edges beside it extrapolated from it, the other faces as without it; on a provided 101 face
     !       the face nodes keep the ring, the edge nodes are interpolated; a non-positive value falls back)
     !
-    ! G1's T check is a control, not a target: the profile is linear, so both fills reproduce
-    ! it exactly and T = 300 at the plane either way. It fails only if the bc pass corrupts a
-    ! scalar it must not touch. G6 is its counterpart: there the linear fill DOES go negative
-    ! and the guard must fall back to zero-gradient.
+    ! A scalar at a 300 plane is even across it: the ghost is the mirror image of the first row
+    ! and the plane takes the value of the fit a + b d^2 through the first two rows, T1 + (T1 - T2)/8
+    ! on this uniform grid. G1's T is linear in y, which no field symmetric about the plane is: the
+    ! linear fill gives 300 there, the even fit 309.375. G6: rho 0.4 / 1.0 takes the fit, 0.325;
+    ! rho 0.1 / 1.0 would take -0.0125, and the guard falls back to the first row's value.
     !
     ! ord2 = .true. must be set before any gasProperties call: without it gasProperties reads
     ! the CELL value and every case samples cell (2,1,1), so G1 reads -0.1 with either fill
@@ -88,6 +92,7 @@ program test_ghost_bc
     call g5_partner
     call g6_guard
     call g7_corner3D
+    call g8_sym_periodic
     call u8_stretched
     call u9_snap
     call u10_two_stage
@@ -121,7 +126,8 @@ contains
         call plane2D(sol, 2, [0.25_real64, 0.0_real64, 0.0_real64], gs)
         call expectLE('G1 v_y at the 300 plane', gs(3), 1.0e-14_real64)
         call expectEq('G1 u   at the 300 plane', gs(2), 1.0_real64,   1.0e-14_real64)
-        call expectEq('G1 T   at the 300 plane', gs(5), 300.0_real64, 1.0e-12_real64)
+        call expectEq('G1 T   at the 300 plane (even fit of the first two rows)', gs(5), &
+                      tprof(1) + (tprof(1) - tprof(2))/8.0_real64, 1.0e-12_real64)
         call freeAll(geo, sol)
     end subroutine g1_uniform_inflow
 
@@ -204,10 +210,10 @@ contains
         call freeAll(geo(1), sol(1))
     end subroutine g5_partner
 
-    !> G6 -- the positivity guard. A steep near-wall density makes the linear ghost negative;
-    !  a negative density in the sample is worse than a first-order one, so 300/301 falls back
-    !  to zero-gradient for the scalars. Only 300/301 does: every other code keeps the linear
-    !  fill.
+    !> G6 -- the even fit of a scalar and its positivity guard. rho 0.4 / 1.0 on the first two rows:
+    !  the plane takes 0.4 + (0.4 - 1.0)/8. rho 0.1 / 1.0: the fit would be negative there, and a
+    !  negative density in the sample is worse than a first-order one, so the node falls back to the
+    !  plain mirror image and the plane takes the first row's value.
     subroutine g6_guard
         type(obj_block)     :: geo
         type(obj_flowblock) :: sol
@@ -219,8 +225,13 @@ contains
         sol%density(1,:,2,1) = 1.0_real64
         call sol%fillGhostGradient(geo)
         call plane2D(sol, 2, [0.25_real64, 0.0_real64, 0.0_real64], gs)
-        call expectEq('G6 rho at the 300 plane (guard -> zero-gradient)', gs(1), &
-                      0.4_real64, 1.0e-12_real64)
+        call expectEq('G6 rho at the 300 plane (even fit of 0.4 and 1.0)', gs(1), &
+                      0.325_real64, 1.0e-12_real64)
+        sol%density(1,:,1,1) = 0.1_real64
+        call sol%fillGhostGradient(geo)
+        call plane2D(sol, 2, [0.25_real64, 0.0_real64, 0.0_real64], gs)
+        call expectEq('G6 rho at the 300 plane (fit not positive: guard -> the first row)', gs(1), &
+                      0.1_real64, 1.0e-12_real64)
         call freeAll(geo, sol)
     end subroutine g6_guard
 
@@ -242,6 +253,48 @@ contains
         call expectLE('G7 v_z at the 3D corner', gs(4), 1.0e-12_real64)
         call freeAll(geo, sol)
     end subroutine g7_corner3D
+
+    !> G8 -- a symmetry plane (face 1, x = 0) beside a translational periodic pair (faces 3 and 4). The ring node
+    !  behind both is the mirror image, in the plane, of the periodic ghost beside it -- not of an interior cell, and
+    !  not an extrapolation along the ring: it must follow the partner value written by fillGhostPartners. u varies
+    !  with y, so the periodic ghost row (the partner row's u) differs from the first interior row's.
+    subroutine g8_sym_periodic
+        type(obj_block)     :: geo(1)
+        type(obj_flowblock) :: sol(1)
+        real(real64) :: gs(NSP), up(3)
+        integer :: i, j, ny
+        call build2D(geo(1), sol(1), 4, 3)
+        ny = sol(1)%Ny
+        call tagAll(geo(1), 400); call tag(geo(1), 1, 300); call tag(geo(1), 3, 201); call tag(geo(1), 4, 201)
+        do i = 1, geo(1)%Nx
+            geo(1)%face(3)%cell(i,1)%connection = [1, i, ny, 1]
+            geo(1)%face(4)%cell(i,1)%connection = [1, i, 1,  1]
+            geo(1)%face(3)%cell(i,1)%connectionFace = 4
+            geo(1)%face(4)%cell(i,1)%connectionFace = 3
+        enddo
+        call setUniform(sol(1), [0.0_real64, -0.1_real64, 0.0_real64])
+        do j = 1, ny
+            up(j) = 0.5_real64 + 0.1_real64*j
+            sol(1)%velocity(1, 1:sol(1)%Nx, j, 1) = up(j)
+        enddo
+        call sol(1)%fillGhostGradient(geo(1))
+        call fillGhostPartners(sol, geo)
+        call expectEq('G8 periodic ghost row j=0 holds the partner row: u', sol(1)%velocity(1,1,0,1), up(ny), 1.0e-12_real64)
+        call expectEq('G8 edge node (0,0): u = minus the periodic ghost u', sol(1)%velocity(1,0,0,1), -up(ny), 1.0e-12_real64)
+        call expectEq('G8 edge node (0,0): v_y = the periodic ghost v_y', sol(1)%velocity(2,0,0,1), -0.1_real64, 1.0e-12_real64)
+        call expectEq('G8 edge node (0,0): T = the periodic ghost T', sol(1)%temperature(0,0,1), tprof(ny), 1.0e-12_real64)
+        call expectEq('G8 edge node (0,Ny+1): u = minus the periodic ghost u', sol(1)%velocity(1,0,ny+1,1), -up(1), &
+                      1.0e-12_real64)
+        call expectEq('G8 edge node (0,Ny+1): T = the periodic ghost T', sol(1)%temperature(0,ny+1,1), tprof(1), &
+                      1.0e-12_real64)
+        call plane2D(sol(1), 1, [0.0_real64, 0.0_real64, 0.0_real64], gs)
+        call expectLE('G8 u at the corner of the 300 plane and the 201 face', gs(2), 1.0e-14_real64)
+        call expectEq('G8 v_y there', gs(3), -0.1_real64, 1.0e-14_real64)
+        call expectEq('G8 T there = mean of the two periodic rows', gs(5), 0.5_real64*(tprof(ny) + tprof(1)), 1.0e-12_real64)
+        call plane2D(sol(1), 1, [0.0_real64, 0.4_real64*H, 0.0_real64], gs)
+        call expectLE('G8 u on the 300 plane inside the corner dual cell', gs(2), 1.0e-14_real64)
+        call freeAll(geo(1), sol(1))
+    end subroutine g8_sym_periodic
 
 
     !> U8 -- a 101 face between cells of 0.3 and 0.6 along x, linear field: every ghost node of
