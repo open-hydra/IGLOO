@@ -333,7 +333,8 @@ contains
   !> Places the ord2 dual node cloud: interior nodes are the geo cell centres, the surrounding
   !  ring is ghosts by reflection and constant-gradient extrapolation. Parts:
   !    faces (i, j; k in 3D), then the given face ghosts (ghostIdx at ghostPos), i/j corners
-  !    (both modes), k edges and true corners (3D only), axis repair for wedges.
+  !    (both modes), k edges and true corners (3D only), axis repair for wedges, then the ghosts of symmetry
+  !    planes as mirror nodes (symmetryRing; no bc code is known at the first call, before the bc read).
   subroutine fill_dual_nodes(sol, blk, is2D, ghostIdx, ghostPos)
     use IGLOO_data_block, only: obj_block, obj_flowblock
     use IGLOO_variables,  only: axisym, refDir
@@ -427,8 +428,96 @@ contains
         enddo
       enddo
     endif
+    call symmetryRing(sol, blk, is2D)
 
   end subroutine fill_dual_nodes
+
+
+  !> Ghost nodes of symmetry planes (code 300), placed as mirror ghosts (symPlanes, symFoot). Behind one plane the
+  !  node is the mirror image of the node one step inside -- a cell centre, or the ghost of another boundary --: the
+  !  point of the plane between the two is the foot of the perpendicular. Behind two symmetry faces (three) the node
+  !  is placed so that the 4 (8) nodes around the edge (corner) have their centre at the foot on the edge (at the
+  !  corner point). The part of a dual cell inside the domain is then the cell with its nodes ON the planes -- the
+  !  projection on them of the first layer of nodes inside -- and a multilinear interpolation whose values at those
+  !  centres have no part normal to the planes has none anywhere on the planes. Nodes behind one symmetry face go
+  !  first, then two, then three. Nodes on the symmetry axis of a 2D wedge (nodeOnAxis) keep their place. nmoved:
+  !  the nodes whose position changed; nby: the nodes behind one plane, the edge of two, the corner of three; nfit:
+  !  those of them whose value takes the even fit (symFitWeight > 0: the next node inside is on the normal).
+  subroutine symmetryRing(sol, blk, is2D, nmoved, nby, nfit)
+    use IGLOO_data_block, only: obj_block, obj_flowblock, symPlanes, symFoot, symFitWeight
+    implicit none
+    type(obj_flowblock), intent(inout) :: sol
+    type(obj_block),     intent(in)    :: blk
+    logical,             intent(in)    :: is2D
+    integer, optional,   intent(out)   :: nmoved, nby(3), nfit(3)
+    integer  :: i, j, k, m, ns, g(3), b(3), c(3), o(3), nm, nc(3), nf(3), mask
+    logical  :: step(3), bits(3)
+    real(R8) :: nrm(3,3), pt(3,3), x(3)
+
+    nm = 0; nc = 0; nf = 0
+    do m = 1, 3
+      do k = lbound(sol%node,4), ubound(sol%node,4)
+        do j = lbound(sol%node,3), ubound(sol%node,3)
+          do i = lbound(sol%node,2), ubound(sol%node,2)
+            if (i >= 1 .and. i <= sol%Nx .and. j >= 1 .and. j <= sol%Ny .and. &
+                (is2D .or. (k >= 1 .and. k <= sol%Nz))) cycle
+            if (allocated(sol%nodeOnAxis)) then
+              if (sol%nodeOnAxis(i,j,k)) cycle
+            endif
+            call symPlanes(blk, i, j, k, ns, nrm, pt, b)
+            if (ns == 0) cycle
+            g = [i, j, k]
+            step = b /= g
+            if (count(step) /= m) cycle
+            !> 2**m times the point on the planes, less the other nodes of the 2**m
+            x = real(2**m, R8)*symFoot(sol%node(:, b(1), b(2), b(3)), ns, nrm, pt)
+            do mask = 1, 7
+              bits = [btest(mask, 0), btest(mask, 1), btest(mask, 2)]
+              if (any(bits .and. .not. step)) cycle
+              o = merge(b, g, bits)
+              x = x - sol%node(:, o(1), o(2), o(3))
+            enddo
+            if (any(x /= sol%node(:,i,j,k))) nm = nm + 1
+            nc(ns) = nc(ns) + 1
+            c = 2*b - g
+            if (all(.not. step .or. (c >= 1 .and. c <= [sol%Nx, sol%Ny, sol%Nz]))) then
+              if (symFitWeight(sol%node(:, b(1), b(2), b(3)), sol%node(:, c(1), c(2), c(3)), ns, nrm, pt) > 0._R8) &
+                nf(ns) = nf(ns) + 1
+            endif
+            sol%node(:,i,j,k) = x
+          enddo
+        enddo
+      enddo
+    enddo
+    if (present(nmoved)) nmoved = nm
+    if (present(nby)) nby = nc
+    if (present(nfit)) nfit = nf
+  end subroutine symmetryRing
+
+
+  !> The ghost nodes of every block's symmetry planes (symmetryRing), once the bc codes are read: a block whose ring
+  !  changes gets its skew flags, dual volumes and bounding box again. In a block with 101 or 201 links
+  !  assembleInterfaceDual did it, keeping the faces it does not clip: nothing moves there. nby: the ghost nodes behind
+  !  one plane, the edge of two, the corner of three, over the blocks; nfit: those that take the even fit.
+  subroutine symmetryDual(geo, gas, nby, nfit)
+    use IGLOO_variables,  only: mesh2D
+    use IGLOO_data_block, only: obj_block, obj_flowblock
+    implicit none
+    type(obj_block),     intent(in)    :: geo(:)
+    type(obj_flowblock), intent(inout) :: gas(:)
+    integer,             intent(out)   :: nby(3), nfit(3)
+    integer :: b, nm, nc(3), nf(3)
+
+    nby = 0; nfit = 0
+    do b = 1, size(gas)
+      call symmetryRing(gas(b), geo(b), mesh2D, nm, nc, nf)
+      nby = nby + nc; nfit = nfit + nf
+      if (nm == 0) cycle
+      call computeSkewFlag(gas(b), mesh2D)
+      call gas(b)%precomputeDualMetric(mesh2D, geo(b))
+      call gas(b)%computeBBox
+    enddo
+  end subroutine symmetryDual
 
   !> Flags the dual cells whose edge directions deviate from orthogonality beyond skew_threshold.
   subroutine computeSkewFlag(sol, is2D)
@@ -786,12 +875,15 @@ contains
       endif
       deallocate(acc, cnt)
       end associate
+      !> the ghosts of symmetry planes again, from the edge ghosts just placed
+      call symmetryRing(gas(bk), geo(bk), mesh2D)
     end subroutine moveEdgeGhosts
 
     !> The dual node of block pb one step s, in the two tangential index directions of its face pf, from its cell
     !  (pi,pj,pk): the centre of the cell there, or beyond the block the ghost of the boundary face the step crosses
-    !  -- the centre of the cell a 101 link joins it to, else the reflection of the centre of (pi,pj,pk) through the
-    !  face centre. ok false where that face cell carries a 201 or 102 link.
+    !  -- the centre of the cell a 101 link joins it to, behind a symmetry plane (300) the mirror image of the centre
+    !  of (pi,pj,pk), else the reflection of that centre through the face centre. ok false where that face cell
+    !  carries a 201 or 102 link.
     subroutine partnerNode(pb, pf, pi, pj, pk, s, xn, ok)
       integer,  intent(in)  :: pb, pf, pi, pj, pk, s(2)
       real(R8), intent(out) :: xn(3)
@@ -831,6 +923,8 @@ contains
         return
       case default
         xn = 2._R8*cell%center - pg%center(:, pi, pj, pk)
+        if (cell%bcdef == 300 .and. abs(norm2(cell%normal) - 1._R8) <= 1.e-6_R8) xn = pg%center(:, pi, pj, pk) &
+          - 2._R8*dot_product(pg%center(:, pi, pj, pk) - cell%center, cell%normal)*cell%normal
       end select
       ok = .true.
       end associate
