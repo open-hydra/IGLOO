@@ -44,7 +44,18 @@ contains
       'when print-dcell is set; <=0 = off','',.false.)
     call reg%add('IGLOO-General','time-end',d_r(26),'-1', &
       'Parcel end time [s]: every parcel still in the domain stops there, with a last trajectory row at that time '// &
-      'and its state in snapshot-<mat>.dat; <=0 = off (integrate until the parcel leaves the domain)','',.false.)
+      'and its state in snapshot-<mat>.dat; <=0 = off (integrate until the parcel leaves the domain); when set '// &
+      'at start-up, read again from input.ini at every sweep','',.false.)
+    call reg%add('IGLOO-General','max-reflections',d_i(3),'5000', &
+      'A parcel is dropped after this many reflections at boundary faces; read again from input.ini at every '// &
+      'sweep, a value below 1 keeps the one in force','',.false.)
+    call reg%add('IGLOO-General','reflect-standoff',d_r(3),'1e-6', &
+      'Distance [m] from the face at which a parcel restarts after a reflection, along the face normal, never '// &
+      'more than 1 % of the cell''s extent along it; read again at every sweep, a value <= 0 is reported and '// &
+      'ignored','',.false.)
+    call reg%add('IGLOO-General','corner-clear',d_s(16),'on', &
+      'After a reflection the parcel stands off every symmetry face (300) of its cell, not only the one it '// &
+      'hit; read again at every sweep','on, off',.false.)
     call reg%add('IGLOO-General','out-time',d_s(23),'off', &
       'Append the parcel time [s] as the last column of every trajectory and exit row','on, off',.false.)
     call reg%add('IGLOO-General','mdot-max',d_r(2),'0', &
