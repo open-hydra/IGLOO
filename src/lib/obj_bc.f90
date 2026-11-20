@@ -18,7 +18,7 @@ module IGLOO_bcBox
   public :: sectorDs
   public :: periodicTransport
   public :: faceAzimuth, wedgeAzimTol
-  public :: grazeOffset, grazeStandoff, grazeCellFrac
+  public :: grazeOffset, grazeStandoff, grazeCellFrac, reflOffset
   public :: hopCrossing
 
 contains
@@ -40,6 +40,23 @@ contains
     endif
 
   end function grazeOffset
+
+  !> Interior offset after a specular reflection on face f of the cell, along the face normal nn: reflect-standoff,
+  !  never more than grazeCellFrac of the cell's extent along the normal. The parcel must end inside the cell by the
+  !  containment test, whose planes pass through the face's nodes: on a face that is not planar its mean plane lies up
+  !  to the face's warp outside them, so the length must exceed the warp (and the test's own tolerance).
+  pure function reflOffset(vertices, f, nn) result(offset)
+    use IGLOO_variables, only: toll, reflStandoff
+    implicit none
+    real(R8), intent(in) :: vertices(3,8), nn(3)
+    integer,  intent(in) :: f
+    real(R8) :: offset, proj(8), thickness
+
+    offset = reflStandoff
+    proj      = matmul(nn, vertices)
+    thickness = maxval(proj) - minval(proj)
+    if (thickness > toll) offset = min(offset, grazeCellFrac*thickness)
+  end function reflOffset
 
   !> First outward crossing of the plane (pI, nn) on the cubic Hermite of a step's end states over h: s the bracket's
   !  non-negative side, xc and vc the path's state there; found = .false. for h <= 0, a chord parallel to the plane
@@ -238,14 +255,11 @@ contains
         time = told + s*(time - told)
         v    = vc
         nOut = sign(1._R8, dot_product(nn, p - pold))*nn
-        if (abs(dot_product(v,nn)) < grazeFrac*norm2(v)) then
-          !> grazing: slide along the plane; the standoff keeps the ray off the face
-          v = v - dot_product(v,nn)*nn
-          p = xc - grazeOffset(vertices,nn)*nOut
-        else
-          v = v - 2._R8*dot_product(v,nn)*nn
-          p = xc - minDist*nOut
-        endif
+        !> specular at every incidence: the normal velocity is mirrored, never removed. The parcel is set back inside
+        !  by the standoff, which must exceed the face's own non-planarity (a face warped by 1e-11 m leaves a parcel
+        !  1e-12 m inside its mean plane outside the cell's triangle planes: it is then found outside again at once).
+        v = v - 2._R8*dot_product(v,nn)*nn
+        p = xc - reflOffset(vertices,f,nn)*nOut
       else
         !> no usable step (no duration, a chord parallel to the face, no outward root): the chord's crossing
         pstop = intersect + minDist * myRay%direction
@@ -255,13 +269,8 @@ contains
           v = vold
         endif
         time = time - norm2(p-pstop)/norm2(0.5_R8*(v+vold))
-        if (abs(dot_product(v,nn)) < grazeFrac*norm2(v)) then
-          v = v - dot_product(v,nn) * nn
-          p = intersect - sign(grazeOffset(vertices,nn), dot_product(myRay%direction,nn)) * nn
-        else
-          v = v - 2.0 * dot_product(v,nn) * nn
-          p = pstop - 2.0 * dot_product(pstop-intersect,nn) * nn
-        endif
+        v = v - 2.0 * dot_product(v,nn) * nn
+        p = intersect - sign(reflOffset(vertices,f,nn), dot_product(myRay%direction,nn)) * nn
       endif
 
     !> Wedge 200 face: fold position and velocity by -+delthe about axisDir.

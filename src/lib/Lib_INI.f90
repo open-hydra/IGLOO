@@ -29,7 +29,7 @@ contains
   !> The parcel guards of [IGLOO-General], read again from input.ini at the start of every sweep: max-reflections
   !  (> 0) and, when time-end was set at start-up, its value. A missing or invalid key keeps the value in force.
   subroutine reread_guards()
-    use IGLOO_variables, only: nMaxRefl, tEnd, snapOn
+    use IGLOO_variables, only: nMaxRefl, tEnd, snapOn, reflStandoff
     use IGLOO_Mod_MPI,   only: mpi_is_root
     implicit none
     type(file_ini) :: f
@@ -39,6 +39,14 @@ contains
     if (e /= 0) return
     call f%get(section_name='IGLOO-General', option_name='max-reflections', val=n, error=e)
     if (e == 0 .and. n > 0) nMaxRefl = n
+    call f%get(section_name='IGLOO-General', option_name='reflect-standoff', val=t, error=e)
+    if (e == 0 .and. t > 0._R8) then
+      reflStandoff = t
+      if (mpi_is_root) write(*,'(A,ES10.3,A)') ' [IGLOO] reflect-standoff of this sweep: ', reflStandoff, ' m'
+    elseif (e == 0) then
+      if (mpi_is_root) write(*,'(A,ES10.3,A)') ' [IGLOO] reflect-standoff must be > 0: ignored, in force ', &
+                                               reflStandoff, ' m'
+    endif
     if (snapOn) then
       call f%get(section_name='IGLOO-General', option_name='time-end', val=t, error=e)
       if (e == 0 .and. t > 0._R8) tEnd = t
