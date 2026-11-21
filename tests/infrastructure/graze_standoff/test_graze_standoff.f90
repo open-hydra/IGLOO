@@ -1,50 +1,53 @@
 program test_graze_standoff
     !
-    ! The reflection standoff must never exceed the cell it is placing a particle into.
+    ! The set-back of a grazing impact scales with the parcel and never exceeds the cell it places the parcel into.
     !
-    ! The standoff ([IGLOO-General] reflect-standoff; its default is `grazeStandoff`) is an absolute 1e-6 m whose
-    ! stated contract is ">> roundoff, << cell
-    ! size"; the second half is load-bearing on the axisymmetric AXIS face, which takes the
-    ! reflection path: the axis is precisely where a mesh is radially thin. On a block whose
-    ! first radial cell is thinner than 1e-6 m a bare standoff pushes the particle clean
-    ! through cell j=1 into j=2 -- a silent teleport
-    ! across a cell boundary, with no error and no give-up message.
+    ! The set-back is a contact length: `[IGLOO-General] graze-standoff` (setbackFrac, default 0.01) parcel
+    ! diameters, at least `setbackMin` = 1e-9 m. Its contract is ">> roundoff, << cell size"; the second half is
+    ! load-bearing on the axisymmetric AXIS face, which takes the reflection path: the axis is precisely where a
+    ! mesh is radially thin. On a block whose first radial cell is thinner than the set-back a bare length pushes
+    ! the particle clean through cell j=1 into j=2 -- a silent teleport across a cell boundary, with no error and
+    ! no give-up message.
     !
-    ! Production `reflOffset(vertices, f, nn)` caps the standoff at grazeCellFrac of the cell's
-    ! own extent along the face normal. Assertions:
+    ! Production `grazeSetback(vertices, nn, d)` caps the length at grazeCellFrac of the cell's own extent along
+    ! the face normal, after the floor: the cell wins over the floor. Assertions:
     !
-    !   G1  thick cell (JPL's first radial cell, 5.7e-4 m)  -> exactly grazeStandoff, i.e. the
-    !       cap leaves the standoff alone wherever the bare constant is valid
-    !   G2  thin cell (1e-7 m)                              -> capped, and strictly inside
-    !   G3  sweep over 12 decades of thickness              -> invariants hold everywhere:
-    !         0 < offset <= grazeStandoff  and  offset <= grazeCellFrac*thickness
-    !       (the second is what a bare constant violates)
-    !   G4  degenerate cell (zero extent)                   -> falls back, stays finite
+    !   G1  thick cell (JPL's first radial cell, 5.7e-4 m), d = 100 um -> exactly setbackFrac*d, i.e. the floor
+    !       and the cap leave the length alone wherever it fits
+    !   G2  thin cell (1e-7 m), d = 100 um                             -> capped, and strictly inside
+    !   G3  sweep over 12 decades of thickness and 8 of diameter       -> invariants hold everywhere:
+    !         0 < offset <= max(setbackFrac*d, setbackMin)  and  offset <= grazeCellFrac*thickness
+    !       (the second is what a bare length violates)
+    !   G4  degenerate cell (zero extent)                              -> falls back, stays finite
+    !   G5  thick cell, d = 10 nm (1 % of it is 1e-10 m)               -> exactly setbackMin; d = 1 um -> 1e-8 m
+    !   G6  cell thinner than the floor allows (1e-8 m), d = 10 nm     -> the cap, below setbackMin
     !
     ! The normal is deliberately not axis-aligned in G3 so the projection is exercised rather
     ! than a single coordinate difference.
     !
     use, intrinsic :: iso_fortran_env, only: real64
-    use IGLOO_bcBox, only: reflOffset, grazeStandoff, grazeCellFrac    ! PRODUCTION under test
+    use IGLOO_bcBox,     only: grazeSetback, setbackMin, grazeCellFrac    ! PRODUCTION under test
+    use IGLOO_variables, only: setbackFrac
     implicit none
 
     real(real64), parameter :: EPS = epsilon(1.0_real64)
-    integer      :: nfail, kdec
-    real(real64) :: vert(3,8), nn(3), off, t
+    integer      :: nfail, kdec, kd
+    real(real64) :: vert(3,8), nn(3), off, t, d, bare
 
     nfail = 0
 
-    ! ---- G1: thick cell -> unchanged --------------------------------------------------------
+    ! ---- G1: thick cell -> the fraction of the diameter, unchanged ---------------------------
     nn = [0.0_real64, 1.0_real64, 0.0_real64]
+    d  = 1.0e-4_real64
     call slab(5.7e-4_real64, nn, vert)
-    off = reflOffset(vert, 1, nn)
-    call expect('G1 thick cell returns grazeStandoff unchanged',                             &
-                off - grazeStandoff, 8.0_real64*EPS*grazeStandoff)
+    off = grazeSetback(vert, nn, d)
+    call expect('G1 thick cell returns setbackFrac*d unchanged',                              &
+                off - setbackFrac*d, 8.0_real64*EPS*setbackFrac*d)
 
     ! ---- G2: thin cell -> capped and strictly inside -----------------------------------------
     t = 1.0e-7_real64
     call slab(t, nn, vert)
-    off = reflOffset(vert, 1, nn)
+    off = grazeSetback(vert, nn, d)
     call expect('G2 thin cell is capped at grazeCellFrac*thickness',                          &
                 off - grazeCellFrac*t, 8.0_real64*EPS*grazeCellFrac*t)
     if (off >= t) then
@@ -53,39 +56,59 @@ program test_graze_standoff
         nfail = nfail + 1
     endif
 
-    ! ---- G3: invariants across 12 decades, oblique normal ------------------------------------
+    ! ---- G3: invariants across 12 decades of thickness and 8 of diameter, oblique normal -----
     nn = [1.0_real64, 2.0_real64, -2.0_real64]; nn = nn/norm2(nn)
-    do kdec = -10, 1
-        t = 10.0_real64**kdec
-        call slab(t, nn, vert)
-        off = reflOffset(vert, 1, nn)
-        if (.not. (off > 0.0_real64)) then
-            write(*,'(a,i0,a)') '[FAIL] G3 t=1e', kdec, ': offset is not positive'
-            nfail = nfail + 1
-        endif
-        if (off > grazeStandoff*(1.0_real64 + 8.0_real64*EPS)) then
-            write(*,'(a,i0,a,es12.5)') '[FAIL] G3 t=1e', kdec,                               &
-                ': offset exceeds grazeStandoff, ', off
-            nfail = nfail + 1
-        endif
-        if (off > grazeCellFrac*t*(1.0_real64 + 1.0e-9_real64)) then
-            write(*,'(a,i0,a,es12.5,a,es12.5)') '[FAIL] G3 t=1e', kdec,                      &
-                ': offset ', off, ' exceeds grazeCellFrac*thickness ', grazeCellFrac*t
-            nfail = nfail + 1
-        endif
+    do kd = -9, -2
+        d    = 10.0_real64**kd
+        bare = max(setbackFrac*d, setbackMin)
+        do kdec = -10, 1
+            t = 10.0_real64**kdec
+            call slab(t, nn, vert)
+            off = grazeSetback(vert, nn, d)
+            if (.not. (off > 0.0_real64)) then
+                write(*,'(a,i0,a,i0,a)') '[FAIL] G3 t=1e', kdec, ' d=1e', kd, ': offset is not positive'
+                nfail = nfail + 1
+            endif
+            if (off > bare*(1.0_real64 + 8.0_real64*EPS)) then
+                write(*,'(a,i0,a,i0,a,es12.5)') '[FAIL] G3 t=1e', kdec, ' d=1e', kd,          &
+                    ': offset exceeds max(setbackFrac*d, setbackMin), ', off
+                nfail = nfail + 1
+            endif
+            if (off > grazeCellFrac*t*(1.0_real64 + 1.0e-9_real64)) then
+                write(*,'(a,i0,a,i0,a,es12.5,a,es12.5)') '[FAIL] G3 t=1e', kdec, ' d=1e', kd, &
+                    ': offset ', off, ' exceeds grazeCellFrac*thickness ', grazeCellFrac*t
+                nfail = nfail + 1
+            endif
+        enddo
     enddo
 
     ! ---- G4: degenerate cell -----------------------------------------------------------------
     vert = 0.0_real64
     nn   = [0.0_real64, 1.0_real64, 0.0_real64]
-    off  = reflOffset(vert, 1, nn)
-    if (.not. (off > 0.0_real64 .and. off <= grazeStandoff)) then
+    d    = 1.0e-4_real64
+    off  = grazeSetback(vert, nn, d)
+    if (.not. (off > 0.0_real64 .and. off <= setbackFrac*d*(1.0_real64 + 8.0_real64*EPS))) then
         write(*,'(a,es12.5)') '[FAIL] G4 degenerate cell gave a non-usable offset ', off
         nfail = nfail + 1
     endif
 
+    ! ---- G5: the floor ------------------------------------------------------------------------
+    call slab(5.7e-4_real64, nn, vert)
+    off = grazeSetback(vert, nn, 1.0e-8_real64)
+    call expect('G5 a 10 nm parcel is set back setbackMin', off - setbackMin, 8.0_real64*EPS*setbackMin)
+    off = grazeSetback(vert, nn, 1.0e-6_real64)
+    call expect('G5 a 1 um parcel is set back setbackFrac*d',                                 &
+                off - setbackFrac*1.0e-6_real64, 8.0_real64*EPS*setbackFrac*1.0e-6_real64)
+
+    ! ---- G6: the cell wins over the floor -----------------------------------------------------
+    t = 1.0e-8_real64
+    call slab(t, nn, vert)
+    off = grazeSetback(vert, nn, 1.0e-8_real64)
+    call expect('G6 a cell thinner than the floor allows caps the set-back',                  &
+                off - grazeCellFrac*t, 8.0_real64*EPS*grazeCellFrac*t)
+
     if (nfail == 0) then
-        write(*,'(a)') '[PASS] test_graze_standoff: the graze standoff never exceeds its cell.'
+        write(*,'(a)') '[PASS] test_graze_standoff: the grazing set-back scales with the parcel and never exceeds its cell.'
         stop 0
     else
         write(*,'(a,i0,a)') '[FAIL] test_graze_standoff: ', nfail, ' assertion(s) failed.'
@@ -95,13 +118,13 @@ program test_graze_standoff
 contains
 
     !> A hex slab of the given thickness along `nn`, wider across than through, so the ONLY
-    !  small dimension is the one reflOffset must find.
+    !  small dimension is the one grazeSetback must find.
     !
     !  The width is scaled WITH the thickness (100x) rather than fixed. A fixed 1 m width on a
     !  1e-10 m slab is ill-conditioned for this measurement: e1/e2 are orthogonal to nn only to
     !  roundoff, so the transverse terms contribute ~eps*width to the projection, which at that
     !  aspect ratio is 1e-6 OF THE THICKNESS and swamps what is being measured. That is an
-    !  artefact of the fixture, not of reflOffset, and a 1e10 aspect ratio is not a cell any
+    !  artefact of the fixture, not of grazeSetback, and a 1e10 aspect ratio is not a cell any
     !  mesh generator emits. Keeping the ratio fixed leaves the roundoff at ~1e-14 relative.
     subroutine slab(thickness, nn, vert)
         real(real64), intent(in)  :: thickness, nn(3)

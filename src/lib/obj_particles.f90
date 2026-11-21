@@ -759,10 +759,10 @@ contains
           ind = iold; retry = .false.
         else
           call bcDef(blk%face(f)%cell(m,n),vertices,pold,vold,  &
-                      intersectionPoint,f,p,v,self%time,self%timeOld,iold, &
+                      intersectionPoint,f,self%d,p,v,self%time,self%timeOld,iold, &
                       self%angle,self%Af,found,self%gone,retry,refl,vHit=vh)
           if (present(reflected)) reflected = reflected .or. refl
-          if (refl .and. cornerOn .and. .not. self%gone) call cornerClear(blk, iold(2:4), f, vertices, p)
+          if (refl .and. cornerOn .and. .not. self%gone) call cornerClear(blk, iold(2:4), f, vertices, p, self%d)
           if (self%gone) then
             self%exitCode = blk%face(f)%cell(m,n)%bcdef
             self%exitCell = [b, f, m, n]

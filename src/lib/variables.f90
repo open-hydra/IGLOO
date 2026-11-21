@@ -55,10 +55,10 @@ module IGLOO_variables
   !  parcel time to every trajectory and exit row.
   real(R8) :: tEnd = huge(1._R8)
   !> [IGLOO-General] max-reflections: a parcel is dropped after this many reflections (read again at every sweep).
-  integer  :: nMaxRefl = 5000
-  !> [IGLOO-General] reflect-standoff [m], > 0: how far inside the cell a parcel is set after a specular reflection
-  !  (reflOffset). Read again at every sweep.
-  real(R8) :: reflStandoff = 1.e-6_R8
+  integer  :: nMaxRefl = 10000
+  !> [IGLOO-General] graze-standoff, > 0: how far inside the cell a parcel is set after a grazing impact, in parcel
+  !  diameters (grazeSetback). Read again at every sweep.
+  real(R8) :: setbackFrac = 1.e-2_R8
   !> [IGLOO-General] corner-clear: after a reflection the parcel stands off every reflecting face of its cell
   !  (cornerClear), not only the one it was reflected on. Read again at every sweep.
   logical  :: cornerOn = .true.

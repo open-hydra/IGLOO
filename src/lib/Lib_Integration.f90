@@ -28,7 +28,7 @@ contains
                                 planeOn, planeX, failAfter, maxInnerIter, nm, nsm, &
                                 capColumns, smokeColumns, smokeRow
     use IGLOO_particles,  only: obj_particle, eps
-    use IGLOO_bcBox,      only: axisymFold, sectorDs, grazeStandoff
+    use IGLOO_bcBox,      only: axisymFold, sectorDs, stallStep
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock, obj_wallblock
     use IGLOO_Lib_Erosion, only: isWallCode, erosionRatio
     use IGLOO_Lib_Properties
@@ -541,7 +541,7 @@ contains
         part%gone=.true.
       endif
 
-      !> A bounce that makes no progress: nMaxStall reflections within nMaxStall standoffs.
+      !> A bounce that makes no progress: nMaxStall reflections within nMaxStall*stallStep.
       if (reflSeg .and. .not.part%gone) then
         nReflTot = nReflTot + 1
         if (nReflTot > nMaxRefl) then
@@ -552,7 +552,7 @@ contains
       if (reflSeg .and. .not.part%gone) then
         nReflW = nReflW + 1
         if (nReflW == nMaxStall) then
-          if (norm2(part%stateVar(1:3) - posReflW) < nMaxStall*grazeStandoff) then
+          if (norm2(part%stateVar(1:3) - posReflW) < nMaxStall*stallStep) then
             write(*,'(A,I0,A,4(1X,I0),A)') '       ==> Particle ',part%ID,' stuck in cell:',part%iold
             part%gone = .true.
           endif

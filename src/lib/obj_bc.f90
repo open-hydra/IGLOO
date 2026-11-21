@@ -6,9 +6,10 @@ module IGLOO_bcBox
   implicit none
   real(R8), parameter :: minDist=1.e-12_R8
   real(R8), parameter :: grazeFrac=2.e-2_R8      !> below this v_n/|v| a 300-impact is grazing: project, don't reflect
-  real(R8), parameter :: grazeStandoff=1.e-6_R8  !> interior offset after a graze; >> roundoff, << cell size
+  real(R8), parameter :: stallStep=1.e-6_R8      !> nMaxStall reflections within nMaxStall of these: no progress
+  real(R8), parameter :: setbackMin=1.e-9_R8     !> least set-back after a graze, whatever the parcel's size
   real(R8), parameter :: wedgeAzimTol=0.5_R8     !> |faceAzimuth| above this ⇒ wedge face (rotate), else reflect
-  real(R8), parameter :: grazeCellFrac=1.e-2_R8  !> graze standoff also capped at this fraction of the cell
+  real(R8), parameter :: grazeCellFrac=1.e-2_R8  !> the set-back after a graze is capped at this fraction of the cell
   type(Ray_t)         :: myRay
   !$omp threadprivate(myRay)   !> per-thread: checkBoundary writes it, bcDef reuses it within a thread
   private
@@ -18,56 +19,37 @@ module IGLOO_bcBox
   public :: sectorDs
   public :: periodicTransport
   public :: faceAzimuth, wedgeAzimTol
-  public :: grazeOffset, grazeStandoff, grazeCellFrac, reflOffset, cornerClear
+  public :: grazeSetback, stallStep, grazeCellFrac, setbackMin, cornerClear
   public :: hopCrossing
 
 contains
 
-  !> Interior offset applied after a grazing reflection along the face normal `nn`: the smaller
-  !  of grazeStandoff and grazeCellFrac times the cell's extent along the normal.
-  pure function grazeOffset(vertices, nn) result(offset)
-    use IGLOO_variables, only: toll
+  !> Set-back of a parcel of diameter d after a grazing impact, along the face normal `nn` into the cell. It is a
+  !  contact length, the height the parcel sliding on the plane falls back from: graze-standoff (setbackFrac) parcel
+  !  diameters, at least setbackMin, never more than grazeCellFrac times the cell's extent along the normal.
+  pure function grazeSetback(vertices, nn, d) result(offset)
+    use IGLOO_variables, only: toll, setbackFrac
     implicit none
-    real(R8), intent(in) :: vertices(3,8), nn(3)
+    real(R8), intent(in) :: vertices(3,8), nn(3), d
     real(R8) :: offset, proj(8), thickness
 
+    offset    = max(setbackFrac*d, setbackMin)
     proj      = matmul(nn, vertices)          !> signed position of each vertex along the normal
     thickness = maxval(proj) - minval(proj)
-    if (thickness <= toll) then
-      offset = grazeStandoff
-    else
-      offset = min(grazeStandoff, grazeCellFrac*thickness)
-    endif
-
-  end function grazeOffset
-
-  !> Interior offset after a specular reflection on face f of the cell, along the face normal nn: reflect-standoff,
-  !  never more than grazeCellFrac of the cell's extent along the normal. The parcel must end inside the cell by the
-  !  containment test, whose planes pass through the face's nodes: on a face that is not planar its mean plane lies up
-  !  to the face's warp outside them, so the length must exceed the warp (and the test's own tolerance).
-  pure function reflOffset(vertices, f, nn) result(offset)
-    use IGLOO_variables, only: toll, reflStandoff
-    implicit none
-    real(R8), intent(in) :: vertices(3,8), nn(3)
-    integer,  intent(in) :: f
-    real(R8) :: offset, proj(8), thickness
-
-    offset = reflStandoff
-    proj      = matmul(nn, vertices)
-    thickness = maxval(proj) - minval(proj)
     if (thickness > toll) offset = min(offset, grazeCellFrac*thickness)
-  end function reflOffset
 
-  !> After a specular reflection on face f of cell ic of the block: the parcel p, set back along the normal of f, is
-  !  moved along f, away from any other reflecting face of the cell (code 300) it is nearer to than that face's
-  !  standoff (reflOffset) -- or beyond --, until it stands off both. In the corner of two reflecting planes the
+  end function grazeSetback
+
+  !> After a reflection on face f of cell ic of the block: the parcel p of diameter d, set back along the normal of
+  !  f, is moved along f, away from any other reflecting face of the cell (code 300) it is nearer to than the
+  !  set-back of a graze (grazeSetback) -- or beyond --, until it stands off both. In the corner of two reflecting planes the
   !  set-back along one normal alone leaves the parcel outside the other: found outside at once, it is set back
   !  along the other normal, outside the first, with no time passing. Two rounds: a third plane at the same corner.
-  subroutine cornerClear(blk, ic, f, vertices, p)
+  subroutine cornerClear(blk, ic, f, vertices, p, d)
     implicit none
     class(obj_block), intent(in)    :: blk
     integer,          intent(in)    :: ic(3), f
-    real(R8),         intent(in)    :: vertices(3,8)
+    real(R8),         intent(in)    :: vertices(3,8), d
     real(R8),         intent(inout) :: p(3)
     integer  :: f2, m1, n1, m2, n2, round
     real(R8) :: cen(3), na(3), nb(3), g, s2, d2, off
@@ -89,7 +71,7 @@ contains
         nb = sign(1._R8, dot_product(cen - blk%face(f2)%cell(m2,n2)%center, nb))*nb
         g = dot_product(na, nb); s2 = 1._R8 - g*g
         if (s2 <= 1.e-12_R8) cycle
-        off = reflOffset(vertices, f2, nb)
+        off = grazeSetback(vertices, nb, d)
         d2 = dot_product(p - blk%face(f2)%cell(m2,n2)%center, nb)
         if (d2 >= off) cycle
         !> along f (no change of the distance from it), away from the other plane
@@ -247,12 +229,13 @@ contains
 
   !> Apply the exit cell's boundary condition to the particle state: reflection (300 and non-wedge
   !  200), wedge fold (200), connected interface (101/103: retry in the partner cell), or exit (gone).
-  subroutine bcDef(cell,vertices,pold,vold,intersect,f,p,v,time,told,iold,angle,Af,found,gone,retry,reflected,vHit)
+  subroutine bcDef(cell,vertices,pold,vold,intersect,f,d,p,v,time,told,iold,angle,Af,found,gone,retry,reflected,vHit)
     use IGLOO_variables, only: pi, toll, delthe, axisDir
     implicit none
     class(obj_bc_cell), intent(in)    :: cell
     real(R8),           intent(in)    :: vertices(3,8), pold(3), vold(3)
     real(R8),           intent(in)    :: intersect(3)
+    real(R8),           intent(in)    :: d           !> the parcel's diameter (the set-back of a graze)
     integer,            intent(in)    :: f
     logical,            intent(in)    :: found
     real(R8),           intent(inout) :: p(3), v(3)
@@ -295,11 +278,14 @@ contains
         time = told + s*(time - told)
         v    = vc
         nOut = sign(1._R8, dot_product(nn, p - pold))*nn
-        !> specular at every incidence: the normal velocity is mirrored, never removed. The parcel is set back inside
-        !  by the standoff, which must exceed the face's own non-planarity (a face warped by 1e-11 m leaves a parcel
-        !  1e-12 m inside its mean plane outside the cell's triangle planes: it is then found outside again at once).
-        v = v - 2._R8*dot_product(v,nn)*nn
-        p = xc - reflOffset(vertices,f,nn)*nOut
+        if (abs(dot_product(v,nn)) < grazeFrac*norm2(v)) then
+          !> grazing: slide along the plane; the set-back keeps the ray off the face
+          v = v - dot_product(v,nn)*nn
+          p = xc - grazeSetback(vertices,nn,d)*nOut
+        else
+          v = v - 2._R8*dot_product(v,nn)*nn
+          p = xc - minDist*nOut
+        endif
       else
         !> no usable step (no duration, a chord parallel to the face, no outward root): the chord's crossing
         pstop = intersect + minDist * myRay%direction
@@ -309,8 +295,13 @@ contains
           v = vold
         endif
         time = time - norm2(p-pstop)/norm2(0.5_R8*(v+vold))
-        v = v - 2.0 * dot_product(v,nn) * nn
-        p = intersect - sign(reflOffset(vertices,f,nn), dot_product(myRay%direction,nn)) * nn
+        if (abs(dot_product(v,nn)) < grazeFrac*norm2(v)) then
+          v = v - dot_product(v,nn) * nn
+          p = intersect - sign(grazeSetback(vertices,nn,d), dot_product(myRay%direction,nn)) * nn
+        else
+          v = v - 2.0 * dot_product(v,nn) * nn
+          p = pstop - 2.0 * dot_product(pstop-intersect,nn) * nn
+        endif
       endif
 
     !> Wedge 200 face: fold position and velocity by -+delthe about axisDir.
