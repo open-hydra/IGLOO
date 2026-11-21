@@ -24,8 +24,8 @@ The gate asserts, in order of directness:
      gating. The trajectory file prints y and z at F12.6, so this radius has a
      resolution floor of ~5e-7 m and reads as exactly 0 once the particle is inside
      that -- it answers "did it reach the axis", not "how close". Measured 0.0, against
-     R_NEAR = 1e-5: the margin is set by the print format, not by grazeStandoff, so it
-     does not track that constant if it is ever retuned.
+     R_NEAR = 1e-5: the margin is set by the print format, not by the grazing set-back, so it
+     does not track that length if it is ever retuned.
      ⚠ This assertion is load-bearing, and it is why input.ini gives ID 1 an INWARD
      `vp`. The axis dual ghost keeps only the axial gas velocity (axisGhost), so the
      gas radial velocity vanishes ON the axis, as it must, and an equilibrium parcel

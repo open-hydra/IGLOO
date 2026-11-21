@@ -189,10 +189,10 @@ igloo_unit_test(test_material_tokens    infrastructure/material_tokens    "unit;
 # (`f==6` -> -delthe, `f==5` -> +delthe) on the conventional k-ordering. No e2e case reaches bcDef's fold branch
 # (axisymFold re-sectors first), so this unit test is its only coverage.
 igloo_unit_test(test_axis_dispatch      infrastructure/axis_dispatch      "unit;infrastructure;bc")
-# the grazing standoff is an absolute length that must stay "<< cell size". The axis
-# face reflects, and the axis is where meshes go radially thin, so grazeOffset caps
-# it at a fraction of the cell. Pins the invariant across 12 decades of cell
-# thickness.
+# the grazing set-back is a fraction of the parcel's diameter (at least 1e-9 m) that must stay
+# "<< cell size". The axis face reflects, and the axis is where meshes go radially thin, so
+# grazeSetback caps it at a fraction of the cell. Pins the invariant across 12 decades of cell
+# thickness and 8 of diameter.
 igloo_unit_test(test_graze_standoff     infrastructure/graze_standoff     "unit;infrastructure;bc")
 # A reflection's crossing from the step's two end states: hopCrossing's first outward root of the cubic Hermite, exact
 # on paths of degree <= 3 (a whole hop in one step, three crossings in one step, none, a straight step).
@@ -1666,16 +1666,16 @@ igloo_e2e_case(plane-back infrastructure/plane-back "e2e;infrastructure;output")
 # (12 'stuck in cell' at gas order 1). The -ord2 twin runs the same streams at gas order 2.
 igloo_e2e_case(sym-plane-skate infrastructure/sym-plane-skate "e2e;infrastructure;bc;guard")
 igloo_e2e_case(sym-plane-skate-ord2 infrastructure/sym-plane-skate-ord2 "e2e;infrastructure;bc;guard;gas")
-# sym-plane-bounce: six slow streams pressed onto a symmetry plane by gravity in a 0.1 m/s gas bounce up to 49 times
+# sym-plane-bounce: six slow streams pressed onto a symmetry plane by gravity in a 0.1 m/s gas bounce up to 158 times
 # in one cell: at gas order 1 a reflection is not residency, so no 'stuck in cell' and every exit at the outlet.
 # RED with reflections counted: 6 'stuck in cell' in cell 3. The -ord2 twin (a reflection restarts the count there)
 # is the control. Both write a row at nearly every segment end (print-ds 1e-5 m) and witness more than 11 rows of one
-# parcel in one cell (49 and 50; RED with print-ds at the cell: 2); their rows are the parcel rule's replayed on a
+# parcel in one cell (158 at either order; RED with print-ds at the cell: 2); their rows are the parcel rule's replayed on a
 # sibling that writes every segment end (ref-ends/).
 igloo_e2e_case(sym-plane-bounce infrastructure/sym-plane-bounce "e2e;infrastructure;bc;guard")
 igloo_e2e_case(sym-plane-bounce-ord2 infrastructure/sym-plane-bounce-ord2 "e2e;infrastructure;bc;guard;gas")
-# sym-plane-creep: sym-plane-bounce's six streams in a 3 mm/s gas creep along the plane by far less than one grazing
-# standoff per reflection: the progress guard (100 reflections within 1e-4 m) ends each one as 'stuck in cell' in
+# sym-plane-creep: sym-plane-bounce's six streams in a 3 mm/s gas creep along the plane by less than 1e-7 m per
+# reflection: the progress guard (100 reflections within 1e-4 m) ends each one as 'stuck in cell' in
 # the cell where it landed, code 0. RED with the bound at 0: 6 'hit outer maxIter'. The -ord2 twin (a trajectory
 # row at every reflection) also bounds the rows per parcel: RED with the window at 10 reflections, 21 rows each.
 igloo_e2e_case(sym-plane-creep infrastructure/sym-plane-creep "e2e;infrastructure;bc;guard")

@@ -15,8 +15,8 @@ tolerances. The gas carries no normal velocity and there is no body force, so th
 above its start height.
 
 What the streams do: the 50 m/s, 1° streams meet the plane at |v_n|/|v| = 0.016, below the grazing threshold
-(0.02): `bcDef` projects them onto it at x = 0.0099 m and they slide to the outlet at the grazing standoff
-(z = 1e-6 m). The 50 m/s, 10° streams reflect at x = 0.0046 m and leave at z = 5.9e-3 m. Drag stops the 0.1 m/s
+(0.02): `bcDef` projects them onto it at x = 0.0099 m and they slide to the outlet at the grazing set-back
+(1 % of the diameter, z = 1.2e-7 m). The 50 m/s, 10° streams reflect at x = 0.0046 m and leave at z = 5.9e-3 m. Drag stops the 0.1 m/s
 streams 2e-6 m (1°) and 1.7e-5 m (10°) below their start height, short of the plane.
 
 **Gates** (`check.py`).

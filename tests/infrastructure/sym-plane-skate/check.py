@@ -27,7 +27,7 @@ import datcols  # noqa: E402
 N_STREAMS = 12
 X_OUT, HALF = 0.15, 0.5e-6          # the outlet plane; half the F12.6 quantum
 Z0 = 1.0e-4                         # the start height
-Z_SLIDE = 1.0e-5                    # a parcel sliding on the plane sits at the grazing standoff (1e-6 m here)
+Z_SLIDE = 1.0e-5                    # a parcel sliding on the plane sits at the grazing set-back (1.2e-7 m here)
 SLOW, GRAZE, REFLECT = range(1, 7), range(7, 10), range(10, 13)
 GUARDS = ["stuck in cell", "no net progress", "Run_ODESolver err=", "EXIT OF SDIRK4", "Inner loop >",
           "hit outer maxIter", "non-finite", "initialized out of domain"]

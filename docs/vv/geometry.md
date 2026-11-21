@@ -26,7 +26,7 @@ or overlapping chimera faces. The drag physics is gated elsewhere; what these ca
 | `gas_reconstruction` | constant and multilinear fields to machine precision (E1, E2); observed order $p \approx 2$ (E3); the hex map round trip (E4); partition of unity (E5); warm-start sampling up to 20 m from the origin (E7, E8) |
 | `containment` | every point of a face shared by two cells lies in one of them, for cells 50–150 m from the origin with edges 1 cm to 1 µm; the two copies of the test agree on $10^5$ points |
 | `axis_dispatch` | bcdef-200 faces: the axis reflects, the wedge faces fold, whatever the face index and axis direction |
-| `hop_crossing`, `graze_standoff` | a reflection's crossing as the first outward root of the step's cubic; a reflection's stand-off never leaves its cell |
+| `hop_crossing`, `graze_standoff` | a reflection's crossing as the first outward root of the step's cubic; a grazing stand-off never leaves its cell |
 | `geometry_rules`, `dual_clip` | the boundary search's face; the gas-order-2 dual mesh tiles the domain |
 
 - **Sensitivity** — with an absolute $10^{-15}$ m containment tolerance up to 60 % of a shared face

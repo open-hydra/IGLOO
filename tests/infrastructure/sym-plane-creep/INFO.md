@@ -1,12 +1,12 @@
 # sym-plane-creep — parcels creeping on a symmetry plane
 
 **Purpose.** A parcel pressed onto a symmetry plane (code 300) bounces on it: drag damps the rebounds until an impact
-grazes the plane, the grazing projection sets the parcel one standoff (`grazeStandoff` = 1e-6 m) off the face, it
-falls back and the cycle restarts. In a slow gas the parcel advances along the plane by far less than one standoff
+grazes the plane, the grazing projection sets the parcel one set-back (1 % of its diameter, 1.2e-7 m) off the face, it
+falls back and the cycle restarts. In a slow gas the parcel advances along the plane by less than 1e-7 m
 per reflection, and the cycle would run on to the outer cap (`maxIter` = 500 000 segments) with the parcel
 practically at rest. The integration loop compares the parcel's position every `nMaxStall` = 100 reflections along
 its path (in any cell, at either gas order) with the previous checkpoint, the injection or birth point for the
-first one: closer than `nMaxStall` standoffs, 1e-4 m, the parcel ends as `stuck in cell`, code 0, with its exit
+first one: closer than `nMaxStall × stallStep` = 1e-4 m, the parcel ends as `stuck in cell`, code 0, with its exit
 record where it stands. This case is the guard's gate at gas order 1;
 [`sym-plane-creep-ord2`](../sym-plane-creep-ord2/INFO.md) runs the same parcels at gas order 2.
 
@@ -18,7 +18,7 @@ z = 1e-4 m, three per incidence on y = 0.015, 0.025, 0.035 m, 0.1 m/s at 1° (ID
 the plane; d = 11.89 µm, ρ_p = 2950 kg/m³, Schiller-Naumann drag, SDIRK4 at its default tolerances,
 `body-accel = 0 0 -9.81`, `print-dcell = 1`, `out-time`. Each parcel lands in its injection cell and stops there
 after 200 reflections, at x = 0.00420–0.00421 m and t = 0.0265–0.0281 s: its first window, which holds the fall
-from the injection height, spans 2.2e-4 m, its second 7.7e-6 m.
+from the injection height, spans 2.2e-4 m, its second 8.0e-6 m.
 
 **The bound.** 1e-4 m per 100 reflections lies 54 times below the least advance of `sym-plane-bounce`'s parcels
 over 100 reflections, 5.36e-3 m. On this box with the gas at u_t along the plane, the 10° stream alone, the nearest

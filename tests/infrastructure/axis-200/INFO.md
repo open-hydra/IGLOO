@@ -44,12 +44,12 @@ The coverage radius is read from the trajectory file's F12.6 columns, so it floo
 reads as exactly 0 once the particle is inside that — it answers *did it reach the axis*,
 not *how close*. Measured 0.0, also on a solver without the axis branch, and stable across
 repeated 5-thread ctest runs, so the 1e-5 margin is set by the print format rather than by
-`grazeStandoff` and will not drift if that constant is retuned.
+the grazing set-back and will not drift if that length is retuned.
 
 **RED on a solver whose 200 branch only rotates** (ID 1: `no net progress ==> marking gone`,
 exit x = −0.2609 instead of 2.0587; measured on a variant without ID 1's `vp` and with the
 dual ghost reflected across the axis, whose spurious radial gas velocity carries ID 1 onto
-it) **and GREEN on this one** (ID 1 reaches the axis, is projected back to r ≈ 1.01e-6 by
+it) **and GREEN on this one** (ID 1 reaches the axis, is set back to r ≈ 2e-7, 1 % of its diameter, by
 the grazing branch, and exits at x = 2.0587).
 
 **Behaviour at the axis.** ID 1 meets the axis face once (one reflection event, stable
@@ -57,9 +57,9 @@ across `vp` = −0.5 … −5.0), and the impact takes the *grazing* sub-branch 
 reflection (v_n/|v| below `grazeFrac` = 2e-2), so the radial velocity is projected out and
 the particle slides along the axis rather than bouncing; no reflection storm.
 
-**Note on the graze standoff.** The graze places the particle `grazeOffset` inside the face:
-`grazeStandoff` = 1e-6 m, capped at `grazeCellFrac` = 1e-2 of the cell's extent along the
-face normal (measured: r 1.0e-8 → 1.01e-6). The axis is where meshes get radially thin.
+**Note on the graze set-back.** The graze places the particle `grazeSetback` inside the face:
+`graze-standoff` = 0.01 parcel diameters (2e-7 m for these 20 µm parcels), at least 1e-9 m, capped at
+`grazeCellFrac` = 1e-2 of the cell's extent along the face normal. The axis is where meshes get radially thin.
 Here the first cell reaches r ≈ 5.6e-3 and on the JPL mesh r ≈ 5.7e-4, so the cap is
-inactive and the standoff is ≤ 0.2 % of the first cell; on a first radial cell thinner than
-1e-4 m the cap sets it ([graze_standoff](../graze_standoff/INFO.md)).
+inactive and the set-back is ≤ 0.04 % of the first cell; on a first radial cell thinner than
+100 set-backs the cap sets it ([graze_standoff](../graze_standoff/INFO.md)).

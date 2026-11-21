@@ -4,9 +4,9 @@ sym-plane-creep (and its gas-order-2 twin) -- parcels creeping on a symmetry pla
 
 sym-plane-bounce's box and six streams with the gas at 3 mm/s along +x. Pressed onto the plane (face 5, z = 0,
 code 300) by a body acceleration of 9.81 m/s2, each parcel lands in its injection cell and bounces on, advancing
-along the plane by far less than one grazing standoff (1e-6 m) per reflection. Every nMaxStall = 100 reflections
+along the plane by less than 1e-7 m per reflection. Every nMaxStall = 100 reflections
 along its path the guard compares the parcel's position with the previous checkpoint and ends it as stuck when it
-has moved less than nMaxStall standoffs (1e-4 m): at either gas order every parcel stops where it landed.
+has moved less than nMaxStall x stallStep (1e-4 m): at either gas order every parcel stops where it landed.
 
 Gates
   K1  one 'stuck in cell' line per parcel, the IDs of the exit records; no 'hit outer maxIter', 'no net progress',
@@ -15,7 +15,7 @@ Gates
   K2  six exit records, IDs 1-6 once each, code 0, on the plane (z <= 1e-5 m), in the cell where they landed
       (x < 0.005 m) and early (t < 1 s)
   K3  (gas order 2, whose trajectory has a row at every reflection) each parcel has at least nMaxStall + 1 = 101
-      and at most 2 nMaxStall + 1 = 201 rows, and its last nMaxStall rows lie within nMaxStall standoffs (1e-4 m)
+      and at most 2 nMaxStall + 1 = 201 rows, and its last nMaxStall rows lie within nMaxStall x stallStep (1e-4 m)
       of each other: the guard's criterion recomputed from the output
 """
 import collections
@@ -29,10 +29,10 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
 import datcols  # noqa: E402
 
 N_STREAMS = 6
-Z_PLANE = 1.0e-5                  # the grazing standoff is 1e-6 m here
+Z_PLANE = 1.0e-5                  # the grazing set-back is 1.2e-7 m here
 X_CELL = 0.005                    # the downstream face of the injection cell (2.5 mm cells along x)
 T_EARLY = 1.0                     # [s]; the outer cap ends these parcels after about 30 s of parcel time
-N_STALL, STANDOFF = 100, 1.0e-6   # the guard's window [reflections] and its bound per reflection [m]
+N_STALL, STANDOFF = 100, 1.0e-6   # the guard's window [reflections] and its bound per reflection, stallStep [m]
 GUARDS = ["hit outer maxIter", "no net progress", "Inner loop >", "Run_ODESolver err=", "EXIT OF SDIRK4",
           "non-finite", "initialized out of domain"]
 STUCK = re.compile(r"Particle\s+(\d+)\s+stuck in cell")
