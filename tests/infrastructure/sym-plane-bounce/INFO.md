@@ -18,7 +18,7 @@ streams start at x = 0.004 m, z = 1e-4 m, three per incidence on y = 0.015, 0.02
 default tolerances, `body-accel = 0 0 -9.81`, `print-ds = 1e-5` m (a trajectory row at nearly every segment end,
 each a reflection or a cell crossing on the plane). The slow gas and the body force onto the plane are what make the
 parcels bounce: without a force toward it, parcels this slow stop short of the plane (as in `sym-plane-skate`).
-Each parcel bounces about 2 800 times and slides to the outlet in 1.46 s; up to 49 bounces fall in one cell.
+Each parcel bounces about 9 100 times and slides to the outlet in 1.46 s; up to 158 bounces fall in one cell.
 
 **Gates** (`check.py`, shared with the twin).
 - B1 no give-up guard and no solver failure: no `stuck in cell`, `no net progress`, `Run_ODESolver err=`,
@@ -27,12 +27,12 @@ Each parcel bounces about 2 800 times and slides to the outlet in 1.46 s; up to 
 - B2 six exit records, IDs 1–6 once each, every one at the outlet: x = 0.15 m, boundary code 400.
 - B3 every parcel leaves on the plane, z ≤ 1e-5 m.
 - B4 some parcel has more than nMaxCell + 1 = 11 rows in one cell along x, the first by (most rows, ID, cell)
-  named: the fixture keeps a parcel in one cell for more reflections than the guard allows (measured 49, 2 724–2 731
-  rows per parcel; at gas order 2 53, 2 759–2 784 rows).
+  named: the fixture keeps a parcel in one cell for more reflections than the guard allows (measured 158, 9 097–9 108
+  rows per parcel, at either gas order).
 - R1 the rows are the parcel rule's (`print-ds`) on the segment ends of a sibling run in `ref-ends/` that writes
   every one (`print-dtime = 1e-300` in place of `print-ds`; `tools/replay.py`), row for row, a decision within the
-  print quantum of the limit (2e-6 m) accepted either way: 16 365 rows of 16 497 segment ends, 75 decisions within
-  the quantum (gas order 2: 16 607 of 16 877, 142); the 132 ends left out lie within 1e-5 m of the row before. Under
+  print quantum of the limit (2e-6 m) accepted either way: 54 615 rows of 54 957 segment ends, 72 decisions within
+  the quantum (gas order 2: 54 615 of 55 336, 165); the 342 ends left out lie within 1e-5 m of the row before. Under
   `check-order` (`IGLOO_REUSE_SIBLING=1`) the `ref-ends/` the case's run left is read.
 
 **RED.** With every segment that ends inside the cell counted, reflections included: the six parcels end with

@@ -4,7 +4,7 @@ module IGLOO_IO_INI
   use finer, only: file_ini
   implicit none
   private
-  public :: read_IGLOO_input
+  public :: read_IGLOO_input, reread_guards
   public :: set_material_defaults, apply_material_key, finalize_material_models
   public :: load_models_file, apply_models_rows, apply_model_row, check_models_rows
   public :: read_breakup_constants, apply_breakup_tokens
@@ -24,6 +24,44 @@ module IGLOO_IO_INI
 
 
 contains
+
+
+  !> The parcel guards of [IGLOO-General], read again from input.ini at the start of every sweep: max-reflections
+  !  (> 0) and, when time-end was set at start-up, its value. A missing or invalid key keeps the value in force.
+  subroutine reread_guards()
+    use IGLOO_variables, only: nMaxRefl, tEnd, snapOn, setbackFrac, cornerOn
+    use IGLOO_Mod_MPI,   only: mpi_is_root
+    implicit none
+    type(file_ini) :: f
+    integer  :: e, n
+    real(R8) :: t
+    character(len=16) :: word
+    call f%load(filename='input.ini', error=e)
+    if (e /= 0) return
+    call f%get(section_name='IGLOO-General', option_name='max-reflections', val=n, error=e)
+    if (e == 0 .and. n > 0) nMaxRefl = n
+    call f%get(section_name='IGLOO-General', option_name='graze-standoff', val=t, error=e)
+    if (e == 0 .and. t > 0._R8) then
+      setbackFrac = t
+      if (mpi_is_root) write(*,'(A,ES10.3,A)') ' [IGLOO] graze-standoff of this sweep: ', setbackFrac, &
+                                               ' parcel diameters'
+    elseif (e == 0) then
+      if (mpi_is_root) write(*,'(A,ES10.3,A)') ' [IGLOO] graze-standoff must be > 0: ignored, in force ', &
+                                               setbackFrac, ' parcel diameters'
+    endif
+    word = ''
+    call f%get(section_name='IGLOO-General', option_name='corner-clear', val=word, error=e)
+    if (e == 0 .and. (trim(adjustl(word)) == 'on' .or. trim(adjustl(word)) == 'off')) then
+      cornerOn = trim(adjustl(word)) == 'on'
+      if (mpi_is_root) write(*,'(A)') ' [IGLOO] corner-clear of this sweep: '//trim(adjustl(word))
+    endif
+    if (snapOn) then
+      call f%get(section_name='IGLOO-General', option_name='time-end', val=t, error=e)
+      if (e == 0 .and. t > 0._R8) tEnd = t
+    endif
+    if (mpi_is_root) write(*,'(A,I0,A,ES10.3,A)') ' [IGLOO] guards of this sweep: max-reflections = ', nMaxRefl, &
+                                                   ', time-end = ', tEnd, ' s'
+  end subroutine reread_guards
 
 
   !> Reads input.ini: [IGLOO-General], [IGLOO-Models], [IGLOO-Properties], [IGLOO-BC], [IGLOO-ODE], [IGLOO-Erosion].

@@ -7,6 +7,7 @@ module IGLOO_data_block
   public :: buildInterfaceLinks, reportNonAligned, hasConnectedFaces, buildGhostLinks
   public :: mollifyEulerBlocks, mollifySourceBlocks
   public :: combineInterfaceDual
+  public :: symPlanes, symSpan, symFoot, symFitWeight
 
   type, public :: obj_bc_cell
     real(R8),dimension(:,:),allocatable :: properties !> first index per group (family)
@@ -1095,7 +1096,9 @@ contains
 
   !> Per-cell volumes of the ord2 dual mesh (1..N+1 per direction), clipped to the domain:
   !  3D hex volumes; 2D quad area times the slab thickness (uniform on a planar mesh,
-  !  cSlab*r on an axisymmetric wedge). No clip normal to a face cell flagged in linked.
+  !  cSlab*r on an axisymmetric wedge). No clip normal to a face cell flagged in linked. Next to symmetry
+  !  planes (300) the cell is taken with its ghost nodes at the points of the planes they stand for
+  !  (boundaryPoint), which is its part inside the domain: no clip normal to those faces either.
   subroutine precomputeDualMetric(self, is2D, geoblock, linked)
     use IGLOO_variables, only: axisym, axisDir
     implicit none
@@ -1105,7 +1108,8 @@ contains
     type(faceFlags),  intent(in), optional :: linked(6)  !> the 101 or 201 face cells
     integer  :: i, j, k, i0, j0, ii, jj, in, jn, kn, nxe, nye, nze
     real(R8) :: vol, Tgeo, geoArea, v(3,4), d1(3), d2(3)
-    real(R8) :: rad, num, den, cSlab, fi, fj, fk
+    real(R8) :: rad, num, den, cSlab, fi, fj, fk, v8(3,8)
+    integer  :: da, db, dc
 
     nxe = self%Nx + 1
     nye = self%Ny + 1
@@ -1130,7 +1134,8 @@ contains
       cSlab = num / max(den, tiny(1._R8))
 
       do j = 1, nye; do i = 1, nxe
-        call self%getVertices([i, j, 1], v, .true.)
+        v(:,1) = boundaryPoint(i-1, j-1, 1); v(:,2) = boundaryPoint(i, j-1, 1)
+        v(:,3) = boundaryPoint(i, j, 1);     v(:,4) = boundaryPoint(i-1, j, 1)
         d1 = v(:,3) - v(:,1); d2 = v(:,4) - v(:,2)
         rad = 0.25_R8 * ( axisRadius(v(:,1)) + axisRadius(v(:,2)) &
                         + axisRadius(v(:,3)) + axisRadius(v(:,4)) )
@@ -1148,7 +1153,8 @@ contains
                                 d1(1)*d2(2)-d1(2)*d2(1)])
       Tgeo = geoblock%cellVol(i0, j0, 1) / max(geoArea, tiny(1._R8))
       do j = 1, nye; do i = 1, nxe
-        call self%getVertices([i, j, 1], v, .true.)
+        v(:,1) = boundaryPoint(i-1, j-1, 1); v(:,2) = boundaryPoint(i, j-1, 1)
+        v(:,3) = boundaryPoint(i, j, 1);     v(:,4) = boundaryPoint(i-1, j, 1)
         d1 = v(:,3) - v(:,1); d2 = v(:,4) - v(:,2)
         self%cellVol(i, j, 1) = 0.5_R8 * norm2([d1(2)*d2(3)-d1(3)*d2(2), &
                                                 d1(3)*d2(1)-d1(1)*d2(3), &
@@ -1156,7 +1162,14 @@ contains
       enddo; enddo
     else
       do k = 1, nze; do j = 1, nye; do i = 1, nxe
-        call self%computeVolume(i, j, k, vol)
+        if (i == 1 .or. i == nxe .or. j == 1 .or. j == nye .or. k == 1 .or. k == nze) then
+          do dc = 0, 1; do db = 0, 1; do da = 0, 1
+            v8(:, 1 + da + 2*db + 4*dc) = boundaryPoint(i-1+da, j-1+db, k-1+dc)
+          enddo; enddo; enddo
+          vol = hexVolume(v8)
+        else
+          call self%computeVolume(i, j, k, vol)
+        endif
         self%cellVol(i, j, k) = vol
       enddo; enddo; enddo
     endif
@@ -1168,25 +1181,25 @@ contains
       in = min(max(i-1, 1), geoblock%Nx)
       jn = min(max(j-1, 1), geoblock%Ny)
       kn = merge(1, min(max(k-1, 1), geoblock%Nz), is2D)
-      if (i == 1 .and. .not. isLinked(1, jn, kn)) &
+      if (i == 1 .and. .not. isLinked(1, jn, kn) .and. .not. onSym(0, jn, kn)) &
                     fi = insideFrac(self%node(:,1,jn,kn), self%node(:,0,jn,kn),          &
                                     geoblock%face(1)%cell(jn,kn)%center)
-      if (i == nxe .and. .not. isLinked(2, jn, kn)) &
+      if (i == nxe .and. .not. isLinked(2, jn, kn) .and. .not. onSym(self%Nx+1, jn, kn)) &
                     fi = insideFrac(self%node(:,self%Nx,jn,kn),                          &
                                     self%node(:,self%Nx+1,jn,kn),                        &
                                     geoblock%face(2)%cell(jn,kn)%center)
-      if (j == 1 .and. .not. isLinked(3, in, kn)) &
+      if (j == 1 .and. .not. isLinked(3, in, kn) .and. .not. onSym(in, 0, kn)) &
                     fj = insideFrac(self%node(:,in,1,kn), self%node(:,in,0,kn),          &
                                     geoblock%face(3)%cell(in,kn)%center)
-      if (j == nye .and. .not. isLinked(4, in, kn)) &
+      if (j == nye .and. .not. isLinked(4, in, kn) .and. .not. onSym(in, self%Ny+1, kn)) &
                     fj = insideFrac(self%node(:,in,self%Ny,kn),                          &
                                     self%node(:,in,self%Ny+1,kn),                        &
                                     geoblock%face(4)%cell(in,kn)%center)
       if (.not. is2D) then
-        if (k == 1 .and. .not. isLinked(5, in, jn)) &
+        if (k == 1 .and. .not. isLinked(5, in, jn) .and. .not. onSym(in, jn, 0)) &
                       fk = insideFrac(self%node(:,in,jn,1), self%node(:,in,jn,0),        &
                                       geoblock%face(5)%cell(in,jn)%center)
-        if (k == nze .and. .not. isLinked(6, in, jn)) &
+        if (k == nze .and. .not. isLinked(6, in, jn) .and. .not. onSym(in, jn, self%Nz+1)) &
                       fk = insideFrac(self%node(:,in,jn,self%Nz),                        &
                                       self%node(:,in,jn,self%Nz+1),                      &
                                       geoblock%face(6)%cell(in,jn)%center)
@@ -1204,6 +1217,35 @@ contains
       if (.not. allocated(linked(f)%f)) return
       isLinked = linked(f)%f(m, n)
     end function isLinked
+
+    !> Node (a,b,c) of the dual mesh; for a ring node behind symmetry planes, the point of the planes that its 2**m
+    !  nodes have as centre: the foot of the perpendicular from the node one step inside (symmetryRing).
+    function boundaryPoint(a, b, c) result(x)
+      integer, intent(in) :: a, b, c
+      real(R8) :: x(3), nrm(3,3), pt(3,3)
+      integer  :: ns, bb(3)
+      x = self%node(:, a, b, c)
+      if (.not. onSym(a, b, c)) return
+      call symPlanes(geoblock, a, b, c, ns, nrm, pt, bb)
+      x = symFoot(self%node(:, bb(1), bb(2), bb(3)), ns, nrm, pt)
+    end function boundaryPoint
+
+    !> Ring node (a,b,c) is a ghost of symmetry planes placed by symmetryRing.
+    logical function onSym(a, b, c)
+      integer, intent(in) :: a, b, c
+      real(R8) :: nrm(3,3), pt(3,3)
+      integer  :: ns, bb(3)
+      onSym = .false.
+      if (a >= 1 .and. a <= self%Nx .and. b >= 1 .and. b <= self%Ny .and. (is2D .or. (c >= 1 .and. c <= self%Nz))) return
+      select type (self)
+      class is (obj_flowblock)
+        if (allocated(self%nodeOnAxis)) then
+          if (self%nodeOnAxis(a, b, c)) return
+        endif
+      end select
+      call symPlanes(geoblock, a, b, c, ns, nrm, pt, bb)
+      onSym = ns > 0
+    end function onSym
 
   end subroutine precomputeDualMetric
 
@@ -1249,7 +1291,7 @@ contains
 
 
   !> Fill the ghost ring of the gas field by linear extrapolation: faces (a parent's face over it),
-  !  then the symmetry-axis override, then edges and corners.
+  !  then the symmetry-axis override, then edges and corners, then the ghosts of symmetry planes (symRing).
   subroutine fillGhostGradient(self, geoblock)
     implicit none
     class(obj_flowblock), intent(inout) :: self
@@ -1406,6 +1448,9 @@ contains
       call bcEdgeGhost(self, geoblock, 0,    Ny+1, Nz+1); call bcEdgeGhost(self, geoblock, Nx+1, Ny+1, Nz+1)
     endif
 
+    !> ghosts of symmetry planes (mirror nodes, symmetryRing): the gas even across the planes, no flow through them
+    call symRing(self, geoblock, .false.)
+
   end subroutine fillGhostGradient
 
 
@@ -1480,24 +1525,59 @@ contains
   end subroutine applyGhostData
 
 
-  !> Ghost values for a node on the symmetry axis (g*): scalars copied from the interior
-  !  partner (i*), velocity reduced to its axis-parallel component.
+  !> Ghost values for a node on the symmetry axis (g*). The scalars and the axis-parallel velocity are even in
+  !  the radius: on the axis they take the value of the fit a + b r^2 through the interior partner (i*, radius r1)
+  !  and the cell behind it on the same index line (radius r2), phi1 + w (phi1 - phi2), w = r1^2/(r2^2 - r1^2),
+  !  which has no radial slope there. The velocity normal to the axis is zero. The partner's values are kept
+  !  (w = 0) where there is no second cell, where the radius does not grow along the line, or where a fitted
+  !  scalar is not positive.
   subroutine axisGhost(self, gi, gj, gk, ii, ij, ik)
     use IGLOO_variables, only: axisDir
     implicit none
     class(obj_flowblock), intent(inout) :: self
     integer,              intent(in)    :: gi, gj, gk, ii, ij, ik
-    real(R8) :: v(3)
+    integer  :: ji, jj, jk
+    real(R8) :: w, r1, r2, u1, u2
 
-    self%density    (:, gi,gj,gk) = self%density    (:, ii,ij,ik)
-    self%temperature(   gi,gj,gk) = self%temperature(   ii,ij,ik)
-    self%mil        (   gi,gj,gk) = self%mil        (   ii,ij,ik)
-    self%kl         (   gi,gj,gk) = self%kl         (   ii,ij,ik)
-    self%gam        (   gi,gj,gk) = self%gam        (   ii,ij,ik)
-    self%R          (   gi,gj,gk) = self%R          (   ii,ij,ik)
+    w = 0._R8
+    ji = 2*ii - gi; jj = 2*ij - gj; jk = 2*ik - gk
+    if (ji >= 1 .and. ji <= self%Nx .and. jj >= 1 .and. jj <= self%Ny .and. jk >= 1 .and. jk <= self%Nz) then
+      r1 = axisRadius(self%node(:, ii,ij,ik)); r2 = axisRadius(self%node(:, ji,jj,jk))
+      if (r1 > 0._R8 .and. r2 > r1) w = r1*r1/(r2*r2 - r1*r1)
+    else
+      ji = ii; jj = ij; jk = ik
+    endif
 
-    v = self%velocity(:, ii,ij,ik)
-    self%velocity(:, gi,gj,gk) = dot_product(v, axisDir)*axisDir
+    call evenFit()
+    if (w > 0._R8) then
+      if (any(self%density(:, gi,gj,gk) <= 0._R8) .or. self%temperature(gi,gj,gk) <= 0._R8 .or. &
+          self%mil(gi,gj,gk) <= 0._R8 .or. self%kl(gi,gj,gk) <= 0._R8 .or.                      &
+          self%gam(gi,gj,gk) <= 0._R8 .or. self%R(gi,gj,gk) <= 0._R8) then
+        w = 0._R8
+        call evenFit()
+      endif
+    endif
+
+    u1 = dot_product(self%velocity(:, ii,ij,ik), axisDir); u2 = dot_product(self%velocity(:, ji,jj,jk), axisDir)
+    self%velocity(:, gi,gj,gk) = (u1 + w*(u1 - u2))*axisDir
+
+  contains
+
+    !> a1 + w (a1 - a2): the fit's value on the axis from the partner's value a1 and the second cell's a2
+    elemental function onAxis(a1, a2) result(a)
+      real(R8), intent(in) :: a1, a2
+      real(R8) :: a
+      a = a1 + w*(a1 - a2)
+    end function onAxis
+
+    subroutine evenFit()
+      self%density    (:, gi,gj,gk) = onAxis(self%density    (:, ii,ij,ik), self%density    (:, ji,jj,jk))
+      self%temperature(   gi,gj,gk) = onAxis(self%temperature(   ii,ij,ik), self%temperature(   ji,jj,jk))
+      self%mil        (   gi,gj,gk) = onAxis(self%mil        (   ii,ij,ik), self%mil        (   ji,jj,jk))
+      self%kl         (   gi,gj,gk) = onAxis(self%kl         (   ii,ij,ik), self%kl         (   ji,jj,jk))
+      self%gam        (   gi,gj,gk) = onAxis(self%gam        (   ii,ij,ik), self%gam        (   ji,jj,jk))
+      self%R          (   gi,gj,gk) = onAxis(self%R          (   ii,ij,ik), self%R          (   ji,jj,jk))
+    end subroutine evenFit
 
   end subroutine axisGhost
 
@@ -1616,6 +1696,8 @@ contains
             call bcEdgeGhost(gas, geoall(b), gas%glink(l)%gi, gas%glink(l)%gj, gas%glink(l)%gk)
         endif
       enddo
+      !> edge and corner ghosts of symmetry planes, from the face ghosts just written
+      call symRing(gas, geoall(b), .true.)
       end associate
     enddo
 
@@ -1677,7 +1759,7 @@ contains
   !  nodes and the edge and corner nodes of its plane, a node shared by two connected faces taken
   !  by the first -- the dual cell of the connected block holding it (after the periodic translation
   !  for 201; for 102 in the layer-1 donors' blocks by decreasing weight) and the weights there.
-  !  Nodes on the symmetry axis are left out. nin nodes are located, nmiss are not (they keep the
+  !  Nodes on the symmetry axis and ghosts of symmetry planes are left out. nin nodes are located, nmiss are not (they keep the
   !  ring's own fill); nfar 102 nodes lie in a dual cell none of whose nodes is a listed donor or
   !  next to one (interpolated all the same).
   subroutine buildGhostLinks(gasall, geoall, nin, nmiss, nfar)
@@ -1692,7 +1774,8 @@ contains
     integer :: b, f, nf, a1, a2, ga, gb, gi, gj, gk, m, n, kmin, kmax, nl, d, t, cb, pm, pn, nfr
     logical :: found
     logical, allocatable :: tried(:)
-    real(R8) :: p(3), tr(3)
+    real(R8) :: p(3), tr(3), snrm(3,3), spt(3,3)
+    integer  :: nsym, sIn(3)
 
     nin = 0; nmiss = 0; nfr = 0
     nf = merge(4, 6, mesh2D)
@@ -1732,6 +1815,9 @@ contains
             if (allocated(gas%nodeOnAxis)) then
               if (gas%nodeOnAxis(gi,gj,gk)) cycle
             endif
+            !> a ghost of a symmetry plane takes its values from its own block (symRing)
+            call symPlanes(blk, gi, gj, gk, nsym, snrm, spt, sIn)
+            if (nsym > 0) cycle
             nl = nl + 1
             tmp(nl) = ghostLink(gi=gi, gj=gj, gk=gk, edge=(ga < 1 .or. ga > a1 .or. gb < 1 .or. gb > a2))
             p = gas%node(:, gi, gj, gk)
@@ -1937,6 +2023,244 @@ contains
         ': faces normal to different index directions, the field mollifier gives it zero flux'
     enddo
   end subroutine reportNonAligned
+
+
+  !> The symmetry planes (code 300) that ring node (gi,gj,gk) of the block's dual mesh lies behind: ns of them (0 to
+  !  3: a face, an edge, a corner of the ring), nrm their unit normals and pt a point of each, both of the face cell
+  !  next to the node. b: the node one step back inside across those planes only -- a cell centre, or the ghost of
+  !  the other boundaries the node is also beyond. A face cell without a unit normal (a collapsed face) is no plane;
+  !  a plane parallel to one already counted, or through the edge of the two already counted, steps b inside
+  !  without adding a normal.
+  pure subroutine symPlanes(geo, gi, gj, gk, ns, nrm, pt, b)
+    use IGLOO_VectorModule, only: cross
+    implicit none
+    class(obj_block), intent(in)  :: geo
+    integer,          intent(in)  :: gi, gj, gk
+    integer,          intent(out) :: ns, b(3)
+    real(R8),         intent(out) :: nrm(3,3), pt(3,3)
+    real(R8), parameter :: tolInd = 1.e-12_R8   !> squared sine of the smallest angle between independent normals
+    integer  :: g(3), nmax(3), c(3), q, f, code
+    real(R8) :: n(3), x(3), t(3)
+
+    g = [gi, gj, gk]; nmax = [geo%Nx, geo%Ny, geo%Nz]
+    c = min(max(g, 1), nmax)
+    ns = 0; b = g; nrm = 0._R8; pt = 0._R8
+    do q = 1, 3
+      if (g(q) >= 1 .and. g(q) <= nmax(q)) cycle
+      f = 2*q - merge(1, 0, g(q) < 1)
+      select case (q)
+      case (1)
+        code = geo%face(f)%cell(c(2),c(3))%bcdef; n = geo%face(f)%cell(c(2),c(3))%normal
+        x = geo%face(f)%cell(c(2),c(3))%center
+      case (2)
+        code = geo%face(f)%cell(c(1),c(3))%bcdef; n = geo%face(f)%cell(c(1),c(3))%normal
+        x = geo%face(f)%cell(c(1),c(3))%center
+      case default
+        code = geo%face(f)%cell(c(1),c(2))%bcdef; n = geo%face(f)%cell(c(1),c(2))%normal
+        x = geo%face(f)%cell(c(1),c(2))%center
+      end select
+      if (code /= 300) cycle
+      if (abs(norm2(n) - 1._R8) > 1.e-6_R8) cycle
+      b(q) = c(q)
+      if (ns == 1) then
+        if (1._R8 - dot_product(n, nrm(:,1))**2 <= tolInd) cycle
+      elseif (ns == 2) then
+        t = cross(nrm(:,1), nrm(:,2))
+        if (dot_product(n, t)**2 <= tolInd*dot_product(t, t)) cycle
+      endif
+      ns = ns + 1; nrm(:,ns) = n; pt(:,ns) = x
+    enddo
+  end subroutine symPlanes
+
+
+  !> The vector r in the span of ns independent unit normals with r.n_q = d(q) for each of them: d(1) n_1 for one;
+  !  for two, the combination of n_1 and n_2 from their Gram system; for three, the solution of the 3 x 3 system.
+  pure function symSpan(ns, nrm, d) result(r)
+    use IGLOO_VectorModule, only: cross
+    implicit none
+    integer,  intent(in) :: ns
+    real(R8), intent(in) :: nrm(3,3), d(3)
+    real(R8) :: r(3), g, t(3)
+
+    select case (ns)
+    case (1)
+      r = d(1)*nrm(:,1)
+    case (2)
+      g = dot_product(nrm(:,1), nrm(:,2))
+      r = ((d(1) - g*d(2))*nrm(:,1) + (d(2) - g*d(1))*nrm(:,2))/(1._R8 - g*g)
+    case (3)
+      t = cross(nrm(:,2), nrm(:,3))
+      r = (d(1)*t + d(2)*cross(nrm(:,3), nrm(:,1)) + d(3)*cross(nrm(:,1), nrm(:,2)))/dot_product(nrm(:,1), t)
+    case default
+      r = 0._R8
+    end select
+  end function symSpan
+
+
+  !> The foot of the perpendicular from x on ns planes together (symPlanes): on the plane, on the edge of two, at
+  !  the corner of three.
+  pure function symFoot(x, ns, nrm, pt) result(xf)
+    implicit none
+    real(R8), intent(in) :: x(3), nrm(3,3), pt(3,3)
+    integer,  intent(in) :: ns
+    real(R8) :: xf(3), d(3)
+    integer  :: q
+
+    d = 0._R8
+    do q = 1, ns
+      d(q) = dot_product(x - pt(:,q), nrm(:,q))
+    enddo
+    xf = x - symSpan(ns, nrm, d)
+  end function symFoot
+
+
+  !> Weight w of the even fit on ns planes together (symPlanes) from the first node inside, at xb, and the next node
+  !  on the same index line, at xc: the value on the planes is phi_b + w (phi_b - phi_c), w = d_b^2/(d_c^2 - d_b^2)
+  !  with d the distance from the planes -- the fit a + e d^2, for two nodes on one normal. Where the feet of the
+  !  two are apart, the change of the field along the planes over that offset would enter the value with the same
+  !  weight: with s the offset of the feet over the growth of the distance, w is tapered by 1 - (s/symSkewMax)^2
+  !  and is zero from s = symSkewMax (and where the distance does not grow): the value on the planes is then b's.
+  pure function symFitWeight(xb, xc, ns, nrm, pt) result(w)
+    implicit none
+    real(R8), intent(in) :: xb(3), xc(3), nrm(3,3), pt(3,3)
+    integer,  intent(in) :: ns
+    real(R8), parameter :: symSkewMax = 0.1_R8
+    real(R8) :: w, fb(3), fc(3), db, dc, s
+
+    w = 0._R8
+    fb = symFoot(xb, ns, nrm, pt); fc = symFoot(xc, ns, nrm, pt)
+    db = norm2(xb - fb); dc = norm2(xc - fc)
+    if (db <= 0._R8 .or. dc <= db) return
+    s = norm2(fc - fb)/(dc - db)
+    if (s >= symSkewMax) return
+    w = db*db/(dc*dc - db*db)*(1._R8 - (s/symSkewMax)**2)
+  end function symFitWeight
+
+
+  !> Gas at ring node (gi,gj,gk) behind symmetry planes, when it is behind mStep symmetry faces of the block
+  !  (symPlanes: ns planes, b the node one step inside across them, c the next one on the same index line). The 2**m
+  !  nodes that b and the ring nodes behind those faces make have their centre on the planes, at the foot of the
+  !  perpendicular from b (symmetryRing). There the scalars and the velocity take the fit a + e d^2 in the distance d
+  !  from the planes through b and c, even across the planes with no slope normal to them: phi_b + w (phi_b - phi_c),
+  !  w from symFitWeight (zero where c is not on the normal through b: the value on the planes is then b's and the
+  !  node the plain mirror image); the velocity loses its part normal to the planes -- on one plane the normal component,
+  !  on the edge of two all but the component along the edge, at the corner of three everything. The node takes the
+  !  value that makes the mean of the 2**m nodes that value: behind one plane, b's state mirrored in the plane, with
+  !  the fit's correction. w = 0 also where there is no c or where a scalar
+  !  of the node would not be positive; where one still is not, the node keeps b's scalars.
+  subroutine symGhost(self, geo, gi, gj, gk, mStep)
+    implicit none
+    class(obj_flowblock), intent(inout) :: self
+    class(obj_block),     intent(in)    :: geo
+    integer,              intent(in)    :: gi, gj, gk, mStep
+    integer  :: ns, g(3), b(3), c(3), o(3), q, mask
+    logical  :: step(3), bits(3)
+    real(R8) :: nrm(3,3), pt(3,3), d(3), w, v(3), f
+    real(R8) :: sRho(size(self%density,1)), sV(3), sT, sMil, sKl, sGam, sR
+
+    call symPlanes(geo, gi, gj, gk, ns, nrm, pt, b)
+    if (ns == 0) return
+    g = [gi, gj, gk]
+    step = b /= g
+    if (count(step) /= mStep) return
+    !> a symmetry face whose ring a parent provided is the parent's: the nodes beside it keep the ring's own fill
+    do q = 1, 3
+      if (step(q) .and. self%ghostExternal(2*q - merge(1, 0, g(q) < 1))) return
+    enddo
+    f = real(2**mStep, R8)
+    c = 2*b - g
+    w = 0._R8
+    if (all(.not. step .or. (c >= 1 .and. c <= [self%Nx, self%Ny, self%Nz]))) then
+      w = symFitWeight(self%node(:, b(1),b(2),b(3)), self%node(:, c(1),c(2),c(3)), ns, nrm, pt)
+    else
+      c = b
+    endif
+    !> the other nodes of the 2**m, summed
+    sRho = 0._R8; sV = 0._R8; sT = 0._R8; sMil = 0._R8; sKl = 0._R8; sGam = 0._R8; sR = 0._R8
+    do mask = 1, 7
+      bits = [btest(mask, 0), btest(mask, 1), btest(mask, 2)]
+      if (any(bits .and. .not. step)) cycle
+      o = merge(b, g, bits)
+      sRho = sRho + self%density(:, o(1),o(2),o(3)); sV = sV + self%velocity(:, o(1),o(2),o(3))
+      sT = sT + self%temperature(o(1),o(2),o(3)); sMil = sMil + self%mil(o(1),o(2),o(3))
+      sKl = sKl + self%kl(o(1),o(2),o(3)); sGam = sGam + self%gam(o(1),o(2),o(3)); sR = sR + self%R(o(1),o(2),o(3))
+    enddo
+    call fill()
+    if (w > 0._R8 .and. .not. positive()) then
+      w = 0._R8
+      call fill()
+    endif
+    if (.not. positive()) then
+      self%density    (:, gi,gj,gk) = self%density    (:, b(1),b(2),b(3))
+      self%temperature(   gi,gj,gk) = self%temperature(   b(1),b(2),b(3))
+      self%mil        (   gi,gj,gk) = self%mil        (   b(1),b(2),b(3))
+      self%kl         (   gi,gj,gk) = self%kl         (   b(1),b(2),b(3))
+      self%gam        (   gi,gj,gk) = self%gam        (   b(1),b(2),b(3))
+      self%R          (   gi,gj,gk) = self%R          (   b(1),b(2),b(3))
+    endif
+    v = even(self%velocity(:, b(1),b(2),b(3)), self%velocity(:, c(1),c(2),c(3)))
+    d = 0._R8
+    do q = 1, ns
+      d(q) = dot_product(v, nrm(:,q))
+    enddo
+    self%velocity(:, gi,gj,gk) = f*(v - symSpan(ns, nrm, d)) - sV
+
+  contains
+
+    !> The fit's value on the planes from the values at b and at c.
+    elemental function even(a1, a2) result(a)
+      real(R8), intent(in) :: a1, a2
+      real(R8) :: a
+      a = a1 + w*(a1 - a2)
+    end function even
+
+    !> The node's scalars: 2**m times the value on the planes less the other nodes'.
+    subroutine fill()
+      associate(i1 => b(1), j1 => b(2), k1 => b(3), i2 => c(1), j2 => c(2), k2 => c(3))
+      self%density    (:, gi,gj,gk) = f*even(self%density    (:, i1,j1,k1), self%density    (:, i2,j2,k2)) - sRho
+      self%temperature(   gi,gj,gk) = f*even(self%temperature(   i1,j1,k1), self%temperature(   i2,j2,k2)) - sT
+      self%mil        (   gi,gj,gk) = f*even(self%mil        (   i1,j1,k1), self%mil        (   i2,j2,k2)) - sMil
+      self%kl         (   gi,gj,gk) = f*even(self%kl         (   i1,j1,k1), self%kl         (   i2,j2,k2)) - sKl
+      self%gam        (   gi,gj,gk) = f*even(self%gam        (   i1,j1,k1), self%gam        (   i2,j2,k2)) - sGam
+      self%R          (   gi,gj,gk) = f*even(self%R          (   i1,j1,k1), self%R          (   i2,j2,k2)) - sR
+      end associate
+    end subroutine fill
+
+    logical function positive()
+      positive = all(self%density(:, gi,gj,gk) > 0._R8) .and. self%temperature(gi,gj,gk) > 0._R8 .and. &
+                 self%mil(gi,gj,gk) > 0._R8 .and. self%kl(gi,gj,gk) > 0._R8 .and.                       &
+                 self%gam(gi,gj,gk) > 0._R8 .and. self%R(gi,gj,gk) > 0._R8
+    end function positive
+
+  end subroutine symGhost
+
+
+  !> The gas of every ring node behind symmetry planes (symGhost), after the ring's own fill: the nodes behind one
+  !  symmetry face, then two, then three (each takes the others of its 2**m). edgesOnly: the edge and corner nodes
+  !  only (they follow the face ghosts of the other boundaries). A node on the symmetry axis of a 2D wedge keeps
+  !  axisGhost's values, a node all of whose faces a parent provided keeps the parent's, and a node behind a
+  !  symmetry face that a parent provided keeps the ring's own fill (symGhost).
+  subroutine symRing(self, geo, edgesOnly)
+    implicit none
+    class(obj_flowblock), intent(inout) :: self
+    class(obj_block),     intent(in)    :: geo
+    logical,              intent(in)    :: edgesOnly
+    integer :: i, j, k, kmin, kmax, m
+    logical :: beyond(6)
+
+    kmin = merge(0, 1, self%Nz > 1); kmax = merge(self%Nz + 1, 1, self%Nz > 1)
+    do m = 1, merge(3, 2, self%Nz > 1)
+      do k = kmin, kmax; do j = 0, self%Ny + 1; do i = 0, self%Nx + 1
+        beyond = [i == 0, i == self%Nx + 1, j == 0, j == self%Ny + 1, k == 0, k == self%Nz + 1]
+        if (count(beyond) < max(m, merge(2, 1, edgesOnly))) cycle
+        if (all(self%ghostExternal .or. .not. beyond)) cycle
+        if (allocated(self%nodeOnAxis)) then
+          if (self%nodeOnAxis(i,j,k)) cycle
+        endif
+        call symGhost(self, geo, i, j, k, m)
+      enddo; enddo; enddo
+    enddo
+  end subroutine symRing
 
 
   !> Linear extrapolation of the gas state to ghost (ig,jg,kg) from (i1,j1,k1) and (i2,j2,k2).

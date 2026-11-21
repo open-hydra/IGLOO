@@ -243,7 +243,7 @@ call particles%solve()
 The arrays hold the values at the face's ghost nodes over its interior range: `density(nspecies, na, nb)`,
 `velocity(3, na, nb)` and the scalars `(na, nb)`, with `(na, nb)` = (Ny, Nz) on faces 1–2, (Nx, Nz) on faces 3–4
 and (Nx, Ny) on faces 5–6 (a one-layer block has no ring on faces 5 and 6). They replace IGLOO's own fill on that
-face — the linear extrapolation, a wall's mirror, the axis rule and, on a connected face, the interpolated values;
+face — the linear extrapolation, a wall's mirror, a symmetry plane's mirror ghost, the axis rule and, on a connected face, the interpolated values;
 a node with a non-positive scalar falls back to the interior cell's values. The edge and corner nodes beside the
 face are extrapolated from the provided values as from IGLOO's own, and on a connected face they are still
 interpolated from the connected block unless their other face is provided too. `reset_state` drops every provided

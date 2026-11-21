@@ -33,7 +33,7 @@ import datcols  # noqa: E402
 import replay  # noqa: E402
 
 N_STREAMS, X_OUT, HALF = 6, 0.15, 0.5e-6
-Z_PLANE = 1.0e-5                     # the grazing standoff is 1e-6 m here
+Z_PLANE = 1.0e-5                     # the grazing set-back is 1.2e-7 m here
 DX, NX, N_MAX_CELL = 0.0025, 60, 10  # the box's cells along x; the guard's limit
 GUARDS = ["stuck in cell", "no net progress", "Run_ODESolver err=", "EXIT OF SDIRK4", "Inner loop >",
           "hit outer maxIter", "non-finite", "initialized out of domain"]

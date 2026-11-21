@@ -6,7 +6,7 @@ counts segments on the gas dual cell.
 
 **Fixture.** `INPUT/` and `check.py` symlinked to `sym-plane-skate`'s; `input.ini` is its own with `gas-order = 2`.
 The twelve streams behave as at gas order 1: the 50 m/s, 1° streams slide on the plane to the outlet at
-z = 1e-6 m, the 50 m/s, 10° streams reflect and leave at z = 5.9e-3 m, the 0.1 m/s streams stop short of the plane.
+z = 1.2e-7 m, the 50 m/s, 10° streams reflect and leave at z = 5.9e-3 m, the 0.1 m/s streams stop short of the plane.
 
 **Gates** (`check.py`, shared). C1 no give-up guard and no solver failure; C2 twelve exits, all at the outlet;
 C3 the grazing streams slide on the plane, the steep ones leave reflected, the slow ones stop short of it.

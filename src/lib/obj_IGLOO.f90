@@ -91,7 +91,7 @@ contains
     real(8), allocatable :: pos0(:,:), vel0(:,:), mdot(:), diam(:), temp0(:)
     integer              :: m, g, fam, nthreads, nGhostIn, nGhostMiss, nGhostFar, b, b2, nMoved, nWallFace, nDrop
     integer,  allocatable :: nDualColl(:), nDualFold(:), firstFold(:,:)
-    integer               :: nEdgeMoved, nEdgeFixed
+    integer               :: nEdgeMoved, nEdgeFixed, nSym(3), nSymFit(3)
     real(R8), allocatable :: worstFold(:)
     character(len=16)    :: dualCodes
     integer, allocatable :: npair(:,:), ncut(:,:), resCount(:)
@@ -184,6 +184,13 @@ contains
         //trim(dualCodes)//' faces: ', size(self%classes), ' vertex classes, ', nMoved, ' ghost nodes at partner centres'
       if (mpi_is_root .and. nEdgeMoved + nEdgeFixed > 0) write(*,'(A,2(I0,A))') ' [IGLOO] gas-order-2 dual ring: ', &
         nEdgeMoved, ' edge ghost nodes from the partner blocks, ', nEdgeFixed, ' completed as parallelograms'
+      call symmetryDual(self%geoblock, self%gasblock, nSym, nSymFit)
+      if (mpi_is_root .and. sum(nSym) > 0) write(*,'(A,3(I0,A))') ' [IGLOO] gas-order-2 ghosts of symmetry planes: ', &
+        nSym(1), ' mirror nodes behind a plane, ', nSym(2), ' behind the edge of two planes, ', nSym(3), &
+        ' behind the corner of three'
+      if (mpi_is_root .and. sum(nSym) > 0) write(*,'(A,3(I0,A))') ' [IGLOO] even fit at symmetry planes: ', nSymFit(1), &
+        ' of the nodes behind a plane, ', nSymFit(2), ' behind an edge and ', nSymFit(3), &
+        ' behind a corner have the next node on the normal; the others are plain mirror images'
       call buildGhostLinks(self%gasblock, self%geoblock, nGhostIn, nGhostMiss, nGhostFar)
       if (mpi_is_root .and. nGhostIn + nGhostMiss > 0) write(*,'(A,2(I0,A))') &
         ' [IGLOO] ghost nodes at connected faces: ', nGhostIn, ' interpolated, ', nGhostMiss, ' not covered'
@@ -399,6 +406,7 @@ contains
   !  output files, sizes the scatter quantum, runs the OpenMP particle loop (with the child
   !  generation loop for shedding models), then reduces and finalizes the source/euler fields.
   subroutine solve(self)
+    use IGLOO_IO_INI, only: reread_guards
     use Lib_Integration,  only: integrate
     use IGLOO_particles,  only: obj_particle
     use IGLOO_variables,  only: ode_word,iopt,rtol,atol, ord2, nm, nsm, nb, &
@@ -635,6 +643,7 @@ contains
               '/stream; realized varies with residence — raise fsample-traj for a denser cloud)'
       endif
 
+      call reread_guards()
       if (mpi_is_root) then
         write(*,*)" Compute particles dynamics for material: ",trim(mat%matName)
         if (mat%cpVariable .and. mat%solidSelect == 0) write(*,*) ' >> Solving enthalpy equation'

@@ -17,7 +17,7 @@ contains
                         epsTab,cuts)
     use, intrinsic :: iso_fortran_env, only : R8 => real64
     use IGLOO_data_phases, only: obj_shed, shedList
-    use IGLOO_variables,  only: iprint,dtprint,dsprint,dcellSet,tEnd,timeOn,snapOn,frozenOn, &
+    use IGLOO_variables,  only: iprint,dtprint,dsprint,dcellSet,tEnd,timeOn,snapOn,frozenOn,nMaxRefl, &
                                 nb,toll,ord2,mesh2D,                      &
                                 eulerSwitch,sourceSwitch, phaseChange,     &
                                 bodyAccel, srcBodyForce, axisym,           &
@@ -28,7 +28,7 @@ contains
                                 planeOn, planeX, failAfter, maxInnerIter, nm, nsm, &
                                 capColumns, smokeColumns, smokeRow
     use IGLOO_particles,  only: obj_particle, eps
-    use IGLOO_bcBox,      only: axisymFold, sectorDs, grazeStandoff
+    use IGLOO_bcBox,      only: axisymFold, sectorDs, stallStep
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock, obj_wallblock
     use IGLOO_Lib_Erosion, only: isWallCode, erosionRatio
     use IGLOO_Lib_Properties
@@ -128,6 +128,7 @@ contains
     logical  :: geoHexDegen(2,6), gasHexDegen(2,6)
     real(R8) :: geoHexTol, gasHexTol   !> the cached cells' containment tolerances
     integer,  parameter :: maxIter=500000, nMaxCell=10, nMaxStall=100
+    integer  :: nReflTot
     !> accessed by ODEsystem, rhs1-4, solout via host association
     real(R8) :: y(part%neq), oldLocal(part%neq)
     real(R8) :: auxLocal(nauxvar), childState(nchild)
@@ -143,6 +144,7 @@ contains
     real(R8) :: sEv
     integer  :: whichEv
     real(R8) :: timeLocal, din, dout, deltaS(3), dir(3), taup, tEvt, rhoEvt
+    real(R8) :: xiEntry(3)    ! gas order 2, 3D: the local-coordinate seed of the entry sample (part%xi0 is left as it is)
     real(R8) :: zEnd          ! the law's cap at burnout over m_p0 (unused here)
     integer  :: err, nDL, innerIter, jSlot
     integer,  parameter :: nStep=10
@@ -254,6 +256,12 @@ contains
     !> Block index and cell-entry state for every entry (children enter with time /= 0).
     b = part%i(1)
     call refreshCellEntry()
+    !> Gas order 2: gasState is the right-hand side's sample, and the solver's first solout call (the start point of
+    !  the first segment) precedes every right-hand side: the breakup event of that call takes the gas at the entry state.
+    if (ord2) then
+      if (mesh2D) then; call sampleGas2D(gasVert, gas, part%stateVar(1:3), ng, gasState)
+      else; xiEntry = part%xi0; call interp2ndOrder(gasVert, gas, part%stateVar(1:3), ng, xiEntry, gasState); endif
+    endif
     !> Pack auxiliary variables once (constant throughout integration)
     call packAuxVars(part, nauxvar, auxLocal)
     !> The injection row, then a breakup child's first row (its birth state, before its first step), on the
@@ -272,6 +280,7 @@ contains
     iter = 0; nCross=0; tprint = part%time + dtprint
     nStall = 0; posPrev = part%stateVar(1:3) - 1._R8
     nRefl = 0
+    nReflTot = 0
     nReflW = 0; posReflW = part%stateVar(1:3)
     !> Scatter cloud: the marker rate npRef/dNscat, fixed at entry (a breakup child's is its parent's); the accumulator
     !  seeded with the golden-ratio phase of the parcel's own ID.
@@ -532,11 +541,18 @@ contains
         part%gone=.true.
       endif
 
-      !> A bounce that makes no progress: nMaxStall reflections within nMaxStall standoffs.
+      !> A bounce that makes no progress: nMaxStall reflections within nMaxStall*stallStep.
+      if (reflSeg .and. .not.part%gone) then
+        nReflTot = nReflTot + 1
+        if (nReflTot > nMaxRefl) then
+          write(*,'(A,I0,A,I0,A)') '       ==> Particle ',part%ID,' more than ',nMaxRefl,' reflections ==> marking gone'
+          part%gone = .true.
+        endif
+      endif
       if (reflSeg .and. .not.part%gone) then
         nReflW = nReflW + 1
         if (nReflW == nMaxStall) then
-          if (norm2(part%stateVar(1:3) - posReflW) < nMaxStall*grazeStandoff) then
+          if (norm2(part%stateVar(1:3) - posReflW) < nMaxStall*stallStep) then
             write(*,'(A,I0,A,4(1X,I0),A)') '       ==> Particle ',part%ID,' stuck in cell:',part%iold
             part%gone = .true.
           endif
@@ -1232,6 +1248,7 @@ contains
       if     ( ord2 ) then; newGas = .not.isPointInsideCell(y(1:3),gasVert,mesh2D,gasHexNorms,gasHexCentroids,gasHexDegen,part%gasExitFace, &
                                                          sectorOut,gasHexTol)
       elseif (IamOut) then; newGas = .true.; endif
+      if (ord2 .and. newGas .and. .not.mesh2D) call outerFacesOnly(y(1:3))
 
       !> Locator-lost start: suppress containment interrupts until the particle has moved escapeDist.
       if (NR == 1) startedOut = (IamOut .or. newGas) .and. part%lost
@@ -1371,6 +1388,36 @@ contains
       part%i = part%iInj; part%wasin = .true.; part%lost = .false.
       injCellHolds = .true.
     end function injCellHolds
+
+    !> A point outside the gas dual cell (newGas) through outer faces only -- faces with no dual cell beyond, the cell
+    !  being an outermost one -- is no gas-cell change: there is no cell to go to. The geometry test, on in these
+    !  cells, ends the block; until then the gas is the cell's interpolation continued past the face. Outside
+    !  through a face that has a cell beyond: that face is the exit face. The two-triangle rule of isInsideHex12Fast.
+    subroutine outerFacesOnly(p)
+      real(R8), intent(in) :: p(3)
+      integer  :: f, q, hi(3)
+      real(R8) :: d1, d2
+
+      hi = [gasblock(b)%Nx, gasblock(b)%Ny, gasblock(b)%Nz] + 1
+      do f = 1, 6
+        if (gasHexDegen(1,f)) then
+          d1 = 1._R8
+          if (gasHexDegen(2,f)) then; d2 = -1._R8
+          else; d2 = dot_product(gasHexNorms(:,2,f), p - gasHexCentroids(:,2,f)); endif
+        else
+          d1 = dot_product(gasHexNorms(:,1,f), p - gasHexCentroids(:,1,f))
+          if (gasHexDegen(2,f)) then; d2 = 1._R8
+          else; d2 = dot_product(gasHexNorms(:,2,f), p - gasHexCentroids(:,2,f)); endif
+        endif
+        if (.not. (d1 > gasHexTol .and. d2 > gasHexTol)) cycle
+        q = (f + 1)/2
+        if (mod(f,2) == 1 .and. part%igas(q) <= 1) cycle
+        if (mod(f,2) == 0 .and. part%igas(q) >= hi(q)) cycle
+        part%gasExitFace = f
+        return
+      enddo
+      newGas = .false.; part%gasExitFace = 0
+    end subroutine outerFacesOnly
 
     !> True when the gas dual cell sits on a block boundary
     subroutine setAtGasBoundary()

@@ -12,6 +12,8 @@ Gates
       diameter change, before x = 0.01 m and at t_ev < 2e-4 s
   E1  gas order 1: |t_ev(+0.45 deg) - t_ev(-0.45 deg)| <= TOL
   E2  gas order 2 (ref-ord2/, the sibling run with the IGLOO_EXE executable, the control): the same bound
+The sibling runs with MALLOC_PERTURB_=1 (glibc fills every allocation with a byte pattern): a value the solver
+reads before setting it is then a huge number, not the zero of a fresh page, and E0 sees it.
 The centre copy's offset, t_ev(0) - (t_ev(+) + t_ev(-))/2, is printed for both runs, not gated.
 """
 import os
@@ -55,7 +57,8 @@ def sibling():
     ini = re.sub(r"^gas-order\s*=.*$", "gas-order   = 2", ini, count=1, flags=re.M)
     open(os.path.join(d, "input.ini"), "w").write(ini)
     with open(os.path.join(d, "run_out.txt"), "w") as out, open(os.path.join(d, "run_err.txt"), "w") as err:
-        return subprocess.run([IGLOO], cwd=d, stdout=out, stderr=err).returncode, d
+        env = dict(os.environ, MALLOC_PERTURB_="1")
+        return subprocess.run([IGLOO], cwd=d, stdout=out, stderr=err, env=env).returncode, d
 
 
 def gate(name, label, d):

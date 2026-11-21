@@ -516,9 +516,63 @@ contains
     elseif (any(self%igas < 1) .or. self%igas(1) > gasblock%Nx + 1 .or. self%igas(2) > gasblock%Ny + 1 .or. &
             self%igas(3) > merge(1, gasblock%Nz + 1, mesh2D)) then
       call self%findDualCell(gasblock)
+    elseif (.not. mesh2D) then
+      !> no dual cell holds p: it is past the outer faces of the outermost cells (outerWalk)
+      if (outerWalk(gasblock, p, self%igasOld, found)) self%igas = found
     endif
 
   end subroutine advanceGasCell
+
+
+  !> For a point p that no gas dual cell of the block holds: from cell seed, across the faces p lies outside of
+  !  that have a cell beyond, to the cell p is outside of through outer faces only -- faces with no dual cell
+  !  beyond, of an outermost cell. The outer dual faces can cut the block's own cells (a block interface oblique
+  !  to a symmetry plane whose ghost nodes are mirror images): the parcel there is still the block's, and its gas
+  !  is the outermost cell's interpolation continued past the face. False when five moves do not end.
+  !  The two-triangle rule of isInsideHex12Fast.
+  logical function outerWalk(gasblock, p, seed, found)
+    implicit none
+    type(obj_flowblock), intent(in)  :: gasblock
+    real(R8),            intent(in)  :: p(3)
+    integer,             intent(in)  :: seed(3)
+    integer,             intent(out) :: found(3)
+    real(R8) :: verts(3,8), norms(3,2,6), cents(3,2,6), tol, d1, d2
+    logical  :: degen(2,6)
+    integer  :: c(3), hi(3), move, f, q, fin
+
+    outerWalk = .false.; found = seed
+    hi = [gasblock%Nx, gasblock%Ny, gasblock%Nz] + 1
+    c = seed
+    if (any(c < 1) .or. any(c > hi)) return
+    do move = 1, 5
+      tol = 0._R8
+      call gasblock%getVertices(c, verts, .false., norms, cents, degen, tol)
+      fin = 0
+      do f = 1, 6
+        if (degen(1,f)) then
+          d1 = 1._R8
+          if (degen(2,f)) then; d2 = -1._R8
+          else; d2 = dot_product(norms(:,2,f), p - cents(:,2,f)); endif
+        else
+          d1 = dot_product(norms(:,1,f), p - cents(:,1,f))
+          if (degen(2,f)) then; d2 = 1._R8
+          else; d2 = dot_product(norms(:,2,f), p - cents(:,2,f)); endif
+        endif
+        if (.not. (d1 > tol .and. d2 > tol)) cycle
+        q = (f + 1)/2
+        if (mod(f,2) == 1 .and. c(q) <= 1) cycle
+        if (mod(f,2) == 0 .and. c(q) >= hi(q)) cycle
+        fin = f
+        exit
+      enddo
+      if (fin == 0) then
+        found = c; outerWalk = .true.
+        return
+      endif
+      q = (fin + 1)/2
+      c(q) = c(q) + merge(-1, 1, mod(fin,2) == 1)
+    enddo
+  end function outerWalk
 
 
   !> Layered cell search on one block (geometry or gas dual): tier 0 the neighbour across `face`,
@@ -705,9 +759,10 @@ contains
           ind = iold; retry = .false.
         else
           call bcDef(blk%face(f)%cell(m,n),vertices,pold,vold,  &
-                      intersectionPoint,f,p,v,self%time,self%timeOld,iold, &
+                      intersectionPoint,f,self%d,p,v,self%time,self%timeOld,iold, &
                       self%angle,self%Af,found,self%gone,retry,refl,vHit=vh)
           if (present(reflected)) reflected = reflected .or. refl
+          if (refl .and. cornerOn .and. .not. self%gone) call cornerClear(blk, iold(2:4), f, vertices, p, self%d)
           if (self%gone) then
             self%exitCode = blk%face(f)%cell(m,n)%bcdef
             self%exitCell = [b, f, m, n]
