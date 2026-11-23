@@ -46,8 +46,6 @@ the sources only:
   DOI                        a DOI in any source: its hash-like or ledger-like pieces are no commit and no id
   RT-path quadrants Q1-Q4    the check labels of tests/breakup/reitz-khrt/test_khrt_interaction.f90
   print-format placeholder   d.dddddddd, an ES16.8 field written in digit placeholders: its d-run is no commit
-  working-notes exclude      a quoted string that is exactly /plan-bucket in tests/bench/monolith/sync-src-monolith.sh:
-                             the rsync filter that keeps the untracked working notes off the cluster
 A drop match is exempt only when an allow rule of its class covers its whole span on that line. A
 ledger-like token is never exempt right after "bug", "bugs" or "ledger", right before "fix", "fixes" or
 "fixed", or anywhere on a line that names the ledger ("ledger", "BUGS").
@@ -171,8 +169,6 @@ SOURCE_ALLOW = [
      "tests/breakup/reitz-khrt/test_khrt_interaction.f90"),
     ("print-format placeholder d.dddddddd", {"hash"}, r"(?<![A-Za-z0-9.])d\.d{7,10}(?![A-Za-z0-9])", ALL,
      "kept: a print format in digit placeholders (an ES16.8 field)"),
-    ("working-notes exclude", {"plantag"}, r"^/plan-bucket$", ("tests/bench/monolith/sync-src-monolith.sh",),
-     "tests/bench/monolith/sync-src-monolith.sh: the rsync filter keeping the untracked working notes off the cluster"),
 ]
 SOURCE_ALLOW = [(n, c, re.compile(r), g, s) for n, c, r, g, s in SOURCE_ALLOW]
 MAPPING = "directory mapping"

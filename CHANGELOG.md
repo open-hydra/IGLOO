@@ -39,6 +39,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   that margin burned on past `d-burnout` to a solver failure instead of being removed (18 of the 25 drops of
   `tests/combustion/burnout-direct`).
 
+### Removed
+- The Monolith timing harness (`tests/bench/monolith/`) and the `IGLOO_IO_PROBE` configure option: the harness, its
+  I/O probe and its measured-performance table are now the igloo-bench repository, which builds the probe through
+  a CMake project hook.
+
 ## [1.0.0] - 2026-11-16
 
 ### Added
