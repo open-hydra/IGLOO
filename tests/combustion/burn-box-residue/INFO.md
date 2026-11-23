@@ -7,7 +7,7 @@ inputs. The cap's growth and burn law are `burn-box-cap`'s (`[Beck05]`, `[Gal21]
 
 ## Model
 A capped parcel (ODE model 8) with `residue=on` ends at burnout (`m_Al ≤ m_b = min(1e-6 m₀, 1e-20 kg)`, `tools/burnout.py`), at a solver failure or at a
-non-finite state with its cap `m_ox > 0`; the cap becomes **one parcel of the combustion product** (`product=OX`, a
+non-finite state with its cap `m_ox > 0`; the cap becomes **one parcel of the combustion product** (`carried=OX`, a
 0-group line of the phase file with its own table zone and solidification data), born at the parent's position,
 velocity, temperature and time — the state its exit record prints — with the cap's mass (`d-residue = 0`: one
 residue per droplet) or at `d-residue` with the mass flow kept. The gas books lose the residue's birth flux at that
@@ -19,13 +19,13 @@ group's offset (the parcels of the earlier groups naming the same product) plus 
 `burn-box`'s case (`bc.txt`, `solfile.tec` symlinked) and `burn-box-cap`'s absolute two-zone table (symlinked);
 `out-file = S`, `out-time = on`, `mollify = off`. Its own `INPUT/phase.txt`:
 
-    A 1 combustion=Beckstead cap=constant
+    A 1 combustion=Beckstead carry=constant
     OX 0 solidification=on T-melt=2327 h-fus=1.08949e6 cp-solid=1360
 
 and `INPUT/models.txt`:
 
     A combustion Beckstead K-burn=2.0e-6 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000
-    A cap constant xi-cap=0.2 product=OX residue=on
+    A carry constant share=0.2 carried=OX residue=on
 
 (`T-nuc` 0.8 T-melt = 1861.6 K.) The 25 parcels burn out near x = 0.072 m at 792.32 K; each residue
 (`d = 1.9678e-5 m`) is born undercooled, freezes whole (the jump to 998.1 K) and relaxes to the 600 K gas with

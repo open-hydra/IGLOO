@@ -8,7 +8,7 @@ module Lib_RHS
   public  :: packAuxVars
   public  :: packAuxState, unpackAuxState
   public  :: packEventVar, unpackEventVar
-  public  :: rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, rhsAlCombustion, rhsAlCap
+  public  :: rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, rhsBurn, rhsBurnCarry
   public  :: rhsSolidification
   public  :: p2tSurface
   public  :: ind_d, ind_rho, ind_sig, ind_mup
@@ -45,7 +45,7 @@ module Lib_RHS
   integer :: ind_Le  = 0, ind_Yi  = 0, ind_e1 = 0, ind_e2  = 0
   integer :: ind_e3  = 0, ind_e4  = 0, ind_e5 = 0  !> alpha_e (LK interface); k_liq / mu_liq (P2T)
   integer :: ind_mb  = 0                            !> metal-block start (combustion), 0 = absent
-  integer, parameter :: nmetal = 16                 !> metal parameter block, order = IGLOO_Lib_Combustion imKb..imDir
+  integer, parameter :: nmetal = 17                 !> metal parameter block, order = IGLOO_Lib_Combustion imKb..imYld
   integer :: ind_rs  = 0                            !> rho-solid (solid density), 0 = absent
   integer :: ind_eps = 0                            !> emissivity (radiation), 0 = absent
   integer :: nauxvar = 0
@@ -67,19 +67,19 @@ module Lib_RHS
 
 contains
 
-  !> ODE model selector from the solidification, combustion (with or without the oxide cap), breakup-ODE and
+  !> ODE model selector from the solidification, combustion (with or without a carried material), breakup-ODE and
   !  phase-change flags.
-  pure function determineModel(phaseChange, brkupEqOde, combSelect, solidSelect, cap) result(model)
+  pure function determineModel(phaseChange, brkupEqOde, combSelect, solidSelect, carry) result(model)
     logical, intent(in) :: phaseChange, brkupEqOde
     integer, intent(in) :: combSelect, solidSelect
-    logical, intent(in), optional :: cap   !> the burning material carries an oxide cap (xi-cap > 0 or the law)
+    logical, intent(in), optional :: carry   !> the burning drop keeps part of what it forms (share > 0 or the law)
     integer :: model
-    logical :: capped
-    capped = .false.
-    if (present(cap)) capped = cap
+    logical :: carries
+    carries = .false.
+    if (present(carry)) carries = carry
     if     (solidSelect>0) then; model = merge(7, 6, brkupEqOde) !> solidification (7: with a breakup ODE)
-    elseif (combSelect>0 .and. capped) then; model = 8  !> Al combustion with the oxide cap
-    elseif (combSelect>0) then; model = 5  !> Al combustion
+    elseif (combSelect>0 .and. carries) then; model = 8  !> burning, with a carried material
+    elseif (combSelect>0) then; model = 5  !> burning
     elseif (brkupEqOde .and. &
             phaseChange) then; model = 4
     elseif (brkupEqOde ) then; model = 3
@@ -331,9 +331,9 @@ contains
     !> metal (contiguous nmetal slice)
     if (ind_mb > 0) aux(ind_mb:ind_mb+nmetal-1) =                        &
       [particle%Kburn, particle%nBurn, particle%Xeff, particle%betaPart, &
-       particle%xiCap, merge(particle%Tboil, particle%Tign, particle%combSelect == 2), particle%hFus, particle%cpSol, &
-       particle%qComb, particle%rhoRes, particle%cpRes, particle%cStretch, real(particle%xiLaw, R8), &
-       particle%Lv, particle%dStop, merge(1._R8, 0._R8, particle%combSelect == 2)]
+       particle%carryShare, merge(particle%Tboil, particle%Tign, particle%combSelect == 2), particle%hFus, particle%cpSol, &
+       particle%qComb, particle%rhoCar, particle%cpCar, particle%cStretch, real(particle%carryLaw, R8), &
+       particle%Lv, particle%dStop, merge(1._R8, 0._R8, particle%combSelect == 2), particle%carryYield]
     !> solid density
     if (ind_rs > 0) aux(ind_rs) = particle%rhoSol
     !> radiation
@@ -1243,7 +1243,7 @@ contains
 
 
   !> Model 5: Beckstead d^n burn law; state layout as model 2 (Z(7)=T/h, Z(8)=mass).
-  subroutine rhsAlCombustion(neq, time, Z, F, aux,naux, auxst,nauxst, &
+  subroutine rhsBurn(neq, time, Z, F, aux,naux, auxst,nauxst, &
                               hTabM, rhoTabM,                   &
                               gasNodes, gasVert,gas,nsp,nNodes, epsTabM)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
@@ -1325,18 +1325,19 @@ contains
     if (any(.not. ieee_is_finite(F))) then
       where (.not. ieee_is_finite(F)) F = 1.e30_R8
     endif
-  end subroutine rhsAlCombustion
+  end subroutine rhsBurn
 
 
-  !> Model 8: model 5 with the oxide cap. Z(7) = T, Z(8) = metal mass, Z(9) = cap mass. The burn law on the metal's
-  !  diameter, scaled by the exposed-surface factor F(f_ox) and the stretch c; drag, heat and radiation on the
-  !  equal-volume sphere; the cap retains xi*nuOx of the metal burned.
-  subroutine rhsAlCap(neq, time, Z, F, aux,naux, auxst,nauxst, &
+  !> Model 8: model 5 with a carried material. Z(7) = T, Z(8) = the burning material's mass, Z(9) = the carried
+  !  mass. The burn law on the burning material's diameter, scaled by the exposed-surface factor F(f) of the
+  !  carried fraction f and the stretch c; drag, heat and radiation on the equal-volume sphere; the drop keeps
+  !  share*yield of the mass it burns.
+  subroutine rhsBurnCarry(neq, time, Z, F, aux,naux, auxst,nauxst, &
                       gasNodes, gasVert,gas,nsp,nNodes, epsTabM)
     use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
                                bodyForce, bodyAccel, srcBodyForce
-    use IGLOO_Lib_Combustion,  only: becksteadRate, nmp, imXi, imRr, imCr, imCs, imXl, lobeF, nuOx, xiGallier
+    use IGLOO_Lib_Combustion,  only: becksteadRate, nmp, imShare, imRhoC, imCpC, imStr, imLaw, imYld, lobeF, xiGallier
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
@@ -1359,7 +1360,7 @@ contains
     mOx = Z(9)
     m   = mAl + mOx
     dAl = (sixOverPi*mAl/rho)**oneThird
-    d   = (sixOverPi*(mAl/rho + mOx/aux(ind_mb+imRr-1)))**oneThird
+    d   = (sixOverPi*(mAl/rho + mOx/aux(ind_mb+imRhoC-1)))**oneThird
 
     ! 2nd order gas interpolation
     if (ord2) then
@@ -1379,17 +1380,17 @@ contains
     if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), tp, epsTabM), d, gas(5), tp)
     !> Burn rate and heat release of the metal (inert below T-ign), scaled by F(f_ox)*c
     call becksteadRate(tp, dAl, rho, aux(ind_mb:ind_mb+nmp-1), mdot, qrel)
-    scale = lobeF(mOx/m)*aux(ind_mb+imCs-1)
+    scale = lobeF(mOx/m)*aux(ind_mb+imStr-1)
     mdot  = mdot*scale
     qrel  = qrel*scale
     F(1:3) = Z(4:6)
     F(4:6) = Fdrag / m
     if (bodyForce) F(4:6) = F(4:6) + bodyAccel
-    F(7)   = (Qdot + qrel) / (mAl*aux(ind_cp) + mOx*aux(ind_mb+imCr-1))
+    F(7)   = (Qdot + qrel) / (mAl*aux(ind_cp) + mOx*aux(ind_mb+imCpC-1))
     F(8)   = mdot
-    F(9)   = -aux(ind_mb+imXi-1)*nuOx*mdot
-    !> Gallier's law in place of xi-cap: the retained fraction at the metal diameter and oxide fraction
-    if (aux(ind_mb+imXl-1) > 0._R8) F(9) = -xiGallier(dAl, mOx/m)*nuOx*mdot
+    F(9)   = -aux(ind_mb+imShare-1)*aux(ind_mb+imYld-1)*mdot
+    !> Gallier's law in place of the constant share: the share kept at the metal diameter and carried fraction
+    if (aux(ind_mb+imLaw-1) > 0._R8) F(9) = -xiGallier(dAl, mOx/m)*aux(ind_mb+imYld-1)*mdot
 
     if (eulerSwitch) then
       normVel  = norm2(Z(4:6))
@@ -1408,6 +1409,6 @@ contains
     if (any(.not. ieee_is_finite(F))) then
       where (.not. ieee_is_finite(F)) F = 1.e30_R8
     endif
-  end subroutine rhsAlCap
+  end subroutine rhsBurnCarry
 
 end module Lib_RHS

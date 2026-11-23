@@ -1,5 +1,0 @@
-# models.txt: the constants of each material's models
-# <material> <kind> <model> key=value ...
-
-A combustion Beckstead K-burn=4.5e-07 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000
-A cap constant xi-ox0=0.1

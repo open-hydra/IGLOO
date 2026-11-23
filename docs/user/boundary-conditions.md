@@ -109,9 +109,9 @@ Per-cell injection properties stored in `bc.txt` columns (after the `bcdef` colu
 | 9 | Per-cell injection spacing override `ds` [m] (0 → use global `[IGLOO-BC] ds`) |
 | 10 | 401 only: $G$, the sum of the mass fluxes `gp` [kg/(s·m²)] of the 402/403 records of the cell over every dispersed phase (required) |
 
-For a burning material with an oxide fraction at injection (`xi-ox0`), the loading (column 1) and the size
+For a burning material with an oxide fraction at injection (`carried-0`), the loading (column 1) and the size
 columns (6–8) describe the whole particle, metal and oxide, its diameter the equal-volume sphere of both
-([An oxide fraction at injection](../theory/combustion.md#an-oxide-fraction-at-injection)).
+([Carried material at injection](../theory/combustion.md#carried-material-at-injection)).
 
 The line is split on blanks and tabs (a `normal,` direction token keeps its comma, which is accepted); a
 line of 512 characters or more and a token of 256 or more are refused. The laws and their CDFs are

@@ -7,7 +7,7 @@ This case gates the **equivalent-Eulerian deposit of the burning material (ODE m
 ## Why it exists
 `Lib_Integration::computeEulField` deposits, for models 2, 5 and 8, the number density `npdot·Tstay/V` and the
 density `npdot·intE(5)/V`, where `intE(5) = ∫ m dt` is the mass integral of **one** droplet over its stay in
-the cell (`F(14) = m` in `rhsAlCombustion`); `finalizeEUL` divides the velocity and temperature moments by
+the cell (`F(14) = m` in `rhsBurn`); `finalizeEUL` divides the velocity and temperature moments by
 that density. `burn-box` writes the source field only, `infrastructure/body-burn-m5` writes the Eulerian field
 without reading it, `evaporation/tc-box-euler` covers model 2 and `combustion/burn-box-cap` model 8: no other
 fixture gates model 5's Eulerian field.

@@ -65,7 +65,7 @@ not its y):
 The largest spread is 0.0042 % on Fig. 7 (0.22 px) and 0.026 % on Fig. 11 (0.19 px). A marker read 2 px off would
 move its value by 0.04 % (Fig. 7) or 0.28 % (Fig. 11).
 
-## The law built from them (`cap=Gallier21`)
+## The law built from them (`carry=Gallier21`)
 
 Gallier gives the product form and the figures `g` and `h` come from. The normalisation of `g` at 70 µm and the
 values held outside the computed points are IGLOO's readings, not stated in the paper.

@@ -5,7 +5,7 @@
 ## What it pins
 ATLAS GPB writes a material's phase-change models and constants as `key=value` tokens after `<name> <groups>` on
 the material line of `<name>-phase.txt`, and the constants of its burning and breakup models (`K-burn`, `n-burn`,
-`X-eff`, `beta-part`, `xi-cap`, `T-ign`, `q-comb` of the table below, the others of the two burning kinds, the
+`X-eff`, `beta-part`, `share`, `T-ign`, `q-comb` of the table below, the others of the two burning kinds, the
 twenty-three breakup constants) as rows of `<name>-models.txt`, `<material> <kind> <model> key=value ...`, which
 `apply_model_row` reads on a material that names the model. The reader (`IGLOO_IO_INI`) applies them through six
 public routines: `set_material_defaults` (the defaults of the fourteen reals), `apply_material_key` (one token: six
@@ -24,7 +24,7 @@ test drives them on an `obj_material` it builds: no input file, no setup.
 | `n-burn` | `nBurn` | 1.8 | `T-nuc` | `Tnuc` | 0.8 T-melt (finalize) |
 | `X-eff` | `Xeff` | 1 | `cp-solid` | `cpSol` | 0 |
 | `beta-part` | `betaPart` | 0 | | | |
-| `xi-cap` | `xiCap` | 0 | | | |
+| `share` | `carryShare` | 0 | | | |
 
 Model words: `evaporation` (`NoEvaporation`, `d2-law`, `CEM`, `CEM-B`, `ASM`, `TC` → `evapSelect` 0–5, and
 `evapWord`), `liquid-conduction` (`ITC`, `P2T` → 0, 1), `interface` (`VLE`, `LK` → 0, 1), `boiling` (`clamp`,
@@ -53,13 +53,13 @@ correctly, and T-nuc's default is the run-time product `0.8*T-melt`, as the read
 | id | checks |
 |---|---|
 | MT1 | the fourteen reals after `set_material_defaults` + `finalize_material_models`, on a material whose fourteen reals were set to −999 first (eleven of the type's initializers equal the defaults; the poison makes a dropped default visible) |
-| MT2 | each real alone (its token of the line; a row of the models file for the seven constants of the burning models), a distinct value each (`alpha-e=0.75`, `k-liq=0.125`, `mu-liq=0.0009765625`, `K-burn=4.5e-07`, `n-burn=1.5`, `X-eff=0.5`, `beta-part=0.25`, `xi-cap=0.375`, `T-ign=2100`, `q-comb=31000000`, `T-melt=2300`, `h-fus=1070000`, `T-nuc=1900`, `cp-solid=1300`): the field equals the literal and the other thirteen keep their defaults — a token written into the wrong field fails twice |
+| MT2 | each real alone (its token of the line; a row of the models file for the seven constants of the burning models), a distinct value each (`alpha-e=0.75`, `k-liq=0.125`, `mu-liq=0.0009765625`, `K-burn=4.5e-07`, `n-burn=1.5`, `X-eff=0.5`, `beta-part=0.25`, `share=0.375`, `T-ign=2100`, `q-comb=31000000`, `T-melt=2300`, `h-fus=1070000`, `T-nuc=1900`, `cp-solid=1300`): the field equals the literal and the other thirteen keep their defaults — a token written into the wrong field fails twice |
 | MT3 | each model word, every allowed value (15), from the opposite preset: its selector takes the value; the other five selectors (set to sentinels), `evapWord` (but for `evaporation`, which sets it to the word) and the fourteen reals keep theirs |
 | MT4 | `T-melt=2300` alone gives T-nuc = 0.8·2300; `T-nuc=1900` is kept; `evaporation=CEM` alone is kept; `combustion=Beckstead` with `evaporation=CEM`, in either order, sets `evapSelect` to 0 |
 | MT5 | a repeated key: the last value wins (`alpha-e`, `evaporation`) |
 | MT6 | each of the twenty-three breakup constants alone in a row of its own model (`A breakup <model> <key>=<value>`), a distinct value each, on a fresh material of that model (its constants poisoned to −999 at the model's size, `bpMethod` 2): exactly its slot takes the literal (the two `WeCrit` doubled, `method=1` sets `bpMethod`), the other slots keep the poison, the row is seen; the fourteen reals and the selectors keep theirs. The key table is the test's own, never `Lib_Breakup`'s arrays (a wrong slot would agree with itself) |
 | MT7 | TAB's product-size scale: the row `A breakup TAB n=4` gives Γ(1.5)/Γ(1.75) (≤ 1e-15 absolute: a Γ folded at compile time may differ from the library's in the last bit); with `A breakup - n=4 method=1` it is 1 (exact) |
-| MT8 | the rows of the models file: `A combustion direct d-burnout=1e-07 T-burn=1363 q-comb=9530000` on a `combustion=direct` material (keys in any order: each field its literal, `d-stop` kept, the combustion kind seen, the cap and breakup kinds not); `A combustion - K-burn=4.5e-07 d-stop=6e-05` and `A cap Gallier21 residue=on product=OX d-residue=5e-06 xi-ox0=0.125` on a `combustion=Beckstead cap=Gallier21` material (the model `-`, the cap row: each field its literal, `xi-cap` kept, both kinds seen, breakup not) |
+| MT8 | the rows of the models file: `A combustion direct d-burnout=1e-07 T-burn=1363 q-comb=9530000` on a `combustion=direct` material (keys in any order: each field its literal, `d-stop` kept, the combustion kind seen, the cap and breakup kinds not); `A combustion - K-burn=4.5e-07 d-stop=6e-05` and `A carry Gallier21 residue=on carried=OX d-residue=5e-06 carried-0=0.125` on a `combustion=Beckstead carry=Gallier21` material (the model `-`, the cap row: each field its literal, `share` kept, both kinds seen, breakup not) |
 | MT9 | `A breakup <model>` alone on each of the five models, then `read_breakup_constants` and `apply_breakup_tokens`: the row is seen, nothing is given, every constant equals the test's own table of the published defaults (π as `acos(-1)`, the two `WeCrit` 12), `bpMethod` 2 for TAB and 1 otherwise, TAB's scale Γ(1+2/3.5)/Γ(1+3/3.5) (≤ 1e-15) |
 
 ## RED (one line of `Lib_INI.f90` each)

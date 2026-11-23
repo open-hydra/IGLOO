@@ -22,7 +22,7 @@ program test_material_tokens
     !        test's own, never Lib_Breakup's. A key of another model is refused (refuse-models-breakup-key)
     !   MT7  TAB's product-size scale: a row n=4 gives Gamma(1.5)/Gamma(1.75), with method=1 it is 1
     !   MT8  the rows of the models file: a combustion row of direct with its keys in any order; a combustion
-    !        row under the model '-' and a cap row of Gallier21, each field its literal, both kinds seen
+    !        row under the model '-' and a carry row of Gallier21, each field its literal, both kinds seen
     !   MT9  a breakup row that names its model alone, on each of the five models: the row is seen, no
     !        constant is given, every constant is its published default (the test's own table)
     !
@@ -37,7 +37,7 @@ program test_material_tokens
 
     integer,  parameter :: NR = 14
     character(len=9),  parameter :: RKEY(NR) = [character(len=9) :: 'alpha-e', 'k-liq', 'mu-liq', 'K-burn', &
-        'n-burn', 'X-eff', 'beta-part', 'xi-cap', 'T-ign', 'q-comb', 'T-melt', 'h-fus', 'T-nuc', 'cp-solid']
+        'n-burn', 'X-eff', 'beta-part', 'share', 'T-ign', 'q-comb', 'T-melt', 'h-fus', 'T-nuc', 'cp-solid']
     character(len=12), parameter :: RVAL(NR) = [character(len=12) :: '0.75', '0.125', '0.0009765625', &
         '4.5e-07', '1.5', '0.5', '0.25', '0.375', '2100', '31000000', '2300', '1070000', '1900', '1300']
     real(R8), parameter :: RLIT(NR) = [0.75_R8, 0.125_R8, 0.0009765625_R8, 4.5e-07_R8, 1.5_R8, 0.5_R8, &
@@ -228,14 +228,14 @@ program test_material_tokens
                'MT8 a combustion row of direct, its keys in any order: T-burn, q-comb, d-burnout', nbad)
     call fresh(mat)
     call apply_material_key(1, mat, 'combustion', 'Beckstead')
-    call apply_material_key(1, mat, 'cap', 'Gallier21')
+    call apply_material_key(1, mat, 'carry', 'Gallier21')
     seen = .false.
     call apply_model_row(1, mat, 'A combustion - K-burn=4.5e-07 d-stop=6e-05', seen)
-    call apply_model_row(1, mat, 'A cap Gallier21 residue=on product=OX d-residue=5e-06 xi-ox0=0.125', seen)
-    call check(mat%Kburn == 4.5e-07_R8 .and. mat%dStop == 6e-05_R8 .and. mat%xiLaw == 1 .and. mat%resOn .and. &
-               trim(mat%productName) == 'OX' .and. mat%dRes == 5e-06_R8 .and. mat%xiOx0 == 0.125_R8 .and. &
-               seen(1) .and. seen(2) .and. .not. seen(3) .and. mat%xiCap == 0._R8, &
-               'MT8 a combustion row under the model - and a cap row of Gallier21: each field its literal', nbad)
+    call apply_model_row(1, mat, 'A carry Gallier21 residue=on carried=OX d-residue=5e-06 carried-0=0.125 yield=1.5', seen)
+    call check(mat%Kburn == 4.5e-07_R8 .and. mat%dStop == 6e-05_R8 .and. mat%carryLaw == 1 .and. mat%resOn .and. &
+               trim(mat%carriedName) == 'OX' .and. mat%dRes == 5e-06_R8 .and. mat%carry0 == 0.125_R8 .and. &
+               mat%carryYield == 1.5_R8 .and. seen(1) .and. seen(2) .and. .not. seen(3) .and. mat%carryShare == 0._R8, &
+               'MT8 a combustion row under the model - and a carry row of Gallier21: each field its literal', nbad)
 
     ! ---- MT9: a breakup row that names its model alone: the published defaults ----------------------------
     do s = 1, 5
@@ -301,9 +301,9 @@ contains
         case ('K-burn', 'n-burn', 'X-eff', 'beta-part', 'T-ign', 'q-comb')
             call apply_material_key(1, m, 'combustion', 'Beckstead')
             call apply_model_row(1, m, 'A combustion Beckstead '//key//'='//value, took)
-        case ('xi-cap')
-            call apply_material_key(1, m, 'cap', 'constant')
-            call apply_model_row(1, m, 'A cap constant '//key//'='//value, took)
+        case ('share')
+            call apply_material_key(1, m, 'carry', 'constant')
+            call apply_model_row(1, m, 'A carry constant '//key//'='//value, took)
         case default
             call apply_material_key(1, m, key, value)
         end select
@@ -313,7 +313,7 @@ contains
     function reals(m) result(r)
         type(obj_material), intent(in) :: m
         real(R8) :: r(NR)
-        r = [m%alphaE, m%kLiq, m%muLiq, m%Kburn, m%nBurn, m%Xeff, m%betaPart, m%xiCap, &
+        r = [m%alphaE, m%kLiq, m%muLiq, m%Kburn, m%nBurn, m%Xeff, m%betaPart, m%carryShare, &
              m%Tign, m%qComb, m%Tmelt, m%hFus, m%Tnuc, m%cpSol]
     end function reals
 
@@ -321,7 +321,7 @@ contains
         type(obj_material), intent(inout) :: m
         real(R8),           intent(in)    :: r(NR)
         m%alphaE = r(1);  m%kLiq  = r(2);  m%muLiq    = r(3);  m%Kburn = r(4);  m%nBurn = r(5)
-        m%Xeff   = r(6);  m%betaPart = r(7);  m%xiCap = r(8);  m%Tign  = r(9);  m%qComb = r(10)
+        m%Xeff   = r(6);  m%betaPart = r(7);  m%carryShare = r(8);  m%Tign  = r(9);  m%qComb = r(10)
         m%Tmelt  = r(11); m%hFus  = r(12); m%Tnuc     = r(13); m%cpSol = r(14)
     end subroutine setReals
 

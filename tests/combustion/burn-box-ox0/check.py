@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""burn-box-ox0: an oxide fraction at injection (xi-ox0) on the capped burning droplet, against an independent oracle.
+"""burn-box-ox0: an oxide fraction at injection (carried-0) on the capped burning droplet, against an independent oracle.
 
-The burning line carries xi-ox0 = x0 = 0.1. The inlet's diameter d_p0 and mass flow are the whole particle's, metal and
+The burning line carries carried-0 = x0 = 0.1. The inlet's diameter d_p0 and mass flow are the whole particle's, metal and
 oxide at the equal volume: the parcel's mass is m_p0 = (pi/6) d_p0^3/((1 - x0)/rho_Al + x0/rho_res), its metal
 m_Al0 = (1 - x0) m_p0, its cap m_ox0 = x0 m_p0 and its number rate mdot/m_p0. The cap grows from m_ox0 by xi nu of the
 metal burned; the burn law acts on the metal's diameter, scaled by the exposed-surface factor F(f_ox) and by the
@@ -11,11 +11,11 @@ stretch re-evaluated from the initial cap,
   c = (d_Al0/d_p0)^n int_0^1 ds/F(f_ox(s)) = 1.388383   (exact F, midpoint 20000 cells)
 
 so the particle burns out in Beckstead's time for its injected diameter, t_b = d_p0^n/K_eff. At burnout the cap becomes
-one parcel of the product OX (inert: its line carries no model). F comes from Gallier's lobe by bisection
+one parcel of the carried OX (inert: its line carries no model). F comes from Gallier's lobe by bisection
 (burn-box-cap's oracle), never from IGLOO's table; RK4 in time on (s, T) from (1, T_g) at t = 0 to each row's printed
 t. Nothing is read from the code under test to build an expectation: the inputs below and the printed rows.
 
-  W   the log: the xi-ox0 line, the stretch c read back within 3e-6 of 1.388383, the capped banner, 25 residues
+  W   the log: the carried-0 line, the stretch c read back within 3e-6 of 1.388383, the capped banner, 25 residues
   I   every burning parcel's injection row: m = m_p0 = 4.278788e-11 kg within 2e-6, d = d_p0
   C   every burning parcel's row before its exit record against the oracle at its t: m and d 4e-6, T 0.1 K; the
       coast u = u_g, v = w = 0
@@ -33,12 +33,12 @@ t. Nothing is read from the code under test to build an expectation: the inputs 
   R5  each residue's mdot = (m_res/m_p0) x its parent's: 1e-5
   S   the scatter quanta of A and of OX = (sum_p mdot_p/m_p0) (L_ref/u_g)/(100 x 25), L_ref the box diagonal: 1e-3
 
-X0 = 0 checks a run of the line without xi-ox0 (c 1.397686, m_p0 = (pi/6) rho_Al d_p0^3, no xi-ox0 line in the log).
+X0 = 0 checks a run of the line without carried-0 (c 1.397686, m_p0 = (pi/6) rho_Al d_p0^3, no carried-0 line in the log).
 
 The gate fails on the stretch not re-evaluated (W, C1 3.2e-3, B: the burnouts 0.67 % before the window), on the factor
 (d_Al0/d_p0)^n dropped (W, C, B 4.7 % early), on the split on (pi/6) rho_Al d_p0^3 (I, R2, R5 2.5e-2), on the split
 skipped (C1 0.14, R2 0.14, R3e 0.35), on the number rate left at mdot/((pi/6) rho_Al d_p0^3) (R3 4.7e-2, R5 2.5e-2), on
-the scatter pre-pass's number rate on (pi/6) rho_Al d_p0^3 (S 2.6e-2) and on the xi-ox0 line missing from the log (W).
+the scatter pre-pass's number rate on (pi/6) rho_Al d_p0^3 (S 2.6e-2) and on the carried-0 line missing from the log (W).
 """
 import importlib.util
 import math
@@ -57,7 +57,7 @@ _spec.loader.exec_module(cap)                     # Gallier's lobe (exact F), bu
 bb = cap.bb
 
 # ---- inputs: phase.txt (both lines), models.txt, the table's zones, bc.txt, the box ----
-X0 = 0.1                                          # xi-ox0 of the burning material's cap row
+X0 = 0.1                                          # carried-0 of the burning material's cap row
 STRETCH = {0.0: 1.397686, 0.1: 1.388383}          # (d_Al0/d_p0)^n int_0^1 ds/F(f_ox(s; x0)): exact F, 20000 cells
 KEFF = 2.0e-6 * bb.XEFF
 XI, NU = cap.XI, cap.NU
@@ -164,20 +164,20 @@ def by_id(path):
 
 
 def log_checks(log):
-    """W: the xi-ox0 line (none at X0 = 0), the stretch line read back, the capped banner, the product's banner."""
-    banner = re.findall(r"combustion product \(residues: (\d+)\)", log)
+    """W: the carried-0 line (none at X0 = 0), the stretch line read back, the capped banner, the product's banner."""
+    banner = re.findall(r"born parcels only \(residues and births: (\d+)\)", log)
     nres = int(banner[0]) if len(banner) == 1 else -1
-    capped = "law with an oxide cap (xi-cap, product OX)" in log
-    tok = re.findall(r"\] xi-ox0=\s*(\S+)", log)
+    capped = "law, carrying OX (constant share)" in log
+    tok = re.findall(r"\] carried-0=\s*(\S+)", log)
     if X0 > 0.0:
-        m = re.findall(r"\] oxide cap on product OX: stretch c = \s*([0-9.]+) from xi-ox0 = ([0-9.]+)\s*$", log, re.M)
+        m = re.findall(r"\] carries OX: stretch c = \s*([0-9.]+) from carried-0 = ([0-9.]+)\s*$", log, re.M)
         lines_ok = tok == ["%.3E" % X0] and len(m) == 1 and m[0][1] == "%6.4f" % X0
     else:
-        m = [(v,) for v in re.findall(r"\] oxide cap on product OX: stretch c = \s*([0-9.]+)\s*$", log, re.M)]
+        m = [(v,) for v in re.findall(r"\] carries OX: stretch c = \s*([0-9.]+)\s*$", log, re.M)]
         lines_ok = not tok and len(m) == 1
     c = float(m[0][0]) if len(m) == 1 else float("nan")
     err = abs(c / C_STRETCH - 1.0)
-    return [("W the log: xi-ox0 line %s (want %s), stretch line %s; c %.6f vs %.6f (rel %.2e <= %.0e); the capped "
+    return [("W the log: carried-0 line %s (want %s), stretch line %s; c %.6f vs %.6f (rel %.2e <= %.0e); the capped "
              "banner %s; the product's banner %d residues (need %d)"
              % (" ".join(tok) if tok else "none", "%.3E" % X0 if X0 > 0.0 else "none",
                 "found" if len(m) == 1 else "MISSING", c, C_STRETCH, err, TOL_C, "found" if capped else "MISSING",

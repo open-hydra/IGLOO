@@ -24,7 +24,7 @@ d0^n/K_eff (the stretch per parcel keeps every burn time on it).
       Gallier's 0.57 (20 um), 0.55 (70 um, Table 3 at f_ox0 = 0), 0.49 (200 um) and 0.40 (400 um, PDF p. 14):
       0.03 (their two digits and the digitization)
 
-The gate fails on the constant law at h(0) (xi-cap 0.069522: R2 25 of 25, B beta 0.427 at every size), on g read at
+The gate fails on the constant law at h(0) (share 0.069522: R2 25 of 25, B beta 0.427 at every size), on g read at
 the injected diameter (R2 and T1 20 of 25, B beta 0.256 at 400 um), on the law read at the drop's diameter (R2 and
 T1 20 of 25) and on the stretch left at 1 (T1 25 of 25: every burnout 1.20-1.34 times Beckstead's time). The 400 um
 size is the one B needs against g at the injected diameter (at 200 um that mutant's beta, 0.460, passes B).
@@ -75,7 +75,7 @@ def main():
         ("R1 one residue per parcel burned out inside the box: %d parents, %d inside, residue IDs %s"
          % (len(parents), len(inside), "= theirs" if sorted(res_rows) == sorted(p["ID"] for p in inside) else "differ"),
          len(parents) == N_PARENTS and len(inside) == N_PARENTS and sorted(res_rows) == sorted(p["ID"] for p in inside)
-         and "combustion product (residues: %d)" % N_PARENTS in log),
+         and "born parcels only (residues and births: %d)" % N_PARENTS in log),
     ]
 
     paths, bad_m, bad_t, worst = {}, [], [], {}

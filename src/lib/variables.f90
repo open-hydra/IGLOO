@@ -40,12 +40,18 @@ module IGLOO_variables
   integer  :: nInjMoved = 0   !> per-sweep: pinned parcels whose injection point lies outside its injection cell
   integer  :: nKHRTwarn = 0   !> per-sweep: KH-RT evaluations outside the model's hypotheses
   integer  :: fsample, nb, nm, nfam, iprint, trajSample
-  !> A material burns with an oxide cap: the mass source then carries, after its nm net columns, two per material
-  !  (nm+2m-1 the oxide the caps of material m gained, nm+2m the cap oxide handed to the gas)
-  logical  :: capColumns = .false.
-  !> A material with d-smoke: after the net and the cap columns, five per material for its smoke: W, W u (3), W T over
-  !  the segments of a cell, W the metal burnt (a parcel consumed there: all its metal, with residue = off its whole cap)
-  logical  :: smokeColumns = .false.
+  !> The rows of the mass source, per cell [per second]. The nm net rows are always there; each block after them
+  !  exists only when a channel needs it (rowCarry and rowProc give the row numbers):
+  !    net        nm   the mass each material's parcels give the gas
+  !    carried    2 nm the carried material the burning deposits on the parcels (1), the one they give the gas (2)
+  !    processed  5 nm W, the mass the process (burning, evaporation) takes off, and W u (3), W T: the velocity and
+  !                    temperature it leaves at, weighted by W (asked by a coupler: track_processed)
+  !  What the parcels absorb is kept apart, per geometry cell (obj_sourceblock: offered, absorbed, held).
+  logical  :: carryColumns = .false.   !> a material carries another
+  logical  :: procColumns  = .false.   !> a coupler tracks the processed mass of a material
+  logical  :: absColumns   = .false.   !> a coupler offers mass to absorb (the absorption arrays exist)
+  !> Per material: a coupler tracks its processed mass (track_processed); a coupler offers it mass (add_absorption_rate)
+  logical, allocatable :: trackProc(:), absorbs(:)
   integer, allocatable :: nspecies(:)
   real(R8) :: ds, mdotMax, dtprint
   !> [IGLOO-General] print-ds [m] (<= 0 = off); dcellSet: print-dcell is present (the diagnostic crossing cadence)
@@ -89,7 +95,7 @@ module IGLOO_variables
   character(len=100) :: ode_word
   real(R8) :: rtol, atol
   integer  :: iopt(3)
-  !> [IGLOO-ODE] fail-after [s]: the oxide-cap model (ODE model 8) fails once a parcel's last accepted time
+  !> [IGLOO-ODE] fail-after [s]: the carried-material model (ODE model 8) fails once a parcel's last accepted time
   !  reaches it (the residue's failure path); 0 = off
   real(R8) :: failAfter = 0._R8
   integer  :: maxInnerIter = 10   !> [IGLOO-ODE] max-inner-iter: solver calls per cell segment
@@ -122,18 +128,24 @@ module IGLOO_variables
 
 contains
 
-  !> Columns of the mass source: nm, 2 nm more with the cap's columns, 5 nm more with the smoke's
+  !> The number of rows of the mass source.
   pure integer function nsm()
     nsm = nm
-    if (capColumns) nsm = 3*nm
-    if (smokeColumns) nsm = nsm + 5*nm
+    if (carryColumns) nsm = nsm + 2*nm
+    if (procColumns)  nsm = nsm + 5*nm
   end function nsm
 
-  !> The row of column s (1 W, 2-4 W u, 5 W T) of material m's smoke in the mass source
-  pure integer function smokeRow(m, s)
+  !> Row s of material m's carried block: 1 deposited on the parcels, 2 given to the gas.
+  pure integer function rowCarry(m, s)
     integer, intent(in) :: m, s
-    smokeRow = nm + 5*(m-1) + s
-    if (capColumns) smokeRow = smokeRow + 2*nm
-  end function smokeRow
+    rowCarry = nm + 2*(m-1) + s
+  end function rowCarry
+
+  !> Row s of material m's processed block: 1 W, 2-4 W u, 5 W T.
+  pure integer function rowProc(m, s)
+    integer, intent(in) :: m, s
+    rowProc = nm + 5*(m-1) + s
+    if (carryColumns) rowProc = rowProc + 2*nm
+  end function rowProc
 
 end module IGLOO_variables 

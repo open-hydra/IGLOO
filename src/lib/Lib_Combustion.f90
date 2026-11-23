@@ -1,20 +1,22 @@
-!> Beckstead d^n burn law for metal particles; the oxide cap's exposed-surface factor and stretch.
+!> Beckstead d^n burn law for metal particles; the exposed-surface factor and stretch of a drop that carries a second
+!  material (the carried material: what the burning forms and keeps on the drop).
 module IGLOO_Lib_Combustion
     use, intrinsic :: iso_fortran_env, only : I4 => int32, R8 => real64
     use IGLOO_variables, only : pi
     implicit none
     private
     public :: becksteadRate, directRate
-    public :: buildLobeTable, lobeF, capStretch, capStretchX0
-    public :: buildXiLaw, xiGallier, capLawPath
+    public :: buildLobeTable, lobeF, carryStretch, carryStretchX0
+    public :: buildXiLaw, xiGallier, carryLawPath
 
     !> Metal parameter slots; the order is mirrored by Lib_RHS ind_mb../nmetal.
-    integer(I4), parameter, public :: nmp = 16
-    integer(I4), parameter, public :: imKb=1, imN=2, imXe=3, imBeta=4, imXi=5
+    integer(I4), parameter, public :: nmp = 17
+    integer(I4), parameter, public :: imKb=1, imN=2, imXe=3, imBeta=4, imShare=5
     integer(I4), parameter, public :: imTig=6, imHf=7, imCps=8, imQc=9
-    integer(I4), parameter, public :: imRr=10, imCr=11, imCs=12   !> the cap: product density, heat capacity, stretch
-    integer(I4), parameter, public :: imXl=13                     !> the cap's retained fraction: 0 xi-cap, 1 Gallier21
-    integer(I4), parameter, public :: imLv=14, imDr=15, imDir=16  !> direct's latent heat; the stop diameter; 1 = direct
+    integer(I4), parameter, public :: imRhoC=10, imCpC=11, imStr=12  !> the carried material: density, heat capacity; the stretch
+    integer(I4), parameter, public :: imLaw=13                       !> the share kept: 0 the constant share, 1 Gallier21
+    integer(I4), parameter, public :: imLv=14, imDr=15, imDir=16     !> direct's latent heat; the stop diameter; 1 = direct
+    integer(I4), parameter, public :: imYld=17                       !> the carried material formed per kg burnt (yield)
 
     !> A direct drop burns from directOnset x T-burn: the round-off of a temperature held at T-burn does not switch it off.
     !  The burning branch and the burn-out removal both test it.
@@ -22,9 +24,6 @@ module IGLOO_Lib_Combustion
 
     !> X_eff exponent of the Beckstead (2005) correlation.
     real(R8), parameter, public :: aXeff = 1.0_R8
-
-    !> Oxide formed per kg of aluminium burned, M(Al2O3)/(2 M(Al)).
-    real(R8), parameter, public :: nuOx = (2._R8*26.9815385_R8 + 3._R8*15.999_R8)/(2._R8*26.9815385_R8)
 
     !> The lobe temperature of the exposed-surface factor [K] (Gallier et al. 2021, 1 atm).
     real(R8), parameter, public :: TLobe = 2570._R8
@@ -171,11 +170,11 @@ contains
 
     end function lobeF
 
-    !> The stretch c(xi, n) = int_0^1 ds/F(f_ox(s)), s = (d_Al/d0)^n, which keeps Beckstead's burn time d0^n/K_eff
-    !  under F; midpoint rule on NSTRETCH cells over lobeF.
-    pure function capStretch(xi, n) result(c)
+    !> The stretch c(xi, nu, n) = int_0^1 ds/F(f_ox(s)), s = (d_Al/d0)^n, which keeps Beckstead's burn time
+    !  d0^n/K_eff under F; xi the share kept, nu the yield; midpoint rule on NSTRETCH cells over lobeF.
+    pure function carryStretch(xi, nu, n) result(c)
         implicit none
-        real(R8), intent(in) :: xi, n
+        real(R8), intent(in) :: xi, nu, n
         real(R8) :: c, s, x, fox
         integer  :: k
 
@@ -183,17 +182,18 @@ contains
         do k = 0, NSTRETCH - 1
             s   = (real(k, R8) + 0.5_R8)/real(NSTRETCH, R8)
             x   = s**(3._R8/n)
-            fox = xi*nuOx*(1._R8 - x)/(x + xi*nuOx*(1._R8 - x))
+            fox = xi*nu*(1._R8 - x)/(x + xi*nu*(1._R8 - x))
             c   = c + 1._R8/lobeF(fox)
         enddo
         c = c/real(NSTRETCH, R8)
 
-    end function capStretch
+    end function carryStretch
 
-    !> The stretch with an initial cap: c = (d_Al0/d_p0)^n int_0^1 ds/F(f_ox(s)), so t_b = d_p0^n/K_eff.
-    pure function capStretchX0(xi, n, x0, rhoAl, rhoRes) result(c)
+    !> The stretch with carried material at injection (fraction x0): c = (d_Al0/d_p0)^n int_0^1 ds/F(f_ox(s)), so
+    !  t_b = d_p0^n/K_eff.
+    pure function carryStretchX0(xi, nu, n, x0, rhoAl, rhoCar) result(c)
         implicit none
-        real(R8), intent(in) :: xi, n, x0, rhoAl, rhoRes
+        real(R8), intent(in) :: xi, nu, n, x0, rhoAl, rhoCar
         real(R8) :: c, s, x, fox, r0
         integer  :: k
 
@@ -202,13 +202,13 @@ contains
         do k = 0, NSTRETCH - 1
             s   = (real(k, R8) + 0.5_R8)/real(NSTRETCH, R8)
             x   = s**(3._R8/n)
-            fox = (r0 + xi*nuOx*(1._R8 - x))/(x + r0 + xi*nuOx*(1._R8 - x))
+            fox = (r0 + xi*nu*(1._R8 - x))/(x + r0 + xi*nu*(1._R8 - x))
             c   = c + 1._R8/lobeF(fox)
         enddo
         c = c/real(NSTRETCH, R8)
-        c = c*((1._R8 - x0)/rhoAl/((1._R8 - x0)/rhoAl + x0/rhoRes))**(n/3._R8)
+        c = c*((1._R8 - x0)/rhoAl/((1._R8 - x0)/rhoAl + x0/rhoCar))**(n/3._R8)
 
-    end function capStretchX0
+    end function carryStretchX0
 
     !> g's slope from the least-squares line f = a + b d through Fig. 7's points: g = f(d)/f(70) = 1 + b (d - 70)/f(70).
     subroutine buildXiLaw()
@@ -251,16 +251,17 @@ contains
 
     end function xiGallier
 
-    !> The law's stretch c = (d_Al0/d_p0)^n int_0^1 ds/F and the cap at burnout zEnd = m_ox/m_p0, on the path
-    !  dy/ds = -nu xi(d_Al0 s^(1/n), y/(x + y)) dx/ds, x = s^(3/n), y = m_ox/m_Al0: RK4 half-steps, midpoint rule.
-    pure subroutine capLawPath(dp0, n, x0, rhoAl, rhoRes, c, zEnd)
+    !> The law's stretch c = (d_Al0/d_p0)^n int_0^1 ds/F and the carried mass at burnout zEnd = m_ox/m_p0, on the
+    !  path dy/ds = -nu xi(d_Al0 s^(1/n), y/(x + y)) dx/ds, x = s^(3/n), y = m_ox/m_Al0 (nu the yield): RK4
+    !  half-steps, midpoint rule.
+    pure subroutine carryLawPath(dp0, n, nu, x0, rhoAl, rhoCar, c, zEnd)
         implicit none
-        real(R8), intent(in)  :: dp0, n, x0, rhoAl, rhoRes
+        real(R8), intent(in)  :: dp0, n, nu, x0, rhoAl, rhoCar
         real(R8), intent(out) :: c, zEnd
         real(R8) :: r, dAl0, h, s, y, k1, k2, k3, k4
         integer  :: k, j
 
-        r    = (1._R8 - x0)/rhoAl/((1._R8 - x0)/rhoAl + x0/rhoRes)
+        r    = (1._R8 - x0)/rhoAl/((1._R8 - x0)/rhoAl + x0/rhoCar)
         dAl0 = dp0*r**(1._R8/3._R8)
         h    = -0.5_R8/real(NSTRETCH, R8)
         y    = x0/(1._R8 - x0)
@@ -286,10 +287,10 @@ contains
             real(R8) :: dy, sc
 
             sc = max(s, 0._R8)
-            dy = -nuOx*xiGallier(dAl0*sc**(1._R8/n), y/(sc**(3._R8/n) + y))*(3._R8/n)*sc**(3._R8/n - 1._R8)
+            dy = -nu*xiGallier(dAl0*sc**(1._R8/n), y/(sc**(3._R8/n) + y))*(3._R8/n)*sc**(3._R8/n - 1._R8)
 
         end function lawSlope
 
-    end subroutine capLawPath
+    end subroutine carryLawPath
 
 end module IGLOO_Lib_Combustion

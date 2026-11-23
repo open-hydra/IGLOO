@@ -311,6 +311,10 @@ contains
           call mpi_ordered_sum_r8_array(srcblock(b)%sourceMom,  size(srcblock(b)%sourceMom))
         if (allocated(srcblock(b)%sourceEn)) &
           call mpi_ordered_sum_r8_array(srcblock(b)%sourceEn,   size(srcblock(b)%sourceEn))
+        if (allocated(srcblock(b)%absorbed)) &
+          call mpi_ordered_sum_r8_array(srcblock(b)%absorbed,   size(srcblock(b)%absorbed))
+        if (allocated(srcblock(b)%held)) &
+          call mpi_ordered_sum_r8_array(srcblock(b)%held,       size(srcblock(b)%held))
       endif
       if (eulSwitch) then
         do fam = 1, size(eulblock, 2)

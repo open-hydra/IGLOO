@@ -90,12 +90,13 @@ output written).
 | `refuse-comb-kburn` | own `INPUT/phase.txt` `A 1 combustion=Beckstead` and `INPUT/models.txt` `A combustion Beckstead n-burn=1.8` (no `K-burn`, so 0), `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `combustion=Beckstead requires K-burn > 0` |
 | `refuse-comb-nburn` | as above with the row's `K-burn=4.5e-07 n-burn=3.0` | `combustion=Beckstead requires 0 < n-burn < 3` |
 | `refuse-comb-xeff` | as above with the row's `K-burn=4.5e-07 X-eff=1.5` | `combustion=Beckstead requires 0 < X-eff <= 1` |
-| `refuse-cap-product` | own `INPUT/phase.txt` and `INPUT/models.txt`: `burn-box`'s line with `cap=constant`, its cap row `xi-cap=0.2` and no `product`; `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `xi-cap > 0 requires product = a 0-group material of the phase file` |
-| `refuse-cap-varcp` | `combustion/burn-box-cap`'s `phase.txt` and `models.txt` (symlinked) and its own ten-row two-zone table, the `OX` zone's `Cp` rising 0.01 J/(kg·K) per K (the enthalpy its integral, so the table itself is valid; `burn-box-cap/make_table.py varcp`) | `xi-cap > 0 requires a constant-cp, constant-density material and product` |
-| `refuse-cap-relative` | as above with a relative ten-row table (an `Enthalpy` column, `make_table.py relative`) | `xi-cap > 0 requires the absolute enthalpy datum (an Enthalpy_abs column)` |
-| `refuse-xi-law-token` | own `INPUT/phase.txt` and `INPUT/models.txt`: `burn-box-cap`'s line with `cap=Gallier` (an unknown word); `burn-box`'s `bc.txt`/`solfile.tec`, `burn-box-cap`'s table | `IGLOO: unknown cap law` |
-| `refuse-xi-law-cap` | as above with `cap=Gallier21` and `xi-cap=0.2` in its cap row (a constant the law does not read) | `IGLOO: a constant the model does not read in the models file` |
-| `refuse-xi-law-noburn` | as above, `A 1 cap=Gallier21` with the row `A cap Gallier21 product=OX`: no burn law | `IGLOO: cap=Gallier21 requires combustion=Beckstead` |
+| `refuse-carry-no-carried` | own `INPUT/phase.txt` and `INPUT/models.txt`: `burn-box`'s line with `carry=constant`, its carry row `share=0.2` and no `carried`; `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `a carrying material requires carried = a 0-group material of the phase file` |
+| `refuse-carry-no-yield` | `combustion/burn-box-cap`'s deck with its own `INPUT/models.txt`: the carry row without `yield` | `a carrying material requires yield > 0` |
+| `refuse-carry-varcp` | `combustion/burn-box-cap`'s `phase.txt` and `models.txt` (symlinked) and its own ten-row two-zone table, the `OX` zone's `Cp` rising 0.01 J/(kg·K) per K (the enthalpy its integral, so the table itself is valid; `burn-box-cap/make_table.py varcp`) | `a carrying material requires a constant cp and density` |
+| `refuse-carry-relative` | as above with a relative ten-row table (an `Enthalpy` column, `make_table.py relative`) | `a carrying material requires the absolute enthalpy datum (an Enthalpy_abs column)` |
+| `refuse-carry-law-token` | own `INPUT/phase.txt` and `INPUT/models.txt`: `burn-box-cap`'s line with `carry=Gallier` (an unknown word); `burn-box`'s `bc.txt`/`solfile.tec`, `burn-box-cap`'s table | `IGLOO: unknown carry law` |
+| `refuse-carry-law-share` | as above with `carry=Gallier21` and `share=0.2` in its carry row (a constant the law does not read) | `IGLOO: a constant the model does not read in the models file` |
+| `refuse-carry-law-noburn` | as above, `A 1 carry=Gallier21` with the row `A carry Gallier21 carried=OX`: no burn law | `IGLOO: carry=Gallier21 requires combustion=Beckstead` |
 | `refuse-models-line` | own `INPUT/phase.txt` `A 1 combustion=Beckstead K-burn=4.5e-07` (a constant left on the material line), no `models.txt`; `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `burn-box`'s settings | `IGLOO: a constant of a burning model on the material line of the phase file` |
 | `refuse-models-kind` | as above with `A 1 combustion=Beckstead` and `burn-box`'s combustion row; a second row `A Foo Reitz-KHRT B1=40` | `IGLOO: unknown kind in the models file` |
 | `refuse-models-model` | as above, the combustion row naming `direct` | `IGLOO: the models file names another model than the material` |
@@ -112,16 +113,13 @@ output written).
 | `refuse-models-inf` | as above with `q-comb=Inf` | `IGLOO: a constant of the models file that is not one finite real number` |
 | `refuse-models-comma` | as above with `K-burn=4.5e-07,5` (a list-directed read takes 4.5e-07 and stops at the comma) | `IGLOO: a constant of the models file that is not one finite real number` |
 | `refuse-models-no-qcomb` | as above, the row without `q-comb` (`q-comb=0` written is allowed) | `IGLOO: combustion without q-comb in its row of the models file` |
-| `refuse-cap-word-no-row` | own `INPUT/phase.txt` `A 1 combustion=Beckstead cap=constant` and the combustion row alone, no `cap` row | `IGLOO: a cap word on the material line without its row in the models file` |
+| `refuse-carry-word-no-row` | own `INPUT/phase.txt` `A 1 combustion=Beckstead carry=constant` and the combustion row alone, no `carry` row | `IGLOO: a carry word on the material line without its row in the models file` |
 | `refuse-section-q-comb` | `models-real`'s `phase.txt`, a valid row; `q-comb = 1.0e-5` in `[IGLOO-Models]` | `IGLOO: a constant of a burning model in [IGLOO-Models]` |
 | `refuse-section-d-stop` | as above with `d-stop = 1.0e-5` | `IGLOO: a constant of a burning model in [IGLOO-Models]` |
 | `refuse-section-d-burnout` | as above with `d-burnout = 1.0e-5` | `IGLOO: a constant of a burning model in [IGLOO-Models]` |
 | `refuse-direct-pressure` | own `INPUT/phase.txt` `A 1 combustion=direct`, the row `A combustion direct q-comb=1000000` (no `T-burn`); `[IGLOO-Properties] boiling-temperature = 900`, `boiling-pressure = 2.0e5`, `Lv = 1.0e6` | `IGLOO: combustion=direct without T-burn, and boiling-temperature not at one atmosphere` |
-| `refuse-section-d-smoke` | `models-real`'s `phase.txt`, a valid row; `d-smoke = 1.0e-5` in `[IGLOO-Models]` | `IGLOO: a constant of a burning model in [IGLOO-Models]` |
-| `refuse-line-d-smoke` | own `INPUT/phase.txt` `A 1 combustion=Beckstead d-smoke=1.0e-6` and a valid row | `IGLOO: a constant of a burning model on the material line of the phase file` |
-| `refuse-models-dsmoke-neg` | `models-real`'s `phase.txt`, the row with `d-smoke=-1.0e-6` | `d-smoke must be >= 0` |
-| `refuse-ox0-range` | own `INPUT/phase.txt` and `INPUT/models.txt`: `combustion/burn-box-ox0`'s two lines and rows with `xi-ox0=1.0` (a particle without metal); `burn-box`'s `bc.txt`/`solfile.tec`, `burn-box-cap`'s table; `refusals/cap-product`'s settings | `xi-ox0 must lie in [0, 1)` |
-| `refuse-ox0-nocap` | own `INPUT/phase.txt` and `INPUT/models.txt`: `burn-box`'s line with `cap=constant` and the cap row `xi-ox0=0.1` (no `xi-cap`, no product line); `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `refusals/cap-product`'s settings | `xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0` |
+| `refuse-carried0-range` | own `INPUT/phase.txt` and `INPUT/models.txt`: `combustion/burn-box-ox0`'s two lines and rows with `carried-0=1.0` (a particle without metal); `burn-box`'s `bc.txt`/`solfile.tec`, `burn-box-cap`'s table; `refusals/carry-no-carried`'s settings | `carried-0 must lie in [0, 1)` |
+| `refuse-carried0-nocarry` | own `INPUT/phase.txt` and `INPUT/models.txt`: `burn-box`'s line with `carry=constant` and the carry row `carried-0=0.1` (no `share`, no carried line); `burn-box`'s `bc.txt`/`solfile.tec`, `common/properties.dat`; `refusals/carry-no-carried`'s settings | `carried-0 > 0 requires combustion=Beckstead and share > 0` |
 | `refuse-brk-sigma` | `tab-e2e` (`INPUT/` symlinked) without `[IGLOO-Properties] sigma` | `Breakup requires sigma` |
 | `refuse-brk-mu` | `tab-e2e` without `mu` | `Breakup requires mu` |
 | `refuse-sigma-size` | `tab-e2e` with `Le = 1.0` added and `sigma = 0.072 0.072`, `mu = 1.0e-3 1.0e-3`: the vectors are read in the order psat, Mv, Lv, Tboil, cpv, Le, Yinf, sigma, mu and the first present (`Le`, one value) sets the length | `sigma: size mismatch with other property vectors` |
@@ -168,13 +166,13 @@ exit 0 and writes its output. **The two gas-order-2 interface cases are RED** on
 pass, which never reads the orientation integers: both run to "Stop condition" with exit 0 and write their output.
 **The two gas-order-2 periodic cases are RED** on the interface pass of 101 faces alone, which never reads a 201
 record's orientation integers: both run to "Stop condition" with exit 0 and write their output.
-**The three oxide-cap cases are RED** on a reader that does not know the `product` token: `refuse-cap-product`
-(whose line names no product) runs the burn law to "Stop condition" with exit 0 and writes its output, the other two
-stop at `unknown per-material key` (exit 128, not their payload); with its check taken out of `resolve_products`
-each of the three runs to "Stop condition" with exit 0. **The two oxide-fraction cases are RED** on a reader
-that does not know the `xi-ox0` token, which stops both at `unknown per-material key` (exit 128, not their
-payload); with its check taken out of `resolve_products`, `refuse-ox0-nocap` runs the burn law to "Stop
-condition" with exit 0 and writes its output, and so does `refuse-ox0-range`, its stretch printed as 0.
+**The three carried-material cases are RED** on a reader that does not know the `carried` token: `refuse-carry-no-carried`
+(whose row names no carried line) runs the burn law to "Stop condition" with exit 0 and writes its output, the other two
+stop at `unknown per-material key` (exit 128, not their payload); with its check taken out of `resolve_carried`
+each of the three runs to "Stop condition" with exit 0. **The two carried-fraction cases are RED** on a reader
+that does not know the `carried-0` token, which stops both at `unknown per-material key` (exit 128, not their
+payload); with its check taken out of `resolve_carried`, `refuse-carried0-nocarry` runs the burn law to "Stop
+condition" with exit 0 and writes its output, and so does `refuse-carried0-range`, its stretch printed as 0.
 **The three `properties.dat` cases are
 RED** on a reader that takes three columns by position, which runs each of them to "All particles out of
 domain" with exit 0 — the two-enthalpy header as an absolute datum with `hOff = 0`, the typed row with
@@ -216,7 +214,6 @@ value: it runs to "Stop condition" with exit 0 and writes three `.dat` files and
 
 **The nine refusals of the models file's values, its `q-comb`, the cap word's row, the three section keys and the burning temperature of `direct` are RED** on a reader without their checks: each runs to "Stop condition : All particles out of domain!" with exit 0 and writes its four output files. `K-burn=NaN` and `q-comb=Inf` are taken as numbers, `K-burn=4.5e-07,5` as 4.5e-07, the row without `q-comb` burns at `q-comb` 0, the capped material burns uncapped, the three `[IGLOO-Models]` keys are ignored, and `direct` burns at the boiling temperature given at 2e5 Pa.
 
-**The three `d-smoke` refusals are RED** on a reader without the key: `refuse-section-d-smoke` runs to "Stop condition : All particles out of domain!" with exit 0 (an unknown `[IGLOO-Models]` key is ignored); `refuse-line-d-smoke` stops on `IGLOO: unknown per-material key in the phase file` and `refuse-models-dsmoke-neg` on `IGLOO: a constant the model does not read in the models file`, not on their payloads.
 
 **Not here.** The mixed-Nk refusal (`allocation.f90`, `IGLOO: mixed 2D/3D blocks are not supported`)
 needs a two-zone `solfile.tec`; it is verified on a scratch fixture only and has no case.

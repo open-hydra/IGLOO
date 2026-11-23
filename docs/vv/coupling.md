@@ -13,6 +13,7 @@ these gates see it.
 | [Scatter cloud](#scatter) | marker count, placement and weight | 726/726 parcels |
 | [Plane crossings](#plane-crossings) | records of parcels crossing planes | net flow within $1.3\cdot10^{-9}$ |
 | [Output controls](#output-controls) | cadence, time limits, outputs off, exit records | pass |
+| [Exchange channels](#exchange-channels) | what a coupler reads, offers and adds through `IGLOO_Mod_Exchange` | 20 gates pass |
 
 ---
 
@@ -109,3 +110,19 @@ The scatter cloud places markers at a parcel's rate $\dot n_p/\mathrm{d}N_\mathr
 | `out-off` | the trajectory and scatter outputs switched off |
 | `exit-census` | every parcel whose integration stops leaves exactly one exit record |
 | `timing-report` | `timing = on` prints the timing report |
+
+---
+
+## Exchange channels {#exchange-channels}
+
+`tests/coupling/test_exchange.f90`, cases `exchange-track`, `exchange-absorb`, `exchange-births` · feature (audit)
+
+The driver calls IGLOO as a coupler does: `setup_static` once, then `reset_state` and `solve` per sweep, the
+exchange calls in between ([Coupling with other solvers](../development/coupling.md)).
+
+| Case | Deck | What it shows | Result |
+| :--- | :--- | :--- | :--- |
+| `exchange-track` | `burn-box` | the processed mass equals the net mass given the gas, cell by cell; it leaves at the gas velocity (the drops coast) and between the gas and the drops' temperatures; the gas's momentum is that of the mass it receives | exact; $5\cdot10^{-15}$ m/s |
+| `exchange-absorb` | `drag-stokes` | an offer in 20 of 60 cells: nothing absorbed in sweep 1, 3 % over in sweep 2, 0.06 % in sweep 3; the absorbed mass carries the offer's velocity and energy per kg; the drops leave with the injected flow plus what they absorbed; clearing the offer gives sweep 1's run back bit for bit | $10^{-13}$; $10^{-9}$ on the books |
+| `exchange-births` | `zero-group-line` | births refused for an injected line and without a diameter; two births of a 0-group line integrated as two parcels, IDs 1 and 2, each reaching the outlet with its mass flow; again in sweep 2; none after the clear | exact |
+

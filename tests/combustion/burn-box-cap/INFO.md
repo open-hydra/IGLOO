@@ -5,7 +5,7 @@
 property laws of its p. 5). The oracle is written from the model equations, never from IGLOO's table.
 
 ## Model
-A burning parcel carries the metal `m_Al` (Z(8)) and its oxide cap `m_ox` (Z(9)). With `xi-cap = ξ`, the cap
+A burning parcel carries the metal `m_Al` (Z(8)) and its oxide cap `m_ox` (Z(9)). With `share = ξ`, the cap
 retains `ξν` of the metal burned (`ν = M(Al₂O₃)/(2 M(Al)) = 1.889441`); the Beckstead d^n law acts on the metal's
 diameter, scaled by Gallier's exposed-surface factor `F(f_ox)` (`f_ox = m_ox/m`) and by the stretch
 `c = ∫₀¹ ds/F` that keeps Beckstead's burn time; drag and heat act on the equal-volume sphere of metal and cap;
@@ -21,13 +21,13 @@ The gas receives `(1 − ξν)` of the metal burned.
 `../../burn-box/INPUT/`) with `burn-box-euler`'s output settings (`out-file = ALL`, `mollify = off`, one
 trajectory row per cell entry). Its own `INPUT/phase.txt`:
 
-    A 1 combustion=Beckstead cap=constant
+    A 1 combustion=Beckstead carry=constant
     OX 0
 
 and `INPUT/models.txt`:
 
     A combustion Beckstead K-burn=4.5e-07 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000
-    A cap constant xi-cap=0.2 product=OX
+    A carry constant share=0.2 carried=OX
 
 and a two-zone absolute table (`make_table.py`, committed): zone A the metal (Cp 1250, Density 2950,
 `Enthalpy_abs` 1250 T − 372687.5, zero at 298.15 K), zone OX the product, liquid alumina (Cp 1887.6, Density
@@ -57,7 +57,7 @@ E13.6 print of `m` and `d` (2.3e-6) with the cell-crossing tolerance; the oracle
 differ by at most 1.7e-6. Each parcel rides its own `(j, k)` column: the fields and the printout do not depend on
 the thread count.
 
-## RED (each one line of `rhsAlCap`)
+## RED (each one line of `rhsBurnCarry`)
 
 | mutation | what fails |
 |---|---|

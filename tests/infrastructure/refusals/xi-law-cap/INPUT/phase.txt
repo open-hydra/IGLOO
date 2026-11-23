@@ -1,3 +1,0 @@
-condensed-dispersed
-A 1 combustion=Beckstead cap=Gallier21
-OX 0

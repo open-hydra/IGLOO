@@ -92,7 +92,7 @@ contains
       'Evaporation model; presence enables phase change','d2-law, CEM, CEM-B, ASM, TC',.false.)
     call reg%add('IGLOO-Models','combustion',d_s(27),'none', &
       'Burning model, the default of every injected material (per-material override: combustion=<model> on the '// &
-      'material line of the phase file, from [GPB-Phase*]; a combustion product, a line of 0 groups, never takes it)', &
+      'material line of the phase file, from [GPB-Phase*]; a line of 0 groups never takes it)', &
       'none, Beckstead, direct',.false.)
     call reg%add('IGLOO-Models','liquid-conduction',d_s(11),'ITC', &
       'Liquid-side conduction model, global default (per-material override: key=value on the material line of the phase file, from [GPB-Phase*]); P2T: parabolic temperature profile inside the droplet, needs k-liq on the material line or a Conductivity column in properties.dat, and mu-liq or a Viscosity column; a breaking material takes the breakup viscosity instead of mu-liq','ITC, P2T',.false.)
@@ -182,8 +182,8 @@ contains
     call reg%add('IGLOO-ODE','absolute-tol',d_r(25),'1e-10', &
       'ODE absolute tolerance','',.false.)
     call reg%add('IGLOO-ODE','fail-after',d_r(27),'0', &
-      'A forced solver failure of the oxide-cap model (ODE model 8) once a parcel''s last accepted time reaches this '// &
-      'value [s]: the failure path of the burnout residue; 0 = off','',.false.)
+      'A forced solver failure of the carried-material model (ODE model 8) once a parcel''s last accepted time reaches '// &
+      'this value [s]: the failure path of the burnout residue; 0 = off','',.false.)
     call reg%add('IGLOO-ODE','max-inner-iter',d_i(9),'10', &
       'Maximum ODE solver calls on one cell segment (its first call and the refinements of its crossing); a parcel '// &
       'that needs more ends at its last accepted step','',.false.)

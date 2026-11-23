@@ -4,7 +4,7 @@ program test_solidification
     ! (supercooling, adiabatic recalescence, freezing plateau at T-melt, solid cooling),
     ! called directly with an alumina-like particle.
     !
-    !   SG0  metal-slot pin: imHf/imCps = 7/8 of the nmp = nmetal = 16 block.
+    !   SG0  metal-slot pin: imHf/imCps = 7/8 of the nmp = nmetal = 17 block.
     !   SG1  nucleationJump: f0 = cl*(Tm-Tn)/hfus with T back to Tm; the whole-freeze branch
     !        (f0 >= 1) at the temperature that conserves the enthalpy.
     !   SG2  plateauRate: m*hfus*df/dt = -Qdot, sign and magnitude; RK4 lands on f = 1 at
@@ -33,7 +33,7 @@ program test_solidification
     !        it rebuilds (1e-13), F(9) as a direct breakupOde in the liquid phases (1e-12), exactly 0 on
     !        the plateau and the solid where the direct call is not; the euler tail model 6's shifted by
     !        one slot plus Z(9); the KH-RT timer written back in the liquid phases only.
-    !   SB1  birthResidue: a burnout residue of a freezing product at its parent's temperature 2500, 2000, 1500 K is born
+    !   SB1  birthParcel: a burnout residue of a freezing product at its parent's temperature 2500, 2000, 1500 K is born
     !        liquid, undercooled, undercooled with f = 0 (never solid at its own temperature); its mass, diameter,
     !        number rate, flow and m0 for one residue per droplet and at d-residue (the mass flow kept).
     !   SG12 rho-solid: solidDiameter at f = 0, 0.3, 1 against d0 (1 - f + f rho_l/rho_s)^(1/3); setupRHS puts the
@@ -144,8 +144,8 @@ contains
     subroutine run_SG0(ok)
         !> the two solidification slots of the metal block, and the block length on both sides
         logical, intent(inout) :: ok
-        call flag('SG0 metal slots imHf/imCps = 7/8, nmp = nmetal = 16', 'SG0_slots', &
-                  imHf == 7 .and. imCps == 8 .and. nmp == 16 .and. nmetal == 16, ok)
+        call flag('SG0 metal slots imHf/imCps = 7/8, nmp = nmetal = 17', 'SG0_slots', &
+                  imHf == 7 .and. imCps == 8 .and. nmp == 17 .and. nmetal == 17, ok)
     end subroutine run_SG0
 
     subroutine run_SG1(ok)
@@ -443,9 +443,9 @@ contains
         use IGLOO_particles, only: obj_particle
         use Lib_RHS, only: setupRHS, packAuxVars, rhsSolidification, nauxvar, nauxstate, &
                            ind_mb, ind_m, ind_d, ind_sph
-        use IGLOO_Lib_Combustion, only: imKb, imN, imXe, imBeta, imXi, imTig, imQc
+        use IGLOO_Lib_Combustion, only: imKb, imN, imXe, imBeta, imShare, imTig, imQc
         logical, intent(inout) :: ok
-        integer, parameter :: poisoned(7) = [imKb, imN, imXe, imBeta, imXi, imTig, imQc]
+        integer, parameter :: poisoned(7) = [imKb, imN, imXe, imBeta, imShare, imTig, imQc]
         real(R8), parameter :: UG = 10._R8, Tph(0:3) = [T0, 2000._R8, TM, 1800._R8]
         type(obj_particle) :: p
         real(R8), allocatable :: aux(:), auxP(:), auxst(:)
@@ -1015,9 +1015,9 @@ contains
     end subroutine run_SG14
 
     subroutine run_SB1(ok)
-        !> birthResidue on a freezing product (T-melt 2327, T-nuc 1861.6 K, rho 3950) from one parent record
+        !> birthParcel on a freezing carried material (T-melt 2327, T-nuc 1861.6 K, rho 3950) from one parent record
         use IGLOO_particles,   only: obj_particle
-        use IGLOO_data_phases, only: obj_shed, birthResidue
+        use IGLOO_data_phases, only: obj_shed, birthParcel
         use IGLOO_variables,   only: pi, eulerSwitch
         logical, intent(inout) :: ok
         real(R8), parameter :: TBS(3) = [2500._R8, 2000._R8, 1500._R8], RRES = 3950._R8
@@ -1025,7 +1025,7 @@ contains
         integer,  parameter :: PHEXP(3) = [phLiquid, phUndercooled, phUndercooled]
         type(obj_particle) :: kid
         type(obj_shed) :: rec
-        real(R8) :: m, d, np, dr
+        real(R8) :: m, d, np, dr, noTab(0)
         integer  :: i, k
         logical  :: pass
         eulerSwitch = .false.
@@ -1038,7 +1038,7 @@ contains
             do i = 1, 3
                 call fresh(kid)
                 rec%temp = TBS(i)
-                call birthResidue(kid, rec, 32, dr)
+                call birthParcel(kid, rec, 32, dr, noTab, noTab)
                 if (k == 1) then
                     m = MCAP;  d = (6._R8*m/(pi*RRES))**(1._R8/3._R8);  np = NPD
                 else
@@ -1056,7 +1056,7 @@ contains
                     ' K: phase ', kid%solidPhase, ', f ', kid%stateVar(8), ', m ', kid%m, ', d ', kid%d
             end do
         end do
-        call flag('SB1 birthResidue: liquid / undercooled / undercooled with f = 0; m, d, npdot, mdot, m0 for both '// &
+        call flag('SB1 birthParcel: liquid / undercooled / undercooled with f = 0; m, d, npdot, mdot, m0 for both '// &
                   'size rules', 'SB1_birth', pass, ok)
     end subroutine run_SB1
 

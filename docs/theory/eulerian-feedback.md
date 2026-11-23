@@ -20,40 +20,52 @@ only, `E+S`/`ALL` or absent = both).  The accumulation routines are `computeSrcF
 
 The source block type `obj_sourceblock` stores:
 
-- `sourceMass(nsm(), Nx, Ny, Nz)` — mass source per material per cell [kg/s] in its first `nm` rows; with a capped material two more per material (the cap's oxide), with a material of `d-smoke > 0` five more per material (its smoke: [The smoke columns](combustion.md#the-smoke-columns)); the rows are listed [below](#rows-of-the-mass-source)
+- `sourceMass(nsm(), Nx, Ny, Nz)` — mass source per material per cell [kg/s] in its first `nm` rows, and the
+  optional rows listed [below](#rows-of-the-mass-source)
 - `sourceMom(3, Nx, Ny, Nz)` — momentum source [N]
 - `sourceEn(Nx, Ny, Nz)` — energy source [W]
 
+A coupler reads these through IGLOO's exchange module, never directly:
+[Coupling with other solvers](../development/coupling.md).
+
 ### Rows of the mass source
 
-`nsm()` (`src/lib/variables.f90`) counts the rows: `nm`, `3 nm` when a material of the run burns with an oxide cap
-(`xi-cap > 0` or `cap=Gallier21`, [The oxide cap](combustion.md#the-oxide-cap-model-8)), and `5 nm` more when a
-material has `d-smoke > 0`. With $m$ a material's index in the phase file and $\dot n$ a parcel's number rate:
+The net rows are always there. The others exist only when something needs them; `nsm()`
+(`src/lib/variables.f90`) counts them, `rowCarry` and `rowProc` give their numbers. With $m$ a material's index in
+the phase file and $\dot n$ a parcel's number rate:
 
-| Row | Present | Holds, per cell [kg/s] |
+| Rows | Present when | Holds, per cell [kg/s] |
 | :--- | :--- | :--- |
-| $m$ | always | the net mass the parcels of material $m$ hand the gas, $\dot m_\mathrm{in} - \dot m_\mathrm{out}$ (below) |
-| $n_m + 2m - 1$ | a capped material in the run | the oxide the caps of material $m$ gained in the cell, $\dot n\,(m_\mathrm{ox,out} - m_\mathrm{ox,in})$ per residence, $m_\mathrm{ox,out}$ the cap at the residence's end |
-| $n_m + 2m$ | a capped material in the run | the cap a parcel of material $m$ consumed in the cell hands the gas when `residue=off`, $\dot n\,m_\mathrm{ox}$ at its end; 0 for a parcel that goes on or whose cap becomes a residue |
-| `smokeRow(m, s)` $= n_m + 5(m - 1) + s$, $+ 2n_m$ with the cap's rows | a material with `d-smoke > 0` | its smoke, $s = 1$ the weight $W$, $s = 2$–$4$ $W\mathbf{u}$, $s = 5$ $WT$ ([The smoke columns](combustion.md#the-smoke-columns)) |
+| net, $m$ | always | the mass the parcels of material $m$ give the gas, $\dot m_\mathrm{in} - \dot m_\mathrm{out}$ (below) |
+| carried, `rowCarry(m, 1)` | a material of the run carries another | the carried material deposited on material $m$'s parcels, $\dot n\,(m_\mathrm{ox,out} - m_\mathrm{ox,in})$ per residence |
+| carried, `rowCarry(m, 2)` | same | the carried material a parcel consumed in the cell gives the gas when `residue=off`, $\dot n\,m_\mathrm{ox}$ at its end; 0 for a parcel that goes on or whose cap becomes a residue |
+| processed, `rowProc(m, s)` | a coupler tracks a material (`track_processed`) | $s = 1$ the mass $W$ the process (burning, evaporation) takes off, $s = 2$–$4$ $W\mathbf{u}$, $s = 5$ $WT$ |
 
-Only parcels of the capped model (model 8) fill the cap's rows (`Lib_Integration.f90`, beside the net row's
-deposit), so they stay 0 for a material without a cap. The net row of a capped material counts the metal and the cap
-together: the metal the parcel burned less the oxide its cap gained; for a parcel consumed in the cell, all it
-carried at cell entry, less its cap at the end when that becomes a residue (the residue's birth flux leaves with
-$\dot m_\mathrm{out}$, see [The burnout residue](combustion.md#the-burnout-residue)). In every case
+Only parcels of model 8 fill the carried rows, so they stay 0 for a material that carries nothing. The net row of a
+carrying material counts both masses: the metal the parcel burned less the carried material deposited; for a parcel
+consumed in the cell, all it carried at cell entry, less its cap at the end when that becomes a residue (the
+residue's birth flux leaves with $\dot m_\mathrm{out}$, see [The burnout residue](combustion.md#the-burnout-residue)).
+In every case
 
 $$
-S_\mathrm{mass}(m) + S_\mathrm{mass}(n_m + 2m - 1) - S_\mathrm{mass}(n_m + 2m)
+S_\mathrm{net}(m) + S_\mathrm{carried,1}(m) - S_\mathrm{carried,2}(m)
 = \sum_\mathrm{residences} \dot n\,(m_\mathrm{Al,in} - m_\mathrm{Al,out}),
 $$
 
 the metal that left material $m$'s parcels in the cell ($m_\mathrm{Al,out} = 0$ for a consumed parcel, whose
-remnant goes to the gas), whatever the retained fraction: a coupler reads the burn rate from the three rows (from
-the net row alone only through a constant `xi-cap`, see [Energy](combustion.md#energy-the-absolute-datum-and-the-streams)).
-The extra rows take the cut records' weights as the net rows do, are summed over the MPI ranks and across block
+remnant goes to the gas), whatever the share kept: a coupler reads the burn rate from the three rows (from
+the net row alone only through a constant `share`, see [Energy](combustion.md#energy-the-absolute-datum-and-the-streams)).
+
+The processed rows weight the velocity and temperature by the mass processed over the residence: over each
+accepted step the mass it processed times the step's mean velocity and temperature, then the residence's last piece
+and a consumed parcel's remnant at their means. The processed mass is thus valued at the state of the process, not
+at the residence's end.
+
+The optional rows take the cut records' weights as the net rows do, are summed over the MPI ranks and across block
 interfaces and chimera overlaps, and are reduced with them to the geometry cells at `gas-order = 2`; `source.tec`
-writes the `nm` net rows only, and a coupler reads the others from the source blocks.
+writes the `nm` net rows only. What the parcels **absorb** is kept apart from these rows, per geometry cell and never
+smoothed, so the coupler takes from the donor exactly what was absorbed where it offered it
+([Coupling](../development/coupling.md#receiving-mass)).
 
 For each cell transit, `computeSrcField` accumulates the difference between cell-entry
 and cell-exit values of mass, momentum, and energy carried by the parcel:

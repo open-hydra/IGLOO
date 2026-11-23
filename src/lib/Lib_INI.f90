@@ -338,7 +338,7 @@ contains
     if (error/=0) combustion_word = 'none'
     !> the constants of a burning model are rows of the models file, never keys of this section
     block
-      character(len=9), parameter :: rowKeys(4) = ['q-comb   ', 'd-stop   ', 'd-burnout', 'd-smoke  ']
+      character(len=9), parameter :: rowKeys(3) = ['q-comb   ', 'd-stop   ', 'd-burnout']
       integer :: r
       do r = 1, size(rowKeys)
         if (.not. inSection('IGLOO-Models', trim(rowKeys(r)))) cycle
@@ -431,9 +431,10 @@ contains
     mat%nBurn    = 1.8_R8            ! Beckstead nominal exponent
     mat%Xeff     = 1._R8             ! pure effective oxidizer => Keff = K-burn
     mat%betaPart = 0._R8
-    mat%xiCap    = 0._R8
-    mat%xiOx0    = 0._R8
-    mat%xiLaw    = 0
+    mat%carryShare = 0._R8
+    mat%carryYield = 0._R8
+    mat%carry0     = 0._R8
+    mat%carryLaw   = 0
     mat%Tign     = 2350._R8          ! Al2O3-shell melting anchor
     mat%qComb    = 0._R8
     mat%Tmelt    = 2327._R8          ! alumina default
@@ -441,26 +442,25 @@ contains
     mat%Tnuc     = 0._R8
     mat%cpSol    = 0._R8
     mat%rhoSol   = 0._R8
-    mat%productName = ''
+    mat%carriedName = ''
     mat%resOn    = .false.
     mat%dRes     = 0._R8
     mat%dStop    = 0._R8
     mat%dBurn    = 0._R8
-    mat%dSmoke   = 0._R8
     mat%Tburn    = 0._R8
-    mat%capAsked = .false.
+    mat%carryAsked = .false.
     mat%qcombSet = .false.
   end subroutine set_material_defaults
 
 
   !> One key=value token from the material line of the phase file (written by ATLAS GPB from
-  !  [GPB-Phase*]): the model words call the assign_* selectors (cap=<law> names the oxide cap), the reals of
+  !  [GPB-Phase*]): the model words call the assign_* selectors (carry=<law> names a carried material), the reals of
   !  the evaporation and solidification models are read. A constant of a burning or of a breakup model stops the
   !  run (its place is the models file), as an unknown key or a non-numeric value does.
   subroutine apply_material_key(imat, mat, key, value)
     use IGLOO_data_phases,     only: obj_material
     use IGLOO_Lib_Evaporation, only: assign_evaporation, assign_liquid, assign_interface, &
-                                     assign_boiling, assign_combustion, assign_solidification, assign_xilaw
+                                     assign_boiling, assign_combustion, assign_solidification, assign_carry_law
     use IGLOO_Lib_Breakup,     only: assign_breakup, breakup_token
     implicit none
     integer,            intent(in)    :: imat
@@ -476,7 +476,7 @@ contains
     case ('boiling');           call assign_boiling(value, mat%boilSelect)
     case ('combustion');        call assign_combustion(value, mat%combSelect)
     case ('solidification');    call assign_solidification(value, mat%solidSelect)
-    case ('cap');               call assign_xilaw(value, mat%xiLaw); mat%capAsked = .true.
+    case ('carry');             call assign_carry_law(value, mat%carryLaw); mat%carryAsked = .true.
     case ('breakup');           mat%brkupWord = value
       call assign_breakup(value, mat%brkupSelect, mat%brkupEqOde, mat%brkupEvent, mat%brkupHasChild)
     case ('alpha-e');   read(value,*,iostat=ios) mat%alphaE
@@ -487,11 +487,12 @@ contains
     case ('T-nuc');     read(value,*,iostat=ios) mat%Tnuc
     case ('cp-solid');  read(value,*,iostat=ios) mat%cpSol
     case ('rho-solid'); read(value,*,iostat=ios) mat%rhoSol
-    case ('K-burn', 'n-burn', 'X-eff', 'beta-part', 'T-ign', 'T-burn', 'q-comb', 'd-stop', 'd-burnout', 'd-smoke', &
-          'xi-law', 'xi-cap', 'xi-ox0', 'product', 'residue', 'd-residue')
+    case ('K-burn', 'n-burn', 'X-eff', 'beta-part', 'T-ign', 'T-burn', 'q-comb', 'd-stop', 'd-burnout', &
+          'share', 'yield', 'carried', 'carried-0', 'residue', 'd-residue')
       write(*,'(a,i0,a)') ' [ERROR] phase file, material ', imat, ': '//trim(key)//'='//trim(value)// &
         ' on the material line: the constants of the burning models are rows of the models file, '// &
-        '"<material> combustion|cap <model> key=value ..." (ATLAS GPB writes it; the line keeps combustion=<model>, cap=<law>)'
+        '"<material> combustion|carry <model> key=value ..." (ATLAS GPB writes it; the line keeps combustion=<model>, '// &
+        'carry=<law>)'
       error stop 'IGLOO: a constant of a burning model on the material line of the phase file'
     case default
       if (breakup_token(key) > 0) then
@@ -575,17 +576,20 @@ contains
     write(*,'(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,es10.3)') '  >> [material ', imat, '] evap=', mat%evapSelect, &
       ' liq=', mat%liqSelect, ' intf=', mat%intfSelect, ' boil=', mat%boilSelect, ' comb=', mat%combSelect, &
       ' solid=', mat%solidSelect, ' alpha-e=', mat%alphaE
-    if (len_trim(mat%productName) > 0 .and. .not. mat%resOn .and. mat%xiLaw == 0) write(*,'(a,i0,a,es10.3)') &
-      '  >> [material ', imat, '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap
-    if (len_trim(mat%productName) > 0 .and. mat%resOn .and. mat%xiLaw == 0) write(*,'(a,i0,a,es10.3,a,es10.3)') &
-      '  >> [material ', imat, '] product='//trim(mat%productName)//' xi-cap=', mat%xiCap, ' residue=on d-residue=', mat%dRes
-    !> under the law the retained fraction is the law's, not xi-cap
-    if (len_trim(mat%productName) > 0 .and. .not. mat%resOn .and. mat%xiLaw > 0) write(*,'(a,i0,a)') &
-      '  >> [material ', imat, '] product='//trim(mat%productName)//' cap=Gallier21'
-    if (len_trim(mat%productName) > 0 .and. mat%resOn .and. mat%xiLaw > 0) write(*,'(a,i0,a,es10.3)') &
-      '  >> [material ', imat, '] product='//trim(mat%productName)//' cap=Gallier21 residue=on d-residue=', mat%dRes
-    if (mat%xiOx0 > 0._R8) write(*,'(a,i0,a,es10.3)') '  >> [material ', imat, '] xi-ox0=', mat%xiOx0
-    if (mat%xiLaw > 0 .and. len_trim(mat%productName) == 0) write(*,'(a,i0,a)') '  >> [material ', imat, '] cap=Gallier21'
+    if (len_trim(mat%carriedName) > 0 .and. .not. mat%resOn .and. mat%carryLaw == 0) write(*,'(a,i0,a,es10.3)') &
+      '  >> [material ', imat, '] carried='//trim(mat%carriedName)//' share=', mat%carryShare
+    if (len_trim(mat%carriedName) > 0 .and. mat%resOn .and. mat%carryLaw == 0) write(*,'(a,i0,a,es10.3,a,es10.3)') &
+      '  >> [material ', imat, '] carried='//trim(mat%carriedName)//' share=', mat%carryShare, ' residue=on d-residue=', &
+      mat%dRes
+    !> under the law the share kept is the law's, not the row's
+    if (len_trim(mat%carriedName) > 0 .and. .not. mat%resOn .and. mat%carryLaw > 0) write(*,'(a,i0,a)') &
+      '  >> [material ', imat, '] carried='//trim(mat%carriedName)//' carry=Gallier21'
+    if (len_trim(mat%carriedName) > 0 .and. mat%resOn .and. mat%carryLaw > 0) write(*,'(a,i0,a,es10.3)') &
+      '  >> [material ', imat, '] carried='//trim(mat%carriedName)//' carry=Gallier21 residue=on d-residue=', mat%dRes
+    if (mat%carry0 > 0._R8) write(*,'(a,i0,a,es10.3)') '  >> [material ', imat, '] carried-0=', mat%carry0
+    if (mat%carryYield > 0._R8) write(*,'(a,i0,a,es23.16)') '  >> [material ', imat, '] yield=', mat%carryYield
+    if (mat%carryLaw > 0 .and. len_trim(mat%carriedName) == 0) write(*,'(a,i0,a)') '  >> [material ', imat, &
+      '] carry=Gallier21'
   end subroutine finalize_material_models
 
 
@@ -643,17 +647,17 @@ contains
       modelsUsed(r) = .true.
       call apply_model_row(imat, mat, modelsRow(r), seen)
     enddo
-    !> a cap word on the line holds only with its row: without it the material would burn uncapped
-    if (mat%capAsked .and. .not. seen(2)) then
-      write(*,'(a,i0,a)') ' [ERROR] material ', imat, ' ('//trim(mat%matName)//'): its line names an oxide cap '// &
-        '(cap=<law>) and the models file has no cap row for it, "'//trim(mat%matName)//' cap <law> key=value ..."'
-      error stop 'IGLOO: a cap word on the material line without its row in the models file'
+    !> a carry word on the line holds only with its row: without it the material would burn carrying nothing
+    if (mat%carryAsked .and. .not. seen(2)) then
+      write(*,'(a,i0,a)') ' [ERROR] material ', imat, ' ('//trim(mat%matName)//'): its line names a carried material '// &
+        '(carry=<law>) and the models file has no carry row for it, "'//trim(mat%matName)//' carry <law> key=value ..."'
+      error stop 'IGLOO: a carry word on the material line without its row in the models file'
     endif
   end subroutine apply_models_rows
 
 
   !> One row of the models file, dispatched on its kind: combustion (the constants of the material's burning
-  !  model), cap (those of its oxide cap) or breakup (those of its breakup model, kept in bpTok for
+  !  model), carry (those of its carried material) or breakup (those of its breakup model, kept in bpTok for
   !  apply_breakup_tokens). The row names the model the material line names (combustion, breakup: or the one of
   !  [IGLOO-Models]; '-' stands for it). A kind that is not known, a second row of a kind, another model than the
   !  material's, a key the model does not read or a value that is not a number stop the run.
@@ -666,7 +670,7 @@ contains
     integer,            intent(in)    :: imat
     type(obj_material), intent(inout) :: mat
     character(len=*),   intent(in)    :: row
-    logical,            intent(inout) :: seen(3)   !> a combustion, a cap, a breakup row already applied to this material
+    logical,            intent(inout) :: seen(3)   !> a combustion, a carry, a breakup row already applied to this material
     character(len=128) :: name, kind, model, tok, key, value
     character(len=80)  :: reads
     character(len=16)  :: word
@@ -684,9 +688,9 @@ contains
       k = 1
       select case (mat%combSelect)
       case (COMB_BECKSTEAD)
-        word = 'Beckstead'; reads = ' K-burn n-burn X-eff beta-part T-ign q-comb d-stop d-burnout d-smoke '
+        word = 'Beckstead'; reads = ' K-burn n-burn X-eff beta-part T-ign q-comb d-stop d-burnout '
       case (COMB_DIRECT)
-        word = 'direct';    reads = ' T-burn q-comb d-stop d-burnout d-smoke '
+        word = 'direct';    reads = ' T-burn q-comb d-stop d-burnout '
       case default
         call refuse_row('the material names no burning model (no combustion= on its line, none in [IGLOO-Models])', &
                         'IGLOO: constants of a burning model for a material that names none')
@@ -694,16 +698,16 @@ contains
       if (trim(model) /= '-' .and. trim(model) /= trim(word)) &
         call refuse_row('the material burns with combustion='//trim(word), &
                         'IGLOO: the models file names another model than the material')
-    case ('cap')
+    case ('carry')
       k = 2
-      if (.not. mat%capAsked) call refuse_row('the material line names no cap (cap=<law>)', &
-                                              'IGLOO: the models file names another model than the material')
-      if (mat%xiLaw > 0) then
-        word = 'Gallier21'; reads = ' xi-ox0 product residue d-residue '
+      if (.not. mat%carryAsked) call refuse_row('the material line names no carried material (carry=<law>)', &
+                                                'IGLOO: the models file names another model than the material')
+      if (mat%carryLaw > 0) then
+        word = 'Gallier21'; reads = ' yield carried carried-0 residue d-residue '
       else
-        word = 'constant';  reads = ' xi-cap xi-ox0 product residue d-residue '
+        word = 'constant';  reads = ' share yield carried carried-0 residue d-residue '
       endif
-      if (trim(model) /= trim(word)) call refuse_row('the material line says cap='//trim(word), &
+      if (trim(model) /= trim(word)) call refuse_row('the material line says carry='//trim(word), &
                                                      'IGLOO: the models file names another model than the material')
     case ('breakup')
       k = 3
@@ -715,7 +719,7 @@ contains
         call refuse_row('the material breaks up with breakup='//trim(word), &
                         'IGLOO: the models file names another model than the material')
     case default
-      call refuse_row('the kinds are combustion, cap and breakup', 'IGLOO: unknown kind in the models file')
+      call refuse_row('the kinds are combustion, carry and breakup', 'IGLOO: unknown kind in the models file')
     end select
     if (seen(k)) call refuse_row('a second row of kind '//trim(kind)//' for this material', &
                                  'IGLOO: two rows of one kind for a material in the models file')
@@ -732,7 +736,7 @@ contains
                         'IGLOO: a constant the model does not read in the models file')
       ios = 0
       !> a real is one finite number: a list-directed read takes 'NaN' and 'Inf', and stops at ',' or '/'
-      if (trim(key) /= 'residue' .and. trim(key) /= 'product') then
+      if (trim(key) /= 'residue' .and. trim(key) /= 'carried') then
         read(value,*,iostat=ios) x
         if (ios == 0 .and. (scan(value, ',/') > 0 .or. .not. ieee_is_finite(x))) &
           call refuse_row(trim(key)//'='//trim(value)//' is not one finite real number', &
@@ -756,16 +760,16 @@ contains
       case ('q-comb');    read(value,*,iostat=ios) mat%qComb; mat%qcombSet = .true.
       case ('d-stop');    read(value,*,iostat=ios) mat%dStop
       case ('d-burnout'); read(value,*,iostat=ios) mat%dBurn
-      case ('d-smoke');   read(value,*,iostat=ios) mat%dSmoke
-      case ('xi-cap');    read(value,*,iostat=ios) mat%xiCap
-      case ('xi-ox0');    read(value,*,iostat=ios) mat%xiOx0
+      case ('share');     read(value,*,iostat=ios) mat%carryShare
+      case ('yield');     read(value,*,iostat=ios) mat%carryYield
+      case ('carried-0'); read(value,*,iostat=ios) mat%carry0
       case ('d-residue'); read(value,*,iostat=ios) mat%dRes
       case ('residue');   call assign_residue(value, mat%resOn)
-      case ('product')
-        if (len_trim(value) > len(mat%productName)) &
-          call refuse_row('product="'//trim(value)//'" is longer than a material name', &
-                          'IGLOO: product name too long in the models file')
-        mat%productName = value
+      case ('carried')
+        if (len_trim(value) > len(mat%carriedName)) &
+          call refuse_row('carried="'//trim(value)//'" is longer than a material name', &
+                          'IGLOO: carried material name too long in the models file')
+        mat%carriedName = value
       end select
       if (ios /= 0) call refuse_row(trim(key)//'='//trim(value)//' is not a real number', &
                                     'IGLOO: non-numeric constant in the models file')
@@ -1073,7 +1077,7 @@ contains
   end subroutine read_bc
 
 
-  !> [IGLOO-ODE]: solver name, maximum steps, tolerances, the forced failure of the oxide-cap model.
+  !> [IGLOO-ODE]: solver name, maximum steps, tolerances, the forced failure of the carried-material model (8).
   subroutine read_ode()
     use IGLOO_variables, only: ode_word, iopt, rtol, atol, failAfter, maxInnerIter, massTolBurnout
     implicit none

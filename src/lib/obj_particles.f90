@@ -115,9 +115,10 @@ module IGLOO_particles
     real(R8)     :: nBurn      = 0._R8  !> Beckstead exponent
     real(R8)     :: Xeff       = 0._R8  !> effective oxidizer fraction
     real(R8)     :: betaPart   = 0._R8  !> heat-partition fraction of q-comb to the particle
-    real(R8)     :: xiCap      = 0._R8  !> oxide-cap fraction: the oxide formed by the burn retained on the drop
-    real(R8)     :: xiOx0      = 0._R8  !> oxide mass fraction of the injected particle (model 8)
-    integer      :: xiLaw      = 0      !> the cap's retained fraction: 0 xi-cap, 1 Gallier et al. 2021's law
+    real(R8)     :: carryShare = 0._R8  !> share: the part of the carried material formed by the burning that stays on the drop
+    real(R8)     :: carryYield = 0._R8  !> yield: the carried material formed per kg burnt
+    real(R8)     :: carry0     = 0._R8  !> carried-0: the carried mass fraction of the injected particle (model 8)
+    integer      :: carryLaw   = 0      !> the share kept: 0 the constant share, 1 Gallier et al. 2021's law
     real(R8)     :: Tign       = 0._R8  !> ignition temperature [K]
     real(R8)     :: Tmelt      = 2327._R8 !> melt temperature [K], default alumina (solidification)
     real(R8)     :: hFus       = 0._R8  !> heat of fusion [J/kg] (solidification)
@@ -127,12 +128,11 @@ module IGLOO_particles
     real(R8)     :: qComb      = 0._R8  !> heat of combustion [J/kg]
     real(R8)     :: dStop      = 0._R8  !> d-stop [m]: burning stops at this diameter; 0 = none
     real(R8)     :: dBurn      = 0._R8  !> d-burnout [m]: handed whole to the gas at this diameter; 0 = built-in
-    real(R8)     :: dSmoke     = 0._R8  !> d-smoke [m]: the smoke's drops are born at it; > 0: the smoke's columns
     real(R8)     :: emissivity = 0._R8  !> grey-body surface emissivity; 0 = no radiation
-    !> The oxide cap (model 8): the combustion product's density, heat capacity and enthalpy datum, the stretch c
-    real(R8)     :: rhoRes     = 0._R8
-    real(R8)     :: cpRes      = 0._R8
-    real(R8)     :: hOffRes    = 0._R8
+    !> The carried material (model 8): its density, heat capacity and enthalpy datum; the stretch c
+    real(R8)     :: rhoCar     = 0._R8
+    real(R8)     :: cpCar      = 0._R8
+    real(R8)     :: hOffCar    = 0._R8
     real(R8)     :: cStretch   = 1._R8
   contains
     !> integration procedures
@@ -149,7 +149,7 @@ module IGLOO_particles
     !> self properties computing
     procedure, pass(self) :: computeMass
     procedure, pass(self) :: injectionMass
-    procedure, pass(self) :: capInjMass
+    procedure, pass(self) :: carryInjMass
     procedure, pass(self) :: computeSource
     procedure, pass(self) :: resolveInjectionRate
     procedure, pass(self) :: dbInjectionFallback
@@ -171,7 +171,7 @@ contains
 
 
   !> The injection mass integrate takes: the injected diameter at the density (a table at the injection temperature),
-  !  then the initial cap (model 8) or a frozen fraction at rho-solid (models 6, 7) in its place.
+  !  then the carried material at injection (model 8) or a frozen fraction at rho-solid (models 6, 7) in its place.
   subroutine injectionMass(self, rhoTab)
     implicit none
     class(obj_particle), intent(inout) :: self
@@ -183,8 +183,8 @@ contains
     f = 0._R8
     if ((self%model == 6 .or. self%model == 7) .and. self%rhoSol > 0._R8) &
       call solidPhaseAtInjection(self%tp, self%Tmelt, self%Tnuc, phase, f)
-    if (self%model == 8 .and. self%xiOx0 > 0._R8) then
-      self%m = self%capInjMass()
+    if (self%model == 8 .and. self%carry0 > 0._R8) then
+      self%m = self%carryInjMass()
     elseif (f > 0._R8) then
       self%m = pi/6._R8*self%d**3._R8/((1._R8 - f)/self%rho + f/self%rhoSol)
     endif
@@ -192,15 +192,15 @@ contains
   end subroutine injectionMass
 
 
-  !> The whole particle's mass at its diameter: metal and initial cap at the equal volume.
-  pure function capInjMass(self) result(m)
+  !> The whole particle's mass at its diameter: its own and its carried material at the equal volume.
+  pure function carryInjMass(self) result(m)
     implicit none
     class(obj_particle), intent(in) :: self
     real(R8) :: m
 
-    m = pi/6._R8*self%d**3._R8/((1._R8 - self%xiOx0)/self%rho + self%xiOx0/self%rhoRes)
+    m = pi/6._R8*self%d**3._R8/((1._R8 - self%carry0)/self%rho + self%carry0/self%rhoCar)
 
-  end function capInjMass
+  end function carryInjMass
 
 
   !> Number rate npdot = mdot/m of this stream without the geometric cell search (run on a
@@ -230,7 +230,7 @@ contains
         self%npdot = self%mdot / self%m
       endif
     elseif (self%rho > 0._R8 .and. self%d > 0._R8) then
-      if ((self%model == 8 .and. self%xiOx0 > 0._R8) .or. f > 0._R8) then
+      if ((self%model == 8 .and. self%carry0 > 0._R8) .or. f > 0._R8) then
         call self%injectionMass(rhoTab)
         self%npdot = self%mdot / self%m
       else
@@ -302,7 +302,7 @@ contains
     endif
     !> model 8: the metal and its cap, each at its own heat capacity and datum
     if (self%model == 8) enthalpy = (self%stateVar(8)*(self%cp*self%stateVar(7) + self%hOff) +      &
-                                     self%stateVar(9)*(self%cpRes*self%stateVar(7) + self%hOffRes)) / &
+                                     self%stateVar(9)*(self%cpCar*self%stateVar(7) + self%hOffCar)) / &
                                     (self%stateVar(8) + self%stateVar(9))
     select case (self%model)
     case (2,4,5,8); mdot_inst = self%npdot * self%m
@@ -439,8 +439,8 @@ contains
     case(8); self%m      = self%stateVar(8) + self%stateVar(9)
     end select
     if (self%model == 8) then
-      !> the equal-volume sphere of the metal and its cap
-      self%d = (sixOverPi*(self%stateVar(8)/self%rho + self%stateVar(9)/self%rhoRes))**oneThird
+      !> the equal-volume sphere of its own and its carried material
+      self%d = (sixOverPi*(self%stateVar(8)/self%rho + self%stateVar(9)/self%rhoCar))**oneThird
     elseif (self%model/=1 .or. self%varRho) then
       if (self%varRho) self%rho = tableValue(rhoTab, Tmin, Tmax, self%Tp)
       if (self%rhoSol > 0._R8) then

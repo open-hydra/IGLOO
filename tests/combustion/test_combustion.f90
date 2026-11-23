@@ -13,28 +13,28 @@ program test_combustion
     !   CB4  Beckstead-correlation DISCRIMINATOR: K-burn calibrated at the anchor,
     !        other (D, X_eff) points predicted vs published [Beck05]; RED unless the
     !        X_eff exponent is 1 (linear per Beckstead's final D^1.8 fit). [Beck05]
-    !   CB5  the oxide cap (ODE model 8): one rhsAlCap call, F(9) = -xi nu F(8).
-    !   CB6  rhsAlCap at f_ox = 0.1, 0.3, 0.5, 0.9: F(8) = becksteadRate's mdot on the metal's
+    !   CB5  the oxide cap (ODE model 8): one rhsBurnCarry call, F(9) = -xi nu F(8).
+    !   CB6  rhsBurnCarry at f_ox = 0.1, 0.3, 0.5, 0.9: F(8) = becksteadRate's mdot on the metal's
     !        diameter times F(f_ox) c, the products typed from Gallier's lobe [Gal21].
-    !   CB7  nu = M(Al2O3)/(2 M(Al)) from the molar masses typed here.
+    !   CB7  the yield is the row's: at yield 1 the drop keeps share x what it burns, F(9) = -xi F(8).
     !   CB8  computeSource of a capped parcel: the energy flow carries the metal and the cap
     !        each at its own heat capacity and enthalpy datum.
     !   CB9  lobeF at ten points of f_ox against Gallier's exposed-surface factor at 2570 K,
     !        typed here, and decreasing over 1001 points. [Gal21]
-    !   CB10 capStretch(0.2, 1.8) = int_0^1 ds/F, the stretch that keeps Beckstead's burn time.
-    !   CB11 capStretchX0(0.2, 1.8, 0.1): the stretch with an initial cap.
+    !   CB10 carryStretch(0.2, 1.8) = int_0^1 ds/F, the stretch that keeps Beckstead's burn time.
+    !   CB11 carryStretchX0(0.2, 1.8, 0.1): the stretch with an initial carried mass.
     !   CB12 Gallier's deposition law (xi-law=Gallier21) at its nodes: Fig. 11's values at 70 um exactly, Fig. 7's
     !        sizes at f_ox = 0 on the least-squares line through Fig. 7's points, both typed here. [Gal21]
     !   CB13 the law between its nodes (linear in f_ox) and past its ends (h held past f_ox = 0.9, g held outside
     !        20-400 um).
-    !   CB14 rhsAlCap under the law: F(9) = -xi(d_Al, f_ox) nu F(8), the law read through its slot.
-    !   CB15 capLawPath: the law's stretch and the cap at burnout on its path, at 30 um and at 200 um with an
-    !        initial cap, against burn-box-cap-gallier/law_path.py (Gallier's lobe F, the same cells).
+    !   CB14 rhsBurnCarry under the law: F(9) = -xi(d_Al, f_ox) nu F(8), the law read through its slot.
+    !   CB15 carryLawPath: the law's stretch and the carried mass at burnout on its path, at 30 um and at 200 um with an
+    !        initial carried mass, against burn-box-cap-gallier/law_path.py (Gallier's lobe F, the same cells).
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
     use IGLOO_Lib_Combustion, only: becksteadRate, nmp, imKb, imN, imXe, imBeta, &
-                                    imTig, imQc, aXeff, nuOx, buildLobeTable, lobeF, capStretch, capStretchX0, &
-                                    buildXiLaw, xiGallier, capLawPath
+                                    imTig, imQc, aXeff, buildLobeTable, lobeF, carryStretch, carryStretchX0, &
+                                    buildXiLaw, xiGallier, carryLawPath
     use verif_norms,  only: assert_lt
     use verif_report, only: init_report, append_row, finalize_report
     use verif_dump,   only: dump_curve
@@ -47,6 +47,8 @@ program test_combustion
     real(R8), parameter :: KBURN = 4.28e-6_R8   ! [m^n/s] at X-eff=1
     real(R8), parameter :: NB = 1.8_R8, XEFF = 0.21_R8
     real(R8), parameter :: TIGN = 2350._R8, BETA = 0.3_R8, QCOMB = 31.0e6_R8
+    !> The yield of alumina from aluminium, M(Al2O3)/(2 M(Al)): the carry row's yield of the Al cases
+    real(R8), parameter :: NU_AL = (2._R8*26.9815385_R8 + 3._R8*15.999_R8)/(2._R8*26.9815385_R8)
     real(R8) :: mp(nmp), Keff, tb
 
     integer :: exit_code
@@ -235,9 +237,9 @@ contains
     end subroutine set_switches
 
     subroutine run_CB5_CB6(ok)
-        !> one production rhsAlCap per cap fraction on a burning particle (T = 3000 K > T-ign) at zero slip
+        !> one production rhsBurnCarry per cap fraction on a burning particle (T = 3000 K > T-ign) at zero slip
         use IGLOO_particles, only: obj_particle
-        use Lib_RHS,         only: setupRHS, packAuxVars, nauxvar, nauxstate, rhsAlCap
+        use Lib_RHS,         only: setupRHS, packAuxVars, nauxvar, nauxstate, rhsBurnCarry
         logical, intent(inout) :: ok
         real(R8), parameter :: XI = 0.2_R8
         real(R8), parameter :: fox(4) = [0.1_R8, 0.3_R8, 0.5_R8, 0.9_R8]
@@ -251,21 +253,22 @@ contains
         call set_switches()
         p%cp = 1250._R8;  p%rho = RHOP
         p%Kburn = KBURN;  p%nBurn = NB;  p%Xeff = XEFF;  p%betaPart = BETA;  p%Tign = TIGN;  p%qComb = QCOMB
-        p%xiCap = XI;  p%rhoRes = 3950._R8;  p%cpRes = 1887.6_R8;  p%cStretch = capStretch(XI, NB)
+        p%carryShare = XI;  p%carryYield = NU_AL;  p%rhoCar = 3950._R8;  p%cpCar = 1887.6_R8
+        p%cStretch = carryStretch(XI, NU_AL, NB)
         pf = .false.
         call setupRHS(8, 0, 0, 0, 0, 0, 1, pf, [real(R8)::], 0, 0._R8, nAux, nS, nE)
         allocate(aux(nauxvar), auxst(max(1, nauxstate)))
         call packAuxVars(p, nauxvar, aux)
         gas = [1.2_R8, 10._R8, 0._R8, 0._R8, 2000._R8, 1.8e-5_R8, 1.4_R8, 287._R8, 0.026_R8]
         gasNodes = spread(gas, 2, 8);  gasVert = 0._R8
-        nuT = (2._R8*26.9815385_R8 + 3._R8*15.999_R8)/(2._R8*26.9815385_R8)
+        nuT = NU_AL
         err5 = 0._R8;  err6 = 0._R8
         do i = 1, size(fox)
             mAl = RHOP*PI/6._R8*D0**3
             mOx = fox(i)/(1._R8 - fox(i))*mAl
             Z = [0._R8, 0._R8, 0._R8, 10._R8, 0._R8, 0._R8, TP, mAl, mOx]
             auxst = 0._R8
-            call rhsAlCap(9, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), gasNodes, gasVert, gas, 9, 8)
+            call rhsBurnCarry(9, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), gasNodes, gasVert, gas, 9, 8)
             err5 = max(err5, abs(F(9) + XI*nuT*F(8))/abs(XI*nuT*F(8)))
             dAl = (6._R8*mAl/(PI*RHOP))**(1._R8/3._R8)
             call becksteadRate(TP, dAl, RHOP, mp, mdot, qrel)
@@ -284,15 +287,35 @@ contains
     end subroutine run_CB5_CB6
 
     subroutine run_CB7(ok)
-        !> nuOx from the molar masses of aluminium and oxygen
+        !> the yield read through its slot: at yield 1, F(9) = -xi F(8)
+        use IGLOO_particles, only: obj_particle
+        use Lib_RHS,         only: setupRHS, packAuxVars, rhsBurnCarry, nauxvar, nauxstate
         logical, intent(inout) :: ok
-        real(R8) :: err, tol
-        logical  :: pass
-        err = abs(nuOx - (2._R8*26.9815385_R8 + 3._R8*15.999_R8)/(2._R8*26.9815385_R8))
-        tol = 1.0e-6_R8
-        pass = assert_lt('CB7 nu = M(Al2O3)/(2 M(Al)) from M(Al) 26.9815385, M(O) 15.999', err, tol)
+        type(obj_particle) :: p
+        real(R8), allocatable :: aux(:), auxst(:)
+        real(R8) :: Z(9), F(9), gas(9), gasNodes(9,8), gasVert(3,8), mAl, err, tol
+        logical  :: pf(7), pass
+        integer  :: nAux, nS, nE
+        call set_switches()
+        p%cp = 1250._R8;  p%rho = RHOP
+        p%Kburn = KBURN;  p%nBurn = NB;  p%Xeff = XEFF;  p%betaPart = BETA;  p%Tign = TIGN;  p%qComb = QCOMB
+        p%carryShare = 0.2_R8;  p%carryYield = 1._R8;  p%rhoCar = 3950._R8;  p%cpCar = 1887.6_R8
+        p%cStretch = carryStretch(0.2_R8, 1._R8, NB)
+        pf = .false.
+        call setupRHS(8, 0, 0, 0, 0, 0, 1, pf, [real(R8)::], 0, 0._R8, nAux, nS, nE)
+        allocate(aux(nauxvar), auxst(max(1, nauxstate)))
+        call packAuxVars(p, nauxvar, aux)
+        gas = [1.2_R8, 10._R8, 0._R8, 0._R8, 2000._R8, 1.8e-5_R8, 1.4_R8, 287._R8, 0.026_R8]
+        gasNodes = spread(gas, 2, 8);  gasVert = 0._R8
+        mAl = RHOP*PI/6._R8*D0**3
+        Z = [0._R8, 0._R8, 0._R8, 10._R8, 0._R8, 0._R8, TP, mAl, 0.1_R8*mAl]
+        auxst = 0._R8
+        call rhsBurnCarry(9, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), gasNodes, gasVert, gas, 9, 8)
+        err = abs(F(9) + 0.2_R8*F(8))/abs(0.2_R8*F(8))
+        tol = 1.0e-15_R8
+        pass = assert_lt('CB7 the yield is the row''s: at yield 1, |F(9) + xi F(8)|/|xi F(8)|', err, tol)
         ok = ok .and. pass
-        call append_row('CB7_nu', 'nu', err, err, 0._R8, 0._R8, tol, pass)
+        call append_row('CB7_yield', 'F9', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_CB7
 
     subroutine run_CB8(ok)
@@ -306,7 +329,7 @@ contains
         logical  :: pass
         mAl = 2.0e-11_R8;  mOx = 1.5e-11_R8;  v = [10._R8, -2._R8, 1._R8]
         p%model = 8;  p%varCp = .false.;  p%solidSelect = 0
-        p%cp = CAL;  p%hOff = HAL;  p%cpRes = CRES;  p%hOffRes = HRES
+        p%cp = CAL;  p%hOff = HAL;  p%cpCar = CRES;  p%hOffCar = HRES
         allocate(p%stateVar(9))
         p%stateVar = [0._R8, 0._R8, 0._R8, v(1), v(2), v(3), T9, mAl, mOx]
         p%m = mAl + mOx;  p%npdot = NPD
@@ -356,23 +379,23 @@ contains
         logical, intent(inout) :: ok
         real(R8) :: c, err, tol
         logical  :: pass
-        c = capStretch(0.2_R8, 1.8_R8)
+        c = carryStretch(0.2_R8, NU_AL, 1.8_R8)
         err = abs(c - 1.397686_R8)/1.397686_R8
         tol = 1.0e-5_R8
-        pass = assert_lt('CB10 capStretch(0.2, 1.8) vs 1.397686, relative', err, tol)
+        pass = assert_lt('CB10 carryStretch(0.2, 1.8) vs 1.397686, relative', err, tol)
         ok = ok .and. pass
         call append_row('CB10_stretch', 'c', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_CB10
 
     subroutine run_CB11(ok)
-        !> the stretch with an initial cap (x0 = 0.1, rho_Al 2950, rho_res 3950) against (d_Al0/d_p0)^n int_0^1 ds/F
+        !> the stretch with an initial carried mass (x0 = 0.1, rho_Al 2950, rho_res 3950) against (d_Al0/d_p0)^n int_0^1 ds/F
         logical, intent(inout) :: ok
         real(R8) :: c, err, tol
         logical  :: pass
-        c = capStretchX0(0.2_R8, 1.8_R8, 0.1_R8, 2950._R8, 3950._R8)
+        c = carryStretchX0(0.2_R8, NU_AL, 1.8_R8, 0.1_R8, 2950._R8, 3950._R8)
         err = abs(c - 1.388383_R8)/1.388383_R8
         tol = 1.0e-5_R8
-        pass = assert_lt('CB11 capStretchX0(0.2, 1.8, 0.1) vs 1.388383, relative', err, tol)
+        pass = assert_lt('CB11 carryStretchX0(0.2, 1.8, 0.1) vs 1.388383, relative', err, tol)
         ok = ok .and. pass
         call append_row('CB11_stretch_x0', 'c', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_CB11
@@ -449,9 +472,9 @@ contains
     end subroutine run_CB12_CB13
 
     subroutine run_CB14(ok)
-        !> one production rhsAlCap per oxide fraction under the law (slot imXl = 1), d_Al = 100 um
+        !> one production rhsBurnCarry per oxide fraction under the law (slot imLaw = 1), d_Al = 100 um
         use IGLOO_particles, only: obj_particle
-        use Lib_RHS,         only: setupRHS, packAuxVars, nauxvar, nauxstate, rhsAlCap
+        use Lib_RHS,         only: setupRHS, packAuxVars, nauxvar, nauxstate, rhsBurnCarry
         logical, intent(inout) :: ok
         real(R8), parameter :: fox(5) = [0._R8, 0.1_R8, 0.3_R8, 0.6_R8, 0.95_R8]
         type(obj_particle) :: p
@@ -462,7 +485,8 @@ contains
         call set_switches()
         p%cp = 1250._R8;  p%rho = RHOP
         p%Kburn = KBURN;  p%nBurn = NB;  p%Xeff = XEFF;  p%betaPart = BETA;  p%Tign = TIGN;  p%qComb = QCOMB
-        p%xiCap = 0._R8;  p%xiLaw = 1;  p%rhoRes = 3950._R8;  p%cpRes = 1887.6_R8;  p%cStretch = 1._R8
+        p%carryShare = 0._R8;  p%carryLaw = 1;  p%carryYield = NU_AL;  p%rhoCar = 3950._R8;  p%cpCar = 1887.6_R8
+        p%cStretch = 1._R8
         pf = .false.
         call setupRHS(8, 0, 0, 0, 0, 0, 1, pf, [real(R8)::], 0, 0._R8, nAux, nS, nE)
         allocate(aux(nauxvar), auxst(max(1, nauxstate)))
@@ -475,13 +499,13 @@ contains
             mOx = fox(i)/(1._R8 - fox(i))*mAl
             Z = [0._R8, 0._R8, 0._R8, 10._R8, 0._R8, 0._R8, TP, mAl, mOx]
             auxst = 0._R8
-            call rhsAlCap(9, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), gasNodes, gasVert, gas, 9, 8)
+            call rhsBurnCarry(9, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), gasNodes, gasVert, gas, 9, 8)
             dAl = (6._R8*mAl/(PI*RHOP))**(1._R8/3._R8)
             xi  = law_g(dAl*1.e6_R8)*law_h(mOx/(mAl + mOx))
-            err = max(err, abs(F(9) + xi*nuOx*F(8))/abs(xi*nuOx*F(8)))
+            err = max(err, abs(F(9) + xi*NU_AL*F(8))/abs(xi*NU_AL*F(8)))
         end do
         tol = 1.0e-14_R8
-        pass = assert_lt('CB14 rhsAlCap under the law: |F(9) + xi(d_Al, f_ox) nu F(8)|/|xi nu F(8)|', err, tol)
+        pass = assert_lt('CB14 rhsBurnCarry under the law: |F(9) + xi(d_Al, f_ox) nu F(8)|/|xi nu F(8)|', err, tol)
         ok = ok .and. pass
         call append_row('CB14_law_cap_growth', 'F9', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_CB14
@@ -496,17 +520,17 @@ contains
         integer  :: i
         errC = 0._R8; errZ = 0._R8
         do i = 1, 2
-            call capLawPath(dp(i), 1.8_R8, x0(i), 2950._R8, 3950._R8, c, z)
+            call carryLawPath(dp(i), 1.8_R8, NU_AL, x0(i), 2950._R8, 3950._R8, c, z)
             errC = max(errC, abs(c - cRef(i))/cRef(i))
             errZ = max(errZ, abs(z - zRef(i))/zRef(i))
         end do
         tol = 1.0e-5_R8
-        pass = assert_lt('CB15 capLawPath vs law_path.py at 30 and 200 um (x0 0, 0.1): c, relative', errC, tol)
+        pass = assert_lt('CB15 carryLawPath vs law_path.py at 30 and 200 um (x0 0, 0.1): c, relative', errC, tol)
         ok = ok .and. pass
         call append_row('CB15a_law_stretch', 'c', errC, errC, 0._R8, 0._R8, tol, pass)
         !> the path holds no F: the typed nine digits
         tol = 1.0e-8_R8
-        pass = assert_lt('CB15 capLawPath vs law_path.py: m_ox/m_p0 at burnout, relative', errZ, tol)
+        pass = assert_lt('CB15 carryLawPath vs law_path.py: m_ox/m_p0 at burnout, relative', errZ, tol)
         ok = ok .and. pass
         call append_row('CB15b_law_cap_end', 'z', errZ, errZ, 0._R8, 0._R8, tol, pass)
     end subroutine run_CB15

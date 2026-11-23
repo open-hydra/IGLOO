@@ -46,25 +46,26 @@ whatever IGLOO needs from them reaches it through the files ATLAS writes (`phase
 `[GPB-Phase*]` input too: ATLAS GPB writes them as `key=value` tokens after
 `<name> <groups>` on the material line of the phase file, and IGLOO reads them there (an unknown key stops the run).
 The constants of the burning models (`K-burn`, `n-burn`, `X-eff`, `T-ign`, `beta-part`, `T-burn`, `q-comb`, `d-stop`,
-`d-burnout`, `d-smoke`, and the oxide cap's `xi-cap`, `xi-ox0`, `product`, `residue`, `d-residue`; see
+`d-burnout`, and those of a carried material, `share`, `yield`, `carried`, `carried-0`, `residue`, `d-residue`; see
 [Metal Combustion](../theory/combustion.md#inputs)) and of the breakup models (table under
 [`[IGLOO-Models]`](#igloo-models)) are `[GPB-Phase*]` input as well, and ATLAS GPB writes them to a
 second file, `models.txt` (with the phase file's prefix): one row per material and kind,
-`<material> <kind> <model> key=value ...`, the kinds `combustion`, `cap` and `breakup`; the material line keeps the
-words `combustion=<model>`, `cap=<law>` and `breakup=<model>`. A constant of a burning or breakup model on the
+`<material> <kind> <model> key=value ...`, the kinds `combustion`, `carry` and `breakup`; the material line keeps the
+words `combustion=<model>`, `carry=<law>` and `breakup=<model>`. A constant of a burning or breakup model on the
 material line stops the run, and so does a
 row of an unknown kind, of another model than the line names, with a key its model does not read, or for no material
 of the phase file. So do a value that is not one finite real number (`NaN`, `Inf`, a value holding `,` or `/`), a
-burning material whose `combustion` row does not write `q-comb` (`q-comb=0` is allowed), and a `cap=<law>` word on
-the line without its `cap` row. The constants are never keys of `[IGLOO-Models]`: `q-comb`, `d-stop`, `d-burnout` or `d-smoke`
+burning material whose `combustion` row does not write `q-comb` (`q-comb=0` is allowed), and a `carry=<law>` word on
+the line without its `carry` row. The constants are never keys of `[IGLOO-Models]`: `q-comb`, `d-stop` or `d-burnout`
 there stops the run by name, and so does any breakup constant.
 The `<groups>` summed over the material lines is the family count, and therefore the number of table
 copies `bc.txt` may carry (one copy feeds every family; see [Several families](boundary-conditions.md#several-families)).
-A line with 0 groups injects nothing and `bc.txt` carries no copy for it; named by `product=` on a burning line, it
-is that line's combustion product, with its own zone of `properties.dat` and one family after the injected ones
-([The burnout residue](../theory/combustion.md#the-burnout-residue)). Unnamed, it stays an inert material — it keeps
-its zone of `properties.dat`, its particle files hold only their headers — and the setup log names it:
-`>> [material <i>] <name>: 0 groups and no product= names it -- an inert material that injects nothing`.
+A line with 0 groups injects nothing and `bc.txt` carries no copy for it: its parcels are **born only**. It keeps its
+own zone of `properties.dat` and has one family after the injected ones. Its parcels are the burnout residues of a
+drop that carries it (named by `carried=`, [The burnout residue](../theory/combustion.md#the-burnout-residue)) and the
+births a coupled solver adds ([Coupling](../development/coupling.md)); with neither, its particle files hold only
+their headers. The setup log names it:
+`>> [material <i>] <name>: 0 groups -- its parcels are born only (burnout residues, births a coupled solver adds)`.
 
 | Section | Role |
 |---------|------|
@@ -183,7 +184,7 @@ Selects physical model closures.
 | `liquid-conduction` | string | `ITC` | Heat conduction inside an evaporating droplet: `ITC` (a uniform temperature) or `P2T` (a parabolic profile; the liquid conductivity is the `k-liq` token of the material line or the `Conductivity` column of `properties.dat`, and on a material that does not break the liquid viscosity is the `mu-liq` token or the `Viscosity` column); see [Evaporation](../theory/evaporation.md#heat-conduction-inside-the-droplet) |
 | `boiling` | string | `clamp` | An evaporating droplet at or above its boiling point at the gas pressure: `clamp` (the gas-side model with its surface fraction capped) or `ZGR` (the Zuo–Gomes–Rutland boiling branch); see [Evaporation](../theory/evaporation.md#boiling-of-a-superheated-droplet) |
 | `breakup` | string | absent | Breakup model (`Pilch-Erdman`, `Reitz-Diawakar`, `Reitz-KHRT`, `TAB`, `ETAB`); when present, enables secondary breakup. The default of every material: a material's `breakup=<model>` token on its phase-file line overrides it. Its constants are not keys of this section (below) |
-| `combustion` | string | `none` | Burning model: `none`, `Beckstead` (the $d^n$ law of a metal drop) or `direct` (the $d^2$ law of a drop whose vapour burns in the gas); see [Metal Combustion](../theory/combustion.md). The default of every injected material: a material's `combustion=<model>` token on its phase-file line overrides it; a combustion product (a line of 0 groups) never takes it. Another word stops the run (`IGLOO: unknown combustion model`) |
+| `combustion` | string | `none` | Burning model: `none`, `Beckstead` (the $d^n$ law of a metal drop) or `direct` (the $d^2$ law of a drop whose vapour burns in the gas); see [Metal Combustion](../theory/combustion.md). The default of every injected material: a material's `combustion=<model>` token on its phase-file line overrides it; a line of 0 groups never takes it. Another word stops the run (`IGLOO: unknown combustion model`) |
 
 Each breaking material reads the constants of its own model from its row of the models file,
 `<material> breakup <model> key=value ...` (the model of its line, or `-` for this section's), and takes the default of
@@ -207,8 +208,8 @@ that names no breakup model, a second breakup row, any of these keys in `[IGLOO-
 
 The constants of a burning model are not keys of this section: they are the material's rows of the models file
 (`<material> combustion <model> key=value ...`, see [Metal Combustion](../theory/combustion.md#inputs)), and a
-`combustion` row may name its model `-`, the one of the material line or of this section. `q-comb`, `d-stop`, `d-burnout` or
-`d-smoke` here stops the run by name (`IGLOO: a constant of a burning model in [IGLOO-Models]`).
+`combustion` row may name its model `-`, the one of the material line or of this section. `q-comb`, `d-stop` or
+`d-burnout` here stops the run by name (`IGLOO: a constant of a burning model in [IGLOO-Models]`).
 
 ### `[IGLOO-Properties]`
 
@@ -265,7 +266,7 @@ Selects and tunes the ODE integrator.
 | `absolute-tol` | real | `1e-10` | Absolute ODE tolerance |
 | `mass-tol` | string | `burnout` | The absolute tolerance of the mass slot of an evaporating or burning parcel (ODE models 2, 4, 5 and 8): `burnout` = the lower of `absolute-tol` and $10^{-3}$ of the group's burnout mass $\min(10^{-6} m_0, 10^{-20}\,\mathrm{kg})$, $m_0$ the mass of its smallest injected diameter at the material's lowest density; `off` = `absolute-tol`; any other token is refused |
 | `max-steps-ode` | integer | `100000` | Maximum internal steps per integrator call (`iopt(1)`) |
-| `fail-after` | real | `0` | Forces the solver failure of the oxide-cap model (ODE model 8) once a parcel's last accepted time reaches this value [s]: the failure path of the [burnout residue](../theory/combustion.md#the-burnout-residue); 0 = off |
+| `fail-after` | real | `0` | Forces the solver failure of the carried-material model (ODE model 8) once a parcel's last accepted time reaches this value [s]: the failure path of the [burnout residue](../theory/combustion.md#the-burnout-residue); 0 = off |
 | `max-inner-iter` | integer | `10` | Maximum ODE solver calls on one cell segment (its first call and the refinements of its crossing); a parcel that needs more ends at its last accepted step, as on a solver failure; below 1 is refused |
 
 `H-sdirk4` is recommended for stiff cases (evaporation, small Stokes number). `H-dopri5` is faster for non-stiff drag-only cases.
@@ -435,4 +436,4 @@ does not break, neither a `Viscosity` column nor `mu-liq` > 0.
     Zone *i* of `INPUT/properties.dat` is the material on line *i* of `INPUT/phase.txt`; the zone title (`ZONE T="..."`) is not read. ATLAS writes both files in material order, so a generated case is always consistent — the trap is a hand-edited or regenerated `phase.txt` paired with a stale `properties.dat`, which is a silent density/cp swap. IGLOO refuses a file whose zone count differs from the material count or whose zones do not share one temperature table.
 
 !!! note "The enthalpy column carries a datum"
-    Column 4 of `properties.dat` is named `Enthalpy` (relative: `cp·T`, or the SP-database integral from `Tmin`) or `Enthalpy_abs` (absolute: formation enthalpy included — thermo tables, or a fixed `cp` with `[GPB-Phase*] h0`). For a constant-`cp` material IGLOO integrates the temperature and takes the table's level once, `hOff = h(Tmin) − cp·Tmin` (0 for a relative table), and the gas coupling source credits the transferred mass at `cp·T + hOff`; a variable-`cp` material integrates the enthalpy state read from the table, which carries its datum by itself. The datum only matters when mass is transferred to a gas solver whose energy is absolute (hydra-MI2): a relative table then leaves the coupler to correct the level. A relative-tagged constant-`cp` column that is not `cp·T` is refused at setup. The datum is printed per material at setup (`enthalpy datum absolute|relative (hOff = ...)`). An oxide cap (`xi-cap > 0`) requires an absolute table: the parcel carries two species, each valued on its own datum ([The oxide cap](../theory/combustion.md#energy-the-absolute-datum-and-the-streams)).
+    Column 4 of `properties.dat` is named `Enthalpy` (relative: `cp·T`, or the SP-database integral from `Tmin`) or `Enthalpy_abs` (absolute: formation enthalpy included — thermo tables, or a fixed `cp` with `[GPB-Phase*] h0`). For a constant-`cp` material IGLOO integrates the temperature and takes the table's level once, `hOff = h(Tmin) − cp·Tmin` (0 for a relative table), and the gas coupling source credits the transferred mass at `cp·T + hOff`; a variable-`cp` material integrates the enthalpy state read from the table, which carries its datum by itself. The datum only matters when mass is transferred to a gas solver whose energy is absolute (hydra-MI2): a relative table then leaves the coupler to correct the level. A relative-tagged constant-`cp` column that is not `cp·T` is refused at setup. The datum is printed per material at setup (`enthalpy datum absolute|relative (hOff = ...)`). A carrying material (`share > 0` or a law) requires an absolute table: the parcel carries two materials, each valued on its own datum ([Energy](../theory/combustion.md#energy-the-absolute-datum-and-the-streams)).

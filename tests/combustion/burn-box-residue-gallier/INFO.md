@@ -16,13 +16,13 @@ time on it).
 ## Fixture
 `burn-box-residue`'s case with the law and a faster burn. Its own `INPUT/phase.txt`:
 
-    A 1 combustion=Beckstead cap=Gallier21
+    A 1 combustion=Beckstead carry=Gallier21
     OX 0 solidification=on T-melt=2327 h-fus=1.08949e6 cp-solid=1360
 
 and `INPUT/models.txt`:
 
     A combustion Beckstead K-burn=1.5e-4 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000
-    A cap Gallier21 product=OX residue=on
+    A carry Gallier21 carried=OX residue=on
 
 and its own `INPUT/bc.txt`: `burn-box`'s with the inlet radius set by the inlet row `j` (10, 35, 100, 200 and 50 µm:
 diameters 20, 70, 200, 400 and 100 µm, five parcels each); `burn-box`'s `solfile.tec` and `burn-box-cap`'s table
@@ -52,7 +52,7 @@ parcel rides its own `(j, k)` column: the fields and the printout do not depend 
 
 | mutation | what fails |
 |---|---|
-| the constant law at `h(0)` (`xi-cap=0.069522` in place of the law) | R2 25 of 25 (`z` 0.131 at every size), B: `β` 0.427 at every size |
+| the constant law at `h(0)` (`share=0.069522` in place of the law) | R2 25 of 25 (`z` 0.131 at every size), B: `β` 0.427 at every size |
 | `g` read at the injected diameter for the whole burn | R2 and T1 20 of 25 (the 20 µm parcels hold `g(20)` either way), B: `β` 0.256 at 400 µm |
 | the law read at the drop's diameter in place of the metal's | R2 and T1 20 of 25 |
 | the stretch left at 1 | T1 25 of 25: every burnout at 1.20–1.34 times `d₀ⁿ/K_eff` (R2 holds: the path holds no time) |

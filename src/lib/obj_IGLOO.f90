@@ -215,7 +215,7 @@ contains
     fam = 0
     do m = 1, nm
       self%material(m)%mID = m
-      if (self%material(m)%isProduct) cycle
+      if (self%material(m)%bornOnly) cycle
       allocate(self%material(m)%group(1:self%material(m)%ngroups))
       call self%material(m)%assign_material2group()
       do g = 1, self%material(m)%ngroups
@@ -236,9 +236,9 @@ contains
         end associate
       enddo
     enddo
-    !> Each combustion product: one group, never injected, after every injected family.
+    !> Each born-only line: one group, never injected, after every injected family.
     do m = 1, nm
-      if (.not. self%material(m)%isProduct) cycle
+      if (.not. self%material(m)%bornOnly) cycle
       self%material(m)%ngroups = 1
       allocate(self%material(m)%group(1:1))
       call self%material(m)%assign_material2group()
@@ -253,17 +253,21 @@ contains
       end associate
     enddo
     nfam = fam
-    !> The ID offset of each residue-on group's residues in its product: the parcels of the earlier groups naming it.
+    !> The ID offset of each residue-on group's residues in its carried material: the parcels of the earlier groups
+    !  naming it; a coupler's births come after every residue.
     allocate(resCount(nm)); resCount = 0
     do m = 1, nm
       do g = 1, self%material(m)%ngroups
         associate(gr => self%material(m)%group(g))
         if (gr%resOn) then
-          gr%resBase = resCount(gr%prodID)
-          resCount(gr%prodID) = resCount(gr%prodID) + gr%nInjected
+          gr%resBase = resCount(gr%carriedID)
+          resCount(gr%carriedID) = resCount(gr%carriedID) + gr%nInjected
         endif
         end associate
       enddo
+    enddo
+    do m = 1, nm
+      self%material(m)%birthBase = resCount(m)
     enddo
     call tm_phase(TM_IDLE)
     self%staticDone = .true.
@@ -298,6 +302,8 @@ contains
       self%gasblock(b)%ghostExternal = .false.
     enddo
 
+    !> Absorption: the mass each material held per cell last sweep, the shares of this sweep's absorption.
+    call keepHeldMass(self%source)
     !> Drop last sweep's source/euler accumulators (all of them); solve re-allocates them at the right shape.
     if (allocated(self%mirrored)) deallocate(self%mirrored)
     do b = 1, nb
@@ -409,7 +415,7 @@ contains
     use IGLOO_IO_INI, only: reread_guards
     use Lib_Integration,  only: integrate
     use IGLOO_particles,  only: obj_particle
-    use IGLOO_variables,  only: ode_word,iopt,rtol,atol, ord2, nm, nsm, nb, &
+    use IGLOO_variables,  only: ode_word,iopt,rtol,atol, ord2, nm, nsm, nb, pi, &
                                 eulerSwitch, sourceSwitch, unitTraj, unitScat, &
                                 unitExit, IGLOO_phase_prefix, srcBodyForce,    &
                                 trajOn, scatOn, dNscat, npFloor, scatterFloor, trajSample, threshold, &
@@ -419,7 +425,7 @@ contains
                                 massTolBurnout, kMassTol
     use IGLOO_IC,         only: initialize_fields
     use IGLOO_allocation, only: allocateAccumulators
-    use IGLOO_Lib_Properties, only: lookupTab   !> child hand-off (enthalpy slot)
+    use IGLOO_Lib_Properties, only: lookupTab, tableValue, Tmin, Tmax   !> child hand-off (enthalpy slot), births' density
     use IGLOO_Lib_Statistics, only: rngSeedFor
     use IGLOO_Mod_MPI,        only: mpi_size_, mpi_abort_all, owns_particle,           &
                                     mpi_allreduce_sum_i4_array, mpi_is_root, rank_suffix, &
@@ -429,7 +435,7 @@ contains
                                     TM_REDUCE, TM_FINALIZE, TM_SMOOTH
     use IGLOO_Mod_Footprint,  only: record_footprint
     use IGLOO_overlap,        only: mirrorSource, mirrorEuler, resetCuts
-    use IGLOO_Lib_Combustion, only: nuOx, capLawPath
+    use IGLOO_Lib_Combustion, only: carryLawPath
     use IGLOO_records,        only: rec_setup, ps_open, ps_text, ps_zone, ps_close, ps_begin, ps_end, &
                                     STR_TRAJ, STR_EXIT, STR_PLANE, STR_SNAP, STR_SCAT
     use IGLOO_Lib_Erosion,    only: zeroWall
@@ -456,7 +462,7 @@ contains
     logical, allocatable :: skipIp(:)
     !> Scatter-cloud weight-quantum (dNscat) auto-sizing scratch.
     integer  :: c, nStreams, nValid
-    real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp, rRes, cLaw, zEnd
+    real(R8) :: Lref, xmin(3), xmax(3), Ndot, Vsum, Vref, tauRef, vsp, rRes, cLaw, zEnd, rhoB
     type(obj_particle) :: ptmp   ! throwaway copy for the inject-only pre-pass
     character(len=4) :: fHead    !> the frozen-fraction header entry, blank for a material that does not solidify
     character(len=10) :: tsHead  !> the trajectory file's surface-temperature entry, blank for a material without P2T
@@ -507,10 +513,10 @@ contains
     if (allocated(self%pidx)) deallocate(self%pidx)
     allocate(self%pidx(5, nm))
 
-    !> Two passes: every burning material before every combustion product, whatever the line order.
+    !> Two passes: every injected material before every born-only one (they receive residues), whatever the line order.
     do pass = 1, 2
     do m = 1, nm
-      if (self%material(m)%isProduct .neqv. (pass == 2)) cycle
+      if (self%material(m)%bornOnly .neqv. (pass == 2)) cycle
       material: associate(mat => self%material(m))
       !> A material of which a group solidifies ends every particle-file row with f.
       frozenOn = any(mat%group(1:mat%ngroups)%solidSelect > 0)
@@ -569,12 +575,12 @@ contains
         !> Serial inject-only pre-pass over ALL particles (replicated on every rank so dNscat is
         !  identical everywhere): resolves each stream's npdot and injection speed.
         Ndot = 0._R8; nStreams = 0; Vsum = 0._R8; nValid = 0
-        !> A product: its residue-on parents' streams at their injection state (its residues are rank-local).
-        if (mat%isProduct) then
+        !> A born-only line: its residue-on parents' streams at their injection state (its residues are rank-local).
+        if (mat%bornOnly) then
           do m2 = 1, nm
             do g = 1, self%material(m2)%ngroups
               associate(pgr => self%material(m2)%group(g))
-              if (.not. (pgr%resOn .and. pgr%prodID == m)) cycle
+              if (.not. (pgr%resOn .and. pgr%carriedID == m)) cycle
               call pgr%setup_particleODE()
               do ip = 1, pgr%nInjected
                 ptmp = pgr%particle(ip)
@@ -586,21 +592,21 @@ contains
                   call ptmp%injectionGasState(self%geoblock, self%gasblock)
                 endif
                 call ptmp%resolveInjectionRate(self%geoblock, self%gasblock, self%material(m2)%rhoTab)
-                !> residues per parent droplet: one, or the cap's mass over a residue's at d-residue
+                !> residues per parent droplet: one, or the carried mass over a residue's at d-residue
                 rRes = 1._R8
-                if (pgr%xiLaw > 0) then
-                  !> the cap at burnout on the law's path, m_p0 zEnd, over a residue's
+                if (pgr%carryLaw > 0) then
+                  !> the carried mass at burnout on the law's path, m_p0 zEnd, over a residue's
                   if (pgr%dRes > 0._R8) then
-                    call capLawPath(ptmp%d, pgr%nBurn, pgr%xiOx0, ptmp%rho, pgr%rhoRes, cLaw, zEnd)
+                    call carryLawPath(ptmp%d, pgr%nBurn, pgr%carryYield, pgr%carry0, ptmp%rho, pgr%rhoCar, cLaw, zEnd)
                     rRes = zEnd*ptmp%d**3/ &
-                      (((1._R8 - pgr%xiOx0)/ptmp%rho + pgr%xiOx0/pgr%rhoRes)*pgr%rhoRes*pgr%dRes**3)
+                      (((1._R8 - pgr%carry0)/ptmp%rho + pgr%carry0/pgr%rhoCar)*pgr%rhoCar*pgr%dRes**3)
                   endif
-                elseif (pgr%xiOx0 > 0._R8) then
-                  !> the cap at burnout with its initial oxide, m_p0 (x0 + xi nu (1 - x0)), over a residue's
-                  if (pgr%dRes > 0._R8) rRes = (pgr%xiOx0 + pgr%xiCap*nuOx*(1._R8 - pgr%xiOx0))*ptmp%d**3 / &
-                    (((1._R8 - pgr%xiOx0)/ptmp%rho + pgr%xiOx0/pgr%rhoRes)*pgr%rhoRes*pgr%dRes**3)
+                elseif (pgr%carry0 > 0._R8) then
+                  !> the carried mass at burnout with its share at injection, m_p0 (x0 + xi nu (1 - x0)), over a residue's
+                  if (pgr%dRes > 0._R8) rRes = (pgr%carry0 + pgr%carryShare*pgr%carryYield*(1._R8 - pgr%carry0))*ptmp%d**3 / &
+                    (((1._R8 - pgr%carry0)/ptmp%rho + pgr%carry0/pgr%rhoCar)*pgr%rhoCar*pgr%dRes**3)
                 else
-                  if (pgr%dRes > 0._R8) rRes = pgr%xiCap*nuOx*ptmp%rho*ptmp%d**3/(pgr%rhoRes*pgr%dRes**3)
+                  if (pgr%dRes > 0._R8) rRes = pgr%carryShare*pgr%carryYield*ptmp%rho*ptmp%d**3/(pgr%rhoCar*pgr%dRes**3)
                 endif
                 if (ptmp%npdot > 0._R8) Ndot = Ndot + ptmp%npdot*rRes
                 vsp = norm2(ptmp%stateVar(4:6))
@@ -610,9 +616,20 @@ contains
               end associate
             enddo
           enddo
+          !> its births at their birth state
+          do e = 1, mat%births%n
+            associate(rec => mat%births%item(e))
+            rhoB = mat%rho
+            if (mat%rhoVariable) rhoB = tableValue(mat%rhoTab, Tmin, Tmax, rec%temp)
+            Ndot = Ndot + rec%npdot*rec%mass/(pi/6._R8*rhoB*rec%diam**3)
+            vsp = norm2(rec%vel)
+            if (vsp < threshold) then; Vsum = Vsum + vsp; nValid = nValid + 1; endif
+            end associate
+          enddo
+          nStreams = nStreams + mat%births%n
         endif
         do g = 1, mat%ngroups
-          if (mat%isProduct) exit
+          if (mat%bornOnly) exit
           associate(gr => mat%group(g))
           call gr%setup_particleODE()
           do ip = 1, gr%nparticles
@@ -650,6 +667,9 @@ contains
       endif
       do g = 1, mat%ngroups
         group: associate(gr => mat%group(g))
+        !> A born-only line: the coupler's births join its residues
+        if (mat%bornOnly .and. mat%births%n > 0) &
+          call drainBirths(gr, mat%births, mat%birthBase, mat%hTab, mat%rhoTab, self%gasblock)
         call gr%setup_particleODE()
         if (allocated(relTol)) deallocate(relTol); allocate(relTol(gr%neq)); relTol(:) = rtol
         if (allocated(absTol)) deallocate(absTol); allocate(absTol(gr%neq)); absTol(:) = atol
@@ -670,28 +690,28 @@ contains
         endif
         call setup_odesolver(N=gr%neq,solver=ode_word,RT=relTol,AT=absTol,iopt=iopt)
 
-        !> A product's residues live on the ranks of their parents: the banner counts them over every rank.
+        !> A born-only line's parcels live on the ranks that made them: the banner counts them over every rank.
         nShow = gr%nparticles
-        if (mat%isProduct) then
+        if (mat%bornOnly) then
           resGlobal = [gr%nparticles]
           call mpi_allreduce_sum_i4_array(resGlobal, 1)
           nShow = resGlobal(1)
         endif
         if (mpi_is_root) then
           write(*,'(A,I3,A,I6)')"     Group",g," => number of particles = ", nShow
-          if (mat%isProduct) write(*,'(A,I0,A)') '        - combustion product (residues: ', nShow, ')'
+          if (mat%bornOnly) write(*,'(A,I0,A)') '        - born parcels only (residues and births: ', nShow, ')'
           write(*,'(A,I2,A)') '     >> ODE system (neq=', gr%neq, '):'
           if (consumeGrp .and. massTolBurnout) write(*,'(A,ES10.3,A,ES10.3,A)') &
             '        - mass slot absolute-tol = ', absTol(8), ' kg (mass-tol = burnout, burnout mass ', mbGrp, ' kg)'
           if (consumeGrp .and. .not.massTolBurnout) write(*,'(A,ES10.3,A)') &
             '        - mass slot absolute-tol = ', absTol(8), ' kg (mass-tol = off)'
           if (gr%evapSelect/=0) write(*,*) '       - evaporation --> ', trim(gr%evapWord)
-          if (gr%combSelect==1 .and. gr%prodID == 0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
+          if (gr%combSelect==1 .and. gr%carriedID == 0) write(*,*) '       - combustion  --> Beckstead d^n burn law'
           if (gr%combSelect==2) write(*,*) '       - combustion  --> direct d2 burn law'
-          if (gr%combSelect/=0 .and. gr%prodID > 0 .and. gr%xiLaw == 0) write(*,'(A)') '        - combustion  --> '// &
-            'Beckstead d^n burn law with an oxide cap (xi-cap, product '//trim(gr%productName)//')'
-          if (gr%combSelect/=0 .and. gr%prodID > 0 .and. gr%xiLaw > 0) write(*,'(A)') '        - combustion  --> '// &
-            'Beckstead d^n burn law with an oxide cap (cap=Gallier21, product '//trim(gr%productName)//')'
+          if (gr%combSelect/=0 .and. gr%carriedID > 0 .and. gr%carryLaw == 0) write(*,'(A)') '        - combustion  --> '// &
+            'Beckstead d^n burn law, carrying '//trim(gr%carriedName)//' (constant share)'
+          if (gr%combSelect/=0 .and. gr%carriedID > 0 .and. gr%carryLaw > 0) write(*,'(A)') '        - combustion  --> '// &
+            'Beckstead d^n burn law, carrying '//trim(gr%carriedName)//' (carry=Gallier21)'
           if (gr%solidSelect/=0 .and. .not.gr%brkupEqOde) &
             write(*,*) '       - solidification --> supercooling + recalescence (model 6)'
           if (gr%solidSelect/=0 .and. gr%brkupEqOde) &
@@ -896,12 +916,12 @@ contains
               call gr%resid(ip)%reserve(1)
             enddo
           endif
-          !> The probe and MPI ownership filters; a product's residues live on their parents' rank: no filter.
+          !> The probe and MPI ownership filters; a born-only line's parcels live on the rank that made them: no filter.
           if (allocated(skipIp)) deallocate(skipIp)
           allocate(skipIp(1:gr%nparticles))
           do ip = 1, gr%nparticles
             skipIp(ip) = .false.
-            if (mat%isProduct) cycle
+            if (mat%bornOnly) cycle
             if (probeOn) skipIp(ip) = .not.any(gr%particle(ip)%ID==probeIDs)
             skipIp(ip) = skipIp(ip) .or. .not.owns_particle(ip)
           enddo
@@ -929,8 +949,9 @@ contains
           call region_fail_check()
           call countLKFail(gr%particle(1:gr%nparticles), nLKfail(m))
           call ps_end()
-          !> The residues of this group's parcels join its product's group, on this rank.
-          if (gr%resOn) call drainResidues(self%material(gr%prodID)%group(1), gr)
+          !> The residues of this group's parcels join its carried material's group, on this rank.
+          if (gr%resOn) call drainResidues(self%material(gr%carriedID)%group(1), gr, &
+                                           self%material(gr%carriedID)%hTab, self%material(gr%carriedID)%rhoTab)
           call tm_phase(TM_SOLVE)
         endif
         end associate group
@@ -1066,7 +1087,7 @@ contains
 
 
   !> The lowest burnout mass min(epsBurn m0, mBurnAbs) [kg] of group g's injected parcels: m0 = pi/6 rho d^3 at each
-  !  injected diameter and the material's lowest density (its table, rho-solid, the initial cap's residue).
+  !  injected diameter and the material's lowest density (its table, rho-solid, the carried material at injection).
   pure function groupBurnoutMass(mat, g) result(mb)
     use IGLOO_variables, only: pi, epsBurn, mBurnAbs
     implicit none
@@ -1083,7 +1104,7 @@ contains
       rhoLo = gr%rho
     endif
     if (gr%rhoSol > 0._R8) rhoLo = min(rhoLo, gr%rhoSol)
-    if (gr%xiOx0 > 0._R8 .and. gr%rhoRes > 0._R8) rhoLo = min(rhoLo, gr%rhoRes)
+    if (gr%carry0 > 0._R8 .and. gr%rhoCar > 0._R8) rhoLo = min(rhoLo, gr%rhoCar)
     if (rhoLo > 0._R8 .and. rhoLo < huge(rhoLo)) then
       do ip = 1, gr%nparticles
         d = gr%particle(ip)%dInj
@@ -1209,13 +1230,15 @@ contains
   end subroutine print_header
 
 
-  !> The residue records of a burning group's parcels become parcels of its product's group pg (rank-local): the
-  !  particle array grows, the new range is set up and each takes its birth state; ID = resBase + the parent's ID.
-  subroutine drainResidues(pg, gr)
-    use IGLOO_data_phases, only: obj_group, birthResidue
+  !> The residue records of a burning group's parcels become parcels of its carried material's group pg
+  !  (rank-local; hTab, rhoTab the carried material's tables): the particle array grows, the new range is set up and
+  !  each takes its birth state; ID = resBase + the parent's ID.
+  subroutine drainResidues(pg, gr, hTab, rhoTab)
+    use IGLOO_data_phases, only: obj_group, birthParcel
     implicit none
     type(obj_group), intent(inout) :: pg
     type(obj_group), intent(inout) :: gr
+    real(R8),        intent(in)    :: hTab(:), rhoTab(:)
     integer :: ip, e, k, nNew, start, nEnd
 
     nNew = 0
@@ -1232,13 +1255,75 @@ contains
     do ip = 1, gr%nparticles
       do e = 1, gr%resid(ip)%n
         k = k + 1
-        call birthResidue(pg%particle(k), gr%resid(ip)%item(e), gr%resBase + gr%resid(ip)%item(e)%parent, gr%dRes)
+        call birthParcel(pg%particle(k), gr%resid(ip)%item(e), gr%resBase + gr%resid(ip)%item(e)%parent, gr%dRes, &
+                         hTab, rhoTab)
       enddo
     enddo
     pg%nparticles = nEnd
     pg%nactive    = nEnd
 
   end subroutine drainResidues
+
+
+  !> Absorption: last sweep's held mass becomes heldLast, the shares of the next absorption; last sweep's absorbed
+  !  amounts are dropped (the coupler has read them).
+  subroutine keepHeldMass(src)
+    implicit none
+    type(obj_sourceblock), intent(inout) :: src(:)
+    integer :: b
+
+    do b = 1, size(src)
+      if (allocated(src(b)%held)) then
+        if (allocated(src(b)%heldLast)) deallocate(src(b)%heldLast)
+        call move_alloc(src(b)%held, src(b)%heldLast)
+      endif
+      if (allocated(src(b)%absorbed)) deallocate(src(b)%absorbed)
+    enddo
+
+  end subroutine keepHeldMass
+
+
+  !> The births a coupler added to a born-only material become parcels of its group pg, birth e on the rank that
+  !  owns e (MPI): the particle array grows, the new range is set up and each takes its birth state; ID =
+  !  birthBase + e. hTab, rhoTab: the material's tables. At gas order 2 each finds its gas dual cell.
+  subroutine drainBirths(pg, births, birthBase, hTab, rhoTab, gasblock)
+    use IGLOO_data_phases, only: obj_group, shedList, birthParcel
+    use IGLOO_Mod_MPI,     only: owns_particle
+    use IGLOO_variables,   only: ord2
+    implicit none
+    type(obj_group),     intent(inout) :: pg
+    type(shedList),      intent(in)    :: births
+    integer,             intent(in)    :: birthBase
+    real(R8),            intent(in)    :: hTab(:), rhoTab(:)
+    type(obj_flowblock), intent(in)    :: gasblock(:)
+    integer :: e, k, nNew, start, nEnd
+
+    nNew = 0
+    do e = 1, births%n
+      if (owns_particle(e)) nNew = nNew + 1
+    enddo
+    if (nNew == 0) return
+    start = pg%nparticles + 1
+    nEnd  = pg%nparticles + nNew
+    if (nEnd > size(pg%particle)) call resizeParticleArray(pg%particle, max(2*size(pg%particle), nEnd))
+    call pg%setup_particleODE(start, nEnd)
+    call pg%assign_group2particle(start, nEnd)
+    k = start - 1
+    do e = 1, births%n
+      if (.not. owns_particle(e)) cycle
+      k = k + 1
+      associate(kid => pg%particle(k), rec => births%item(e))
+      call birthParcel(kid, rec, birthBase + e, rec%diam, hTab, rhoTab)
+      if (ord2) then
+        call kid%findDualCell(gasblock(rec%ipos(1)))
+        kid%igasOld = kid%igas
+      endif
+      end associate
+    enddo
+    pg%nparticles = nEnd
+    pg%nactive    = nEnd
+
+  end subroutine drainBirths
 
 
   !> Resize a particle array to newCapacity, preserving the leading entries.

@@ -31,7 +31,7 @@ The uniform-gas box of `tools/make_box_case.py` (60×5×5 cells over 0.15 × 0.0
     python3 tests/tools/make_box_case.py INPUT --kv 1.0 --kt 1.0 --tg 300 --ug 0.04 --rp-sweep 5.00000e-06,6.05764e-06,7.33900e-06,8.89140e-06,1.07722e-05,1.30508e-05,1.58114e-05,1.91559e-05,2.32079e-05,2.81171e-05,3.40646e-05,4.12702e-05,5.00000e-05,6.05764e-05,7.33900e-05,8.89140e-05,1.07722e-04,1.30508e-04,1.58114e-04,1.91559e-04,2.32079e-04,2.81171e-04,3.40646e-04,4.12702e-04,5.00000e-04
 
 - `phase.txt`: `A 1 combustion=Beckstead`; `models.txt`: `A combustion Beckstead K-burn=6.74740707e-06 n-burn=1.8 X-eff=0.21 T-ign=250 q-comb=0`. No heat release
-  (`q-comb=0`, written as a burning row requires; `beta-part` at its 0 default), no oxide cap or residue (`xi-cap` 0, no `residue` key): ODE model 5.
+  (`q-comb=0`, written as a burning row requires; `beta-part` at its 0 default), no oxide cap or residue (`share` 0, no `residue` key): ODE model 5.
   **`T-ign = 250 K` is a switch, not a physical claim**: Eq. 7's rate does not depend on the particle temperature
   above ignition, so the gate sits below the injection temperature and every particle burns from injection.
 - `kv = kt = 1`: zero slip and zero thermal slip, the d^n law is the only dynamics; `u_g = 0.04 m/s` is a clock (the

@@ -103,7 +103,7 @@ contains
                           material(i)%brkupHasChild)
       material(i)%evapWord = evaporation_word
       call assign_evaporation(evaporation_word,material(i)%evapSelect)
-      !> a line of 0 groups is a combustion product, never injected: the section's burning model is not its own
+      !> a line of 0 groups is never injected (its parcels are born): the section's burning model is not its own
       if (material(i)%ngroups > 0) call assign_combustion(combustion_word, material(i)%combSelect)
       material(i)%liqSelect  = liqSelect
       material(i)%intfSelect = intfSelect
@@ -156,18 +156,17 @@ contains
       if (material(i)%combSelect == 2) then
         if (material(i)%brkupSelect > 0) error stop '[ERROR] combustion=direct with breakup is not supported'
         if (material(i)%qComb < 0._R8) error stop '[ERROR] combustion=direct requires q-comb >= 0'
-        if (material(i)%capAsked) &
-          error stop '[ERROR] combustion=direct has no oxide cap: cap=<law> belongs to combustion=Beckstead'
+        if (material(i)%carryAsked) &
+          error stop '[ERROR] combustion=direct carries no material: carry=<law> belongs to combustion=Beckstead'
       endif
       !> The end of the burn, either model: a residue (d-stop) that stays, or the removal at d-burnout
       if (material(i)%dStop < 0._R8) error stop '[ERROR] d-stop must be >= 0'
       if (material(i)%dBurn < 0._R8) error stop '[ERROR] d-burnout must be >= 0'
-      if (material(i)%dSmoke < 0._R8) error stop '[ERROR] d-smoke must be >= 0'
       if (material(i)%dStop > 0._R8 .and. material(i)%dBurn > 0._R8) &
         error stop '[ERROR] d-stop beside d-burnout: a drop that stops at its residue is never removed; give one'
       if (material(i)%combSelect == 1) then
-        if (material(i)%dStop > 0._R8 .and. (material(i)%xiCap > 0._R8 .or. material(i)%xiLaw > 0)) &
-          error stop '[ERROR] d-stop beside an oxide cap: the cap gives its own residue (residue, d-residue)'
+        if (material(i)%dStop > 0._R8 .and. (material(i)%carryShare > 0._R8 .or. material(i)%carryLaw > 0)) &
+          error stop '[ERROR] d-stop beside a carried material: it gives its own residue (residue, d-residue)'
         if (material(i)%brkupSelect > 0) error stop '[ERROR] combustion=Beckstead with breakup is not supported (deferred)'
         if (material(i)%Kburn <= 0._R8) error stop '[ERROR] combustion=Beckstead requires K-burn > 0 in [GPB-PhaseX]'
         if (material(i)%nBurn <= 0._R8 .or. material(i)%nBurn >= 3._R8) &
@@ -541,7 +540,7 @@ contains
       end associate 
     enddo
     close(unit)
-    call resolve_products(material)
+    call resolve_carried(material)
 
   contains
 
@@ -610,68 +609,78 @@ contains
   end function read_points_table
 
 
-  !> The combustion products: each capped material (xi-cap > 0) finds its product, a 0-group line of the phase
-  !  file, by name; the refusals; the cap takes the product's density, heat capacity and enthalpy datum, and the
-  !  stretch c of its xi-cap and n-burn on the lobe table.
-  subroutine resolve_products(material)
-    use IGLOO_variables,      only: nm, capColumns, smokeColumns
+  !> The carried materials: each material that carries one (share > 0 or a law) finds it, a 0-group line of the
+  !  phase file, by name; the refusals; the carrier takes its density, heat capacity and enthalpy datum, and the
+  !  stretch c of its share, yield and n-burn on the lobe table. Every 0-group line holds born parcels only.
+  subroutine resolve_carried(material)
+    use IGLOO_variables,      only: nm, carryColumns, trackProc, absorbs
     use IGLOO_data_phases,    only: obj_material
-    use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch, capStretchX0, buildXiLaw
+    use IGLOO_Lib_Combustion, only: buildLobeTable, carryStretch, carryStretchX0, buildXiLaw
     use IGLOO_Mod_MPI,        only: mpi_is_root
     implicit none
     type(obj_material), intent(inout) :: material(:)
     integer :: i, j, p
-    logical :: capOn
+    logical :: carries
 
-    capColumns = .false.
+    carryColumns = .false.
+    !> No coupler has asked for anything yet (IGLOO_Mod_Exchange sets these)
+    if (allocated(trackProc)) deallocate(trackProc)
+    if (allocated(absorbs))   deallocate(absorbs)
+    allocate(trackProc(nm), absorbs(nm))
+    trackProc = .false.; absorbs = .false.
+    !> A line without injection groups: its parcels are born (the residues of a carrier, the births of a coupler)
+    do i = 1, nm
+      material(i)%bornOnly = material(i)%ngroups == 0
+    enddo
     do i = 1, nm
       associate(mat => material(i))
-      !> the cap: a constant retained fraction xi-cap, or Gallier's law alone (the models file's reader refuses both)
-      if (mat%xiLaw > 0 .and. mat%combSelect == 0) error stop 'IGLOO: cap=Gallier21 requires combustion=Beckstead'
-      capOn = mat%xiCap > 0._R8 .or. mat%xiLaw > 0
-      if (mat%xiCap < 0._R8 .or. mat%xiCap > 1._R8) error stop '[ERROR] xi-cap must lie in [0, 1]'
-      if (mat%xiOx0 < 0._R8 .or. mat%xiOx0 >= 1._R8) error stop '[ERROR] xi-ox0 must lie in [0, 1)'
-      if (mat%xiOx0 > 0._R8 .and. .not. (mat%combSelect > 0 .and. capOn)) &
-        error stop '[ERROR] xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0 or cap=Gallier21'
-      if ((len_trim(mat%productName) > 0 .or. mat%resOn .or. mat%dRes > 0._R8) .and. &
-          .not. (mat%combSelect > 0 .and. capOn)) &
-        error stop '[ERROR] product, residue and d-residue require combustion=Beckstead and &
-                   &xi-cap > 0 or cap=Gallier21'
-      if (capOn) then
+      !> the share kept: a constant share, or Gallier's law alone (the models file's reader refuses both)
+      if (mat%carryLaw > 0 .and. mat%combSelect == 0) error stop 'IGLOO: carry=Gallier21 requires combustion=Beckstead'
+      carries = mat%carryShare > 0._R8 .or. mat%carryLaw > 0
+      if (mat%carryShare < 0._R8 .or. mat%carryShare > 1._R8) error stop '[ERROR] share must lie in [0, 1]'
+      if (mat%carry0 < 0._R8 .or. mat%carry0 >= 1._R8) error stop '[ERROR] carried-0 must lie in [0, 1)'
+      if (mat%carry0 > 0._R8 .and. .not. (mat%combSelect > 0 .and. carries)) &
+        error stop '[ERROR] carried-0 > 0 requires combustion=Beckstead and share > 0 or carry=Gallier21'
+      if ((len_trim(mat%carriedName) > 0 .or. mat%resOn .or. mat%dRes > 0._R8 .or. mat%carryYield /= 0._R8) .and. &
+          .not. (mat%combSelect > 0 .and. carries)) &
+        error stop '[ERROR] carried, yield, residue and d-residue require combustion=Beckstead and &
+                   &share > 0 or carry=Gallier21'
+      if (carries) then
         p = 0
         do j = 1, nm
-          if (len_trim(mat%productName) > 0 .and. trim(material(j)%matName) == trim(mat%productName)) p = j
+          if (len_trim(mat%carriedName) > 0 .and. trim(material(j)%matName) == trim(mat%carriedName)) p = j
         enddo
-        if (p == 0) error stop '[ERROR] xi-cap > 0 requires product = a 0-group material of the phase file'
+        if (p == 0) error stop '[ERROR] a carrying material requires carried = a 0-group material of the phase file'
         if (material(p)%ngroups /= 0) &
-          error stop '[ERROR] xi-cap > 0 requires product = a 0-group material of the phase file'
+          error stop '[ERROR] a carrying material requires carried = a 0-group material of the phase file'
         if (material(p)%combSelect > 0 .or. material(p)%evapSelect > 0 .or. material(p)%brkupSelect > 0) &
-          error stop '[ERROR] a combustion product cannot burn, evaporate or break up'
+          error stop '[ERROR] a carried material cannot burn, evaporate or break up'
+        if (.not. mat%carryYield > 0._R8) &
+          error stop '[ERROR] a carrying material requires yield > 0 (the carried mass formed per kg burnt)'
         if (mat%cpVariable .or. mat%rhoVariable .or. material(p)%cpVariable .or. material(p)%rhoVariable) &
-          error stop '[ERROR] xi-cap > 0 requires a constant-cp, constant-density material and product'
+          error stop '[ERROR] a carrying material requires a constant cp and density, its own and the carried one''s'
         if (mat%hDatum /= 'absolute') &
-          error stop '[ERROR] xi-cap > 0 requires the absolute enthalpy datum (an Enthalpy_abs column)'
-        mat%prodID = p
-        material(p)%isProduct = .true.
-        capColumns = .true.
-        mat%rhoRes  = material(p)%rho
-        mat%cpRes   = material(p)%cp
-        mat%hOffRes = material(p)%hOff
+          error stop '[ERROR] a carrying material requires the absolute enthalpy datum (an Enthalpy_abs column)'
+        mat%carriedID = p
+        carryColumns = .true.
+        mat%rhoCar  = material(p)%rho
+        mat%cpCar   = material(p)%cp
+        mat%hOffCar = material(p)%hOff
         call buildLobeTable()
-        if (mat%xiLaw > 0) then
+        if (mat%carryLaw > 0) then
           !> the law's stretch is the parcel's own, from its injected size (integrate)
           call buildXiLaw()
           mat%cStretch = 1._R8
-          if (mpi_is_root) write(*,'(a,i0,a)') '  >> [material ', i, '] oxide cap on product '//trim(mat%productName)// &
-            ': cap=Gallier21 (g of the current d_Al, held at its 20 and 400 um values outside them; h held past'// &
+          if (mpi_is_root) write(*,'(a,i0,a)') '  >> [material ', i, '] carries '//trim(mat%carriedName)// &
+            ': carry=Gallier21 (g of the current d_Al, held at its 20 and 400 um values outside them; h held past'// &
             ' f_ox = 0.9), the stretch c per parcel'
-        elseif (mat%xiOx0 > 0._R8) then
-          mat%cStretch = capStretchX0(mat%xiCap, mat%nBurn, mat%xiOx0, mat%rho, mat%rhoRes)
-          write(*,'(a,i0,a,f9.6,a,f6.4)') '  >> [material ', i, '] oxide cap on product '//trim(mat%productName)// &
-                                          ': stretch c = ', mat%cStretch, ' from xi-ox0 = ', mat%xiOx0
+        elseif (mat%carry0 > 0._R8) then
+          mat%cStretch = carryStretchX0(mat%carryShare, mat%carryYield, mat%nBurn, mat%carry0, mat%rho, mat%rhoCar)
+          write(*,'(a,i0,a,f9.6,a,f6.4)') '  >> [material ', i, '] carries '//trim(mat%carriedName)// &
+                                          ': stretch c = ', mat%cStretch, ' from carried-0 = ', mat%carry0
         else
-          mat%cStretch = capStretch(mat%xiCap, mat%nBurn)
-          write(*,'(a,i0,a,f9.6)') '  >> [material ', i, '] oxide cap on product '//trim(mat%productName)// &
+          mat%cStretch = carryStretch(mat%carryShare, mat%carryYield, mat%nBurn)
+          write(*,'(a,i0,a,f9.6)') '  >> [material ', i, '] carries '//trim(mat%carriedName)// &
                                    ': stretch c = ', mat%cStretch
         endif
       endif
@@ -679,21 +688,14 @@ contains
         error stop '[ERROR] d-residue must be >= 0, and > 0 only with residue=on'
       end associate
     enddo
-    !> A material with d-smoke: its smoke's five columns of the mass source (the coupler's birth state)
-    smokeColumns = any(material(:)%dSmoke > 0._R8)
+    !> The log names each born-only line (root rank).
     do i = 1, nm
-      if (material(i)%dSmoke > 0._R8 .and. mpi_is_root) &
-        write(*,'(a,i0,a,es10.3,a)') '  >> [material ', i, '] '//trim(material(i)%matName)//': d-smoke ', &
-          material(i)%dSmoke, ' m: the weight, velocity and temperature of what it burns, in five source columns'
-    enddo
-    !> A 0-group line that no product= names is inert: the log names it (root rank).
-    do i = 1, nm
-      if (material(i)%ngroups /= 0 .or. material(i)%isProduct .or. .not. mpi_is_root) cycle
+      if (.not. material(i)%bornOnly .or. .not. mpi_is_root) cycle
       write(*,'(a,i0,a)') '  >> [material ', i, '] '//trim(material(i)%matName)// &
-                          ': 0 groups and no product= names it -- an inert material that injects nothing'
+                          ': 0 groups -- its parcels are born only (burnout residues, births a coupled solver adds)'
     enddo
 
-  end subroutine resolve_products
+  end subroutine resolve_carried
 
 
   !> Read bc.txt: pass 0 picks the layout -- one record per boundary face, fed to every family, or

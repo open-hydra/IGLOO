@@ -7,11 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
-- Combustion: `d-smoke`, a constant of both burning models in the models file (refused in `[IGLOO-Models]`, on the
-  material line and below 0). A material with `d-smoke > 0` gets five rows of the mass source for its smoke: the
-  weight W of what a burning parcel burns in a cell (the metal consumed and the oxide its cap gained), W u and W T,
-  u and T weighted by the metal burnt over the cell residence. A coupler reads them to give the smoke its birth
-  state; `source.tec` keeps the net rows only.
+- Coupling: `IGLOO_Mod_Exchange` (`src/lib/coupling/`), the one module a parent code needs to exchange with IGLOO:
+  `exchange_rate` and `gas_rate` (what the parcels give the gas, deposit and absorb), `track_processed` (the state the
+  processed mass leaves at), `add_absorption_rate` and `absorption_packet` (mass offered to the parcels, from the gas
+  or any other phase), `add_birth_rate` (new parcels of a 0-group line), `clear_import_rates`, `material_id`. A
+  refusal comes back in plain words. See docs/development/coupling.md.
+- Coupling: the parcels of a material absorb the mass offered in a cell in proportion to the mass they held there in
+  the last sweep, mixing its momentum and energy; what they absorbed is reported per cell, apart from the smoothed
+  source fields.
 
 ### Changed
 - Combustion: the `combustion` row of a burning material in the models file must write `q-comb`, the heat of
@@ -21,7 +24,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   asks for `T-burn`.
 - Combustion: a value of the models file is one finite real number; `NaN`, `Inf` and a value holding `,` or `/`
   stop the run.
-- Combustion: a `cap=<law>` word on a material line needs its `cap` row in the models file; without it the run stops.
+- Combustion: the oxide cap is a generic **carried material**: the line word `carry=constant|Gallier21` and the row
+  `<material> carry <law> share= yield= carried= carried-0= residue= d-residue=` replace `cap=`, `xi-cap`, `xi-ox0`
+  and `product`. The yield (kg formed per kg burnt, 1.889441 for aluminium and alumina) is an input, no longer built
+  in; a carrying material without it stops the run. A `carry=<law>` word needs its `carry` row.
+- A line of the phase file with 0 groups holds born parcels only (burnout residues, a coupler's births) and always has
+  one family, named by `carried=` or not.
 - Combustion: `q-comb`, `d-stop` and `d-burnout` given in `[IGLOO-Models]` stop the run by name; they are constants of
   the material's row in the models file.
 - Breakup: the constants of a material's breakup model are its row of the models file,

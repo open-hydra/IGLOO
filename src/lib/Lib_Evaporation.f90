@@ -6,7 +6,7 @@ module IGLOO_Lib_Evaporation
     public :: assign_evaporation
     public :: assign_liquid, assign_interface, assign_boiling
     public :: assign_blowing, blowingFactor
-    public :: assign_combustion, assign_solidification, assign_residue, assign_xilaw
+    public :: assign_combustion, assign_solidification, assign_residue, assign_carry_law
     public :: evaporation
     public :: chiETC
     public :: boilingTemperatureCC, alphaBoil, zgrBoiling
@@ -174,7 +174,7 @@ contains
         end select
     end subroutine assign_solidification
 
-    !> Burnout residue: on, the oxide cap becomes a parcel of the combustion product; off, it goes to the gas.
+    !> Burnout residue: on, the carried material becomes a parcel of its own at burnout; off, it goes to the gas.
     subroutine assign_residue(word, resOn)
         implicit none
         character(len=*), intent(in)  :: word
@@ -189,20 +189,21 @@ contains
         end select
     end subroutine assign_residue
 
-    !> The oxide cap's retained fraction: constant, xi-cap; Gallier21, Gallier et al. 2021's deposition law.
-    subroutine assign_xilaw(word, xiLaw)
+    !> The share of the carried material the drop keeps: constant, the row's share; Gallier21, Gallier et al.
+    !  2021's deposition law.
+    subroutine assign_carry_law(word, carryLaw)
         implicit none
         character(len=*), intent(in)  :: word
-        integer,          intent(out) :: xiLaw
+        integer,          intent(out) :: carryLaw
         select case (word)
-        case('constant');  xiLaw = 0
-        case('Gallier21'); xiLaw = 1
+        case('constant');  carryLaw = 0
+        case('Gallier21'); carryLaw = 1
         case default
-            write(*,*) "Wrong cap law input ---> "//trim(word)
+            write(*,*) "Wrong carry law input ---> "//trim(word)
             write(*,*) "Choose one of: constant, Gallier21"
-            error stop 'IGLOO: unknown cap law'
+            error stop 'IGLOO: unknown carry law'
         end select
-    end subroutine assign_xilaw
+    end subroutine assign_carry_law
 
 
     !> Evaporation rate mdot (< 0) and, for the models that provide it, the gas-side heat Qdot_evap:

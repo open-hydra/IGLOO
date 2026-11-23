@@ -5,15 +5,15 @@ program test_slot_order
     ! take two contiguous slices by their OWN named indices: the evaporation parameters
     ! aux(ind_Mv : ind_Mv+nep-1) as ep(iMv..imuLiq) of IGLOO_Lib_Evaporation (rhsEvaporation,
     ! rhsEvapBreakup), and the metal block aux(ind_mb : ind_mb+nmp-1) as mp(imKb..imQc) of
-    ! IGLOO_Lib_Combustion (rhsAlCombustion; imHf and imCps in rhsSolidification). Every property gets
+    ! IGLOO_Lib_Combustion (rhsBurn; imHf and imCps in rhsSolidification). Every property gets
     ! a distinct value, and every named read must return the property of that name.
     !
     !   S1  model 2 (CEM): the ten ep slots; nep = 10; the slice inside aux; ind_Lv.. agree with ep
     !   S2  model 4 (CEM + Reitz-Diwakar): the same ep slots
-    !   S3  model 5 (Beckstead): the sixteen metal slots; nmp = nmetal = 16; the slice inside aux; slots
-    !       1-9 the burn law's and solidification's, 10-13 the oxide cap's (product density, heat
-    !       capacity, stretch, the retained fraction's law), 14-16 direct's (latent heat, the stop
-    !       diameter, the flag of the law) appended last
+    !   S3  model 5 (Beckstead): the seventeen metal slots; nmp = nmetal = 17; the slice inside aux; slots
+    !       1-9 the burn law's and solidification's, 10-13 the carried material's (its density, heat
+    !       capacity, the stretch, the law of the share kept), 14-16 direct's (latent heat, the stop
+    !       diameter, the flag of the law), 17 the carried material's yield, appended last
     !   S4  model 6 (solidification): the same metal block, h-fus and cp-solid where its RHS reads them
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64
@@ -22,8 +22,8 @@ program test_slot_order
                                      ind_Mv, ind_Lv, ind_Cv, ind_Le, ind_Yi, ind_e1, ind_e2, ind_e3, ind_e4, ind_e5
     use IGLOO_Lib_Evaporation, only: nep, iMv, iLv, icpv, iLe, iYinf, iLvMvOverRu, iinvTboil, &
                                      ialphaE, ikLiq, imuLiq
-    use IGLOO_Lib_Combustion,  only: nmp, imKb, imN, imXe, imBeta, imXi, imTig, imHf, imCps, imQc, imRr, imCr, imCs, &
-                                     imXl, imLv, imDr, imDir
+    use IGLOO_Lib_Combustion,  only: nmp, imKb, imN, imXe, imBeta, imShare, imTig, imHf, imCps, imQc, imRhoC, imCpC, imStr, imYld, &
+                                     imLaw, imLv, imDr, imDir
     implicit none
 
     type(obj_particle)    :: p
@@ -40,8 +40,9 @@ program test_slot_order
     p%LvMvOverRu = 106._R8;  p%invTboil = 107._R8;  p%alphaE = 108._R8;  p%kLiq = 109._R8
     p%muLiq = 110._R8
     p%Kburn = 201._R8;  p%nBurn = 202._R8;  p%Xeff = 203._R8;  p%betaPart = 204._R8
-    p%xiCap = 205._R8;  p%Tign = 206._R8;  p%hFus = 207._R8;  p%cpSol = 208._R8;  p%qComb = 209._R8
-    p%rhoRes = 210._R8;  p%cpRes = 211._R8;  p%cStretch = 212._R8;  p%xiLaw = 213;  p%dStop = 214._R8
+    p%carryShare = 205._R8;  p%Tign = 206._R8;  p%hFus = 207._R8;  p%cpSol = 208._R8;  p%qComb = 209._R8
+    p%rhoCar = 210._R8;  p%cpCar = 211._R8;  p%cStretch = 212._R8;  p%carryLaw = 213;  p%dStop = 214._R8
+    p%carryYield = 215._R8
 
     ! ---- S1, S2: the evaporation slice --------------------------------------------------------
     call setupRHS(2, 0, 2, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
@@ -55,7 +56,7 @@ program test_slot_order
     ! ---- S3, S4: the metal block ----------------------------------------------------------------
     call setupRHS(5, 0, 0, 0, 0, 0, 1, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
     call pack()
-    call check(nmp == nmetal .and. nmp == 16, 'S3 nmp = nmetal = 16 metal slots', nbad)
+    call check(nmp == nmetal .and. nmp == 17, 'S3 nmp = nmetal = 17 metal slots', nbad)
     call checkMetal('S3 model 5')
     call setupRHS(6, 0, 0, 0, 0, 0, 0, propFlags, [real(R8)::], 0, 0._R8, nAux, nAuxSt, nEvV)
     call pack()
@@ -106,19 +107,20 @@ contains
         if (.not. (ind_mb > 0 .and. ind_mb + nmp - 1 <= nauxvar)) return
         mp = aux(ind_mb:ind_mb+nmp-1)
         call check(mp(imKb) == p%Kburn .and. mp(imN) == p%nBurn .and. mp(imXe) == p%Xeff .and. &
-                   mp(imBeta) == p%betaPart .and. mp(imXi) == p%xiCap .and. mp(imQc) == p%qComb, &
+                   mp(imBeta) == p%betaPart .and. mp(imShare) == p%carryShare .and. mp(imQc) == p%qComb, &
                    tag//': mp K-burn, n-burn, X-eff, beta-part, xi-cap, q-comb', nbad)
         call check(mp(imTig) == p%Tign .and. mp(imHf) == p%hFus .and. mp(imCps) == p%cpSol, &
                    tag//': mp T-ign, h-fus, cp-solid', nbad)
-        call check(imRr == 10 .and. imCr == 11 .and. imCs == 12 .and. mp(imRr) == p%rhoRes .and. &
-                   mp(imCr) == p%cpRes .and. mp(imCs) == p%cStretch, &
+        call check(imRhoC == 10 .and. imCpC == 11 .and. imStr == 12 .and. mp(imRhoC) == p%rhoCar .and. &
+                   mp(imCpC) == p%cpCar .and. mp(imStr) == p%cStretch, &
                    tag//': mp the cap at slots 10-12: product density, heat capacity, stretch', nbad)
-        call check(imXl == 13 .and. mp(imXl) == real(p%xiLaw, R8), tag//': mp the law of the retained fraction at slot 13', &
+        call check(imLaw == 13 .and. mp(imLaw) == real(p%carryLaw, R8), tag//': mp the law of the retained fraction at slot 13', &
                    nbad)
         call check(imLv == 14 .and. imDr == 15 .and. imDir == 16 .and. mp(imLv) == p%Lv .and. mp(imDr) == p%dStop .and. &
                    mp(imDir) == 0._R8, tag//': mp direct at slots 14-16: latent heat, stop diameter, the flag (0: not direct)', &
                    nbad)
-        if (nbad > 0) write(*,'(A,16F7.1)') '        mp = ', mp
+        call check(imYld == 17 .and. mp(imYld) == p%carryYield, tag//': mp the carried material''s yield at slot 17', nbad)
+        if (nbad > 0) write(*,'(A,17F7.1)') '        mp = ', mp
     end subroutine checkMetal
 
     subroutine check(cond, name, nbad)
