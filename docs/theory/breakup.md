@@ -1,44 +1,28 @@
 # Breakup
 
-Five breakup models are available, selected per material — by the `breakup=<model>` token of
-the material's line in the phase file, else by `[IGLOO-Models] breakup` in `input.ini` — and
-assigned by `assign_breakup` in `src/lib/Lib_Breakup.f90`.  They split into two mechanistic
-classes:
+Five breakup models are available, chosen per material ([Materials & Models](../user/models.md#breakup)). They work in
+two ways:
 
-- **Continuous-rate (ODE)**: add a $\dot{n}_p$ equation to the ODE system; active models set
-  `brkupEqOde = .true.` → model 3, 4 or 7.  `breakupOde` is evaluated inside the RHS.
-- **Event-based (solout callback)**: modify parcel diameter/count at a discrete breakup
-  event detected in the `solout` callback.  These set `brkupEvent = .true.` and run under
-  model 1, 2 or 6; they do **not** set `brkupEqOde`.
+- **At a continuous rate**: Pilch–Erdman, Reitz–Diwakar and the KH stripping of Reitz KH-RT add an equation for the
+  number rate $\dot n_p$: the parcel's drops shrink and multiply at a constant stream mass (systems 3, 4 and 7).
+- **By events**: TAB, ETAB and the RT breakup and KH shedding of Reitz KH-RT change the parcel at a discrete instant,
+  between two integration steps. TAB and ETAB add no equation, so their material stays in system 1, 2 or 6.
 
-With evaporation on, an event model runs as model 2 and Reitz-KHRT as model 4: both keep the
-droplet mass as an ODE state, and an event writes its new diameter into it together with the
-rescaled number rate (and, for model 4, the number-rate state), at constant stream mass.
+| Model | Continuous rate | Events | Creates new parcels |
+| :--- | :---: | :---: | :---: |
+| Pilch–Erdman | yes | no | no |
+| Reitz–Diwakar | yes | no | no |
+| Reitz KH-RT | yes | yes | yes |
+| TAB | no | yes | no |
+| ETAB | no | yes | no |
 
-On a solidifying material breakup acts on the liquid only, in the liquid and undercooled-liquid
-phases, and stops at nucleation: an event model keeps model 6 with its event applied only in
-those phases, and a continuous-rate model runs as model 7, whose number-rate equation is off from
-the nucleation to a complete re-melt; a KH child is born in its parent's phase (see
-[Solidification](solidification.md#breakup-on-the-liquid)).
+An event sets a new diameter and scales the number rate so that the stream mass is kept; on an evaporating drop it
+also resets the drop's mass. On a solidifying material breakup acts on the liquid only, and stops at nucleation
+([Solidification](solidification.md#breakup-on-the-liquid)).
 
-| Model | Keyword | `brkupEqOde` | `brkupEvent` | Spawns children |
-| :--- | :--- | :---: | :---: | :---: |
-| Pilch-Erdman | `Pilch-Erdman` | yes | no | no |
-| Reitz-Diwakar | `Reitz-Diawakar` | yes | no | no |
-| Reitz-KHRT | `Reitz-KHRT` | yes | yes | yes |
-| TAB | `TAB` | no | yes | no |
-| ETAB | `ETAB` | no | yes | no |
-
-Each constant of a material's model is the value of its row of the models file,
-`<material> breakup <model> key=value ...` (the key is the name listed per model below, as in
-`A breakup TAB Comega=10` or `A breakup Reitz-KHRT B1=40`), or its default (in the
-[input reference](../user/input.md#igloo-models)); TAB and ETAB each read their own `Comega`, `Cmu`
-and `WeCrit`, and a key of another model stops the run. The liquid properties the models need — surface tension
-$\sigma$ and viscosity $\mu_p$ — are, per material, either the `Sigma` / `Viscosity` columns of
-`INPUT/properties.dat` at the droplet temperature (linear between the nodes, the end values
-outside the table) or the `[IGLOO-Properties] sigma` / `mu` constants, not both, and are
-required (> 0) only for a material that breaks (see
-[Property tables](../user/input.md#property-tables-inputpropertiesdat)).
+The models need the liquid's surface tension $\sigma$ and viscosity $\mu_p$, constants or tables in temperature read
+at the drop's temperature ([Material Properties](../user/properties.md)). Each model's constants have published
+defaults, which the input may change.
 
 ---
 
@@ -46,11 +30,7 @@ required (> 0) only for a material that breaks (see
 
 ### Pilch-Erdman
 
-```
-breakup = Pilch-Erdman
-```
-
-Parameters: `Cd`, `B` (calibration constants).
+Constants: $C_d$ and $B$.
 
 Computes the dimensionless breakup time $T_{BT}$ from a five-branch $\mathrm{We}$–$\mathrm{Oh}$
 map, then the stable diameter via
@@ -72,13 +52,9 @@ $d > d_\mathrm{stable}$.
 
 ---
 
-### Reitz-Diwakar
+### Reitz–Diwakar
 
-```
-breakup = Reitz-Diawakar
-```
-
-Parameters: `WeBag`, `Cb`, `Cstrip`, `Cs`.
+Constants: $\mathrm{We}_\mathrm{bag}$, $C_b$, $C_\mathrm{strip}$, $C_s$.
 
 Distinguishes bag breakup ($\mathrm{We} > We_\mathrm{bag}$) from stripping breakup
 ($\mathrm{We} > C_\mathrm{strip}\sqrt{\mathrm{Re}}$):
@@ -94,13 +70,9 @@ calibrated values of Reitz & Diwakar (1987): $C_s = 20$ (curve-fit) and $C_b = \
 
 ---
 
-### Reitz-KHRT
+### Reitz KH-RT
 
-```
-breakup = Reitz-KHRT
-```
-
-Parameters: `B0`, `B1`, `Ctau`, `CRT`, `mShedLim`, `WeLimit`.
+Constants: $B_0$, $B_1$, $C_\tau$, $C_{RT}$, the shed limit and the Weber limit.
 
 Kelvin-Helmholtz + Rayleigh-Taylor model.  With $r = d/2$, the gas Weber number
 $\mathrm{We}_g$, $\mathrm{Oh} = \mu_p/\sqrt{\rho_p\,\sigma\,r}$ and
@@ -129,13 +101,13 @@ where $g_t = (\mathbf{a}\cdot\mathbf{v}_p)/|\mathbf{v}_p|$ is the acceleration p
 along the particle velocity, and $\mathbf{a}$ is the drag acceleration.
 
 The continuous ODE contribution is the KH stripping rate, active while no RT breakup is
-pending, $d > d_\mathrm{stable}$ and $\mathrm{We}_g >$ `WeLimit`:
+pending, $d > d_\mathrm{stable}$ and $\mathrm{We}_g$ is above the Weber limit (6):
 
 $$
 \dot{n}_p = -\frac{3\,n_p}{d}\,\frac{d_\mathrm{stable} - d}{\tau_\mathrm{KH}}
 $$
 
-Two discrete events ride on top of it in the `solout` callback:
+Two discrete events ride on top of it:
 
 - **RT breakup** — once the RT clock exceeds $\tau_\mathrm{RT}$ with
   $\lambda_\mathrm{RT} < d$, the parent shatters into drops of diameter
@@ -143,25 +115,22 @@ Two discrete events ride on top of it in the `solout` callback:
   $(d/\lambda_\mathrm{RT})^3$ and $d$ reduced accordingly, conserving parcel mass.  No
   child parcel is created.
 - **KH shed** — the mass stripped since the last event accumulates on the parent; once it
-  exceeds the fraction `mShedLim` of the per-drop mass and the product count would be at
+  exceeds the shed limit (3 % by default) of the per-drop mass and the product count would be at
   least the parent count (Reitz 1987 product-parcel rule), a child parcel of diameter
-  $d_\mathrm{stable}$ carrying the stripped mass is appended (`brkupHasChild = .true.`,
-  `childState = [v_p, d_\mathrm{stable}, n_\mathrm{child}]`, velocity equal to the
-  parent's) and the parent's count is restored.  Without evaporation (ODE model 3) the stream
+  $d_\mathrm{stable}$, with the parent's velocity, carries the stripped mass away, and the parent's count is
+  restored.  Without evaporation the stream
   mass is constant and the stripped mass is the per-drop deficit since the last event.  With
-  evaporation (ODE model 4) the drop mass $m$ also falls by evaporation, which never changes
+  evaporation the drop mass $m$ also falls by evaporation, which never changes
   $\dot n$: with $n_0$ the number rate right after the last event, the stripped mass flow is
-  $(\dot n - n_0)\,m$, the shed fires when it exceeds `mShedLim` $\cdot\,n_0 m_0$ and
+  $(\dot n - n_0)\,m$, the shed fires when it exceeds the shed limit times $n_0 m_0$ and
   $n_\mathrm{child} = (\dot n - n_0)(d/d_\mathrm{stable})^3 \ge n_0$, and the parent returns
   to $n_0$, so evaporated mass never enters a child.  The stripped mass leaves with the child and
   never enters the gas source: the parent's outgoing flux in the shed segment includes the
   child's birth flux, which the child deposits along its own path (see
   [Eulerian feedback](eulerian-feedback.md)).
 
-The solver checks the model's validity range, $\mathrm{Oh} \le 1$ and $\rho_g/\rho_p \le 0.1$, at
-every evaluation, and runs the model outside it too. It counts the evaluations that leave the
-range, over threads and ranks, and when the count N is not zero the sweep ends with one line,
-`[WARNING] Reitz-KHRT outside its hypotheses (Oh > 1 or rho_g/rho_p > 0.1) in N model evaluations`.
+The model is valid for $\mathrm{Oh} \le 1$ and $\rho_g/\rho_p \le 0.1$. IGLOO runs it outside that range too, and
+the run log counts the evaluations that left it.
 
 ---
 
@@ -169,11 +138,7 @@ range, over threads and ranks, and when the count N is not zero the sweep ends w
 
 ### TAB — Taylor Analogy Breakup
 
-```
-breakup = TAB
-```
-
-Parameters: `Comega`, `Cmu`, `WeCrit`, `n` (Rosin–Rammler spread), `method`.
+Constants: $C_k$, $C_d$, the critical Weber number, the product law and its spread $n$.
 
 Models the droplet as a forced, damped oscillator for the non-dimensional deformation $y$
 (O'Rourke & Amsden 1987), integrated in closed form over each accepted ODE step:
@@ -184,26 +149,21 @@ y(t) = y_\mathrm{eq} + e^{-t/t_d}
   + \frac{(y_0 - y_\mathrm{eq})/t_d + \dot{y}_0}{\omega}\sin\omega t\right]
 $$
 
-with the paper's constants $C_k = 8$ (`Comega`), $C_d = 5$ (`Cmu`), $C_f = 1/3$,
+with the paper's constants $C_k = 8$, $C_d = 5$, $C_f = 1/3$,
 $C_b = 1/2$ and $K = 10/3$.  Breakup is detected when $|y| > 1$ within the current
 step.  At breakup the product radius is drawn from the mass distribution of a chi-square
-(`method = 1`, the exponential law of O'Rourke and Amsden's KIVA-II implementation) or a
-Rosin–Rammler (`method = 2`, the default) size law whose Sauter radius is the $r_s$ of energy
+(the exponential law of O'Rourke and Amsden's KIVA-II implementation) or a
+Rosin–Rammler (the default) size law whose Sauter radius is the $r_s$ of energy
 conservation.  Both are drawn inside $[0.01\,r_s, r)$: the Rosin–Rammler scale is iterated so
 that the truncated law keeps $r_s$; the chi-square law has $r_s$ untruncated and keeps the
 Sauter radius of the window, at least $0.946\,r_s$ (at $r/r_s = 7/3$, its smallest value).  The
-parcel keeps its mass, so the drops it represents follow the size law.  Any other `method` value
-is refused at setup.
+parcel keeps its mass, so the drops it represents follow the size law.
 
 ---
 
 ### ETAB — Enhanced TAB
 
-```
-breakup = ETAB
-```
-
-Parameters: `k1`, `k2`, `WeCrit`, `WeTrans`, `Comega`, `Cmu`.
+Constants: $k_1$, $k_2$, the critical and the transition Weber numbers, $C_k$, $C_d$.
 
 ETAB (Tanner 1997) keeps the TAB oscillator for the breakup *time* and replaces the
 stochastic product sizing with a deterministic exponential cascade driven by a
@@ -224,28 +184,20 @@ r_\mathrm{child} = r\,\exp\!\left(-\frac{K_\mathrm{br}}{\omega}\,\arccos\!\left(
 $$
 
 and the product drops receive a velocity kick normal to the path,
-$v_\perp = A\,\dot x$ (Tanner 1997, eqs. 8–10), at a random azimuth.  The kick is
-added to the parcel velocity once, by the segment that ends at the event, whichever ODE solver
-integrates it.  The parcel count is rescaled to conserve mass; no child parcel is created.
+$v_\perp = A\,\dot x$ (Tanner 1997, eqs. 8–10), at a random azimuth, added to the parcel velocity once, at the event.  The parcel count is rescaled to conserve mass; no child parcel is created.
 
 ---
 
-## Child-particle spawning
+## New parcels
 
-Reitz-KHRT is the only model that creates new particles (`brkupHasChild = .true.`).
-`integrate` in `src/lib/Lib_Integration.f90` receives the optional `shed` list and `noShed`
-flag; each parent owns a growable `shedList` (`gr%shed(:)`).  `obj_IGLOO%solve` (outer
-`maxLoop`) drains the lists into fully initialised `obj_particle` objects and appends them
-to the next integration pass.  Every parcel — parents and children — draws its
-stochastic samples from its own RNG stream seeded from `(seed, family, ID)`, so results
-do not depend on thread scheduling or MPI rank count.
+Reitz KH-RT is the only model that creates parcels. A child starts where its parent shed it and is integrated after
+the parents, in the same sweep, until no new child appears. Every parcel, parent or child, draws its random numbers
+from its own stream, seeded from the run's seed, its family and its number, so the results do not depend on how the
+parcels are shared among threads or processes.
 
 ---
 
 ## V&V
 
-Routine-level comparisons of all five models with their source papers, and the
-end-to-end Weber-sweep cases (`tab-e2e`, `etab-e2e`, `pilch-erdman-e2e`,
-`reitz-diwakar-e2e`, `khrt-e2e`, `tab-hf92`/`etab-hf92`, the TAB and ETAB products
-beside Hsiang & Faeth's correlations, and `khrt-hf93`, the KH-RT parent drop beside their
-core drop): [Breakup](../vv/breakup.md).
+Every model against its source paper, the Weber sweeps end to end, the TAB and ETAB products beside Hsiang and
+Faeth's correlations, and the KH-RT parent drop beside their core drop: [Breakup V&V](../vv/breakup.md).

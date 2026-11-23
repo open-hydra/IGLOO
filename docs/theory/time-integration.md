@@ -1,183 +1,89 @@
 # Time Integration
 
-Each particle is integrated by `src/lib/Lib_Integration.f90::integrate`, called from
-`obj_IGLOO%solve` inside an `!$OMP PARALLEL DO` over the particle array.  The function is
-recursive-free: it advances a single particle from injection to domain exit in a single
-call, with no inter-particle communication.
+Each parcel is integrated on its own, from its injection to its exit, independently of every other parcel; the
+parcels are shared among threads and processes. Its path is cut into **segments**, one per cell it crosses: the gas,
+the deposits and the trajectory output all work cell by cell.
 
----
-
-## Model selection
-
-`determineModel` in `src/lib/Lib_RHS.f90` maps two boolean flags to one of four RHS
-routines (plus the combustion family, models 5 and 8):
-
-| `phaseChange` | `brkupEqOde` | Model | RHS | State dim |
-| :---: | :---: | :---: | :--- | :---: |
-| false | false | 1 | `rhsStandard` | 7 (+ 5 euler) |
-| true | false | 2 | `rhsEvaporation` | 8 (+ 6 euler) |
-| false | true | 3 | `rhsBreakupOnly` | 8 (+ 6 euler) |
-| true | true | 4 | `rhsEvapBreakup` | 9 (+ 7 euler) |
-
-A material with `combustion = Beckstead` is routed to model 5 (`rhsBurn`,
-model-2 layout) instead, and with a carried material (`share > 0` or `carry=Gallier21`) to model 8 (`rhsBurnCarry`, the carried
-mass at index 9: 9 + 6 euler).  The euler extra equations (arc-length $\ell$ and the momentum,
-energy and mass moments) are appended only when `eulerSwitch = .true.`; they do not
-change the model index.  See [Governing equations](governing-equations.md) for the full
-state vector.
-
----
-
-## ODE solver
-
-The time-stepping backend is the OSlo library, accessed via `oslo::Run_ODESolver`.  Two
-adaptive solvers are selectable from `input.ini`:
-
-```
-[IGLOO-ODE]
-ode-solver   = H-sdirk4    ; default; or H-dopri5
-max-steps-ode = 100000     ; iopt(1); default 100000
-relative-tol  = 1e-10      ; rtol; default 1e-10
-absolute-tol  = 1e-10      ; atol; default 1e-10
-mass-tol      = burnout    ; the mass slot's atol; default burnout, or off
+```mermaid
+flowchart TD
+    A["Enter a cell:<br/>record the entry state"] --> B["Integrate in time<br/>adaptive steps"]
+    B --> C{"what ended<br/>the step?"}
+    C -- "left the cell" --> D["Refine the step<br/>onto the face"]
+    C -- "an event<br/>(breakup, freezing)" --> E["Apply the event"]
+    E --> B
+    D --> F["Deposit the residence<br/>on the cell"]
+    F --> G{"next cell?"}
+    G -- "inside the domain" --> A
+    G -- "a boundary" --> H["Reflect, transport,<br/>or leave"]
+    H --> A
 ```
 
-`H-sdirk4` (L-stable, stiffly accurate, 4th-order DIRK) is the default because the
-Stokes drag relaxation $\tau_p = \rho_p d^2/(18\mu_g)$ can be very short relative to
-the cell-transit time, making the ODE stiff.  `H-dopri5` (explicit Dormand-Prince 5th
-order) is appropriate for low-Re/large-particle problems where stiffness is absent.
+---
 
-The tolerances apply slot by slot. The mass slot of a consuming parcel (models 2, 4, 5 and 8) takes
-$\min(\mathrm{atol}, 10^{-3} m_b)$ by default (`mass-tol = burnout`), $m_b = \min(10^{-6} m_0, 10^{-20}\,\mathrm{kg})$
-the burnout mass: with one absolute tolerance over states in kg, m, s and K, a drop lighter than `atol` has no
-absolute control on its mass, and in the last part of its life the solver's Newton trial states may leave the domain
-with a negative mass. OSLO takes one tolerance vector per group, so $m_b$ is the group's: $m_0$ the mass of its
-smallest injected diameter at the material's lowest density; a breakup child lighter than every injected parcel of
-its group keeps the group's value. `mass-tol = off` gives the mass slot `atol` like every other slot.
+## The integrator
+
+Two adaptive integrators are available ([Integrator](../user/solver.md)):
+
+- **SDIRK4** (the default): an L-stable, stiffly accurate, fourth-order diagonally implicit Runge–Kutta method. Small
+  drops make the equations stiff: the drag relaxation time $\tau_p = \rho_p d^2/(18\mu_g)$ can be far shorter than the
+  time to cross a cell.
+- **DOPRI5**: the explicit Dormand–Prince 5(4) method, faster where nothing is stiff (large, inert particles).
+
+The tolerances apply to each state component. The mass of an evaporating or burning drop takes the tighter
+$\min(\mathrm{atol}, 10^{-3} m_b)$ by default, $m_b$ the burnout mass: one absolute tolerance over states in kg, m, s and
+K gives no control over the mass of a drop lighter than it, and in the last part of its life the solver's trial states
+could reach a negative mass.
 
 ---
 
-## Outer loop
+## A segment
 
-```
-do while (part%time < tlimit .and. iter < maxIter)   ! maxIter = 500 000
-```
+1. **Entry.** The parcel's state at the cell entry is recorded: it is what the deposit subtracts from.
+2. **Time budget.** The time to cross the cell is estimated from the distance to its exit face along the velocity
+   (on the gas dual cell at the second gas order); where it is not finite, a multiple of the Stokes time is used. The
+   integration is allowed well past it: the integrator stops at the face.
+3. **Integration.** After every accepted step IGLOO checks whether the parcel left its cell (or, at the second gas
+   order, its gas dual cell, or the wedge sector), whether an event occurred, and whether the drop is consumed.
+4. **Refinement onto the face.** A step that left the cell is taken back and retried with a shorter time, aimed at the
+   face by the distance to it, until a step ends just past the face. The step is never shorter than the time to move
+   a fraction of the containment tolerance, so the refinement cannot stall. A segment allows a bounded number of
+   integrator calls (10 by default); a parcel that needs more ends at its last accepted step.
+5. **Deposit.** The residence is deposited on the cell ([Eulerian feedback](eulerian-feedback.md)).
+6. **Next cell.** The cell search finds the new cell ([Geometry](geometry.md)), or the boundary acts.
+7. **Output.** Trajectory rows and scatter markers are written.
 
-Each outer iteration covers one cell transit:
+### What happens after each accepted step
 
-1. `initializeCell` / `computeSource` — record entry state.
-2. **`deltat`** budgeted from `computeDeltat(vert)` (cell diagonal / |v|, on the gas dual
-   cell when `gas-order = 2`); a non-finite estimate falls back to
-   $C_\tau\,\tau_p$ with $\tau_p$ the Stokes drag relaxation time (`tauFactor = 100`).
-3. `t2 = tStart + 20 · deltat` — generous XEND horizon; the solver stops early at cell
-   crossings or events.
-4. **Inner loop** (at most `[IGLOO-ODE] max-inner-iter` calls, default 10): call `ODEsystem` repeatedly until
-   `exitLoop`; if the limit is reached the particle is flagged `gone` at its last accepted step.
-5. Source / Euler accumulation.
-6. Cell-tracking update (`IamOut`, `newGas`, `sectorOut`); BC handling, including the
-   wedge fold when the segment ended on a sector plane.
-7. Trajectory and scatter-cloud output.
-
----
-
-## `ODEsystem` inner procedure
-
-`ODEsystem` wraps a single `Run_ODESolver` call and interprets the result:
-
-- `safety = 0.99` — pre-scales `deltat` before each ODE call to avoid exact-boundary
-  roundoff.
-- `err < 0` (solver failure, e.g. SDIRK4 B2 null-interval) → the particle reverts to its last accepted step, is
-  deposited up to it and is marked `gone`.
-- `exitLoop` is set true when the solver reaches XEND without an interrupt, or when the
-  step is infinitesimally small (`dout < eps`), `deltat < dtMin = 1e-14`, or a NaN
-  appears in `y`.
-- On interrupt (`IamOut`, `newGas`, `sectorOut` or `eventFlag`): `deltat` is shrunk to
-  `max(deltat · min(1/nStep, din/dout), dtMin)` using the Möller-Trumbore face-distance
-  `din` to target the boundary (`nStep = 10`; for a sector plane `din` is the exact
-  point-to-plane distance).  The refined step is also floored at a displacement-based
-  `dtSafe` (the time to move a fraction of the containment tolerance `eps` at the current
-  speed) so refinement cannot stall on steps that no longer move the particle.
+- **Scatter cloud.** The parcel accumulates its number rate at entry times the step length, and writes a marker each
+  time the sum crosses a multiple of the scatter quantum, at the fraction of the step where it does: the position on
+  the cubic through the step's end positions and velocities, the other quantities linear. A step that is cut and
+  integrated again counts once.
+- **Burnout.** An evaporating or burning drop whose mass reaches the burnout mass $m_b$ is consumed
+  ([below](#when-a-parcel-ends)).
+- **Breakup events.** TAB, ETAB and KH-RT apply their events between steps; a KH-RT shed starts a new parcel. On a
+  freezing material they act only on a liquid step.
+- **Freezing events.** The step that ends strictly past the threshold of the current phase (the nucleation
+  temperature, a frozen fraction of 0 or 1, the melting temperature) is cut: the state is interpolated linearly to the
+  crossing and the phase change applied there, landing inside the new phase. A step that also crosses a face is
+  refined first; a threshold passed at the start of a segment is applied there
+  ([Solidification](solidification.md#event-location)).
 
 ---
 
-## `solout` callback
+## When a parcel ends
 
-The OSlo solver calls `solout` at every accepted step.  It performs:
+A parcel's integration ends when it leaves the domain, at the end time when one is set, or for one of these reasons:
 
-1. **Scatter cloud** — adds `npRef·h` to the parcel's accumulator, `npRef` the number rate
-   the parcel entered with (a breakup child's is its parent's), and, as the step is latched,
-   writes a marker at each multiple of `dNscat` the accumulator crosses on it, at the fraction
-   of the step where it does: the position on the cubic Hermite interpolant of the step's end
-   positions and velocities, the other columns linear, the weight `dNscat·ṅ_p/npRef`. A step
-   that ends a segment writes its markers at the segment's finalize, over the part of the step
-   it keeps, before the phase jump and the breakup event. The total is latched with the state,
-   so a step that `ODEsystem` cuts at a face and integrates again adds its weight once, and a
-   model-6 phase event keeps the fraction of the step it keeps.
-2. **Cell-crossing detection** — `isPointInsideCell(y(1:3), vert, ...)` sets `IamOut`
-   (and `sectorOut` when the point left the wedge sector); for `ord2` mode a separate
-   gas-dual-cell test sets `newGas`.
-3. **Burnout test** — for the mass-consuming models (2 evaporation, 4 evaporation with ODE
-   breakup, 5 combustion, 8 the capped burn: the metal's mass) the droplet is declared
-   consumed once its mass slot drops to $m_b = \min(10^{-6} m_0, 10^{-20}\,\mathrm{kg})$, $m_0$ the
-   drop's reference mass: its mass at injection, a child's at its birth, a KH-RT drop's at its
-   last RT breakup or KH shed (a TAB or ETAB event keeps the injection mass).  The step that
-   crosses $m_b$ can end below zero; the burnout state's mass is then set to 0.
-4. **NaN / tiny-step guard** — `exitLoop` is set if `any(y/=y)`, `deltat < dtMin`, or the
-   step moved the particle by less than the containment tolerance.
-5. **Event breakup** — `breakupEvent` (TAB/ETAB/KHRT) detects and applies discrete
-   breakup events; `addChild` flag triggers child-parcel spawning.  On a solidifying material
-   they act only on a step taken in a liquid phase.
-6. **Solidification event** (models 6 and 7) — the step ends strictly past the threshold of the
-   current phase (event function `T - T-nuc` before nucleation, `1 - f` or `f` on the plateau,
-   `T-melt - T` for the solid) from a start at or before it; the step is aborted, and
-   `ODEsystem` interpolates the state linearly to the crossing and applies the phase change
-   there by absolute assignment (never inside `solout`, whose `Y` is a copy under `H-sdirk4`),
-   landing inside the new phase.  A step that also crosses a face is refined first; a
-   threshold strictly passed at the start of a segment is applied there (see
-   [Solidification](solidification.md)).
-7. **State snapshot** — on a clean interior step, updates `oldLocal`, `oldStLocal`,
-   `oldEvLocal`.
-
-`IRTRN = -2724` on any interrupt; the solver returns immediately.
-
----
-
-## Robustness guards
-
-| Location | Guard |
+| Reason | What happens |
 | :--- | :--- |
-| outer loop | a non-finite `deltat` estimate falls back to `tauFactor · taup` |
-| `solout::exitLoop` | `any(y /= y)` or `deltat /= deltat` interrupts the solver |
-| `ODEsystem` | a solver failure (`err < 0`) and a non-finite state after the solver returns are reverted to the last accepted step, for every model: the particle is deposited up to it and marked `gone`; on both exits a consuming droplet (models 2, 4, 5, 8) hands its remnant to the gas, and with `residue=on` the cap of model 8 becomes a parcel of the product instead, born from that state ([The burnout residue](combustion.md#the-burnout-residue)) |
-| `ODEsystem` | a `deltat` update outside `[dtMin, huge)` is a hard error |
-| RHS routines (models 2–8) | any non-finite RHS entry (unphysical Newton trial: $m \le 0$, $\dot n_p \le 0$) is replaced by a `1e30` penalty so SDIRK4 rejects the step |
-| models 6, 7 | no clamp or penalty on the frozen fraction $f$ within a phase: the solidification events own its crossings of 0 and 1; a transition lands inside the new phase (a freezing plateau at no more than `T-melt`, a melting solid at no more than $f = 1$) |
+| **burnout**: an evaporating or burning drop's mass reaches $m_b = \min(10^{-6} m_0, 10^{-20}\ \mathrm{kg})$ | the drop is consumed; what it carried into the cell goes to the gas (a step that ends below zero mass is set to zero). $m_0$ is the reference mass: at injection, a child's at its birth, a KH-RT drop's at its last RT breakup or KH shed |
+| **the integrator fails**, or the state stops being finite | the parcel returns to its last accepted step and is deposited up to it; a consuming drop gives its remnant to the gas, or forms its residue ([The burnout residue](combustion.md#the-burnout-residue)) |
+| **too many integrator calls** on one segment | as a failure, with a warning |
+| **stuck in a cell**: more than 10 segments in one cell without a crossing (reflections not counted) | dropped, with a message |
+| **bouncing in place**: every 100 reflections, closer than 0.1 mm to the previous checkpoint | dropped, with a message |
+| **too many reflections** (10 000 by default) | dropped, with a message |
+| **too many segments**: 500 000 | dropped, its exit record written |
 
-!!! note "Stuck-particle detection"
-    Six guards end a particle's integration. A particle that stays in the same cell for more
-    than `nMaxCell = 10` outer iterations without a crossing (a segment that ends in a reflection
-    at a boundary face is not counted) is flagged `gone` with a diagnostic message. Every
-    `nMaxStall = 100` reflections at boundary faces along its path, in any cell, a particle's
-    position is compared with the previous checkpoint (its injection or birth point for the first
-    one): closer than `nMaxStall × stallStep` = 1e-4 m, a bounce that makes no progress, it is
-    flagged `gone` with the same message. A particle that has reflected more than `[IGLOO-General]
-    max-reflections` times (default 10000) is flagged `gone` with a message of its own. A particle that makes no net displacement for more than
-    `nMaxStall = 100` iterations is flagged `gone` with a diagnostic message. A segment whose
-    solver loop runs more than `[IGLOO-ODE] max-inner-iter` (default 10) times flags the particle `gone` with a
-    warning, as a solver failure: it reverts to its last accepted step, the segment is deposited up to it and a
-    consuming parcel hands its remnant to the gas. A particle that reaches `maxIter = 500000` outer iterations
-    is flagged `gone` with its exit record written.
-
----
-
-## Parameters reference
-
-| INI key | Default | Effect |
-| :--- | :---: | :--- |
-| `ode-solver` | `H-sdirk4` | ODE integrator |
-| `max-steps-ode` | 100000 | `iopt(1)`; internal step limit per `Run_ODESolver` call |
-| `relative-tol` | 1e-10 | `rtol` |
-| `absolute-tol` | 1e-10 | `atol` |
-| `mass-tol` | `burnout` | the mass slot of models 2, 4, 5, 8: $\min(\mathrm{atol}, 10^{-3} m_b)$, $m_b$ the group's burnout mass; `off`: `atol` |
-
-Full registry: [../user/registry.md](../user/registry.md).
+In the equations, a trial state of the implicit integrator may be unphysical (a negative mass or number rate). Any
+right-hand side that is not finite is replaced by a huge value, so the integrator rejects the step instead of carrying
+the error on. On a freezing drop there is no clamp on the frozen fraction: the events own its crossings of 0 and 1.

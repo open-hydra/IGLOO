@@ -154,5 +154,5 @@ A passing run prints:
 ## Next Steps
 
 - **[User Guide](../user/using.md)** — full workflow, case directory contract, hydra embedding.
-- **[Input File Reference](../user/input.md)** — all `input.ini` keys.
+- **[Input Files](../user/input.md)** — the files of a case and the `input.ini` sections.
 - **[V&V Suite](../vv/index.md)** — additional physics cases (heat relaxation, body force, evaporation).

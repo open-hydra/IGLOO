@@ -1,32 +1,25 @@
 # Drag
 
-The drag force on each particle is computed in `Lib_Equations.f90::interphase` as
+The drag force on a particle is
 
 $$
 \mathbf{F}_\mathrm{drag} = \frac{\pi}{8}\,C_d\,d\,\mathrm{Re}\,\mu_g\,(\mathbf{v}_g - \mathbf{v}_p)
 $$
 
-where $d$ is the particle diameter, $\mathrm{Re} = \rho_g\,|\mathbf{v}_g - \mathbf{v}_p|\,d/\mu_g$
-is the particle Reynolds number, and $C_d(\mathrm{Re}, \mathrm{Ma}, \gamma, T_r)$ is selected
-by `assign_drag` in `Lib_Drag.f90`.  The keyword string from `[IGLOO-Models] drag` in
-`input.ini` maps directly to one of the 13 correlations below, or to the `NoDrag` switch
-that turns the momentum exchange off.  The compressible
-correlations also receive the slip Mach number $\mathrm{Ma} = |\mathbf{v}_g - \mathbf{v}_p| /
-\sqrt{\gamma R_g T_g}$, the gas $\gamma$, and the temperature ratio $T_r = T_p / T_g$.
+where $d$ is the particle diameter, $\mathrm{Re} = \rho_g\,|\mathbf{v}_g - \mathbf{v}_p|\,d/\mu_g$ is the particle
+Reynolds number, and $C_d(\mathrm{Re}, \mathrm{Ma}, \gamma, T_r)$ is one of the 13 correlations below; a fourteenth
+choice, NoDrag, turns the momentum exchange off. The compressible correlations also take the slip Mach number
+$\mathrm{Ma} = |\mathbf{v}_g - \mathbf{v}_p| / \sqrt{\gamma R_g T_g}$, the gas $\gamma$, and the temperature ratio
+$T_r = T_p / T_g$. The law is chosen once for every material ([Materials & Models](../user/models.md#drag-and-heat)).
 
-Every correlation carries the sentinel $\varepsilon = 10^{-20}$ (a per-function `toll` parameter)
-in each denominator that could vanish at $\mathrm{Re} = 0$ or $\mathrm{Ma} = 0$; it is
-omitted from the formulas below where it only guards a division.
+Every correlation adds $\varepsilon = 10^{-20}$ to each denominator that could vanish at $\mathrm{Re} = 0$ or
+$\mathrm{Ma} = 0$; the formulas below show it only where it changes the result.
 
 ---
 
 ## Incompressible correlations
 
 ### Stokes
-
-```
-drag = Stokes
-```
 
 $$
 C_d = \frac{24}{\mathrm{Re} + \varepsilon}
@@ -40,10 +33,6 @@ verification cases exact.
 
 ### Schlichting
 
-```
-drag = Schlichting
-```
-
 $$
 C_d = \frac{24}{\mathrm{Re} + \varepsilon}\left(1 + \frac{3\,\mathrm{Re}}{16}\right)
 $$
@@ -54,10 +43,6 @@ One-term Oseen correction; exact for $\mathrm{Re}\ll 1$.
 
 ### Schiller-Naumann
 
-```
-drag = Schiller-Naumann
-```
-
 $$
 C_d = \frac{24}{\mathrm{Re} + \varepsilon}\left(1 + 0.15\,\mathrm{Re}^{0.687}\right)
 $$
@@ -67,10 +52,6 @@ Valid up to $\mathrm{Re} \approx 800$.
 ---
 
 ### Morsi-Alexander
-
-```
-drag = Morsi-Alexander
-```
 
 $$
 C_d = a_1 + \frac{a_2}{\mathrm{Re} + \varepsilon} + \frac{a_3}{\mathrm{Re}^2 + \varepsilon}
@@ -97,10 +78,6 @@ last band above $5\times10^4$.
 
 ### Wen-Yu
 
-```
-drag = Wen-Yu
-```
-
 $$
 C_d = \begin{cases}
 \dfrac{24}{\mathrm{Re}+\varepsilon}(1 + 0.15\,\mathrm{Re}^{0.687}) & \mathrm{Re} \le 1000 \\[6pt]
@@ -118,10 +95,6 @@ Carlson–Hoglund correlations below.
 
 ### Newton
 
-```
-drag = Newton
-```
-
 $$
 C_d = 0.45
 $$
@@ -131,10 +104,6 @@ Constant, valid in the Newton regime ($\mathrm{Re} \in [1000,\,2\times10^5]$).
 ---
 
 ### Chang
-
-```
-drag = Chang
-```
 
 $$
 C_d = \frac{24}{\mathrm{Re}+\varepsilon}\left(1 + 0.15\,\mathrm{Re}^{0.687}\right) + \frac{0.42}{1 + 42500\,(\mathrm{Re}+\varepsilon)^{-1.16}}
@@ -147,10 +116,6 @@ Continuous across all $\mathrm{Re}$; algebraically identical to Clift–Gauvin b
 
 ### Clift-Gauvin
 
-```
-drag = Clift-Gauvin
-```
-
 $$
 C_d = \frac{24}{\mathrm{Re}+\varepsilon}\left(1 + 0.15\,\mathrm{Re}^{0.687} + \frac{0.0175\,\mathrm{Re}}{1 + 4.25\times10^{4}\,\mathrm{Re}^{-1.16}}\right)
 $$
@@ -160,10 +125,6 @@ Continuous across all $\mathrm{Re}$ ranges.
 ---
 
 ### Putnam
-
-```
-drag = Putnam
-```
 
 $$
 C_d = \begin{cases}
@@ -182,12 +143,7 @@ $\approx 3.5\,\%$ step at the handoff.
 
 ### Henderson
 
-```
-drag = Henderson
-```
-
-Henderson (1976); the branch bodies below are the forms as coded (from the Shimada 2006
-catalog, eqs. 20–22).  With $s = \mathrm{Ma}\sqrt{\gamma/2}$, the subsonic branch
+Henderson (1976), in the form of the Shimada 2006 catalog (eqs. 20–22).  With $s = \mathrm{Ma}\sqrt{\gamma/2}$, the subsonic branch
 ($\mathrm{Ma} \le 1$) is
 
 $$
@@ -196,7 +152,7 @@ C_{d,1} = \frac{24}{\mathrm{Re} + s\left[4.33 + \dfrac{3.65 - 1.53\,T_r}{1 + 0.3
 + 0.6\,s\left(1 - e^{-\mathrm{Ma}/\mathrm{Re}}\right)
 $$
 
-and the supersonic branch ($\mathrm{Ma} \ge 1.75$), as coded, is
+and the supersonic branch ($\mathrm{Ma} \ge 1.75$) is
 
 $$
 C_{d,2} = \frac{0.9 + \dfrac{0.34}{\mathrm{Ma}^2} + 1.86\sqrt{\dfrac{\mathrm{Ma}}{\mathrm{Re}}}\left(2 + \dfrac{2}{s^2} + \dfrac{1.058\sqrt{T_r}}{s}\right) - \dfrac{1}{s^4}}{1 + 1.86\sqrt{\mathrm{Ma}/\mathrm{Re}}}
@@ -213,10 +169,6 @@ where $4/3 = 1/(1.75 - 1)$ makes the bridge continuous at both ends.
 ---
 
 ### Crowe
-
-```
-drag = Crowe
-```
 
 Shimada 2006, eq. 23.  With $C_{d,0}$ the Wen–Yu value,
 
@@ -237,10 +189,6 @@ rarefaction (free-molecular) term, which vanishes for $\mathrm{Re}/\mathrm{Ma} \
 
 ### Hermsen
 
-```
-drag = Hermsen
-```
-
 Shimada 2006, eq. 24.  Same structure as Crowe with
 
 $$
@@ -251,10 +199,6 @@ $$
 ---
 
 ### Carlson-Hoglund
-
-```
-drag = Carlson-Hoglund
-```
 
 With $C_{d,0}$ the Wen–Yu value,
 
@@ -271,18 +215,13 @@ Compressible correlation valid across the full Mach range.
 
 ### NoDrag
 
-```
-drag = NoDrag
-```
-
 $$
 C_d = 0
 $$
 
 Not a correlation: the switch that removes the drag force, $\mathbf{F}_\mathrm{drag} = 0$.
 Without a body acceleration a parcel keeps its injection velocity, and no momentum is
-exchanged with the gas.  Nothing in the solver divides by $C_d$ (the step-size fallback uses
-the Stokes time $\rho_p d^2/18\mu_g$).  Under `breakup = Reitz-KHRT` the Rayleigh–Taylor
+exchanged with the gas.  Under Reitz KH-RT breakup the Rayleigh–Taylor
 branch, driven by the drag deceleration $\mathbf{F}_\mathrm{drag}/m$, never fires; the
 Kelvin–Helmholtz branch depends on the slip Weber number only.
 
@@ -290,22 +229,22 @@ Kelvin–Helmholtz branch depends on the slip Weber number only.
 
 ## Selection summary
 
-| Keyword | Compressibility | Re range | Notes |
+| Law | Compressibility | Re range | Notes |
 | :--- | :---: | :--- | :--- |
-| `Stokes` | — | $\mathrm{Re}\to 0$ | theoretical limit; exactly linear drag |
-| `Schlichting` | — | $\mathrm{Re}\ll 1$ | Oseen correction |
-| `Schiller-Naumann` | — | $\mathrm{Re}<800$ | common default |
-| `Morsi-Alexander` | — | all | 8-range piecewise |
-| `Wen-Yu` | — | all | plateau 0.43 above Re = 1000 |
-| `Newton` | — | $10^3$–$2\times10^5$ | constant 0.45 |
-| `Chang` | — | all | continuous; ≡ Clift-Gauvin |
-| `Clift-Gauvin` | — | all | continuous |
-| `Putnam` | — | all | plateau 0.4392 above Re = 1000 |
-| `Henderson` | yes | all | three Mach regimes, linear transonic bridge |
-| `Crowe` | yes | all | continuum + rarefaction terms on Wen–Yu |
-| `Hermsen` | yes | all | continuum + rarefaction terms on Wen–Yu |
-| `Carlson-Hoglund` | yes | all | Mach correction on Wen–Yu |
-| `NoDrag` | — | any | $C_d = 0$: no momentum exchange |
+| Stokes | — | $\mathrm{Re}\to 0$ | theoretical limit; exactly linear drag |
+| Schlichting | — | $\mathrm{Re}\ll 1$ | Oseen correction |
+| Schiller-Naumann | — | $\mathrm{Re}<800$ | common default |
+| Morsi-Alexander | — | all | 8-range piecewise |
+| Wen-Yu | — | all | plateau 0.43 above Re = 1000 |
+| Newton | — | $10^3$–$2\times10^5$ | constant 0.45 |
+| Chang | — | all | continuous; ≡ Clift-Gauvin |
+| Clift-Gauvin | — | all | continuous |
+| Putnam | — | all | plateau 0.4392 above Re = 1000 |
+| Henderson | yes | all | three Mach regimes, linear transonic bridge |
+| Crowe | yes | all | continuum + rarefaction terms on Wen–Yu |
+| Hermsen | yes | all | continuum + rarefaction terms on Wen–Yu |
+| Carlson-Hoglund | yes | all | Mach correction on Wen–Yu |
+| NoDrag | — | any | $C_d = 0$: no momentum exchange |
 
 ---
 
@@ -313,5 +252,5 @@ Kelvin–Helmholtz branch depends on the slip Weber number only.
 
 Routine-level comparison of every correlation against its source expression, and the
 end-to-end Stokes relaxation case: [Drag laws](../vv/drag.md#drag-laws),
-[Stokes drag](../vv/drag.md#drag-stokes).  `NoDrag` is gated end to end by
-[`no-exchange`](../vv/drag.md#no-exchange).
+[Stokes drag](../vv/drag.md#drag-stokes).  NoDrag is checked end to end in
+[No exchange](../vv/drag.md#no-exchange).

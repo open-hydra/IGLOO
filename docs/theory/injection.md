@@ -1,122 +1,65 @@
 # Injection & Packing
 
-Particle initialisation is handled by `pin_particles` in `src/lib/initialization.f90`,
-called once per material group during `obj_IGLOO%setup`.  Two methods are supported;
-the presence of `x`/`y`/`z` coordinates in `[IGLOO-BC]` selects the second:
+Parcels are placed once, at setup, for every injection group. Two ways are available
+([Placing the parcels](../user/boundary-conditions.md#placing-the-parcels-igloo-bc)):
 
-- **`FB` (face-based)** — particles are seeded on inflow-tagged boundary faces of the
-  geometry mesh (the default).
-- **`DB` (assigned position)** — particle positions, velocities, and temperatures are
-  supplied explicitly through the `[IGLOO-BC]` keys `x`, `y`, `z`, `up`, `vp`, `wp`,
-  `temp0`, `mdot`, `diam`.
+- **On the inlet faces** (the default): parcels are seeded on the boundary faces whose code injects (inlets 401–420,
+  and the solid-propellant grains 501–502).
+- **At given points**: the input lists each parcel's position, velocity, temperature, mass flow and diameter.
 
-Injection cells are those whose `bcdef` code satisfies `isInj`: ATLAS codes 401–420
-(inlet/outlet) and 501–502 (SRM grain).
-
-A cell that injects nothing for a family — column 1 of its 401–403 payload zero: a 401 of krho 0, as ATLAS writes it
-for a phase without inlet keys at an inflow grain, or a 402/403 of gp 0 — keeps no parcel of that family. Every
-parcel is pinned first, so the draws made at pinning (the injection diameters) of the others are those of a run
-without the filter; `dropZeroFlow` (`obj_IGLOO.f90`) then removes those of such cells, renumbers the rest 1…n — the
-per-parcel random streams, reseeded each sweep from the family and the ID (`rngSeedFor`), follow the new IDs — and
-prints
-`[IGLOO] family <f>: <n> parcel(s) of inlet cells with a zero loading (field 1 = 0) not injected`. A family left
-without parcels runs empty. Verified by `inlet-zero-load`.
+A cell that injects nothing for a family (a zero loading: a 401 of $k_\rho$ = 0, as ATLAS writes it for a phase without
+inlet keys at a grain, or a 402/403 of zero flux) keeps no parcel of that family. Every parcel is placed first, so the
+diameters drawn for the others are those of a run without the filter; then the parcels of such cells are removed and
+the rest renumbered, and the log counts them. A family left without parcels runs empty.
 
 ---
 
-## Face-based injection (FB)
+## Placing parcels on the inlet faces
 
-Within the `FB` path, the algorithm chosen depends on `ds` (`[IGLOO-BC]`), `mdot-max`
-(`[IGLOO-General]`), and whether any injection cell carries its own spacing in `bc.txt`
-(`dsSwitch`):
+With no spacing and no mass-flow cap, each inlet cell gets **one parcel at its centre** (or every $n$-th cell, with
+subsampling). Otherwise the parcels are placed at a **spacing** $R$ chosen per cell:
 
-| Condition | Algorithm |
-| :--- | :--- |
-| `ds=0`, `mdotMax=0`, `dsSwitch=.false.` | `pin_particles_bc_center`: one particle at each injection cell centre, every `fsample` cells |
-| otherwise | `pin_particles_bc_ds`: spacing-controlled sweep |
+1. a spacing given for the cell in the inlet table overrides the global one;
+2. a cell no larger than the spacing (or with no spacing) gets exactly one centred parcel;
+3. with a cap on the mass flow of one parcel, the cell needs at least $N_\mathrm{min}$ parcels, from its mass flux and
+   area, and $R = \min(R, d_\mathrm{cell}/N_\mathrm{min})$.
 
-### Spacing control — `compute_ds`
+$d_\mathrm{cell}$ is the cell's tangential size along the face. Cells smaller than a set floor are skipped: they are
+usually collapsed cells at edges, and would start parcels in ill-conditioned places.
 
-`compute_ds` returns the effective inter-particle spacing radius `R` for a given
-injection cell:
+### On a 2D face
 
-1. **Per-cell ds** (`bc.txt` column 9, in metres): when positive, overrides the global
-   `ds`.  Falls back to the global `ds` when the per-cell value is ≤ 0.
-2. **Global `ds`**: if `ds ≥ dcell` (or `ds=0`), the cell is classified as `single` and
-   receives exactly one centred particle.
-3. **`mdotMax` cap** (kg/s, read from `g/s` input and converted): computes the minimum
-   parcel count `NpMin` from the cell's mass-flux density and area, then sets
-   `R = dcell / NpMin`.  When both `ds` and `mdotMax` are active, `R = min(ds, dcell/NpMin)`.
+A front advances along the face: the next point is where a circle of radius $R$ around the previous one meets the cell
+boundary. Single cells get their centred point first; a last pass gives one centred parcel to every inlet cell the
+front missed.
 
-`dcell` is the mid-edge tangential cell size along the injection face $m$-direction.
+### On a 3D face: hexagonal packing
 
-**Degenerate cell guard (`dsDegen`)**: `injViable` rejects any candidate placement where
-`dcell < dsDegen` (configurable floor; 0 disables).  Degenerate cells produce no
-particles, preserving the integrator from ill-conditioned initial locations.
+A front spreads over the face from the seeded single cells:
 
-### 2D injection algorithm
-
-Used when `block(1)%Nz == 1`.  A circle/line sweep advances along the face $m$-direction:
-the next injection point is the intersection of a circle of radius `R` centred on the
-previous point with the cell boundary.  Three passes:
-
-- **Pass 0**: classify single cells; place one centred point per single cell.
-- **Pass 1**: in-plane sweep.
-- **Pass 2**: back-fill coverage — any injection cell missed by the sweep gets one centred
-  viable particle.
-
-### 3D injection algorithm (advancing-front hex packing)
-
-Used when `block(1)%Nz > 1`.  An advancing-front BFS over the injection face:
-
-1. **Pass 0**: cache per-cell `R`, `dcell` and containment planes; seed viable single cells.
-2. **Pass 1**: for each placed point, generate 6 hexagonal-neighbour candidates at
-   distance `R` by rotating the tangent frame the point carries about the normal of the
-   point's cell using Rodrigues' formula (steps of $\pi/3$): the seed's frame is its
-   cell's first $m$-edge in the cell's plane, a child's is its parent's frame projected
-   onto the child cell's plane (the child cell's own first $m$-edge where that projection
-   vanishes, a fold of 90° between two inlet cells). On a planar face the frame is the
-   same at every point, so the placed points form one hexagonal lattice over the whole
-   face, whatever the cells' edges do.  Each candidate is projected onto the target
-   face plane and tested by the target cell's 12-plane containment test, its planes
-   computed once per face (`precomputeHex12`, `isInsideHex12Fast`).  A candidate within
-   $R/2$ of any point the call has placed is refused; the placed points are found through
-   a uniform bucket grid whose edge is the smallest spacing.
-3. **Pass 2**: back-fill as in 2D.
-
-The BFS queue is the flat `Inj(:,:)` / `ind(:,:)` arrays; `head` walks the populated
-tail.  Maximum particle count is hard-capped at `alloc = 10⁷`.
+1. Each placed point proposes six neighbours at distance $R$, by turning the point's tangent frame about its cell's
+   normal in steps of $\pi/3$. The first point's frame is its cell's first edge; each new point inherits its parent's
+   frame projected onto its own cell's plane (or its own cell's first edge where that projection vanishes, at a 90°
+   fold between two inlet cells). On a planar face the frame is then the same everywhere, and the points form **one
+   hexagonal lattice over the whole face**, whatever the cells' edges do.
+2. Each candidate is projected onto its cell's plane and kept if the cell holds it and no placed point lies within
+   $R/2$.
+3. A last pass gives one centred parcel to every inlet cell the front missed.
 
 ### The cell a parcel starts in
 
-A face-injected parcel starts its trajectory in the inlet cell that pinned it whenever the 12-plane test
-of that cell (with the cell's tolerance, see [Geometry](geometry.md#ispointinsidehexahedron12)) holds its
-injection point: a point on an edge two inlet cells share lies in both, and one on the domain boundary can
-lie a few ulps outside it. Otherwise the cell search of `updateCell` locates the parcel. `initializePart`
-reads the loading, velocity, direction and temperature columns of the cell the parcel starts in (the
-diameter was drawn at pinning). A
-parcel whose injection point no cell holds is not integrated;
-the run log counts such parcels once per sweep:
-
-```
- [WARNING] N parcel(s) whose injection point no cell holds: not integrated
-```
-
-Verified by the `inj-edge` and `inj-edge-payload` cases (see [Injection](../vv/injection.md#inlet-lattices)).
+A parcel starts in the inlet cell that placed it whenever that cell holds its point (with the cell's tolerance,
+[Geometry](geometry.md#is-a-point-inside-a-cell)): a point on an edge two inlet cells share lies in both, and one on the
+domain boundary may lie a few rounding units outside. Otherwise the cell search locates it. The parcel takes the
+loading, velocity, direction and temperature of the cell it starts in (its diameter was drawn when it was placed). A
+parcel whose point no cell holds is not integrated, and the log counts such parcels at every sweep.
 
 ---
 
 ## Stochastic diameter sampling
 
-After all positions are pinned, each particle's diameter is drawn by `sampleDiameter`
-from `src/lib/Lib_Statistics.f90` using three face-cell properties (`bc.txt` columns 6-8,
-see [Boundary conditions](../user/boundary-conditions.md#injection-patches)):
-
-| Property index | Meaning |
-| :---: | :--- |
-| `(fam, 6)` | Radius $r_p$ |
-| `(fam, 7)` | Width $\sigma_p$ |
-| `(fam, 8)` | Law code: Dirac 0, Normal 1, LogNormal 2, Rosin–Rammler 3; $100 + k$ for the $k$-th size-distribution file |
+Once every position is placed, each parcel draws its diameter from three properties of its inlet cell: a radius $r_p$,
+a width $\sigma_p$ and a law ([Injection patches](../user/boundary-conditions.md#injection-patches)).
 
 | Law | Parameters | Cumulative distribution of the injected diameter $d$ |
 | :--- | :--- | :--- |
@@ -124,46 +67,26 @@ see [Boundary conditions](../user/boundary-conditions.md#injection-patches)):
 | Normal | $\mu = 2r_p$, $\sigma = \sigma_p$ | truncated to $d > 0$ by rejection: $\dfrac{\Phi((d-\mu)/\sigma) - \Phi(-\mu/\sigma)}{1 - \Phi(-\mu/\sigma)}$ |
 | LogNormal | mean $\mu = 2r_p$, standard deviation $\sigma_p$ | $\Phi\big((\ln d - m)/s\big)$, $s^2 = \ln(1 + \sigma_p^2/\mu^2)$, $m = \ln\mu - s^2/2$ |
 | Rosin–Rammler | $x_0 = 2r_p$, $n = \sigma_p$ | $1 - \exp\big(-(d/x_0)^n\big)$ |
-| size-distribution file | radii $r_k$, mass fractions $w_k$ (normalised) | piecewise linear through the class edges $e_k$ (mid-points between radii, the end classes extended by half a spacing, doubled to diameters): $F(e_k) = \sum_{j \le k} w_j$; one row = Dirac at $2r_1$ |
+| size-distribution file | radii $r_k$, mass fractions $w_k$ (normalised) | piecewise linear through the class edges $e_k$ (mid-points between radii, the end classes extended by half a spacing, doubled to diameters): $F(e_k) = \sum_{j \le k} w_j$; one row is a Dirac at $2r_1$ |
 
-**What a law describes.** Inside an inlet cell every parcel carries the same mass flow,
-$\dot m_\mathrm{cell}/N_\mathrm{inj}$, whatever diameter it drew (`obj_particles.f90::initializePart`),
-and its number rate is $\dot m/m$ with $m = \pi\rho_p d^3/6$. The sampled law $f(d)$ is therefore the
-distribution of the injected **mass flow** over the diameter, and the number of particles is
-distributed as $f(d)/d^3$ (normalised); a size-distribution file lists mass fractions for that
-reason. (TAB's Rosin–Rammler product size is a number distribution, a different object.)
+**What a law describes.** In one inlet cell every parcel carries the same mass flow, $\dot m_\mathrm{cell}/N_\mathrm{inj}$,
+whatever diameter it drew, and its number rate is $\dot m/m$ with $m = \pi\rho_p d^3/6$. The sampled law $f(d)$ is
+therefore the distribution of the injected **mass flow** over the diameter, and the number of particles goes as
+$f(d)/d^3$ (normalised). That is why a size-distribution file lists mass fractions. (TAB's Rosin–Rammler product size
+is a number distribution, a different object.)
 
-**Random stream.** The draws come from the intrinsic `random_number`, seeded from
-`[IGLOO-General] seed` (default 42) just before pinning and consumed in pin order. Pinning is
-serial and replicated on every MPI rank, so the
-diameters do not depend on the thread or rank count; the intrinsic generator belongs to the compiler,
-so they do depend on it. The draw happens once, at setup: every sweep re-injects the same diameters.
-The per-parcel streams seeded from `(seed, family, ID)` serve the draws made inside the parallel
-region (TAB and ETAB breakup).
+**Random stream.** The draws come from the compiler's random generator, seeded from the run's seed (42 by default) just
+before the parcels are placed, and consumed in placing order. Placing is serial and repeated identically on every
+process, so the diameters do not depend on the thread or process count; they do depend on the compiler. The draw is
+made once: every sweep injects the same diameters. Draws made during the integration (TAB and ETAB) come from each
+parcel's own stream ([New parcels](breakup.md#new-parcels)).
 
-Verified by `test_psd_table` (10⁵ draws per law) and the `psd-table`, `psd-normal`, `psd-lognormal` and
-`psd-rosinrammler` cases (20 000 injected parcels each), with the Kolmogorov-Smirnov and the
-Anderson-Darling statistics at $\alpha = 10^{-3}$.
+The laws are checked with $10^5$ draws each, and end to end with 20 000 injected parcels, against the
+Kolmogorov–Smirnov and Anderson–Darling statistics at $\alpha = 10^{-3}$: [Injection V&V](../vv/injection.md).
 
 ---
 
-## Assigned-position injection (DB)
+## Parcels at given points
 
-The `pos0(np, 3)`, `vel(np, 3)`, `temp(np)`, `mdot(np)`, `diam(np)` arrays read from
-`[IGLOO-BC]` are transcribed directly into `group%particle(1:npart)`.  Cell indices are
-initialised to `[0,0,0,0]`; `updateCell` locates each particle at the start of
-`integrate`.
-
----
-
-## Parameters
-
-| INI key | Section | Meaning |
-| :--- | :--- | :--- |
-| `ds` | `[IGLOO-BC]` | Global inter-particle spacing (cm → m); 0 = one particle per cell centre |
-| `mdot-max` | `[IGLOO-General]` | Per-parcel mass flow cap (g/s → kg/s); 0 = off |
-| `ds-degen` | `[IGLOO-BC]` | Minimum cell size to attempt injection (cm); 0 = off |
-| `fsample` | `[IGLOO-BC]` | Center-mode stride (one particle per `fsample` cells) |
-| `x`, `y`, `z`, … | `[IGLOO-BC]` | Assigned-position injection (see [Input file](../user/input.md)) |
-
-Full registry: [../user/registry.md](../user/registry.md).
+The listed positions, velocities, temperatures, mass flows and diameters become the parcels as they are; the cell
+search locates each one when its integration starts.

@@ -1,182 +1,86 @@
 # Geometry & Cell Tracking
 
-Cell-containment testing and geometric intersection are in module
-`IGLOO_RayFaceIntersection3D` (`src/lib/geometry.f90`).  The module also provides the
-`guide(6,4)` face-to-vertex mapping used throughout the codebase.
+A parcel always knows the cell that holds it. After each step IGLOO tests whether the parcel is still inside; when it
+is not, it finds the face the parcel crossed and the cell beyond it.
 
 ---
 
-## Hex face convention
+## Is a point inside a cell?
 
-Each structured-hex cell has 8 vertices indexed 1–8.  The module-level parameter
-
-```fortran
-integer, parameter :: guide(6,4) = reshape([1,2,3,4, 7,6,5,8, 6,2,1,5,
-                                             4,3,7,8, 5,1,4,8, 3,2,6,7], [6,4], order=[2,1])
-```
-
-maps each of the 6 faces to its 4 corner vertex indices.  Every containment test loops
-over these 6 faces.
-
----
-
-## Point-in-cell tests
-
-### `isPointInsideCell` (dispatcher)
-
-The public entry point; dispatches based on `is2D` and the precomputed cache:
-
-- **2D** (`mesh2D = .true.`): delegates to `isPointInsideQuadrilateral` — 4 outward-edge
-  normals; returns the crossed face index (1–4 in the 2D convention mapped through
-  `faceMap2D`).
-- **3D with cache** (`norms`, `centroids`, `is_degen` present): calls
-  `isInsideHex12Fast` — dot products against the 12 precomputed triangle plane normals,
-  no recomputation.
-- **3D without cache**: calls `isPointInsideHexahedron12` — recomputes all 12 plane
-  normals on-the-fly.
-
-### `isPointInsideHexahedron12`
-
-Each quad face is split into 2 triangles (12 planes total) using `chooseVector` to pick
-a non-degenerate starting vertex.  A degenerate triangle (zero-area cross product) is
-treated as inside (`distance = -1`) to avoid spuriously rejecting nearly-flat cells.
-A face rejects the point only when it lies beyond both of its triangle planes by more than the cell's
-tolerance
+A cell is a hexahedron of 8 nodes and 6 faces. Its faces need not be planar, so each one is split into two triangles:
+the cell is bounded by 12 planes. A face rejects a point only when the point lies beyond **both** its triangle planes
+by more than the cell's tolerance
 
 $$
 \tau = \max\left(10^{-12}\,h,\; 64\,\varepsilon\,L\right),
 $$
 
-with $h = |v_7 - v_1|$ the cell diagonal, $L$ the largest coordinate magnitude of the cell's nodes and
-$\varepsilon$ the machine epsilon (`hexTol`). The first term scales the test with the cell; the second covers
-the rounding of a triangle distance $n\cdot(p - c)$ far from the origin, where $p$ and $c$ carry coordinates
-of magnitude $L$: with an absolute $10^{-15}$ m, points of a face shared by two cells 100 m from the origin
-can lie in neither cell.
+with $h$ the cell diagonal, $L$ the largest coordinate magnitude of the cell's nodes and $\varepsilon$ the machine
+epsilon. The first term scales the test with the cell. The second covers the rounding of a plane distance far from the
+origin: with a fixed $10^{-15}$ m, a point on a face shared by two cells 100 m from the origin could lie in neither.
 
-### `precomputeHex12` + `isInsideHex12Fast`
-
-`precomputeHex12` is called once per cell entry (and after any boundary event) to cache
-the 12 triangle normals and centroids into `geoHexNorms(3,2,6)` / `geoHexCentroids(3,2,6)`
-/ `geoHexDegen(2,6)`, and the cell's tolerance $\tau$ into `geoHexTol` (`gasHex*` for the gas dual cell), so
-the two copies of the test decide alike (`test_containment` C2).  `isInsideHex12Fast` then performs the containment test using only
-dot products — avoiding the cross products needed by `isPointInsideHexahedron12`.
-
-This cache is the hot path in `solout`, called at every accepted ODE step.
+A degenerate triangle (zero area) never rejects a point, so nearly flat cells are not refused by mistake. The 12 planes
+of a cell are computed once when a parcel enters it. In 2D the cell is a quadrilateral bounded by its four edges.
 
 ---
 
-## Cell-crossing tracking
+## Following a parcel
 
-In `src/lib/Lib_Integration.f90::solout`:
+### Leaving a cell
 
-```
-IamOut  = .not. isPointInsideCell(y(1:3), vert,  mesh2D, geoHexNorms, ...)
-newGas  = .not. isPointInsideCell(y(1:3), gasVert, mesh2D, gasHexNorms, ...)  ! ord2 only
-```
+At the second gas order a parcel is tracked in two meshes at once: the geometry cell, for the deposits and the
+boundaries, and the gas dual cell, for the interpolation. A step ends when the parcel leaves either. The geometry test
+is needed only in the dual cells on a block boundary; in the interior, leaving the dual cell is the one test.
 
-When `IamOut` or `newGas` is detected, `solout` returns `IRTRN = -2724` to interrupt the
-solver.  The outer loop then calls `part%updateCell(geoblock)` to locate the new cell
-via a guided neighbour search starting from the last known cell index.
+A step that leaves its cell is refined onto the exit face ([Time integration](time-integration.md#a-segment)): the
+distance to the face along the motion, from a ray–triangle intersection, sets the shorter step. When the ray grazes a
+triangle split and finds no face, the step is simply divided.
 
-Under `ord2 = .true.` the geo mesh (for containment) and the gas dual mesh (for
-interpolation) are tracked independently.  `atGasBoundary` gates the geo containment
-check to boundary gas cells only, avoiding redundant tests in the interior.
+### The next cell
 
----
+The search starts from the face the parcel left through and steps into the neighbour across it, using the structured
+connectivity: no scan of the mesh. After a boundary event (a reflection) the search is wider, around the last known
+cell. A block, and a cell in it, is tried only when its bounding box holds the point. When no block holds the point,
+the search runs once more with every box widened by the containment tolerance, so that a point that rounding left a
+few units outside the domain boundary is still found in its cell. The gas dual-cell search keeps the exact boxes.
 
-## Step-size budgeting — `computeDs`
+### Crossing a block interface
 
-`part%computeDs(vert, dir)` uses a Möller-Trumbore ray/triangle intersection to estimate
-the distance from the current position to the exit face in direction `dir`.  This `din`
-value feeds the `deltat` shrinkage formula in `ODEsystem`:
+When a step leaves through a connected face (a conformal or periodic connection, or a chimera face), the search first
+tries the cell the connection names: the partner cell, the partner after the periodic shift, or the chimera donors by
+decreasing weight. Otherwise it searches the current block, then every other block in turn; the first that holds the
+point takes the parcel. The tests include their tolerance, so a conformal interface leaves no gap.
 
-$$
-\Delta t_\mathrm{new} = \max\!\left(\Delta t \cdot \min\!\left(\frac{1}{n_\mathrm{step}},\; \frac{d_\mathrm{in}}{d_\mathrm{out}}\right),\; \Delta t_\mathrm{min}\right)
-$$
-
-When Möller-Trumbore fails to pin the crossed face (sub-1e-5 proximity at a triangle
-split), `din ≤ 0` and the fallback `deltat/nStep` is used.
-
-`part%computeDeltat(vert)` estimates the initial `deltat` as the distance `computeDs` returns along
-the velocity (its absolute value, at least `eps`), divided by the particle speed; `dtMax` for a
-parcel at rest.
+At the second gas order a step always ends at a block face, since the parcel changes block there. Within a single block
+it ends there only for a parcel whose dual cell lies on the block boundary. The deposits add over the cut step; the
+averaged velocity and temperature move at second order in the step
+([Block interfaces](eulerian-feedback.md#block-interfaces)). The gas stencil is then sought in the new block's own dual
+mesh.
 
 ---
 
-## Guided cell locator — `updateCell` / `findParticle`
+## The face crossed
 
-`part%updateCell(geoblock)` in `src/lib/obj_particles.f90` searches for the new cell
-starting from the face identified by `part%exitFace` (returned by `isPointInsideCell`),
-walking into the neighbouring cell via the structured mesh connectivity.  The walk uses
-the face index to directly compute the neighbour without a full scan.
-
-`part%findParticle(geoblock)` is called after boundary events (e.g. reflection) where
-`exitFace` may be stale.  It performs a broader containment search starting from the last
-known cell.  A block, and each cell in it, is tried only when the point lies in its bounding box. When
-no block holds the point, the search runs once more with every bounding box widened by the containment
-tolerance $\tau$ — a cell's own, a block's that of a cell spanning the block — so that a point of the domain
-boundary that rounding left a few ulps outside is found in its cell. The gas dual-cell search keeps the
-exact boxes.
-
-`part%advanceGasCell(gasblock)` is the gas-dual-mesh analogue, using `part%gasExitFace`.
-
-**Crossing a block interface.** When the step left its cell through a connected face cell (a 101 or
-a 103 with a partner cell, a 201, a 102 chimera facelet), `updateCell` first searches the cell the
-record names — the partner cell, the partner cell after the periodic transport, or the layer-1 donors
-by decreasing weight — with its ±1 box and a guided walk from the point where the step crossed the
-face. Otherwise, or if that fails, it calls `findParticle`: the search starts in the current block (the
-neighbour across the exit face, a ±1 box around the last cell and a guided walk, then the whole block
-after its bounding-box test) and continues in every other block in index order; the first block that
-contains the point takes the particle. The containment tests are inclusive (to the cell's tolerance), so a conformal
-interface leaves no gap. `bcDef`'s 101 branch, an index jump into the cell named by the bc file, runs
-only when no block contains the point. With
-`gas-order = 2` the ODE step ends at the block face, since the particle must change block there;
-a single block ends it there only for a parcel whose gas dual cell lies on the block boundary, the only dual
-cells where the geometric containment is tested (see [Cell-crossing tracking](#cell-crossing-tracking)), so
-for every other parcel the interface is one more crossing of `print-dcell`'s
-cadence (a row there with `print-dcell = 1`) and, without `print-dcell`, one more segment end (a
-row there only when the `print-ds` or `print-dtime` limit is reached), and the scatter markers beside it keep their times, their interpolated states moving with the step; the source and the eulerian densities are additive over the cut step, the eulerian
-velocity and temperature move at second order in the step (see **Block interfaces** in
-[Eulerian feedback](eulerian-feedback.md#source-fields)). The gas stencil is then sought in
-the new block's own dual mesh, and so is it when the cell search at the entry of a boundary dual cell
-finds the particle in another block.
+The face a parcel left through is the one the ray from its previous position to its new one hits, or else the one the
+reversed ray from the new position hits. A ray parallel to a triangle, in its plane or along an edge, does not hit it,
+so a parcel on a face, an edge or a corner is not stopped by the faces it lies on. When both rays miss, the face is the
+one, among those that reject the point, whose nearer plane is closest; when none rejects it, the face at the smallest
+non-negative distance; when no distance is non-negative, the face whose plane is nearest.
 
 ---
 
-## Boundary handling
+## Boundaries
 
-Full boundary condition documentation is at [../user/boundary-conditions.md](../user/boundary-conditions.md).
+What each boundary code does to a parcel: [Boundary & Injection](../user/boundary-conditions.md). Three act during
+tracking:
 
-The face a particle left its cell through is the face the ray from its previous position to its new one hits, or
-else the face the reversed ray from the new position hits (`checkBoundary`). A ray parallel to a face triangle, in
-its plane or along one of its edges, is no hit on it, so a particle on a face, an edge or a corner of its cell is
-not stopped by the faces it lies on. When both rays miss, `closestFace`
-returns in 3D, of the faces the containment test rejects the point through (beyond both triangle planes by more
-than $\tau$), the one whose nearer triangle plane is closest to the point, and when no face rejects it, the face
-with the smallest non-negative triangle distance, and when no distance is non-negative, the face whose triangle
-plane is nearest (`test_geometry_rules`).
+**Axisymmetric wedge.** The containment test also carries the azimuth band, so a step ends when the parcel reaches a
+sector plane, as at any face. The parcel's position and velocity are then rotated about the axis by one sector, back
+into $[-\Delta\theta/2, +\Delta\theta/2]$, the sector angle taken from the mesh. A sector crossing is not a cell
+crossing. A parcel on the meridian plane is not moved.
 
-The hooks integrated into the tracking loop are:
+**Periodic transport.** The parcel is moved to the partner face, its velocity unchanged. The trajectory continues in a
+new zone of the trajectory file.
 
-**Axisymmetric fold (bcdef 200)**:
-On a wedge the point-in-cell test also carries the azimuth band, so an ODE segment ends
-when the particle reaches a sector plane (`sectorOut`) exactly as it ends at any other
-face.  `axisymFold(part%stateVar)` in `src/lib/obj_bc.f90` then rotates position and
-velocity about the axis by one sector, back into $[-\Delta\theta/2, +\Delta\theta/2]$,
-with the sector angle derived from the mesh k-layer geometry.  A sector crossing is not
-a cell crossing: the stuck-in-cell counter ignores it, and with `print-dcell` set no trajectory
-row is written for it; without it the fold writes two rows at one time, the state before it and
-after it.
-The fold is the identity for particles on the meridian plane.
-
-**Periodic transport (bcdef 201)**:
-Translational periodic BC.  The particle is translated to the partner face position,
-velocity is unchanged.  Distinct from conformal connections (101); the partner face is
-read explicitly.  The trajectory continues in a new zone: without `print-dcell` the wrap
-writes two rows at one time, the state before the transport and after it, the second opening the
-zone; with `print-dcell` set the wrap is a cell crossing, and the first row written after it opens
-the zone.
-
-**Domain exit / `gone`**:
-When `updateCell` cannot locate the particle (or `bcDef` marks it as exited), `part%gone`
-is set, trajectory and exit files are written, and `integrate` returns.
+**Exit.** When no cell holds the parcel, or its face is an outflow or a wall, the parcel leaves the domain and its exit
+record is written.
