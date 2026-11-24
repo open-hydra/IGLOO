@@ -115,7 +115,7 @@ Aluminium combustion: Beckstead's $d^n$ burn law (model 5), the oxide cap on a b
 `tests/combustion/burn-box-cap` · independent integration
 
 - **Setup** — `burn-box`'s parcels with `share = 0.2` and liquid alumina as the product
-  ([theory](../theory/combustion.md#a-drop-that-carries-what-it-forms-model-8)).
+  ([theory](../theory/combustion.md#a-drop-that-carries-what-it-forms)).
 - **Reference** — an RK4 of the cap's burn law and the mixture heat balance, with the exposed-surface
   factor from Gallier's exact lobe (bisection in the lobe angle, never IGLOO's table) and the stretch
   $c = 1.397686$; the Eulerian mass; the mass source $(1 - \xi\nu)$ of the metal burned.

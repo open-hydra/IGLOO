@@ -9,6 +9,8 @@ Resources for contributors and integrators working on IGLOO's source code.
 | Page | What it covers |
 |------|----------------|
 | [Code Structure](structure.md) | Library/executable split, top-level object, hot path, module naming, CMake layout, DocGen |
+| [Code Map](code-map.md) | Where each topic of the Theory Guide lives in the code: files, routines, state layout, the integration loop |
+| [Coupling](coupling.md) | The exchange functions a parent solver calls: sending and receiving mass |
 | [Testing](testing.md) | `tests/` V&V suite, categories, how to add a test |
 | [Parallelization](parallelization.md) | MPI over ranks + OpenMP over threads, rank-count invariance, embedding contract |
 | [Versioning](versioning.md) | The releases of ORION, OSLO and FiNeR that IGLOO requires, and how the configure checks them |

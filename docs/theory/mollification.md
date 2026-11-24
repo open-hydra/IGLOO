@@ -1,15 +1,7 @@
 # Field Mollification
 
-After all particles are integrated, the deposited source and Euler fields can be smoothed
-by a dimension-split binomial smoother controlled by `mollify` and `mollify-passes` in
-`[IGLOO-General]`.  Setting `mollify = off` (or `mollify-passes = 0`) disables smoothing
-entirely.
-
-The smoother is implemented in `src/lib/Lib_Mollify.f90::binomial_smooth` (one block) and
-`mollifyBlocks` (blocks joined by 101 connections, faces paired by periodic (201) connections, chimera (102)
-faces), called
-through `mollifyEulerBlocks` and
-`mollifySourceBlocks` in `src/lib/obj_block.f90`.
+After every parcel is integrated, the deposited source and Euler fields can be smoothed by a dimension-split binomial
+smoother, on by default with 8 passes ([Run Settings](../user/general.md#smoothing-the-fields)).
 
 ---
 
@@ -36,7 +28,7 @@ The binomial smoother avoids both problems:
 ## Algorithm
 
 Each pass applies one 1-D sweep per axis (x, then y, then z in 3D) in a dimension-split
-sequence, using a ping-pong buffer (GATHER form, race-free):
+sequence, each sweep reading the values of the previous one:
 
 $$
 \phi_f = \theta\,\min(V_c,\,V_n)\,(q_n - q_c) \quad \text{[interior faces only]}
@@ -60,7 +52,7 @@ from mesh cell size is by design).
 
 ### Block interfaces and periodic faces
 
-A block face joined to another block by a conformal connection (`bcdef` 101) is an interior
+A block face joined to another block by a conformal connection (code 101) is an interior
 face of the domain, and the smoother treats it as one: before each sweep direction of each pass,
 every face cell of such an interface takes a one-cell halo, the current value $q_p$ and the volume
 $V_p$ of its partner cell in the other block, and the flux across the face is
@@ -75,13 +67,13 @@ conserved; a mesh split into blocks along whole index planes is smoothed as the 
 arithmetic is the same; the default optimised build may differ in the last bits). The halo needs the
 two faces to be normal to the same index direction (an i-face joined to an i-face, and so on); an
 interface whose faces are normal to different index directions keeps zero flux, and the setup prints
-one warning line per such face pair. A translational periodic pair (`bcdef` 201) is smoothed the same
+one warning line per such face pair. A translational periodic pair (code 201) is smoothed the same
 way: each face cell's partner is the cell its connection names on the paired face, in the same block
 or another, so the cells next to the two faces are neighbours, as in one unrolled period (periodicity
 is translational, so the momentum source needs no rotation across the face). Every other block face —
 walls, inlets and outlets — keeps zero flux. The conservation guard sums $q V$ over every block.
 
-A chimera face (`bcdef` 102) lies inside another block, whose cells there are a second copy of the
+A chimera face (code 102) lies inside another block, whose cells there are a second copy of the
 overlap. Before each sweep along the face's index direction, each facelet with layer-1 donors takes a
 halo blended from them, $q_h = \sum_d w_d\,q_d$ and $V_h = \sum_d w_d\,V_d$ (ATLAS's volume weights, the
 donors' current values), and its cell takes the flux $\theta\,\min(V_c, V_h)\,(q_h - q_c)$; the donors
@@ -94,7 +86,7 @@ minus the mirrored totals is still the once-counted total. Where the overlap's c
 of weight 1 per facelet), the overlap's deposits mirrored into both blocks and the halo give each block
 the one-block smoothed field on its own cells; with misaligned cells (two donors of weight 1/2 at a
 half-cell shift) the halo is the average of the two donor cells and the result meets the one-block field
-only to the interpolation error of the halo and of the overlap's volume split: on `chimera-2blk-shift-mollify`
+only to the interpolation error of the halo and of the overlap's volume split: on the shifted two-block test
 each block's smoothed fields lie within 2(max\|ΔR\|/16 + 2 max\|Δ²R\|/8) of the one-block ones, R the unsmoothed
 one-block cells around the seam (measured at 1/13 to 1/40 of that bound). A facelet with an empty layer 1
 keeps zero flux.
@@ -103,11 +95,11 @@ keeps zero flux.
 
 ## Default parameters
 
-| Parameter | Value | Source |
-| :--- | :---: | :--- |
-| $\theta$ | 0.25 | `IGLOO_Lib_Mollify`, parameter |
-| Default passes | 8 | `DEFAULT_MOLLIFY_PASSES` |
-| Effective width $\sigma$ | 2 cells | $\sqrt{8/2}$ |
+| Parameter | Value |
+| :--- | :---: |
+| $\theta$ | 0.25 |
+| passes | 8 |
+| effective width $\sigma$ | 2 cells ($\sqrt{8/2}$) |
 
 With 8 passes:
 
@@ -122,36 +114,12 @@ $\lambda \approx 8$-cell band.
 
 ## Applied fields
 
-At the end of `solve`, after every block's fields are reduced to geometry cells
-(`obj_sourceblock::finalize`, `obj_eulerblock::reduce`), `mollifyEulerBlocks` smooths the
-conserved density numerators of each family before Favre averaging (`obj_eulerblock::normalize`):
+The smoother runs after the fields are reduced to the geometry cells and before the Euler fields are averaged. It
+smooths the conserved quantities:
 
-- `density` ($\rho_p\,T_\mathrm{stay}/V$)
-- `velocity(1:3)` (momentum numerators, each component separately)
-- `temperature` (energy numerator)
-- `np` (parcel-number density)
+- of the Euler fields, the numerators: density ($\rho_p\,T_\mathrm{stay}/V$), the three momentum components, the energy,
+  and the number density;
+- of the source fields, the per-cell totals: every row of the mass source, the three momentum components and the
+  energy.
 
-`mollifySourceBlocks` smooths the source extensive per-cell totals:
-
-- `sourceMass(1:nsm())` (per material, with its optional rows: carried, processed)
-- `sourceMom(1:3)`
-- `sourceEn`
-
-Each scalar field is divided by cell volume before smoothing and multiplied back out
-after, satisfying the $\sum q V$ conservation invariant.
-
-On a mesh without a 101 or 201 face or a chimera facelet with layer-1 donors each block is smoothed on its own (`mollifyEuler`,
-`mollifySource`), with an optional pre-allocated scratch buffer (`work`) reused across all 6
-(Euler) or $n_m+4$ (source) calls, avoiding repeated allocations in the inner loop.
-
----
-
-## Configuration
-
-```ini
-[IGLOO-General]
-mollify        = on  ; off disables the smoother
-mollify-passes = 8   ; override default (0 = off)
-```
-
-Full parameter registry: [../user/registry.md](../user/registry.md).
+Each field is divided by the cell volume before smoothing and multiplied back after, which keeps $\sum q V$.

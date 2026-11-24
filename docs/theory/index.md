@@ -1,47 +1,32 @@
 # Theoretical Guide
 
-IGLOO integrates a set of Lagrangian particle ODEs through a steady background gas field.
-Each computational particle is a parcel representing $\dot{n}_p$ real droplets per unit time.
-The four governing physics layers — drag, heat transfer, evaporation, and breakup — are
-selectable per material group; the active combination determines which ODE system is assembled
-at run time.
+IGLOO follows particles and droplets through a steady gas. Each computational particle is a **parcel**: it stands
+for $\dot n_p$ real drops per second, all alike. A parcel carries its position, velocity, temperature and, when they
+change, its mass and its number rate. These are integrated in time from the inlet to the domain exit, through the
+gas the parcel meets.
 
----
+The physics a parcel feels depends on its material: drag and heat exchange always, then evaporation, breakup,
+burning or freezing when the material asks for them. Each combination is one system of ordinary differential
+equations.
 
-## Model selection
+## The eight systems
 
-Two boolean flags, set during initialisation from `input.ini`, control which right-hand-side
-system is assembled by `determineModel` in `Lib_RHS.f90`:
+| System | Material | What changes besides position, velocity, temperature |
+| :--- | :--- | :--- |
+| 1. inert | no phase change, no continuous breakup | nothing |
+| 2. evaporating | evaporates | the drop's mass |
+| 3. breaking | breaks up at a continuous rate | the number rate |
+| 4. evaporating and breaking | both | the drop's mass and the number rate |
+| 5. burning | burns (Beckstead or direct) | the drop's mass |
+| 6. freezing | solidifies | the frozen fraction |
+| 7. freezing and breaking | solidifies, and breaks up while liquid | the frozen fraction and the number rate |
+| 8. burning and carrying | burns and keeps part of its product | the metal's mass and the carried mass |
 
-- **`phaseChange`** — evaporation is active (requires an evaporation model and species data).
-- **`brkupEqOde`** — at least one continuous-rate breakup model is active (Pilch-Erdman,
-  Reitz-Diwakar, or Reitz-KHRT).  TAB and ETAB do *not* set this flag; they inject a discrete
-  breakup event through the `solout` callback while the particle advances under model 1, 2 or 6.
+The numbers are only labels: the V&V pages use them. The equations of each system are in
+[Governing equations](governing-equations.md). Breakup by events (TAB, ETAB) adds no equation: it changes the
+parcel between two steps, so a material that breaks this way stays in system 1, 2 or 6.
 
-| `phaseChange` | `brkupEqOde` | Model | RHS routine | State dimension |
-| :---: | :---: | :---: | :--- | :---: |
-| false | false | 1 | `rhsStandard` | 7 (+ 5 euler) |
-| true | false | 2 | `rhsEvaporation` | 8 (+ 6 euler) |
-| false | true | 3 | `rhsBreakupOnly` | 8 (+ 6 euler) |
-| true | true | 4 | `rhsEvapBreakup` | 9 (+ 7 euler) |
-
-A material with `combustion = Beckstead` overrides this matrix and is routed to
-model 5, `rhsBurn` (state dimension 8 + 6 euler, model-2 layout), and with a carried material
-(`share > 0` or `carry=Gallier21`) to model 8, `rhsBurnCarry`, with the carried mass at index 9 (state dimension 9 + 6 euler) — see
-[Metal Combustion](combustion.md).  A material with `solidification = on` is routed to
-model 6, `rhsSolidification` (state dimension 8 + 5 euler: temperature and frozen fraction,
-constant mass), and with a continuous-rate breakup model to model 7, the same routine with the
-number rate at index 9 (state dimension 9 + 6 euler) — see [Solidification](solidification.md).
-
-The euler extra equations (arc length $\ell$, the momentum, energy and mass moments) are
-appended only when eulerian output is requested (`out-file` includes `E`); they do not
-change the model index.
-
-!!! note "TAB and ETAB use model 1, 2 or 6"
-    The Taylor Analogy Breakup (TAB) and Enhanced TAB (ETAB) models treat breakup as a
-    discrete event detected in the `solout` callback rather than adding an ODE equation.
-    They therefore run under model 1 (no evaporation), model 2 (with evaporation) or model 6
-    (solidification) and do not appear in the `brkupEqOde` column of the table above.
+The input that selects each model: [Materials & Models](../user/models.md).
 
 ---
 
@@ -51,72 +36,55 @@ change the model index.
 
 -   :material-math-integral: **[Governing equations](governing-equations.md)**
 
-    Per-particle state vector, the RHS systems, and the body-acceleration term.
+    The parcel's state, the equations of each system, the gas seen by a parcel.
 
 -   :material-arrow-expand-all: **[Drag](drag.md)**
 
-    The 13 drag-coefficient correlations and their selection keyword.
+    The 13 drag-coefficient correlations.
 
 -   :material-thermometer: **[Heat transfer](heat.md)**
 
-    Nusselt-number correlations, the grey-body radiative exchange and the particle-property lookup tables.
+    Nusselt-number correlations and the grey-body radiative exchange.
 
 -   :material-water-percent: **[Evaporation](evaporation.md)**
 
-    d²-law, CEM, CEM-B, Abramzon-Sirignano and Tonini-Cossali mass-transfer models;
-    Langmuir-Knudsen interface and Stefan-blowing options; the parabolic temperature profile
-    inside the droplet and the Zuo-Gomes-Rutland boiling branch.
+    d²-law, CEM, CEM-B, Abramzon–Sirignano and Tonini–Cossali; the Langmuir–Knudsen interface, Stefan blowing,
+    the temperature profile inside a drop and the boiling of a superheated drop.
 
 -   :material-fire: **[Metal combustion](combustion.md)**
 
-    Beckstead d^n aluminum burn law, ignition gate, and heat release.
+    Beckstead's $d^n$ law, the direct $d^2$ law, and a drop that carries what it forms.
+
+-   :material-snowflake: **[Solidification](solidification.md)**
+
+    Undercooling, recalescence, the freezing plateau, melting.
 
 -   :material-explosion: **[Breakup](breakup.md)**
 
-    Pilch-Erdman, Reitz-Diwakar, Reitz-KHRT, TAB, and ETAB; child-particle appending.
+    Pilch–Erdman, Reitz–Diwakar, Reitz KH-RT, TAB and ETAB.
 
 -   :material-wall: **[Wall erosion](erosion.md)**
 
-    Erosion of the walls by the parcels that hit them: Oka et al. (2005) and Neilson-Gilchrist (1968), and the
-    wall file `wall.tec`.
+    Oka et al. (2005) and Neilson–Gilchrist (1968).
 
 -   :material-spray: **[Injection](injection.md)**
 
-    BC-pinned face injection, advancing-front 3D hex packing, and stochastic diameter sampling.
+    Placing parcels on an inlet, and drawing their diameters.
 
 -   :material-transfer: **[Eulerian feedback](eulerian-feedback.md)**
 
-    Source and Euler field accumulation, Favre averaging, and body-force correction.
+    What the parcels give the gas, and the averaged fields of the particles.
 
 -   :material-blur: **[Mollification](mollification.md)**
 
-    Dimension-split binomial smoother for deposited fields.
+    Smoothing the deposited fields without losing what they hold.
 
 -   :material-clock-fast: **[Time integration](time-integration.md)**
 
-    The `integrate` loop, OSlo ODE solver interface, geometric cell-crossing sweep, and NaN guards.
+    Advancing a parcel cell by cell, and how a step ends.
 
 -   :material-cube-outline: **[Geometry](geometry.md)**
 
-    Hex face conventions, point-in-cell tests, and ray-polyhedron intersection.
+    Which cell holds a parcel, and where it leaves it.
 
 </div>
-
----
-
-## Summary table
-
-| Page | Key source files |
-| :--- | :--- |
-| [Governing equations](governing-equations.md) | `Lib_RHS.f90`, `Lib_Equations.f90`, `obj_particles.f90` |
-| [Drag](drag.md) | `Lib_Drag.f90` |
-| [Heat transfer](heat.md) | `Lib_Heat.f90`, `Lib_Thermodynamics.f90` |
-| [Evaporation](evaporation.md) | `Lib_Evaporation.f90`, `Lib_RHS.f90` |
-| [Metal combustion](combustion.md) | `Lib_Combustion.f90`, `Lib_RHS.f90` |
-| [Breakup](breakup.md) | `Lib_Breakup.f90`, `Lib_Integration.f90` |
-| [Wall erosion](erosion.md) | `Lib_Erosion.f90`, `Lib_Integration.f90`, `IO.f90` |
-| [Injection](injection.md) | `initialization.f90`, `Lib_Statistics.f90` |
-| [Eulerian feedback](eulerian-feedback.md) | `Lib_Integration.f90`, `obj_block.f90`, `obj_condensed.f90` |
-| [Mollification](mollification.md) | `Lib_Mollify.f90`, `obj_block.f90` |
-| [Time integration](time-integration.md) | `Lib_Integration.f90` |
-| [Geometry](geometry.md) | `geometry.f90`, `obj_block.f90` |

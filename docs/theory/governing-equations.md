@@ -1,234 +1,170 @@
 # Governing equations
 
-Each Lagrangian particle carries a state vector $\mathbf{Z}$ integrated forward in pseudo-time
-from injection to domain exit.  The dimension of $\mathbf{Z}$ and the assembled right-hand side
-depend on the active physics model (see [Model selection](index.md#model-selection)).
+A parcel's state is integrated forward in time from its injection to its exit. What the state holds, and the
+equations it obeys, depend on the parcel's system ([the eight systems](index.md#the-eight-systems)).
 
 ---
 
-## State vector
+## The parcel's state
 
-| Index | Symbol | Meaning | Models |
-| :---: | :---: | :--- | :---: |
-| 1–3 | $\mathbf{x}$ | Position (m) | all |
-| 4–6 | $\mathbf{v}_p$ | Velocity (m s⁻¹) | all |
-| 7 | $T_p$ (or $h_p$) | Temperature (K), or enthalpy when the material carries a $c_p(T)$ table and does not solidify | all |
-| 8 | $m$ | Droplet mass (kg); its rate is $\dot{m}$ (the metal's mass $m_\mathrm{Al}$ under model 8) | 2, 4, 5, 8 |
-| 8 | $\dot{n}_p$ | Droplet-number rate of the parcel; its rate is the continuous breakup rate | 3 |
-| 8 | $f$ | Frozen mass fraction of a solidifying droplet (the temperature stays at index 7) | 6, 7 |
-| 9 | $\dot{n}_p$ | Droplet-number rate for combined evap+breakup, and for breakup on a solidifying droplet | 4, 7 |
-| 9 | $m_\mathrm{ox}$ | Mass of the oxide cap of a burning droplet (kg); the parcel's mass is $m_\mathrm{Al} + m_\mathrm{ox}$ | 8 |
-| +1 | $\ell$ | Arc-length integrand $|\mathbf{v}_p|$ | euler on |
-| +2–4 | $\mathbf{v}_p\,\ell$ | Momentum integrand $\mathbf{v}_p|\mathbf{v}_p|$ (weighted by the parcel mass $m$ for models 2, 5 and 8 and by the stream mass $m\,\dot n_p$ for model 4; unweighted for models 1, 3, 6 and 7; in the meridian frame on a wedge) | euler on |
-| +5 | $T_p\,\ell$ | Energy integrand (weighted by the parcel mass $m$ for models 2, 5 and 8 and by the stream mass $m\,\dot n_p$ for model 4; unweighted for models 1, 3, 6 and 7) | euler on |
-| +6 | $m$ or $\dot{n}_p$ | Mass moment (models 2, 4, 5, 8) or number moment (models 3 and 7) | euler on, models 2–5, 7 and 8 |
-| +7 | $\dot{n}_p$ | Number moment | euler on, model 4 |
-| tail | $J$, $W$ | Body-force reaction accumulators $\int\dot m\,dt$ and $\int\dot m\,\mathbf{g}\cdot\mathbf{v}\,dt$ (models 2, 4, 5, 8 with a body force and source output; $J$ reuses the euler mass moment when both are on) | see [Eulerian feedback](eulerian-feedback.md) |
+| Symbol | Meaning | Systems |
+| :---: | :--- | :--- |
+| $\mathbf x$ | position (m) | all |
+| $\mathbf v_p$ | velocity (m/s) | all |
+| $T_p$ or $h_p$ | temperature (K), or the specific enthalpy when the material's heat capacity varies with temperature (a freezing material keeps the temperature) | all |
+| $m$ | the drop's mass (kg); for system 8 the metal's mass $m_\mathrm{Al}$ | 2, 4, 5, 8 |
+| $\dot n_p$ | the number rate of the parcel (drops per second) | 3, 4, 7 |
+| $f$ | the frozen mass fraction | 6, 7 |
+| $m_\mathrm{ox}$ | the carried mass of a burning drop (kg); the parcel's mass is $m_\mathrm{Al} + m_\mathrm{ox}$ | 8 |
 
-The state dimension is therefore 7 (model 1), 8 (models 2, 3, 5, 6) or 9 (models 4, 7 and 8), plus
-5, 6 or 7 euler slots when `eulerSwitch` is on (5 for models 1 and 6; 6 for models 2, 3, 5, 7 and 8, whose sixth
-slot is the mass moment — the number moment $\dot n_p$ for models 3 and 7 —; 7 for model 4).
-
-The type `obj_particle` (defined in `obj_particles.f90`) stores the state in the allocatable
-`stateVar` array together with auxiliary fields: `m`, `d` (diameter), `npdot` (parcel rate),
-`tp` (temperature), `mdot` (current mass rate), and index arrays `i(4)` / `igas(3)` for
-cell location in the geometry and gas dual-mesh respectively.
+When the Eulerian fields of the particles are asked for, the state also integrates the moments these fields are
+built from: the arc length $\ell$, and the velocity, energy and mass (or number) along it
+([Euler fields](eulerian-feedback.md#euler-fields)). With a body force and the source fields, a parcel whose mass
+changes also integrates $\int \dot m\,dt$ and $\int \dot m\,\mathbf g\cdot\mathbf v\,dt$
+([Body-force correction](eulerian-feedback.md#the-body-force)). None of these changes the motion.
 
 ---
 
-## Interphase force and heat kernel
+## Drag and heat
 
-The shared kernel `interphase` (in `Lib_Equations.f90`) computes the drag force and heat flux
-for all models:
+Every system shares one drag force and one convective heat flux. With the slip Mach and Reynolds numbers
 
 $$
 \mathrm{Ma} = \frac{|\mathbf{v}_g - \mathbf{v}_p|}{\sqrt{\gamma R_g T_g}}, \qquad
-\mathrm{Re} = \frac{\rho_g\,|\mathbf{v}_g - \mathbf{v}_p|\,d}{\mu_g}
+\mathrm{Re} = \frac{\rho_g\,|\mathbf{v}_g - \mathbf{v}_p|\,d}{\mu_g},
 $$
 
-$$
-F_\mathrm{drag} = \frac{\pi}{8}\,C_d\,d\,\mathrm{Re}\,\mu_g\,(\mathbf{v}_g - \mathbf{v}_p)
-$$
-
-This form is algebraically identical to the standard aerodynamic expression
-$C_d\,(\pi d^2/4)\,\tfrac{1}{2}\rho_g|\mathbf{v}_g-\mathbf{v}_p|^2\,\hat{e}$; the factor
-$\pi/8$ arises from absorbing $\rho_g$ and the slip speed into `Re` and factoring out the
-direction from the vector difference.
+the drag force is
 
 $$
-\mathrm{Pr} = \frac{\mu_g\,\gamma\,R_g}{(\gamma-1)\,k_g}, \qquad
-\dot{Q} = \mathrm{Nu}\,k_g\,\pi\,d\,(T_g - T_p)\,c_{p,\mathrm{factor}}
+\mathbf F_\mathrm{drag} = \frac{\pi}{8}\,C_d\,d\,\mathrm{Re}\,\mu_g\,(\mathbf{v}_g - \mathbf{v}_p),
 $$
 
-`cpFactor` is $1/c_{p,p}$ when the state variable is the temperature $T_p$ and $1$ when the
-particle carries a variable-$c_p$ table (the state variable is then the enthalpy $h_p$; a solidifying material keeps
-$T_p$, see [Solidification](solidification.md#a-varying-liquid-heat-capacity)); it
-converts the Nusselt-based heat flux into the rate that appears in $F(7) = \dot Q / m$.
-
-With a variable-$c_p$ table the temperature is recovered from $h_p$ through the tabulated enthalpy,
-linear between the integer nodes $T_i$ and continued beyond the table by its first and last segments:
+the usual $C_d\,(\pi d^2/4)\,\tfrac{1}{2}\rho_g|\mathbf{v}_g-\mathbf{v}_p|\,(\mathbf{v}_g-\mathbf{v}_p)$ with $\rho_g$ and
+the slip speed folded into $\mathrm{Re}$. $C_d$ is the drag law's ([Drag](drag.md)). With the Prandtl number
+$\mathrm{Pr} = \mu_g\,\gamma\,R_g/((\gamma-1)\,k_g)$ the convective heat the parcel receives is
 
 $$
-h(T) = h_i + s_i\,(T - T_i), \qquad s_i = h_{i+1} - h_i, \qquad
-i = \min\bigl(\max(\lfloor T \rfloor, T_\mathrm{min}),\, T_\mathrm{max} - 1\bigr)
+\dot Q_c = \mathrm{Nu}\,k_g\,\pi\,d\,(T_g - T_p)
 $$
 
-$T(h)$ inverts the same pieces, the bracketing node found by bisection, so a table may start at any
-temperature.  ICE writes the energy of its condensed phase as $e = h - h_\mathrm{off}$ with
-$h_\mathrm{off} = h(T_\mathrm{min}) - T_\mathrm{min}\,s_{T_\mathrm{min}}$, and continues it below
-the table by the line through $e(0) = 0$.  Since $e(T_\mathrm{min}) = T_\mathrm{min}\,s_{T_\mathrm{min}}$,
-that line has the slope $s_{T_\mathrm{min}}$: it is the first segment continued.  Above the table both
-solvers continue the last segment, so the two assign one temperature to one enthalpy.
+in watts, $\mathrm{Nu}$ the heat law's ([Heat Transfer](heat.md)). A material with an emissivity $\varepsilon$ also
+exchanges $\dot Q_r = \varepsilon\,\sigma\,\pi\,d^2\,(T_g^4 - T_p^4)$ by radiation ([Radiation](heat.md#radiation)).
+Where the gas viscosity vanishes (a degenerate gas), systems 1, 6 and 7 exchange no heat at all.
+
+---
+
+## The equations of each system
+
+All systems move the parcel the same way:
+
+$$
+\dot{\mathbf x} = \mathbf v_p, \qquad
+\dot{\mathbf v}_p = \frac{\mathbf F_\mathrm{drag}}{m} + \mathbf g_\mathrm{body},
+$$
+
+with $\mathbf g_\mathrm{body}$ the uniform body acceleration (gravity), zero by default. The gas feels the drag
+reaction only; the body force's work is removed from what the parcels give it
+([Eulerian feedback](eulerian-feedback.md#the-body-force)).
 
 ### Energy equation
 
-The heat a particle receives is the convective term of the kernel,
-$\dot Q_c = \mathrm{Nu}\,k_g\,\pi\,d\,(T_g - T_p)$ in watts (the $\dot Q$ above without
-$c_{p,\mathrm{factor}}$), plus the grey-body exchange $\dot Q_r = \varepsilon\,\sigma\,\pi\,d^2\,(T_g^4 - T_p^4)$
-of a material with an emissivity $\varepsilon$ ([Heat Transfer](heat.md#radiation); $\varepsilon = 0$,
-the default, removes it).  With $c = c_{p,\mathrm{factor}}$ the energy equation of each model reads:
+With $c$ the heat capacity, the energy equation of each system is:
 
-| Model | Energy equation |
+| System | Energy equation |
 | :---: | :--- |
-| 1, 3 | $F(7) = (\dot Q_c + \dot Q_r)\,c/m$ |
-| 2, 4 | $F(7) = (f_2\,\dot Q_c + \dot Q_r + \dot m_\mathrm{evap}\,L_v)\,c/m$, with $f_2$ the Stefan-blowing factor (1 unless `blowing = LK`); under ASM and TC the model's own heat rate replaces $f_2\,\dot Q_c$; under `liquid-conduction = P2T` the terms are taken at the surface temperature $T_s$, and in the boiling branch of `boiling = ZGR` the branch's heat replaces $f_2\,\dot Q_c$ at $T_s = T_B$; both add the carry $\dot m_\mathrm{evap}\,(h_l(T_s) - \bar h)$ to the bracket ([Evaporation](evaporation.md#droplet-energy-equation)) |
-| 5 | $F(7) = (\dot Q_c + \dot Q_r + \beta_\mathrm{part}\,q_\mathrm{comb}\,\lvert\dot m\rvert)\,c/m$ ([Combustion](combustion.md#heat-release)) |
-| 8 | $F(7) = (\dot Q_c + \dot Q_r + \beta_\mathrm{part}\,q_\mathrm{comb}\,\lvert\dot m_\mathrm{Al}\rvert)/(m_\mathrm{Al}\,c_\mathrm{Al} + m_\mathrm{ox}\,c_\mathrm{res})$, the heat on the equal-volume sphere of metal and cap ([A drop that carries what it forms](combustion.md#a-drop-that-carries-what-it-forms-model-8)) |
-| 6 | $\dot Q = \dot Q_c + \dot Q_r$: liquid $F(7) = \dot Q/(m\,c_l)$, plateau $F(8) = -\dot Q/(m\,h_\mathrm{fus})$, solid $F(7) = \dot Q/(m\,c_s)$ ([Solidification](solidification.md)) |
-| 7 | as model 6, with the droplet mass $m = \dot m/\dot n_p$ from the stream flow ([Solidification](solidification.md#breakup-on-the-liquid)) |
+| 1, 3 | $m\,c\,\dot T_p = \dot Q_c + \dot Q_r$ |
+| 2, 4 | $m\,c\,\dot T_p = f_2\,\dot Q_c + \dot Q_r + \dot m_\mathrm{evap}\,L_v$, $f_2$ the Stefan-blowing factor (1 unless blowing is on). Under ASM and TC the model's own heat replaces $f_2\,\dot Q_c$; with a temperature profile inside the drop the terms are taken at the surface temperature; see [Evaporation](evaporation.md#droplet-energy-equation) |
+| 5 | $m\,c\,\dot T_p = \dot Q_c + \dot Q_r + \beta_\mathrm{part}\,q_\mathrm{comb}\,\lvert\dot m\rvert$ ([Combustion](combustion.md#heat-release)) |
+| 8 | $(m_\mathrm{Al}\,c_\mathrm{Al} + m_\mathrm{ox}\,c_\mathrm{ox})\,\dot T_p = \dot Q_c + \dot Q_r + \beta_\mathrm{part}\,q_\mathrm{comb}\,\lvert\dot m_\mathrm{Al}\rvert$, on the sphere of metal and cap ([A drop that carries what it forms](combustion.md#a-drop-that-carries-what-it-forms)) |
+| 6, 7 | liquid $m\,c_l\,\dot T_p = \dot Q$, plateau $m\,h_\mathrm{fus}\,\dot f = -\dot Q$, solid $m\,c_s\,\dot T_p = \dot Q$, with $\dot Q = \dot Q_c + \dot Q_r$ ([Solidification](solidification.md)) |
 
-Where the gas viscosity vanishes (a degenerate gas), models 1, 6 and 7 set $\dot Q_c = \dot Q_r = 0$.
+When the state is the enthalpy, $m\,\dot h_p$ replaces $m\,c\,\dot T_p$.
+
+### Mass and number rate
+
+| System | Equations |
+| :---: | :--- |
+| 1 | none: the parcel keeps its mass and its number rate |
+| 2 | $\dot m = \dot m_\mathrm{evap}$, the evaporation model's rate ([Evaporation](evaporation.md)) |
+| 3 | $\mathrm d\dot n_p/\mathrm dt = (\mathrm d\dot n_p/\mathrm dt)_\mathrm{brk}$, the breakup model's rate ([Breakup](breakup.md)); the diameter follows from the parcel's constant mass flow |
+| 4 | the two together, below |
+| 5 | $\dot m$ the burning law's ([Metal Combustion](combustion.md)) |
+| 6 | none: the drop's mass is constant |
+| 7 | the number rate as in system 3, while the drop is liquid; the drop's mass is the stream's mass flow over $\dot n_p$ |
+| 8 | $\dot m_\mathrm{Al}$ the burning law's and $\dot m_\mathrm{ox} = -\xi\,\nu\,\dot m_\mathrm{Al}$ ([A drop that carries what it forms](combustion.md#a-drop-that-carries-what-it-forms)) |
+
+System 4 evaporates and breaks up at once:
+
+$$
+\frac{\mathrm{d}m}{\mathrm{d}t} = \dot{m}_\mathrm{evap}
+  - \frac{m}{\dot{n}_p}\left(\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t}\right)_\mathrm{brk}, \qquad
+\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t} = \left(\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t}\right)_\mathrm{brk},
+$$
+
+so that $\mathrm{d}(\dot{n}_p m)/\mathrm{d}t = \dot{n}_p\,\dot{m}_\mathrm{evap}$: breakup shrinks each drop and raises
+$\dot n_p$ at a constant stream mass; evaporation shrinks each drop at a constant $\dot n_p$. In diameter,
+$\mathrm{d}d/\mathrm{d}t = (d_\mathrm{stable} - d)/\tau + 2\dot{m}_\mathrm{evap}/(\rho_p \pi d^2)$.
+
+Evaporation shrinks the drops of a parcel, never their number. A breakup event (TAB, ETAB, or the RT breakup of
+KH-RT) sets a new diameter and scales the number rate so that the stream mass $\dot n_p\,m$ is kept.
 
 ---
 
-## Model 1 — `rhsStandard`
+## The property tables
 
-Active when `phaseChange = false` and `brkupEqOde = false`; neq = 7 (+ euler).
-
-$$
-\dot{\mathbf{x}} = \mathbf{v}_p
-$$
+The heat capacity, density and enthalpy of a material are tables in temperature, linear between the integer kelvins
+$T_i$ ([Material Properties](../user/properties.md)). When the heat capacity varies, the state is the enthalpy and the
+temperature is read back from it through the same table, continued beyond its ends by its first and last segments:
 
 $$
-\dot{\mathbf{v}}_p = \frac{F_\mathrm{drag}}{m} + \mathbf{g}_\mathrm{body}
+h(T) = h_i + s_i\,(T - T_i), \qquad s_i = h_{i+1} - h_i, \qquad
+i = \min\bigl(\max(\lfloor T \rfloor, T_\mathrm{min}),\, T_\mathrm{max} - 1\bigr).
 $$
 
-$$
-\dot{T}_p = \frac{\dot{Q}_c + \dot{Q}_r}{m\,c_{p,p}}
-$$
+$T(h)$ inverts the same pieces, so a table may start at any temperature.
 
-No mass change; $\dot{n}_p$ is constant throughout the trajectory.  TAB and ETAB breakup events
-modify $d$ and $n_{\!p}$ discretely via the `solout` callback without adding an ODE equation.
-
----
-
-## Model 2 — `rhsEvaporation`
-
-Active when `phaseChange = true` and `brkupEqOde = false`; neq = 8 (+ euler).
-
-Equations (1)–(3) identical to model 1.  The eighth equation tracks mass loss:
-
-$$
-\dot{m} = \dot{m}_\mathrm{evap}(\mathbf{Z}, \mathbf{g})
-$$
-
-where $\dot{m}_\mathrm{evap}$ is evaluated by the active evaporation model (see
-[Evaporation](evaporation.md)).  The particle mass and diameter are updated from `stateVar(8)`
-at each accepted step; $\dot{n}_p$ remains constant (evaporation shrinks individual droplets,
-not the parcel count).  A TAB or ETAB event writes its new diameter into `stateVar(8)` as the
-droplet mass and rescales $\dot{n}_p$ with it, at constant stream mass $\dot{n}_p\,m$.
-
-Body-force source accumulators $J$ and $W$ are appended at the tail of the state when a
-body force is active together with source output; they integrate the mass rate and the
-gravity work along the trajectory for the Eulerian source correction (see
-[Eulerian feedback](eulerian-feedback.md)).
-
----
-
-## Model 3 — `rhsBreakupOnly`
-
-Active when `phaseChange = false` and `brkupEqOde = true`; neq = 8 (+ euler).
-
-Equations (1)–(3) identical to model 1.  The eighth equation is the ODE-based breakup rate of
-the number rate $\dot{n}_p$:
-
-$$
-\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t} = \left(\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t}\right)_\mathrm{brk}(\mathbf{Z}, \mathbf{g})
-$$
-
-evaluated by `breakupOde` in `Lib_Breakup.f90` (Pilch-Erdman, Reitz-Diwakar, or Reitz-KHRT
-continuous rate).  The diameter evolves implicitly through the parcel-mass conservation
-constraint as $\dot{n}_p$ changes.
-
----
-
-## Model 4 — `rhsEvapBreakup`
-
-Active when `phaseChange = true` and `brkupEqOde = true`; neq = 9 (+ euler).
-
-$$
-\frac{\mathrm{d}m}{\mathrm{d}t} = \dot{m}_\mathrm{evap}(\mathbf{Z}, \mathbf{g})
-  - \frac{m}{\dot{n}_p}\left(\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t}\right)_\mathrm{brk} \qquad [\text{index 8}]
-$$
-
-$$
-\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t} = \left(\frac{\mathrm{d}\dot{n}_p}{\mathrm{d}t}\right)_\mathrm{brk}(\mathbf{Z}, \mathbf{g}) \qquad [\text{index 9}]
-$$
-
-so that $\mathrm{d}(\dot{n}_p m)/\mathrm{d}t = \dot{n}_p\,\dot{m}_\mathrm{evap}$: breakup shrinks each drop
-and raises $\dot{n}_p$ at constant stream mass, evaporation shrinks each drop at constant
-$\dot{n}_p$.  In diameter, $\mathrm{d}d/\mathrm{d}t = (d_\mathrm{stable} - d)/\tau
-+ 2\dot{m}_\mathrm{evap}/(\rho_p \pi d^2)$.  A Reitz-KHRT event (RT breakup, KH shed) writes its
-new diameter and number rate into the two states.
-
----
-
-## Body-acceleration term
-
-All models include the body-force (gravity) acceleration:
-
-$$
-\dot{\mathbf{v}}_p \mathrel{+}= \mathbf{g}_\mathrm{body}
-$$
-
-controlled by the `bodyForce` flag in `IGLOO_variables`.  The reaction on the gas phase is
-handled separately via the source-field accumulation described in [Eulerian feedback](eulerian-feedback.md).
+ICE writes the energy of its condensed phase as $e = h - h_\mathrm{off}$ with
+$h_\mathrm{off} = h(T_\mathrm{min}) - T_\mathrm{min}\,s_{T_\mathrm{min}}$, and continues it below the table by the
+line through $e(0) = 0$. Since $e(T_\mathrm{min}) = T_\mathrm{min}\,s_{T_\mathrm{min}}$, that line has the slope
+$s_{T_\mathrm{min}}$: it is the first segment continued. Above the table both solvers continue the last segment, so
+the two codes assign one temperature to one enthalpy.
 
 ---
 
 ## Gas-state interpolation
 
-The gas state vector at a particle position is assembled as:
+A parcel sees the gas density, velocity, temperature, viscosity, ratio of heat capacities, gas constant and
+conductivity at its position. Two orders are available.
 
-| `gas` index | Quantity |
-| :---: | :--- |
-| 1 | $\rho_g$ (kg m⁻³) |
-| 2–4 | $\mathbf{v}_g$ (m s⁻¹) |
-| 5 | $T_g$ (K) |
-| 6 | $\mu_g$ (Pa·s) |
-| 7 | $\gamma$ (–) |
-| 8 | $R_g$ (J kg⁻¹ K⁻¹) |
-| 9 | $k_g$ (W m⁻¹ K⁻¹) |
+**First order.** The values at the centre of the cell holding the parcel.
 
-When `gas-order = 2`, `interp2ndOrder` (3D) or `sampleGas2D` (2D / axisymmetric) in
-`Lib_Equations.f90` evaluates the gas state via trilinear inverse mapping with
-Newton-Raphson iteration (max 10 steps from the particle's previous local coordinates, stopped once
-$\lVert \mathbf{x}(\boldsymbol{\xi}) - \mathbf{p} \rVert < \max(10^{-12} h,\ 64\,\varepsilon L)$, with $h$
-the cell diagonal, $L$ the largest coordinate magnitude of the cell's nodes and $\varepsilon$ the machine
-epsilon — relative to the cell and reachable in floating point —, $\boldsymbol{\xi}$ clamped to
-$[0,1]^3$), or bilinear with an analytic inverse. The trilinear map of a cell far from a parallelepiped folds outside the cell, where the determinant of its Jacobian vanishes, and a point of the cell near the fold has a second preimage across it: when the iteration does not converge, or ends outside the cell at a point where the determinant has not the sign it has at the cell centre, the inverse is sought once more from the cell centre and that solution is taken when it lies in the cell.
-On an axisymmetric wedge the meridian field is sampled at the particle's $(x, r)$ and its
-velocity rotated to the particle's azimuth before it enters the ODE.  When
-`gas-order = 1`, the cell-centre values are used directly, the velocity rotated to the particle's azimuth
-as well.  At both gas orders the rotated velocity enters the ODE and the slip a breakup event model (TAB,
-ETAB, KH-RT) evaluates at a step end.
+**Second order.** The gas lives on a dual mesh whose nodes are the cell centres. In 3D the parcel's local
+coordinates $\boldsymbol\xi$ in its dual cell invert the trilinear map $\mathbf x(\boldsymbol\xi)$, and the gas is
+interpolated trilinearly; in 2D and on an axisymmetric wedge the map is bilinear, inverted in closed form.
 
-The dual mesh of a block reaches one node past each boundary face, a ring of ghost nodes
-filled once per sweep: by linear extrapolation from the interior, mirrored at a solid face, as the mirror image of the interior behind a symmetry plane,
-and — at a face connected to another block (101, 201, 102) — with that block's gas
-interpolated at the node by the same trilinear (bilinear) weights. A linear field is then
-continuous across a block interface whatever the cells on either side
-([Boundary conditions](../user/boundary-conditions.md#connected-faces-the-gas-ghost-ring)). At a 101
-face the ghost nodes of the face sit at the partner cells' centres and take their values, so the dual
-cells of the face vertices are those of the two blocks' cells as one block; their deposits are combined
-across the face ([Eulerian feedback](eulerian-feedback.md#source-fields)).
+The trilinear inverse is a Newton iteration from the parcel's previous local coordinates, at most 10 steps, stopped
+once $\lVert \mathbf{x}(\boldsymbol{\xi}) - \mathbf{p} \rVert < \max(10^{-12} h,\ 64\,\varepsilon L)$, with $h$ the cell
+diagonal, $L$ the largest coordinate magnitude of the cell's nodes and $\varepsilon$ the machine epsilon: a tolerance
+relative to the cell, and reachable in floating point. $\boldsymbol\xi$ is clamped to $[0,1]^3$. The trilinear map of
+a cell far from a parallelepiped folds outside it, where its Jacobian vanishes, and a point near the fold has a second
+preimage across it. When the iteration does not converge, or ends at a point where the Jacobian has not the sign it
+has at the cell centre, the inverse is sought again from the cell centre, and that solution is kept when it lies in
+the cell.
+
+**On a wedge**, the gas lives in the meridian plane: it is sampled at the parcel's $(x, r)$ and its velocity is rotated
+to the parcel's azimuth, at both orders.
+
+**The ghost ring.** The dual mesh of a block reaches one node past each boundary face. These ghost nodes are filled
+once per sweep:
+
+- by linear extrapolation from the interior, at most faces;
+- as the mirror image of the interior, behind a symmetry plane;
+- with the reflected normal velocity, at a solid wall;
+- with the other block's gas, interpolated at the node by the same weights, at a face connected to another block.
+
+A linear field is then continuous across a block interface whatever the cells on either side
+([Boundary conditions](../user/boundary-conditions.md#connected-faces-the-gas-ghost-ring)). At a conformal
+connection the ghost nodes of the face sit at the partner cells' centres, so the dual cells of the face are those of
+the two blocks taken as one; their deposits are combined across the face
+([Eulerian feedback](eulerian-feedback.md#block-interfaces)).

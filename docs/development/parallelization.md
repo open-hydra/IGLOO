@@ -538,7 +538,7 @@ about half of it geometry.
 
 - **Setup is replicated, except the Tecplot read**: rank 0 reads the gas file in one pass, its
   values converted on rank 0's OpenMP threads (`IGLOO_Mod_TecASCII`;
-  [the gas file](../user/input.md#the-gas-file-gas-file)), and broadcasts the field (`mpi_bcast_orion`: names, solution time, block dimensions, mesh and variables);
+  [the gas file](../user/general.md#the-gas-file)), and broadcasts the field (`mpi_bcast_orion`: names, solution time, block dimensions, mesh and variables);
   every rank then builds the blocks, the geometry and the pinning itself, and the other ranks
   busy-wait while rank 0 reads. The box of [Measured performance](#measured-performance)
   (3 M cells, ASCII) reads its gas in 16.60 s on one core, 2.11 s at 1 × 80, 2.84 s at 4 × 20 and

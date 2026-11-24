@@ -189,7 +189,7 @@ After `solve`, `obj_IGLOO%writeout` writes the mesh-projected fields:
 |------|---------|
 | `source.tec` | Gas-coupling source terms: mass, momentum, energy deposition per cell |
 | `euler<fam>.tec` | Equivalent Eulerian fields per particle family: density, velocity, temperature, number density (`rho_p u_p v_p w_p T_p n_p`) |
-| `wall.tec` | With `[IGLOO-Erosion]`: one zone `B<b>F<f>` per block face holding a wall cell, on the face's nodes; per cell the erosion ratio `er-<mat>` [kg/kg] and incident mass flux `g-<mat>` [kg/(m² s)] of every material, then the recession rate `rdot` [m/s] ([Wall erosion](../theory/erosion.md#output-walltec)); not mollified |
+| `wall.tec` | With `[IGLOO-Erosion]`: one zone `B<b>F<f>` per block face holding a wall cell, on the face's nodes; per cell the erosion ratio `er-<mat>` [kg/kg] and incident mass flux `g-<mat>` [kg/(m² s)] of every material, then the recession rate `rdot` [m/s] ([Wall erosion](../user/erosion.md#the-wall-file)); not mollified |
 
 Both outputs are mollified by a local binomial smoother (controlled by `mollify` and `mollify-passes` in `[IGLOO-General]`) to reduce deposition noise.
 

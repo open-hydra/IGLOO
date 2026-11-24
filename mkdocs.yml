@@ -105,13 +105,18 @@ nav:
   - User Guide:
     - user/index.md
     - Using IGLOO: user/using.md
-    - Input File: user/input.md
-    - Input Parameters: user/registry.md
+    - Input Files: user/input.md
+    - Run Settings: user/general.md
+    - Materials & Models: user/models.md
+    - Material Properties: user/properties.md
     - Boundary & Injection: user/boundary-conditions.md
+    - Integrator: user/solver.md
+    - Wall Erosion: user/erosion.md
+    - Parameter Registry: user/registry.md
 
   - Theoretical Guide:
     - theory/index.md
-    - Lagrangian Formulation: theory/governing-equations.md
+    - Governing Equations: theory/governing-equations.md
     - Drag: theory/drag.md
     - Heat Transfer: theory/heat.md
     - Evaporation: theory/evaporation.md
@@ -144,6 +149,7 @@ nav:
   - Developer Guide:
     - development/index.md
     - Code Structure: development/structure.md
+    - Code Map: development/code-map.md
     - Coupling: development/coupling.md
     - Testing: development/testing.md
     - Parallelization: development/parallelization.md
