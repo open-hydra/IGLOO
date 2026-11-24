@@ -32,6 +32,8 @@ program test_radiation
     use verif_norms,    only: assert_lt
     use verif_report,   only: init_report, append_row, finalize_report
     implicit none
+    !> The yield of alumina from aluminium, M(Al2O3)/(2 M(Al)): the carry row's yield of the Al cases
+    real(R8), parameter :: NU_AL = (2._R8*26.9815385_R8 + 3._R8*15.999_R8)/(2._R8*26.9815385_R8)
 
     real(R16), parameter :: SIGQ = 5.670374419e-8_R16      ! Stefan-Boltzmann constant, CODATA
     real(R16), parameter :: PIQ  = 4._R16*atan(1._R16)
@@ -169,8 +171,8 @@ contains
 
     !> one right-hand side call of the model set up last
     subroutine call_rhs(model, neq, Z, F, aux, auxst, gas, htab, epsTab)
-        use Lib_RHS, only: rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, rhsAlCombustion, &
-                           rhsSolidification, rhsAlCap, nauxvar, nauxstate
+        use Lib_RHS, only: rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, rhsBurn, &
+                           rhsSolidification, rhsBurnCarry, nauxvar, nauxstate
         integer,  intent(in)    :: model, neq
         real(R8), intent(in)    :: Z(neq), aux(:), htab(:)
         real(R8), intent(out)   :: F(neq)
@@ -188,11 +190,11 @@ contains
         case (4); call rhsEvapBreakup(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
                                       htab, dtab, dtab, dtab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, &
                                       epsTabM=epsTab)
-        case (5); call rhsAlCombustion(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
+        case (5); call rhsBurn(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
                                        htab, dtab, gasNodes, gasVert, gas, 9, 8, epsTabM=epsTab)
         case (6, 7); call rhsSolidification(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
                                             htab, dtab, dtab, dtab, gasNodes, gasVert, gas, 9, 8, epsTabM=epsTab)
-        case (8); call rhsAlCap(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
+        case (8); call rhsBurnCarry(neq, 0._R8, Z, F, aux, nauxvar, auxst, max(1, nauxstate), &
                                 gasNodes, gasVert, gas, 9, 8, epsTabM=epsTab)
         end select
     end subroutine call_rhs
@@ -265,7 +267,7 @@ contains
         use IGLOO_Lib_Properties, only: Tmin, Tmax
         use IGLOO_Lib_Evaporation, only: blowingFactor
         use IGLOO_Lib_Solidification, only: phLiquid, phUndercooled, phPlateau, phSolid
-        use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch
+        use IGLOO_Lib_Combustion, only: buildLobeTable, carryStretch
         logical, intent(inout) :: ok
         real(R8), parameter :: PI = 4._R8*atan(1._R8), UG = 10._R8, Ru = 8314.46_R8
         type(obj_particle) :: p1, p6, p7, p2, p3, p4, p5, p8
@@ -412,7 +414,8 @@ contains
         p8%cp = 1250._R8;  p8%rho = 2950._R8
         p8%Kburn = 4.28e-6_R8;  p8%nBurn = 1.8_R8;  p8%Xeff = 0.21_R8;  p8%betaPart = 0.3_R8
         p8%Tign = 2350._R8;  p8%qComb = 31.0e6_R8
-        p8%xiCap = 0.2_R8;  p8%rhoRes = 3950._R8;  p8%cpRes = 1887.6_R8;  p8%cStretch = capStretch(0.2_R8, 1.8_R8)
+        p8%carryShare = 0.2_R8;  p8%carryYield = NU_AL;  p8%rhoCar = 3950._R8;  p8%cpCar = 1887.6_R8
+        p8%cStretch = carryStretch(0.2_R8, NU_AL, 1.8_R8)
         Tg = 2000._R8;  Tp = 3000._R8
         mAl = 2950._R8*PI/6._R8*(100.0e-6_R8)**3;  mOx = mAl
         d = (sixOverPi*(mAl/2950._R8 + mOx/3950._R8))**oneThird
@@ -459,7 +462,7 @@ contains
         use IGLOO_variables, only: sixOverPi, oneThird
         use IGLOO_Lib_Properties, only: Tmin, Tmax
         use IGLOO_Lib_Solidification, only: phLiquid, phUndercooled, phPlateau, phSolid
-        use IGLOO_Lib_Combustion, only: buildLobeTable, capStretch
+        use IGLOO_Lib_Combustion, only: buildLobeTable, carryStretch
         logical, intent(inout) :: ok
         real(R8), parameter :: PI = 4._R8*atan(1._R8), UG = 10._R8, Ru = 8314.46_R8
         real(R8), parameter :: Tph(0:3) = [2400._R8, 2300._R8, 2327._R8, 1800._R8], fph(0:3) = [0._R8, 0._R8, 0.5_R8, 1._R8]
@@ -552,7 +555,8 @@ contains
         p8%cp = 1250._R8;  p8%rho = 2950._R8
         p8%Kburn = 4.28e-6_R8;  p8%nBurn = 1.8_R8;  p8%Xeff = 0.21_R8;  p8%betaPart = 0.3_R8
         p8%Tign = 2350._R8;  p8%qComb = 31.0e6_R8
-        p8%xiCap = 0.2_R8;  p8%rhoRes = 3950._R8;  p8%cpRes = 1887.6_R8;  p8%cStretch = capStretch(0.2_R8, 1.8_R8)
+        p8%carryShare = 0.2_R8;  p8%carryYield = NU_AL;  p8%rhoCar = 3950._R8;  p8%cpCar = 1887.6_R8
+        p8%cStretch = carryStretch(0.2_R8, NU_AL, 1.8_R8)
         Tg = 2000._R8;  Tp = 3000._R8
         mAl = 2950._R8*PI/6._R8*(100.0e-6_R8)**3;  mOx = mAl
         d = (sixOverPi*(mAl/2950._R8 + mOx/3950._R8))**oneThird

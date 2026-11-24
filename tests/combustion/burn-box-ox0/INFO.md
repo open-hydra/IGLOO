@@ -7,7 +7,7 @@ The state at injection, the cap's growth, the residue and the books follow from 
 inputs.
 
 ## Model
-`xi-ox0 = x0` on the material line of a burning, capped material (ODE model 8) is the oxide's mass fraction of the
+`carried-0 = x0` on the material line of a burning, capped material (ODE model 8) is the oxide's mass fraction of the
 injected particle, `m_ox/(m_Al + m_ox)`. The inlet's diameter `d_p0` and mass flow describe the whole particle, metal
 and oxide at the equal volume:
 
@@ -21,17 +21,17 @@ so the particle burns out in `t_b = d_p0^n/K_eff` whatever `x0`, and the residue
 `h_mix = (1 − x0)(c_Al T + hOff_Al) + x0 (c_res T + hOff_res)`.
 
 ## Fixture
-`burn-box-residue`'s case with `xi-ox0=0.1` in the burning material's cap row and an inert product (no model on its line, so the
+`burn-box-residue`'s case with `carried-0=0.1` in the burning material's cap row and an inert product (no model on its line, so the
 files carry no `f` column): `burn-box`'s `bc.txt` and `solfile.tec` and `burn-box-cap`'s absolute two-zone table
 (symlinked); `out-file = S`, `out-time = on`, `mollify = off`. Its own `INPUT/phase.txt`:
 
-    A 1 combustion=Beckstead cap=constant
+    A 1 combustion=Beckstead carry=constant
     OX 0
 
 and `INPUT/models.txt`:
 
     A combustion Beckstead K-burn=2.0e-6 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000
-    A cap constant xi-cap=0.2 product=OX residue=on xi-ox0=0.1
+    A carry constant share=0.2 carried=OX residue=on carried-0=0.1
 
 `m_p0 = 4.278788e-11 kg` (`ρ_mix` 3026.62 kg/m³), `m_Al0 = 3.850909e-11 kg`, `d_Al0 = 2.921332e-5 m`. The 25
 parcels burn out near x = 0.072 m at 764.84 K; each residue (`m = 1.883092e-11 kg`, `d = 2.0881e-5 m`, 0.696 of
@@ -41,7 +41,7 @@ parcels burn out near x = 0.072 m at 764.84 K; each residue (`m = 1.883092e-11 k
 
 | id | gate | tolerance | measured |
 |---|---|---|---|
-| W | the log: `xi-ox0= 1.000E-01`; `stretch c =  1.388382 from xi-ox0 = 0.1000` read back against 1.388383; the capped banner; `combustion product (residues: 25)` | 3e-6 relative | 7.2e-7 |
+| W | the log: `carried-0= 1.000E-01`; `stretch c =  1.388382 from carried-0 = 0.1000` read back against 1.388383; the capped banner; `combustion product (residues: 25)` | 3e-6 relative | 7.2e-7 |
 | I | each burning parcel's injection row: `m = m_p0`, `d = d_p0` | 2e-6 relative; exact | 4.7e-7; exact |
 | C | every trajectory row of A before its parcel's exit record against the oracle at the row's `t` (RK4 on `(s, T)`, Gallier's exact `F`, `c` typed): `m = m_Al + m_ox`, the equal-volume `d`, `T`; the coast `u = u_g`, `v = w = 0` (725 rows) | 4e-6, 4e-6 relative; 0.1 K | 2.6e-6, 2.1e-6; 3.5e-5 K |
 | B | each parent's exit record (bc 0) at a time inside `[t(s_b), t_b] = [7.2246481e-3, 7.2246741e-3] s`, `s_b = (m_b/m_Al0)^{n/3}`, `m_b = min(1e-6 m_p0, 1e-20 kg) = 1e-20 kg` (`tools/burnout.py`), `t(s_b)` the burn law's quadrature from 1 to `s_b` (the rate depends on `s` alone): the burnout fires on the first accepted step with `m_Al ≤ m_b` | 3e-6 relative at each end | 7.2246567e-3 to 7.2246705e-3 s |
@@ -58,12 +58,12 @@ Each parcel and its residue ride one `(j, k)` column: the printout is the same a
 
 | mutation | what fails |
 |---|---|
-| the stretch not re-evaluated (`capStretch(ξ, n)`, 1.397685) | W (6.7e-3); C1 3.2e-3, C3 0.74 K; B: the burnouts at 7.1766e-3 s, 0.67 % before the window |
+| the stretch not re-evaluated (`carryStretch(ξ, n)`, 1.397685) | W (6.7e-3); C1 3.2e-3, C3 0.74 K; B: the burnouts at 7.1766e-3 s, 0.67 % before the window |
 | the factor `(d_Al0/d_p0)^n` dropped (the metal burning in its own Beckstead time) | W (4.9e-2); C1 2.2e-2, C3 5.3 K; B: 6.8872e-3 s, 4.7 % before the window |
 | the split on `(π/6) ρ_Al d_p0³` | I 2.5e-2; C1 3.2e-2; B 1.5 % early; R2 2.5e-2; R5 2.5e-2 |
 | the split skipped (the whole `m_p0` as metal, the cap from zero) | C1 0.14, C3 32.9 K; B 2.2 % late; R2 0.14; R3e 0.35 (I holds: the injection row is unchanged) |
 | the number rate left at `ṁ/((π/6) ρ_Al d_p0³)` | R3 4.7e-2; R3e 5.6e-3; R5 2.5e-2 |
 | the scatter pre-pass's number rate on `(π/6) ρ_Al d_p0³` | S 2.6e-2 on both clouds |
-| the `xi-ox0` line missing from the log | W |
+| the `carried-0` line missing from the log | W |
 
-A solver that does not know the `xi-ox0` token stops on `IGLOO: unknown per-material key in the phase file`.
+A solver that does not know the `carried-0` token stops on `IGLOO: unknown per-material key in the phase file`.

@@ -59,7 +59,7 @@ contains
     ntot = 0
     do i = 1, size(material)
       ntot = ntot + material(i)%ngroups
-      if (material(i)%isProduct) ntot = ntot + 1   !> a combustion product: one family, filled by its residues
+      if (material(i)%bornOnly) ntot = ntot + 1   !> a 0-group line: one family, for its born parcels
     enddo
 
     allocate(geoblock(1:nb))
@@ -204,7 +204,7 @@ contains
   !> Allocates the source/euler accumulators per block at the start of solve: gasblock shape
   !  (1..Nx+1) under ord2, geoblock shape otherwise. Existing allocations are kept.
   subroutine allocateAccumulators(srcblock, eulblock, srcSwitch, eulSwitch)
-    use IGLOO_variables,  only: nb, nsm, ord2, mesh2D
+    use IGLOO_variables,  only: nb, nm, nsm, ord2, mesh2D, absColumns
     use IGLOO_data_block, only: obj_sourceblock, obj_eulerblock
     implicit none
     type(obj_sourceblock), intent(inout) :: srcblock(:)
@@ -227,6 +227,13 @@ contains
       if (srcSwitch) then
         if (.not. allocated(srcblock(b)%sourceMass)) then
           call srcblock(b)%allocate(nsm(), ni, nj, nk)
+        endif
+        !> Absorption: what the parcels take and hold, per geometry cell, from zero
+        if (absColumns .and. .not. allocated(srcblock(b)%absorbed)) then
+          allocate(srcblock(b)%absorbed(5, nm, srcblock(b)%Nx, srcblock(b)%Ny, srcblock(b)%Nz))
+          allocate(srcblock(b)%held(nm, srcblock(b)%Nx, srcblock(b)%Ny, srcblock(b)%Nz))
+          srcblock(b)%absorbed = 0._R8
+          srcblock(b)%held     = 0._R8
         endif
       endif
       if (eulSwitch) then

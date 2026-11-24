@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-zero-group-line -- a 0-group material line that no product= names is an inert material, named in the setup log.
+zero-group-line -- a 0-group material line holds born parcels only: with none born it stays empty, named in the log.
 
 drag-stokes's deck with the phase file "A 1" / "B 0" (B's zone of properties.dat is two-mat's second zone).
 check.py runs the plain drag-stokes case into ref-plain/ with the same executable and holds this run to it:
-  Z1  the log holds exactly one line naming material 2, B, as 0 groups that no product= names
+  Z1  the log holds exactly one line naming material 2, B, as a 0-group line whose parcels are born only
   Z2  trajectories-A.dat, outloc-A.dat, scatter-A.dat equal the plain run's as sorted multisets of lines
-  Z3  B's files hold no data row: trajectories-B.dat and outloc-B.dat their header line only, scatter-B.dat its
-      header and its zone line
+  Z3  B's files hold no data row: trajectories-B.dat its header line only, outloc-B.dat and scatter-B.dat their
+      header and their zone line (B's one group, for its born parcels)
   Z4  source.tec: every variable the plain run's carries (by name) within 1e-12 of its scale there; wdot(B) zero
   Z5  this run reaches its stop condition; the plain run exits 0
 """
@@ -22,7 +22,7 @@ from body_source_check import cells  # noqa: E402
 
 IGLOO = os.environ.get("IGLOO_EXE", os.path.abspath(os.path.join(HERE, "..", "..", "..", "bin", "IGLOO")))
 SIB = os.path.join(HERE, "..", "..", "standard", "drag-stokes")
-NOTICE = "[material 2] B: 0 groups and no product= names it"
+NOTICE = "[material 2] B: 0 groups -- its parcels are born only"
 DATS_A = ("trajectories-A.dat", "outloc-A.dat", "scatter-A.dat")
 TOL = 1.0e-12
 
@@ -81,7 +81,7 @@ def main():
             fails.append(f"Z2 {name} differs from the plain run's ({len(set(la) ^ set(lb))} distinct lines in one only)")
         else:
             print(f"Z2 {name}: {len(la)} lines, equal to the plain run's as a sorted multiset")
-    for name, want in (("trajectories-B.dat", (1, 0)), ("outloc-B.dat", (1, 0)), ("scatter-B.dat", (1, 1))):
+    for name, want in (("trajectories-B.dat", (1, 0)), ("outloc-B.dat", (1, 1)), ("scatter-B.dat", (1, 1))):
         p = os.path.join(HERE, "OUTPUT", name)
         if not os.path.isfile(p):
             fails.append(f"Z3 {name} missing")
@@ -120,7 +120,7 @@ def main():
     if fails:
         print(f"\n[FAIL] {len(fails)} violation(s)")
         return 1
-    print("\n[PASS] the unnamed 0-group line B is inert and named once in the log.")
+    print("\n[PASS] the 0-group line B, with nothing born, stays empty and is named once in the log.")
     return 0
 
 

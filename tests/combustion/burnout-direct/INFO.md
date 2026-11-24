@@ -3,7 +3,7 @@
 ## What it verifies
 A drop of `combustion=direct` that heats into its burning temperature burns on the d²-law at a constant temperature
 and is removed at the removal size `d-burnout`, inside the box, what it still holds handed to the gas. The burning
-branch (`rhsAlCombustion`, `src/lib/Lib_RHS.f90`) and the burn-out removal (`solout`,
+branch (`rhsBurn`, `src/lib/Lib_RHS.f90`) and the burn-out removal (`solout`,
 `src/lib/Lib_Integration.f90`) test the same temperature, `directOnset` × `T-burn` (`directOnset` = 1 − 1e-10,
 `src/lib/Lib_Combustion.f90`): a drop burns from the step that ends at or above it, and its temperature then stays
 where that step left it, since every heat it receives feeds the burning.

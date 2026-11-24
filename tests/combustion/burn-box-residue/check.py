@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """burn-box-residue: the burnout residue of an aluminium droplet against independent books.
 
-A capped parcel (ODE model 8, xi-cap 0.2, residue = on) burns out near x = 0.072 m. Its cap becomes one parcel of the
-combustion product OX (a 0-group line of the phase file, its own table zone and solidification data), born at the
+A capped parcel (ODE model 8, share 0.2, residue = on) burns out near x = 0.072 m. Its cap becomes one parcel of the
+combustion carried OX (a 0-group line of the phase file, its own table zone and solidification data), born at the
 parent's position, velocity, temperature and time with the cap's mass, written as a birth row; the gas books lose the
 residue's birth flux at that point. OX freezes: born undercooled (f = 0), it nucleates at its first segment (the
 whole drop freezes, enthalpy kept) and relaxes to the gas temperature. Nothing is read from the code under test to
@@ -212,7 +212,7 @@ def zone_titles(name, d, checks):
 
 
 def banner(log):
-    m = re.findall(r"combustion product \(residues: (\d+)\)", log)
+    m = re.findall(r"born parcels only \(residues and births: (\d+)\)", log)
     return int(m[0]) if len(m) == 1 else -1
 
 

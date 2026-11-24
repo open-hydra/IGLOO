@@ -10,7 +10,7 @@ take two contiguous slices by their **own** named indices:
 | slice | written by `packAuxVars` | read as | by |
 |---|---|---|---|
 | `aux(ind_Mv : ind_Mv+nep-1)` | `Mv, Lv, cpv, Le, Yinf, LvMvOverRu, invTboil, alphaE, kLiq, muLiq` | `ep(iMv .. imuLiq)` of `IGLOO_Lib_Evaporation` | `rhsEvaporation`, `rhsEvapBreakup` (also `aux(ind_Lv)` directly) |
-| `aux(ind_mb : ind_mb+nmetal-1)` | `Kburn, nBurn, Xeff, betaPart, xiCap, Tign, hFus, cpSol, qComb, rhoRes, cpRes, cStretch, xiLaw` | `mp(imKb .. imXl)` of `IGLOO_Lib_Combustion` | `rhsAlCombustion`, `rhsAlCap` (`becksteadRate`; the cap's `imXi`, `imRr`, `imCr`, `imCs`, `imXl`); `rhsSolidification` (`imHf`, `imCps`) |
+| `aux(ind_mb : ind_mb+nmetal-1)` | `Kburn, nBurn, Xeff, betaPart, carryShare, Tign, hFus, cpSol, qComb, rhoRes, cpRes, cStretch, carryLaw` | `mp(imKb .. imXl)` of `IGLOO_Lib_Combustion` | `rhsBurn`, `rhsBurnCarry` (`becksteadRate`; the cap's `imXi`, `imRr`, `imCr`, `imCs`, `imXl`); `rhsSolidification` (`imHf`, `imCps`) |
 
 The two orders are written in three files; nothing ties them together but this test. A swap of two slots that
 a model reads (`T-ign` with `h-fus`) changes a result some e2e case sees; a swap between slots that only one

@@ -18,6 +18,7 @@ the registry of record, [`VERIFICATION_MATRIX.md`](VERIFICATION_MATRIX.md) holds
 | [`infrastructure/`](infrastructure/README.md) | tracking, boundaries, multi-block, injection, files, refusals | `./tests/test.sh infrastructure` |
 | [`erosion/`](erosion/README.md) | wall erosion by particle impact | `./tests/test.sh erosion` |
 | [`repeatability/`](repeatability/README.md) | two-sweep state-leak gates | `./tests/test.sh repeatability` |
+| [`coupling/`](coupling/README.md) | the exchange channels a parent code drives | `./tests/test.sh coupling` |
 | [`mpi/`](mpi/README.md) | rank-count gates, MPI build only | `USE_MPI=ON ./tests/test.sh mpi -- -DUSE_TECIO=OFF` |
 | [`tools/`](tools/README.md) | case generators and checkers | — |
 | `support/` | the shared Fortran verification library (not a test family) | — |

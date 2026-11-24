@@ -2,7 +2,7 @@
 
 A material carrying `combustion=Beckstead` on its line of the phase file (from
 `[GPB-Phase*] combustion = Beckstead` in the ATLAS input) is routed to
-the dedicated ODE family `model = 5` (`src/lib/Lib_RHS.f90::rhsAlCombustion`), whose
+the dedicated ODE family `model = 5` (`src/lib/Lib_RHS.f90::rhsBurn`), whose
 closure lives in `src/lib/Lib_Combustion.f90`.  The state layout is identical to the
 evaporation family (model 2): position/velocity in Z(1:6), temperature (or
 enthalpy) at Z(7), the particle **Al mass** at Z(8).  Combustion is mutually
@@ -12,10 +12,10 @@ with breakup (setup error).
 A material carrying `combustion=direct` takes the same ODE family and state, with the $d^2$ law of a drop whose
 vapour burns in the gas in place of Beckstead's ([Direct combustion](#direct-combustion)).
 
-With `xi-cap > 0`, or with Gallier's deposition law (`cap=Gallier21`), the burning parcel carries its
-**oxide cap** beside the metal: ODE `model = 8` (`rhsAlCap`, [The oxide cap](#the-oxide-cap-model-8)). With `residue=on` the cap
-becomes, when the metal is gone, a parcel of the **combustion product**, a material of its own
-([The burnout residue](#the-burnout-residue)).
+A burning drop may keep part of what it forms: it then **carries a second material** beside its own, ODE
+`model = 8` (`rhsBurnCarry`, [A drop that carries what it forms](#a-drop-that-carries-what-it-forms-model-8)). The
+aluminium drop and its alumina cap are the case the suite runs. With `residue=on` the carried material becomes, when
+the drop's own material is gone, a parcel of its own ([The burnout residue](#the-burnout-residue)).
 
 ---
 
@@ -72,7 +72,7 @@ particle at exactly `T-ign` burns.
 
 Combustion *releases* heat to the particle — the sign is opposite to the
 evaporation latent-heat sink of the model-2 $F(7)$.  The energy
-equation of `rhsAlCombustion` is
+equation of `rhsBurn` is
 
 $$
 \frac{dT_p}{dt} \;(\text{or } \tfrac{dh_p}{dt})
@@ -105,7 +105,7 @@ outgoing flux for the cell is zero, and the mass, momentum and energy it still c
 at cell entry are deposited on the gas through the source block.  The same hand-off
 applies when a consuming model reverts a non-finite state to its last good step, and at a
 solver failure.  Under model 8 the test is on the metal's mass $m_\mathrm{Al}$; with
-`residue=on` the cap is not handed to the gas but becomes a parcel of the product
+`residue=on` the cap is not handed to the gas but becomes a parcel of the carried material
 ([The burnout residue](#the-burnout-residue)), which may freeze
 ([Solidification](solidification.md)).
 
@@ -128,7 +128,7 @@ poisoning the integration.
 
 `combustion=direct` burns a drop as Gallier and Godfroy burn their aluminium drops [GG09]: the drop vaporises at
 its burning temperature and its vapour burns in the gas around it, a diffusion-limited burning that holds for any
-drop whose vapour burns in the gas. It shares the ODE family and the state of model 5 (`rhsAlCombustion`): Z(7) the
+drop whose vapour burns in the gas. It shares the ODE family and the state of model 5 (`rhsBurn`): Z(7) the
 temperature (or enthalpy), Z(8) the drop's mass $m$, $d = (6m/\pi\rho_p)^{1/3}$.
 
 ### The $d^2$ burn rate
@@ -167,7 +167,7 @@ above it. No share of the heat of reaction goes to the drop (`direct` has no `be
 
 Below $T_\mathrm{burn}$, at or below `d-stop`, or at $B \le 0$, $\dot m = 0$ and the drop exchanges drag,
 convective heat and radiation as an inert one; it ignites when it reaches $T_\mathrm{burn}$. A drop that reaches
-`d-stop` stays at that diameter, inert: its residue (no parcel of a product is born; the oxide cap and its residue
+`d-stop` stays at that diameter, inert: its residue (no parcel of another material is born; a carried material and its residue
 belong to `Beckstead`). Without `d-stop` the burning goes on down to the removal mass: a drop at that mass and at
 its burning temperature is removed and handed to the gas ([Burnout](#burnout)).
 
@@ -179,7 +179,7 @@ release when it burns the vapour.
 ### Inputs of direct
 
 The constants are those of the material's `combustion direct` row of the models file (table under
-[Inputs](#inputs)): `T-burn`, `q-comb`, `d-stop`, `d-burnout`, `d-smoke`.
+[Inputs](#inputs)): `T-burn`, `q-comb`, `d-stop`, `d-burnout`.
 
 - **Burning temperature.** `T-burn`, else `[IGLOO-Properties] boiling-temperature` — accepted only when
   `boiling-pressure` is absent or 101325 Pa: [GG09] hold their drops at the saturation temperature of aluminium
@@ -197,7 +197,7 @@ The setup stops the run on:
 | :--- | :--- |
 | breakup on the material | `[ERROR] combustion=direct with breakup is not supported` |
 | solidification on the material | `[ERROR] solidification=on with combustion is not supported` |
-| a `cap=<law>` word on the line, with its `cap` row in the models file (without the row: `IGLOO: a cap word on the material line without its row in the models file`) | `[ERROR] combustion=direct has no oxide cap: cap=<law> belongs to combustion=Beckstead` |
+| a `carry=<law>` word on the line, with its `carry` row in the models file (without the row: `IGLOO: a carry word on the material line without its row in the models file`) | `[ERROR] combustion=direct carries no material: carry=<law> belongs to combustion=Beckstead` |
 | a key the row does not read (`K-burn`, `T-ign`, `beta-part`, ...) | `IGLOO: a constant the model does not read in the models file` |
 | a row without `q-comb` | `IGLOO: combustion without q-comb in its row of the models file` |
 | `q-comb` < 0 | `[ERROR] combustion=direct requires q-comb >= 0` |
@@ -230,18 +230,28 @@ last bits at small $B$. ICE stores $\dot m\,Q$ per cell in a heat field; IGLOO d
 
 ---
 
-## The oxide cap (model 8)
+## A drop that carries what it forms (model 8)
 
-Liquid alumina formed at the burning surface partly leaves with the flame (the smoke) and partly
-gathers on the drop as one oxide lobe, the cap, which reduces the surface that burns
-[Liu21], [Gal21].  With `xi-cap` $=\xi > 0$ the parcel carries the cap's mass beside the
-metal's: Z(7) the temperature, Z(8) the metal's mass $m_\mathrm{Al}$, Z(9) the cap's mass
-$m_\mathrm{ox}$.
+A burning drop forms a product. Part of it leaves with the flame, part may gather on the drop and stay there.
+IGLOO calls what stays the **carried material**: the parcel then holds two masses, its own and the carried one.
+
+| Key of the `carry` row | Symbol | Meaning |
+| :--- | :---: | :--- |
+| `yield` | $\nu$ | kg of product formed per kg of the drop's own material burnt |
+| `share` | $\xi$ | the part of that product the drop keeps (a constant; or Gallier's law, `carry=Gallier21`) |
+| `carried` | | the material the drop carries: a line of the phase file with no injection groups |
+
+The case the suite runs is an aluminium drop and its alumina cap: liquid alumina gathers on the drop as one
+lobe and hides part of the surface that burns [Liu21], [Gal21]. For aluminium
+$\nu = M_{\mathrm{Al_2O_3}}/(2\,M_\mathrm{Al}) = 1.889441$; the yield is a property of the chemistry, so it comes
+with the input (ATLAS writes it), never from the code. The equations below use the aluminium names: the metal for
+the drop's own material, the oxide (or the cap) for the carried one.
+
+The state is Z(7) the temperature, Z(8) the metal's mass $m_\mathrm{Al}$, Z(9) the carried mass $m_\mathrm{ox}$:
 
 $$
-\dot m_\mathrm{Al} = B(T, d_\mathrm{Al})\,F(f_\mathrm{ox})\,c(\xi, n), \qquad
-\dot m_\mathrm{ox} = -\xi\,\nu\,\dot m_\mathrm{Al}, \qquad
-\nu = \frac{M_{\mathrm{Al_2O_3}}}{2\,M_\mathrm{Al}} = 1.889441
+\dot m_\mathrm{Al} = B(T, d_\mathrm{Al})\,F(f_\mathrm{ox})\,c(\xi, \nu, n), \qquad
+\dot m_\mathrm{ox} = -\xi\,\nu\,\dot m_\mathrm{Al}
 $$
 
 $B$ is Beckstead's rate on the metal's diameter $d_\mathrm{Al} = (6 m_\mathrm{Al}/\pi\rho_\mathrm{Al})^{1/3}$
@@ -262,8 +272,8 @@ $$
 = \dot Q_\mathrm{conv}(d, T) + \dot Q_r(d, T) + \beta_\mathrm{part}\,q_\mathrm{comb}\,|\dot m_\mathrm{Al}|.
 $$
 
-$\rho_\mathrm{res}$, $c_\mathrm{res}$ and the cap's enthalpy datum are those of the **product** named by
-`product=` on the burning line ([The burnout residue](#the-burnout-residue)); model 8 integrates $T$ with
+$\rho_\mathrm{res}$, $c_\mathrm{res}$ and the cap's enthalpy datum are those of the **carried material** named by
+`carried=` in the burning line's `carry` row ([The burnout residue](#the-burnout-residue)); model 8 integrates $T$ with
 constant heat capacities and densities.
 
 ### The exposed-surface factor $F$
@@ -305,15 +315,15 @@ $$
 keeps $t_b = d_0^n/K_\mathrm{eff}$ at every size: the metal burns faster than Beckstead's law while the cap
 is small and slower once it is large; the burn time and the residue's mass do not change.  Holding the burn
 time on Beckstead's correlation is IGLOO's rule, not Gallier's: their 0-D model has no stretch, and there the lobe
-lengthens the burn of a 70 µm drop by about 27 % (their Table 3).  `capStretch`
+lengthens the burn of a 70 µm drop by about 27 % (their Table 3).  `carryStretch`
 evaluates $c$ at setup (midpoint rule, 4096 cells over `lobeF`) for each burning material with
-`xi-cap > 0`, and the log prints it: $c$ = 1.305, 1.398, 1.547 at
+`share > 0`, and the log prints it: $c$ = 1.305, 1.398, 1.547 at
 $\xi$ = 0.1, 0.2, 0.5 ($n = 1.8$).  With no initial cap, at every state $m_\mathrm{ox} = \xi\nu(m_0 - m_\mathrm{Al})$ and
 $m/m_0 = s^{3/n} + \xi\nu(1 - s^{3/n})$.
 
-### An oxide fraction at injection
+### Carried material at injection
 
-`xi-ox0` $= x_0 \in [0, 1)$ on a capped burning line starts the cap from oxide the particle carries at
+`carried-0` $= x_0 \in [0, 1)$ in a `carry` row starts the cap from oxide the particle carries at
 injection: $x_0 = m_\mathrm{ox}/(m_\mathrm{Al} + m_\mathrm{ox})$ of the injected particle.  The inlet's loading
 and size describe the **whole particle**, metal and oxide (a `401` record's `krho`, a `402`/`403` record's
 flux, a size law or file, a database stream's flow and diameter), and its diameter $d_{p0}$ is the
@@ -336,14 +346,14 @@ $$
 
 so the particle burns out in Beckstead's time for its injected diameter, $t_b = d_{p0}^n/K_\mathrm{eff}$, whatever
 $x_0$: the initial oxide shows in the residue, $m_\mathrm{res} = m_\mathrm{ox0} + \xi\nu(m_\mathrm{Al0} - m_\mathrm{Al,b})$,
-not in the burn time.  `capStretchX0` evaluates $c$ at setup in place of `capStretch` and the log prints it beside
+not in the burn time.  `carryStretchX0` evaluates $c$ at setup in place of `carryStretch` and the log prints it beside
 $x_0$: $c$ = 1.395, 1.388, 1.379 at $x_0$ = 0.05, 0.10, 0.15 ($\xi = 0.2$, $n = 1.8$).  The parcel's first source
 segment brings $\dot m\,(h_\mathrm{mix}(T_0) + |v|^2/2)$ to the books, $h_\mathrm{mix}$ the mixture enthalpy below.
 Absent or 0, the cap starts from zero.
 
 ### Gallier's deposition law
 
-`cap=Gallier21` takes the retained fraction from the closure of Gallier et al.'s lobe-growth model
+`carry=Gallier21` takes the share kept from the closure of Gallier et al.'s lobe-growth model
 [Gal21] (PDF pp. 13–14) in place of a constant, at the metal's current diameter and the cap's mass fraction:
 
 $$
@@ -376,9 +386,9 @@ c = \left(\frac{d_\mathrm{Al0}}{d_{p0}}\right)^n \int_0^1 \frac{ds}{F(f_\mathrm{
 \quad y = \frac{m_\mathrm{ox}}{m_\mathrm{Al0}},
 $$
 
-so its burn time stays $d_{p0}^n/K_\mathrm{eff}$, IGLOO's rule as for a constant fraction (`capLawPath`: RK4 half-steps in $s$, the midpoint rule on 4096
+so its burn time stays $d_{p0}^n/K_\mathrm{eff}$, IGLOO's rule as for a constant fraction (`carryLawPath`: RK4 half-steps in $s$, the midpoint rule on 4096
 cells over `lobeF`): $c$ = 1.342, 1.329, 1.203 at 20, 70, 400 µm ($n$ = 1.8, no initial oxide).  The law alone
-selects model 8; `xi-ox0`, `product`, `residue` and `d-residue` act as with a constant fraction (the scatter quantum's
+selects model 8; `yield`, `carried-0`, `carried`, `residue` and `d-residue` act as with a constant share (the scatter quantum's
 residue estimate takes the path's cap at burnout).
 
 ### Energy: the absolute datum and the streams
@@ -389,7 +399,7 @@ $$
 h_p = \frac{m_\mathrm{Al}\,(c_\mathrm{Al}T + h^\mathrm{off}_\mathrm{Al}) + m_\mathrm{ox}\,(c_\mathrm{res}T + h^\mathrm{off}_\mathrm{res})}{m},
 $$
 
-so `xi-cap > 0` requires the **absolute** datum (an `Enthalpy_abs` column, see
+so a carrying material requires the **absolute** datum (an `Enthalpy_abs` column, see
 [Property tables](../user/input.md#property-tables-inputpropertiesdat)).  Per kilogram of metal burned the
 books then hand the gas $h_\mathrm{Al}(T) - \xi\nu\,h_\mathrm{ox}(T)$: the metal that burns in the gas leaves
 at $h_\mathrm{Al}$, the oxygen the cap draws comes from the gas at $h_{\mathrm{O_2}}$, and the heat of forming
@@ -401,8 +411,8 @@ when it burns the vapour.  A gas solver that reads the net row of a capped mater
 $|\dot m_\mathrm{Al}| = \dot w/(1 - \xi\nu)$, burns $(1 - \xi)|\dot m_\mathrm{Al}|$ of metal vapour, debits
 $\xi(\nu - 1)|\dot m_\mathrm{Al}|$ of oxygen, and does not release $\xi\,q_r$ again; the net row alone cannot
 tell the rate at $\xi = 1/\nu = 0.5293$, where it is zero. The cap's two rows, after the net ones, tell it at every
-$\xi$ and under Gallier's law: the oxide the caps gained and the cap a consumed parcel hands the gas
-([Rows of the mass source](eulerian-feedback.md#rows-of-the-mass-source)).
+$\xi$ and under Gallier's law: the carried material deposited on the parcels and the one a consumed parcel gives the
+gas ([What a coupler reads](../development/coupling.md#what-a-coupler-reads)).
 
 The product's datum in the test cases is anchored on JANAF's liquid alumina at its melting point
 [JANAF98]: $h_\mathrm{res} = 1887.6\,T - 1.723894\times10^{7}$ J/kg, the slope JANAF's constant liquid heat
@@ -413,24 +423,25 @@ $T_m$ ([Solidification](solidification.md)).
 
 ## The burnout residue
 
-A **combustion product** is a line of the phase file with 0 groups, named by the burning line's
-`product=`: its table zone gives the cap and the residue their density, heat capacity and absolute
-datum, and its own line their solidification data.  The product is never injected; it has one group and
-one Eulerian family after every injected family, and its own particle files.  With `residue=on` the cap of a parcel whose metal is gone — at burnout, at a solver failure or at
-a non-finite state — becomes **one parcel of the product**:
+The **carried material** is a line of the phase file with 0 groups, named by `carried=` in the burning line's `carry`
+row: its table zone gives the cap and the residue their density, heat capacity and absolute datum, and its own line
+their solidification data. A line with 0 groups is never injected; its parcels are born only (residues, and the
+births a coupler adds: [Coupling](../development/coupling.md)). It has one group and one Eulerian family after every
+injected family, and its own particle files. With `residue=on` the cap of a parcel whose metal is gone — at burnout,
+at a solver failure or at a non-finite state — becomes **one parcel of the carried material**:
 
 - born at the parent's position, velocity, temperature and time (the state the parent's exit record
   prints; after a solver failure the parcel first reverts to its last accepted step), in the parent's
-  cell, with a birth row in the product's trajectory file;
+  cell, with a birth row in its material's trajectory file;
 - its mass the cap's, $m_\mathrm{res} = m_\mathrm{ox}$, with $d = (6 m_\mathrm{res}/\pi\rho_\mathrm{res})^{1/3}$ and the
   parent's number rate (one residue per droplet); with `d-residue` $> 0$ the residue has that diameter
   and the mass flow is kept, $\dot n_\mathrm{res} = \dot n\,m_\mathrm{ox}/(\rho_\mathrm{res}\pi d^3/6)$ — a population
   size the case computes from chamber parameters, as Hermsen's correlation [Herm81];
-- inert (model 1) or, with `solidification=on` on the product's line, freezing (model 6): born liquid at
+- inert (model 1) or, with `solidification=on` on the carried material's line, freezing (model 6): born liquid at
   or above `T-melt`, else undercooled, with $f = 0$ — never solid at birth, unlike an injected droplet
   ([Initial phase](solidification.md#phases-and-events)), which would drop its latent heat; one born at
   or below `T-nuc` recalesces on its first step, the enthalpy kept;
-- its ID is the group's offset (the parcels of the earlier groups naming the same product) plus its
+- its ID is the group's offset (the parcels of the earlier groups naming the same carried material) plus its
   parent's ID, whatever rank integrated the parent.
 
 The residue's birth flux, $\dot n\,m_\mathrm{ox}$ at $c_\mathrm{res}T + h^\mathrm{off}_\mathrm{res} + |v|^2/2$, leaves the
@@ -439,41 +450,23 @@ inside the domain,
 
 $$
 \sum_\mathrm{cells} \dot w_\mathrm{metal} = \sum_\mathrm{parents}\dot m - \sum_\mathrm{residues}\dot m,
-\qquad \dot w_\mathrm{product} = 0,
+\qquad \dot w_\mathrm{carried} = 0,
 $$
 
-and the energy source is the parents' inflow less the residues' outflow on the product's datum.  With
+and the energy source is the parents' inflow less the residues' outflow on the carried material's datum.  With
 `residue=off` the cap goes to the gas where the parcel is consumed; a parcel that leaves the domain
-carries its cap out.  Every burning material is integrated before every product, whatever the line
-order; a product's parcels live on the rank of their parent, and its banner counts them over every rank
-(`combustion product (residues: N)`).
+carries its cap out.  Every injected material is integrated before every 0-group line, whatever the line
+order; a residue lives on the rank of its parent, and the banner counts them over every rank
+(`born parcels only (residues and births: N)`).
 
-`[IGLOO-ODE] fail-after` forces the solver failure of the cap model once a parcel's last accepted time
+`[IGLOO-ODE] fail-after` forces the solver failure of model 8 once a parcel's last accepted time
 reaches it (0, the default, is off): the failure path of the residue, run by its test.
 
-## The smoke columns
+## What a coupler can read
 
-A burning material with `d-smoke > 0` hands a coupled solver what its burning feeds to a smoke. When a material of
-the run has one, the mass source gains five rows per material after the net rows (and after the cap's two per
-material when a material has a cap, [Rows of the mass source](eulerian-feedback.md#rows-of-the-mass-source)): row `smokeRow(m, s) = nm + 5(m - 1) + s` (`+ 2 nm` with the cap's rows), $s = 1$
-the weight $W$, $s = 2$–$4$ $W\mathbf{u}$, $s = 5$ $WT$. For each residence of a burning parcel (model 5 or 8) in a
-cell,
-
-$$
-W = \max\left(0,\ \dot m_\mathrm{in} - \dot m_\mathrm{out} + \dot m_\mathrm{ox,cap}\right),
-$$
-
-the net row plus the oxide the cap gained: the metal the residence burnt; for a parcel consumed in the cell, all
-its metal, and with `residue=off` also its whole cap, which leaves the parcel there. $\mathbf{u}$, $T$ are the parcel's
-velocity and temperature weighted by the metal burnt over the residence: over each accepted step of the integrator
-the metal it burnt times the step's mean velocity and temperature (the means of its two ends), then the residence's
-last piece and a consumed parcel's remnant at their means. A smoke is thus born at the state of the burning, not at
-the residence's end. On a wedge $W\mathbf{u}$ is turned to the meridian frame; with `gas-order = 2` the rows go to
-the dual cell, and a cut record takes them with the weight of the other rows. They are extensive sums like the net
-rows (the mollifier, the multi-block exchanges and the MPI sums carry them); `source.tec` writes the net rows only. A
-coupler takes $\mathbf{u} = W\mathbf{u}/W$ and $T = WT/W$ as the smoke's birth state and gives its drops the
-diameter `d-smoke`; IGLOO's suite checks the key and the run with the rows, the values are checked through the
-coupled cases.
+A coupled solver reads what the burning gives the gas, what it deposits on the drops and, when it asks, the state
+the burnt mass leaves at (to give it to another phase, say the smoke of an Eulerian solver). These are IGLOO's
+exchange channels: [Coupling with other solvers](../development/coupling.md).
 
 ---
 
@@ -487,7 +480,7 @@ and kind, `<material> <kind> <model> key=value ...`, the keys in any order, a li
 | On the material line | Meaning | Default |
 | :--- | :--- | :---: |
 | `combustion` | the burning model: `Beckstead` (the $d^n$ law of this page, the metal track), `direct` (the $d^2$ law of a drop held at its burning temperature) or `none` | `[IGLOO-Models] combustion`, else off |
-| `cap` | the oxide cap of a `Beckstead` material and its retained fraction: `constant` (`xi-cap`) or `Gallier21` (Gallier's deposition law); the cap selects model 8 | absent = no cap |
+| `carry` | the material a `Beckstead` drop keeps of what it forms, and the law of the share kept: `constant` (`share`) or `Gallier21` (Gallier's deposition law); it selects model 8 | absent = carries nothing |
 
 | Row (`<kind> <model>`) | Key | Meaning | Default |
 | :--- | :--- | :--- | :---: |
@@ -500,49 +493,48 @@ and kind, `<material> <kind> <model> key=value ...`, the keys in any order, a li
 | either `combustion` row | `q-comb` | heat of combustion (J/kg) | required (0 allowed) |
 | | `d-stop` | diameter (m) of the residue: the burning stops there and the drop stays | 0 = no residue |
 | | `d-burnout` | diameter (m) at which a burning drop is handed whole to the gas; to compare a material with its run in ICE, give it in both decks, at about 0.1 of the injected diameter | 0 = the built-in burnout mass |
-| | `d-smoke` | diameter (m) a coupler gives the drops of the material's smoke; > 0 opens its five smoke rows of the mass source ([The smoke columns](#the-smoke-columns)) | 0 = no smoke rows |
-| `cap constant` | `xi-cap` | fraction of the oxide formed retained in the cap, [0, 1] | 0 |
-| either `cap` row | `xi-ox0` | the oxide's mass fraction of the injected particle, [0, 1) | 0 |
-| | `product` | the combustion product: the name of a 0-group line of the phase file; required with the cap | none |
-| | `residue` | `on`: the cap becomes a parcel of the product; `off`: it goes to the gas | `off` |
+| `carry constant` | `share` | the part of the product formed the drop keeps, [0, 1] | 0 |
+| either `carry` row | `yield` | kg of product formed per kg burnt (1.889441 for aluminium and alumina) | required > 0 |
+| | `carried-0` | the carried mass fraction of the injected particle, [0, 1) | 0 |
+| | `carried` | the carried material: the name of a 0-group line of the phase file | required |
+| | `residue` | `on`: the carried material becomes a parcel of its own at burnout; `off`: it goes to the gas | `off` |
 | | `d-residue` | residue diameter (m) with the mass flow kept; 0: one residue per droplet | 0 |
 
 A row names the model its material line names; a `combustion` row may name `-` instead, the model of the line or of
-`[IGLOO-Models] combustion`. A value of a row is one finite real number (the words of `product` and `residue`
-aside). The constants are keys of the rows only: `q-comb`, `d-stop`, `d-burnout` or `d-smoke` in `[IGLOO-Models]` stops the
+`[IGLOO-Models] combustion`. A value of a row is one finite real number (the words of `carried` and `residue`
+aside). The constants are keys of the rows only: `q-comb`, `d-stop` or `d-burnout` in `[IGLOO-Models]` stops the
 run by name.
 
 The latent heat of `combustion=direct` is no constant of the row: it is the material's, the `Lv` column of
 `properties.dat` read at the burning temperature, else `Lv` of `[IGLOO-Properties]`; given both ways it is refused.
 
-The product's line carries no combustion, evaporation or breakup (under a global evaporation or breakup
+The carried material's line carries no combustion, evaporation or breakup (under a global evaporation or breakup
 word it says `evaporation=NoEvaporation`, `breakup=NoBreakup`) and may carry `solidification=on` with its own
 `T-melt`, `h-fus`, `T-nuc`, `cp-solid`; every `[IGLOO-Properties]` vector holds one value for it too.
 Setup refuses a constant of a burning model on the material line; a row of an unknown kind, a second row of one
-kind for a material, a row of another model than the line's, a key the row's model does not read (`xi-cap` in a
-`cap Gallier21` row, `K-burn` in a `combustion direct` row), a row for no material of the phase file; a value that is
+kind for a material, a row of another model than the line's, a key the row's model does not read (`share` in a
+`carry Gallier21` row, `K-burn` in a `combustion direct` row), a row for no material of the phase file; a value that is
 not one finite real number (`NaN`, `Inf`, a value holding `,` or `/`); a burning material whose `combustion` row
-has no `q-comb`; a `cap` word on the material line without its `cap` row; `q-comb`, `d-stop`, `d-burnout` or `d-smoke` in
-`[IGLOO-Models]`; a negative `d-smoke`; `combustion=direct` without `T-burn` when `boiling-pressure` is not 101325 Pa; `xi-cap`
-outside [0, 1]; a `cap` word other than `constant` and `Gallier21`; the law without `combustion=Beckstead`, and any
-cap under `combustion=direct`; `xi-ox0` outside [0, 1), or > 0 without
-`combustion=Beckstead` and the cap; `product`, `residue=on` or `d-residue > 0` without
-`combustion=Beckstead` and the cap; the cap without a 0-group product line; a product that
-burns, evaporates or breaks up; a varying `Cp` or `Density` of the burning material or its product; a
-relative table; a negative `d-residue`, or one without `residue=on`.  The refusals worded for `xi-cap > 0`
-apply to the law alike.
+has no `q-comb`; a `carry` word on the material line without its `carry` row; `q-comb`, `d-stop` or `d-burnout` in
+`[IGLOO-Models]`; `combustion=direct` without `T-burn` when `boiling-pressure` is not 101325 Pa; `share`
+outside [0, 1]; a `carry` word other than `constant` and `Gallier21`; the law without `combustion=Beckstead`, and any
+carried material under `combustion=direct`; `carried-0` outside [0, 1), or > 0 without
+`combustion=Beckstead` and a share; `carried`, `yield`, `residue=on` or `d-residue > 0` without
+`combustion=Beckstead` and a share; a share without a 0-group carried line, or without `yield > 0`; a carried material
+that burns, evaporates or breaks up; a varying `Cp` or `Density` of the burning material or the carried one; a
+relative table; a negative `d-residue`, or one without `residue=on`. The refusals apply to the law alike.
 
 Example (the residue case of the test suite), the phase file and the models file:
 
 ```text
 condensed-dispersed
-A  1 combustion=Beckstead cap=constant
+A  1 combustion=Beckstead carry=constant
 OX 0 solidification=on T-melt=2327 h-fus=1.08949e6 cp-solid=1360
 ```
 
 ```text
 A combustion Beckstead K-burn=2.0e-6 n-burn=1.8 X-eff=0.5 T-ign=550 beta-part=0.3 q-comb=1000000
-A cap constant xi-cap=0.2 product=OX residue=on
+A carry constant share=0.2 yield=1.8894414971926081 carried=OX residue=on
 ```
 
 Euler feedback and the mass source follow the model-2 rules: the instantaneous
@@ -556,7 +548,7 @@ the cap together, the fraction $(1 - \xi\nu)$ of it (see [Eulerian Feedback](eul
 Unit family `tests/combustion/` (closed-form complex-step oracle, d^n
 regression identity, bitwise ignition gate, informational Beckstead
 correlation points; the cap's growth, its burn rate against Beckstead's times $F\,c$,
-$\nu$, the mixture enthalpy of the source, the lobe table against Gallier's factor, the
+the yield read from its slot, the mixture enthalpy of the source, the lobe table against Gallier's factor, the
 stretch with and without an initial cap, the deposition law at and between its points, and its stretch and cap
 at burnout against a quadrature of the path) and e2e box cases `tests/combustion/burn-box/` (exact
 closed-form $d^n(x)$, independent RK4 of the heat-release energy balance,

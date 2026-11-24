@@ -1,2 +1,0 @@
-condensed-dispersed
-A 1 combustion=Beckstead d-smoke=1.0e-6

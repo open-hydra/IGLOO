@@ -10,8 +10,9 @@
 #   combustion/         unit family (root) + burn-box/ burn-box-euler/ burn-box-cap/ burn-box-residue/ burn-box-ox0/ burn-box-cap-gallier/ burn-box-residue-gallier/ beckstead-air/ burnout-direct/ (e2e)
 #   solidification/     unit family (root) + solid-box/ solid-melt/ solid-melt-rhos/ solid-box-euler/ solid-box-2mat/ solid-box-rad/ scatter-weight-solid/ solid-brk-tab/ solid-brk-khrt/ solid-box-rhos/ solid-box-varrho/ solid-box-varcp/ solid-brk-khrt-varcp/ solid-brk-tab-rhos/ solid-remelt-khrt/ (e2e)
 #   breakup/            tab/ pilch-erdman/ reitz-diwakar/ etab/ reitz-khrt/ (unit) + tab-e2e/ etab-e2e/ etab-e2e-dopri5/ tab-hf92/ etab-hf92/ pilch-erdman-e2e/ reitz-diwakar-e2e/ khrt-e2e/ khrt-e2e-euler/ khrt-stress/ rd-evap-frozen/ tab-evap-frozen/ etab-evap-frozen/ khrt-evap-frozen/ khrt-evap-frozen-euler/ khrt-evap-live/ khrt-shed-noexchange/ tab-varrho/ tab-evap-frozen-varrho/ khrt-varrho/ khrt-varcp/ breakup-per-material/ khrt-plane/ khrt-exit-children/ khrt-hf93/ pe-sigma-table/ tab-wedge-slip/
-#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ hop_crossing/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ pin_grid/ tec_read/ tec_write/ fmt/ rc-gate/ (unit) + db-injection/ db-varrho/ db-varrho-ord2/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-pack-polar/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ inlet-401-g/ inlet-zero-load/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ inner-loop-cap/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ sym-plane-creep/ sym-plane-creep-ord2/ sym-plane-hop/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ chimera-2blk-shift3/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,kliq-column-both,muliq-column-both,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,breakup-section-key,breakup-line-token,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,max-inner-iter,boiling-temperature-both,boiling-pressure,boiling-pressure-noevap,solid-{hfus,cpsolid,tnuc,evap,comb},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},cap-{product,varcp,relative},xi-law-{token,cap,noburn},ox0-{range,nocap},brk-{sigma,mu},sigma-{size,nm,both,column},emissivity-column,emissivity-column-both,bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,bc-no-g,krho-negative,gas-no-density,scatter-floor-{sign,count}}
+#   infrastructure/     gas_reconstruction/ ini_pipeline/ properties_reader/ rng_stream/ psd_table/ slot_order/ material_tokens/ axis_dispatch/ graze_standoff/ hop_crossing/ geometry_rules/ dual_clip/ source_reduction/ ghost_bc/ bc_families/ mollify_blocks/ host_assoc/ containment/ pin_grid/ tec_read/ tec_write/ fmt/ rc-gate/ (unit) + db-injection/ db-varrho/ db-varrho-ord2/ coupled-body/ body-evap-m2/ body-evap-m4/ body-burn-m5/ db-2daxi/ axis-200/ wedge-fold/ planar-slab/ wedge-axis-row/ wedge-tiny/ two-mat/ inlet-402-403/ periodic-y/ bc-center-2grp/ inj-pack/ inj-pack-polar/ inj-mdotmax/ inj-dscell/ inj-dsdegen/ inlet-401-g/ inlet-zero-load/ ini-comment-eq/ foreign-keys/ foreign-keys-db/ zero-group-line/ timing-report/ solver-fail-consumed/ solver-fail-consumed-m4/ solver-fail-midway/ solver-fail-refine/ inner-loop-cap/ stuck-cell/ plane-back/ sym-plane-skate/ sym-plane-skate-ord2/ sym-plane-bounce/ sym-plane-bounce-ord2/ sym-plane-creep/ sym-plane-creep-ord2/ sym-plane-hop/ exit-census/ wall-approach/ periodic-2d/ periodic-2d-ord2/ periodic-2d-ord2-dual/ conn-103/ two-fam-bc/ two-fam-bc-2blk/ two-fam-bc-2blk-mollify/ rot-2blk/ chimera-2blk/ chimera-2blk-rim/ two-fam-bc-2blk-stretch-ord2/ two-fam-bc-2blk-ord2-dual/ two-fam-bc-2blk-ord2-dual-1l/ two-fam-bc-2blk-ord2-dual-default/ swirl-wedge-2blk-ord2-dual/ chimera-2blk-shift-ord2/ chimera-2blk-mollify/ chimera-2blk-shift-mollify/ chimera-2blk-shift3/ varcp-tmin/ psd-bare-token/ inj-edge/ inj-edge-payload/ refusals/{p2t,p2t-kliq,p2t-muliq,p2t-mu-two,p2t-mu-zero,kliq-column-both,muliq-column-both,zgr,lk-d2law,properties-{zones,range,two-enthalpy,psat,bad-row},vapour-{cc,ini-both},pure2d-{mesh,bc},bc-copies,bc-copy-order,chimera-{counts,donor-line,donor-cell,weights,copies},periodic-not-mutual,ord2-{orient,slab,periodic-orient,periodic-slab},drag-token,heat-token,breakup-token,breakup-token-material,breakup-section-key,breakup-line-token,evaporation-token,phase-token,phase-token-real,tab-method,gas-order,out-file,ode-solver,max-inner-iter,boiling-temperature-both,boiling-pressure,boiling-pressure-noevap,solid-{hfus,cpsolid,tnuc,evap,comb},rho-solid,wedge-offcentre,psd-{missing,line-long,token-long,law-typo,unsorted,negative,three-col,empty,radius-zero,mass-zero},comb-{brk,kburn,nburn,xeff},carry-{no-carried,no-yield,varcp,relative,word-no-row},carry-law-{token,share,noburn},carried0-{range,nocarry},brk-{sigma,mu},sigma-{size,nm,both,column},emissivity-column,emissivity-column-both,bc-{legacy,empty-payload},body-accel,plane-x,plane-x-empty,bc-no-g,krho-negative,gas-no-density,scatter-floor-{sign,count}}
 #   repeatability/      two-sweep gates (twosweep driver): 16 cases
+#   coupling/           test_exchange driver: exchange-{track,absorb,births} (e2e)
 #   mpi/                registered only under USE_MPI: 9 rank-count cases + 6 consistency + 1 determinism
 #                       + 14 two-sweep cases
 #
@@ -837,9 +838,35 @@ igloo_e2e_case(burnout-cold combustion/burnout-cold "e2e;combustion;burnout")
 # (temp-relax-varcp's table). RED on a removal at T-burn itself: 18 and 24 of the 25 drops burn on past d-burnout to a
 # solver failure.
 igloo_e2e_case(burnout-direct combustion/burnout-direct "e2e;combustion;burnout")
-# smoke-columns: burn-box with d-smoke in its row: the five smoke columns are filled beside the net ones, and burn-box's
-# own check of the stream (mass, momentum, energy handed) passes unchanged.
-igloo_e2e_case(smoke-columns combustion/smoke-columns "e2e;combustion;smoke")
+
+# ---------- coupling (src/lib/coupling/IGLOO_Mod_Exchange.f90: what a coupler sends and receives) --------------
+# test_exchange drives obj_IGLOO as a coupler does (setup_static, then reset_state + solve per sweep, the exchange calls
+# in between) in a case dir whose INPUT is a sibling's: track (the state the processed mass leaves at, burn-box's
+# deck), absorb (an offer the parcels absorb, drag-stokes's deck), births (parcels of a 0-group line, zero-group-line's
+# deck). Its gates are in the source; it exits 1 when one fails.
+add_executable(test_exchange coupling/test_exchange.f90)
+target_link_libraries(test_exchange PRIVATE IGLOOL FiNeR::FiNeR)
+set_target_properties(test_exchange PROPERTIES
+    LINKER_LANGUAGE Fortran
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+if(USE_TECIO)
+    target_link_libraries(test_exchange PRIVATE -pthread)
+endif()
+if(USE_OPENMP)
+    set_target_properties(test_exchange PROPERTIES
+        COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
+        LINK_FLAGS    "${OpenMP_Fortran_FLAGS}")
+endif()
+foreach(_mode track absorb births)
+    igloo_rc_gate(_gate test_exchange)
+    add_test(NAME exchange-${_mode}
+        COMMAND bash -c "ulimit -s unlimited; rm -rf OUTPUT; mkdir -p OUTPUT; ${CMAKE_CURRENT_BINARY_DIR}/test_exchange ${_mode} 1>run_out.txt 2>run_err.txt; ${_gate}; grep -E 'PASS|FAIL' run_out.txt"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/coupling/exchange-${_mode}")
+    set_tests_properties(exchange-${_mode} PROPERTIES
+        LABELS "e2e;coupling"
+        ENVIRONMENT "OMP_NUM_THREADS=4;KMP_STACKSIZE=100M"
+        TIMEOUT 600)
+endforeach()
 
 # ---------- solidification (ODE models 6 and 7: supercooling, recalescence, plateau, melting; breakup on the liquid) --------
 igloo_unit_test(test_solidification solidification "unit;solidification")
@@ -1422,17 +1449,20 @@ igloo_refusal_case(refuse-comb-nburn       infrastructure/refusals/comb-nburn
                    "combustion=Beckstead requires 0 < n-burn < 3" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-comb-xeff        infrastructure/refusals/comb-xeff
                    "combustion=Beckstead requires 0 < X-eff <= 1" "e2e;refusal;combustion")
-# The oxide cap (xi-cap > 0) without a product line, with a product whose Cp varies, on a relative table.
-igloo_refusal_case(refuse-cap-product      infrastructure/refusals/cap-product
-                   "xi-cap > 0 requires product = a 0-group material of the phase file" "e2e;refusal;combustion")
-# An unknown word for the cap's retained-fraction law.
-igloo_refusal_case(refuse-xi-law-token    infrastructure/refusals/xi-law-token
-                   "IGLOO: unknown cap law" "e2e;refusal;combustion")
-# xi-cap in the cap row of the Gallier21 law (a constant the law does not read), and the law on a line that does not burn.
-igloo_refusal_case(refuse-xi-law-cap      infrastructure/refusals/xi-law-cap
+# A carrying material (share > 0) without its carried line, without the yield of what it carries.
+igloo_refusal_case(refuse-carry-no-carried infrastructure/refusals/carry-no-carried
+                   "a carrying material requires carried = a 0-group material of the phase file" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-carry-no-yield   infrastructure/refusals/carry-no-yield
+                   "a carrying material requires yield > 0" "e2e;refusal;combustion")
+# An unknown word for the law of the share kept.
+igloo_refusal_case(refuse-carry-law-token  infrastructure/refusals/carry-law-token
+                   "IGLOO: unknown carry law" "e2e;refusal;combustion")
+# share in the carry row of the Gallier21 law (a constant the law does not read), and the law on a line that does not
+# burn.
+igloo_refusal_case(refuse-carry-law-share  infrastructure/refusals/carry-law-share
                    "IGLOO: a constant the model does not read in the models file" "e2e;refusal;combustion")
-igloo_refusal_case(refuse-xi-law-noburn   infrastructure/refusals/xi-law-noburn
-                   "IGLOO: cap=Gallier21 requires combustion=Beckstead" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-carry-law-noburn infrastructure/refusals/carry-law-noburn
+                   "IGLOO: carry=Gallier21 requires combustion=Beckstead" "e2e;refusal;combustion")
 # The models file (the constants of the burning models, a row per material and kind): a constant left on the material
 # line, a kind that is not known, a row of another model than the material's, a row for no material of the phase
 # file, two rows of one kind, a row for a material that does not burn, a value that is not a number, a row cut short.
@@ -1462,9 +1492,9 @@ igloo_refusal_case(refuse-models-breakup-key   infrastructure/refusals/models-br
                    "IGLOO: a constant the model does not read in the models file" "e2e;refusal;breakup")
 igloo_refusal_case(refuse-models-breakup-twice infrastructure/refusals/models-breakup-twice
                    "IGLOO: two rows of one kind for a material in the models file" "e2e;refusal;breakup")
-# The burning models' refusals: a value that is not one finite real, a burning row without q-comb, a cap word without its
-# row (the material would burn uncapped), the constants of a burning model in [IGLOO-Models], direct falling back on a
-# boiling temperature that is not the one at one atmosphere.
+# The burning models' refusals: a value that is not one finite real, a burning row without q-comb, a carry word without
+# its row (the material would burn carrying nothing), the constants of a burning model in [IGLOO-Models], direct falling
+# back on a boiling temperature that is not the one at one atmosphere.
 igloo_refusal_case(refuse-models-nan       infrastructure/refusals/models-nan
                    "IGLOO: a constant of the models file that is not one finite real number" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-models-inf       infrastructure/refusals/models-inf
@@ -1473,8 +1503,8 @@ igloo_refusal_case(refuse-models-comma     infrastructure/refusals/models-comma
                    "IGLOO: a constant of the models file that is not one finite real number" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-models-no-qcomb  infrastructure/refusals/models-no-qcomb
                    "IGLOO: combustion without q-comb in its row of the models file" "e2e;refusal;combustion")
-igloo_refusal_case(refuse-cap-word-no-row  infrastructure/refusals/cap-word-no-row
-                   "IGLOO: a cap word on the material line without its row in the models file" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-carry-word-no-row infrastructure/refusals/carry-word-no-row
+                   "IGLOO: a carry word on the material line without its row in the models file" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-section-q-comb   infrastructure/refusals/section-q-comb
                    "IGLOO: a constant of a burning model in [IGLOO-Models]" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-section-d-stop   infrastructure/refusals/section-d-stop
@@ -1483,22 +1513,15 @@ igloo_refusal_case(refuse-section-d-burnout infrastructure/refusals/section-d-bu
                    "IGLOO: a constant of a burning model in [IGLOO-Models]" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-direct-pressure  infrastructure/refusals/direct-pressure
                    "IGLOO: combustion=direct without T-burn, and boiling-temperature not at one atmosphere" "e2e;refusal;combustion")
-# d-smoke: a constant of the burning models, in the row only, >= 0.
-igloo_refusal_case(refuse-section-d-smoke  infrastructure/refusals/section-d-smoke
-                   "IGLOO: a constant of a burning model in [IGLOO-Models]" "e2e;refusal;combustion")
-igloo_refusal_case(refuse-line-d-smoke     infrastructure/refusals/line-d-smoke
-                   "IGLOO: a constant of a burning model on the material line of the phase file" "e2e;refusal;combustion")
-igloo_refusal_case(refuse-models-dsmoke-neg infrastructure/refusals/models-dsmoke-neg
-                   "d-smoke must be >= 0" "e2e;refusal;combustion")
-igloo_refusal_case(refuse-cap-varcp        infrastructure/refusals/cap-varcp
-                   "xi-cap > 0 requires a constant-cp, constant-density material and product" "e2e;refusal;combustion")
-igloo_refusal_case(refuse-cap-relative     infrastructure/refusals/cap-relative
-                   "xi-cap > 0 requires the absolute enthalpy datum (an Enthalpy_abs column)" "e2e;refusal;combustion")
-# The initial oxide (xi-ox0) outside [0, 1), and without a burning, capped material.
-igloo_refusal_case(refuse-ox0-range        infrastructure/refusals/ox0-range
-                   "xi-ox0 must lie in [0, 1)" "e2e;refusal;combustion")
-igloo_refusal_case(refuse-ox0-nocap        infrastructure/refusals/ox0-nocap
-                   "xi-ox0 > 0 requires combustion=Beckstead and xi-cap > 0" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-carry-varcp      infrastructure/refusals/carry-varcp
+                   "a carrying material requires a constant cp and density" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-carry-relative   infrastructure/refusals/carry-relative
+                   "a carrying material requires the absolute enthalpy datum (an Enthalpy_abs column)" "e2e;refusal;combustion")
+# The carried fraction at injection (carried-0) outside [0, 1), and without a burning, carrying material.
+igloo_refusal_case(refuse-carried0-range   infrastructure/refusals/carried0-range
+                   "carried-0 must lie in [0, 1)" "e2e;refusal;combustion")
+igloo_refusal_case(refuse-carried0-nocarry infrastructure/refusals/carried0-nocarry
+                   "carried-0 > 0 requires combustion=Beckstead and share > 0" "e2e;refusal;combustion")
 igloo_refusal_case(refuse-brk-sigma        infrastructure/refusals/brk-sigma
                    "Breakup requires sigma" "e2e;refusal;breakup")
 igloo_refusal_case(refuse-brk-mu           infrastructure/refusals/brk-mu

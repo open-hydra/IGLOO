@@ -19,8 +19,8 @@ routines (plus the combustion family, models 5 and 8):
 | false | true | 3 | `rhsBreakupOnly` | 8 (+ 6 euler) |
 | true | true | 4 | `rhsEvapBreakup` | 9 (+ 7 euler) |
 
-A material with `combustion = Beckstead` is routed to model 5 (`rhsAlCombustion`,
-model-2 layout) instead, and with an oxide cap (`xi-cap > 0` or `cap=Gallier21`) to model 8 (`rhsAlCap`, the cap's
+A material with `combustion = Beckstead` is routed to model 5 (`rhsBurn`,
+model-2 layout) instead, and with a carried material (`share > 0` or `carry=Gallier21`) to model 8 (`rhsBurnCarry`, the carried
 mass at index 9: 9 + 6 euler).  The euler extra equations (arc-length $\ell$ and the momentum,
 energy and mass moments) are appended only when `eulerSwitch = .true.`; they do not
 change the model index.  See [Governing equations](governing-equations.md) for the full

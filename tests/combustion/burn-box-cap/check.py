@@ -168,7 +168,7 @@ def main():
         ("W1 out-file = ALL was read (witness)", "Output fields: gas coupling source & equivalent eulerian" in log),
         ("W2 mollify = off was read (witness)", "Field mollification OFF" in log),
         ("W3 the burning group runs the oxide cap (banner)",
-         "law with an oxide cap (xi-cap, product OX)" in log),
+         "law, carrying OX (constant share)" in log),
     ]
 
     rows = [r for z in zones(TRAJ) for r in z["rows"]]

@@ -26,7 +26,8 @@ contains
                                 trajOn, scatOn, dNscat, npFloor, sixOverPi, pi, &
                                 epsBurn, mBurnAbs,                         &
                                 planeOn, planeX, failAfter, maxInnerIter, nm, nsm, &
-                                capColumns, smokeColumns, smokeRow
+                                carryColumns, procColumns, absColumns, rowCarry, rowProc, &
+                                trackProc, absorbs
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs, stallStep
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock, obj_wallblock
@@ -36,7 +37,7 @@ contains
     use Lib_RHS, only: packAuxVars, nauxvar, packAuxState, unpackAuxState,     &
                        packEventVar, unpackEventVar,                           &
                        rhsStandard, rhsEvaporation, rhsBreakupOnly, rhsEvapBreakup, &
-                       rhsAlCombustion, rhsSolidification, rhsAlCap,                &
+                       rhsBurn, rhsSolidification, rhsBurnCarry,                &
                        ind_d, ind_rho, ind_sig, ind_mup, ind_m, ind_rs, ind_mb,     &
                        ind_sb1, ind_sb2, ind_sph,                                   &
                        ind_evd, ind_evn, ind_ev1, ind_ev2,                          &
@@ -45,7 +46,7 @@ contains
                        mod_bp, mod_bpMethod, mod_bpScale
     use oslo,              only: Run_ODESolver, no_jacobian
     use IGLOO_Lib_Breakup, only: nchild
-    use IGLOO_Lib_Combustion, only: imRr, capLawPath, directOnset
+    use IGLOO_Lib_Combustion, only: imRhoC, carryLawPath, directOnset
     use IGLOO_Lib_Evaporation, only: COMB_DIRECT
     use IGLOO_Lib_Solidification, only: solidPhaseAtInjection, eventFunction, eventValue, eventCrossed, &
                                         eventPassed, solidTransition, solidTransitionTab, solidDiameter, &
@@ -70,7 +71,7 @@ contains
     type(shedList),        intent(inout), optional :: shed
     !> True on the last generation pass: sheds are suppressed and the parent keeps the mass.
     logical,               intent(in),    optional :: noShed
-    !> This parent's burnout-residue list (a capped material with residue = on).
+    !> This parent's burnout-residue list (a carrying material with residue = on).
     type(shedList),        intent(inout), optional :: resid
     !> [IGLOO-Erosion]: the wall-impact sums of every block.
     type(obj_wallblock),   intent(inout), optional :: wallblock(nb)
@@ -83,7 +84,7 @@ contains
     !> local variables
     type(obj_shed) :: shedRec   !> staged child record, pushed once complete
     type(obj_shed) :: resRec    !> the burnout residue's record
-    logical  :: resBorn         !> the parcel ended consumed with its cap: a residue is born
+    logical  :: resBorn         !> the parcel ended consumed with carried material on it: a residue is born
     real(R8) :: mRes, hRes, vRes
     real(R8), allocatable :: gas(:,:), gasVert(:,:), gasState(:)
     real(R8) :: vert(3,8), t1, t2, tStart, deltat, tprint
@@ -91,14 +92,20 @@ contains
     real(R8) :: entryPos(3)   ! cell-entry position, for the closed-form body-force work (models 1,3)
     real(R8) :: pMid(3)       ! segment mid position: azimuth of the meridian-frame source deposit
     real(R8) :: dSrc(5), dEul(6)  ! the segment's source and eulerian deposits, for a cut cell's records
-    real(R8) :: oxIn, dCap(2)     ! a capped parcel: its cap's flux at cell entry; the oxide the cap gained, the cap handed to the gas
-    real(R8) :: dSm(5)            ! a burning parcel with a smoke: the segment's W, W u, W T
-    integer  :: kSm
-    real(R8) :: bwSum(5)          ! a burning parcel with a smoke, over the residence's latched steps: SUM w, w u, w T
-    real(R8) :: bwT               !   (w the metal a step burnt, u and T its means over the step); T at the last latch
-    real(R8) :: bwF               !   the metal of the residence's last, unlatched piece (and of a consumed remnant)
-    logical  :: bwOn              !   this residence accumulates them
-    integer  :: ic, jc, kc
+    !> The segment's optional rows of the mass source (variables.f90 lists them)
+    real(R8) :: carIn             ! a carrying parcel: the carried flux at cell entry
+    real(R8) :: dCar(2)           !   the carried material deposited on it, the carried material it gave the gas
+    real(R8) :: dProc(5)          ! a tracked material: W, the mass the process took off, W u, W T
+    real(R8) :: dAbs(5)           ! an absorbing material: the mass, momentum, energy the parcel absorbed
+    real(R8) :: dHeld             !   the mass it held in the cell over the segment [kg]
+    real(R8) :: dmAbs             !   the mass one of its droplets absorbed [kg]
+    real(R8) :: procSum(5)        ! a tracked material, over the residence's latched steps: SUM w, w u, w T
+    real(R8) :: procT             !   (w the mass a step processed, u and T its means over the step); T at the last latch
+    real(R8) :: procF             !   the mass of the residence's last, unlatched piece (and of a consumed remnant)
+    logical  :: procOn            !   this residence accumulates them
+    logical  :: absOn             ! this residence absorbs its share of an offer
+    integer  :: ic, jc, kc        ! the deposit cell (the geo cell, or the gas dual cell at gas order 2)
+    integer  :: s
     real(R8) :: wAcc          ! scatter-cloud accumulator: npRef*h per step, a marker per dNscat (host-associated)
     real(R8) :: wAccOld       ! wAcc at the last latched state, restored when a cut step is integrated again
     !> The parcel's rows per particle file, written at its end by emitParcel
@@ -145,7 +152,7 @@ contains
     integer  :: whichEv
     real(R8) :: timeLocal, din, dout, deltaS(3), dir(3), taup, tEvt, rhoEvt
     real(R8) :: xiEntry(3)    ! gas order 2, 3D: the local-coordinate seed of the entry sample (part%xi0 is left as it is)
-    real(R8) :: zEnd          ! the law's cap at burnout over m_p0 (unused here)
+    real(R8) :: zEnd          ! the law's carried mass at burnout over m_p0 (unused here)
     integer  :: err, nDL, innerIter, jSlot
     integer,  parameter :: nStep=10
     !> Hard cap on child parcels one parent may shed in one call.
@@ -178,8 +185,8 @@ contains
     allocate(stateLocal(max(1,nauxstate))); allocate(oldStLocal(max(1,nauxstate)))
     allocate(eventLocal(max(1,neventvar))); allocate(oldEvLocal(max(1,neventvar)))
 
-    !> PARCEL INITIALIZATION
-    if (part%time==0._R8) then
+    !> PARCEL INITIALIZATION (an injected parcel; a born one, at any time, holds its birth state)
+    if (part%time==0._R8 .and. .not. part%newborn) then
       part%Ncell = 0
       part%gone  = .false.
       part%wasin = .false.
@@ -226,23 +233,23 @@ contains
       !> a solidifying parcel integrates T whatever its table
       if (part%varCp .and. .not. mod_isSolid) then; part%stateVar(7) = lookupTab(hTab,part%tp)
       else;                                         part%stateVar(7) = part%tp; endif
-      !> the injection mass: the initial cap (model 8), a frozen fraction at rho-solid, else the injected diameter
+      !> the injection mass: the carried material at injection (model 8), a frozen fraction at rho-solid, else the injected diameter
       call part%injectionMass(rhoTab); part%m0 = part%m; part%npdot = part%mdot/part%m; part%npold = part%npdot
       part%n0 = part%npdot
 
       select case(part%model)
       case(2,5); part%stateVar(8) = part%m
-      case(8); if (part%xiOx0 > 0._R8) then
-                 !> the whole particle at the injected diameter: metal and its initial cap
-                 part%stateVar(8) = (1._R8 - part%xiOx0)*part%m
-                 part%stateVar(9) = part%xiOx0*part%m
+      case(8); if (part%carry0 > 0._R8) then
+                 !> the whole particle at the injected diameter: its own and its carried material
+                 part%stateVar(8) = (1._R8 - part%carry0)*part%m
+                 part%stateVar(9) = part%carry0*part%m
                else
                  part%stateVar(8) = part%m
                  part%stateVar(9) = 0._R8
                endif
                !> Gallier's law: the parcel's own stretch, on the law's path from its injected size
-               if (part%xiLaw > 0) &
-                 call capLawPath(part%d, part%nBurn, part%xiOx0, part%rho, part%rhoRes, part%cStretch, zEnd)
+               if (part%carryLaw > 0) &
+                 call carryLawPath(part%d, part%nBurn, part%carryYield, part%carry0, part%rho, part%rhoCar, part%cStretch, zEnd)
       case(3); part%stateVar(8) = part%npdot
       case(4); part%stateVar(8) = part%m
                part%stateVar(9) = part%npdot
@@ -269,7 +276,7 @@ contains
     rowsNew = trajOn .and. .not.dcellSet
     haveRow = .false.
     nWrap = 0
-    if (part%time==0._R8 .and. trajOn) call writeTrajRow()
+    if (part%time==0._R8 .and. .not. part%newborn .and. trajOn) call writeTrajRow()
     if (part%newborn) then
       if (trajOn) call writeTrajRow()
       part%newborn = .false.
@@ -297,11 +304,12 @@ contains
       part%deltaL = 0._R8; part%Tstay = 0._R8
       if (eulerSwitch) part%intE = 0._R8
       if (sourceSwitch) call part%computeSource(massIn,Pin,Ein,hTab)
-      !> A burning parcel with a smoke: its birth state over this residence, from zero at cell entry
-      bwOn = sourceSwitch .and. smokeColumns .and. (part%model == 5 .or. part%model == 8) .and. part%dSmoke > 0._R8
-      bwSum = 0._R8; bwT = 0._R8
-      oxIn = 0._R8
-      if (part%model == 8) oxIn = part%npdot*part%stateVar(9)
+      !> A tracked material: the state its processed mass leaves at, over this residence, from zero at cell entry
+      procOn = sourceSwitch .and. procColumns .and. any(part%model == [2, 4, 5, 8])
+      if (procOn) procOn = trackProc(part%mID)
+      procSum = 0._R8; procT = 0._R8
+      carIn = 0._R8
+      if (part%model == 8) carIn = part%npdot*part%stateVar(9)
       entryPos = part%stateVar(1:3)   ! cell-entry position (for the closed-form body-force work)
       i = part%i(2); j = part%i(3); k = part%i(4);
       if (ord2) then; deltat = part%computeDeltat(gasVert)
@@ -332,12 +340,25 @@ contains
         t1     = part%time
         call ODEsystem()
       enddo
-      !> A capped parcel consumed (burnout, solver failure, non-finite state) with a cap: its residue is born.
+      !> A carrying parcel consumed (burnout, solver failure, non-finite state) with carried material on it: its
+      !  residue is born.
       resBorn = .false.
       if (present(resid) .and. consumed .and. part%model == 8) resBorn = part%stateVar(9) > 0._R8
-            
+
       if (sourceSwitch) then
         call part%computeSource(massOut,Pout,Eout,hTab)
+        !> The deposit cell
+        ic = i; jc = j; kc = k
+        if (ord2) then; ic = part%igas(1); jc = part%igas(2); kc = part%igas(3); endif
+        !> An absorbing material: the parcel takes in its share of the offer in its cell, at the segment's end. The
+        !  flux leaving the cell stays the one before (the gas never sees the absorbed mass); dAbs books the jump.
+        dAbs = 0._R8; dHeld = 0._R8; dmAbs = 0._R8
+        absOn = absColumns .and. .not. consumed
+        if (absOn) absOn = absorbs(part%mID)
+        if (absOn) then
+          dHeld = part%npdot*part%m*part%Tstay
+          call absorbShare()
+        endif
         !> A droplet consumed inside the cell has zero outgoing flux.
         if (consumed) then
           massOut = 0._R8
@@ -354,10 +375,11 @@ contains
           Pout    = Pout    + shedM*shedV
           Eout    = Eout    + shedM*(hShed + 0.5_R8*vShed*vShed)
         endif
-        !> A burnout residue takes its birth flux, the cap at the product's heat capacity and datum, from the books.
+        !> A burnout residue takes its birth flux, the carried material at its own heat capacity and datum, from the
+        !  books.
         if (resBorn) then
           mRes    = part%npdot*part%stateVar(9)
-          hRes    = part%cpRes*part%tp + part%hOffRes
+          hRes    = part%cpCar*part%tp + part%hOffCar
           vRes    = norm2(part%stateVar(4:6))
           massOut = massOut + mRes
           Pout    = Pout    + mRes*part%stateVar(4:6)
@@ -383,55 +405,54 @@ contains
           pMid = 0.5_R8 * (entryPos + part%stateVar(1:3))
           Pin  = toMeridian(Pin,  pMid)
           Pout = toMeridian(Pout, pMid)
+          if (absOn) dAbs(2:4) = toMeridian(dAbs(2:4), pMid)
         endif
-        if (ord2) then
-          call computeSrcField(part, srcblock(b), part%igas(1), part%igas(2), part%igas(3), &
-                               massIn, massOut, Pin, Pout, Ein, Eout, dSrc)
-        else
-          call computeSrcField(part, srcblock(b), i, j, k, massIn, massOut, Pin, Pout, Ein, Eout, dSrc)
+        call computeSrcField(part, srcblock(b), ic, jc, kc, massIn, massOut, Pin, Pout, Ein, Eout, dSrc)
+        !> A carrying parcel: the carried material deposited on it over the segment, and the carried material a
+        !  consumed parcel gives the gas (residue = off)
+        dCar = 0._R8
+        if (part%model == 8 .and. carryColumns) then
+          dCar(1) = part%npdot*part%stateVar(9) - carIn
+          if (consumed .and. .not. resBorn) dCar(2) = part%npdot*part%stateVar(9)
+          do s = 1, 2
+            call addRow(rowCarry(part%mID, s), dCar(s))
+          enddo
         endif
-        !> A capped parcel: the oxide its cap gained over the segment, and the cap a consumed parcel hands the gas
-        !  (residue = off), in the two columns of its material after the nm net ones
-        dCap = 0._R8
-        if (part%model == 8 .and. capColumns) then
-          dCap(1) = part%npdot*part%stateVar(9) - oxIn
-          if (consumed .and. .not. resBorn) dCap(2) = part%npdot*part%stateVar(9)
-          ic = i; jc = j; kc = k
-          if (ord2) then; ic = part%igas(1); jc = part%igas(2); kc = part%igas(3); endif
-          !$OMP ATOMIC UPDATE
-          srcblock(b)%sourceMass(nm+2*part%mID-1,ic,jc,kc) = srcblock(b)%sourceMass(nm+2*part%mID-1,ic,jc,kc) + dCap(1)
-          !$OMP ATOMIC UPDATE
-          srcblock(b)%sourceMass(nm+2*part%mID,ic,jc,kc)   = srcblock(b)%sourceMass(nm+2*part%mID,ic,jc,kc)   + dCap(2)
-        endif
-        !> A burning parcel of a material with a smoke: W = net + O, the metal the segment burnt (consumed in the cell: all
-        !  its metal and, with residue = off, its whole cap, which leaves it here), and W times the parcel's velocity and
-        !  temperature weighted by the metal burnt over the residence, in its five columns: the latched steps' sums, then
-        !  the last piece (a consumed remnant burns at once) at its mean state
-        dSm = 0._R8
-        if (smokeColumns .and. (part%model == 5 .or. part%model == 8) .and. part%dSmoke > 0._R8) then
-          dSm(1) = max(0._R8, massIn - massOut + dCap(1))
-          bwF = max(0._R8, part%oldState(8) - part%stateVar(8))
-          if (consumed) bwF = bwF + max(0._R8, part%stateVar(8))
-          bwSum(1)   = bwSum(1)   + bwF
-          bwSum(2:4) = bwSum(2:4) + bwF*0.5_R8*(part%oldState(4:6) + part%stateVar(4:6))
-          bwSum(5)   = bwSum(5)   + bwF*0.5_R8*(bwT + part%tp)
-          if (bwSum(1) > 0._R8) then
-            dSm(2:4) = dSm(1)*bwSum(2:4)/bwSum(1)
-            dSm(5)   = dSm(1)*bwSum(5)/bwSum(1)
+        !> A tracked material: W = net + carried deposited, the mass the segment processed (consumed in the cell: all
+        !  its own mass and, with residue = off, its whole carried material, which leaves it here), and W times the
+        !  parcel's velocity and temperature weighted by the mass processed over the residence: the latched steps'
+        !  sums, then the last piece (a consumed remnant goes at once) at its mean state
+        dProc = 0._R8
+        if (procOn) then
+          dProc(1) = max(0._R8, massIn - massOut + dCar(1))
+          procF = max(0._R8, part%oldState(8) - part%stateVar(8) + dmAbs)
+          if (consumed) procF = procF + max(0._R8, part%stateVar(8))
+          procSum(1)   = procSum(1)   + procF
+          procSum(2:4) = procSum(2:4) + procF*0.5_R8*(part%oldState(4:6) + part%stateVar(4:6))
+          procSum(5)   = procSum(5)   + procF*0.5_R8*(procT + part%tp)
+          if (procSum(1) > 0._R8) then
+            dProc(2:4) = dProc(1)*procSum(2:4)/procSum(1)
+            dProc(5)   = dProc(1)*procSum(5)/procSum(1)
           else
-            dSm(2:4) = dSm(1)*part%stateVar(4:6)
-            dSm(5)   = dSm(1)*part%tp
+            dProc(2:4) = dProc(1)*part%stateVar(4:6)
+            dProc(5)   = dProc(1)*part%tp
           endif
-          if (axisym) dSm(2:4) = toMeridian(dSm(2:4), pMid)
-          if (dSm(1) > 0._R8) then
-            ic = i; jc = j; kc = k
-            if (ord2) then; ic = part%igas(1); jc = part%igas(2); kc = part%igas(3); endif
-            do kSm = 1, 5
-              !$OMP ATOMIC UPDATE
-              srcblock(b)%sourceMass(smokeRow(part%mID,kSm),ic,jc,kc) = srcblock(b)%sourceMass(smokeRow(part%mID,kSm),ic,jc,kc) &
-                                                                       + dSm(kSm)
+          if (axisym) dProc(2:4) = toMeridian(dProc(2:4), pMid)
+          if (dProc(1) > 0._R8) then
+            do s = 1, 5
+              call addRow(rowProc(part%mID, s), dProc(s))
             enddo
           endif
+        endif
+        !> An absorbing material: what the parcel absorbed, and the mass it held here (the next sweep's share), in its
+        !  geometry cell
+        if (absOn) then
+          do s = 1, 5
+            !$OMP ATOMIC UPDATE
+            srcblock(b)%absorbed(s,part%mID,i,j,k) = srcblock(b)%absorbed(s,part%mID,i,j,k) + dAbs(s)
+          enddo
+          !$OMP ATOMIC UPDATE
+          srcblock(b)%held(part%mID,i,j,k) = srcblock(b)%held(part%mID,i,j,k) + dHeld
         endif
       endif
 
@@ -824,7 +845,7 @@ contains
         f = 0._R8
         if (mod_isSolid) f = ya(8) + s*(yb(8) - ya(8))
         if (mod_model == 8) then
-          d = (sixOverPi*(mAlP/rho + mOxP/auxLocal(ind_mb+imRr-1)))**oneThird
+          d = (sixOverPi*(mAlP/rho + mOxP/auxLocal(ind_mb+imRhoC-1)))**oneThird
         elseif (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7 .and. ind_rs == 0) then
           d = auxLocal(ind_d)
         else
@@ -877,7 +898,7 @@ contains
         if (ind_d > 0 .and. mod_model /= 3 .and. mod_model /= 7) then; d = auxLocal(ind_d)
         else; d = (sixOverPi*m/rho)**oneThird; endif
         if (ind_rs > 0) d = solidDiameter(m, f, rho, auxLocal(ind_rs))
-        if (mod_model == 8) d = (sixOverPi*(mAlS/rho + mOxS/auxLocal(ind_mb+imRr-1)))**oneThird
+        if (mod_model == 8) d = (sixOverPi*(mAlS/rho + mOxS/auxLocal(ind_mb+imRhoC-1)))**oneThird
         if (frozenOn) then
           call rec_push(lScat, [pos, vel, tp, d, m, real(part%ID, R8), f, dNscat*(np/part%npRef)], L_SCAT_F)
         else
@@ -964,7 +985,7 @@ contains
       case(7); nDL = 10; call Run_ODESolver(neq, t1, t2, y, rhs6, no_jacobian, 0, err, deltat, solout)
       case(8); nDL = 10; call Run_ODESolver(neq, t1, t2, y, rhs8, no_jacobian, 0, err, deltat, solout)
       end select
-      !> [IGLOO-ODE] fail-after: the cap model fails once its last accepted time reaches it.
+      !> [IGLOO-ODE] fail-after: model 8 fails once its last accepted time reaches it.
       if (failAfter > 0._R8 .and. mod_model == 8 .and. err >= 0 .and. timeLocal >= failAfter) err = -1
       if (err < 0) then
         write(*,'(a,i0,a,i0,a,es12.4,a)')                                   &
@@ -1195,7 +1216,7 @@ contains
     end subroutine rhs4
     subroutine rhs5(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
-      call rhsAlCombustion(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab, gas,gasVert,gasState, ng,ngVert, &
+      call rhsBurn(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, hTab,rhoTab, gas,gasVert,gasState, ng,ngVert, &
                            epsTabM=epsTab)
     end subroutine rhs5
     subroutine rhs6(neq, time, Z, F)
@@ -1205,7 +1226,7 @@ contains
     end subroutine rhs6
     subroutine rhs8(neq, time, Z, F)
       integer, intent(in) :: neq; real(R8), intent(in) :: time, Z(neq); real(R8), intent(out) :: F(neq)
-      call rhsAlCap(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, gas,gasVert,gasState, ng,ngVert, epsTabM=epsTab)
+      call rhsBurnCarry(neq,time,Z,F, auxLocal,nauxvar, stateLocal,nauxstate, gas,gasVert,gasState, ng,ngVert, epsTabM=epsTab)
     end subroutine rhs8
 
 
@@ -1224,16 +1245,16 @@ contains
       real(R8) :: brkupState(max(nbrkst,1))
       real(R8) :: gOld, gEnd
       real(R8) :: vEvt(3)   !> the velocity breakupEvent works on (Y stays the solver's)
-      real(R8) :: tBw       !> a burning parcel with a smoke: its temperature at this step's end
+      real(R8) :: tProc     !> a tracked material: the parcel's temperature at this step's end
       logical  :: brkOn     !> the breakup event acts on this step
       real(R8), parameter :: oneThird=0.3333333333333333_R8, sixOverPi=1.90985931710274403_R8
 
       IRTRN = 1
 
-      !> A burning parcel with a smoke: the temperature at this step's end (the first point is the latched start)
-      if (bwOn) then
-        if (mod_propFlags(1) .and. .not. mod_isSolid) then; tBw = comp_TfromTab(hTab,y(7)); else; tBw = y(7); endif
-        if (NR == 1) bwT = tBw
+      !> A tracked material: the temperature at this step's end (the first point is the latched start)
+      if (procOn) then
+        if (mod_propFlags(1) .and. .not. mod_isSolid) then; tProc = comp_TfromTab(hTab,y(7)); else; tProc = y(7); endif
+        if (NR == 1) procT = tProc
       endif
 
       !> Scatter cloud: accumulate this step's marker weight at the parcel's constant rate.
@@ -1340,14 +1361,14 @@ contains
       !> Never latch a non-finite state as the last good one.
       if (any(y/=y)) return
 
-      !> A burning parcel with a smoke: the metal this latched step burnt, at its mean velocity and temperature
-      if (bwOn .and. NR > 1) then
+      !> A tracked material: the mass this latched step processed, at its mean velocity and temperature
+      if (procOn .and. NR > 1) then
         if (oldLocal(8) > y(8)) then
-          bwSum(1)   = bwSum(1)   + (oldLocal(8) - y(8))
-          bwSum(2:4) = bwSum(2:4) + (oldLocal(8) - y(8))*0.5_R8*(oldLocal(4:6) + y(4:6))
-          bwSum(5)   = bwSum(5)   + (oldLocal(8) - y(8))*0.5_R8*(bwT + tBw)
+          procSum(1)   = procSum(1)   + (oldLocal(8) - y(8))
+          procSum(2:4) = procSum(2:4) + (oldLocal(8) - y(8))*0.5_R8*(oldLocal(4:6) + y(4:6))
+          procSum(5)   = procSum(5)   + (oldLocal(8) - y(8))*0.5_R8*(procT + tProc)
         endif
-        bwT = tBw
+        procT = tProc
       endif
 
       !> Planes and scatter markers the accepted step crosses, emitted once as it is latched.
@@ -1564,6 +1585,61 @@ contains
 
     end subroutine computeEulField
 
+    !> Add v to row `row` of the mass source in the deposit cell (ic, jc, kc).
+    subroutine addRow(row, v)
+      integer,  intent(in) :: row
+      real(R8), intent(in) :: v
+      !$OMP ATOMIC UPDATE
+      srcblock(b)%sourceMass(row,ic,jc,kc) = srcblock(b)%sourceMass(row,ic,jc,kc) + v
+    end subroutine addRow
+
+    !> Add v to row `row` of chimera record r.
+    subroutine addCut(row, r, v)
+      integer,  intent(in) :: row, r
+      real(R8), intent(in) :: v
+      !$OMP ATOMIC UPDATE
+      cuts%acc(row, r) = cuts%acc(row, r) + v
+    end subroutine addCut
+
+    !> Absorption: the parcel's share of the offer to its material in its geometry cell (b, i, j, k), at the end of
+    !  the segment. The share is the parcel's part of the mass the material held in the cell last sweep: each
+    !  droplet takes dm = (offered mass / held mass) m Tstay. Its velocity and total energy mix with the offer's
+    !  (u_in, e_in per kg): mass, momentum and energy are conserved exactly. dAbs: what the parcel's flux gained.
+    subroutine absorbShare()
+      real(R8) :: offer(5), held, uIn(3), eIn, mOld, mNew, uNew(3), eNew, h, m1, p1(3), e1
+      if (.not. allocated(srcblock(b)%offered) .or. .not. allocated(srcblock(b)%heldLast)) return
+      offer = srcblock(b)%offered(:, part%mID, i, j, k)
+      held  = srcblock(b)%heldLast(part%mID, i, j, k)
+      if (.not. (offer(1) > 0._R8 .and. held > 0._R8 .and. part%Tstay > 0._R8)) return
+      uIn = offer(2:4)/offer(1)
+      if (axisym) uIn = meridianToAzimuth(uIn, part%stateVar(1:3))
+      eIn = offer(5)/offer(1)   !> a rotation keeps |u_in|: the total energy needs no turning
+      mOld  = part%m
+      dmAbs = offer(1)/held*mOld*part%Tstay
+      mNew  = mOld + dmAbs
+      !> the specific enthalpy computeSource values the parcel at
+      h = part%stateVar(7)
+      if (.not. part%varCp) h = part%cp*h + part%hOff
+      uNew = (mOld*part%stateVar(4:6) + dmAbs*uIn)/mNew
+      eNew = (mOld*(h + 0.5_R8*dot_product(part%stateVar(4:6), part%stateVar(4:6))) + dmAbs*eIn)/mNew
+      h    = eNew - 0.5_R8*dot_product(uNew, uNew)
+      part%stateVar(4:6) = uNew
+      if (part%varCp) then; part%stateVar(7) = h
+      else;                 part%stateVar(7) = (h - part%hOff)/part%cp; endif
+      select case (part%model)
+      case (2, 4, 5); part%stateVar(8) = mNew
+      case default;   part%m = mNew; part%mdot = part%npdot*mNew
+      end select
+      call part%updatePart(rhoTab, hTab, eulerSwitch)
+      if (part%model == 1) then
+        part%d = (sixOverPi*part%m/part%rho)**(1._R8/3._R8)
+        if (ind_m > 0) auxLocal(ind_m) = part%m
+        if (ind_d > 0) auxLocal(ind_d) = part%d
+      endif
+      call part%computeSource(m1, p1, e1, hTab)
+      dAbs = [m1 - massOut, p1 - Pout, e1 - Eout]
+    end subroutine absorbShare
+
     !> The segment's deposits times the fraction of its chord (cell entry to segment end) inside the other block,
     !  into each record of its deposit cell.
     subroutine depositCuts()
@@ -1588,18 +1664,17 @@ contains
           cuts%acc(nsm() + 3, r) = cuts%acc(nsm() + 3, r) + lam*dSrc(4)
           !$OMP ATOMIC UPDATE
           cuts%acc(nsm() + 4, r) = cuts%acc(nsm() + 4, r) + lam*dSrc(5)
-          if (part%model == 8 .and. capColumns) then
-            !$OMP ATOMIC UPDATE
-            cuts%acc(nm+2*nmat-1, r) = cuts%acc(nm+2*nmat-1, r) + lam*dCap(1)
-            !$OMP ATOMIC UPDATE
-            cuts%acc(nm+2*nmat, r)   = cuts%acc(nm+2*nmat, r)   + lam*dCap(2)
-          endif
-          if (dSm(1) > 0._R8) then
-            do kSm = 1, 5
-              !$OMP ATOMIC UPDATE
-              cuts%acc(smokeRow(nmat,kSm), r) = cuts%acc(smokeRow(nmat,kSm), r) + lam*dSm(kSm)
+          if (part%model == 8 .and. carryColumns) then
+            do s = 1, 2
+              call addCut(rowCarry(nmat, s), r, lam*dCar(s))
             enddo
           endif
+          if (dProc(1) > 0._R8) then
+            do s = 1, 5
+              call addCut(rowProc(nmat, s), r, lam*dProc(s))
+            enddo
+          endif
+
         endif
         if (eulerSwitch) then
           !$OMP ATOMIC UPDATE

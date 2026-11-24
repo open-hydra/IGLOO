@@ -28,7 +28,7 @@ def main():
     for arm in shared.ARMS:
         log = "run_%s.txt" % shared.tag(arm)
         txt = open(log, errors="replace").read() if os.path.exists(log) else ""
-        got = re.findall(r"combustion product \(residues: (\d+)\)", txt)
+        got = re.findall(r"born parcels only \(residues and births: (\d+)\)", txt)
         ok = got == [str(N_RESIDUES)]
         print("  [%s] %s: the product's banner counts %s residue(s) (need %d over every rank)"
               % ("PASS" if ok else "FAIL", shared.label(arm), ", ".join(got) or "no", N_RESIDUES))

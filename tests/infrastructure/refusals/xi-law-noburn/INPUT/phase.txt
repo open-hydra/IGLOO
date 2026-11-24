@@ -1,3 +1,0 @@
-condensed-dispersed
-A 1 cap=Gallier21
-OX 0

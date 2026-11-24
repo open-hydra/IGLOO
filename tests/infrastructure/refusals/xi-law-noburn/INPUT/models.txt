@@ -1,4 +1,0 @@
-# models.txt: the constants of each material's models
-# <material> <kind> <model> key=value ...
-
-A cap Gallier21 product=OX

@@ -1,21 +1,21 @@
 !> Material, group and shed-list types, the material -> group -> particle property hand-off, and the birth of a
-!  burnout residue.
+!  parcel (a burnout residue, or a birth a coupler adds).
 module IGLOO_data_phases
   use, intrinsic :: iso_fortran_env, only : R8 => real64
   use IGLOO_particles
   use IGLOO_Lib_Breakup, only: NBRKTOK
   implicit none
   private
-  public :: birthResidue
+  public :: birthParcel
 
-  !> One shed child parcel (or burnout residue), held in a per-parent growable list (shedList).
+  !> One shed child parcel (or born parcel: a burnout residue, a coupler's birth), held in a growable list (shedList).
   type, public:: obj_shed
     integer  :: ipos(4) = 0,      igas(3) = 0
     real(R8) :: pos(3)  = 0._R8,  vel(3)  = 0._R8
     real(R8) :: temp    = 0._R8,  diam    = 0._R8, npdot = 0._R8, time = 0._R8
     integer  :: phase   = 0       !> the parent's solidification phase at the shed
     integer  :: parent  = 0       !> the shedding parcel's ID
-    real(R8) :: mass    = 0._R8   !> a burnout residue's mass: its parent's cap
+    real(R8) :: mass    = 0._R8   !> a born parcel's mass per npdot: a residue's, what its parent carried; a birth's, its rate
     real(R8) :: npRef   = 0._R8   !> the parent's npRef: a breakup child keeps its parent's scatter-marker rate
   end type
 
@@ -71,22 +71,22 @@ module IGLOO_data_phases
     logical  :: LvVariable = .false., cpvVariable = .false.  !> Lv(T), cpv(T) from the properties.dat columns
     !> Optional per-material properties; each is read only by the model that needs it.
     real(R8) :: alphaE = 1._R8, kLiq = 0._R8, muLiq = 0._R8
-    real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8, xiOx0 = 0._R8
-    integer  :: xiLaw = 0            !> the cap's retained fraction: 0 xi-cap, 1 Gallier et al. 2021's law
+    real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8
+    real(R8) :: carryShare = 0._R8, carryYield = 0._R8, carry0 = 0._R8   !> share, yield, carried-0 (the carry row)
+    integer  :: carryLaw = 0         !> the share kept: 0 the constant share, 1 Gallier et al. 2021's law
     real(R8) :: Tign = 0._R8, Tmelt = 2327._R8, hFus = 0._R8, Tnuc = 0._R8, cpSol = 0._R8
     real(R8) :: qComb = 0._R8
     real(R8) :: dStop = 0._R8        !> d-stop [m]: the residue, where a burning drop stops burning and stays; 0 = none
     real(R8) :: dBurn = 0._R8        !> d-burnout [m]: a burning drop this small is handed whole to the gas; 0 = built-in
-    real(R8) :: dSmoke = 0._R8       !> d-smoke [m]: the diameter the smoke's drops are born at; 0 = no smoke columns
     real(R8) :: rhoSol = 0._R8       !> solid density [kg/m3]; 0 = the liquid density
     real(R8) :: emissivity = 0._R8   !> grey-body surface emissivity; 0 = no radiation
-    !> The oxide cap: the combustion product (its material line, 0 = none), its density, heat capacity and datum,
-    !  the stretch c
-    character(len=20) :: productName = ''
-    integer  :: prodID = 0
-    real(R8) :: rhoRes = 0._R8, cpRes = 0._R8, hOffRes = 0._R8, cStretch = 1._R8
+    !> The carried material: its material line (0 = none), its density, heat capacity and enthalpy datum; the
+    !  stretch c
+    character(len=20) :: carriedName = ''
+    integer  :: carriedID = 0
+    real(R8) :: rhoCar = 0._R8, cpCar = 0._R8, hOffCar = 0._R8, cStretch = 1._R8
     !> The burnout residue: on, the residue diameter (0 = one per droplet), the ID offset of this group's residues
-    !  in the product, one record list per parent index
+    !  in the carried material, one record list per parent index
     logical  :: resOn = .false.
     real(R8) :: dRes = 0._R8
     integer  :: resBase = 0
@@ -143,27 +143,32 @@ module IGLOO_data_phases
     logical  :: LvVariable = .false., cpvVariable = .false.  !> Lv(T), cpv(T) from the properties.dat columns
     !> Optional per-material properties; each is read only by the model that needs it.
     real(R8) :: alphaE = 1._R8, kLiq = 0._R8, muLiq = 0._R8
-    real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8, xiCap = 0._R8, xiOx0 = 0._R8
-    integer  :: xiLaw = 0            !> the cap's retained fraction: 0 xi-cap, 1 Gallier et al. 2021's law
+    real(R8) :: Kburn = 0._R8, nBurn = 0._R8, Xeff = 0._R8, betaPart = 0._R8
+    real(R8) :: carryShare = 0._R8, carryYield = 0._R8, carry0 = 0._R8   !> share, yield, carried-0 (the carry row)
+    integer  :: carryLaw = 0         !> the share kept: 0 the constant share, 1 Gallier et al. 2021's law
     real(R8) :: Tign = 0._R8, Tmelt = 2327._R8, hFus = 0._R8, Tnuc = 0._R8, cpSol = 0._R8
     real(R8) :: qComb = 0._R8
     real(R8) :: dStop = 0._R8        !> d-stop [m]: the residue, where a burning drop stops burning and stays; 0 = none
     real(R8) :: dBurn = 0._R8        !> d-burnout [m]: a burning drop this small is handed whole to the gas; 0 = built-in
-    real(R8) :: dSmoke = 0._R8       !> d-smoke [m]: the diameter the smoke's drops are born at; 0 = no smoke columns
     real(R8) :: Tburn = 0._R8        !> T-burn [K] of the models file (direct); 0 = not given: the boiling temperature
-    logical  :: capAsked = .false.   !> the material line names an oxide cap (cap=<law>)
+    logical  :: carryAsked = .false. !> the material line names a carried material (carry=<law>)
     logical  :: qcombSet = .false.   !> q-comb was given in the material's combustion row (0 included)
     real(R8) :: rhoSol = 0._R8       !> rho-solid [kg/m3]; 0 = the liquid density
     real(R8) :: emissivity = 0._R8   !> [IGLOO-Properties] emissivity; 0 = no radiation
-    !> The oxide cap: the product's name and line (0 = none), its density, heat capacity and datum, the stretch c;
-    !  isProduct marks the 0-group line a capped material names
-    character(len=20) :: productName = ''
-    integer  :: prodID = 0
-    logical  :: isProduct = .false.
-    real(R8) :: rhoRes = 0._R8, cpRes = 0._R8, hOffRes = 0._R8, cStretch = 1._R8
-    !> The burnout residue: the cap becomes a parcel of the product (residue = on), at d-residue (0 = one per droplet)
+    !> The carried material: its name and line (0 = none), its density, heat capacity and datum; the stretch c.
+    !  bornOnly: a line with no injection groups, whose parcels are all born (burnout residues, the parent's births)
+    character(len=20) :: carriedName = ''
+    integer  :: carriedID = 0
+    logical  :: bornOnly = .false.
+    real(R8) :: rhoCar = 0._R8, cpCar = 0._R8, hOffCar = 0._R8, cStretch = 1._R8
+    !> The burnout residue: the carried material becomes a parcel of its own (residue = on), at d-residue (0 = one per
+    !  droplet)
     logical  :: resOn = .false.
     real(R8) :: dRes = 0._R8
+    !> A born-only line: the births a coupler adds (add_birth_rate), one stream each, kept until it clears them; the
+    !  ID of the first is birthBase + 1 (after every residue's)
+    type(shedList) :: births
+    integer        :: birthBase = 0
     !> sub-objects
     type(obj_group), allocatable :: group(:)
     !> Thermodynamic tables (defined if variable properties)
@@ -174,19 +179,21 @@ module IGLOO_data_phases
 
 contains
 
-  !> A burnout residue from its parent's record: the parent's position, velocity, temperature, time and cell
-  !  locators; one parcel per droplet with the cap's mass, or at d-residue with the mass flow kept; a freezing
-  !  product's residue liquid at or above T-melt, else undercooled, f = 0; its birth row due. kid holds the
-  !  product's group properties (assign_group2particle) and state arrays (setup_particleODE).
-  subroutine birthResidue(kid, rec, id, dRes)
+  !> A born parcel from its record: the record's position, velocity, temperature, time and cell locators; at the
+  !  diameter dBirth with the record's mass flow npdot*mass kept, or (dBirth = 0) one parcel per record with its
+  !  mass; a freezing material's parcel liquid at or above T-melt, else undercooled, f = 0; its birth row due. kid
+  !  holds its group's properties (assign_group2particle) and state arrays (setup_particleODE).
+  subroutine birthParcel(kid, rec, id, dBirth, hTab, rhoTab)
     use IGLOO_variables,          only: eulerSwitch, pi
     use IGLOO_Lib_Statistics,     only: rngSeedFor
     use IGLOO_Lib_Solidification, only: phLiquid, phUndercooled
+    use IGLOO_Lib_Properties,     only: lookupTab, tableValue, Tmin, Tmax
     implicit none
     type(obj_particle), intent(inout) :: kid
     type(obj_shed),     intent(in)    :: rec
     integer,            intent(in)    :: id
-    real(R8),           intent(in)    :: dRes
+    real(R8),           intent(in)    :: dBirth
+    real(R8),           intent(in)    :: hTab(:), rhoTab(:)
 
     kid%ID            = id
     kid%parentID      = rec%parent
@@ -201,9 +208,10 @@ contains
     kid%xi0     = 0.5_R8
     kid%Ncell = 0; kid%gone = .false.; kid%wasin = .false.; kid%lost = .false.
     kid%angle = 0._R8; kid%exitCode = 0; kid%exitCell = 0
-    if (dRes > 0._R8) then
-      kid%d     = dRes
-      kid%m     = pi/6._R8*kid%rho*dRes**3
+    if (kid%varRho) kid%rho = tableValue(rhoTab, Tmin, Tmax, kid%tp)
+    if (dBirth > 0._R8) then
+      kid%d     = dBirth
+      kid%m     = pi/6._R8*kid%rho*dBirth**3
       kid%npdot = rec%npdot*rec%mass/kid%m
     else
       kid%m     = rec%mass
@@ -214,19 +222,30 @@ contains
     kid%m0    = kid%m
     kid%npold = kid%npdot
     kid%n0    = kid%npdot
-    kid%npRef = -1._R8   !> its own number rate at entry, against the product's quantum
-    kid%stateVar(7) = kid%tp
-    if (kid%model == 6) then
+    kid%npRef = -1._R8   !> its own number rate at entry, against its material's quantum
+    !> the temperature slot holds the enthalpy where cp varies (no solidification)
+    if (kid%varCp .and. kid%solidSelect == 0) then
+      kid%stateVar(7) = lookupTab(hTab, kid%tp)
+    else
+      kid%stateVar(7) = kid%tp
+    endif
+    select case (kid%model)
+    case (2, 5);  kid%stateVar(8) = kid%m
+    case (3);     kid%stateVar(8) = kid%npdot
+    case (4);     kid%stateVar(8) = kid%m; kid%stateVar(9) = kid%npdot
+    case (6, 7)
       kid%solidPhase  = merge(phLiquid, phUndercooled, kid%tp >= kid%Tmelt)
       kid%fSolid      = 0._R8
       kid%stateVar(8) = 0._R8
-    endif
+      if (kid%model == 7) kid%stateVar(9) = kid%npdot
+    case (8);     kid%stateVar(8) = kid%m; kid%stateVar(9) = 0._R8
+    end select
     if (eulerSwitch)   kid%stateVar(kid%nOde+1:kid%neq) = 0._R8
     if (kid%bodyAccum) kid%stateVar(kid%neq-1 :kid%neq) = 0._R8
     kid%oldState = kid%stateVar
     kid%newborn  = .true.
 
-  end subroutine birthResidue
+  end subroutine birthParcel
 
   !> Grow the backing store to at least `newcap`, preserving the live entries. Never shrinks.
   subroutine shed_reserve(this,newcap)
@@ -312,11 +331,11 @@ contains
       gr%solidSelect= self%solidSelect
       if (self%combSelect > 0 .or. self%solidSelect > 0) then
         gr%Kburn = self%Kburn; gr%nBurn = self%nBurn; gr%Xeff  = self%Xeff
-        gr%betaPart = self%betaPart; gr%xiCap = self%xiCap; gr%xiOx0 = self%xiOx0; gr%Tign = self%Tign
-        gr%xiLaw = self%xiLaw
+        gr%betaPart = self%betaPart; gr%carryShare = self%carryShare; gr%carry0 = self%carry0; gr%Tign = self%Tign
+        gr%carryLaw = self%carryLaw; gr%carryYield = self%carryYield
         gr%Tmelt = self%Tmelt; gr%hFus = self%hFus; gr%Tnuc = self%Tnuc; gr%cpSol = self%cpSol
         gr%qComb = self%qComb
-        gr%dStop = self%dStop; gr%dBurn = self%dBurn; gr%dSmoke = self%dSmoke
+        gr%dStop = self%dStop; gr%dBurn = self%dBurn
       endif
       if (self%combSelect == 2) then
         gr%Lv = self%Lv; gr%Tboil = self%Tboil
@@ -324,8 +343,8 @@ contains
       if (self%solidSelect > 0) gr%rhoSol = self%rhoSol
       gr%emissivity = self%emissivity
       gr%klVariable = self%klVariable; gr%epsVariable = self%epsVariable
-      gr%productName = self%productName; gr%prodID = self%prodID
-      gr%rhoRes = self%rhoRes; gr%cpRes = self%cpRes; gr%hOffRes = self%hOffRes; gr%cStretch = self%cStretch
+      gr%carriedName = self%carriedName; gr%carriedID = self%carriedID
+      gr%rhoCar = self%rhoCar; gr%cpCar = self%cpCar; gr%hOffCar = self%hOffCar; gr%cStretch = self%cStretch
       gr%resOn = self%resOn; gr%dRes = self%dRes
       end associate
     enddo
@@ -354,7 +373,7 @@ contains
 
     mdotSwitch = (self%evapSelect > 0)
     mdl = determineModel(mdotSwitch, self%brkupEqOde, self%combSelect, self%solidSelect, &
-                         cap=self%xiCap > 0._R8 .or. self%xiLaw > 0)
+                         carry=self%carryShare > 0._R8 .or. self%carryLaw > 0)
     self%neq  = computeNeq(mdl, eulerSwitch, srcBodyForce)
     !> Build fixed-size propFlags: [varCp, varRho, varSig, varMup, varPsat, varLv, varCpv]
     propFlags = [self%cpVariable, self%rhoVariable, .false., .false., .false., .false., .false.]
@@ -485,18 +504,18 @@ contains
       part%solidSelect= self%solidSelect
       if (self%combSelect > 0 .or. self%solidSelect > 0) then
         part%Kburn = self%Kburn; part%nBurn = self%nBurn; part%Xeff = self%Xeff
-        part%betaPart = self%betaPart; part%xiCap = self%xiCap; part%xiOx0 = self%xiOx0; part%Tign = self%Tign
-        part%xiLaw = self%xiLaw
+        part%betaPart = self%betaPart; part%carryShare = self%carryShare; part%carry0 = self%carry0; part%Tign = self%Tign
+        part%carryLaw = self%carryLaw; part%carryYield = self%carryYield
         part%Tmelt = self%Tmelt; part%hFus = self%hFus; part%Tnuc = self%Tnuc; part%cpSol = self%cpSol
         part%qComb = self%qComb
-        part%dStop = self%dStop; part%dBurn = self%dBurn; part%dSmoke = self%dSmoke
+        part%dStop = self%dStop; part%dBurn = self%dBurn
       endif
       if (self%combSelect == 2) then
         part%Lv = self%Lv; part%Tboil = self%Tboil
       endif
       if (self%solidSelect > 0) part%rhoSol = self%rhoSol
       part%emissivity = self%emissivity
-      part%rhoRes = self%rhoRes; part%cpRes = self%cpRes; part%hOffRes = self%hOffRes; part%cStretch = self%cStretch
+      part%rhoCar = self%rhoCar; part%cpCar = self%cpCar; part%hOffCar = self%hOffCar; part%cStretch = self%cStretch
       end associate
     enddo
 

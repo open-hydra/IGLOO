@@ -133,7 +133,7 @@ conserved density numerators of each family before Favre averaging (`obj_eulerbl
 
 `mollifySourceBlocks` smooths the source extensive per-cell totals:
 
-- `sourceMass(1:nsm())` (per material, with the cap's and the smoke's rows)
+- `sourceMass(1:nsm())` (per material, with its optional rows: carried, processed)
 - `sourceMom(1:3)`
 - `sourceEn`
 

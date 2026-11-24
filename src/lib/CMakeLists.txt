@@ -1,4 +1,4 @@
-file(GLOB LIBSRC *.f90 config/*.f90)
+file(GLOB LIBSRC *.f90 config/*.f90 coupling/*.f90)
 add_library(${lib} ${LIBSRC})
 target_link_libraries(${lib} PRIVATE FiNeR::FiNeR OSLO ORION)
 

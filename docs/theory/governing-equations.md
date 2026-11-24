@@ -93,7 +93,7 @@ the default, removes it).  With $c = c_{p,\mathrm{factor}}$ the energy equation 
 | 1, 3 | $F(7) = (\dot Q_c + \dot Q_r)\,c/m$ |
 | 2, 4 | $F(7) = (f_2\,\dot Q_c + \dot Q_r + \dot m_\mathrm{evap}\,L_v)\,c/m$, with $f_2$ the Stefan-blowing factor (1 unless `blowing = LK`); under ASM and TC the model's own heat rate replaces $f_2\,\dot Q_c$; under `liquid-conduction = P2T` the terms are taken at the surface temperature $T_s$, and in the boiling branch of `boiling = ZGR` the branch's heat replaces $f_2\,\dot Q_c$ at $T_s = T_B$; both add the carry $\dot m_\mathrm{evap}\,(h_l(T_s) - \bar h)$ to the bracket ([Evaporation](evaporation.md#droplet-energy-equation)) |
 | 5 | $F(7) = (\dot Q_c + \dot Q_r + \beta_\mathrm{part}\,q_\mathrm{comb}\,\lvert\dot m\rvert)\,c/m$ ([Combustion](combustion.md#heat-release)) |
-| 8 | $F(7) = (\dot Q_c + \dot Q_r + \beta_\mathrm{part}\,q_\mathrm{comb}\,\lvert\dot m_\mathrm{Al}\rvert)/(m_\mathrm{Al}\,c_\mathrm{Al} + m_\mathrm{ox}\,c_\mathrm{res})$, the heat on the equal-volume sphere of metal and cap ([The oxide cap](combustion.md#the-oxide-cap-model-8)) |
+| 8 | $F(7) = (\dot Q_c + \dot Q_r + \beta_\mathrm{part}\,q_\mathrm{comb}\,\lvert\dot m_\mathrm{Al}\rvert)/(m_\mathrm{Al}\,c_\mathrm{Al} + m_\mathrm{ox}\,c_\mathrm{res})$, the heat on the equal-volume sphere of metal and cap ([A drop that carries what it forms](combustion.md#a-drop-that-carries-what-it-forms-model-8)) |
 | 6 | $\dot Q = \dot Q_c + \dot Q_r$: liquid $F(7) = \dot Q/(m\,c_l)$, plateau $F(8) = -\dot Q/(m\,h_\mathrm{fus})$, solid $F(7) = \dot Q/(m\,c_s)$ ([Solidification](solidification.md)) |
 | 7 | as model 6, with the droplet mass $m = \dot m/\dot n_p$ from the stream flow ([Solidification](solidification.md#breakup-on-the-liquid)) |
 

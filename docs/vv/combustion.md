@@ -25,12 +25,12 @@ Aluminium combustion: Beckstead's $d^n$ burn law (model 5), the oxide cap on a b
 - **Burn law** (`becksteadRate`) — the closed-form $m(t)$ with complex-step derivatives (CB1, CB2);
   the ignition gate at $T_\mathrm{ign}$, bit for bit (CB3); the $X_\mathrm{eff}$ exponent at the
   paper's anchor (CB4).
-- **Oxide cap** (`rhsAlCap`) — the cap growth $\dot m_\mathrm{ox} = -\xi\nu\,\dot m_\mathrm{Al}$
+- **Oxide cap** (`rhsBurnCarry`) — the cap growth $\dot m_\mathrm{ox} = -\xi\nu\,\dot m_\mathrm{Al}$
   (CB5); the rate on the metal diameter times $F\,c$ (CB6); $\nu$ from the molar masses (CB7); the
   mixture enthalpy (CB8); the lobe table against Gallier's exposed-surface factor (CB9); the stretch
   $c$, with and without an initial cap (CB10, CB11).
 - **Gallier's law** — `xiGallier` at the points of the paper's Figs. 7 and 11 and between them
-  (CB12, CB13); the law read through its slot in `rhsAlCap` (CB14); the stretch and the cap on the
+  (CB12, CB13); the law read through its slot in `rhsBurnCarry` (CB14); the stretch and the cap on the
   law's path (CB15).
 - **Sources** — Beckstead 2005 `[Beck05]`; Gallier et al. 2021 `[Gal21]`.
 
@@ -48,7 +48,7 @@ Aluminium combustion: Beckstead's $d^n$ burn law (model 5), the oxide cap on a b
   not depend on $T_p$ above ignition); an independent RK4 of the heat-release energy balance; the
   mass telescoping of the source.
 - **Result** — all three gates pass.
-- **Variants** — the Eulerian field of model 5 (`burn-box-euler`); the five smoke rows of the mass source with `d-smoke` in the row (`smoke-columns`: the same gates pass).
+- **Variants** — the Eulerian field of model 5 (`burn-box-euler`).
 
 <figure>
   --8<-- "docs/vv/images/burn-box.svg"
@@ -114,8 +114,8 @@ Aluminium combustion: Beckstead's $d^n$ burn law (model 5), the oxide cap on a b
 
 `tests/combustion/burn-box-cap` · independent integration
 
-- **Setup** — `burn-box`'s parcels with `xi-cap = 0.2` and liquid alumina as the product
-  ([theory](../theory/combustion.md#the-oxide-cap-model-8)).
+- **Setup** — `burn-box`'s parcels with `share = 0.2` and liquid alumina as the product
+  ([theory](../theory/combustion.md#a-drop-that-carries-what-it-forms-model-8)).
 - **Reference** — an RK4 of the cap's burn law and the mixture heat balance, with the exposed-surface
   factor from Gallier's exact lobe (bisection in the lobe angle, never IGLOO's table) and the stretch
   $c = 1.397686$; the Eulerian mass; the mass source $(1 - \xi\nu)$ of the metal burned.
@@ -144,8 +144,8 @@ Aluminium combustion: Beckstead's $d^n$ burn law (model 5), the oxide cap on a b
 
 `tests/combustion/burn-box-ox0` · independent integration
 
-- **Setup** — `xi-ox0 = 0.1` with an inert product
-  ([theory](../theory/combustion.md#an-oxide-fraction-at-injection)): each parcel is injected with a
+- **Setup** — `carried-0 = 0.1` with an inert product
+  ([theory](../theory/combustion.md#carried-material-at-injection)): each parcel is injected with a
   tenth of its mass as cap, and the stretch is re-evaluated from it ($c = 1.388383$).
 - **Reference** — the injection mass; an RK4 on Gallier's lobe from that cap; the burnout inside
   Beckstead's time; the residue $m_\mathrm{ox0} + \xi\nu(m_\mathrm{Al0} - m_b)$; the books.

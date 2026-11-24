@@ -51,6 +51,9 @@ Methods:
 | `writeout()` | Write Eulerian and source fields to `OUTPUT/` |
 | `getSourceTerms(...)` | `pure` function; returns drag force and heat-transfer rate for given local state (used by hydra) |
 
+What a parent exchanges with IGLOO (mass, momentum and energy to the gas; mass offered to the parcels; births)
+goes through `IGLOO_Mod_Exchange` (`src/lib/coupling/`): [Coupling with other solvers](coupling.md).
+
 ---
 
 ## Hydra integration hook
@@ -72,8 +75,8 @@ in the gas time loop; each sweep integrates every particle over the frozen field
 Called from `obj_IGLOO%solve` inside `!$OMP PARALLEL DO`. For each particle it:
 
 1. Selects the ODE RHS function via `Lib_RHS.f90::determineModel(phaseChange, brkupEqOde)`
-   (a material with `combustion = Beckstead` is routed to `rhsAlCombustion` instead, or to `rhsAlCap` with
-   `xi-cap > 0` or `cap=Gallier21`):
+   (a material with `combustion = Beckstead` is routed to `rhsBurn` instead, or to `rhsBurnCarry` with
+   `share > 0` or `carry=Gallier21`):
 
    | `phaseChange` | `brkupEqOde` | RHS |
    |:---:|:---:|-----|
