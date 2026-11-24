@@ -14,6 +14,7 @@ flowchart LR
     D["Donor<br/>gas or another phase"]
     A["Mass to absorb<br/>add_absorption_rate"]
     B["New parcels<br/>add_birth_rate"]
+    Q["Mass taken off<br/>add_removal_rate"]
     P(("IGLOO<br/>parcels"))
     X["Mass, momentum, energy<br/>exchange_rate, gas_rate"]
     T["Processed mass and its state<br/>track_processed"]
@@ -23,6 +24,7 @@ flowchart LR
     D --> B --> P
     P --> X --> G
     P --> T --> R
+    P --> Q --> R
 ```
 
 Read it left to right: what comes into the parcels, then what leaves them. The carried material a burning drop
@@ -36,6 +38,7 @@ deposits on itself, and gives up at burnout, stays inside the parcels; `exchange
 | IGLOO → any phase | the mass the process takes off a material, with the velocity and temperature it leaves at | `track_processed`, then `exchange_rate` |
 | any phase → IGLOO | mass offered to the parcels of a material in a cell; they absorb it | `add_absorption_rate`, `absorption_packet` |
 | any phase → IGLOO | new parcels of a material born in a cell | `add_birth_rate` |
+| IGLOO → any phase | mass taken off the parcels of a material in a cell, as whole droplets | `add_removal_rate`, then `exchange_rate` |
 
 All rates are per second and per cell, the cell's total (no volume factor): kg/s, N, W.
 
@@ -51,11 +54,11 @@ sequenceDiagram
     P->>I: track_processed (once per material it needs)
     loop every coupling iteration
         P->>I: clear_import_rates
-        P->>I: add_absorption_rate, add_birth_rate
+        P->>I: add_absorption_rate, add_removal_rate, add_birth_rate
         P->>I: reset_state(gas)
         P->>I: solve
         P->>I: exchange_rate, gas_rate (per cell, per material)
-        Note over P: gives the gas what IGLOO gave it,<br/>takes from each donor what IGLOO absorbed
+        Note over P: gives the gas what IGLOO gave it,<br/>takes from each donor what IGLOO absorbed,<br/>gives each receiver what IGLOO lost
     end
 ```
 
@@ -75,19 +78,23 @@ Offers and births stay until `clear_import_rates`: a parent that sets them again
 | `processed` | kg/s | the mass the process (burning, evaporation) took off the parcels, when the material is tracked |
 | `tracked`, `u`, `T` | –, m/s, K | the velocity and temperature the processed mass left at, weighted by the mass processed |
 | `absorbed(5)` | kg/s, N, W | what the parcels absorbed: mass, momentum (3), energy |
+| `removed(5)` | kg/s, N, W | what a removal took off the parcels: mass, momentum (3), energy |
 
 `gas_rate(igloo, b, i, j, k)` returns the momentum (1:3) and energy (4) all parcels gave the gas in the cell.
 
 For a burning drop that carries what it forms, the metal burnt in the cell is
 `mass + carried_in - carried_out` ([Rows of the mass source](../theory/eulerian-feedback.md#rows-of-the-mass-source)).
-What the parcels absorbed is not in `mass`, `gas_rate` or the gas's books: it came from the donor.
+What the parcels absorbed is not in `mass`, `gas_rate` or the gas's books: it came from the donor. Nor is what a
+removal took off them: it goes to the receiver.
 
 ### The state of the processed mass
 
 A coupler that turns the processed mass into something else (the smoke of a burning drop in an Eulerian solver,
 the vapour of an evaporating one) needs the state it leaves at. `track_processed(igloo, m, why)` asks for it, from
 the next sweep on. IGLOO then weights the parcels' velocity and temperature by the mass processed over each cell
-residence, step by step. The birth diameter, and anything else of the new phase, is the coupler's.
+residence, step by step. The new phase is the coupler's. IGLOO holds one of its constants for it: `d-gen` of the
+material's combustion row, the diameter the generated drops are born with, which `gen_diameter(igloo, m)` returns
+(0 when the row gives none). IGLOO itself does not use it.
 
 ---
 
@@ -142,6 +149,27 @@ carries it ([The burnout residue](../theory/combustion.md#the-burnout-residue));
 
 ---
 
+## Taking mass off the parcels
+
+`add_removal_rate(igloo, m, b, i, j, k, mass, why)` takes `mass` [kg/s] off the parcels of material `m` in a cell,
+for the gas or for any other phase (a transfer to an Eulerian solver, for instance). It works as absorption does, in
+reverse. Each parcel gives up its share: a fraction
+
+$$
+f = \frac{M}{H}\,T_\mathrm{stay}
+$$
+
+of its droplets, at the end of its residence, with $M$ the mass asked per second and $H$ the mass the material held
+in the cell last sweep. The droplets leave whole, at their own velocity and temperature, so the droplets left are
+unchanged: only the parcel's number and mass flux drop by $f$. A parcel whose share reaches all of it leaves the run.
+The first sweep after a request takes nothing, and the next ones converge to it as absorption does.
+
+`exchange_rate`'s `removed(5)` reports what left, per geometry cell: the coupler gives it to the receiver. Every
+model can lose droplets this way, since a removal changes no droplet's state. Requests add up until
+`clear_import_rates`.
+
+---
+
 ## Refusals
 
 Every setter returns `why`: empty when accepted, otherwise the reason in plain words, and nothing changes. For
@@ -151,6 +179,7 @@ instance:
 | :--- | :--- |
 | `track_processed` | the material neither burns nor evaporates |
 | `add_absorption_rate` | the cell is outside its block, the mass is not positive, or the parcels cannot absorb (above) |
+| `add_removal_rate` | the cell is outside its block, or the mass is not positive |
 | `add_birth_rate` | the material is injected, breaks up into children, or the mass, diameter or temperature is not positive |
 
 ---

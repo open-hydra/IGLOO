@@ -313,6 +313,8 @@ contains
           call mpi_ordered_sum_r8_array(srcblock(b)%sourceEn,   size(srcblock(b)%sourceEn))
         if (allocated(srcblock(b)%absorbed)) &
           call mpi_ordered_sum_r8_array(srcblock(b)%absorbed,   size(srcblock(b)%absorbed))
+        if (allocated(srcblock(b)%removed)) &
+          call mpi_ordered_sum_r8_array(srcblock(b)%removed,    size(srcblock(b)%removed))
         if (allocated(srcblock(b)%held)) &
           call mpi_ordered_sum_r8_array(srcblock(b)%held,       size(srcblock(b)%held))
       endif

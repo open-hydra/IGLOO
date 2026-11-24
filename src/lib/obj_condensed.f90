@@ -150,6 +150,8 @@ module IGLOO_data_phases
     real(R8) :: qComb = 0._R8
     real(R8) :: dStop = 0._R8        !> d-stop [m]: the residue, where a burning drop stops burning and stays; 0 = none
     real(R8) :: dBurn = 0._R8        !> d-burnout [m]: a burning drop this small is handed whole to the gas; 0 = built-in
+    real(R8) :: dGen = 0._R8         !> d-gen [m]: the diameter of the drops the mass this material generates is born
+                                     !  with in a coupled phase (the coupler's; IGLOO only holds it); 0 = not given
     real(R8) :: Tburn = 0._R8        !> T-burn [K] of the models file (direct); 0 = not given: the boiling temperature
     logical  :: carryAsked = .false. !> the material line names a carried material (carry=<law>)
     logical  :: qcombSet = .false.   !> q-comb was given in the material's combustion row (0 included)

@@ -170,6 +170,7 @@ Each burning material needs a `combustion` row. Theory: [Metal Combustion](../th
 | both | `q-comb` | heat of combustion [J/kg] | required (0 allowed) |
 | | `d-stop` | diameter [m] at which burning stops and the drop stays | 0 = none |
 | | `d-burnout` | diameter [m] at which a burning drop is handed whole to the gas; to compare with ICE, give it in both decks, at about 0.1 of the injected diameter | 0 = the built-in burnout mass |
+| | `d-gen` | diameter [m] of the drops the material's generated mass is born with in another phase (a coupler reads it; IGLOO alone does not use it) | 0 = none |
 
 `direct` takes its latent heat from the material: the `Lv` column of `properties.dat` at the burning temperature,
 else `Lv` of `[IGLOO-Properties]`. The log prints the value it uses.
@@ -179,6 +180,7 @@ Setup stops the run on:
 - a burning material without a `combustion` row, or a row without `q-comb`;
 - burning together with breakup or solidification on one material (burning with evaporation drops evaporation, with
   a warning);
+- a negative `d-gen`;
 - under `direct`: `q-comb` < 0; `d-stop` and `d-burnout` both set; no `T-burn` and no `boiling-temperature`; no
   `T-burn` with a `boiling-pressure` other than 101325 Pa; a burning temperature or latent heat that is not
   positive; the latent heat given both as a column and as a key, or neither;

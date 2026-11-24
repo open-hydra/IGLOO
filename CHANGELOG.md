@@ -12,6 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   processed mass leaves at), `add_absorption_rate` and `absorption_packet` (mass offered to the parcels, from the gas
   or any other phase), `add_birth_rate` (new parcels of a 0-group line), `clear_import_rates`, `material_id`. A
   refusal comes back in plain words. See docs/development/coupling.md.
+- Coupling: `add_removal_rate` takes mass off the parcels of a material in a cell, for the gas or any other phase:
+  whole droplets leave at their own state, in proportion to the mass the parcels held there in the last sweep, and
+  `exchange_rate` reports what left (`removed`). Every model can lose droplets this way.
+- Combustion: `d-gen` in a burning material's `combustion` row, the diameter a coupler gives the drops of the mass
+  the material generates in another phase (`gen_diameter`); IGLOO only holds it.
 - Coupling: the parcels of a material absorb the mass offered in a cell in proportion to the mass they held there in
   the last sweep, mixing its momentum and energy; what they absorbed is reported per cell, apart from the smoothed
   source fields.
@@ -33,7 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   in; a carrying material without it stops the run. A `carry=<law>` word needs its `carry` row.
 - A line of the phase file with 0 groups holds born parcels only (burnout residues, a coupler's births) and always has
   one family, named by `carried=` or not.
-- Combustion: `q-comb`, `d-stop` and `d-burnout` given in `[IGLOO-Models]` stop the run by name; they are constants of
+- Combustion: `q-comb`, `d-stop`, `d-burnout` and `d-gen` given in `[IGLOO-Models]` stop the run by name; they are constants of
   the material's row in the models file.
 - Breakup: the constants of a material's breakup model are its row of the models file,
   `<material> breakup <model> key=value ...`, plain keys (`Comega`, `B1`, ...), each optional (absent: the published

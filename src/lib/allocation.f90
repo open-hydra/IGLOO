@@ -228,11 +228,13 @@ contains
         if (.not. allocated(srcblock(b)%sourceMass)) then
           call srcblock(b)%allocate(nsm(), ni, nj, nk)
         endif
-        !> Absorption: what the parcels take and hold, per geometry cell, from zero
+        !> Absorption and removal: what the parcels take, lose and hold, per geometry cell, from zero
         if (absColumns .and. .not. allocated(srcblock(b)%absorbed)) then
           allocate(srcblock(b)%absorbed(5, nm, srcblock(b)%Nx, srcblock(b)%Ny, srcblock(b)%Nz))
+          allocate(srcblock(b)%removed(5, nm, srcblock(b)%Nx, srcblock(b)%Ny, srcblock(b)%Nz))
           allocate(srcblock(b)%held(nm, srcblock(b)%Nx, srcblock(b)%Ny, srcblock(b)%Nz))
           srcblock(b)%absorbed = 0._R8
+          srcblock(b)%removed  = 0._R8
           srcblock(b)%held     = 0._R8
         endif
       endif
