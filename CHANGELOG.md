@@ -15,6 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Coupling: the parcels of a material absorb the mass offered in a cell in proportion to the mass they held there in
   the last sweep, mixing its momentum and energy; what they absorbed is reported per cell, apart from the smoothed
   source fields.
+- `[IGLOO-General]`: `max-reflections` (default 10000) drops a parcel after that many reflections; `graze-standoff`
+  and `corner-clear` set where a parcel stands after a grazing impact on a symmetry face (300). All three are read
+  again at every sweep.
 
 ### Changed
 - Combustion: the `combustion` row of a burning material in the models file must write `q-comb`, the heat of
@@ -37,6 +40,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   default; `WeCrit` as written, stored doubled). The 20 `[IGLOO-Models]` constants (`Cd` ... `WeTrans`) and the 23
   `<tag>-<key>` tokens of the material line (`TAB-Comega`, ...) stop the run by name; a row key its model does not
   read stops it too. `[IGLOO-Models] breakup` and the line's `breakup=<model>` are unchanged.
+- Reflection: a parcel that grazes a symmetry face (below 2 % incidence) is set back 1 % of its diameter
+  (`graze-standoff`), no longer a fixed 1e-6 m; with `corner-clear` it stands off every symmetry face of its cell.
+- Docs: the user guide is split by topic (Run Settings, Materials & Models, Material Properties, Integrator, Wall
+  Erosion), the theory pages hold the physics only, a Code Map serves developers, and Getting Started lists the
+  whole Hydra suite.
 
 ### Fixed
 - Combustion: the burnout removal of a burning parcel (ODE models 5 and 8) requires the parcel to burn, at or above
@@ -46,6 +54,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   burns from, `T-burn` within 1e-10 (`directOnset`, shared by both tests). A drop whose step into `T-burn` ended in
   that margin burned on past `d-burnout` to a solver failure instead of being removed (18 of the 25 drops of
   `tests/combustion/burnout-direct`).
+- Injection (3-D): a parcel pinned on a warped injecting face is moved inside its cell; where the face bulged
+  outwards it was never injected (2.4 % of the injecting area of a star grain).
+- Breakup at gas order 2 with `H-sdirk4`: the first step of a parcel read the gas before it was set, so a drop could
+  get a non-finite Weber number and never break up.
 
 ### Removed
 - The Monolith timing harness (`tests/bench/monolith/`) and the `IGLOO_IO_PROBE` configure option: the harness, its
