@@ -305,8 +305,8 @@ is taken against the 1 × 1 point of the same workload in the same job, on the s
   keeps them constant whatever the clock, so `C` holds the parallel losses without the fall of the clock.
 
 The 192 measured points, each with the job, node, commit and binary it came from, are in
-`tests/bench/monolith/results/measured-performance.tsv` (written by `results.py` of the harness,
-`tests/bench/monolith/`); every number below is a cell of that table or computed from the cells of one
+`results/measured-performance.tsv` of igloo-bench, the timing harness kept in its own repository (written by
+its `analysis/results.py`); every number below is a cell of that table or computed from the cells of one
 job. The curves of `box-4fam` and `vie-plait-dense` ran ORION's reader of the gas file and ORION's writer of
 the grid output (what `IGLOO_TEC_FAST=0` selects), the curve of `khrt-stress` IGLOO's own;
 [The gas read and the grid write](#the-gas-read-and-the-grid-write) measures the box with IGLOO's own.

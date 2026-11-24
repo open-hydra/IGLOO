@@ -23,7 +23,6 @@ the registry of record, [`VERIFICATION_MATRIX.md`](VERIFICATION_MATRIX.md) holds
 | [`tools/`](tools/README.md) | case generators and checkers | — |
 | `support/` | the shared Fortran verification library (not a test family) | — |
 | `common/` | the shared `phase.txt`, `properties.dat` and the MOSE nozzle gas file | — |
-| `bench/monolith/` | a timing harness, not a test ([README](bench/monolith/README.md)) | — |
 
 ---
 
