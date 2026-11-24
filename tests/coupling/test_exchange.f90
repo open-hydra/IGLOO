@@ -15,6 +15,13 @@
 !            cell; A4 the drops leave with the injected flow plus what they absorbed; A5 after clear_import_rates
 !            the run is sweep 1's again, bit for bit; A6 the refusals (a cell outside the block, a mass that is
 !            not positive).
+!    remove  drag-stokes's deck (inert drops, ODE model 1). The same request (a mass taken off A) in cells 21-40
+!            for three sweeps, then none:
+!            R1 sweep 1 removes nothing (nothing was held before it); R2 sweep 2 removes the request within 4 % in
+!            the cells the drops cross, sweep 3 within 0.5 %; R3 the drops left are unchanged: every parcel leaves
+!            with sweep 1's velocity and temperature, bit for bit, and what left carries a velocity between the
+!            injection's and the gas's; R4 the drops leave with the injected flow less the mass removed; R5 after clear_import_rates the run is sweep 1's again, bit for
+!            bit; R6 the refusals (a cell outside the block, a mass that is not positive).
 !    births  zero-group-line's deck (A injected, B a 0-group line). Two births of B:
 !            B1 an injected material is refused, and a birth without a diameter; B2 the two births are integrated
 !            as two parcels of B, IDs 1 and 2; B3 each reaches the outlet with its mass flow (inert drops); B4 a
@@ -26,7 +33,8 @@ program test_exchange
   use IGLOO_module,       only: obj_IGLOO
   use IGLOO_Mod_MPI,      only: mpi_init_env, mpi_finalize_env
   use IGLOO_Mod_Exchange, only: exchange_t, material_id, exchange_rate, gas_rate, track_processed, &
-                                absorption_packet, add_absorption_rate, add_birth_rate, clear_import_rates
+                                absorption_packet, add_absorption_rate, add_removal_rate, add_birth_rate, &
+                                clear_import_rates
   implicit none
   type(obj_IGLOO) :: igloo
   character(len=16) :: mode
@@ -37,9 +45,10 @@ program test_exchange
   select case (trim(mode))
   case ('track');  call run_track()
   case ('absorb'); call run_absorb()
+  case ('remove'); call run_remove()
   case ('births'); call run_births()
   case default
-    write(*,'(a)') ' usage: test_exchange track|absorb|births'
+    write(*,'(a)') ' usage: test_exchange track|absorb|remove|births'
     nFail = 1
   end select
   call mpi_finalize_env()
@@ -177,6 +186,83 @@ contains
       ok = ok .and. len(why) == 0
     enddo; enddo; enddo
   end subroutine offer_band
+
+
+  subroutine run_remove()
+    real(R8), parameter :: MC = 2.e-6_R8
+    character(len=:), allocatable :: why
+    character(len=160) :: line
+    type(exchange_t) :: x
+    real(R8) :: asked, removed(3), flow(4), uKg, uLo, uHi
+    real(R8), allocatable :: exit1(:,:)
+    integer :: sweep, i, j, k, n
+    logical :: ok, same
+
+    call igloo%setup_static()
+    ok = .true.
+    do k = 1, igloo%geoblock(1)%Nz; do j = 1, igloo%geoblock(1)%Ny; do i = 21, 40
+      call add_removal_rate(igloo, 1, 1, i, j, k, MC, why)
+      ok = ok .and. len(why) == 0
+    enddo; enddo; enddo
+    call gate('R0', ok, 'the request accepted in cells 21-40')
+    do sweep = 1, 4
+      if (sweep == 4) call clear_import_rates(igloo)
+      call igloo%reset_state()
+      call igloo%solve()
+      associate (pg => igloo%material(1)%group(1))
+      n = pg%nparticles
+      flow(sweep) = sum(pg%particle(1:n)%mdot)
+      if (sweep == 1) then
+        allocate(exit1(4, n))
+        do i = 1, n
+          exit1(:, i) = [pg%particle(i)%stateVar(4:6), pg%particle(i)%tp]
+        enddo
+      elseif (sweep == 2) then
+        same = .true.
+        do i = 1, n
+          same = same .and. all([pg%particle(i)%stateVar(4:6), pg%particle(i)%tp] == exit1(:, i))
+        enddo
+      endif
+      end associate
+      if (sweep > 3) cycle
+      removed(sweep) = 0._R8; asked = 0._R8; uLo = huge(1._R8); uHi = -huge(1._R8)
+      do k = 1, igloo%geoblock(1)%Nz; do j = 1, igloo%geoblock(1)%Ny; do i = 21, 40
+        x = exchange_rate(igloo, 1, 1, i, j, k)
+        removed(sweep) = removed(sweep) + x%removed(1)
+        if (allocated(igloo%source(1)%heldLast)) then
+          if (igloo%source(1)%heldLast(1, i, j, k) > 0._R8) asked = asked + MC
+        endif
+        if (x%removed(1) > 0._R8) then
+          uKg = x%removed(2)/x%removed(1)
+          uLo = min(uLo, uKg); uHi = max(uHi, uKg)
+        endif
+      enddo; enddo; enddo
+      if (sweep == 1) then
+        write(line,'(a,es10.3,a)') 'sweep 1 removed ', removed(1), ' kg/s'
+        call gate('R1', removed(1) == 0._R8, trim(line))
+      elseif (sweep == 2) then
+        write(line,'(a,es12.5,a,es12.5,a)') 'sweep 2 removed ', removed(2), ' kg/s of ', asked, &
+          ' kg/s asked where drops were'
+        call gate('R2a', asked > 0._R8 .and. abs(removed(2)/asked - 1._R8) <= 0.04_R8, trim(line))
+        write(line,'(a,l1,a,f8.4,a,f8.4,a)') 'exit states as sweep 1: ', same, ', what left at u in [', uLo, ', ', &
+          uHi, '] m/s'
+        call gate('R3', same .and. uLo >= 1._R8 - 1.e-9_R8 .and. uHi <= 10._R8 + 1.e-9_R8, trim(line))
+        write(line,'(a,es12.5,a,es12.5,a)') 'exit flow loss ', flow(1) - flow(2), ' kg/s, removed ', removed(2), ' kg/s'
+        call gate('R4', abs(flow(1) - flow(2) - removed(2)) <= 1.e-9_R8*removed(2), trim(line))
+      else
+        write(line,'(a,es12.5,a,es12.5,a)') 'sweep 3 removed ', removed(3), ' kg/s of ', asked, &
+          ' kg/s asked where drops were'
+        call gate('R2b', asked > 0._R8 .and. abs(removed(3)/asked - 1._R8) <= 0.005_R8, trim(line))
+      endif
+    enddo
+    write(line,'(a,es23.15,a,es23.15)') 'exit flow ', flow(4), ' vs sweep 1 ', flow(1)
+    call gate('R5', flow(4) == flow(1), trim(line))
+    call add_removal_rate(igloo, 1, 1, 61, 1, 1, MC, why)
+    call gate('R6a', len(why) > 0, 'cell 61 of a 60-cell block refused: '//why)
+    call add_removal_rate(igloo, 1, 1, 30, 1, 1, 0._R8, why)
+    call gate('R6b', len(why) > 0, 'a zero mass refused: '//why)
+
+  end subroutine run_remove
 
 
   subroutine run_births()

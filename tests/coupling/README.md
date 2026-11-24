@@ -9,6 +9,7 @@ when one fails.
 | :--- | :--- | :--- |
 | `exchange-track/` | `combustion/burn-box` | the state the processed mass leaves at (`track_processed`), `gas_rate` |
 | `exchange-absorb/` | `standard/drag-stokes` | mass offered to inert drops and absorbed (`add_absorption_rate`) |
+| `exchange-remove/` | `standard/drag-stokes` | mass taken off inert drops (`add_removal_rate`) |
 | `exchange-births/` | `infrastructure/zero-group-line` | new parcels of a 0-group line (`add_birth_rate`) |
 
 Run: `./tests/test.sh coupling`. What they show: [Coupling & Outputs](../../docs/vv/coupling.md#exchange-channels).

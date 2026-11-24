@@ -2,7 +2,8 @@
 !
 !  Sending (read after solve, per material and geometry cell, [per second, the cell's]):
 !    exchange_rate    the mass the parcels give the gas, the carried material they deposit and give up, the mass
-!                     their process takes off (with the state it leaves at, when tracked) and what they absorbed
+!                     their process takes off (with the state it leaves at, when tracked), what they absorbed and
+!                     what a removal took off them
 !    gas_rate         the momentum and energy all parcels give the gas in a cell
 !    track_processed  ask for the state (velocity, temperature) the processed mass of a material leaves at
 !
@@ -11,10 +12,14 @@
 !                         parcels absorb it in proportion to the mass they hold there, and exchange_rate reports what
 !                         they took, which the coupler removes from the donor
 !    absorption_packet    the offer of a mass at a velocity and temperature, in IGLOO's enthalpy datum
+!    add_removal_rate     mass taken off the parcels of a material in a cell (for the gas or any other phase): whole
+!                         droplets leave, in proportion to the mass the parcels hold there, and exchange_rate reports
+!                         what left, which the coupler gives the receiver
 !    add_birth_rate       new parcels of a born-only material (a line with no injection groups), born in a cell
-!    clear_import_rates   drop every offer and birth
+!    clear_import_rates   drop every offer, removal and birth
 !
-!  material_id gives a material's index from its name. A refusal comes back in plain words in `why` (empty when
+!  material_id gives a material's index from its name, gen_diameter the diameter (d-gen of its combustion row) the
+!  coupler gives the drops of the mass a burning material generates in another phase. A refusal comes back in plain words in `why` (empty when
 !  accepted); nothing is changed then.
 module IGLOO_Mod_Exchange
   use, intrinsic :: iso_fortran_env, only : R8 => real64
@@ -22,8 +27,8 @@ module IGLOO_Mod_Exchange
   implicit none
   private
   public :: exchange_t
-  public :: material_id, exchange_rate, gas_rate, track_processed
-  public :: absorption_packet, add_absorption_rate, add_birth_rate, clear_import_rates
+  public :: material_id, gen_diameter, exchange_rate, gas_rate, track_processed
+  public :: absorption_packet, add_absorption_rate, add_removal_rate, add_birth_rate, clear_import_rates
 
   !> One material's exchange in one cell [per second].
   type :: exchange_t
@@ -35,6 +40,7 @@ module IGLOO_Mod_Exchange
     real(R8) :: u(3)        = 0._R8   !> its mean velocity [m/s]
     real(R8) :: T           = 0._R8   !> its mean temperature [K]
     real(R8) :: absorbed(5) = 0._R8   !> what the parcels absorbed: mass [kg/s], momentum (3) [N], energy [W]
+    real(R8) :: removed(5)  = 0._R8   !> what a removal took off them: mass [kg/s], momentum (3) [N], energy [W]
   end type exchange_t
 
 contains
@@ -50,6 +56,16 @@ contains
       if (trim(igloo%material(k)%matName) == trim(name)) m = k
     enddo
   end function material_id
+
+
+  !> d-gen of material m's combustion row [m]: the diameter the coupler gives the drops of the mass m generates in
+  !  another phase; 0 when the row gives none. IGLOO itself does not use it.
+  real(R8) function gen_diameter(igloo, m) result(d)
+    type(obj_IGLOO), intent(in) :: igloo
+    integer,         intent(in) :: m
+
+    d = igloo%material(m)%dGen
+  end function gen_diameter
 
 
   !> Material m's exchange in geometry cell (i, j, k) of block b, after solve.
@@ -78,6 +94,7 @@ contains
       endif
     endif
     if (allocated(src%absorbed)) x%absorbed = src%absorbed(:, m, i, j, k)
+    if (allocated(src%removed))  x%removed  = src%removed(:, m, i, j, k)
     end associate
   end function exchange_rate
 
@@ -181,6 +198,38 @@ contains
   end subroutine add_absorption_rate
 
 
+  !> Take `mass` [kg/s] off the parcels of material m in geometry cell (i, j, k) of block b: whole droplets leave at
+  !  their own state, in proportion to the mass the material held there in the last sweep (the first sweep after a
+  !  request takes nothing), so the droplets left are unchanged. A parcel whose share is all of it leaves the run.
+  !  exchange_rate's removed is what left. Requests add up until clear_import_rates.
+  subroutine add_removal_rate(igloo, m, b, i, j, k, mass, why)
+    use IGLOO_variables, only: nm, absColumns, removes
+    type(obj_IGLOO),               intent(inout) :: igloo
+    integer,                       intent(in)    :: m, b, i, j, k
+    real(R8),                      intent(in)    :: mass
+    character(len=:), allocatable, intent(out)   :: why
+    integer :: c
+
+    why = refuse_cell(igloo, m, b, i, j, k)
+    if (len(why) > 0) return
+    if (.not. mass > 0._R8) then
+      why = 'the mass removed must be positive'
+      return
+    endif
+    do c = 1, size(igloo%source)
+      associate (src => igloo%source(c))
+      if (.not. allocated(src%asked)) then
+        allocate(src%asked(nm, src%Nx, src%Ny, src%Nz))
+        src%asked = 0._R8
+      endif
+      end associate
+    enddo
+    igloo%source(b)%asked(m, i, j, k) = igloo%source(b)%asked(m, i, j, k) + mass
+    removes(m) = .true.
+    absColumns = .true.
+  end subroutine add_removal_rate
+
+
   !> New parcels of born-only material m (a line with no injection groups): `mass` [kg/s] born at the centre of
   !  geometry cell (i, j, k) of block b, with velocity u [m/s], temperature T [K] and diameter d [m], one stream.
   !  Births add up until clear_import_rates.
@@ -217,18 +266,20 @@ contains
   end subroutine add_birth_rate
 
 
-  !> Drop every offer to absorb and every birth.
+  !> Drop every offer to absorb, every removal and every birth.
   subroutine clear_import_rates(igloo)
-    use IGLOO_variables, only: absorbs
+    use IGLOO_variables, only: absorbs, removes
     type(obj_IGLOO), intent(inout) :: igloo
     integer :: c
 
     if (allocated(igloo%source)) then
       do c = 1, size(igloo%source)
         if (allocated(igloo%source(c)%offered)) igloo%source(c)%offered = 0._R8
+        if (allocated(igloo%source(c)%asked))   igloo%source(c)%asked   = 0._R8
       enddo
     endif
     if (allocated(absorbs)) absorbs = .false.
+    if (allocated(removes)) removes = .false.
     do c = 1, size(igloo%material)
       igloo%material(c)%births%n = 0
     enddo

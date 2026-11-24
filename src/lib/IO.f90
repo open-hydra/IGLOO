@@ -162,6 +162,7 @@ contains
       !> The end of the burn, either model: a residue (d-stop) that stays, or the removal at d-burnout
       if (material(i)%dStop < 0._R8) error stop '[ERROR] d-stop must be >= 0'
       if (material(i)%dBurn < 0._R8) error stop '[ERROR] d-burnout must be >= 0'
+      if (material(i)%dGen < 0._R8)  error stop '[ERROR] d-gen must be >= 0'
       if (material(i)%dStop > 0._R8 .and. material(i)%dBurn > 0._R8) &
         error stop '[ERROR] d-stop beside d-burnout: a drop that stops at its residue is never removed; give one'
       if (material(i)%combSelect == 1) then
@@ -613,7 +614,7 @@ contains
   !  phase file, by name; the refusals; the carrier takes its density, heat capacity and enthalpy datum, and the
   !  stretch c of its share, yield and n-burn on the lobe table. Every 0-group line holds born parcels only.
   subroutine resolve_carried(material)
-    use IGLOO_variables,      only: nm, carryColumns, trackProc, absorbs
+    use IGLOO_variables,      only: nm, carryColumns, trackProc, absorbs, removes
     use IGLOO_data_phases,    only: obj_material
     use IGLOO_Lib_Combustion, only: buildLobeTable, carryStretch, carryStretchX0, buildXiLaw
     use IGLOO_Mod_MPI,        only: mpi_is_root
@@ -626,8 +627,9 @@ contains
     !> No coupler has asked for anything yet (IGLOO_Mod_Exchange sets these)
     if (allocated(trackProc)) deallocate(trackProc)
     if (allocated(absorbs))   deallocate(absorbs)
-    allocate(trackProc(nm), absorbs(nm))
-    trackProc = .false.; absorbs = .false.
+    if (allocated(removes))   deallocate(removes)
+    allocate(trackProc(nm), absorbs(nm), removes(nm))
+    trackProc = .false.; absorbs = .false.; removes = .false.
     !> A line without injection groups: its parcels are born (the residues of a carrier, the births of a coupler)
     do i = 1, nm
       material(i)%bornOnly = material(i)%ngroups == 0

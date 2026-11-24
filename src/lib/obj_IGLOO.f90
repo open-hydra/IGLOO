@@ -302,7 +302,7 @@ contains
       self%gasblock(b)%ghostExternal = .false.
     enddo
 
-    !> Absorption: the mass each material held per cell last sweep, the shares of this sweep's absorption.
+    !> Absorption and removal: the mass each material held per cell last sweep, the shares of this sweep's.
     call keepHeldMass(self%source)
     !> Drop last sweep's source/euler accumulators (all of them); solve re-allocates them at the right shape.
     if (allocated(self%mirrored)) deallocate(self%mirrored)
@@ -1265,8 +1265,8 @@ contains
   end subroutine drainResidues
 
 
-  !> Absorption: last sweep's held mass becomes heldLast, the shares of the next absorption; last sweep's absorbed
-  !  amounts are dropped (the coupler has read them).
+  !> Absorption and removal: last sweep's held mass becomes heldLast, the shares of the next sweep's; last sweep's
+  !  absorbed and removed amounts are dropped (the coupler has read them).
   subroutine keepHeldMass(src)
     implicit none
     type(obj_sourceblock), intent(inout) :: src(:)
@@ -1278,6 +1278,7 @@ contains
         call move_alloc(src(b)%held, src(b)%heldLast)
       endif
       if (allocated(src(b)%absorbed)) deallocate(src(b)%absorbed)
+      if (allocated(src(b)%removed))  deallocate(src(b)%removed)
     enddo
 
   end subroutine keepHeldMass

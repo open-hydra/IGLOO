@@ -46,12 +46,14 @@ module IGLOO_variables
   !    carried    2 nm the carried material the burning deposits on the parcels (1), the one they give the gas (2)
   !    processed  5 nm W, the mass the process (burning, evaporation) takes off, and W u (3), W T: the velocity and
   !                    temperature it leaves at, weighted by W (asked by a coupler: track_processed)
-  !  What the parcels absorb is kept apart, per geometry cell (obj_sourceblock: offered, absorbed, held).
+  !  What the parcels absorb, and what a coupler removes from them, is kept apart, per geometry cell
+  !  (obj_sourceblock: offered, absorbed, asked, removed, held).
   logical  :: carryColumns = .false.   !> a material carries another
   logical  :: procColumns  = .false.   !> a coupler tracks the processed mass of a material
-  logical  :: absColumns   = .false.   !> a coupler offers mass to absorb (the absorption arrays exist)
-  !> Per material: a coupler tracks its processed mass (track_processed); a coupler offers it mass (add_absorption_rate)
-  logical, allocatable :: trackProc(:), absorbs(:)
+  logical  :: absColumns   = .false.   !> a coupler offers mass to absorb or asks mass to remove (their arrays exist)
+  !> Per material: a coupler tracks its processed mass (track_processed); offers it mass (add_absorption_rate); takes
+  !  mass off it (add_removal_rate)
+  logical, allocatable :: trackProc(:), absorbs(:), removes(:)
   integer, allocatable :: nspecies(:)
   real(R8) :: ds, mdotMax, dtprint
   !> [IGLOO-General] print-ds [m] (<= 0 = off); dcellSet: print-dcell is present (the diagnostic crossing cadence)

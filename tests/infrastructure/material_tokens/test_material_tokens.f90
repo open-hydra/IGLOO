@@ -222,10 +222,11 @@ program test_material_tokens
     call fresh(mat)
     call apply_material_key(1, mat, 'combustion', 'direct')
     seen = .false.
-    call apply_model_row(1, mat, 'A combustion direct d-burnout=1e-07 T-burn=1363 q-comb=9530000', seen)
+    call apply_model_row(1, mat, 'A combustion direct d-burnout=1e-07 T-burn=1363 q-comb=9530000 d-gen=3e-06', seen)
     call check(mat%Tburn == 1363._R8 .and. mat%qComb == 9530000._R8 .and. mat%dBurn == 1e-07_R8 .and. &
-               mat%dStop == 0._R8 .and. seen(1) .and. .not. seen(2) .and. .not. seen(3) .and. mat%combSelect == 2, &
-               'MT8 a combustion row of direct, its keys in any order: T-burn, q-comb, d-burnout', nbad)
+               mat%dGen == 3e-06_R8 .and. mat%dStop == 0._R8 .and. seen(1) .and. .not. seen(2) .and. .not. seen(3) &
+               .and. mat%combSelect == 2, &
+               'MT8 a combustion row of direct, its keys in any order: T-burn, q-comb, d-burnout, d-gen', nbad)
     call fresh(mat)
     call apply_material_key(1, mat, 'combustion', 'Beckstead')
     call apply_material_key(1, mat, 'carry', 'Gallier21')

@@ -27,7 +27,7 @@ contains
                                 epsBurn, mBurnAbs,                         &
                                 planeOn, planeX, failAfter, maxInnerIter, nm, nsm, &
                                 carryColumns, procColumns, absColumns, rowCarry, rowProc, &
-                                trackProc, absorbs
+                                trackProc, absorbs, removes
     use IGLOO_particles,  only: obj_particle, eps
     use IGLOO_bcBox,      only: axisymFold, sectorDs, stallStep
     use IGLOO_data_block, only: obj_block, obj_flowblock, obj_eulerblock, obj_sourceblock, obj_wallblock
@@ -99,11 +99,13 @@ contains
     real(R8) :: dAbs(5)           ! an absorbing material: the mass, momentum, energy the parcel absorbed
     real(R8) :: dHeld             !   the mass it held in the cell over the segment [kg]
     real(R8) :: dmAbs             !   the mass one of its droplets absorbed [kg]
+    real(R8) :: dRem(5)           ! a material a coupler removes from: the mass, momentum, energy the parcel lost
     real(R8) :: procSum(5)        ! a tracked material, over the residence's latched steps: SUM w, w u, w T
     real(R8) :: procT             !   (w the mass a step processed, u and T its means over the step); T at the last latch
     real(R8) :: procF             !   the mass of the residence's last, unlatched piece (and of a consumed remnant)
     logical  :: procOn            !   this residence accumulates them
     logical  :: absOn             ! this residence absorbs its share of an offer
+    logical  :: remOn             ! this residence loses its share of a removal
     integer  :: ic, jc, kc        ! the deposit cell (the geo cell, or the gas dual cell at gas order 2)
     integer  :: s
     real(R8) :: wAcc          ! scatter-cloud accumulator: npRef*h per step, a marker per dNscat (host-associated)
@@ -352,13 +354,15 @@ contains
         if (ord2) then; ic = part%igas(1); jc = part%igas(2); kc = part%igas(3); endif
         !> An absorbing material: the parcel takes in its share of the offer in its cell, at the segment's end. The
         !  flux leaving the cell stays the one before (the gas never sees the absorbed mass); dAbs books the jump.
-        dAbs = 0._R8; dHeld = 0._R8; dmAbs = 0._R8
+        !> A material a coupler removes from: then the parcel loses its share of the removal, as whole droplets.
+        dAbs = 0._R8; dHeld = 0._R8; dmAbs = 0._R8; dRem = 0._R8
         absOn = absColumns .and. .not. consumed
+        remOn = absOn
         if (absOn) absOn = absorbs(part%mID)
-        if (absOn) then
-          dHeld = part%npdot*part%m*part%Tstay
-          call absorbShare()
-        endif
+        if (remOn) remOn = removes(part%mID)
+        if (absOn .or. remOn) dHeld = part%npdot*part%m*part%Tstay
+        if (absOn) call absorbShare()
+        if (remOn) call removeShare()
         !> A droplet consumed inside the cell has zero outgoing flux.
         if (consumed) then
           massOut = 0._R8
@@ -406,6 +410,7 @@ contains
           Pin  = toMeridian(Pin,  pMid)
           Pout = toMeridian(Pout, pMid)
           if (absOn) dAbs(2:4) = toMeridian(dAbs(2:4), pMid)
+          if (remOn) dRem(2:4) = toMeridian(dRem(2:4), pMid)
         endif
         call computeSrcField(part, srcblock(b), ic, jc, kc, massIn, massOut, Pin, Pout, Ein, Eout, dSrc)
         !> A carrying parcel: the carried material deposited on it over the segment, and the carried material a
@@ -444,13 +449,21 @@ contains
             enddo
           endif
         endif
-        !> An absorbing material: what the parcel absorbed, and the mass it held here (the next sweep's share), in its
-        !  geometry cell
+        !> An absorbing material, one removed from: what the parcel absorbed and lost, and the mass it held here (the
+        !  next sweep's share), in its geometry cell
         if (absOn) then
           do s = 1, 5
             !$OMP ATOMIC UPDATE
             srcblock(b)%absorbed(s,part%mID,i,j,k) = srcblock(b)%absorbed(s,part%mID,i,j,k) + dAbs(s)
           enddo
+        endif
+        if (remOn) then
+          do s = 1, 5
+            !$OMP ATOMIC UPDATE
+            srcblock(b)%removed(s,part%mID,i,j,k) = srcblock(b)%removed(s,part%mID,i,j,k) + dRem(s)
+          enddo
+        endif
+        if (absOn .or. remOn) then
           !$OMP ATOMIC UPDATE
           srcblock(b)%held(part%mID,i,j,k) = srcblock(b)%held(part%mID,i,j,k) + dHeld
         endif
@@ -1639,6 +1652,32 @@ contains
       call part%computeSource(m1, p1, e1, hTab)
       dAbs = [m1 - massOut, p1 - Pout, e1 - Eout]
     end subroutine absorbShare
+
+    !> Removal: the parcel's share of the mass the coupler takes off its material in its geometry cell (b, i, j, k),
+    !  at the end of the segment, as for absorption: f = (asked mass / held mass) Tstay of its droplets leave, each
+    !  with its own state, so the droplets left are unchanged and the parcel's number and mass flux drop by f. A
+    !  parcel whose share is all of it leaves the run. The flux leaving the cell stays the one before (the gas never
+    !  sees the removed mass); dRem: what the parcel's flux lost.
+    subroutine removeShare()
+      real(R8) :: ask, held, f, m0, p0(3), e0
+      if (.not. allocated(srcblock(b)%asked) .or. .not. allocated(srcblock(b)%heldLast)) return
+      ask  = srcblock(b)%asked(part%mID, i, j, k)
+      held = srcblock(b)%heldLast(part%mID, i, j, k)
+      if (.not. (ask > 0._R8 .and. held > 0._R8 .and. part%Tstay > 0._R8)) return
+      f = min(1._R8, ask/held*part%Tstay)
+      call part%computeSource(m0, p0, e0, hTab)
+      dRem = f*[m0, p0, e0]
+      if (f == 1._R8) then
+        part%gone = .true.
+        return
+      endif
+      part%npdot = (1._R8 - f)*part%npdot
+      part%mdot  = (1._R8 - f)*part%mdot
+      select case (part%model)
+      case (3);    part%stateVar(8) = part%npdot
+      case (4, 7); part%stateVar(9) = part%npdot
+      end select
+    end subroutine removeShare
 
     !> The segment's deposits times the fraction of its chord (cell entry to segment end) inside the other block,
     !  into each record of its deposit cell.

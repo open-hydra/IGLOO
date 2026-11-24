@@ -112,9 +112,11 @@ module IGLOO_data_block
     !> Absorption, per geometry cell, never smoothed (the coupler takes from the donor exactly what was absorbed where):
     !  offered: the coupler's offer, (mass, momentum (3), energy, material, i, j, k) [per second], kept until cleared;
     !  absorbed: what the parcels took of it this sweep, same layout; held: the mass each material holds in the cell
-    !  this sweep [kg]; heldLast: last sweep's, the shares of this sweep's absorption
-    real(R8), dimension(:,:,:,:,:), allocatable :: offered, absorbed
-    real(R8), dimension(:,:,:,:),   allocatable :: held, heldLast
+    !  this sweep [kg]; heldLast: last sweep's, the shares of this sweep's absorption and removal.
+    !  Removal, the same way: asked: the mass the coupler takes off each material [kg/s], kept until cleared;
+    !  removed: what left the parcels this sweep, (mass, momentum (3), energy, material, i, j, k) [per second]
+    real(R8), dimension(:,:,:,:,:), allocatable :: offered, absorbed, removed
+    real(R8), dimension(:,:,:,:),   allocatable :: held, heldLast, asked
     contains
     private
     procedure, pass(self), public :: allocate => allocateSRC
