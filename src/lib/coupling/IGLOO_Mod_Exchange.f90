@@ -204,6 +204,7 @@ contains
     endif
     if (len(why) > 0) return
     rec%ipos  = [b, i, j, k]
+    rec%igas  = [i, j, k]          !> its gas cell at gas order 1; at order 2 drainBirths finds the dual cell
     rec%pos   = igloo%geoblock(b)%center(:, i, j, k)
     rec%vel   = u
     rec%temp  = T

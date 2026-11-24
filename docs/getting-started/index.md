@@ -35,9 +35,9 @@ Welcome to the IGLOO getting-started guide. This section covers everything neede
 ---
 
 
-## Hydra CFD Suite
+## Hydra Suite
 
-IGLOO is the **Lagrangian particle solver** of the **Hydra** CFD ecosystem — an integrated suite of tools for multi-physics simulation of complex systems involving compressible flows and dispersed phases.
+IGLOO is the **Lagrangian particle solver** of the **Hydra** suite — an integrated suite of tools for multi-physics simulation of complex systems involving compressible flows and dispersed phases.
 
 | Component | Role | Status |
 |-----------|------|--------|
@@ -51,7 +51,7 @@ A typical workflow is:
 2. **MOSE** (or another CFD solver) computes the steady gas field and writes a Tecplot solution file.
 3. **IGLOO** reads that solution as a frozen background, injects particles, and integrates them through the domain.
 
-IGLOO can also run standalone — without MOSE — when the gas field is provided as a Tecplot file directly.
+IGLOO can also run standalone — one-way coupling — when the gas field is provided as a Tecplot file directly.
 
 !!! info "Using IGLOO without ATLAS"
     ATLAS is the standard way to produce the BC and material files that IGLOO requires. If ATLAS is not available, all files can be prepared manually; see the [User Guide](../user/using.md) for the expected formats.
@@ -82,7 +82,7 @@ IGLOO is built on three companion libraries, in a standalone build FiNeR as a Gi
 | Library | Role |
 |---------|------|
 | [ORION](https://github.com/MarcoGrossi92/ORION) | Multi-format I/O (Tecplot ASCII/binary) |
-| [OSlo](https://github.com/MarcoGrossi92/OSlo) | ODE solver library (DOPRI5, H-SDIRK4) |
+| [OSLO](https://github.com/MarcoGrossi92/OSLO) | ODE solver library (DOPRI5, H-SDIRK4) |
 | [FiNeR](https://github.com/szaghi/FiNeR) | INI configuration file parser |
 
 Optional: **OpenMP** (threads over particles), **MPI** (ranks over particles, hybrid with OpenMP), **TecIO** (Tecplot binary output, pulled in transitively by ORION; not combinable with MPI).
