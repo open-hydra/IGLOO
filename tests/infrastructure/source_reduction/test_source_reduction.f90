@@ -27,12 +27,9 @@ program test_source_reduction
     ! identity must STILL be exact -- that is the case that separates "conserves on
     ! a nice mesh" from "conserves by construction".
     !
-    ! The partition-of-unity invariant is asserted as sum_d dualW == sum_c sum_oct subVol.
-    ! It is NOT asserted against sum_c cellVol on S7: cellVol is hexVolume of the parent hex
-    ! and hexVolume is a 5-tetrahedron split with abs() per tet, which is NOT additive under
-    ! octant subdivision on a hex with non-planar faces. Measured on S7's node formula the
-    ! two differ by 5.1e-3 relative (1.1e-2 worst per cell) -- an assertion against cellVol
-    ! there would be RED on the CORRECT code.
+    ! The partition-of-unity invariant is asserted as sum_d dualW == sum_c sum_oct subVol, and
+    ! against sum_c cellVol on every case, S7 included: a cell's octants, images of the half-cubes
+    ! under its trilinear map, sum to its trilinear volume.
     !
     ! U2 joins two boxes by a 101 face: a deposit in one block's interface dual cell is shared
     ! between the blocks in proportion to their octant volumes, for the source and the euler field.
@@ -130,9 +127,7 @@ contains
             cSum = cSum + geo%cellVol(i, j, k)
         enddo; enddo; enddo
         call assertRel(label//' : sum(dualW) == sum(subVol)', wSum, vSum, TOL)
-        !> cellVol agrees only where the faces are planar: hexVolume's 5-tet split with
-        !> abs() per tet is not additive under octant subdivision on a curved hex.
-        if (.not. curved) call assertRel(label//' : sum(dualW) == sum(cellVol)', wSum, cSum, TOL)
+        call assertRel(label//' : sum(dualW) == sum(cellVol)', wSum, cSum, TOL)
 
         call src%finalize(geo)
 

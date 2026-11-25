@@ -26,7 +26,7 @@ program test_mollify_blocks
     !        H offset by s H give (1 - s_x)(1 - s_y)(1 - s_z) H^3 to 1e-14 of H^3, touching and apart 0
     !   U-X2 a unit cube and itself turned by 45 degrees about z: 2(sqrt 2 - 1) to 1e-14
     !   U-X3 a warped 3 x 3 x 3 block and a warped cell inside it: the overlaps with the 27 cells, and with
-    !        their 216 octants, sum to the cell's V24 to 1e-13 (V24 - cellVol printed, not asserted)
+    !        their 216 octants, sum to the cell's V24 to 1e-13, and its cellVol (the trilinear volume) is V24
     !   U-X4 a block shifted by 0.3 cell: an inside cell's weights 0.3 and 0.7 on the right targets (1e-14)
     !   U-X5 coincident cells: W = 1 exactly, one target; one node moved by an ULP: W = 1 by the snap
     !   U-X6 chordInside: the fraction of a chord inside the other block's cells (closed forms, 1e-14); a point on
@@ -360,8 +360,8 @@ contains
             one%node(:, i, j, k) = va(:, 1 + i + 2*j + 4*k)
         enddo; enddo; enddo
         call one%precomputeMetric
-        print '(a,es9.2,a)', '  [info] U-X3 V24 - cellVol (hexVolume''s five tetrahedra) = ', (v24 - one%cellVol(1,1,1))/v24, &
-            ' of V24 (not asserted)'
+        call verdict('U-X3 the warped cell''s cellVol (trilinear) = V24 to '//es(abs(one%cellVol(1,1,1) - v24)/v24)// &
+                     ' (1e-13)', abs(one%cellVol(1,1,1) - v24) <= 1.0e-13_real64*v24, 1)
         call verdict('U-X3 the 27 warped cells tile the warped cell: Sum |d ∩ c| = V24(d) to '//es(abs(sumOv - v24)/v24)// &
                      ' (1e-13)', abs(sumOv - v24) <= 1.0e-13_real64*v24, 1)
         call verdict('U-X3 their 216 octants tile it too: '//es(abs(ov - v24)/v24)//' (1e-13)', &

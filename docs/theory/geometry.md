@@ -24,6 +24,30 @@ of a cell are computed once when a parcel enters it. In 2D the cell is a quadril
 
 ---
 
+## Cell volumes
+
+A cell's volume is the integral of the Jacobian determinant of the trilinear map of its 8 nodes, the volume bounded by
+its four-node faces taken as bilinear surfaces, as the gas solvers MOSE and ICE compute it:
+
+$$
+V = \frac{1}{12}\sum_{d=1}^{3} \mathbf e_d\cdot\left(\mathbf S_d^- + \mathbf S_d^+\right),
+$$
+
+with $\mathbf e_d$ the mean of the cell's four edges along index direction $d$ and $\mathbf S_d^\pm$ the cross products
+of the diagonals of its two faces normal to $d$ (twice their area vectors), both along $+d$. It is exact on every
+cell, twisted faces included, and two cells that share a face share its surface, so the volumes of a block sum to the
+volume its boundary faces enclose. IGLOO keeps $|V|$: a left-handed block has positive volumes too, and a flat cell
+has volume 0. Only differences of nodes enter, the nodes relative to the first; they are rounded as written even
+under a compiler that reassociates (a volatile copy). The volume of the 24 tetrahedra the chimera overlap clips (each
+face a fan of four triangles about the mean of its nodes, joined to the mean of the eight) is the same volume.
+
+At the second gas order each cell is split into eight octants, of a node, the midpoints of its three edges, the
+centres of its three faces and the cell centre: the images of the eight half-cubes under the same map. Their volumes,
+by the same formula, add up to the cell's. The 3-D dual cells take the formula too; a 2-D dual cell is its
+quadrilateral's area times the slab thickness.
+
+---
+
 ## Following a parcel
 
 ### Leaving a cell

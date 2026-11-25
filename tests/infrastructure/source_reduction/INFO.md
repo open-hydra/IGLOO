@@ -61,12 +61,9 @@ Each case also asserts the partition-of-unity invariant `Σ_d dualW == Σ_c Σ_o
 and the mass, momentum and energy slots are checked separately so a reduction that is right
 on only one of the three cannot pass.
 
-⚠ **`Σ dualW` is NOT asserted against `Σ cellVol` on S7.** `cellVol` is `hexVolume` of the
-parent hex, and `hexVolume` is a 5-tetrahedron split taking `abs()` per tet — **not additive
-under octant subdivision** when the hex has non-planar faces. Measured on S7's node formula
-the two differ by **5.1e-3** relative in total and **1.1e-2** worst per cell. An assertion
-against `cellVol` there would be RED on the **correct** code. It is asserted on the
-Cartesian cases S1–S6, where all faces are planar and the identity is exact.
+`Σ dualW` is also asserted against `Σ cellVol` on every case, S7 included: a cell's octants are the
+images of the half-cubes under its trilinear map, so their volumes sum to the cell's (measured 1.5e-16 on
+S7). With five tetrahedra per cell, exact only on plane faces, S7 is RED by 5.13e-3.
 
 ## The 101 leg (U2)
 Two boxes share a 101 face. Each block's dual cell at an interface vertex holds only its own
