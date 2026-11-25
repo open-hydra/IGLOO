@@ -10,6 +10,7 @@ program test_gas_reconstruction
     !   E5  partition-of-unity / node recovery / C0    -> machine / Newton-stop
     !   E7  warm start one step behind, linear field   -> f(p1) within the Newton-stop bound
     !   E8  Newton steps of the E7 samples             -> mean <= 2, max <= 3 per cell
+    !   E9  seed within the Newton stop of the point   -> f(p1) within 0.3 tau |grad f|
     !
     ! Expected values ALWAYS come from the physical analytic field, never from
     ! the shape functions. Tolerances are theory-derived:
@@ -44,6 +45,7 @@ program test_gas_reconstruction
     call run_E4(ok_all)
     call run_E5(ok_all)
     call run_E7(ok_all)
+    call run_E9(ok_all)
     call run_E8(ok_all)
 
     call dump_E3()
@@ -353,6 +355,43 @@ contains
             nodes(2,i) = nodes(2,i) + 0.7_real64*bend*cu(1,i)*cu(3,i)*hc(2)
         end do
     end subroutine e7_cell
+
+    !-------------------------------------------------------------------!
+    ! E9 : the seed already lies within the Newton stop of the sampled   !
+    !      point. xi0 = the local coords of p0, the sample asked at      !
+    !      p1 = p0 + 0.9 tau g/|g|, g the gradient of a linear field:    !
+    !      |gas - f(p1)| <= 0.3 tau |g|. A sample left at the seed is    !
+    !      off by 0.9 tau |g|. The field is measured from node 1, so     !
+    !      that only the positions round.                                !
+    !-------------------------------------------------------------------!
+    subroutine run_E9(ok)
+        logical, intent(inout) :: ok
+        real(real64) :: nodes(3,8), gasNodes(1,8), xi(3), p1(3), gas(1), errmax, tol, tau, g(3)
+        integer(int64) :: rng
+        integer :: k, is, i
+        logical :: pass
+        character(len=40) :: tag
+        g = 1.0e6_real64*GRAD7/norm2(GRAD7)
+        do k = 1, 4
+            call e7_cell(k, nodes, tag)
+            do i = 1, 8
+                gasNodes(1,i) = dot_product(g, nodes(:,i) - nodes(:,1))
+            end do
+            tau = newton_tau(nodes)
+            tol = 0.3_real64*tau*norm2(g)
+            rng = 9000_int64 + k
+            errmax = 0._real64
+            do is = 1, NS7
+                call e7_draw(rng, nodes, xi, p1)
+                p1 = forward_hex_map(nodes, xi) + 0.9_real64*tau*g/norm2(g)
+                call interp2ndOrder(nodes, gasNodes, p1, 1, xi, gas)
+                errmax = max(errmax, abs(gas(1) - dot_product(g, p1 - nodes(:,1))))
+            end do
+            pass = assert_lt('E9 seed within the stop, '//trim(tag), errmax, tol)
+            ok = ok .and. pass
+            call append_row('E9_seed_in_stop', trim(tag), errmax, errmax, 0._real64, 0._real64, tol, pass)
+        end do
+    end subroutine run_E9
 
     !> One E7 draw: xi0 in [0.1,0.9]^3, p0 = forward map (oracle basis), p1 = p0 + delta.
     subroutine e7_draw(rng, nodes, xi0, p1)
