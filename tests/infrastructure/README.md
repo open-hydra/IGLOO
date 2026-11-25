@@ -31,6 +31,7 @@ adding a test) are in [`../README.md`](../README.md).
 |---|---|---|
 | [`axis_dispatch/`](axis_dispatch/INFO.md) | `test_axis_dispatch` | Bcdef-200 face classification |
 | `bc_families/` | `test_bc_families` | The boundary file's per-family copies and chimera (102) records |
+| [`cell_volume/`](cell_volume/INFO.md) | `test_cell_volume` | Cell and octant volumes: the trilinear volume |
 | [`containment/`](containment/INFO.md) | `test_containment` | The 12-plane point-in-hexahedron test and its tolerance |
 | [`dual_clip/`](dual_clip/INFO.md) | `test_dual_clip` | The ord2 dual mesh tiles the domain |
 | [`fmt/`](fmt/INFO.md) | `test_fmt` | The particle files' edit descriptors without the runtime |

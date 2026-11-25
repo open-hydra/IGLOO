@@ -23,7 +23,7 @@ FAMILY_DIRS = [
     "infrastructure/rng_stream", "infrastructure/psd_table", "infrastructure/slot_order",
     "infrastructure/material_tokens",
     "infrastructure/axis_dispatch",
-    "infrastructure/graze_standoff", "infrastructure/dual_clip",
+    "infrastructure/graze_standoff", "infrastructure/cell_volume", "infrastructure/dual_clip",
     "infrastructure/mollify_blocks", "infrastructure/host_assoc", "infrastructure/fmt",
     "standard/drag", "standard/temperature",
     "evaporation", "evaporation/interface-neq", "evaporation/tc-analytic",

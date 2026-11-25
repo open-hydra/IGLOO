@@ -28,6 +28,7 @@ or overlapping chimera faces. The drag physics is gated elsewhere; what these ca
 | `axis_dispatch` | bcdef-200 faces: the axis reflects, the wedge faces fold, whatever the face index and axis direction |
 | `hop_crossing`, `graze_standoff` | a reflection's crossing as the first outward root of the step's cubic; a grazing stand-off never leaves its cell |
 | `geometry_rules`, `dual_clip` | the boundary search's face; the gas-order-2 dual mesh tiles the domain |
+| `cell_volume` | cell and octant volumes are the trilinear volume: a twisted cell and a block of jittered cells against Gauss integration of det J, the block summing to its box and each cell to its octants, to $10^{-13}$ |
 
 - **Sensitivity** — with an absolute $10^{-15}$ m containment tolerance up to 60 % of a shared face
   lies in neither cell, in 10 of 400 orientations at 1 cm.

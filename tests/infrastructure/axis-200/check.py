@@ -49,8 +49,8 @@ files do not see the deposit, so this section is what gates it. db-2daxi/check.p
 E1 and E3 of it (and an outlet-band E4) on its own euler1.tec; coupled-body's euler field
 is ord1.
 
-Cell volumes are recomputed here from the tec NODES by exact hexahedron
-decomposition (6 tets on the n0-n6 diagonal). That is deliberately NOT production's
+Cell volumes are recomputed here from the tec NODES by a decomposition exact on
+these plane-faced cells (6 tets on the n0-n6 diagonal). That is deliberately NOT production's
 `cellVol`: an oracle that re-typed the solver's own volume formula would lockstep
 with it and could not see a volume bug at all.
 
