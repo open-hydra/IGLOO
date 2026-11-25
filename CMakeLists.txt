@@ -13,7 +13,7 @@ project (${solver} LANGUAGES Fortran CXX)
 # each release is checked out in lib/<NAME>, out of the build folder, and kept in deps.lock (both git ignored);
 # -DSEMVER_UPDATE=ALL selects the newest ones again.
 set(IGLOO_ORION_VERSION 2.2)
-set(IGLOO_OSLO_VERSION 1.1)
+set(IGLOO_OSLO_VERSION 1.1.1)
 set(IGLOO_ORION_URL https://github.com/MarcoGrossi92/ORION.git)
 set(IGLOO_OSLO_URL  https://github.com/MarcoGrossi92/OSLO.git)
 # - FiNeR. Directly pinned at one release, the submodule lib/FiNeR (bump the gitlink and the tag together).
