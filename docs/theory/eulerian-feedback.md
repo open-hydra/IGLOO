@@ -121,8 +121,8 @@ The integration still ends a step at the block face, and at a periodic face, whe
 and temperature numerators, arc-length means over a step times its residence, differ from those of the uncut step at
 second order: a cut at the fraction $f$ of a step over which the speed and the transported quantity change by the
 relative amounts $\varepsilon$ and $\eta$ changes the numerator by $-\varepsilon\eta\,f(1-f)/4$ of itself, to leading
-order. On a curved mesh the octant sum $W$ differs from the dual cell's metric volume $V$ (a curved hexahedron's volume
-is not the sum of its octants'): next to the face the two blocks then differ from one block by up to that ratio
+order. On a curved mesh the octant sum $W$ differs from the dual cell's metric volume $V$ (the octants about a node and
+the dual cell are different regions): next to the face the two blocks then differ from one block by up to that ratio
 ($7.6\times10^{-5}$ on the wedge of the two-block test).
 
 ### Chimera overlaps

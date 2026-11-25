@@ -655,35 +655,35 @@ contains
 
   end subroutine fmn2ijk
 
-  !> Hex volume as the sum of its 5-tetrahedra decomposition.
-  pure function hexVolume(verts) result(vol)
+  !> Hex volume, nodes 1 + a + 2b + 4c: |integral of det J| of the trilinear map, MOSE's and ICE's (docs/theory/geometry.md).
+  !  The nodes relative to the first go through a VOLATILE copy, so a reassociating compiler keeps the differences.
+  function hexVolume(verts) result(vol)
+    use IGLOO_VectorModule, only: cross
     implicit none
     real(R8), intent(in) :: verts(3, 8)
     real(R8)             :: vol
-    integer, parameter   :: tet(4, 5) = reshape([   &
-                              1, 6, 4, 7,           &  ! inner tet
-                              1, 4, 6, 2,           &  ! outer corner (1,0,0) = idx 2
-                              6, 4, 7, 8,           &  ! outer corner (1,1,1) = idx 8
-                              1, 6, 7, 5,           &  ! outer corner (0,0,1) = idx 5
-                              1, 4, 7, 3            &  ! outer corner (0,1,0) = idx 3
-                              ], [4, 5])
-    real(R8) :: e1(3), e2(3), e3(3), cx(3)
-    integer  :: n
+    real(R8), volatile   :: rv(3, 8)
+    real(R8)             :: r(3, 8), ea(3, 3)
+    integer              :: n
 
-    vol = 0._R8
-    do n = 1, 5
-      e1 = verts(:, tet(2, n)) - verts(:, tet(1, n))
-      e2 = verts(:, tet(3, n)) - verts(:, tet(2, n))
-      e3 = verts(:, tet(4, n)) - verts(:, tet(1, n))
-      cx = [e1(2)*e2(3) - e1(3)*e2(2), &
-            e1(3)*e2(1) - e1(1)*e2(3), &
-            e1(1)*e2(2) - e1(2)*e2(1)]
-      vol = vol + abs(dot_product(cx, e3) / 6._R8)
+    rv(:, 1) = 0._R8
+    do n = 2, 8
+      rv(:, n) = verts(:, n) - verts(:, 1)
     enddo
+    r = rv
+    !> mean edges of directions a, b, c
+    ea(:,1) = 0.25_R8 * ( r(:,2) + ( r(:,6) - r(:,5) ) + ( r(:,4) - r(:,3) ) + ( r(:,8) - r(:,7) ) )
+    ea(:,2) = 0.25_R8 * ( r(:,3) + ( r(:,7) - r(:,5) ) + ( r(:,4) - r(:,2) ) + ( r(:,8) - r(:,6) ) )
+    ea(:,3) = 0.25_R8 * ( r(:,5) + ( r(:,7) - r(:,3) ) + ( r(:,6) - r(:,2) ) + ( r(:,8) - r(:,4) ) )
+    !> twice the area vectors, (3rd - 1st) x (4th - 2nd): faces 1 3 7 5, 2 4 8 6; 1 5 6 2, 3 7 8 4; 1 2 4 3, 5 6 8 7
+    vol =       dot_product(ea(:,1), cross(r(:,7), r(:,5) - r(:,3)) + cross(r(:,8) - r(:,2), r(:,6) - r(:,4)))
+    vol = vol + dot_product(ea(:,2), cross(r(:,6), r(:,2) - r(:,5)) + cross(r(:,8) - r(:,3), r(:,4) - r(:,7)))
+    vol = vol + dot_product(ea(:,3), cross(r(:,4), r(:,3) - r(:,2)) + cross(r(:,8) - r(:,5), r(:,7) - r(:,6)))
+    vol = abs(vol) / 12._R8
   end function hexVolume
 
   !> Volume of cell (i,j,k) from its 8 nodes.
-  pure subroutine computeVolume(self, i, j, k, vol)
+  subroutine computeVolume(self, i, j, k, vol)
     implicit none
     class(obj_block), intent(in)  :: self
     integer,          intent(in)  :: i, j, k
@@ -893,7 +893,7 @@ contains
 
 
   !> Cell centers, edge lengths, face-cell centers/normals and (ord2) sub-octant volumes.
-  pure subroutine compute_geometry(self)
+  subroutine compute_geometry(self)
     use IGLOO_variables, only: ord2
     implicit none
     class(obj_block), intent(inout) :: self
@@ -1086,7 +1086,7 @@ contains
   end subroutine precomputeDualWeights
 
   !> Cache the full volume of every cell (cellVol) for the mollifier.
-  pure subroutine precomputeMetric(self)
+  subroutine precomputeMetric(self)
     implicit none
     class(obj_block), intent(inout) :: self
     integer  :: i, j, k

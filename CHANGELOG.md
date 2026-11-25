@@ -52,6 +52,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   whole Hydra suite.
 
 ### Fixed
+- Geometry: a cell's volume is the integral of det J of the trilinear map of its nodes, the volume its bilinear faces
+  bound, as MOSE and ICE compute it; it was a sum of five tetrahedra, exact only on plane faces, whose volumes did not
+  tile a mesh with twisted faces (a 6×6×6 block with its inner nodes moved by up to 5 % of a cell summed to
+  1 + 3.7e-5 of its box, a cell 3.9e-2 off). A cell's eight octants (gas order 2) add up to its volume, and the
+  chimera overlap's 24 tetrahedra enclose the same volume. Plane-faced meshes change by round-off.
 - Combustion: the burnout removal of a burning parcel (ODE models 5 and 8) requires the parcel to burn, at or above
   `T-ign` under `Beckstead` and `T-burn` under `direct`; a parcel at the removal mass that does not burn stays an
   inert parcel instead of being handed to the gas. The evaporating models 2 and 4 are unchanged.
