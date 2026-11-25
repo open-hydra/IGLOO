@@ -78,19 +78,19 @@ def main():
     except (FileNotFoundError, ValueError) as e:
         return fail(f"F1 {e}")
     failed = [int(m) for m in re.findall(r"Run_ODESolver err=-?\d+ part=(\d+)", log)]
-    late = [(r["ID"], r["X"], r["t"]) for r in ex
-            if not (X_JUMP - 0.5e-6 <= r["X"] < X_JUMP + DX and r["t"] > 0.0)]
+    late = [(r["ID"], r["X"], r["time"]) for r in ex
+            if not (X_JUMP - 0.5e-6 <= r["X"] < X_JUMP + DX and r["time"] > 0.0)]
     if (len(ex) != N_PARCELS or len(failed) != N_PARCELS or sorted(failed) != sorted(r["ID"] for r in ex)
             or late):
         rc |= fail(f"F1 {len(ex)} exit records, {len(failed)} 'Run_ODESolver err=' lines for {len(set(failed))} "
                    f"parcels; exits off the first cell past the jump or at t = 0 (ID, x, t): {late[:5]}")
     else:
         print(f"F1 every parcel ({N_PARCELS}) fails once, in the first cell past the jump "
-              f"(x {min(r['X'] for r in ex):.6f}, t {min(r['t'] for r in ex):.8e} s), after finalized segments PASS")
+              f"(x {min(r['X'] for r in ex):.6f}, t {min(r['time'] for r in ex):.8e} s), after finalized segments PASS")
     last = {}
     for r in datcols.rows(TRAJ):
-        last[r["ID"]] = max(last.get(r["ID"], r["t"]), r["t"])
-    margin = [(r["t"] - last[r["ID"]], r["ID"]) for r in ex if r["ID"] in last]
+        last[r["ID"]] = max(last.get(r["ID"], r["time"]), r["time"])
+    margin = [(r["time"] - last[r["ID"]], r["ID"]) for r in ex if r["ID"] in last]
     short = [(i, m) for m, i in margin if m <= MARGIN]
     if not margin or len(margin) != len(ex) or short:
         rc |= fail(f"F1' {len(ex) - len(margin)} parcels without a trajectory row; {len(short)} exit records at or "
@@ -99,7 +99,7 @@ def main():
         print(f"F1' every exit record lies past its parcel's entry into the failing cell (smallest margin "
               f"{min(m for m, _ in margin):.4e} s): the failing call's accepted steps are kept PASS")
     mf = field_mass(EUL)
-    me = sum(r["mdot"] * r["t"] for r in ex)
+    me = sum(r["mdot"] * r["time"] for r in ex)
     rel = (mf - me) / me
     print(f"   Eulerian mass {mf:.9e} kg; exit records' sum of mdot*t {me:.9e} kg; relative {rel:+.3e} (tol {TOL:.0e})")
     if abs(rel) > TOL:

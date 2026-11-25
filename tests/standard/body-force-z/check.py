@@ -149,12 +149,12 @@ def main():
     nviol, worst = 0, {"v": (0.0, ""), "z": (0.0, ""), "T": (0.0, "")}
     worst_self, crossers, bottom = 0.0, 0, []
     for pid in sorted(parts):
-        pr = sorted(parts[pid], key=lambda r: r["t"])
+        pr = sorted(parts[pid], key=lambda r: r["time"])
         f = pr[0]
         z0 = (layer(f["Z"]) + 0.5) * DZ
         T0_ = T_CELL[layer(z0)]
         # B0: the injection state
-        if not (f["t"] == 0.0 and abs(f["X"]) <= HALF and abs(f["Z"] - z0) <= HALF and abs(f["U"] - U_G) <= HALF
+        if not (f["time"] == 0.0 and abs(f["X"]) <= HALF and abs(f["Z"] - z0) <= HALF and abs(f["U"] - U_G) <= HALF
                 and abs(f["V"]) <= HALF and abs(f["W"]) <= HALF and abs(f["T"] - T0_) <= HALF):
             print(f"[FAIL] B0 ID={pid}: first row is not the injection state (z0 {z0}, T0 {T0_})")
             nviol += 1
@@ -182,18 +182,18 @@ def main():
                 print(f"[FAIL] B2 ID={pid} x={r['X']:.4f}: |z - z(x)| = {res:.3e} > {TOL_Z:.1e}")
                 nviol += 1; bad = True
         # K3: the temperature through the k-layers
-        times = [r["t"] for r in pr]
+        times = [r["time"] for r in pr]
         t_or = rk4(z0, T0_, times)
         worst_self = max(worst_self, max(abs(a[0] - b[0]) for a, b in zip(t_or, rk4(z0, T0_, times, 0.5))))
         for r, (To, cross) in zip(pr, t_or):
-            k = layer(path(r["t"], z0)[1])
-            tol = DELTA_T + abs(rate(r["t"], To, z0, k)) * DELTA_TIME * r["t"] + EPS_INT + cross
+            k = layer(path(r["time"], z0)[1])
+            tol = DELTA_T + abs(rate(r["time"], To, z0, k)) * DELTA_TIME * r["time"] + EPS_INT + cross
             res = abs(r["T"] - To)
             if res / tol > worst["T"][0]:
-                worst["T"] = (res / tol, f"ID={pid} t={r['t']:.6e} res={res:.3e} tol={tol:.3e}")
+                worst["T"] = (res / tol, f"ID={pid} t={r['time']:.6e} res={res:.3e} tol={tol:.3e}")
             if res > tol:
                 if not bad:
-                    print(f"[FAIL] K3 ID={pid} t={r['t']:.6e} z={r['Z']:.6f}: |T - T_or| = {res:.3e} > {tol:.3e} "
+                    print(f"[FAIL] K3 ID={pid} t={r['time']:.6e} z={r['Z']:.6f}: |T - T_or| = {res:.3e} > {tol:.3e} "
                           f"(T={r['T']:.6f}, T_or={To:.6f})")
                 nviol += 1; bad = True
         # K1: a k-face crossed (the drift from the first row to the exit record at x = 0.15)

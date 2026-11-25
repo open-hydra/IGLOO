@@ -95,10 +95,10 @@ def main():
         z = rows[0]["m<sub>p"] / m0
         if not zb * (1.0 - TOL_M) <= z <= z0 * (1.0 + TOL_M):
             bad_m.append(p["ID"])
-        if not tb * fb * (1.0 - TOL_T) <= p["t"] <= tb * (1.0 + TOL_T):
+        if not tb * fb * (1.0 - TOL_T) <= p["time"] <= tb * (1.0 + TOL_T):
             bad_t.append(p["ID"])
-        w = worst.setdefault(key, [z, z, p["t"], p["t"]])
-        w[0], w[1], w[2], w[3] = min(w[0], z), max(w[1], z), min(w[2], p["t"]), max(w[3], p["t"])
+        w = worst.setdefault(key, [z, z, p["time"], p["time"]])
+        w[0], w[1], w[2], w[3] = min(w[0], z), max(w[1], z), min(w[2], p["time"]), max(w[3], p["time"])
     for key in sorted(paths):
         z0, zb, fb, tb = paths[key]
         zl, zh, tl, th = worst[key]

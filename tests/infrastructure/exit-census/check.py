@@ -56,7 +56,7 @@ def main():
         print(f"E1 one exit record per injected parcel (IDs 1-{N_STREAMS}) PASS")
     rec = {r["ID"]: r for r in ex}
     bad = [i for i in LEAVE if i not in rec or abs(rec[i]["X"] - OUTLET) > X_HALF or rec[i]["bc"] != 400
-           or not rec[i]["t"] < T_END]
+           or not rec[i]["time"] < T_END]
     if bad:
         rc |= fail(f"E2 outlet records off: {bad}")
     else:
@@ -64,18 +64,18 @@ def main():
     bad = []
     for i in INSIDE:
         r, s = rec.get(i), snap.get(i)
-        if r is None or s is None or r["bc"] != 0 or abs(r["t"] - T_END) > T_HALF * T_END \
+        if r is None or s is None or r["bc"] != 0 or abs(r["time"] - T_END) > T_HALF * T_END \
                 or not 0.0 < r["X"] < OUTLET or any(abs(r[c] - s[c]) > X_HALF for c in ("X", "Y", "Z")) \
                 or abs(r["|u<sub>p</sub>|"] - (s["U"] ** 2 + s["V"] ** 2 + s["W"] ** 2) ** 0.5) > 2 * X_HALF \
-                or abs(r["t"] - s["t"]) > T_HALF * T_END:
-            bad.append((i, r and (r["X"], r["t"], r["bc"]), s and (s["X"], s["t"])))
+                or abs(r["time"] - s["time"]) > T_HALF * T_END:
+            bad.append((i, r and (r["X"], r["time"], r["bc"]), s and (s["X"], s["time"])))
     if bad:
         rc |= fail(f"E3 time-end records off (ID, record x t bc, snapshot x t): {bad}")
     else:
         print("E3 IDs 4-6 recorded where time-end stopped them (code 0, t = time-end, the snapshot's state) PASS")
     r = rec.get(OUTSIDE)
     ok7 = r is not None and all(abs(r[c] - v) <= X_HALF for c, v in zip(("X", "Y", "Z"), INJ7)) \
-        and r["|u<sub>p</sub>|"] == 0.0 and r["t"] == 0.0 and r["bc"] == 0 \
+        and r["|u<sub>p</sub>|"] == 0.0 and r["time"] == 0.0 and r["bc"] == 0 \
         and "1 parcel(s) whose injection point no cell holds" in log
     if not ok7:
         rc |= fail(f"E4 the parcel never integrated: record {r}")

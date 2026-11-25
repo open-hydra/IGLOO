@@ -90,7 +90,7 @@ def main():
         print(f"G1 exit mass flow {got:.6e} kg/s ({len(md)} records) = the inlet's {want:.6e} ({err:.1e}) PASS")
     first = {}
     for r in tr:
-        if r["ID"] not in first or r["t"] < first[r["ID"]]["t"]:
+        if r["ID"] not in first or r["time"] < first[r["ID"]]["time"]:
             first[r["ID"]] = r
     pairs = [math.hypot(first[a]["Y"] - first[b]["Y"], first[a]["Z"] - first[b]["Z"])
              for ps in by_cell.values() for i, a in enumerate(ps) for b in ps[i + 1:]]

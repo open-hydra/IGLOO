@@ -72,13 +72,13 @@ def main():
     else:
         print(f"K1 {len(stuck)} 'stuck in cell' lines, the IDs of the exit records; no other guard, no solver "
               f"failure; the run ended normally PASS")
-    bad = [(r["ID"], r["X"], r["Z"], r["t"], r.get("bc")) for r in ex
-           if r.get("bc") != 0 or r["Z"] > Z_PLANE or r["X"] >= X_CELL or r["t"] >= T_EARLY]
+    bad = [(r["ID"], r["X"], r["Z"], r["time"], r.get("bc")) for r in ex
+           if r.get("bc") != 0 or r["Z"] > Z_PLANE or r["X"] >= X_CELL or r["time"] >= T_EARLY]
     if ids != list(range(1, N_STREAMS + 1)) or bad:
         rc |= fail(f"K2 exit IDs {ids}; {len(bad)} not code 0 on the plane in the landing cell before {T_EARLY} s "
                    f"(ID, x, z, t, bc): {bad}")
     else:
-        xs, ts = [r["X"] for r in ex], [r["t"] for r in ex]
+        xs, ts = [r["X"] for r in ex], [r["time"] for r in ex]
         print(f"K2 {N_STREAMS} exit records, IDs 1-{N_STREAMS} once each, code 0, z <= {Z_PLANE:g}, "
               f"x = {min(xs):.5f}-{max(xs):.5f} < {X_CELL} m, t = {min(ts):.4f}-{max(ts):.4f} < {T_EARLY} s PASS")
     if gas_order() == 2:

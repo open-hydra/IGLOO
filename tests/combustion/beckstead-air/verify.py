@@ -52,7 +52,7 @@ def igloo_points():
     for e in check.rows(check.OUTLOC):
         c = check.cell_of(e["Y"], e["Z"])
         if c is not None:
-            out.append((e["ID"], d0[c] * 1e6, e["t"] * 1e3))
+            out.append((e["ID"], d0[c] * 1e6, e["time"] * 1e3))
     return sorted(out)
 
 

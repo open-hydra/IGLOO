@@ -48,7 +48,7 @@ EXPECT = {
 def write_file(path):
     with open(path, "w") as f:
         f.write(' variables="plane","X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","mdot","npdot","f","ID",'
-                '"parent","t","dir"\n')
+                '"parent","time","dir"\n')
         f.write('Zone T="Mat A Group  1"\n')
         for i, (k, y, z, d, n, s) in enumerate(RECORDS, 1):
             m = RHO * math.pi / 6.0 * d ** 3

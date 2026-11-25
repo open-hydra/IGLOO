@@ -63,7 +63,7 @@ def main():
         parts.setdefault(r["ID"], []).append(r)
     row_of = {}
     for pid, pr in parts.items():
-        pr.sort(key=lambda r: r["t"])
+        pr.sort(key=lambda r: r["time"])
         row_of[pid] = int(pr[0]["Y"] / DY) + 1
 
     # I1: the injection state -------------------------------------------------------------------------------------
@@ -71,7 +71,7 @@ def main():
     for pid, pr in sorted(parts.items()):
         code, gp, u0, tp = ROW[row_of[pid]]
         f = pr[0]
-        if not (f["t"] == 0.0 and abs(f["X"]) <= HALF and abs(f["U"] - u0) <= HALF and abs(f["V"]) <= HALF
+        if not (f["time"] == 0.0 and abs(f["X"]) <= HALF and abs(f["U"] - u0) <= HALF and abs(f["V"]) <= HALF
                 and abs(f["W"]) <= HALF and abs(f["T"] - tp) <= HALF):
             bad.append(f"ID {pid} (row {row_of[pid]}, {code}): x={f['X']:.6f} u=({f['U']:.6f}, {f['V']:.6f}, "
                        f"{f['W']:.6f}) T={f['T']:.6f}, expected u=({u0:.6f}, 0, 0) T={tp:.6f}")

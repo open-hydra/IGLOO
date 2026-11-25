@@ -18,7 +18,7 @@ import argparse
 import math
 import sys
 
-COLS = ("plane", "X", "Y", "Z", "U", "V", "W", "T", "d", "m", "mdot", "npdot", "f", "ID", "parent", "t", "dir")
+COLS = ("plane", "X", "Y", "Z", "U", "V", "W", "T", "d", "m", "mdot", "npdot", "f", "ID", "parent", "time", "dir")
 
 
 def read_records(path, plane, rmin, rmax, net):

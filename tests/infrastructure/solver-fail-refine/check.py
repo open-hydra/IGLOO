@@ -88,14 +88,14 @@ def gates(tag, d, g):
     else:
         print(f"{tag} R0 {N_PARCELS} exit records, one 'Run_ODESolver err=' line per parcel, each at time= > 0 "
               f"(min {min(t for _, t in failed):.4e} s) PASS")
-    out = [(r["ID"], r["X"], r["t"]) for r in ex if not (r["X"] <= X_FACE + HALF_F and r["t"] > 0.0)]
+    out = [(r["ID"], r["X"], r["time"]) for r in ex if not (r["X"] <= X_FACE + HALF_F and r["time"] > 0.0)]
     if out:
         fails.append(f"{tag} R1 {len(out)} exit records past the first cell's face or at t = 0 (ID, X, t): {out[:5]}")
     else:
         print(f"{tag} R1 every exit record inside the first cell (X {min(r['X'] for r in ex):.6f}.."
-              f"{max(r['X'] for r in ex):.6f} m, t {min(r['t'] for r in ex):.8e}..{max(r['t'] for r in ex):.8e} s) PASS")
+              f"{max(r['X'] for r in ex):.6f} m, t {min(r['time'] for r in ex):.8e}..{max(r['time'] for r in ex):.8e} s) PASS")
     mf = field_mass(p(EUL))
-    me = sum(r["mdot"] * r["t"] for r in ex)
+    me = sum(r["mdot"] * r["time"] for r in ex)
     rel = (mf - me) / me if me else float("inf")
     print(f"{tag}    Eulerian mass {mf:.9e} kg; exit records' sum of mdot*t {me:.9e} kg; relative {rel:+.3e} "
           f"(tol {TOL_R2:.0e})")
@@ -109,7 +109,7 @@ def gates(tag, d, g):
         afx = sum(abs(v) for v in src["Fx"])
         uinj = {}
         for r in datcols.rows(p(TRAJ)):
-            if r["t"] == 0.0:
+            if r["time"] == 0.0:
                 uinj[r["ID"]] = r["U"]
         missing = sorted(set(r["ID"] for r in ex) - set(uinj))
         if missing:
@@ -118,10 +118,10 @@ def gates(tag, d, g):
             rhs = imp = tol = 0.0
             for r in ex:
                 du = uinj[r["ID"]] - r["|u<sub>p</sub>|"]
-                rhs += r["mdot"] * (du + g * r["t"])
-                imp += r["mdot"] * g * r["t"]
-                tol += (r["mdot"] * 2.0 * HALF_F + half_e(r["mdot"]) * abs(du + g * r["t"])
-                        + r["mdot"] * g * half_es(r["t"]))
+                rhs += r["mdot"] * (du + g * r["time"])
+                imp += r["mdot"] * g * r["time"]
+                tol += (r["mdot"] * 2.0 * HALF_F + half_e(r["mdot"]) * abs(du + g * r["time"])
+                        + r["mdot"] * g * half_es(r["time"]))
             tol = 3.0 * tol + SUM_FLOOR * afx
             res = fx - rhs
             print(f"{tag}    sum Fx {fx:+.9e} N; sum mdot (u_inj - |u|) + mdot g t {rhs:+.9e} N; residual "

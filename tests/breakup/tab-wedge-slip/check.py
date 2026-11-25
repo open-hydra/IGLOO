@@ -44,7 +44,7 @@ def events(d):
         d0 = rows[0]["d<sub>p"]
         first = next((r for r in rows if r["d<sub>p"] < d0 * (1.0 - D_REL)), None)
         nchg = sum(1 for a, b in zip(rows, rows[1:]) if b["d<sub>p"] != a["d<sub>p"])
-        out[z["id"]] = (first["t"] if first else None, first["X"] if first else None, nchg)
+        out[z["id"]] = (first["time"] if first else None, first["X"] if first else None, nchg)
     return out
 
 

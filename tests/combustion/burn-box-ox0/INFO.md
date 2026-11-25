@@ -43,7 +43,7 @@ parcels burn out near x = 0.072 m at 764.84 K; each residue (`m = 1.883092e-11 k
 |---|---|---|---|
 | W | the log: `carried-0= 1.000E-01`; `stretch c =  1.388382 from carried-0 = 0.1000` read back against 1.388383; the capped banner; `combustion product (residues: 25)` | 3e-6 relative | 7.2e-7 |
 | I | each burning parcel's injection row: `m = m_p0`, `d = d_p0` | 2e-6 relative; exact | 4.7e-7; exact |
-| C | every trajectory row of A before its parcel's exit record against the oracle at the row's `t` (RK4 on `(s, T)`, Gallier's exact `F`, `c` typed): `m = m_Al + m_ox`, the equal-volume `d`, `T`; the coast `u = u_g`, `v = w = 0` (725 rows) | 4e-6, 4e-6 relative; 0.1 K | 2.6e-6, 2.1e-6; 3.5e-5 K |
+| C | every trajectory row of A before its parcel's exit record against the oracle at the row's `time` (RK4 on `(s, T)`, Gallier's exact `F`, `c` typed): `m = m_Al + m_ox`, the equal-volume `d`, `T`; the coast `u = u_g`, `v = w = 0` (725 rows) | 4e-6, 4e-6 relative; 0.1 K | 2.6e-6, 2.1e-6; 3.5e-5 K |
 | B | each parent's exit record (bc 0) at a time inside `[t(s_b), t_b] = [7.2246481e-3, 7.2246741e-3] s`, `s_b = (m_b/m_Al0)^{n/3}`, `m_b = min(1e-6 m_p0, 1e-20 kg) = 1e-20 kg` (`tools/burnout.py`), `t(s_b)` the burn law's quadrature from 1 to `s_b` (the rate depends on `s` alone): the burnout fires on the first accepted step with `m_Al ≤ m_b` | 3e-6 relative at each end | 7.2246567e-3 to 7.2246705e-3 s |
 | R1 | one residue per parent burned out inside the box: IDs 1–25 = the parents' exit records with `X < Lx − 1e-6`; the product's banner 25 | exact | 25 |
 | R2 | each residue's birth row: `m = m_ox0 + ξν(m_Al0 − m_b) = 1.883092e-11 kg`; `d = (6m/(π ρ_res))^{1/3}` of the printed `m` | 3e-5; 5e-6 relative | 1.2e-6; 2.7e-6 |

@@ -30,7 +30,7 @@ cells, none on a node line): d₀ = 20 µm, T₀ = 320 K, u₀ = 0.5 m/s along x
 within u₀ τ₀ = 0.554 mm (τ₀ = ρ_p d₀²/(18 μ_g) = 1.108 ms); CEM evaporation with the Langmuir-Knudsen interface, the
 water constants of `mhb98-water` (L_v 2.462478e6 J/kg, M_v 18.015, T_boil 373.15 K, Clausius-Clapeyron p_sat), then
 burns them out at m_b = min(1e-6 m₀, 1e-20 kg) = 1e-20 kg (m₀ = 4.176e-12 kg, d(m_b) = 26.76 nm). `out-time = on`
-puts `t` on every exit record; `out-file = S` writes the source field. `[IGLOO-ODE] mass-tol = off`; `check.py` writes
+puts `time` on every exit record; `out-file = S` writes the source field. `[IGLOO-ODE] mass-tol = off`; `check.py` writes
 the sibling deck, the same lines without the `[IGLOO-ODE]` section, into `ref-burnout/` and runs it there.
 
 ## What it verifies (`check.py`, inputs, logs and the printed records only)

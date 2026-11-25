@@ -121,8 +121,8 @@ def run(case, y_edges=None):
         return fail(str(e)), {}
     first = {}
     for r in rows:
-        if r["ID"] not in first or r["t"] < first[r["ID"]]["t"] or \
-                (r["t"] == first[r["ID"]]["t"] and r["X"] < first[r["ID"]]["X"]):
+        if r["ID"] not in first or r["time"] < first[r["ID"]]["time"] or \
+                (r["time"] == first[r["ID"]]["time"] and r["X"] < first[r["ID"]]["X"]):
             first[r["ID"]] = r
     exits = {r["ID"]: r for r in ex}
     lost = [p for p in first if p not in exits or abs(exits[p]["X"] - LX) > HALF]
@@ -210,7 +210,7 @@ def run(case, y_edges=None):
             if c:
                 cells.setdefault(c, []).append(p)
     # J1: the inlet plane
-    off = [p for p, r in first.items() if abs(r["X"]) > HALF or r["t"] != 0.0]
+    off = [p for p, r in first.items() if abs(r["X"]) > HALF or r["time"] != 0.0]
     if off:
         rc |= fail(f"J1 {len(off)} first rows off the inlet plane or not at t = 0: {off[:5]}")
     else:

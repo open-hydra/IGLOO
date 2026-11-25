@@ -69,7 +69,7 @@ def load_planes():
             r = {"k": int(c[0]), "X": float(c[1]), "Y": c[2], "Z": c[3], "U": float(c[4]), "V": float(c[5]),
                  "W": float(c[6]), "T": float(c[7]), "d": float(c[8]), "m": float(c[9]), "mdot": float(c[10]),
                  "npdot": float(c[11]), "f": float(c[12]), "ID": int(c[13]), "parent": int(c[14]),
-                 "t": float(c[15]), "dir": int(c[16]), "s": c}
+                 "time": float(c[15]), "dir": int(c[16]), "s": c}
         except ValueError:
             continue
         recs.append(r)
@@ -186,7 +186,7 @@ def main():
     for pid, v in byid.items():
         if pid not in ex:
             bad.append(f"record ID {pid} has no exit record")
-        ts = [r["t"] for r in sorted(v, key=lambda r: r["k"])]
+        ts = [r["time"] for r in sorted(v, key=lambda r: r["k"])]
         if any(b <= a for a, b in zip(ts[:-1], ts[1:])):
             bad.append(f"ID {pid}: t not increasing along the planes {ts}")
     fails += report("P2", bad, N_INJ * len(XP) + len(kids) * len(XP) + len(byid), "crossing counts")

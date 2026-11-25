@@ -98,7 +98,7 @@ def check_c0(log, err, ex, traj):
     capped = sorted(int(m) for m in re.findall(r"Inner loop > \d+ iter, part=(\d+)", log))
     ids = sorted(r["ID"] for r in ex)
     bad_ex = [(r["ID"], r["X"], r["bc"]) for r in ex
-              if not (r["bc"] == 0 and X_ENTRY - HALF <= r["X"] <= LX and r["t"] > 0.0)]
+              if not (r["bc"] == 0 and X_ENTRY - HALF <= r["X"] <= LX and r["time"] > 0.0)]
     if len(ex) != N_PARCELS or capped != ids or bad_ex:
         rc |= fail(f"C0 {len(ex)} exit records, {len(capped)} 'Inner loop >' lines; exit records off the capped "
                    f"half, not code 0 or at t = 0 (ID, X, bc): {bad_ex[:5]}")
@@ -112,7 +112,7 @@ def check_c0(log, err, ex, traj):
         if off > HALF + EPS:
             bad_rows.append((z["id"], off))
             continue
-        tent[z["id"]] = rows[N_LEFT]["t"]
+        tent[z["id"]] = rows[N_LEFT]["time"]
     if len(traj) != N_PARCELS or bad_rows or sorted(tent) != ids:
         rc |= fail(f"C0 {len(traj)} trajectories; parcels without their injection row and 30 left-half crossings at "
                    f"k*DX1 (ID, rows or worst offset): {bad_rows[:5]}")
@@ -189,7 +189,7 @@ def main():
         return fail(f"C0 {e}")
     rc, _ = check_c0(log, err, ex, traj)
     # C1
-    worst = max(abs(r["X"] - U_G * r["t"]) - (HALF + U_G * T_HALF * r["t"]) for r in ex)
+    worst = max(abs(r["X"] - U_G * r["time"]) - (HALF + U_G * T_HALF * r["time"]) for r in ex)
     off = [(r["ID"], r["X"]) for r in ex if not (X_ENTRY - HALF <= r["X"] <= X_ENTRY + DX2 + HALF)]
     long_traj = [(z["id"], len(z["rows"])) for z in traj if len(z["rows"]) != N_LEFT + 1]
     if worst > 0.0 or off or long_traj:
@@ -198,11 +198,11 @@ def main():
                    f"{long_traj[:5]}")
     else:
         print(f"C1 every exit record is one state inside the capped cell (|X - u_g t| within its bound, margin "
-              f"{-worst:.3e} m; X {min(r['X'] for r in ex):.6f} m, t {min(r['t'] for r in ex):.8e} s), every "
+              f"{-worst:.3e} m; X {min(r['X'] for r in ex):.6f} m, t {min(r['time'] for r in ex):.8e} s), every "
               f"trajectory ends at the cell entry ({N_LEFT + 1} rows) PASS")
     # C2
     mf = field_mass(EUL)
-    me = sum(r["mdot"] * r["t"] for r in ex)
+    me = sum(r["mdot"] * r["time"] for r in ex)
     rel = (mf - me) / me
     print(f"   Eulerian mass {mf:.9e} kg; exit records' sum of mdot*t {me:.9e} kg; relative {rel:+.3e} (tol {TOL:.0e})")
     if abs(rel) > TOL:

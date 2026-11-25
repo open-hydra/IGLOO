@@ -161,18 +161,18 @@ def main():
             continue
         cells[c] = e
     nbc = sum(1 for e in ex if e["bc"] != 0)
-    over = [e for c, e in cells.items() if not (e["d<sub>p</sub>"] <= d_floor[c] * (1.0 + TOL_FLOOR) and e["t"] > 0.0)]
+    over = [e for c, e in cells.items() if not (e["d<sub>p</sub>"] <= d_floor[c] * (1.0 + TOL_FLOOR) and e["time"] > 0.0)]
     ok = len(ex) == N_CELLS and len(cells) == N_CELLS and not bad and nbc == 0 and not over
     for b in bad[:5]:
         print("      " + b)
     for e in over[:5]:
-        print("      ID %d: d_p %.6e m, t %.8e s (bc %d)" % (e["ID"], e["d<sub>p</sub>"], e["t"], e["bc"]))
+        print("      ID %d: d_p %.6e m, t %.8e s (bc %d)" % (e["ID"], e["d<sub>p</sub>"], e["time"], e["bc"]))
     verdict(ok, "B1 %d exit records in %d of %d inlet cells, %d with bc != 0, %d above d_floor (1 + %.0e) or at t <= 0;"
             " largest d_p %.6e m" % (len(ex), len(cells), N_CELLS, nbc, len(over), TOL_FLOOR,
                                      max(e["d<sub>p</sub>"] for e in ex) if ex else float("nan")))
     worst0, nfirst, nstray = 0.0, 0, 0
     for c, e in sorted(cells.items()):
-        rr = sorted(by_id.get(e["ID"], []), key=lambda r: r["t"])
+        rr = sorted(by_id.get(e["ID"], []), key=lambda r: r["time"])
         nstray += sum(1 for r in rr if cell_of(r["Y"], r["Z"]) != c)
         if rr:
             nfirst += 1
@@ -186,7 +186,7 @@ def main():
     worst2, short, ovs = 0.0, [], []
     for c, e in sorted(cells.items(), key=lambda ce: d0[ce[0]]):
         D0 = d0[c]
-        t, dp = e["t"], e["d<sub>p</sub>"]
+        t, dp = e["time"], e["d<sub>p</sub>"]
         res = abs(t - (D0 ** NB - dp ** NB) / KEFF) / t
         t_floor = (D0 ** NB - d_floor[c] ** NB) / KEFF
         worst2 = max(worst2, res)
@@ -209,7 +209,7 @@ def main():
     for c, e in cells.items():
         D0 = d0[c]
         for r in by_id.get(e["ID"], []):
-            d, t = r["d<sub>p"], r["t"]
+            d, t = r["d<sub>p"], r["time"]
             bud = NB * d ** (NB - 1.0) * half_e13(d) + KEFF * half_es16(t)
             res = abs(d ** NB - (D0 ** NB - KEFF * t))
             nrow += 1

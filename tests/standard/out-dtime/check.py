@@ -61,12 +61,12 @@ def main():
     bad1, counts, worst, nviol = [], [], (0.0, ""), 0
     for key, pr in sorted(parts.items()):
         pid = key[2]
-        if pr[0]["t"] != 0.0:
-            bad1.append(f"ID {pid}: first row at t = {pr[0]['t']:.8e}")
+        if pr[0]["time"] != 0.0:
+            bad1.append(f"ID {pid}: first row at t = {pr[0]['time']:.8e}")
             continue
         for k in range(1, len(pr) - 1):
-            if pr[k]["t"] - pr[k - 1]["t"] < DT - 1.0e-8 * pr[k]["t"]:
-                bad1.append(f"ID {pid}: row {k} at t = {pr[k]['t']:.8e}, {pr[k]['t'] - pr[k - 1]['t']:.3e} s after "
+            if pr[k]["time"] - pr[k - 1]["time"] < DT - 1.0e-8 * pr[k]["time"]:
+                bad1.append(f"ID {pid}: row {k} at t = {pr[k]['time']:.8e}, {pr[k]['time'] - pr[k - 1]['time']:.3e} s after "
                             f"the row before")
                 break
         counts.append(len(pr))

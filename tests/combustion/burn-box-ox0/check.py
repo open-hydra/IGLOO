@@ -115,12 +115,12 @@ def rk4(s, T, h):
 
 def oracle(times):
     """(s, T) at each of the sorted times: RK4 from (1, T_g) at t = 0 in steps of at most DT."""
-    out, st = {}, {"s": 1.0, "T": bb.T_G, "t": 0.0}
+    out, st = {}, {"s": 1.0, "T": bb.T_G, "time": 0.0}
     for tq in times:
-        while st["t"] < tq - 1e-15:
-            h = min(DT, tq - st["t"])
+        while st["time"] < tq - 1e-15:
+            h = min(DT, tq - st["time"])
             st["s"], st["T"] = rk4(st["s"], st["T"], h)
-            st["t"] += h
+            st["time"] += h
         out[tq] = (st["s"], st["T"])
     return out
 
@@ -159,7 +159,7 @@ def by_id(path):
         for r in z["rows"]:
             out.setdefault(r["ID"], []).append(r)
     for rs in out.values():
-        rs.sort(key=lambda r: r["t"])
+        rs.sort(key=lambda r: r["time"])
     return out
 
 
@@ -202,7 +202,7 @@ def main():
     wi, bad_d, n_inj = 0.0, 0, 0
     for pid, rs in rows.items():
         r = rs[0]
-        if r["t"] != 0.0:
+        if r["time"] != 0.0:
             continue
         n_inj += 1
         wi = max(wi, abs(r["m<sub>p"] / MP0 - 1.0))
@@ -212,23 +212,23 @@ def main():
                    n_inj == N_PARENTS and wi <= TOL_I and bad_d == 0))
 
     # C: every row before its parcel's exit record against the oracle; B: the burnout times
-    before = [(pid, r) for pid, rs in rows.items() for r in rs if pid in ex and r["t"] < ex[pid]["t"]]
-    orc = oracle(sorted({r["t"] for _, r in before}))
+    before = [(pid, r) for pid, rs in rows.items() for r in rs if pid in ex and r["time"] < ex[pid]["time"]]
+    orc = oracle(sorted({r["time"] for _, r in before}))
     t_sb = t_of_s(SB)
     wm = wd = wT = coast = vw = 0.0
     at_m = at_d = at_T = None
     for pid, r in before:
-        s, T = orc[r["t"]]
+        s, T = orc[r["time"]]
         mal, mox, dal, deq = state(s)
         em = abs(r["m<sub>p"] - (mal + mox)) / (mal + mox)
         ed = abs(r["d<sub>p"] - deq) / deq
         eT = abs(r["T"] - T)
         if em > wm:
-            wm, at_m = em, r["t"]
+            wm, at_m = em, r["time"]
         if ed > wd:
-            wd, at_d = ed, r["t"]
+            wd, at_d = ed, r["time"]
         if eT > wT:
-            wT, at_T = eT, r["t"]
+            wT, at_T = eT, r["time"]
         coast = max(coast, abs(r["U"] - bb.U_G))
         vw = max(vw, abs(r["V"]), abs(r["W"]))
     nmin = min((sum(1 for p, _ in before if p == pid) for pid in ex), default=0)
@@ -244,7 +244,7 @@ def main():
         ("C4 the coast: |u - u_g| %.2e <= %.0e, |v|,|w| %.2e <= %.0e" % (coast, TOL_U, vw, TOL_VW),
          coast <= TOL_U and vw <= TOL_VW),
     ]
-    tex = sorted(r["t"] for r in exits)
+    tex = sorted(r["time"] for r in exits)
     lo, hi = t_sb * (1.0 - TOL_B), TB * (1.0 + TOL_B)
     nb0 = sum(1 for r in exits if r["bc"] == 0)
     checks.append(("B burnout of every parent: %d exit records, %d with bc 0; t in [%.7e, %.7e] s against the window "

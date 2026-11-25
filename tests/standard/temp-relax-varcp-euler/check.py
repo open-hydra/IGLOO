@@ -127,21 +127,21 @@ def main():
         parts.setdefault(r["ID"], []).append(r)
     checked, worst1, worst2, seen = 0, (0.0, ""), (0.0, ""), set()
     for pid, rows in sorted(parts.items()):
-        rows.sort(key=lambda r: r["t"])
+        rows.sort(key=lambda r: r["time"])
         first = rows[0]
         j, k = int(first["Y"] / DY) + 1, int(first["Z"] / DZ) + 1
         T0 = tr.T_0[k]
-        if first["t"] != 0.0 or abs(first["T"] - T0) > 1.0e-6:
+        if first["time"] != 0.0 or abs(first["T"] - T0) > 1.0e-6:
             fails.append("W ID=%d: first row (t %.8e, T %.6f) is not the injection state (0, %.1f)"
-                         % (pid, first["t"], first["T"], T0))
+                         % (pid, first["time"], first["T"], T0))
             continue
         ex = exits.get(pid)
         if ex is None:
             fails.append("E3 ID=%d: no exit record" % pid)
             continue
-        bounds = [(r["X"], r["t"], r["T"]) for r in rows]
-        if rows[-1]["t"] < ex["t"]:          # the trajectory ends at the exit: its last row is the exit record
-            bounds.append((ex["X"], ex["t"], ex["T"]))
+        bounds = [(r["X"], r["time"], r["T"]) for r in rows]
+        if rows[-1]["time"] < ex["time"]:          # the trajectory ends at the exit: its last row is the exit record
+            bounds.append((ex["X"], ex["time"], ex["T"]))
         for n in range(len(bounds) - 1):
             (xa, ta, Ta), (xb, tb, Tb) = bounds[n], bounds[n + 1]
             i = int(round(xa / DX)) + 1

@@ -25,7 +25,7 @@ radii `0.05 µm · 10^{k/12}`, k = 0 … 24 (D₀ = 0.1 … 10 µm, log-spaced; 
 The gas file is the shared box's (600 K, 10 m/s; `d2law-line`'s `solfile.tec`, symlinked), `phase.txt` the common
 one, `properties.dat` `d2law-line`'s (ρ_p 8000, c_p 125000 J/(kg K), constant; symlinked): the 100-fold c_p keeps the
 drops within 20 K of their 300 K injection (313.8–319.7 K at burnout). `kv = 1`: zero slip, so `x = u_g t` and a parcel's exit (Y, Z) names
-its inlet cell. `out-time = on` puts `t` on every exit record; SDIRK4 at `relative-tol = absolute-tol = 1e-11`,
+its inlet cell. `out-time = on` puts `time` on every exit record; SDIRK4 at `relative-tol = absolute-tol = 1e-11`,
 `d2law-line`'s.
 
 | D₀ [µm] | m₀ [kg] | m_b [kg] | d(m_b) |

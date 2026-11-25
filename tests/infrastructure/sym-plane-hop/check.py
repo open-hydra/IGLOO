@@ -107,18 +107,18 @@ def main():
         t100 = refl[-1][0]
         rows = zones.get(i, [])
         if i in ex:
-            rel = (ex[i]["t"] - t100) / t100
+            rel = (ex[i]["time"] - t100) / t100
             if abs(rel) > TOL_T:
-                rc |= fail(f"H1 stream {i}: t_exit {ex[i]['t']:.8e} s vs t_100 {t100:.10e} s, {rel:+.3e} (tol {TOL_T:g})")
+                rc |= fail(f"H1 stream {i}: t_exit {ex[i]['time']:.8e} s vs t_100 {t100:.10e} s, {rel:+.3e} (tol {TOL_T:g})")
             else:
-                print(f"H1 stream {i} (w0 {w0:+.2f} m/s): t_exit {ex[i]['t']:.8e} s vs t_100 {t100:.10e} s, "
+                print(f"H1 stream {i} (w0 {w0:+.2f} m/s): t_exit {ex[i]['time']:.8e} s vs t_100 {t100:.10e} s, "
                       f"{rel:+.3e} (tol {TOL_T:g}) PASS")
-        t = [r["t"] for r in rows]
+        t = [r["time"] for r in rows]
         back = sum(1 for a, b in zip(t, t[1:]) if b <= a)
         if len(rows) != N_REFL + 1 or back:
             rc |= fail(f"H2 stream {i}: {len(rows)} rows (want {N_REFL + 1}), {back} not after the previous one")
         else:
-            dev = max(abs(r["t"] - tk) / hk for r, (tk, hk) in zip(rows[1:], refl))
+            dev = max(abs(r["time"] - tk) / hk for r, (tk, hk) in zip(rows[1:], refl))
             print(f"H2 stream {i}: {len(rows)} rows, t strictly increasing PASS (each row's t within {dev:.1e} hops "
                   f"of its reflection, printed)")
         neg = [k for k, r in enumerate(rows) if k > 0 and not r["W"] > 0.0]

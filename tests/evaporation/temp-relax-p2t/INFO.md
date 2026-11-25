@@ -24,7 +24,7 @@ parcels (1525 rows: the injection row, one per cell crossing, the boundary-exit 
   solve's 4ε T_s: 9.2e-7 K) — worst 8.3e-7 K;
 - `m = ρ π d³/6` within the E13.6 half-ULP (5e-18 kg) — no mass transfer; `u = u_g`, `v = w = 0`, `d = d₀`.
 
-The column `T<sub>s` ends the trajectory rows of a P2T material only (after `t` when `out-time` is on); the exit
+The column `T<sub>s` ends the trajectory rows of a P2T material only (after `time` when `out-time` is on); the exit
 records, snapshots and scatter file do not carry it.
 
 ## Fails on

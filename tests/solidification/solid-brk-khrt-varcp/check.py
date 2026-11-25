@@ -144,8 +144,8 @@ def check_frozen_m(traj, fails):
         bad = [r for r in rows[k + 1:] if r["m<sub>p"] != mk]
         n_rows += len(rows) - k
         if bad:
-            fails.append(f"K2 family {fam} ID={pid}: {len(bad)} rows after the first frozen row (t={rows[k]['t']:.6e}, "
-                         f"m={mk:.6e}) change m, first t={bad[0]['t']:.6e} m={bad[0]['m<sub>p']:.6e}")
+            fails.append(f"K2 family {fam} ID={pid}: {len(bad)} rows after the first frozen row (t={rows[k]['time']:.6e}, "
+                         f"m={mk:.6e}) change m, first t={bad[0]['time']:.6e} m={bad[0]['m<sub>p']:.6e}")
         if fam == 2 and (k == 0 or not rows[k]["m<sub>p"] < rows[k - 1]["m<sub>p"]):
             unstripped.append(pid)
     if unstripped:
@@ -268,7 +268,7 @@ def main():
         except (FileNotFoundError, StopIteration, ValueError) as e:
             fails.append(f"K5 family {c}: {e}")
             continue
-        ft = sum(r["mdot"] * r["t"] for (f, _), rr in exits.items() if f == c for r in rr)
+        ft = sum(r["mdot"] * r["time"] for (f, _), rr in exits.items() if f == c for r in rr)
         k5[c] = (em, ft, abs(em - ft) / ft if ft > 0.0 else float("inf"))
         if k5[c][2] > tab.TOL_E:
             fails.append(f"K5 family {c}: sum rho_p V = {em:.9e} kg vs sum mdot t = {ft:.9e} kg (rel {k5[c][2]:.3e})")

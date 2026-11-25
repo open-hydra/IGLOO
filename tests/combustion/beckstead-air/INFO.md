@@ -86,7 +86,7 @@ about 0.6 s; the log carries no revert, stuck, no-progress, outer-maxIter or sol
 `t_b` [ms] against D [µm], 10–1000 µm × 0.1–10⁴ ms): the 183 markers digitized from Fig. 1 as one grey glyph (the
 source labels of the stacked markers are not recovered, `reference/PROVENANCE.md`), Fig. 1's fit **as drawn**
 (`t = 0.00258 D^1.989`, dashed; its label prints the rounded `0.003 D^1.99`, which lies 16.5–16.8 % above the drawn
-line), Eq. 7 at air, 1 atm, 300 K (solid), and IGLOO's 25 burnout times (the exit records' `t`, markers) at their
+line), Eq. 7 at air, 1 atm, 300 K (solid), and IGLOO's 25 burnout times (the exit records' `time`, markers) at their
 injection diameters. The parcels are taken by ascending ID; the figure does not depend on the order of the records
 (`vv-order`). Fig. 9's reduced data are not drawn: the figure's own upper line is not Eq. 7.
 

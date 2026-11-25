@@ -36,12 +36,12 @@ Traceback (most recent call last):
     ...
 ValueError: outloc-A.dat:6: 3 values for 9 names
 >>> _ = open(p, "w").write(
-...     ' variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","t","bc","d<sub>p</sub>"\\n'
+...     ' variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","time","bc","d<sub>p</sub>"\\n'
 ...     'Zone T="Mat A Group  1"\\n'
 ...     '    0.150000    0.005000    0.035000  600.000000    9.999968    0.000001 0.618182E-03 0.100000E-03      16'
 ...     '  1.50000000E-02  400 0.118900E-04\\n')
 >>> r = rows(p)[0]
->>> r["t"], r["bc"], r["d<sub>p</sub>"], r["ID"]
+>>> r["time"], r["bc"], r["d<sub>p</sub>"], r["ID"]
 (0.015, 400, 1.189e-05, 16)
 >>> group(z[1]["title"]), group("Mat A Group100 ID 3 parent 0")
 (2, 100)

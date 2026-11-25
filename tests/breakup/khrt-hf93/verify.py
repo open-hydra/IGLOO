@@ -118,7 +118,7 @@ def main(case_dir=HERE):
 
     # (c) the time of the first RT
     ranged(ax_c, lambda w: TB_STAR, "-", "k", r"[HF93] $t_b/t^* = 5$", we_lo)
-    by_regime(ax_c, wes, [q["rt"]["t"] / c["tstar"] for c, q in zip(cl, qs)], wes, True, "IGLOO, first RT")
+    by_regime(ax_c, wes, [q["rt"]["time"] / c["tstar"] for c, q in zip(cl, qs)], wes, True, "IGLOO, first RT")
     onsets(ax_c, 0.15)
     ax_c.set_xscale("log")
     ax_c.set_xlim(we_lo, 1000.0); ax_c.set_ylim(0.0, 6.0)

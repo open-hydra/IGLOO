@@ -37,7 +37,7 @@ def run(case, exe, name="ref-last"):
 
 def at(r, e):
     return (all(abs(r[c] - e[c]) <= X_HALF for c in ("X", "Y", "Z"))
-            and abs(r["t"] - e["t"]) <= T_HALF * max(abs(e["t"]), 1e-30))
+            and abs(r["time"] - e["time"]) <= T_HALF * max(abs(e["time"]), 1e-30))
 
 
 def by_parcel(path):
@@ -57,14 +57,14 @@ def check(d, unintegrated=0, mat="A"):
         if len(ex[key]) != 1:
             bad.append((key, "%d exit records" % len(ex[key])))
             continue
-        e, pr = ex[key][0], sorted(rows.get(key, []), key=lambda r: r["t"])
+        e, pr = ex[key][0], sorted(rows.get(key, []), key=lambda r: r["time"])
         nrow += len(pr)
         if not pr:
-            (never if e["t"] == 0.0 else bad).append(key)
+            (never if e["time"] == 0.0 else bad).append(key)
             continue
         n_at = sum(1 for r in pr if at(r, e))
         if not at(pr[-1], e) or n_at != 1:
-            bad.append((key, len(pr), n_at, round(pr[-1]["t"], 9), round(e["t"], 9)))
+            bad.append((key, len(pr), n_at, round(pr[-1]["time"], 9), round(e["time"], 9)))
         if len(pr) > 2:
             extra.append((key, len(pr)))
     stray = sorted(set(rows) - set(ex))

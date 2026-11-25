@@ -38,7 +38,7 @@ The books are `burn-box-residue`'s.
 |---|---|---|---|
 | R1 | one residue per parcel burned out inside the box (`X < Lx − 1e-6`); the product's banner counts 25 | exact | 25 |
 | R2 | each residue's mass at birth over `m₀ = ρ_Al π d₀³/6` (`d₀` the inlet size) inside `[z(m_b), z(0)]` of the path, each end widened | 1e-5 relative (the E13.6 print of `m`, the integrator, the last step's overshoot past `m_Al = 0`: its metal clamped to 0, its cap kept) | 0 of 25 outside; the farthest 3.4e-6 above `z(0)` and 2.8e-6 below `z(m_b)` (70 µm) |
-| T1 | each parent's burnout time (its exit record's `t`) inside `[t(m_b), d₀ⁿ/K_eff]`, each end widened | 1e-5 relative | 0 of 25 outside |
+| T1 | each parent's burnout time (its exit record's `time`) inside `[t(m_b), d₀ⁿ/K_eff]`, each end widened | 1e-5 relative | 0 of 25 outside |
 | R3 | `Σ wdot(A) = Σ ṁ(parents) − Σ ṁ(residues)`; `wdot(OX) = 0` | 1e-5 relative | 5.2e-7 |
 | R3e | the energy books with the residues' outflow at the product's datum (4.285015e6 J per kg injected) | 1e-5 relative | 3.2e-7 |
 | B | `β = (z ρ_Al/ρ_ox)^{1/3}` with Gallier's densities at 2570 K (1673.7 and 2820.3 kg/m³: `z` does not depend on the densities, `β` does) from each size's residue mass, against Gallier's 0.57 (20 µm), 0.55 (70 µm), 0.49 (200 µm), 0.40 (400 µm) | 0.03 absolute (their two digits, the digitization) | 0.581, 0.565, 0.507, 0.400: worst 0.017 |
