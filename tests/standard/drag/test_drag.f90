@@ -9,6 +9,7 @@ program test_drag
     !       x = x0 + v0 t + g t^2/2, v = v0 + g t, exact for SDIRK4 (fixed steps)
     !   AO  order-of-accuracy on the LINEAR Stokes RHS (fixed-step) -> p_obs ~ 4
     !   A3  Schiller-Naumann (nonlinear) -> independent RK4 oracle
+    !   AP  a trial state below absolute zero -> every slot the finite penalty 1e30, at sub- and supersonic slip
     !   E6a Stokes drag in the linear gas field u_g = G(x - x0) + u0 sampled by
     !       the trilinear map of one cell (the unit cube) -> per-axis closed form
     !   E6b the same field on a distorted cell (one vertex moved by 10 % of the
@@ -23,7 +24,7 @@ program test_drag
     use verif_norms,  only: relLinf, relL2, assert_lt, observed_order
     use verif_report, only: init_report, append_row, finalize_report
     use verif_oracle, only: exp_relax, rk4_ref
-    use verif_driver, only: advance, MODE_WRAPPER_ADAPTIVE, MODE_SDIRK_FIXEDSTEP
+    use verif_driver, only: advance, rhs_drag, MODE_WRAPPER_ADAPTIVE, MODE_SDIRK_FIXEDSTEP
     implicit none
 
     real(R8), parameter :: PI = 4.0_R8*atan(1.0_R8)
@@ -65,6 +66,7 @@ program test_drag
     call run_A4_ballistic(ok_all)
     call run_AO(ok_all)
     call run_A3(ok_all)
+    call run_AP(ok_all)
     call run_E6(ok_all, .false.)
     call run_E6(ok_all, .true.)
 
@@ -221,6 +223,41 @@ contains
         ok = ok .and. pass
         call append_row('A3_schiller_naumann', 'vx,x', err, err, 0._R8, 0._R8, tol, pass)
     end subroutine run_A3
+
+    !---------------------------------------------------------------!
+    ! AP: Henderson's law holds sqrt(Tp/Tg). A Newton trial with      !
+    !     Tp < 0 gets the penalty in every slot, and the same state   !
+    !     at Tp > 0 does not.                                         !
+    !---------------------------------------------------------------!
+    subroutine run_AP(ok)
+        logical, intent(inout) :: ok
+        integer,  parameter :: DRAG_HENDERSON = 11
+        real(R8), parameter :: SLIP(2) = [10._R8, 2000._R8]
+        real(R8) :: y0(NEQ), y(NEQ), F(NEQ), worst, spread, gasA(9)
+        integer  :: ierr, k
+        logical  :: pass
+        worst = 0._R8; spread = 0._R8
+        do k = 1, 2
+            gasA = gas9; gasA(2) = SLIP(k)
+            y0 = 0._R8;  y0(7) = Tg
+            call advance(gasA, cp_p, rho_p, dp, mass, DRAG_HENDERSON, HEAT_RM, &
+                         y0, NEQ, MODE_SDIRK_FIXEDSTEP, 1.e-9_R8, 1, y, ierr)
+            y0(7) = -500._R8
+            call rhs_drag(NEQ, 0._R8, y0, F)
+            do ierr = 1, NEQ
+                if (.not. (F(ierr) >= 0.99e30_R8 .and. F(ierr) <= 1.01e30_R8)) worst = worst + 1._R8
+            end do
+            y0(7) = Tg
+            call rhs_drag(NEQ, 0._R8, y0, F)
+            spread = max(spread, maxval(abs(F)))
+        end do
+        pass = assert_lt('AP slots without the penalty at Tp < 0', worst, 0.5_R8)
+        ok = ok .and. pass
+        call append_row('AP_penalty', 'F', worst, worst, 0._R8, 0._R8, 0.5_R8, pass)
+        pass = assert_lt('AP |F| at Tp > 0', spread, 1.0e20_R8)
+        ok = ok .and. pass
+        call append_row('AP_regular', 'F', spread, spread, 0._R8, 0._R8, 1.0e20_R8, pass)
+    end subroutine run_AP
 
     !---------------------------------------------------------------!
     ! E6: Stokes drag in u_g = G (x - XC) + U0 (G diagonal) set at the !
