@@ -62,7 +62,7 @@ def main():
     tA, eA = rows("trajectories-A.dat"), rows("outloc-A.dat")
     first = {}
     for r in tA:
-        if r["ID"] not in first or r["t"] < first[r["ID"]]["t"]:
+        if r["ID"] not in first or r["time"] < first[r["ID"]]["time"]:
             first[r["ID"]] = r
     bad = [r for r in eA if abs(r["mdot"] - MDOT) > TOL * MDOT or abs(r["X"] - LX) > 0.5e-6]
     low = [p for p, r in first.items() if r["Y"] <= Y_ROW3]

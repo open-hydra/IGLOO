@@ -59,7 +59,7 @@ def group(path):
     out = {}
     for r in datcols.rows(path):
         out.setdefault(r["ID"], []).append(r)
-    return {k: sorted(v, key=lambda r: r["t"]) for k, v in out.items()}
+    return {k: sorted(v, key=lambda r: r["time"]) for k, v in out.items()}
 
 
 def main():
@@ -76,7 +76,7 @@ def main():
     worst, nrows = (0.0, ""), 0
     for pid, rows in traj.items():
         for r in rows:
-            t = r["t"]
+            t = r["time"]
             ux, xx = u_cf(t), x_cf(t)
             tol_x = HALF_ULP + abs(ux) * hulp_es(t) + INT_FLOOR
             tol_u = HALF_ULP + abs(ux / TAU + G) * hulp_es(t) + INT_FLOOR
@@ -97,19 +97,19 @@ def main():
     for pid in sorted(traj):
         rows = traj[pid]
         for k, xp in enumerate(PLANE_X, 1):
-            rr = sorted(by.get((pid, k), []), key=lambda r: r["t"])
+            rr = sorted(by.get((pid, k), []), key=lambda r: r["time"])
             if [r["dir"] for r in rr] != [1, -1] or any(abs(r["X"] - xp) > HALF_ULP for r in rr):
-                fails.append(f"B1 ID={pid} plane {k} (x={xp}): records {[(r['dir'], r['t']) for r in rr]}, want +1 then "
+                fails.append(f"B1 ID={pid} plane {k} (x={xp}): records {[(r['dir'], r['time']) for r in rr]}, want +1 then "
                              f"-1 at the plane")
                 continue
             for r in rr:
-                leg = [q for q in rows if (q["t"] <= T_STAR) == (r["dir"] > 0)]
+                leg = [q for q in rows if (q["time"] <= T_STAR) == (r["dir"] > 0)]
                 br = [(a, b) for a, b in zip(leg[:-1], leg[1:]) if min(a["X"], b["X"]) <= xp <= max(a["X"], b["X"])
-                      and min(a["t"], b["t"]) <= r["t"] <= max(a["t"], b["t"])]
+                      and min(a["time"], b["time"]) <= r["time"] <= max(a["time"], b["time"])]
                 n_b3 += 1
                 if not br:
                     fails.append(f"B3 ID={pid} plane {k} dir {r['dir']}: no pair of its leg's rows brackets x = {xp} at "
-                                 f"t = {r['t']:.8e}")
+                                 f"t = {r['time']:.8e}")
                     continue
                 a, b = br[0]
                 ok_u = min(a["U"], b["U"]) - HALF_ULP <= r["U"] <= max(a["U"], b["U"]) + HALF_ULP

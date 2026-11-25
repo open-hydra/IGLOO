@@ -123,7 +123,7 @@ def gates(d, tag, verdict, db, tau0):
     for e in ex:
         byid.setdefault(e["ID"], []).append(e)
     bad1 = [i for i in range(1, NPART + 1) if len(byid.get(i, [])) != 1 or byid[i][0]["bc"] != 0
-            or not byid[i][0]["t"] > 0.0]
+            or not byid[i][0]["time"] > 0.0]
     verdict(len(ex) == NPART and not bad1, "P1%s %d exit records for %d parcels; %d without exactly one record of "
             "bc 0 at t > 0" % (tag, len(ex), NPART, len(bad1)))
 
@@ -137,7 +137,7 @@ def gates(d, tag, verdict, db, tau0):
         e = byid[i][0]
         dx = e["X"] - X0
         r = e["d<sub>p</sub>"] / db
-        print("  %2d  %.6e  %.8e  %.6e  %.5f" % (i, dx, e["t"], e["d<sub>p</sub>"], r))
+        print("  %2d  %.6e  %.8e  %.6e  %.5f" % (i, dx, e["time"], e["d<sub>p</sub>"], r))
         if not (0.0 < dx <= U0 * tau0 + TOL_POS and abs(e["Y"] - Y0[i - 1]) <= TOL_POS
                 and abs(e["Z"] - Z0) <= TOL_POS):
             bad2.append(i)

@@ -79,7 +79,7 @@ def parcels():
         for r in z["rows"]:
             out.setdefault((zi, r["ID"]), []).append(r)
     for k in out:
-        out[k].sort(key=lambda r: r["t"])
+        out[k].sort(key=lambda r: r["time"])
     return out
 
 
@@ -104,14 +104,14 @@ def gate_k(tab, parts):
     for key, rows in parts.items():
         rr = [rows[0]]
         for r in rows[1:]:
-            if r["t"] > rr[-1]["t"]:
+            if r["time"] > rr[-1]["time"]:
                 rr.append(r)
         rs = runs([r["d<sub>p"] for r in rr])
         for (a, b) in rs:
             if b <= a:
                 continue
             seg = rr[a:b + 1]
-            ts = [r["t"] for r in seg]
+            ts = [r["time"] for r in seg]
             us = [r["U"] for r in seg]
             d = seg[0]["d<sub>p"]
             h0 = tab.h(seg[0]["T"])
@@ -138,13 +138,13 @@ def gate_k(tab, parts):
                 r_ = max(res / tol, res_u / tol_u)
                 if r_ > worst[0]:
                     worst = (r_, "parcel %s t=%.8e x=%.6f: T %.6f vs %.6f (resid %.2e, tol %.2e), U %.6f vs %.6f "
-                             "(resid %.2e, tol %.2e)" % (key, seg[k]["t"], seg[k]["X"], seg[k]["T"], Tp, res, tol,
+                             "(resid %.2e, tol %.2e)" % (key, seg[k]["time"], seg[k]["X"], seg[k]["T"], Tp, res, tol,
                                                          seg[k]["U"], mid[k][1], res_u, tol_u))
                 if res > tol or res_u > tol_u:
                     bad.append(key)
         for (a, _) in rs[1:]:
             ra, rb = rr[a - 1], rr[a]
-            ts = [ra["t"], rb["t"]]
+            ts = [ra["time"], rb["time"]]
             h0 = tab.h(ra["T"])
             dmax, dmin = max(ra["d<sub>p"], rb["d<sub>p"]), min(ra["d<sub>p"], rb["d<sub>p"])
             umax, umin = max(ra["U"], rb["U"]), min(ra["U"], rb["U"])
@@ -165,7 +165,7 @@ def gate_k(tab, parts):
             n_iv += 1
             if res > worst_iv[0] or not worst_iv[1]:
                 worst_iv = (res, "%.3e K: parcel %s t=%.8e T=%.6f, bracket [%.6f, %.6f] +- %.1e" % (
-                    res, key, rb["t"], rb["T"], Tlo, Thi, tol))
+                    res, key, rb["time"], rb["T"], Tlo, Thi, tol))
             if res > 0.0:
                 bad_iv.append(key)
     return n_rows, bad, worst, n_iv, bad_iv, worst_iv
@@ -179,7 +179,7 @@ def main():
     # ---- P ----
     parts = parcels()
     inj = {k: v[0] for k, v in parts.items() if v[0]["X"] == 0.0}
-    ok_inj = len(inj) == N_INJ and all(r["T"] == T0 and r["U"] == U0 and r["t"] == 0.0 for r in inj.values())
+    ok_inj = len(inj) == N_INJ and all(r["T"] == T0 and r["U"] == U0 and r["time"] == 0.0 for r in inj.values())
     long_ = sum(1 for v in parts.values() if len(v) >= MIN_ROWS)
     heat = statistics.median(max(r["T"] for r in v) - v[0]["T"] for v in parts.values())
     okp = ok_inj and long_ >= MIN_PARCELS and heat >= MIN_HEAT

@@ -141,7 +141,7 @@ def march(rows, law, step):
     out = {0: q}
     for a, b in zip(idx[:-1], idx[1:]):
         ra, rb = rows[a], rows[b]
-        h = rb["t"] - ra["t"]
+        h = rb["time"] - ra["time"]
 
         def f(s, q2):
             T = ra["T"] + s * (rb["T"] - ra["T"])
@@ -164,7 +164,7 @@ def march_T(rows, t0, step):
     idx = list(range(0, len(rows), step))
     if idx[-1] != len(rows) - 1:
         idx.append(len(rows) - 1)
-    tu = [rows[i]["t"] for i in idx]
+    tu = [rows[i]["time"] for i in idx]
     qu = [rows[i]["d<sub>p"] ** 2 for i in idx]
     su = [rows[i]["slip"] for i in idx]
     T = t0
@@ -174,7 +174,7 @@ def march_T(rows, t0, step):
         lo = min(max(j - 1, 0), len(idx) - 4)
         nodes = list(range(lo, lo + 4))
         n = SUB * (b - a)
-        dt = (rb["t"] - ra["t"]) / n
+        dt = (rb["time"] - ra["time"]) / n
 
         def state(t):
             q = slip = 0.0
@@ -188,7 +188,7 @@ def march_T(rows, t0, step):
             d = math.sqrt(q)
             return d, RHO_G * slip * d / MU_G
 
-        t = ra["t"]
+        t = ra["time"]
         for _ in range(n):
             d1, r1 = state(t)
             dm, rm = state(t + 0.5 * dt)
@@ -215,7 +215,7 @@ def print_budget(rows, law):
 
         dT = abs(rate(r["T"] + 0.1, r["slip"]) - rate(r["T"] - 0.1, r["slip"])) / 0.2
         du = abs(rate(r["T"], r["slip"] + 1e-3) - rate(r["T"], max(r["slip"] - 1e-3, 0.0))) / 2e-3
-        acc += (dT + du) * HALF_F * (rows[a]["t"] - r["t"])
+        acc += (dT + du) * HALF_F * (rows[a]["time"] - r["time"])
         out.append(acc)
     return out
 
@@ -248,9 +248,9 @@ def main(model, t0):
     fails, worst, worst2, worst_sig, verified = [], (0.0, ""), (0.0, ""), math.inf, 0
     bm_lo, bt_lo = math.inf, math.inf
     for pid in sorted(parts):
-        p = sorted(parts[pid], key=lambda r: r["t"])
+        p = sorted(parts[pid], key=lambda r: r["time"])
         a = p[0]
-        if (a["t"] != 0.0 or abs(a["T"] - t0) > HALF_F or abs(a["U"] - KV * U_G) > HALF_F or abs(a["V"]) > HALF_F
+        if (a["time"] != 0.0 or abs(a["T"] - t0) > HALF_F or abs(a["U"] - KV * U_G) > HALF_F or abs(a["V"]) > HALF_F
                 or abs(a["W"]) > HALF_F or abs(a["d<sub>p"] - D0) > half_e(D0)):
             fails.append("G0 ID=%d: first row is not the injection state" % pid)
             continue
@@ -263,7 +263,7 @@ def main(model, t0):
             tol = (2.0 * dk * half_e(dk) + 2.0 * D0 * half_e(D0) + tus[k] + eprint[k] + INT_FLOOR_REL * D0 ** 2)
             res = abs(dk * dk - fine[k])
             if res / tol > worst[0]:
-                worst = (res / tol, "ID=%d t=%.6e d2=%.6e resid=%.3e tol=%.3e" % (pid, p[k]["t"], dk * dk, res, tol))
+                worst = (res / tol, "ID=%d t=%.6e d2=%.6e resid=%.3e tol=%.3e" % (pid, p[k]["time"], dk * dk, res, tol))
             bad |= res > tol
             sig = max(sig, abs(fine[k] - regr[k]) / tol)
         worst_sig = min(worst_sig, sig)
@@ -282,7 +282,7 @@ def main(model, t0):
                 res = abs(p[k]["T"] - tf[k])
                 if res / tol > worst2[0]:
                     worst2 = (res / tol, "ID=%d t=%.6e T=%.6f kernel %.6f resid=%.3e tol=%.3e" % (
-                        pid, p[k]["t"], p[k]["T"], tf[k], res, tol))
+                        pid, p[k]["time"], p[k]["T"], tf[k], res, tol))
                 bad2 |= res > tol
             if bad2:
                 fails.append("K2 ID=%d: T off the ASM energy kernel" % pid)

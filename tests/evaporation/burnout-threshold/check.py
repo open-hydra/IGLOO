@@ -106,11 +106,11 @@ def main():
                                                        else "a second record in cell %s" % (c,)))
             continue
         cells[c] = e
-    out = [e for e in ex if not (e["bc"] == 0 and e["t"] > 0.0 and e["X"] < LX - 1.0e-6)]
+    out = [e for e in ex if not (e["bc"] == 0 and e["time"] > 0.0 and e["X"] < LX - 1.0e-6)]
     for b in bad[:5]:
         print("      " + b)
     for e in out[:5]:
-        print("      ID %d: bc %d, t %.8e s, X %.6f m" % (e["ID"], e["bc"], e["t"], e["X"]))
+        print("      ID %d: bc %d, t %.8e s, X %.6f m" % (e["ID"], e["bc"], e["time"], e["X"]))
     verdict(len(ex) == N_CELLS and len(cells) == N_CELLS and not bad and not out,
             "B0 %d exit records in %d of %d inlet cells; %d not a burnout inside (bc != 0, t <= 0 or X >= Lx - 1e-6)"
             % (len(ex), len(cells), N_CELLS, len(out)))
@@ -129,14 +129,14 @@ def main():
         r = e["d<sub>p</sub>"] / db
         tb = D ** 2 / k0
         tlo = (D ** 2 - db ** 2) / k0
-        lag = e["t"] / tb - 1.0
+        lag = e["time"] / tb - 1.0
         ratios.append((r, D))
         lags.append(lag)
         if r > 1.0 + TOL_B1:
             over1.append((D, r))
-        if e["t"] < tlo * (1.0 - TOL_B2):
-            short2.append((D, e["t"] / tlo - 1.0))
-        print("  %7.4f  %.4e  %.4e  %.4e  %10.5f  %.8e  %.8e  %+.3e" % (D * 1e6, m0, mb, db, r, e["t"], tb, lag))
+        if e["time"] < tlo * (1.0 - TOL_B2):
+            short2.append((D, e["time"] / tlo - 1.0))
+        print("  %7.4f  %.4e  %.4e  %.4e  %10.5f  %.8e  %.8e  %+.3e" % (D * 1e6, m0, mb, db, r, e["time"], tb, lag))
     for D, r in over1[:5]:
         print("      D0 %.4f um: d_p %.4g x d(m_b)" % (D * 1e6, r))
     verdict(len(ratios) == N_CELLS and not over1,

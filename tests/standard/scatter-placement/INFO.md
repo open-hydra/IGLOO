@@ -19,7 +19,7 @@ weight `w = ṅ_p(t_k)/r` (the column `weight`), the droplets it stands for.
   at a step end crowds the faces, where the steps are cut.
 - **P2** no two markers alike in every printed column.
 - **P3** the markers' fractional x in their cells against U(0,1): Kolmogorov-Smirnov p ≥ 1e-3.
-- **C** per parcel, the marker count `N = ⌊frac(ID·φ) + r·τ⌋`, `τ` its exit `t` less its birth `t`, `r` with the
+- **C** per parcel, the marker count `N = ⌊frac(ID·φ) + r·τ⌋`, `τ` its exit `time` less its birth `time`, `r` with the
   floor.
 - **F** the floor's premise: `n̄/dNscat = fsample-traj · V_ref/L_ref` (the quantum's definition, `n̄` over the 25
   roots), `V_ref` the roots' mean first-row speed, `L_ref` the mesh's bounding-box diagonal.

@@ -181,7 +181,7 @@ def fold_rows():
         rows = z["rows"]
         nrow.append(len(rows))
         for a, b in zip(rows, rows[1:]):
-            if b["t"] != a["t"]:
+            if b["time"] != a["time"]:
                 continue
             ra, rb = math.hypot(a["Y"], a["Z"]), math.hypot(b["Y"], b["Z"])
             ta, tb = math.atan2(a["Z"], a["Y"]), math.atan2(b["Z"], b["Y"])
@@ -189,7 +189,7 @@ def fold_rows():
             tol = 4.0e-6 / min(ra, rb)
             if (n == 0 or abs(ta - tb - n * DELTHE) > tol or abs(ra - rb) > 2.0 * DELTA
                     or abs(ta) < 0.5 * DELTHE - tol or abs(tb) > 0.5 * DELTHE + tol):
-                bad.append((z["title"], a["t"], round(ta, 6), round(tb, 6)))
+                bad.append((z["title"], a["time"], round(ta, 6), round(tb, 6)))
                 continue
             pairs += 1
             multi += abs(n) > 1

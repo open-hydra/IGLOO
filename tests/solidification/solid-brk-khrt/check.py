@@ -180,7 +180,7 @@ def main():
         except (FileNotFoundError, StopIteration, ValueError) as e:
             fails.append(f"K5 family {c}: {e}")
             continue
-        ft = sum(r["mdot"] * r["t"] for (f, _), rr in exits.items() if f == c for r in rr)
+        ft = sum(r["mdot"] * r["time"] for (f, _), rr in exits.items() if f == c for r in rr)
         k5[c] = (em, ft, abs(em - ft) / ft if ft > 0.0 else float("inf"))
         if k5[c][2] > tab.TOL_E:
             fails.append(f"K5 family {c}: sum rho_p V = {em:.9e} kg vs sum mdot t = {ft:.9e} kg (rel {k5[c][2]:.3e})")

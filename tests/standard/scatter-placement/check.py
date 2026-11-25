@@ -177,7 +177,7 @@ def lineage():
     exits = {r["ID"]: r for r in datcols.rows("OUTPUT/outloc-A.dat")}
     rows, parent, v0 = {}, {}, {}
     for z in datcols.parcel_zones("OUTPUT/trajectories-A.dat"):
-        rows.setdefault(z["id"], []).extend((r["t"], r["m<sub>p"]) for r in z["rows"])
+        rows.setdefault(z["id"], []).extend((r["time"], r["m<sub>p"]) for r in z["rows"])
         parent[z["id"]] = z["parent"]
         v0.setdefault(z["id"], tuple(z["rows"][0][c] for c in ("U", "V", "W")))
     ids = sorted(exits)
@@ -281,7 +281,7 @@ def counts(scat, lin, rate):
     d_lo, d_hi = dn - dh, dn + dh
     for i in ids:
         np_lo, np_hi, _ = rate[lin["root"][i]]
-        te, tb = exits[i]["t"], rows[i][0][0]
+        te, tb = exits[i]["time"], rows[i][0][0]
         th = half_ulp_es(es8(te)) + half_ulp_es(es8(tb))
         r_lo, r_hi = np_lo * max(te - tb - th, 0.0), np_hi * (te - tb + th)
         ph = math.fmod(i * PHI, 1.0)
@@ -324,7 +324,7 @@ def weights(scat, lin, rate):
     lo_t = hi_t = g_b = 0.0
     grows, out, tight = 0, [], [0, 0.0]
     for i in ids:
-        knots = rows[i] + [(exits[i]["t"], RHO * math.pi * exits[i]["d<sub>p</sub>"] ** 3 / 6.0)]
+        knots = rows[i] + [(exits[i]["time"], RHO * math.pi * exits[i]["d<sub>p</sub>"] ** 3 / 6.0)]
         sheds = sorted((rows[c][0][0], mdot_b[c]) for c in kids[i])
 
         def after(t):                                # mdot just after t: the exit flow and the sheds still to come

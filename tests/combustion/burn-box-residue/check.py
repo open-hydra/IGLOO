@@ -147,7 +147,7 @@ def load_run(d):
         for r in z["rows"]:
             res_rows.setdefault(r["ID"], []).append(r)
     for rs in res_rows.values():
-        rs.sort(key=lambda r: r["t"])
+        rs.sort(key=lambda r: r["time"])
     wA, ox_zero, E = read_source(os.path.join(out, "source.tec"))
     log = open(os.path.join(d, "run_out.txt"), errors="replace").read()
     return par, res_exit, res_rows, wA, ox_zero, E, log
@@ -201,7 +201,7 @@ def zone_titles(name, d, checks):
     bad = [z["title"] for z in za + zo if z["image"] != 0] + [z["title"] for z in za if z["parent"] != 0]
     for z in zo:
         b = z["rows"][0]
-        ids = sorted({r["ID"] for r in ex if all(r[k] == b[k] for k in ("X", "Y", "Z", "T", "t"))})
+        ids = sorted({r["ID"] for r in ex if all(r[k] == b[k] for k in ("X", "Y", "Z", "T", "time"))})
         if ids != [z["parent"]]:
             bad.append("%s born at the exit records of IDs %s" % (z["title"], ids))
     nin = sum(1 for r in ex if r["X"] < LX - 1e-6)
@@ -243,10 +243,10 @@ def scatter_counts(name, d, checks):
             b = first[k]
             np_lo = (e["mdot"] - half_ulp_e(e["mdot"])) / (b["m<sub>p"] + half_ulp_e(b["m<sub>p"]))
             np_hi = (e["mdot"] + half_ulp_e(e["mdot"])) / (b["m<sub>p"] - half_ulp_e(b["m<sub>p"]))
-            th = half_ulp_es("%.8E" % e["t"]) + half_ulp_es("%.8E" % b["t"])
+            th = half_ulp_es("%.8E" % e["time"]) + half_ulp_es("%.8E" % b["time"])
             ph = math.fmod(k[1] * PHI, 1.0)
-            lo = math.floor(ph + np_lo * max(e["t"] - b["t"] - th, 0.0) / (dn + dh))
-            hi = math.floor(ph + np_hi * (e["t"] - b["t"] + th) / (dn - dh))
+            lo = math.floor(ph + np_lo * max(e["time"] - b["time"] - th, 0.0) / (dn + dh))
+            hi = math.floor(ph + np_hi * (e["time"] - b["time"] + th) / (dn - dh))
             w = win.setdefault(k[1], [0, 0])
             w[0] += lo
             w[1] += hi
@@ -295,7 +295,7 @@ def check_main(checks):
         L = bb.U_G * tau
         for r in rs[1:]:
             phase_ok = phase_ok and r["f"] == fa == 1.0
-            dt = r["t"] - b["t"]
+            dt = r["time"] - b["time"]
             Tp = bb.T_G + (Ta - bb.T_G) * math.exp(-dt / tau)
             tol = (HALF_ULP * (1.0 + CL / CS + 2.0 * abs(r["T"] - bb.T_G) / L)
                    + 2.0 * PRINT_D * abs(r["T"] - bb.T_G) * dt / tau + INT_FLOOR)
@@ -379,7 +379,7 @@ def check_f(checks):
     par, res_exit, res_rows, wA, ox_zero, E, log = load_run(d)
     exits = par[0]
     by_id = {r["ID"]: r for r in exits}
-    tstar = [r["t"] for r in exits]
+    tstar = [r["time"] for r in exits]
     checks.append(("F every parent ends at t* >= fail-after %.1e s: t* in [%.8e, %.8e]; %d residues, banner %d"
                    % (FAIL_AFTER, min(tstar), max(tstar), len(res_rows), banner(log)),
                    len(exits) == N_PARENTS and min(tstar) >= FAIL_AFTER and len(res_rows) == N_PARENTS
@@ -390,7 +390,7 @@ def check_f(checks):
         return
     cache, wm = {}, 0.0
     for rid, rs in res_rows.items():
-        t = by_id[rid]["t"]
+        t = by_id[rid]["time"]
         if t not in cache:
             cache[t] = XI * NU * (M0 - m_al_at(t))
         wm = max(wm, abs(rs[0]["m<sub>p"] - cache[t]) / cache[t])

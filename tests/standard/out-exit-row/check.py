@@ -78,10 +78,10 @@ def check_run(label, case):
     for e in exited:
         pr = rows.get(e["ID"], [])
         at = [r for r in pr if all(abs(r[c] - e[c]) <= X_HALF for c in ("X", "Y", "Z"))
-              and abs(r["t"] - e["t"]) <= T_HALF * max(abs(e["t"]), 1e-30)]
+              and abs(r["time"] - e["time"]) <= T_HALF * max(abs(e["time"]), 1e-30)]
         if len(at) != 1:
             bad1.append((e["ID"], len(at)))
-        elif max(r["t"] for r in pr) > at[0]["t"]:
+        elif max(r["time"] for r in pr) > at[0]["time"]:
             bad2.append(e["ID"])
     ok = len(exited) == N_PARCELS and not bad1 and not bad2
     print(f"{label}: {len(exited)} exited parcels, {len(tr)} trajectory rows; X1 rows at the exit (ID, count) off one: "

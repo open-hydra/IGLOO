@@ -61,10 +61,10 @@ def main():
     dn = float(m.group(1)); dn_h = half_ulp_es(m.group(1))
     npart = sum(int(k) for k in re.findall(r"number of particles =\s*(\d+)", txt))
 
-    exits = {r["ID"]: (r["mdot"], es8(r["t"])) for r in datcols.rows("OUTPUT/outloc-A.dat")}
+    exits = {r["ID"]: (r["mdot"], es8(r["time"])) for r in datcols.rows("OUTPUT/outloc-A.dat")}
     m0 = {}
     for r in datcols.rows("OUTPUT/trajectories-A.dat"):
-        i, t = r["ID"], r["t"]
+        i, t = r["ID"], r["time"]
         if i not in m0 or t < m0[i][0]:
             m0[i] = (t, r["m<sub>p"])
     n = Counter(r["ID"] for r in datcols.rows("OUTPUT/scatter-A.dat"))

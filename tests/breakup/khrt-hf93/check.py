@@ -38,9 +38,9 @@ def records(case_dir):
     """{ID: [(t, kind, row)]} of the trajectory rows (kind 0) and plane records (kind 1), by time."""
     out = {}
     for r in hf92.rows(os.path.join(case_dir, "OUTPUT", "trajectories-A.dat")):
-        out.setdefault(r["ID"], []).append((r["t"], 0, r))
+        out.setdefault(r["ID"], []).append((r["time"], 0, r))
     for r in hf92.rows(os.path.join(case_dir, PLANES)):
-        out.setdefault(r["ID"], []).append((r["t"], 1, r))
+        out.setdefault(r["ID"], []).append((r["time"], 1, r))
     for v in out.values():
         v.sort(key=lambda e: (e[0], e[1]) + tuple(e[2][k] for k in ("X", "Y", "Z", "U", "V", "W"))
                + (e[2][hf92.dkey(e[2])],))
@@ -67,7 +67,7 @@ def load(case_dir=HERE):
             continue
         k, (t, kind, row), (_, kind0, prev) = rt
         du = ((case["ug"] - row["U"]) ** 2 + row["V"] ** 2 + row["W"] ** 2) ** 0.5
-        q["rt"] = {"k": k, "t": t, "kind": kind, "kind_before": kind0, "d_before": prev[hf92.dkey(prev)],
+        q["rt"] = {"k": k, "time": t, "kind": kind, "kind_before": kind0, "d_before": prev[hf92.dkey(prev)],
                    "d_after": row[hf92.dkey(row)], "slip": du, "x": row["X"]}
     return case
 
@@ -97,7 +97,7 @@ def main(case_dir=HERE):
         q = qs[0]
         tb = q["tb"]
         print(" %3d %7.2f %3d  %7.4f  %10.4f  %10.4f  %9.4f  %6.4f"
-              % (k + 1, c["we"], len(c["ids"]), q["rt"]["t"] / c["tstar"], q["rt"]["d_before"] / c["d0"],
+              % (k + 1, c["we"], len(c["ids"]), q["rt"]["time"] / c["tstar"], q["rt"]["d_before"] / c["d0"],
                  q["rt"]["slip"] / c["u0"], tb["d"] / c["d0"] if tb else float("nan"),
                  q["ub"] / c["u0"] if tb else float("nan")))
     print("%s: %s" % (os.path.basename(os.path.abspath(case_dir)), "PASS" if not fails else "%d gate(s) FAIL" % fails))

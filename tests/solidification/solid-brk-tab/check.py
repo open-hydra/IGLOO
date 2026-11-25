@@ -79,7 +79,7 @@ def parcels(path):
         fam = int(m.group(1))
         for r in z["rows"]:
             out.setdefault((fam, r["ID"]), []).append(r)
-    return {k: sorted(v, key=lambda r: r["t"]) for k, v in out.items()}
+    return {k: sorted(v, key=lambda r: r["time"]) for k, v in out.items()}
 
 
 def first_frozen(rows):
@@ -112,8 +112,8 @@ def check_frozen_d(traj, fails, tag):
         bad = [r for r in rows[k + 1:] if r["d<sub>p"] != dk]
         n_rows += len(rows) - k
         if bad:
-            fails.append(f"{tag} family {fam} ID={pid}: {len(bad)} rows after the first frozen row (t={rows[k]['t']:.6e},"
-                         f" d={dk:.6e}) change d, first t={bad[0]['t']:.6e} d={bad[0]['d<sub>p']:.6e}")
+            fails.append(f"{tag} family {fam} ID={pid}: {len(bad)} rows after the first frozen row (t={rows[k]['time']:.6e},"
+                         f" d={dk:.6e}) change d, first t={bad[0]['time']:.6e} d={bad[0]['d<sub>p']:.6e}")
     return n_rows, on_k, never
 
 
@@ -164,8 +164,8 @@ def check_injection(traj, exits, fails, tag):
         if pid > N_INJ:
             continue
         r0 = rows[0]
-        if r0["t"] != 0.0 or abs(r0["T"] - T_0[fam]) > TOL_T0 or r0["d<sub>p"] != D_0:
-            fails.append(f"{tag} family {fam} ID={pid}: first row t={r0['t']}, T={r0['T']}, d={r0['d<sub>p']} is not "
+        if r0["time"] != 0.0 or abs(r0["T"] - T_0[fam]) > TOL_T0 or r0["d<sub>p"] != D_0:
+            fails.append(f"{tag} family {fam} ID={pid}: first row t={r0['time']}, T={r0['T']}, d={r0['d<sub>p']} is not "
                          f"the injection state (0, {T_0[fam]}, {D_0})")
             continue
         if first_frozen(rows) is not None and len(exits.get((fam, pid), [])) == 1:
@@ -202,7 +202,7 @@ def main():
         n1_on_k += k in dec
 
     # T2: family 2 never breaks up
-    bad2 = [(pid, r["t"], r["d<sub>p"]) for (fam, pid), rows in traj.items() if fam == 2 for r in rows
+    bad2 = [(pid, r["time"], r["d<sub>p"]) for (fam, pid), rows in traj.items() if fam == 2 for r in rows
             if r["d<sub>p"] != D_0]
     n2 = sum(len(rows) for (fam, _), rows in traj.items() if fam == 2)
     if bad2:

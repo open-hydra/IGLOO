@@ -145,7 +145,7 @@ def check_run(d, name, checks):
         if len(rows) < 2 or rows[0]["T"] != T0:
             t_bad.append(i)
             continue
-        burn = [(r["t"], r["d<sub>p"], r["T"]) for r in rows[1:]] + [(e["t"], e["d<sub>p</sub>"], e["T"])]
+        burn = [(r["time"], r["d<sub>p"], r["T"]) for r in rows[1:]] + [(e["time"], e["d<sub>p</sub>"], e["T"])]
         Tb = burn[0][2]
         if not (all(b[2] == Tb for b in burn) and T_BURN - hu_f6(T_BURN) <= Tb <= T_BURN + TOL_T):
             t_bad.append(i)

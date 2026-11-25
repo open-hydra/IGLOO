@@ -100,12 +100,12 @@ def main():
         if c not in ex or p not in ex:
             bad.append(f"child {c} of {p}: an exit record missing")
             continue
-        if ex[c]["t"] == ex[p]["t"] and first[c]["X"] == ex[p]["X"]:
+        if ex[c]["time"] == ex[p]["time"] and first[c]["X"] == ex[p]["X"]:
             exit_step[c] = p
     for p in roots:
         ks = [c for c, q in exit_step.items() if q == p]
         if not ks:
-            bad.append(f"parent {p}: no child born on its exit step (exit t {ex.get(p, {}).get('t')})")
+            bad.append(f"parent {p}: no child born on its exit step (exit t {ex.get(p, {}).get('time')})")
     off = sorted(i for i, r in ex.items() if int(r["bc"]) != 400)
     if off:
         bad.append(f"exit records not at the outlet (bc != 400): IDs {off}")

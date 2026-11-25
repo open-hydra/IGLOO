@@ -37,7 +37,7 @@ def parcels(path):
         key, r = (f[0], f[1], f[2]), z["rows"]
         if f[4] != 0 or key in out:
             raise ValueError("%s: parcel %s has a second image (a wrap)" % (name, key))
-        if any(r[k]["t"] <= r[k - 1]["t"] for k in range(1, len(r))):
+        if any(r[k]["time"] <= r[k - 1]["time"] for k in range(1, len(r))):
             raise ValueError("%s: parcel %s has rows whose t does not increase (a fold, or out of order)" % (name, key))
         out[key] = r
     return out
@@ -59,8 +59,8 @@ def replay(all_dir, rule_dir, ds=-1.0, dt=-1.0, name="trajectories-A.dat", mutan
                 d = math.sqrt(sum((r[c] - ref[c]) ** 2 for c in ("X", "Y", "Z")))
                 must, maybe = d >= ds + X_AMB, d >= ds - X_AMB
             elif dt > 0.0:
-                gap = r["t"] - ref["t"]
-                must, maybe = gap >= dt + T_AMB * r["t"], gap >= dt - T_AMB * r["t"]
+                gap = r["time"] - ref["time"]
+                must, maybe = gap >= dt + T_AMB * r["time"], gap >= dt - T_AMB * r["time"]
             else:
                 must = maybe = False
             last = k == len(e) - 1

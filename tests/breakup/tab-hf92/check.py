@@ -115,8 +115,8 @@ def mmd(ds, ws):
 def at_time(seq, t):
     """X, d and the slip vector at time t, linear between the rows bracketing it (None outside them)."""
     for a, b in zip(seq, seq[1:]):
-        if a["t"] <= t <= b["t"] and b["t"] > a["t"]:
-            f = (t - a["t"]) / (b["t"] - a["t"])
+        if a["time"] <= t <= b["time"] and b["time"] > a["time"]:
+            f = (t - a["time"]) / (b["time"] - a["time"])
             g = {k: a[k] + f * (b[k] - a[k]) for k in ("X", "U", "V", "W")}
             g["d"] = a[dkey(a)] + f * (b[dkey(b)] - a[dkey(a)])
             return g
@@ -153,10 +153,10 @@ def load(case_dir="."):
         exits.setdefault(r["ID"], []).append(r)
     parcels, orphans = {}, []
     for pid in sorted(set(traj) | set(exits)):
-        seq = sorted(traj.get(pid, []), key=lambda r: (r["t"], r["X"], r["Y"], r["Z"], r["U"], r["V"], r["W"],
+        seq = sorted(traj.get(pid, []), key=lambda r: (r["time"], r["X"], r["Y"], r["Z"], r["U"], r["V"], r["W"],
                                                         r[dkey(r)]))
         ex = exits.get(pid, [])
-        if not seq or len(ex) != 1 or seq[0]["t"] != 0.0:
+        if not seq or len(ex) != 1 or seq[0]["time"] != 0.0:
             orphans.append((pid, len(seq), len(ex)))
             continue
         inj, last, ex = seq[0], seq[-1], ex[0]
@@ -177,7 +177,7 @@ def load(case_dir="."):
             "bc": ex["bc"], "events": sum(1 for a, b in zip(seq, seq[1:]) if b[dk] != a[dk]),
             "half_const": bool(half) and max(half) == min(half),
             "we_last": case["rhog"] * sum(v * v for v in du) * 0.5 * last[dk] / case["sigma"],
-            "t_last": last["t"], "tb": tb,
+            "t_last": last["time"], "tb": tb,
         }
         if tb is not None:
             ub = math.sqrt((case["ug"] - tb["U"]) ** 2 + tb["V"] ** 2 + tb["W"] ** 2)

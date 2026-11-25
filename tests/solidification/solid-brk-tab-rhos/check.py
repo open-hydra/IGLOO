@@ -73,8 +73,8 @@ def main():
         bad = [r for r in rows[k + 1:] if r[MK] != mk]
         n1 += len(rows) - k
         if bad:
-            fails.append(f"W1 family {fam} ID={pid}: {len(bad)} rows after the first frozen row (t={rows[k]['t']:.6e}, "
-                         f"m={mk:.6e}) change m, first t={bad[0]['t']:.6e} m={bad[0][MK]:.6e} "
+            fails.append(f"W1 family {fam} ID={pid}: {len(bad)} rows after the first frozen row (t={rows[k]['time']:.6e}, "
+                         f"m={mk:.6e}) change m, first t={bad[0]['time']:.6e} m={bad[0][MK]:.6e} "
                          f"(ratio {bad[0][MK] / mk:.6f})")
         if fam == 2:
             dm = max(abs(r[MK] - M_0) for r in rows)
@@ -92,9 +92,9 @@ def main():
             res = abs(d - d_of(m, f))
             n2 += 1
             if res / tol > w2[0]:
-                w2 = (res / tol, f"family {fam} ID={pid} t={r['t']:.6e} f={f:.6f} d={d:.6e} resid={res:.3e}")
+                w2 = (res / tol, f"family {fam} ID={pid} t={r['time']:.6e} f={f:.6f} d={d:.6e} resid={res:.3e}")
             if res > tol:
-                fails.append(f"W2 family {fam} ID={pid} t={r['t']:.6e}: d={d:.6e} vs (6 m (a + b f)/pi)^(1/3) = "
+                fails.append(f"W2 family {fam} ID={pid} t={r['time']:.6e}: d={d:.6e} vs (6 m (a + b f)/pi)^(1/3) = "
                              f"{d_of(m, f):.6e} at m={m:.6e}, f={f:.6f} (resid {res:.3e} > {tol:.3e})")
             elif f > 0.0 and abs(d - d_of(m, 0.0)) > tol:
                 eff[(fam, "solid" if f >= 1.0 else "plateau")] += 1

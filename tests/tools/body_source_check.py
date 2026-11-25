@@ -144,19 +144,19 @@ def check_run(d, cfg, layout, g):
     for r in rows:
         parts.setdefault(r["ID"], []).append(r)
     for p in parts.values():
-        p.sort(key=lambda r: r["t"])
+        p.sort(key=lambda r: r["time"])
     parts = dict(sorted(parts.items()))  # ID order: the sums and the ties do not follow the record order
     ex_ok = sorted(r["ID"] for r in exits) == sorted(snap) and all(
-        r["bc"] == 0 and all(r[k] == snap[r["ID"]][k] for k in ("X", "Y", "Z", "t")) for r in exits)
+        r["bc"] == 0 and all(r[k] == snap[r["ID"]][k] for k in ("X", "Y", "Z", "time")) for r in exits)
     g.check("W", ex_ok and len(exits) == N_PARCELS and len(parts) == N_PARCELS and len(snap) == N_PARCELS,
             "%d exit records, each code 0 at its snapshot row's position and time (time-end comes first), %d parcels, "
             "%d snapshot rows" % (len(exits), len(parts), len(snap)))
-    keys = ("X", "U", "V", "W", "T", "d<sub>p", "m<sub>p", "t")
+    keys = ("X", "U", "V", "W", "T", "d<sub>p", "m<sub>p", "time")
     bad_first = [pid for pid, p in parts.items()
-                 if p[0]["t"] != 0.0 or abs(p[0]["T"] - cfg["T0"]) > HALF_F or abs(p[0]["U"] - U_G) > HALF_F
+                 if p[0]["time"] != 0.0 or abs(p[0]["T"] - cfg["T0"]) > HALF_F or abs(p[0]["U"] - U_G) > HALF_F
                  or abs(p[0]["V"]) > HALF_F or abs(p[0]["m<sub>p"] - m0) > half_e(m0)]
     bad_last = [pid for pid, p in parts.items()
-                if p[-1]["t"] != T_END or pid not in snap or any(snap[pid][k] != p[-1][k] for k in keys)]
+                if p[-1]["time"] != T_END or pid not in snap or any(snap[pid][k] != p[-1][k] for k in keys)]
     g.check("W", not bad_first and not bad_last,
             "first rows the injection state (T0 %.1f K, u_g, m_0 %.6e kg), last rows at t = %.6e s = the snapshot"
             % (cfg["T0"], m0, T_END))
@@ -186,7 +186,7 @@ def check_run(d, cfg, layout, g):
     b2_first = b2_kin = wint = ric2 = tol_t2 = tol_k2 = 0.0
     sig4 = 0.0
     for p in parts.values():
-        ts = [r["t"] for r in p]
+        ts = [r["time"] for r in p]
         ms = [r["m<sub>p"] for r in p]
         im, rm = trap_rich(ts, ms)
         imv, rmv = trap_rich(ts, [r["m<sub>p"] * r["V"] for r in p])
@@ -221,7 +221,7 @@ def check_run(d, cfg, layout, g):
         apre = 8.0 * K_G / (CP_G * cfg["rho_p"])
         worst, nbad = (0.0, ""), 0
         for pid, p in parts.items():
-            ts = [r["t"] for r in p]
+            ts = [r["time"] for r in p]
             ks = [apre * math.log1p(max(CP_G * (T_G - r["T"]) / cfg["lv"], 0.0)) for r in p]
             dks = [apre * CP_G / (cfg["lv"] + CP_G * (T_G - r["T"])) for r in p]
             d2a = p[0]["d<sub>p"] ** 2

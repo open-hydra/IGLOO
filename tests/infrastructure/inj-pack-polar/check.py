@@ -98,8 +98,8 @@ def main():
         return fail(str(e))
     first = {}
     for r in rows:
-        if r["ID"] not in first or r["t"] < first[r["ID"]]["t"] or \
-                (r["t"] == first[r["ID"]]["t"] and r["X"] < first[r["ID"]]["X"]):
+        if r["ID"] not in first or r["time"] < first[r["ID"]]["time"] or \
+                (r["time"] == first[r["ID"]]["time"] and r["X"] < first[r["ID"]]["X"]):
             first[r["ID"]] = r
     exits = {r["ID"]: r for r in ex}
     pts = {p: (r["Y"], r["Z"]) for p, r in first.items()}

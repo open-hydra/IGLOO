@@ -141,7 +141,7 @@ def twins(ex):
     by_id = {r["ID"]: r for r in ex}
     if sorted(by_id) != list(range(1, 2 * NP + 1)):
         return fail(f"P exit IDs {sorted(by_id)}, expected 1..{2 * NP}")
-    bad, worst = [], {"t": 0.0, "T": 0.0, "Y": 0.0}
+    bad, worst = [], {"time": 0.0, "T": 0.0, "Y": 0.0}
     for j in range(1, NP + 1):
         a, b = by_id[j], by_id[j + NP]
         for c in ("X", "Z", "|u<sub>p</sub>|", "bc"):
@@ -150,14 +150,14 @@ def twins(ex):
         if a["bc"] != 400:
             bad.append(f"bc {a['bc']} (pair {j}, {j + NP})")
         dy = abs((b["Y"] - a["Y"]) % (2.0 * LY) - LY)
-        for c, d, t in (("t", abs(a["t"] - b["t"]), T_TWIN), ("T", abs(a["T"] - b["T"]), TOL_TWIN_T),
+        for c, d, t in (("time", abs(a["time"] - b["time"]), T_TWIN), ("T", abs(a["T"] - b["T"]), TOL_TWIN_T),
                         ("Y", dy, TOL_TWIN_Y)):
             worst[c] = max(worst[c], d)
             if d > t * (1.0 + 1.0e-9):
                 bad.append(f"{c} {d:.2e} > {t:.2e} (pair {j}, {j + NP})")
     if bad:
         return fail(f"P the twins differ: {len(bad)} values, first {bad[:3]}")
-    print(f"P {NP} twin pairs: X, Z, |u|, bc equal; worst |dt| {worst['t']:.1e} s (<= {T_TWIN:g}), |dT| "
+    print(f"P {NP} twin pairs: X, Z, |u|, bc equal; worst |dt| {worst['time']:.1e} s (<= {T_TWIN:g}), |dT| "
           f"{worst['T']:.1e} K (<= {TOL_TWIN_T:.2e}, R_MAX {R_MAX:.3e} K/s), |dY - Ly| {worst['Y']:.1e} m PASS")
     return 0
 

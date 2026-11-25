@@ -137,11 +137,11 @@ def main():
         fails.append("R0 %d parcels in the trajectories, %d inlet records" % (len(parcels), n_inj))
     worst, prod, lam, seq = 0.0, 0.0, [], []
     for key, rows in sorted(parcels.items()):
-        rows.sort(key=lambda r: r["t"])
+        rows.sort(key=lambda r: r["time"])
         ph = [datcols.solid_phase(r["f"], r["T"], t_m) for r in rows]
         tag = "parcel %d/%d" % key
         k_n = next((i for i, r in enumerate(rows) if ph[i] >= 2), None)
-        if k_n is None or rows[k_n]["t"] >= T_NUC_BY:
+        if k_n is None or rows[k_n]["time"] >= T_NUC_BY:
             fails.append("R0 %s: no frozen row before %.1e s" % (tag, T_NUC_BY))
             continue
         k_m = next((i for i in range(k_n + 1, len(rows)) if rows[i]["f"] == 0.0 and ph[i] == 0), None)
@@ -173,12 +173,12 @@ def main():
         if abs(d_r - lam_r) > bound:
             fails.append("R0 %s: the RT row's d %.6e, lambda_RT %.6e (off by %.2e > %.2e: not one RT breakup)"
                          % (tag, d_r, lam_r, abs(d_r - lam_r), bound))
-        res = abs((rows[k_r]["t"] - rows[k_m]["t"]) - tau)
+        res = abs((rows[k_r]["time"] - rows[k_m]["time"]) - tau)
         worst = max(worst, res)
         if res > TOL_R1:
             fails.append("R1 %s: t_RT - t_rm = %.6e s, tau_RT = %.6e s, off by %.2e > %.0e"
-                         % (tag, rows[k_r]["t"] - rows[k_m]["t"], tau, res, TOL_R1))
-        seq.append((rows[k_n]["t"], rows[k_m]["t"], rows[k_m]["X"], rows[k_r]["t"], rows[k_r]["X"], tau))
+                         % (tag, rows[k_r]["time"] - rows[k_m]["time"], tau, res, TOL_R1))
+        seq.append((rows[k_n]["time"], rows[k_m]["time"], rows[k_m]["X"], rows[k_r]["time"], rows[k_r]["X"], tau))
     if seq:
         tn, tm_, xm, tr, xr, tau = seq[0]
         print("[INFO] first parcel: nucleation %.4e s; re-melt %.6e s at x %.6f; RT %.6e s at x %.6f; tau_RT %.6e s"

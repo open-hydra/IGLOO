@@ -166,14 +166,14 @@ def main():
     min_sep = None
     wraps_all = []
     for pid in sorted(parts):
-        prow = sorted(parts[pid], key=lambda r: r["t"])
+        prow = sorted(parts[pid], key=lambda r: r["time"])
         first = prow[0]
         j = min(range(NY), key=lambda q: abs(YC[q] - first["Y"]))
         y0, T0 = YC[j], KT * TC[j]
         # P0: the injection state
-        if (first["t"] != 0.0 or abs(first["X"]) > PY.HALF_ULP or abs(first["Y"] - y0) > PY.HALF_ULP
+        if (first["time"] != 0.0 or abs(first["X"]) > PY.HALF_ULP or abs(first["Y"] - y0) > PY.HALF_ULP
                 or abs(first["V"]) > PY.HALF_ULP or abs(first["T"] - T0) > DELTA_T):
-            print(f"[FAIL] P0 ID={pid}: first row (t={first['t']:.8e}, x={first['X']:.6f}, y={first['Y']:.6f}, "
+            print(f"[FAIL] P0 ID={pid}: first row (t={first['time']:.8e}, x={first['X']:.6f}, y={first['Y']:.6f}, "
                   f"v={first['V']:.6f}, T={first['T']:.6f}) is not the injection state (0, 0, {y0:.6f}, 0, {T0:.6f})")
             nviol += 1
             continue
@@ -207,7 +207,7 @@ def main():
                 nviol += 1; bad = True
         wraps_all.append(wraps)
         # P2 and P5: T along the closed-form path
-        times = [r["t"] for r in prow]
+        times = [r["time"] for r in prow]
         t_or = rk4(y0, T0, times, periodic)
         t_half = rk4(y0, T0, times, periodic, scale=0.5)
         t_lin = rk4(y0, T0, times, linear)
@@ -216,20 +216,20 @@ def main():
             worst_self = (self_err, f"ID={pid}")
         sep = 0.0
         for r, To, Tl in zip(prow, t_or, t_lin):
-            y = path(r["t"], y0)[1]
-            dTdt = abs(rate(r["t"], To, y0, periodic))
-            tol_T = DELTA_T + dTdt * DELTA_TIME * r["t"] + EPS_INT
+            y = path(r["time"], y0)[1]
+            dTdt = abs(rate(r["time"], To, y0, periodic))
+            tol_T = DELTA_T + dTdt * DELTA_TIME * r["time"] + EPS_INT
             res = abs(r["T"] - To)
             if res / tol_T > worst_all[0]:
-                worst_all = (res / tol_T, f"ID={pid} t={r['t']:.6e} res={res:.3e} tol={tol_T:.3e}")
+                worst_all = (res / tol_T, f"ID={pid} t={r['time']:.6e} res={res:.3e} tol={tol_T:.3e}")
             sep = max(sep, abs(Tl - To) / tol_T)
             if abs(r["T"] - gas_T(y, periodic)) <= TG_BAND:
                 continue
             if res / tol_T > worst_t[0]:
-                worst_t = (res / tol_T, f"ID={pid} t={r['t']:.6e} res={res:.3e} tol={tol_T:.3e}")
+                worst_t = (res / tol_T, f"ID={pid} t={r['time']:.6e} res={res:.3e} tol={tol_T:.3e}")
             if res > tol_T:
                 if not bad:
-                    print(f"[FAIL] P2 ID={pid} t={r['t']:.6e} y={r['Y']:.6f}: |T-T_or|={res:.3e} > {tol_T:.3e} "
+                    print(f"[FAIL] P2 ID={pid} t={r['time']:.6e} y={r['Y']:.6f}: |T-T_or|={res:.3e} > {tol_T:.3e} "
                           f"(T={r['T']:.6f}, T_or={To:.6f})")
                 nviol += 1; bad = True
         if self_err > RK_SELF:

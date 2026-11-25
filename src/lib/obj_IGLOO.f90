@@ -529,7 +529,7 @@ contains
              access='stream', form='unformatted', status='replace')
         call ps_open(STR_TRAJ, unitTraj)
         if (timeOn) then
-          call ps_text(STR_TRAJ, ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)// &
+          call ps_text(STR_TRAJ, ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","time"'//trim(fHead)// &
                        trim(tsHead)//LF, 0, 0)
         else
           call ps_text(STR_TRAJ, ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID"'//trim(fHead)// &
@@ -540,7 +540,7 @@ contains
              access='stream', form='unformatted', status='replace')
       call ps_open(STR_EXIT, unitExit)
       if (timeOn) then
-        call ps_text(STR_EXIT, ' variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","t",'// &
+        call ps_text(STR_EXIT, ' variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID","time",'// &
                      '"bc","d<sub>p</sub>"'//trim(fHead)//LF, 0, 0)
       else
         call ps_text(STR_EXIT, ' variables="X","Y","Z","T","|u<sub>p</sub>|","<greek>a</greek>","mdot","Af","ID",'// &
@@ -552,14 +552,14 @@ contains
              access='stream', form='unformatted', status='replace')
         call ps_open(STR_PLANE, unitPlane)
         call ps_text(STR_PLANE, ' variables="plane","X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","mdot","npdot",'// &
-                     '"f","ID","parent","t","dir"'//LF, 0, 0)
+                     '"f","ID","parent","time","dir"'//LF, 0, 0)
       endif
       !> Parcels still in the domain at time-end, one record each.
       if (snapOn) then
         open(newunit=unitSnap,file='OUTPUT/'//trim(IGLOO_phase_prefix)//'snapshot-'//trim(mat%matName)//self%sweepTag()//trim(rank_suffix())//'.dat', &
              access='stream', form='unformatted', status='replace')
         call ps_open(STR_SNAP, unitSnap)
-        call ps_text(STR_SNAP, ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","t"'//trim(fHead)//LF, &
+        call ps_text(STR_SNAP, ' variables="X","Y","Z","U","V","W","T","d<sub>p","m<sub>p","ID","time"'//trim(fHead)//LF, &
                      0, 0)
       endif
 

@@ -85,14 +85,14 @@ def main():
     except (FileNotFoundError, ValueError) as e:
         print(f"[FAIL] {e}")
         return 1
-    if not rows or "t" not in rows[0]:
+    if not rows or "time" not in rows[0]:
         print("[FAIL] no trajectory rows with a time column (out-time = on)")
         return 1
     parts = {}
     for r in rows:
         parts.setdefault(r["ID"], []).append(r)
 
-    tmax = max(r["t"] for r in rows)
+    tmax = max(r["time"] for r in rows)
     dt = tmax / NSTEP
     grid = [U0]
     for _ in range(NSTEP):
@@ -104,25 +104,25 @@ def main():
 
     bad, worst, nrow, re_lo, re_hi = [], (0.0, ""), 0, float("inf"), 0.0
     for pid in sorted(parts):
-        pr = sorted(parts[pid], key=lambda r: r["t"])
+        pr = sorted(parts[pid], key=lambda r: r["time"])
         first = pr[0]
-        if abs(first["X"]) > HALF_U or abs(first["U"] - U0) > HALF_U or first["t"] != 0.0:
-            bad.append(f"D2 ID {pid}: first row x {first['X']}, u {first['U']}, t {first['t']}")
+        if abs(first["X"]) > HALF_U or abs(first["U"] - U0) > HALF_U or first["time"] != 0.0:
+            bad.append(f"D2 ID {pid}: first row x {first['X']}, u {first['U']}, t {first['time']}")
         for r in pr:
             if abs(r["V"]) > HALF_U or abs(r["W"]) > HALF_U or abs(r["T"] - T_G) > HALF_U \
                     or abs(r["d<sub>p"] - D) > 5.0e-7 * D:
-                bad.append(f"D2 ID {pid} t {r['t']:.8e}: v {r['V']}, w {r['W']}, T {r['T']}, d {r['d<sub>p']}")
+                bad.append(f"D2 ID {pid} t {r['time']:.8e}: v {r['V']}, w {r['W']}, T {r['T']}, d {r['d<sub>p']}")
                 break
-            uo = u_oracle(r["t"])
-            tol = HALF_U + abs(f(uo)) * REL_T * r["t"] + INT_FLOOR
+            uo = u_oracle(r["time"])
+            tol = HALF_U + abs(f(uo)) * REL_T * r["time"] + INT_FLOOR
             err = abs(r["U"] - uo)
             nrow += 1
             re = reynolds(r["U"])
             re_lo, re_hi = min(re_lo, re), max(re_hi, re)
             if err / tol > worst[0]:
-                worst = (err / tol, f"ID {pid} t {r['t']:.6e}: u {r['U']:.6f} oracle {uo:.9f} |du| {err:.2e} tol {tol:.2e}")
+                worst = (err / tol, f"ID {pid} t {r['time']:.6e}: u {r['U']:.6f} oracle {uo:.9f} |du| {err:.2e} tol {tol:.2e}")
             if err > tol:
-                bad.append(f"D1 ID {pid} t {r['t']:.8e}: u {r['U']:.6f} oracle {uo:.9f} |du| {err:.3e} > {tol:.3e}")
+                bad.append(f"D1 ID {pid} t {r['time']:.8e}: u {r['U']:.6f} oracle {uo:.9f} |du| {err:.3e} > {tol:.3e}")
         if len(pr) < MIN_ROWS:
             bad.append(f"D3 ID {pid}: {len(pr)} rows < {MIN_ROWS}")
     if len(parts) != N_PARCELS:

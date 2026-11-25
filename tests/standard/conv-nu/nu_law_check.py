@@ -121,21 +121,21 @@ def main(law):
             shown += 1
 
     for pid in sorted(parts):
-        prow = sorted(parts[pid], key=lambda r: r["t"])
+        prow = sorted(parts[pid], key=lambda r: r["time"])
         first = prow[0]
-        if first["t"] != 0.0 or abs(first["T"] - TP0) > TOL_T0:
+        if first["time"] != 0.0 or abs(first["T"] - TP0) > TOL_T0:
             fail("G0 ID=%d: first row t = %.8e, T = %.6f (injection t = 0, T = %.6f)"
-                 % (pid, first["t"], first["T"], TP0))
+                 % (pid, first["time"], first["T"], TP0))
             continue
         npts, bad = 0, False
         for r in prow:
             if (abs(r["U"] - cn.U_G) > cn.TOL_U or abs(r["V"] - cn.V_INF) > cn.TOL_V or abs(r["W"]) > cn.TOL_W
                     or abs(r["d<sub>p"] - cn.D_P) > cn.TOL_DP_REL * cn.D_P):
                 fail("G1 ID=%d t=%.8e: (u, v, w, d) = (%.6f, %.6f, %.2e, %.4e) off the terminal state"
-                     % (pid, r["t"], r["U"], r["V"], r["W"], r["d<sub>p"]))
+                     % (pid, r["time"], r["U"], r["V"], r["W"], r["d<sub>p"]))
                 bad = True
                 break
-            t, temp = r["t"], r["T"]
+            t, temp = r["time"], r["T"]
             pred = t_of(t, tau)
             slope = abs(pred - cn.T_G) / tau
             tol = HALF_T + slope * HALF_TIME * t + INT_FLOOR
