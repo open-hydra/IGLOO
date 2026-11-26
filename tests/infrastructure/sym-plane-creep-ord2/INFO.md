@@ -5,7 +5,8 @@ reflections along the path at either gas order, and at gas order 2 the trajector
 the check recomputes the guard's criterion from the output.
 
 **Fixture.** `INPUT/` and `check.py` symlinked to `sym-plane-creep`'s; `input.ini` is its own with
-`gas-order = 2`. The six parcels stop after 200 reflections, 201 trajectory rows each, at x = 0.00420–0.00421 m and
+`gas-order = 2`, its streams at y = 0.0151, 0.0251, 0.0351 m: 1e-4 m off the faces of the dual cells, on which the
+cell of a parcel hangs on the last bit of its position. The six parcels stop after 200 reflections, 201 trajectory rows each, at x = 0.00420–0.00421 m and
 t = 0.0265–0.0281 s; their last 100 rows lie within 8e-6 m of each other.
 
 **Gates** (`check.py`, shared). K1 one `stuck in cell` line per parcel, no other guard or solver failure, the run

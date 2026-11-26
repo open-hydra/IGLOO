@@ -27,7 +27,7 @@ module verif_driver
     implicit none
     private
 
-    public :: advance
+    public :: advance, rhs_drag
     public :: MODE_WRAPPER_ADAPTIVE, MODE_SDIRK_FIXEDSTEP
 
     integer(I4), parameter :: MODE_WRAPPER_ADAPTIVE = 1

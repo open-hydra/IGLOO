@@ -51,6 +51,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Erosion), the theory pages hold the physics only, a Code Map serves developers, and Getting Started lists the
   whole Hydra suite.
 
+- Build: OSLO 1.1.1 or a later 1.x is required (was 1.1): its H-sdirk4 perturbs the Jacobian by the rounding unit of
+  double precision and rejects a step whose right-hand side has no value.
+
 ### Fixed
 - Geometry: a cell's volume is the integral of det J of the trilinear map of its nodes, the volume its bilinear faces
   bound, as MOSE and ICE compute it; it was a sum of five tetrahedra, exact only on plane faces, whose volumes did not
@@ -68,6 +71,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   outwards it was never injected (2.4 % of the injecting area of a star grain).
 - Breakup at gas order 2 with `H-sdirk4`: the first step of a parcel read the gas before it was set, so a drop could
   get a non-finite Weber number and never break up.
+
+- Sampling: the inverse of the gas map takes one Newton step from a converged point. A sample kept its seed's offset,
+  up to the Newton stop, so the right-hand side jumped with the position by about the solver's tolerance for a small
+  parcel near a wall, and the solver ran out of steps.
+- Models: `rhsStandard` returns the finite penalty 1e30 for a trial state below absolute zero or a non-finite
+  right-hand side, as every other model does, so that the solver rejects the step (Henderson's drag held
+  sqrt(Tp/Tg) at Tp < 0 and returned a NaN).
 
 ### Removed
 - The Monolith timing harness (`tests/bench/monolith/`) and the `IGLOO_IO_PROBE` configure option: the harness, its

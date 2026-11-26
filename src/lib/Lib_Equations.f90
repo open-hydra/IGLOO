@@ -233,6 +233,7 @@ contains
     integer,  intent(out)   :: nIt
     real(R8) :: F(3), J(3,3), dN(3,8), detJ, d(3)
     integer  :: iter, i
+    logical  :: conv
 
     nIt = 0
     do iter = 1, maxIt
@@ -241,7 +242,7 @@ contains
       do i = 1, 8
         F = F + N(i)*vertices(:,i)
       enddo
-      if (norm2(F) < tol) exit
+      conv = norm2(F) < tol
       J = 0._R8
       do i = 1, 8
         J(:,1) = J(:,1) + dN(1,i)*vertices(:,i)
@@ -250,13 +251,17 @@ contains
       enddo
       detJ = J(1,1)*(J(2,2)*J(3,3) - J(2,3)*J(3,2)) - J(1,2)*(J(2,1)*J(3,3) - J(2,3)*J(3,1)) + &
              J(1,3)*(J(2,1)*J(3,2) - J(2,2)*J(3,1))
+      if (conv .and. .not. abs(detJ) > tiny(1._R8)) exit   ! a collapsed corner: the point as it is
       d(1) = (F(1)*(J(2,2)*J(3,3) - J(2,3)*J(3,2)) + F(2)*(J(1,3)*J(3,2) - J(1,2)*J(3,3)) + &
               F(3)*(J(1,2)*J(2,3) - J(1,3)*J(2,2)))/detJ
       d(2) = (F(1)*(J(2,3)*J(3,1) - J(2,1)*J(3,3)) + F(2)*(J(1,1)*J(3,3) - J(1,3)*J(3,1)) + &
               F(3)*(J(1,3)*J(2,1) - J(1,1)*J(2,3)))/detJ
       d(3) = (F(1)*(J(2,1)*J(3,2) - J(2,2)*J(3,1)) + F(2)*(J(1,2)*J(3,1) - J(1,1)*J(3,2)) + &
               F(3)*(J(1,1)*J(2,2) - J(1,2)*J(2,1)))/detJ
+      if (conv .and. .not. maxval(abs(d)) < 1.e-6_R8) exit
       xi = xi - d
+      !> One step from a converged point (quadratic: to rounding), so that the sample does not depend on the seed
+      if (conv) exit
       nIt = iter
     enddo
     call hex(xi, N, dN)

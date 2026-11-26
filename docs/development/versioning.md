@@ -11,7 +11,7 @@ with stops the configure before anything is built.
 | Library | Requirement | How |
 |---|---|---|
 | ORION | `IGLOO_ORION_VERSION 2.2`: 2.2.0 and later, up to 3.0.0 excluded | `semver_dependency` of `cmake/SemVerDeps.cmake` |
-| OSLO | `IGLOO_OSLO_VERSION 1.1`: 1.1.0 and later, up to 2.0.0 excluded | `semver_dependency` of `cmake/SemVerDeps.cmake` |
+| OSLO | `IGLOO_OSLO_VERSION 1.1.1`: 1.1.1 and later, up to 2.0.0 excluded | `semver_dependency` of `cmake/SemVerDeps.cmake` |
 | FiNeR | `IGLOO_FINER_TAG v2.3.0` | the submodule `lib/FiNeR`, checked against its `VERSION` file |
 
 `cmake/SemVerDeps.cmake` is FLINT's file, copied unmodified: update it from FLINT, never here.
@@ -21,8 +21,10 @@ releases; a tag such as `v2.2.0-rc1` is never selected.
 
 IGLOO requires the oldest release that has everything it uses. ORION `2.2`: the property table
 is read with `tec_read_structured_multiblock`, whose Tecplot reader 2.1.0 fixed and 2.2.0 made
-refuse data that a zone header does not announce. OSLO `1.1`: `run_odesolver` with the
-Jacobian arguments IGLOO passes.
+refuse data that a zone header does not announce. OSLO `1.1.1`: `run_odesolver` with the
+Jacobian arguments IGLOO passes, and H-sdirk4 with the rounding unit of double precision in its
+Jacobian and a right-hand side without a value rejecting the step: with 1.1.0 a parcel sampled
+through the gas-order-2 inverse map fails in `sym-plane-skate-ord2`.
 
 FiNeR's own dependencies are fetched as FiNeR's author does (`fobis fetch`: their default
 branches, `IGLOO_FINER_DEPS=FREE`). If an upstream change breaks IGLOO, `IGLOO_FINER_DEPS=BACKUP`

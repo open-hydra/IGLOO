@@ -429,6 +429,7 @@ contains
     use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, toll, &
                                bodyForce, bodyAccel, srcBodyForce
     use IGLOO_Lib_Properties, only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
     real(R8), intent(in)    :: time
@@ -447,6 +448,11 @@ contains
     F = 0._R8
     if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
     else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
+    !> a trial state below absolute zero has no laws: the penalty, the step is rejected
+    if (.not. tp > 0._R8) then
+      F = 1.e30_R8
+      return
+    endif
     if (mod_propFlags(2)) then; rho = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho = aux(ind_rho); endif
     m = aux(ind_m) 
     if (ind_d > 0) then; d = aux(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
@@ -484,26 +490,9 @@ contains
       F(12)   = Z(7) * normVel
     endif
 
-    !> diagnostic: dump the intermediates on NaN
-    if (any(F /= F)) then
-      print*,'[rhsStandard] NaN in F: time=',time
-      print*,'  Z(1:3) pos =',Z(1:3)
-      print*,'  Z(4:6) vel =',Z(4:6)
-      print*,'  Z(7)  ent/T=',Z(7)
-      print*,'  tp=',tp,' rho=',rho,' m=',m,' d=',d,' cpFactor=',cpFactor
-      print*,'  gas(1:nsp) =',gas
-      print*,'  Vdif=',Vdif,' slip=',slip,' Re=',Re
-      print*,'  Fdrag=',Fdrag,' Qdot=',Qdot
-      print*,'  F=',F
-      print*,'gas nodes 1'
-      print*,gasNodes(:,1)
-      print*,'gas nodes 2'
-      print*,gasNodes(:,2)
-      print*,'gas nodes 3'
-      print*,gasNodes(:,3)
-      print*,'gas nodes 4'
-      print*,gasNodes(:,4)
-      ! error stop '[ERROR] rhsStandard produced NaN'
+    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
+    if (any(.not. ieee_is_finite(F))) then
+      where (.not. ieee_is_finite(F)) F = 1.e30_R8
     endif
   end subroutine rhsStandard
 
