@@ -65,6 +65,9 @@ module Lib_RHS
   integer :: neventvar = 0                   !> total eventVar size
   integer :: nbrkst   = 0                   !> breakup ODE state size for breakupEvent
 
+  !> The finite value of every slot of a rejected trial state: the solver halves the step.
+  real(R8), parameter :: penalty = 1.e30_R8
+
 contains
 
   !> ODE model selector from the solidification, combustion (with or without a carried material), breakup-ODE and
@@ -421,186 +424,169 @@ contains
   !  auxst the auxiliary state, gas the interpolated gas state.
 
 
-  !> Model 1: constant mass, no breakup ODE.
-  subroutine rhsStandard(neq, time, Z, F, aux,naux, auxst,nauxst, &
-                          hTabM, rhoTabM,                  &
-                          gasNodes,gasVert,gas,nsp,nNodes, epsTabM)
-    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
-    use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, toll, &
-                               bodyForce, bodyAccel, srcBodyForce
-    use IGLOO_Lib_Properties, only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
+  !> The pieces every right-hand side shares: a correction to one of them is made here, once for every model.
+
+  !> The parcel temperature and the factor that turns a heat rate [W] into the rate of Z(7): with the enthalpy
+  !  table (varCp) Z(7) is h, T comes from the table and the factor is 1; else Z(7) is T and the factor 1/cp.
+  subroutine parcelTemperature(Z7, hTabM, aux, naux, tp, cpFactor)
+    use IGLOO_Lib_Properties, only: comp_TfromTab
+    implicit none
+    integer,  intent(in)  :: naux
+    real(R8), intent(in)  :: Z7, hTabM(:), aux(naux)
+    real(R8), intent(out) :: tp, cpFactor
+    if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z7); cpFactor = 1._R8
+    else;                       tp = Z7;                       cpFactor = 1._R8/aux(ind_cp); endif
+  end subroutine parcelTemperature
+
+
+  !> A trial state the laws do not hold for: a parcel temperature at or below absolute zero.
+  pure logical function trialRejected(tp) result(bad)
+    implicit none
+    real(R8), intent(in) :: tp
+    bad = .not. tp > 0._R8
+  end function trialRejected
+
+
+  !> A property of the parcel material at T: its table when the material has the column, else the constant aux(idx).
+  pure function propertyAt(tabulated, tab, T, aux, naux, idx) result(v)
+    use IGLOO_Lib_Properties, only: tableValue, Tmin, Tmax
+    implicit none
+    logical,  intent(in) :: tabulated
+    integer,  intent(in) :: naux, idx
+    real(R8), intent(in) :: tab(:), T, aux(naux)
+    real(R8) :: v
+    if (tabulated) then; v = tableValue(tab, Tmin, Tmax, T); else; v = aux(idx); endif
+  end function propertyAt
+
+
+  !> The diameter of a sphere of mass m and density rho.
+  pure function sphereDiameter(m, rho) result(d)
+    use IGLOO_variables, only: oneThird, sixOverPi
+    implicit none
+    real(R8), intent(in) :: m, rho
+    real(R8) :: d
+    d = (sixOverPi*m/rho)**oneThird
+  end function sphereDiameter
+
+
+  !> The gas at the parcel position X at gas order 2: the 2-D sample, or the 3-D inverse map started from the local
+  !  coordinates kept in auxst (updated). At gas order 1 gas keeps the cell value it holds.
+  subroutine sampleGas(gasVert, gasNodes, nNodes, X, nsp, auxst, nauxst, gas)
+    use Lib_Equations,   only: interp2ndOrder, sampleGas2D
+    use IGLOO_variables, only: mesh2D, ord2
+    implicit none
+    integer,  intent(in)    :: nNodes, nsp, nauxst
+    real(R8), intent(in)    :: gasVert(3,nNodes), gasNodes(nsp,nNodes), X(3)
+    real(R8), intent(inout) :: auxst(nauxst), gas(nsp)
+    real(R8) :: xi0_loc(3)
+    if (.not. ord2) return
+    if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, X, nsp, gas)
+    else
+      xi0_loc = auxst(ind_sxi:ind_sxi+2)
+      call interp2ndOrder(gasVert, gasNodes, X, nsp, xi0_loc, gas)
+      auxst(ind_sxi:ind_sxi+2) = xi0_loc
+    endif
+  end subroutine sampleGas
+
+
+  !> The gas velocity relative to the parcel at X moving at V (the gas meridian velocity turned to the parcel
+  !  azimuth) and its magnitude.
+  subroutine relativeFlow(gas, nsp, X, V, Vdif, slip)
+    use Lib_Equations, only: meridianToAzimuth
+    implicit none
+    integer,  intent(in)  :: nsp
+    real(R8), intent(in)  :: gas(nsp), X(3), V(3)
+    real(R8), intent(out) :: Vdif(3), slip
+    Vdif = meridianToAzimuth(gas(2:4), X) - V
+    slip = norm2(Vdif)
+  end subroutine relativeFlow
+
+
+  !> The parcel Reynolds number at slip speed and diameter d.
+  pure function parcelReynolds(gas, nsp, slip, d) result(Re)
+    implicit none
+    integer,  intent(in) :: nsp
+    real(R8), intent(in) :: gas(nsp), slip, d
+    real(R8) :: Re
+    Re = gas(1) * slip * d / gas(6)
+  end function parcelReynolds
+
+
+  !> The radiative heat of a parcel at T (an emissivity given) added to Qdot, scaled as the heat (cpFactor).
+  subroutine addRadiation(Qdot, aux, naux, T, d, Tg, cpFactor, epsTabM)
+    implicit none
+    integer,  intent(in)    :: naux
+    real(R8), intent(inout) :: Qdot
+    real(R8), intent(in)    :: aux(naux), T, d, Tg, cpFactor
+    real(R8), intent(in), optional :: epsTabM(:)
+    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), T, epsTabM), d, Tg, T)*cpFactor
+  end subroutine addRadiation
+
+
+  !> The drag force and the heat rate of the parcel at T (the drag and heat laws), its radiation included.
+  subroutine dragAndHeat(gas, nsp, Vdif, slip, T, d, Re, cpFactor, aux, naux, Fdrag, Qdot, NuOut, epsTabM)
+    use Lib_Equations, only: interphase
+    implicit none
+    integer,  intent(in)  :: nsp, naux
+    real(R8), intent(in)  :: gas(nsp), Vdif(3), slip, T, d, Re, cpFactor, aux(naux)
+    real(R8), intent(out) :: Fdrag(3), Qdot
+    real(R8), intent(out), optional :: NuOut
+    real(R8), intent(in),  optional :: epsTabM(:)
+    call interphase(gas, nsp, Vdif, slip, T, d, Re, cpFactor, Fdrag, Qdot, NuOut)
+    call addRadiation(Qdot, aux, naux, T, d, gas(5), cpFactor, epsTabM)
+  end subroutine dragAndHeat
+
+
+  !> The position and velocity rates: dX/dt = V, dV/dt = acc plus the body acceleration.
+  subroutine motionRates(V, acc, F)
+    use IGLOO_variables, only: bodyForce, bodyAccel
+    implicit none
+    real(R8), intent(in)    :: V(3), acc(3)
+    real(R8), intent(inout) :: F(:)
+    F(1:3) = V
+    F(4:6) = acc
+    if (bodyForce) F(4:6) = F(4:6) + bodyAccel
+  end subroutine motionRates
+
+
+  !> The Euler moments of the trajectory from slot i0: |V|, w V |V| in the meridian frame (wedge) and w Z(7) |V|, with
+  !  w the parcel weight (1, the parcel mass or the stream mass).
+  subroutine eulerMoments(Z, w, i0, F)
+    use Lib_Equations, only: toMeridian
+    implicit none
+    real(R8), intent(in)    :: Z(:), w
+    integer,  intent(in)    :: i0
+    real(R8), intent(inout) :: F(:)
+    real(R8) :: normVel
+    normVel = norm2(Z(4:6))
+    F(i0)          = normVel
+    F(i0+1:i0+3)   = w * toMeridian(Z(4:6), Z(1:3)) * normVel
+    F(i0+4)        = w * Z(7) * normVel
+  end subroutine eulerMoments
+
+
+  !> The body-force accumulators of a parcel of weight w: the work at slot neq, the weight at neq-1 unless the Euler
+  !  moments hold it.
+  subroutine bodyForceWork(Z, neq, w, F)
+    use IGLOO_variables, only: eulerSwitch, bodyAccel
+    implicit none
+    integer,  intent(in)    :: neq
+    real(R8), intent(in)    :: Z(neq), w
+    real(R8), intent(inout) :: F(neq)
+    if (.not. eulerSwitch) F(neq-1) = w
+    F(neq) = w * dot_product(bodyAccel, Z(4:6))
+  end subroutine bodyForceWork
+
+
+  !> A non-finite slot (an unphysical Newton trial): the finite penalty, so that the solver rejects the step.
+  subroutine penalizeNonFinite(F)
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
-    integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
-    real(R8), intent(in)    :: time
-    real(R8), intent(in)    :: Z(neq)
-    real(R8), intent(out)   :: F(neq)
-    real(R8), intent(in)    :: aux(naux)
-    real(R8), intent(inout) :: auxst(nauxst)
-    real(R8), intent(in)    :: hTabM(:), rhoTabM(:)
-    real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
-    real(R8), intent(inout) :: gas(nsp)
-    real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
-    ! locals
-    real(R8) :: normVel, slip, Vdif(3), Re, cpFactor, tp, d, rho, m, xi0_loc(3)
-    real(R8) :: Fdrag(3), Qdot
-
-    F = 0._R8
-    if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
-    else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    !> a trial state below absolute zero has no laws: the penalty, the step is rejected
-    if (.not. tp > 0._R8) then
-      F = 1.e30_R8
-      return
-    endif
-    if (mod_propFlags(2)) then; rho = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho = aux(ind_rho); endif
-    m = aux(ind_m) 
-    if (ind_d > 0) then; d = aux(ind_d); else; d = (sixOverPi*m/rho)**oneThird; endif
-    ! 2nd order gas interpolation
-    if (ord2) then
-      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
-      else
-        xi0_loc = auxst(ind_sxi:ind_sxi+2)
-        call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
-        auxst(ind_sxi:ind_sxi+2) = xi0_loc
-      endif
-    endif
-
-    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
-    slip = norm2(Vdif)
-    !> degenerate gas (mu <= 0): no drag, no heat
-    if (gas(6) <= toll) then
-      Re    = 0._R8
-      Fdrag = 0._R8
-      Qdot  = 0._R8
-    else
-      Re = gas(1) * slip * d / gas(6)
-      call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot)
-      if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), tp, epsTabM), d, gas(5), tp)*cpFactor
-    endif
-    F(1:3) = Z(4:6)
-    F(4:6) = Fdrag/m
-    if (bodyForce) F(4:6) = F(4:6) + bodyAccel
-    F(7)   = Qdot/m
-
-    if (eulerSwitch) then
-      normVel = norm2(Z(4:6))
-      F(8)    = normVel
-      F(9:11) = toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
-      F(12)   = Z(7) * normVel
-    endif
-
-    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
+    real(R8), intent(inout) :: F(:)
     if (any(.not. ieee_is_finite(F))) then
-      where (.not. ieee_is_finite(F)) F = 1.e30_R8
+      where (.not. ieee_is_finite(F)) F = penalty
     endif
-  end subroutine rhsStandard
-
-
-  !> Models 6 and 7: solidification; Z(7) = T, Z(8) = frozen fraction f, phase from auxst.
-  !  Model 7 adds the breakup number rate Z(9), acting in the liquid phases only.
-  subroutine rhsSolidification(neq, time, Z, F, aux,naux, auxst,nauxst, &
-                                hTabM, rhoTabM, mupTabM, sigTabM,      &
-                                gasNodes,gasVert,gas,nsp,nNodes, epsTabM)
-    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
-    use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, toll, bodyForce, bodyAccel, oneThird, sixOverPi
-    use IGLOO_Lib_Combustion,     only: imHf, imCps
-    use IGLOO_Lib_Solidification, only: plateauRate, solidDiameter, tableSlope, phUndercooled, phPlateau, phSolid
-    use IGLOO_Lib_Breakup,        only: breakupOde
-    use IGLOO_Lib_Properties,     only: tableValue, Tmin, Tmax
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-    implicit none
-    integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
-    real(R8), intent(in)    :: time
-    real(R8), intent(in)    :: Z(neq)
-    real(R8), intent(out)   :: F(neq)
-    real(R8), intent(in)    :: aux(naux)
-    real(R8), intent(inout) :: auxst(nauxst)
-    real(R8), intent(in)    :: hTabM(:), rhoTabM(:), mupTabM(:), sigTabM(:)
-    real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
-    real(R8), intent(inout) :: gas(nsp)
-    real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
-    ! locals
-    real(R8) :: normVel, slip, Vdif(3), Re, d, m, xi0_loc(3)
-    real(R8) :: Fdrag(3), QdotW
-    real(R8) :: rho, sigma, mup, brkupVar(2)
-
-    F = 0._R8
-    if (mod_model == 7) then; m = aux(ind_m)/Z(9); else; m = aux(ind_m); endif
-    if (mod_propFlags(2)) then; rho = tableValue(rhoTabM, Tmin, Tmax, Z(7)); else; rho = aux(ind_rho); endif
-    !> the liquid at rho, the frozen fraction at rho-solid; one density otherwise
-    if (ind_rs > 0) then
-      d = solidDiameter(m, Z(8), rho, aux(ind_rs))
-    elseif (mod_model == 7 .or. mod_propFlags(2)) then
-      d = (sixOverPi*m/rho)**oneThird
-    else
-      d = aux(ind_d)
-    endif
-    ! 2nd order gas interpolation
-    if (ord2) then
-      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
-      else
-        xi0_loc = auxst(ind_sxi:ind_sxi+2)
-        call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
-        auxst(ind_sxi:ind_sxi+2) = xi0_loc
-      endif
-    endif
-
-    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
-    slip = norm2(Vdif)
-    !> degenerate gas (mu <= 0): no drag, no heat
-    if (gas(6) <= toll) then
-      Re    = 0._R8
-      Fdrag = 0._R8
-      QdotW = 0._R8
-    else
-      Re = gas(1) * slip * d / gas(6)
-      call interphase(gas, nsp, Vdif, slip, Z(7), d, Re, 1._R8, Fdrag, QdotW)
-      if (ind_eps > 0) QdotW = QdotW + radiativeHeat(emissivityAt(aux(ind_eps), Z(7), epsTabM), d, gas(5), Z(7))
-    endif
-    F(1:3) = Z(4:6)
-    F(4:6) = Fdrag/m
-    if (bodyForce) F(4:6) = F(4:6) + bodyAccel
-    !> heat [W] goes to T (liquid c_l, solid c_s) or, on the plateau, to the frozen fraction
-    select case (nint(auxst(ind_sph)))
-    case (phPlateau); F(8) = plateauRate(QdotW, m, aux(ind_mb+imHf-1))
-    case (phSolid);   F(7) = QdotW/(m*aux(ind_mb+imCps-1))
-    case default
-      if (mod_propFlags(1)) then; F(7) = QdotW/(m*tableSlope(hTabM, Z(7)))
-      else;                       F(7) = QdotW/(m*aux(ind_cp)); endif
-    end select
-    !> model 7: the breakup number rate, liquid phases only (KH-RT timer read and written there)
-    if (mod_model == 7) then
-      if (nint(auxst(ind_sph)) <= phUndercooled) then
-        if (mod_propFlags(3)) then; sigma = tableValue(sigTabM, Tmin, Tmax, Z(7)); else; sigma = aux(ind_sig); endif
-        if (mod_propFlags(4)) then; mup   = tableValue(mupTabM, Tmin, Tmax, Z(7)); else; mup   = aux(ind_mup); endif
-        if (ind_sb1 > 0) then; brkupVar = auxst(ind_sb1:ind_sb2)
-        else;                  brkupVar = 0._R8; endif
-        F(9) = breakupOde(d, sigma, mup, rho, Z(9), gas(1), slip, Re, time, &
-                          Fdrag/m, Z(4:6), brkupVar, mod_brkSelect, mod_bp)
-        if (ind_sb1 > 0) auxst(ind_sb1:ind_sb2) = brkupVar
-      endif
-    endif
-
-    if (eulerSwitch) then
-      normVel  = norm2(Z(4:6))
-      if (mod_model == 7) then
-        F(10)    = normVel
-        F(11:13) = toMeridian(Z(4:6), Z(1:3)) * normVel
-        F(14)    = Z(7) * normVel
-        F(15)    = Z(9)
-      else
-        F(9)     = normVel
-        F(10:12) = toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
-        F(13)    = Z(7) * normVel
-      endif
-    endif
-
-    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
-    if (any(.not. ieee_is_finite(F))) then
-      where (.not. ieee_is_finite(F)) F = 1.e30_R8
-    endif
-  end subroutine rhsSolidification
+  end subroutine penalizeNonFinite
 
 
   !> A trial state the solver rejects: no mass left or a non-finite slot, at a gas sample whose cpg is not positive.
@@ -615,16 +601,149 @@ contains
   end function trialGasUnphysical
 
 
+  !> Model 1: constant mass, no breakup ODE.
+  subroutine rhsStandard(neq, time, Z, F, aux,naux, auxst,nauxst, &
+                          hTabM, rhoTabM,                  &
+                          gasNodes,gasVert,gas,nsp,nNodes, epsTabM)
+    use IGLOO_variables, only: eulerSwitch, toll
+    implicit none
+    integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
+    real(R8), intent(in)    :: time
+    real(R8), intent(in)    :: Z(neq)
+    real(R8), intent(out)   :: F(neq)
+    real(R8), intent(in)    :: aux(naux)
+    real(R8), intent(inout) :: auxst(nauxst)
+    real(R8), intent(in)    :: hTabM(:), rhoTabM(:)
+    real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
+    real(R8), intent(inout) :: gas(nsp)
+    real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
+    ! locals
+    real(R8) :: slip, Vdif(3), Re, cpFactor, tp, d, rho, m
+    real(R8) :: Fdrag(3), Qdot
+
+    F = 0._R8
+    call parcelTemperature(Z(7), hTabM, aux, naux, tp, cpFactor)
+    if (trialRejected(tp)) then
+      F = penalty
+      return
+    endif
+    rho = propertyAt(mod_propFlags(2), rhoTabM, tp, aux, naux, ind_rho)
+    m = aux(ind_m) 
+    if (ind_d > 0) then; d = aux(ind_d); else; d = sphereDiameter(m, rho); endif
+    call sampleGas(gasVert, gasNodes, nNodes, Z(1:3), nsp, auxst, nauxst, gas)
+
+    call relativeFlow(gas, nsp, Z(1:3), Z(4:6), Vdif, slip)
+    !> degenerate gas (mu <= 0): no drag, no heat
+    if (gas(6) <= toll) then
+      Re    = 0._R8
+      Fdrag = 0._R8
+      Qdot  = 0._R8
+    else
+      Re = parcelReynolds(gas, nsp, slip, d)
+      call dragAndHeat(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, aux, naux, Fdrag, Qdot, epsTabM=epsTabM)
+    endif
+    call motionRates(Z(4:6), Fdrag/m, F)
+    F(7)   = Qdot/m
+
+    if (eulerSwitch) call eulerMoments(Z, 1._R8, 8, F)
+
+    call penalizeNonFinite(F)
+  end subroutine rhsStandard
+
+
+  !> Models 6 and 7: solidification; Z(7) = T, Z(8) = frozen fraction f, phase from auxst.
+  !  Model 7 adds the breakup number rate Z(9), acting in the liquid phases only.
+  subroutine rhsSolidification(neq, time, Z, F, aux,naux, auxst,nauxst, &
+                                hTabM, rhoTabM, mupTabM, sigTabM,      &
+                                gasNodes,gasVert,gas,nsp,nNodes, epsTabM)
+    use IGLOO_variables, only: eulerSwitch, toll
+    use IGLOO_Lib_Combustion,     only: imHf, imCps
+    use IGLOO_Lib_Solidification, only: plateauRate, solidDiameter, tableSlope, phUndercooled, phPlateau, phSolid
+    use IGLOO_Lib_Breakup,        only: breakupOde
+    implicit none
+    integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
+    real(R8), intent(in)    :: time
+    real(R8), intent(in)    :: Z(neq)
+    real(R8), intent(out)   :: F(neq)
+    real(R8), intent(in)    :: aux(naux)
+    real(R8), intent(inout) :: auxst(nauxst)
+    real(R8), intent(in)    :: hTabM(:), rhoTabM(:), mupTabM(:), sigTabM(:)
+    real(R8), intent(in)    :: gasNodes(nsp,nNodes), gasVert(3,nNodes)
+    real(R8), intent(inout) :: gas(nsp)
+    real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
+    ! locals
+    real(R8) :: slip, Vdif(3), Re, d, m
+    real(R8) :: Fdrag(3), QdotW
+    real(R8) :: rho, sigma, mup, brkupVar(2)
+
+    F = 0._R8
+    if (mod_model == 7) then; m = aux(ind_m)/Z(9); else; m = aux(ind_m); endif
+    rho = propertyAt(mod_propFlags(2), rhoTabM, Z(7), aux, naux, ind_rho)
+    !> the liquid at rho, the frozen fraction at rho-solid; one density otherwise
+    if (ind_rs > 0) then
+      d = solidDiameter(m, Z(8), rho, aux(ind_rs))
+    elseif (mod_model == 7 .or. mod_propFlags(2)) then
+      d = sphereDiameter(m, rho)
+    else
+      d = aux(ind_d)
+    endif
+    call sampleGas(gasVert, gasNodes, nNodes, Z(1:3), nsp, auxst, nauxst, gas)
+
+    call relativeFlow(gas, nsp, Z(1:3), Z(4:6), Vdif, slip)
+    !> degenerate gas (mu <= 0): no drag, no heat
+    if (gas(6) <= toll) then
+      Re    = 0._R8
+      Fdrag = 0._R8
+      QdotW = 0._R8
+    else
+      Re = parcelReynolds(gas, nsp, slip, d)
+      call dragAndHeat(gas, nsp, Vdif, slip, Z(7), d, Re, 1._R8, aux, naux, Fdrag, QdotW, epsTabM=epsTabM)
+    endif
+    call motionRates(Z(4:6), Fdrag/m, F)
+    !> heat [W] goes to T (liquid c_l, solid c_s) or, on the plateau, to the frozen fraction
+    select case (nint(auxst(ind_sph)))
+    case (phPlateau); F(8) = plateauRate(QdotW, m, aux(ind_mb+imHf-1))
+    case (phSolid);   F(7) = QdotW/(m*aux(ind_mb+imCps-1))
+    case default
+      if (mod_propFlags(1)) then; F(7) = QdotW/(m*tableSlope(hTabM, Z(7)))
+      else;                       F(7) = QdotW/(m*aux(ind_cp)); endif
+    end select
+    !> model 7: the breakup number rate, liquid phases only (KH-RT timer read and written there)
+    if (mod_model == 7) then
+      if (nint(auxst(ind_sph)) <= phUndercooled) then
+        sigma = propertyAt(mod_propFlags(3), sigTabM, Z(7), aux, naux, ind_sig)
+        mup   = propertyAt(mod_propFlags(4), mupTabM, Z(7), aux, naux, ind_mup)
+        if (ind_sb1 > 0) then; brkupVar = auxst(ind_sb1:ind_sb2)
+        else;                  brkupVar = 0._R8; endif
+        F(9) = breakupOde(d, sigma, mup, rho, Z(9), gas(1), slip, Re, time, &
+                          Fdrag/m, Z(4:6), brkupVar, mod_brkSelect, mod_bp)
+        if (ind_sb1 > 0) auxst(ind_sb1:ind_sb2) = brkupVar
+      endif
+    endif
+
+    if (eulerSwitch) then
+      if (mod_model == 7) then
+        call eulerMoments(Z, 1._R8, 10, F)
+        F(15) = Z(9)
+      else
+        call eulerMoments(Z, 1._R8, 9, F)
+      endif
+    endif
+
+    call penalizeNonFinite(F)
+  end subroutine rhsSolidification
+
+
+
   !> Model 2: variable mass via evaporation.
   subroutine rhsEvaporation(neq, time, Z, F, aux,naux, auxst,nauxst, &
                              hTabM, rhoTabM, psatTabM, LvTabM, cpvTabM, &
                              gasNodes, gasVert,gas,nsp,nNodes, mupTabM, TsOut, kLiqTabM, epsTabM, lkFail)
-    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
-    use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
-                               bodyForce, bodyAccel, srcBodyForce, blowSelect
+    use Lib_Equations,   only: interphase
+    use IGLOO_variables, only: eulerSwitch, srcBodyForce, blowSelect
     use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor, iLv, icpv
-    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
+    use IGLOO_Lib_Properties,  only: lookupTab, tableValue, Tmin, Tmax
+    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
     real(R8), intent(in)    :: time
@@ -641,7 +760,7 @@ contains
     real(R8), intent(in),  optional :: kLiqTabM(:)  !> the liquid conductivity table (P2T)
     logical, intent(inout), optional :: lkFail   !> set when an LK fixed point was not bracketed
     ! locals
-    real(R8) :: normVel, slip, mdot, Vdif(3), Re, cpFactor, tp, d, rho, m, psat, xi0_loc(3)
+    real(R8) :: slip, mdot, Vdif(3), Re, cpFactor, tp, d, rho, m, psat
     real(R8) :: Fdrag(3), Qdot, Qdot_evap
     real(R8) :: ep(nep)
     real(R8) :: ts, cl, mul, carry, TB, Nu, kl
@@ -649,32 +768,22 @@ contains
     integer  :: p2tStat
 
     F = 0._R8
-    if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
-    else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    if (mod_propFlags(2)) then; rho   = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho   = aux(ind_rho); endif
+    call parcelTemperature(Z(7), hTabM, aux, naux, tp, cpFactor)
+    rho = propertyAt(mod_propFlags(2), rhoTabM, tp, aux, naux, ind_rho)
     m = Z(8)
-    d = (sixOverPi*m/rho)**oneThird
+    d = sphereDiameter(m, rho)
 
-    ! 2nd order gas interpolation
-    if (ord2) then
-      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
-      else
-        xi0_loc = auxst(ind_sxi:ind_sxi+2)
-        call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
-        auxst(ind_sxi:ind_sxi+2) = xi0_loc
-      endif
-    endif
+    call sampleGas(gasVert, gasNodes, nNodes, Z(1:3), nsp, auxst, nauxst, gas)
 
     !> a non-physical trial state sampling a gas of cpg <= 0: the scrub's penalty, the step is rejected (no stop)
     if (trialGasUnphysical(gas, nsp, Z, neq)) then
-      F = 1.e30_R8
+      F = penalty
       if (present(TsOut)) TsOut = tp
       return
     endif
 
-    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
-    slip = norm2(Vdif)
-    Re   = gas(1) * slip * d / gas(6)
+    call relativeFlow(gas, nsp, Z(1:3), Z(4:6), Vdif, slip)
+    Re   = parcelReynolds(gas, nsp, slip, d)
     !> the liquid conductivity at the mean temperature: the column, else k-liq
     kl = aux(ind_e4)
     if (present(kLiqTabM)) kl = tableValue(kLiqTabM, Tmin, Tmax, tp)
@@ -704,7 +813,7 @@ contains
                       psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl, epsTabM=epsTabM, mulTabM=mupTabM, lkFail=lkFail)
       !> no surface root: the scrub's penalty, the step is rejected
       if (p2tStat == 0) then
-        F = 1.e30_R8
+        F = penalty
         if (present(TsOut)) TsOut = ts
         return
       endif
@@ -738,10 +847,8 @@ contains
     !> Stefan-blowing reduction of the convective heat (MHB98 eq.19); skipped when the model returned its own Qdot
     if (blowSelect == 1 .and. .not.override) &
         Qdot = Qdot * blowingFactor(gas(7), gas(8), gas(6), gas(9), rho, d, m, mdot)
-    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), ts, epsTabM), d, gas(5), ts)*cpFactor
-    F(1:3) = Z(4:6)
-    F(4:6) = Fdrag / m
-    if (bodyForce) F(4:6) = F(4:6) + bodyAccel
+    call addRadiation(Qdot, aux, naux, ts, d, gas(5), cpFactor, epsTabM)
+    call motionRates(Z(4:6), Fdrag / m, F)
     if (mod_liqSelect == 1 .or. boiling) then
       !> m dh/dt = Q + mdot (Lv(Ts) + h(Ts) - h): the vapour leaves at the surface temperature
       if (mod_propFlags(1)) then; carry = lookupTab(hTabM, ts) - Z(7)
@@ -754,22 +861,12 @@ contains
     F(8)   = mdot
 
     if (eulerSwitch) then
-      normVel  = norm2(Z(4:6))
-      F(9)     = normVel
-      F(10:12) = m * toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
-      F(13)    = m * Z(7) * normVel
-      F(14)    = m
+      call eulerMoments(Z, m, 9, F)
+      F(14) = m
     endif
-    !> Body-force accumulators: W at slot neq; J at neq-1 unless euler reuses its mass moment F(14).
-    if (srcBodyForce) then
-      if (.not. eulerSwitch) F(neq-1) = m              ! J (skipped when euler reuses F(14))
-      F(neq)   = m * dot_product(bodyAccel, Z(4:6))    ! W
-    endif
+    if (srcBodyForce) call bodyForceWork(Z, neq, m, F)
 
-    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
-    if (any(.not. ieee_is_finite(F))) then
-      where (.not. ieee_is_finite(F)) F = 1.e30_R8
-    endif
+    call penalizeNonFinite(F)
 
   end subroutine rhsEvaporation
 
@@ -779,12 +876,8 @@ contains
   subroutine rhsBreakupOnly(neq, time, Z, F, aux,naux, auxst,nauxst, &
                              hTabM, rhoTabM, mupTabM, sigTabM, &
                              gasNodes, gasVert,gas,nsp,nNodes, epsTabM)
-    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
-    use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
-                               bodyForce, bodyAccel, srcBodyForce
+    use IGLOO_variables, only: eulerSwitch
     use IGLOO_Lib_Breakup, only: breakupOde
-    use IGLOO_Lib_Properties, only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
     real(R8), intent(in)    :: time
@@ -797,34 +890,23 @@ contains
     real(R8), intent(inout) :: gas(nsp)
     real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
     ! locals
-    real(R8) :: normVel, slip, Vdif(3), Re, cpFactor, tp, d, rho, m, sigma, mup, xi0_loc(3)
+    real(R8) :: slip, Vdif(3), Re, cpFactor, tp, d, rho, m, sigma, mup
     real(R8) :: Fdrag(3), Qdot, acc(3), brkupVar(2)
 
     F = 0._R8
-    if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
-    else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    if (mod_propFlags(2)) then; rho   = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho   = aux(ind_rho); endif
-    if (mod_propFlags(3)) then; sigma = tableValue(sigTabM, Tmin, Tmax, tp); else; sigma = aux(ind_sig); endif
-    if (mod_propFlags(4)) then; mup   = tableValue(mupTabM, Tmin, Tmax, tp); else; mup   = aux(ind_mup); endif
+    call parcelTemperature(Z(7), hTabM, aux, naux, tp, cpFactor)
+    rho = propertyAt(mod_propFlags(2), rhoTabM, tp, aux, naux, ind_rho)
+    sigma = propertyAt(mod_propFlags(3), sigTabM, tp, aux, naux, ind_sig)
+    mup   = propertyAt(mod_propFlags(4), mupTabM, tp, aux, naux, ind_mup)
     m = aux(ind_m)/Z(8)
-    d = (sixOverPi*m/rho)**oneThird
+    d = sphereDiameter(m, rho)
 
-    ! 2nd order gas interpolation
-    if (ord2) then
-      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
-      else
-        xi0_loc = auxst(ind_sxi:ind_sxi+2)
-        call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
-        auxst(ind_sxi:ind_sxi+2) = xi0_loc
-      endif
-    endif
+    call sampleGas(gasVert, gasNodes, nNodes, Z(1:3), nsp, auxst, nauxst, gas)
 
-    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
-    slip = norm2(Vdif)
-    Re   = gas(1) * slip * d / gas(6)
+    call relativeFlow(gas, nsp, Z(1:3), Z(4:6), Vdif, slip)
+    Re   = parcelReynolds(gas, nsp, slip, d)
 
-    call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot)
-    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), tp, epsTabM), d, gas(5), tp)*cpFactor
+    call dragAndHeat(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, aux, naux, Fdrag, Qdot, epsTabM=epsTabM)
     acc = Fdrag / m
 
     ! Breakup: npdot rate — brkupVar from auxState (told/tc for KHRT)
@@ -834,23 +916,15 @@ contains
                       acc, Z(4:6), brkupVar, mod_brkSelect, mod_bp)
     if (ind_sb1 > 0) auxst(ind_sb1:ind_sb2) = brkupVar
 
-    F(1:3) = Z(4:6)
-    F(4:6) = acc
-    if (bodyForce) F(4:6) = F(4:6) + bodyAccel
+    call motionRates(Z(4:6), acc, F)
     F(7)   = Qdot / m
 
     if (eulerSwitch) then
-      normVel = norm2(Z(4:6))
-      F(9)     = normVel
-      F(10:12) = toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
-      F(13)    = Z(7) * normVel
-      F(14)    = Z(8)
+      call eulerMoments(Z, 1._R8, 9, F)
+      F(14) = Z(8)
     endif
 
-    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
-    if (any(.not. ieee_is_finite(F))) then
-      where (.not. ieee_is_finite(F)) F = 1.e30_R8
-    endif
+    call penalizeNonFinite(F)
 
   end subroutine rhsBreakupOnly
 
@@ -860,13 +934,11 @@ contains
   subroutine rhsEvapBreakup(neq, time, Z, F, aux,naux, auxst,nauxst,     &
                              hTabM, rhoTabM, mupTabM, sigTabM, psatTabM, LvTabM, cpvTabM, &
                              gasNodes, gasVert,gas,nsp,nNodes, TsOut, kLiqTabM, epsTabM, lkFail)
-    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
-    use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
-                               bodyForce, bodyAccel, srcBodyForce, blowSelect
+    use Lib_Equations,   only: interphase
+    use IGLOO_variables, only: eulerSwitch, srcBodyForce, blowSelect
     use IGLOO_Lib_Breakup,     only: breakupOde
     use IGLOO_Lib_Evaporation, only: evaporation, nep, blowingFactor, iLv, icpv
-    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use IGLOO_Lib_Properties,  only: lookupTab, tableValue, Tmin, Tmax
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp,nNodes
     real(R8), intent(in)    :: time
@@ -883,8 +955,8 @@ contains
     real(R8), intent(in),  optional :: kLiqTabM(:)  !> the liquid conductivity table (P2T)
     logical, intent(inout), optional :: lkFail   !> set when an LK fixed point was not bracketed
     ! locals
-    real(R8) :: normVel, slip, mdot, mdot_evap, Vdif(3), Re, mTraj, cpFactor, sigma, mup, psat
-    real(R8) :: tp, d, rho, m, xi0_loc(3)
+    real(R8) :: slip, mdot, mdot_evap, Vdif(3), Re, mTraj, cpFactor, sigma, mup, psat
+    real(R8) :: tp, d, rho, m
     real(R8) :: Fdrag(3), Qdot, Qdot_evap, acc(3), brkupVar(2)
     real(R8) :: ep(nep)
     real(R8) :: ts, cl, carry, TB, Nu, kl
@@ -892,34 +964,24 @@ contains
     integer  :: p2tStat
 
     F = 0._R8
-    if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
-    else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    if (mod_propFlags(2)) then; rho   = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho   = aux(ind_rho); endif
-    if (mod_propFlags(3)) then; sigma = tableValue(sigTabM, Tmin, Tmax, tp); else; sigma = aux(ind_sig); endif
-    if (mod_propFlags(4)) then; mup   = tableValue(mupTabM, Tmin, Tmax, tp); else; mup   = aux(ind_mup); endif
+    call parcelTemperature(Z(7), hTabM, aux, naux, tp, cpFactor)
+    rho = propertyAt(mod_propFlags(2), rhoTabM, tp, aux, naux, ind_rho)
+    sigma = propertyAt(mod_propFlags(3), sigTabM, tp, aux, naux, ind_sig)
+    mup   = propertyAt(mod_propFlags(4), mupTabM, tp, aux, naux, ind_mup)
     m = Z(8)
-    d = (sixOverPi*m/rho)**oneThird
+    d = sphereDiameter(m, rho)
 
-    ! 2nd order gas interpolation
-    if (ord2) then
-      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
-      else
-        xi0_loc = auxst(ind_sxi:ind_sxi+2)
-        call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
-        auxst(ind_sxi:ind_sxi+2) = xi0_loc
-      endif
-    endif
+    call sampleGas(gasVert, gasNodes, nNodes, Z(1:3), nsp, auxst, nauxst, gas)
 
     !> a non-physical trial state sampling a gas of cpg <= 0: the scrub's penalty, the step is rejected (no stop)
     if (trialGasUnphysical(gas, nsp, Z, neq)) then
-      F = 1.e30_R8
+      F = penalty
       if (present(TsOut)) TsOut = tp
       return
     endif
 
-    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
-    slip = norm2(Vdif)
-    Re   = gas(1) * slip * d / gas(6)
+    call relativeFlow(gas, nsp, Z(1:3), Z(4:6), Vdif, slip)
+    Re   = parcelReynolds(gas, nsp, slip, d)
     !> the liquid conductivity at the mean temperature: the column, else k-liq
     kl = aux(ind_e4)
     if (present(kLiqTabM)) kl = tableValue(kLiqTabM, Tmin, Tmax, tp)
@@ -941,7 +1003,7 @@ contains
                       psatTabM, LvTabM, cpvTabM, ts, p2tStat, klIn=kl, epsTabM=epsTabM, mulTabM=mupTabM, lkFail=lkFail)
       !> no surface root: the scrub's penalty, the step is rejected
       if (p2tStat == 0) then
-        F = 1.e30_R8
+        F = penalty
         if (present(TsOut)) TsOut = ts
         return
       endif
@@ -985,14 +1047,12 @@ contains
     !> Stefan-blowing reduction of the convective heat (MHB98 eq.19); skipped when the model returned its own Qdot
     if (blowSelect == 1 .and. .not.override) &
         Qdot = Qdot * blowingFactor(gas(7), gas(8), gas(6), gas(9), rho, d, m, mdot_evap)
-    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), ts, epsTabM), d, gas(5), ts)*cpFactor
+    call addRadiation(Qdot, aux, naux, ts, d, gas(5), cpFactor, epsTabM)
 
     !> per-droplet mass: evaporation plus the breakup share that keeps the stream mass
     mdot = mdot_evap - m*F(9)/Z(9)
 
-    F(1:3) = Z(4:6)
-    F(4:6) = acc
-    if (bodyForce) F(4:6) = F(4:6) + bodyAccel
+    call motionRates(Z(4:6), acc, F)
     if (mod_liqSelect == 1 .or. boiling) then
       !> as model 2; the carry goes with the evaporated mass, the breakup share stays at the mean state
       if (mod_propFlags(1)) then; carry = lookupTab(hTabM, ts) - Z(7)
@@ -1004,26 +1064,16 @@ contains
     endif
     F(8)   = mdot
 
+    !> the stream mass weighs the Euler moments and the body-force accumulators
+    mTraj = m * Z(9)
     if (eulerSwitch) then
-      normVel  = norm2(Z(4:6))
-      mTraj    = m * Z(9)
-      F(10)    = normVel
-      F(11:13) = mTraj * toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
-      F(14)    = mTraj * Z(7) * normVel
-      F(15)    = mTraj
-      F(16)    = Z(9)
+      call eulerMoments(Z, mTraj, 10, F)
+      F(15) = mTraj
+      F(16) = Z(9)
     endif
-    !> Body-force accumulators: W at slot neq; J at neq-1 unless euler reuses its mass moment F(15).
-    if (srcBodyForce) then
-      mTraj    = m * Z(9)
-      if (.not. eulerSwitch) F(neq-1) = mTraj           ! J; skip when euler-on (neq-1 holds F(16)=npdot)
-      F(neq)   = mTraj * dot_product(bodyAccel, Z(4:6)) ! W
-    endif
+    if (srcBodyForce) call bodyForceWork(Z, neq, mTraj, F)
 
-    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
-    if (any(.not. ieee_is_finite(F))) then
-      where (.not. ieee_is_finite(F)) F = 1.e30_R8
-    endif
+    call penalizeNonFinite(F)
   end subroutine rhsEvapBreakup
 
 
@@ -1235,12 +1285,8 @@ contains
   subroutine rhsBurn(neq, time, Z, F, aux,naux, auxst,nauxst, &
                               hTabM, rhoTabM,                   &
                               gasNodes, gasVert,gas,nsp,nNodes, epsTabM)
-    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
-    use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
-                               bodyForce, bodyAccel, srcBodyForce
+    use IGLOO_variables, only: eulerSwitch, srcBodyForce
     use IGLOO_Lib_Combustion,  only: becksteadRate, directRate, nmp, imTig, imQc, imLv, imDr, imDir, directOnset
-    use IGLOO_Lib_Properties,  only: comp_TfromTab, lookupTab, tableValue, Tmin, Tmax
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
     real(R8), intent(in)    :: time
@@ -1253,32 +1299,21 @@ contains
     real(R8), intent(inout) :: gas(nsp)
     real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
     ! locals
-    real(R8) :: normVel, slip, mdot, qrel, Vdif(3), Re, cpFactor, tp, d, rho, m, xi0_loc(3)
+    real(R8) :: slip, mdot, qrel, Vdif(3), Re, cpFactor, tp, d, rho, m
     real(R8) :: Fdrag(3), Qdot, Nu, cpg
 
     F = 0._R8
-    if (mod_propFlags(1)) then; tp = comp_TfromTab(hTabM, Z(7)); cpFactor = 1._R8
-    else;                       tp = Z(7);                       cpFactor = 1._R8/aux(ind_cp); endif
-    if (mod_propFlags(2)) then; rho = tableValue(rhoTabM, Tmin, Tmax, tp); else; rho = aux(ind_rho); endif
+    call parcelTemperature(Z(7), hTabM, aux, naux, tp, cpFactor)
+    rho = propertyAt(mod_propFlags(2), rhoTabM, tp, aux, naux, ind_rho)
     m = Z(8)
-    d = (sixOverPi*m/rho)**oneThird
+    d = sphereDiameter(m, rho)
 
-    ! 2nd order gas interpolation
-    if (ord2) then
-      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
-      else
-        xi0_loc = auxst(ind_sxi:ind_sxi+2)
-        call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
-        auxst(ind_sxi:ind_sxi+2) = xi0_loc
-      endif
-    endif
+    call sampleGas(gasVert, gasNodes, nNodes, Z(1:3), nsp, auxst, nauxst, gas)
 
-    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
-    slip = norm2(Vdif)
-    Re   = gas(1) * slip * d / gas(6)
+    call relativeFlow(gas, nsp, Z(1:3), Z(4:6), Vdif, slip)
+    Re   = parcelReynolds(gas, nsp, slip, d)
 
-    call interphase(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, Fdrag, Qdot, Nu)
-    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), tp, epsTabM), d, gas(5), tp)*cpFactor
+    call dragAndHeat(gas, nsp, Vdif, slip, tp, d, Re, cpFactor, aux, naux, Fdrag, Qdot, NuOut=Nu, epsTabM=epsTabM)
     if (aux(ind_mb+imDir-1) > 0.5_R8) then
       !> direct: at its burning temperature and above its residue the drop burns on the d2-law and keeps its temperature
       mdot = 0._R8; qrel = 0._R8
@@ -1291,29 +1326,17 @@ contains
       !> Burn rate + heat release from the metal aux block (inert below T-ign)
       call becksteadRate(tp, d, rho, aux(ind_mb:ind_mb+nmp-1), mdot, qrel)
     endif
-    F(1:3) = Z(4:6)
-    F(4:6) = Fdrag / m
-    if (bodyForce) F(4:6) = F(4:6) + bodyAccel
+    call motionRates(Z(4:6), Fdrag / m, F)
     F(7)   = (Qdot + qrel*cpFactor) / m   !> heat RELEASE: sign opposite to the model-2 latent sink
     F(8)   = mdot
 
     if (eulerSwitch) then
-      normVel  = norm2(Z(4:6))
-      F(9)     = normVel
-      F(10:12) = m * toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
-      F(13)    = m * Z(7) * normVel
-      F(14)    = m
+      call eulerMoments(Z, m, 9, F)
+      F(14) = m
     endif
-    !> Body-force accumulators: W at slot neq; J at neq-1 unless euler reuses its mass moment F(14).
-    if (srcBodyForce) then
-      if (.not. eulerSwitch) F(neq-1) = m              ! J (skipped when euler reuses F(14))
-      F(neq)   = m * dot_product(bodyAccel, Z(4:6))    ! W
-    endif
+    if (srcBodyForce) call bodyForceWork(Z, neq, m, F)
 
-    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
-    if (any(.not. ieee_is_finite(F))) then
-      where (.not. ieee_is_finite(F)) F = 1.e30_R8
-    endif
+    call penalizeNonFinite(F)
   end subroutine rhsBurn
 
 
@@ -1323,11 +1346,8 @@ contains
   !  share*yield of the mass it burns.
   subroutine rhsBurnCarry(neq, time, Z, F, aux,naux, auxst,nauxst, &
                       gasNodes, gasVert,gas,nsp,nNodes, epsTabM)
-    use Lib_Equations,   only: interphase, interp2ndOrder, sampleGas2D, meridianToAzimuth, toMeridian
-    use IGLOO_variables, only: eulerSwitch, mesh2D, ord2, oneThird, sixOverPi, &
-                               bodyForce, bodyAccel, srcBodyForce
+    use IGLOO_variables, only: eulerSwitch, oneThird, sixOverPi, srcBodyForce
     use IGLOO_Lib_Combustion,  only: becksteadRate, nmp, imShare, imRhoC, imCpC, imStr, imLaw, imYld, lobeF, xiGallier
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     integer,  intent(in)    :: neq, naux, nauxst, nsp, nNodes
     real(R8), intent(in)    :: time
@@ -1339,7 +1359,7 @@ contains
     real(R8), intent(inout) :: gas(nsp)
     real(R8), intent(in),    optional :: epsTabM(:)   !> the emissivity table (an Emissivity column)
     ! locals
-    real(R8) :: normVel, slip, mdot, qrel, Vdif(3), Re, tp, d, dAl, rho, mAl, mOx, m, scale, xi0_loc(3)
+    real(R8) :: slip, mdot, qrel, Vdif(3), Re, tp, d, dAl, rho, mAl, mOx, m, scale
     real(R8) :: Fdrag(3), Qdot
 
     F = 0._R8
@@ -1348,33 +1368,21 @@ contains
     mAl = Z(8)
     mOx = Z(9)
     m   = mAl + mOx
-    dAl = (sixOverPi*mAl/rho)**oneThird
+    dAl = sphereDiameter(mAl, rho)
     d   = (sixOverPi*(mAl/rho + mOx/aux(ind_mb+imRhoC-1)))**oneThird
 
-    ! 2nd order gas interpolation
-    if (ord2) then
-      if (mesh2D) then; call sampleGas2D(gasVert, gasNodes, Z(1:3), nsp, gas)
-      else
-        xi0_loc = auxst(ind_sxi:ind_sxi+2)
-        call interp2ndOrder(gasVert, gasNodes, Z(1:3), nsp, xi0_loc, gas)
-        auxst(ind_sxi:ind_sxi+2) = xi0_loc
-      endif
-    endif
+    call sampleGas(gasVert, gasNodes, nNodes, Z(1:3), nsp, auxst, nauxst, gas)
 
-    Vdif = meridianToAzimuth(gas(2:4), Z(1:3)) - Z(4:6)
-    slip = norm2(Vdif)
-    Re   = gas(1) * slip * d / gas(6)
+    call relativeFlow(gas, nsp, Z(1:3), Z(4:6), Vdif, slip)
+    Re   = parcelReynolds(gas, nsp, slip, d)
 
-    call interphase(gas, nsp, Vdif, slip, tp, d, Re, 1._R8, Fdrag, Qdot)
-    if (ind_eps > 0) Qdot = Qdot + radiativeHeat(emissivityAt(aux(ind_eps), tp, epsTabM), d, gas(5), tp)
+    call dragAndHeat(gas, nsp, Vdif, slip, tp, d, Re, 1._R8, aux, naux, Fdrag, Qdot, epsTabM=epsTabM)
     !> Burn rate and heat release of the metal (inert below T-ign), scaled by F(f_ox)*c
     call becksteadRate(tp, dAl, rho, aux(ind_mb:ind_mb+nmp-1), mdot, qrel)
     scale = lobeF(mOx/m)*aux(ind_mb+imStr-1)
     mdot  = mdot*scale
     qrel  = qrel*scale
-    F(1:3) = Z(4:6)
-    F(4:6) = Fdrag / m
-    if (bodyForce) F(4:6) = F(4:6) + bodyAccel
+    call motionRates(Z(4:6), Fdrag / m, F)
     F(7)   = (Qdot + qrel) / (mAl*aux(ind_cp) + mOx*aux(ind_mb+imCpC-1))
     F(8)   = mdot
     F(9)   = -aux(ind_mb+imShare-1)*aux(ind_mb+imYld-1)*mdot
@@ -1382,22 +1390,12 @@ contains
     if (aux(ind_mb+imLaw-1) > 0._R8) F(9) = -xiGallier(dAl, mOx/m)*aux(ind_mb+imYld-1)*mdot
 
     if (eulerSwitch) then
-      normVel  = norm2(Z(4:6))
-      F(10)    = normVel
-      F(11:13) = m * toMeridian(Z(4:6), Z(1:3)) * normVel   ! euler moment in the meridian frame (wedge)
-      F(14)    = m * Z(7) * normVel
-      F(15)    = m
+      call eulerMoments(Z, m, 10, F)
+      F(15) = m
     endif
-    !> Body-force accumulators: W at slot neq; J at neq-1 unless euler reuses its mass moment F(15).
-    if (srcBodyForce) then
-      if (.not. eulerSwitch) F(neq-1) = m              ! J (skipped when euler reuses F(15))
-      F(neq)   = m * dot_product(bodyAccel, Z(4:6))    ! W
-    endif
+    if (srcBodyForce) call bodyForceWork(Z, neq, m, F)
 
-    !> non-finite F (unphysical Newton trial): finite penalty so the solver rejects the step
-    if (any(.not. ieee_is_finite(F))) then
-      where (.not. ieee_is_finite(F)) F = 1.e30_R8
-    endif
+    call penalizeNonFinite(F)
   end subroutine rhsBurnCarry
 
 end module Lib_RHS

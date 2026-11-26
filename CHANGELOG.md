@@ -54,6 +54,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Build: OSLO 1.1.1 or a later 1.x is required (was 1.1): its H-sdirk4 perturbs the Jacobian by the rounding unit of
   double precision and rejects a step whose right-hand side has no value.
 
+- Models: the pieces every right-hand side shares (parcel temperature, material properties, gas sampling at gas
+  order 2, relative flow, drag and heat with radiation, motion rates, Euler moments, body-force accumulators, the
+  penalty of a non-finite slot) are subroutines of `Lib_RHS.f90` called by each right-hand side; the results are the
+  same to the byte.
+
 ### Fixed
 - Combustion: the burnout removal of a burning parcel (ODE models 5 and 8) requires the parcel to burn, at or above
   `T-ign` under `Beckstead` and `T-burn` under `direct`; a parcel at the removal mass that does not burn stays an
