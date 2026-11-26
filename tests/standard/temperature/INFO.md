@@ -53,7 +53,8 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
   to JAXA1 turns it red.
 - `test_radiation.f90` (ctest `test_radiation`): the grey-body exchange `Q̇_r = ε σ π d² (T_g⁴ − T_p⁴)`
   against the form typed in the test (`σ = 5.670374419e-8`, CODATA) in quadruple precision; RU2, RU4, RU5 and RU6 at zero
-  slip under `NoDrag` and `NoHeat`, so the radiative term is the only heat exchange:
+  slip under `NoDrag` and `NoHeat`, so the radiative term is the only heat exchange; RT on the same eight right-hand
+  sides, under the same laws:
 
   | id | compared | tolerance | measured | RED |
   |---|---|---|---|---|
@@ -63,5 +64,6 @@ Citation tags resolve in [../../REFERENCES.md](../../REFERENCES.md).
   | RU4 | `getSourceTerms` (the Eulerian source branch): the energy component against `n_p ε σ π d² (T_g⁴ − T_p⁴)`, `d = (6 ρ̂_p/(π ρ n_p))^⅓`; `ε = 0` gives exactly 0 | 1e-14 relative | 9.5e-16 | the term absent from the branch: 1.0 |
   | RU5 | an `Emissivity` column `ε(T) = T/3000` beside the constant 0.5: per right-hand side with a radiation site outside P2T (models 1, 2 and 4 under ITC, 3, 5, 6 in its four phases, 8), `F(table) − F(constant)` = RU2's term with `Q̇_r = [ε(T_site) − 0.5] σ π d² (T_g⁴ − T_site⁴)` at the site's temperature, 0 in every other component | 8 ULP of the larger `F` | worst 0.13 of tol (model 3) | every site on the constant: `dF = 0` on all ten legs; every site at the gas temperature: all ten legs (model 1 `dF` +3.05e4 against −3.05e4 K/s) |
   | RU6 | `getSourceTerms` of a material with the `Emissivity` column and the constant 0: the energy component against `n_p ε(T_p) σ π d² (T_g⁴ − T_p⁴)` | 1e-14 relative | 1.0e-15 | the column ignored by the branch: 1.0 (energy 0) |
+  | RT | per ODE model 1–8 (models 6 and 7 liquid), the right-hand side at a trial temperature `Z(7) = −500 K` and at the parcel's regular temperature: slots off the penalty `1e30` at −500 K; slots at the penalty or non-finite at the regular temperature | 0 and 0 | 0 and 0, every model | without the check in models 2–8: 8, 8, 9, 8, 8, 9, 9 slots off the penalty (every slot finite: the laws hold no root of `T_p` here) |
 
   The e2e twins are `rad-cool`, `rad-cool-epscol`, `emissivity-cap`, `rad-foreign-key` and `solidification/solid-box-rad`.

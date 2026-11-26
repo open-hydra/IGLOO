@@ -75,9 +75,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Sampling: the inverse of the gas map takes one Newton step from a converged point. A sample kept its seed's offset,
   up to the Newton stop, so the right-hand side jumped with the position by about the solver's tolerance for a small
   parcel near a wall, and the solver ran out of steps.
-- Models: `rhsStandard` returns the finite penalty 1e30 for a trial state below absolute zero or a non-finite
-  right-hand side, as every other model does, so that the solver rejects the step (Henderson's drag held
-  sqrt(Tp/Tg) at Tp < 0 and returned a NaN).
+- Models: every right-hand side returns the finite penalty 1e30 in every slot for a trial state at or below absolute
+  zero, before any law is evaluated, and `rhsStandard` returns it for a non-finite slot as every model does: the
+  solver rejects the step. Henderson's drag holds sqrt(Tp/Tg), a NaN at Tp < 0; under laws without a root of Tp
+  the state was integrated as a valid one.
 
 ### Removed
 - The Monolith timing harness (`tests/bench/monolith/`) and the `IGLOO_IO_PROBE` configure option: the harness, its

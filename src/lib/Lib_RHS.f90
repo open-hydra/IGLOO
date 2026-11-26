@@ -439,7 +439,8 @@ contains
   end subroutine parcelTemperature
 
 
-  !> A trial state the laws do not hold for: a parcel temperature at or below absolute zero.
+  !> A trial state the laws do not hold for: a parcel temperature at or below absolute zero. Every right-hand side
+  !  returns the penalty in every slot for it, before any law is evaluated.
   pure logical function trialRejected(tp) result(bad)
     implicit none
     real(R8), intent(in) :: tp
@@ -677,6 +678,10 @@ contains
     real(R8) :: rho, sigma, mup, brkupVar(2)
 
     F = 0._R8
+    if (trialRejected(Z(7))) then
+      F = penalty
+      return
+    endif
     if (mod_model == 7) then; m = aux(ind_m)/Z(9); else; m = aux(ind_m); endif
     rho = propertyAt(mod_propFlags(2), rhoTabM, Z(7), aux, naux, ind_rho)
     !> the liquid at rho, the frozen fraction at rho-solid; one density otherwise
@@ -769,6 +774,11 @@ contains
 
     F = 0._R8
     call parcelTemperature(Z(7), hTabM, aux, naux, tp, cpFactor)
+    if (trialRejected(tp)) then
+      F = penalty
+      if (present(TsOut)) TsOut = tp
+      return
+    endif
     rho = propertyAt(mod_propFlags(2), rhoTabM, tp, aux, naux, ind_rho)
     m = Z(8)
     d = sphereDiameter(m, rho)
@@ -895,6 +905,10 @@ contains
 
     F = 0._R8
     call parcelTemperature(Z(7), hTabM, aux, naux, tp, cpFactor)
+    if (trialRejected(tp)) then
+      F = penalty
+      return
+    endif
     rho = propertyAt(mod_propFlags(2), rhoTabM, tp, aux, naux, ind_rho)
     sigma = propertyAt(mod_propFlags(3), sigTabM, tp, aux, naux, ind_sig)
     mup   = propertyAt(mod_propFlags(4), mupTabM, tp, aux, naux, ind_mup)
@@ -965,6 +979,11 @@ contains
 
     F = 0._R8
     call parcelTemperature(Z(7), hTabM, aux, naux, tp, cpFactor)
+    if (trialRejected(tp)) then
+      F = penalty
+      if (present(TsOut)) TsOut = tp
+      return
+    endif
     rho = propertyAt(mod_propFlags(2), rhoTabM, tp, aux, naux, ind_rho)
     sigma = propertyAt(mod_propFlags(3), sigTabM, tp, aux, naux, ind_sig)
     mup   = propertyAt(mod_propFlags(4), mupTabM, tp, aux, naux, ind_mup)
@@ -1304,6 +1323,10 @@ contains
 
     F = 0._R8
     call parcelTemperature(Z(7), hTabM, aux, naux, tp, cpFactor)
+    if (trialRejected(tp)) then
+      F = penalty
+      return
+    endif
     rho = propertyAt(mod_propFlags(2), rhoTabM, tp, aux, naux, ind_rho)
     m = Z(8)
     d = sphereDiameter(m, rho)
@@ -1364,6 +1387,10 @@ contains
 
     F = 0._R8
     tp  = Z(7)
+    if (trialRejected(tp)) then
+      F = penalty
+      return
+    endif
     rho = aux(ind_rho)
     mAl = Z(8)
     mOx = Z(9)
