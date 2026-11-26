@@ -43,6 +43,15 @@ Reitz-KHRT). TAB and ETAB set `brkupEvent` only, and act through the `solout` ca
 | 7 | solidification and `brkupEqOde` | `rhsSolidification` | 9 (+6) |
 | 8 | Beckstead with a carried material (`share > 0` or `carry=Gallier21`) | `rhsBurnCarry` | 9 (+6) |
 
+What the right-hand sides do alike is written once, in `Lib_RHS.f90`, and each right-hand side calls it: the parcel
+temperature and the heat-to-`Z(7)` factor (`parcelTemperature`), the refusal of a trial state at or below absolute
+zero (`trialRejected`, the penalty `penalty` in every slot), a material property from its table or its constant
+(`propertyAt`), the sphere diameter (`sphereDiameter`), the gas at gas order 2 (`sampleGas`), the relative velocity
+and the Reynolds number (`relativeFlow`, `parcelReynolds`), drag and heat with radiation (`dragAndHeat`,
+`addRadiation`), the position and velocity rates (`motionRates`), the Euler moments and the body-force accumulators
+weighted by the parcel (`eulerMoments`, `bodyForceWork`) and the penalty for a non-finite slot
+(`penalizeNonFinite`). A change to one of them is made there, for every model.
+
 ### State layout (`stateVar`)
 
 | Index | Content | Models |

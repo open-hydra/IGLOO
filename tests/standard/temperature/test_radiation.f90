@@ -26,6 +26,9 @@ program test_radiation
     !        8 ULP of the larger F, and 0 in every other component
     !   RU6  getSourceTerms of a material with the Emissivity table (its constant 0): the energy component equals
     !        np eps(Tp) sigma pi d^2 (Tg^4 - Tp^4), 1e-14 relative
+    !   RT   the same eight right-hand sides (models 6 and 7 liquid) at a trial temperature of -500 K: every slot is
+    !        the penalty 1e30; the same parcel at its regular temperature has no slot at the penalty and none
+    !        non-finite
     !
     use, intrinsic :: iso_fortran_env, only: R8 => real64, R16 => real128
     use IGLOO_Lib_Heat, only: radiativeHeat
@@ -52,6 +55,7 @@ program test_radiation
     call run_RU4(ok_all)
     call run_RU5(ok_all)
     call run_RU6(ok_all)
+    call run_RT(ok_all)
 
     call finalize_report(exit_code)
     if (ok_all .and. exit_code == 0) then
@@ -663,5 +667,82 @@ contains
         FQ = ig%getSourceTerms(gas, vel, TP, rhop, NPV, 1)
         call flag('RU4b eps = 0: energy component exactly 0 (NoHeat, NoDrag)', 'RU4b_zero', all(FQ == 0._R8), ok)
     end subroutine run_RU4
+
+    !> one RT leg: model set up without radiation, F at Z with Z(7) = -500 K, then at Z itself
+    subroutine rt_leg(name, model, brk, evap, comb, p, neq, Z, Tg, htab, ok)
+        use IGLOO_particles, only: obj_particle
+        use Lib_RHS, only: packAuxVars, nauxvar, nauxstate, ind_sph
+        use IGLOO_Lib_Solidification, only: phLiquid
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        character(len=*), intent(in) :: name
+        integer,  intent(in)    :: model, brk, evap, comb, neq
+        type(obj_particle), intent(inout) :: p
+        real(R8), intent(in)    :: Z(neq), Tg, htab(:)
+        logical,  intent(inout) :: ok
+        real(R8), allocatable :: aux(:), auxst(:)
+        real(R8) :: gas(9), Zc(neq), Fc(neq), Fr(neq)
+        integer  :: nAux, nOff, nPen
+        p%emissivity = 0._R8
+        call setup(model, brk, evap, comb, .false., nAux, .false.)
+        allocate(aux(nauxvar), auxst(max(1, nauxstate)))
+        call packAuxVars(p, nauxvar, aux)
+        gas = [1.2_R8, 10._R8, 0._R8, 0._R8, Tg, 1.8e-5_R8, 1.4_R8, 287._R8, 0.026_R8]
+        auxst = 0._R8;  if (ind_sph > 0) auxst(ind_sph) = real(phLiquid, R8)
+        Zc = Z;  Zc(7) = -500._R8
+        call call_rhs(model, neq, Zc, Fc, aux, auxst, gas, htab)
+        auxst = 0._R8;  if (ind_sph > 0) auxst(ind_sph) = real(phLiquid, R8)
+        call call_rhs(model, neq, Z, Fr, aux, auxst, gas, htab)
+        nOff = count(Fc /= 1.e30_R8)
+        nPen = count(Fr == 1.e30_R8 .or. .not. ieee_is_finite(Fr))
+        write(*,'(a,a,a,i0,a,i0,a,i0)') '  [INFO] RT ', name, ': slots off the penalty at -500 K ', nOff, &
+            ' of ', neq, '; at the penalty or non-finite at the regular temperature ', nPen
+        call flag('RT '//name//': -500 K every slot 1e30, the regular state none', 'RT_'//name, &
+                  nOff == 0 .and. nPen == 0, ok)
+        deallocate(aux, auxst)
+    end subroutine rt_leg
+
+    !> RT: a trial state below absolute zero in every model
+    subroutine run_RT(ok)
+        use IGLOO_particles, only: obj_particle
+        use IGLOO_Lib_Combustion, only: buildLobeTable, carryStretch
+        logical, intent(inout) :: ok
+        real(R8), parameter :: PI = 4._R8*atan(1._R8), UG = 10._R8, Ru = 8314.46_R8
+        type(obj_particle) :: p1, p2, p3, p4, p5, p6, p7, p8
+        real(R8) :: htab(1), mAl
+        htab = 0._R8
+        call set_switches(0)
+        p1%cp = 1250._R8;  p1%rho = 2950._R8;  p1%d = 30.0e-6_R8;  p1%m = p1%rho*PI/6._R8*p1%d**3
+        call rt_leg('model1', 1, 0, 0, 0, p1, 7, [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, 2400._R8], 600._R8, htab, ok)
+        p2%cp = 4180._R8;  p2%rho = 1000._R8;  p2%d = 50.0e-6_R8;  p2%m = p2%rho*PI/6._R8*p2%d**3
+        p2%Mv = 18._R8;  p2%Lv = 2.26e6_R8;  p2%cpv = 1900._R8;  p2%Le = 1._R8;  p2%Yinf = 0._R8
+        p2%LvMvOverRu = p2%Lv*p2%Mv/Ru;  p2%invTboil = 1._R8/373.15_R8;  p2%alphaE = 1._R8
+        call rt_leg('model2', 2, 0, 1, 0, p2, 8, [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, 350._R8, p2%m], 800._R8, htab, ok)
+        p3%cp = 1250._R8;  p3%rho = 2950._R8;  p3%d = 30.0e-6_R8;  p3%m = p3%rho*PI/6._R8*p3%d**3
+        p3%sigma = 6.0e-5_R8;  p3%mup = 1.0e-3_R8;  p3%mdot = 1.0e-3_R8
+        call rt_leg('model3', 3, 2, 0, 0, p3, 8, [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, 2400._R8, p3%mdot/p3%m], &
+                    600._R8, htab, ok)
+        p4 = p2;  p4%sigma = 0.072_R8;  p4%mup = 1.0e-3_R8
+        call rt_leg('model4', 4, 2, 1, 0, p4, 9, [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, 350._R8, p4%m, 1.0e6_R8], &
+                    800._R8, htab, ok)
+        p5%cp = 1250._R8;  p5%rho = 2700._R8;  p5%d = 100.0e-6_R8;  p5%m = p5%rho*PI/6._R8*p5%d**3
+        p5%Kburn = 4.28e-6_R8;  p5%nBurn = 1.8_R8;  p5%Xeff = 0.21_R8;  p5%betaPart = 0.3_R8
+        p5%Tign = 2350._R8;  p5%qComb = 31.0e6_R8
+        call rt_leg('model5', 5, 0, 0, 1, p5, 8, [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, 3000._R8, p5%m], 2000._R8, htab, ok)
+        p6%cp = 1250._R8;  p6%rho = 2950._R8;  p6%d = 10.0e-6_R8;  p6%m = p6%rho*PI/6._R8*p6%d**3
+        p6%Tmelt = 2327._R8;  p6%hFus = 1.07e6_R8;  p6%Tnuc = 2300._R8;  p6%cpSol = 600._R8
+        call rt_leg('model6', 6, 0, 0, 0, p6, 8, [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, 2400._R8, 0._R8], 600._R8, htab, ok)
+        p7 = p6;  p7%sigma = 6.0e-5_R8;  p7%mup = 1.0e-3_R8;  p7%mdot = 1.0e-3_R8
+        call rt_leg('model7', 7, 2, 0, 0, p7, 9, [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, 2400._R8, 0._R8, &
+                    1.5_R8*p7%mdot/p7%m], 600._R8, htab, ok)
+        call buildLobeTable()
+        p8%cp = 1250._R8;  p8%rho = 2950._R8
+        p8%Kburn = 4.28e-6_R8;  p8%nBurn = 1.8_R8;  p8%Xeff = 0.21_R8;  p8%betaPart = 0.3_R8
+        p8%Tign = 2350._R8;  p8%qComb = 31.0e6_R8
+        p8%carryShare = 0.2_R8;  p8%carryYield = NU_AL;  p8%rhoCar = 3950._R8;  p8%cpCar = 1887.6_R8
+        p8%cStretch = carryStretch(0.2_R8, NU_AL, 1.8_R8)
+        mAl = 2950._R8*PI/6._R8*(100.0e-6_R8)**3
+        call rt_leg('model8', 8, 0, 0, 1, p8, 9, [0._R8, 0._R8, 0._R8, UG, 0._R8, 0._R8, 3000._R8, mAl, mAl], 2000._R8, &
+                    htab, ok)
+    end subroutine run_RT
 
 end program test_radiation

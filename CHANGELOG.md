@@ -54,6 +54,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Build: OSLO 1.1.1 or a later 1.x is required (was 1.1): its H-sdirk4 perturbs the Jacobian by the rounding unit of
   double precision and rejects a step whose right-hand side has no value.
 
+- Models: the pieces every right-hand side shares (parcel temperature, material properties, gas sampling at gas
+  order 2, relative flow, drag and heat with radiation, motion rates, Euler moments, body-force accumulators, the
+  penalty of a non-finite slot) are subroutines of `Lib_RHS.f90` called by each right-hand side; the results are the
+  same to the byte.
+
 ### Fixed
 - Geometry: a cell's volume is the integral of det J of the trilinear map of its nodes, the volume its bilinear faces
   bound, as MOSE and ICE compute it; it was a sum of five tetrahedra, exact only on plane faces, whose volumes did not
@@ -75,9 +80,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Sampling: the inverse of the gas map takes one Newton step from a converged point. A sample kept its seed's offset,
   up to the Newton stop, so the right-hand side jumped with the position by about the solver's tolerance for a small
   parcel near a wall, and the solver ran out of steps.
-- Models: `rhsStandard` returns the finite penalty 1e30 for a trial state below absolute zero or a non-finite
-  right-hand side, as every other model does, so that the solver rejects the step (Henderson's drag held
-  sqrt(Tp/Tg) at Tp < 0 and returned a NaN).
+- Models: every right-hand side returns the finite penalty 1e30 in every slot for a trial state at or below absolute
+  zero, before any law is evaluated, and `rhsStandard` returns it for a non-finite slot as every model does: the
+  solver rejects the step. Henderson's drag holds sqrt(Tp/Tg), a NaN at Tp < 0; under laws without a root of Tp
+  the state was integrated as a valid one.
 
 ### Removed
 - The Monolith timing harness (`tests/bench/monolith/`) and the `IGLOO_IO_PROBE` configure option: the harness, its
